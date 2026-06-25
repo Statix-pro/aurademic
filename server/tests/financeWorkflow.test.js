@@ -9,20 +9,23 @@ process.env.JWT_SECRET = 'test-secret-key';
 import financeModel from '../modules/finance/financeModel.js';
 import workflowService from '../modules/shared/workflow/workflowService.js';
 import accessControlModel from '../modules/accessControl/accessControlModel.js';
+import db from '../config/connection.js';
 
 // Mock the model
 vi.mock('../modules/finance/financeModel.js', () => {
   return {
-      default: {
-        getFinanceRequestById: vi.fn(),
-        updateFinanceWorkflowSnapshot: vi.fn(),
-        doesFinanceExist: vi.fn(),
-        getBudgetAvailabilityForUser: vi.fn(),
-        createFinanceRequest: vi.fn(),
-        updateFinanceRequest: vi.fn(),
-        addBudgetBreakup: vi.fn(),
-        hardDeleteFinanceRequest: vi.fn(),
-      },
+    default: {
+      getFinanceRequestById: vi.fn(),
+      getFinanceRecordContext: vi.fn(),
+      getBudgetBreakup: vi.fn(),
+      updateFinanceWorkflowSnapshot: vi.fn(),
+      doesFinanceExist: vi.fn(),
+      getBudgetAvailabilityForUser: vi.fn(),
+      createFinanceRequest: vi.fn(),
+      updateFinanceRequest: vi.fn(),
+      addBudgetBreakup: vi.fn(),
+      hardDeleteFinanceRequest: vi.fn(),
+    },
   };
 });
 
@@ -45,6 +48,15 @@ vi.mock('../modules/accessControl/accessControlModel.js', () => {
   };
 });
 
+vi.mock('../config/connection.js', () => {
+  return {
+    default: {
+      getConnection: vi.fn(),
+      query: vi.fn(),
+    },
+  };
+});
+
 describe('Finance Workflow Integration Tests', () => {
   let token;
 
@@ -54,6 +66,13 @@ describe('Finance Workflow Integration Tests', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    db.getConnection.mockResolvedValue({
+      beginTransaction: vi.fn().mockResolvedValue(undefined),
+      commit: vi.fn().mockResolvedValue(undefined),
+      rollback: vi.fn().mockResolvedValue(undefined),
+      release: vi.fn(),
+      query: vi.fn(),
+    });
     token = generateTestToken({
       userId: 1,
       email: 'test-user@ksrct.ac.in',
@@ -209,7 +228,22 @@ describe('Finance Workflow Integration Tests', () => {
       };
 
       financeModel.getFinanceRequestById.mockResolvedValue(approvedFinanceRequest);
+      financeModel.getBudgetBreakup.mockResolvedValue([
+        {
+          budget_head: 'Research',
+          sub_head: 'Lab Equipment',
+          amount: 12000,
+          approved_amount: 12000,
+          budget_line_id: 10,
+          budget_proposal_id: 20,
+          available_amount_snapshot: 12000,
+          remaining_amount_snapshot: 0,
+        },
+      ]);
       financeModel.updateFinanceRequest.mockResolvedValue({ affectedRows: 1 });
+      financeModel.getFinanceRecordContext.mockResolvedValue({
+        totalBudget: 17000,
+      });
       workflowService.startWorkflow.mockResolvedValue({
         state: { currentStage: 'level1', status: 'in_progress' },
       });
@@ -222,9 +256,18 @@ describe('Finance Workflow Integration Tests', () => {
           topup_mode: true,
           budget_rows: [
             {
+              budget_head: 'Tampered Existing Head',
+              sub_head: 'Tampered Existing Subhead',
+              amount: 1,
+              approved_amount: 1,
+              remaining_amount_snapshot: 999,
+            },
+            {
               budget_head: 'Research',
               sub_head: 'Lab Equipment',
               amount: 5000,
+              approved_amount: 5000,
+              remaining_amount_snapshot: 5000,
             },
           ],
           income_rows: [
@@ -246,20 +289,36 @@ describe('Finance Workflow Integration Tests', () => {
         expect.objectContaining({
           recordId: 201,
           moduleKey: 'finance',
+          tx: expect.any(Object),
+          metadata: expect.objectContaining({
+            moduleMeta: expect.objectContaining({
+              amountBand: 'gt_10k',
+            }),
+          }),
         }),
       );
       expect(financeModel.updateFinanceRequest).toHaveBeenCalledWith(
         201,
         expect.objectContaining({
-          income_rows: expect.arrayContaining([
+          budget_rows: [
             expect.objectContaining({
-              incomeSource: 'Grant',
-              amount: '2500',
+              budget_head: 'Research',
+              amount: 12000,
+              approved_amount: 12000,
             }),
-          ]),
+            expect.not.objectContaining({
+              approved_amount: expect.anything(),
+              remaining_amount_snapshot: expect.anything(),
+            }),
+          ],
+          topup_mode: true,
         }),
         expect.any(Object),
+        expect.objectContaining({
+          tx: expect.any(Object),
+        }),
       );
+      expect(financeModel.updateFinanceRequest.mock.calls[0][1]).not.toHaveProperty('income_rows');
       expect(financeModel.updateFinanceWorkflowSnapshot).toHaveBeenCalled();
     });
   });

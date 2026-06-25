@@ -512,8 +512,7 @@ const financeController = {
       const isWorkflowEditor = hasFinanceWorkflowEditorAccess(req);
       const workflowStatus = normalizeText(finance.workflow_state?.status).toLowerCase();
       const isTopupMode = parseBooleanLike(req.body?.topup_mode || req.body?.topupMode);
-      const isTopupEditable =
-        isTopupMode && ['approved', 'completed'].includes(workflowStatus);
+      const isTopupEditable = isTopupMode && ['approved', 'completed'].includes(workflowStatus);
       const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(
         workflowStatus,
       );
@@ -546,67 +545,66 @@ const financeController = {
         });
       }
 
-      const updatePayload = isTopupEditable
-        ? {
-            ...(req.body || {}),
-            employee_id: finance.employee_id ?? null,
-            applicant_name: finance.applicant_name ?? null,
-            designation: finance.designation ?? null,
-            department: finance.department ?? null,
-            email: finance.email ?? null,
-            mobile: finance.mobile ?? null,
-            request_date: finance.request_date ?? null,
-            description: finance.description ?? null,
-            beneficiary_type: finance.beneficiary_type ?? null,
-            beneficiary_value: finance.beneficiary_value ?? null,
-            budget_tag: finance.budget_tag ?? null,
-            primary_head: finance.primary_head ?? null,
-            event_sub_head: finance.event_sub_head ?? null,
-            is_budget_proposed: finance.is_budget_proposed ?? null,
-            proposed_amount: finance.proposed_amount ?? null,
-            balance_amount: finance.balance_amount ?? null,
-            unplanned_budget_enabled: finance.unplanned_budget_enabled ?? null,
-            unplanned_budget_amount: finance.unplanned_budget_amount ?? null,
-            unplanned_budget_description: finance.unplanned_budget_description ?? null,
-            income_type: finance.income_type ?? null,
-            income_status: finance.income_status ?? null,
-            income_amount_type: finance.income_amount_type ?? null,
-            credit_status: finance.credit_status ?? null,
-            debit_status: finance.debit_status ?? null,
-            partial_amount: finance.partial_amount ?? null,
-            annexure_type: finance.annexure_type ?? null,
-            annexure_file_name: finance.annexure_file_name ?? null,
-            annexure_storage_name: finance.annexure_storage_name ?? null,
-            annexure_file_path: finance.annexure_file_path ?? null,
-            annexure_mime_type: finance.annexure_mime_type ?? null,
-            annexure_file_size: finance.annexure_file_size ?? null,
-            annexures: Array.isArray(finance.annexures) ? finance.annexures : [],
-            income_rows: Array.isArray(req.body?.income_rows)
-              ? req.body.income_rows
-              : Array.isArray(finance.income_rows)
-                ? finance.income_rows
-                : [],
-          }
-        : req.body || {};
-
       const topupStartedAt = isTopupEditable ? new Date().toISOString() : null;
+      const actor = normalizeActor(req);
 
-      const result = await financeModel.updateFinanceRequest(
-        financeId,
-        updatePayload,
-        normalizeActor(req),
-      );
+      if (isTopupEditable) {
+        const connection = await db.getConnection();
 
-      if (result.affectedRows > 0) {
-        if (isTopupEditable) {
+        try {
+          await connection.beginTransaction();
+          const existingBudgetRows = await financeModel.getBudgetBreakup(financeId, {
+            tx: connection,
+          });
+          const submittedBudgetRows = Array.isArray(req.body?.budget_rows)
+            ? req.body.budget_rows
+            : [];
+          const appendedBudgetRows = submittedBudgetRows
+            .slice(existingBudgetRows.length)
+            .map((row) => {
+              const sanitizedRow = { ...(row || {}) };
+              delete sanitizedRow.approved_amount;
+              delete sanitizedRow.remaining_amount_snapshot;
+              return sanitizedRow;
+            });
+
+          if (!appendedBudgetRows.length) {
+            await connection.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'At least one new topup budget row is required',
+            });
+          }
+
+          const updatePayload = {
+            budget_rows: [...existingBudgetRows, ...appendedBudgetRows],
+            topup_mode: true,
+          };
+
+          const result = await financeModel.updateFinanceRequest(financeId, updatePayload, actor, {
+            tx: connection,
+          });
+
+          if (result.affectedRows <= 0) {
+            await connection.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'No changes applied',
+            });
+          }
+
+          const updatedFinanceContext = await financeModel.getFinanceRecordContext(financeId, {
+            tx: connection,
+            forUpdate: true,
+          });
           const financeMeta = {
             unplannedBudgetEnabled: Boolean(finance.unplanned_budget_enabled),
             unplannedBudgetAmount:
-              finance.unplanned_budget_amount !== undefined && finance.unplanned_budget_amount !== null
+              finance.unplanned_budget_amount !== undefined &&
+              finance.unplanned_budget_amount !== null
                 ? Number(finance.unplanned_budget_amount)
                 : null,
-            unplannedBudgetDescription:
-              normalizeText(finance.unplanned_budget_description) || null,
+            unplannedBudgetDescription: normalizeText(finance.unplanned_budget_description) || null,
             topupMode: true,
           };
 
@@ -619,27 +617,52 @@ const financeController = {
               moduleMetaVersion: 1,
               moduleMeta: {
                 trigger: 'finance_topup',
-                amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+                amountBand:
+                  Number(updatedFinanceContext?.totalBudget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
                 beneficiaryType: normalizeText(finance.beneficiary_type) || null,
                 financeMeta,
               },
             },
+            tx: connection,
           });
 
-          await financeModel.updateFinanceWorkflowSnapshot(financeId, {
-            ...(restartResult.state || {}),
-            topupAt: topupStartedAt,
-            updatedAt: topupStartedAt,
-            lastDecision: 'topup_submitted',
-            lastFeedback: null,
+          await financeModel.updateFinanceWorkflowSnapshot(
+            financeId,
+            {
+              ...(restartResult.state || {}),
+              topupAt: topupStartedAt,
+              updatedAt: topupStartedAt,
+              lastDecision: 'topup_submitted',
+              lastFeedback: null,
+            },
+            { tx: connection },
+          );
+
+          await connection.commit();
+
+          return res.status(200).json({
+            success: true,
+            message: 'Finance topup submitted successfully',
+            data: {
+              id: financeId,
+              requestRef: finance.proposal_ref || null,
+              proposal_ref: finance.proposal_ref || null,
+            },
           });
+        } catch (error) {
+          await connection.rollback();
+          throw error;
+        } finally {
+          connection.release();
         }
+      }
 
+      const result = await financeModel.updateFinanceRequest(financeId, req.body || {}, actor);
+
+      if (result.affectedRows > 0) {
         return res.status(200).json({
           success: true,
-          message: isTopupEditable
-            ? 'Finance topup submitted successfully'
-            : 'Finance request updated successfully',
+          message: 'Finance request updated successfully',
           data: {
             id: financeId,
             requestRef: finance.proposal_ref || null,

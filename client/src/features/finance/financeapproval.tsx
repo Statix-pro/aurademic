@@ -2500,9 +2500,17 @@ const FinanceApproval: React.FC = () => {
   const isTopupWorkflow = Boolean(
     isEditMode && isTopupRoute && ['approved', 'completed'].includes(normalizedWorkflowStatus),
   );
-  const proposalFieldsReadOnly = isViewMode || isTopupWorkflow;
+  const isSuperAdminUser =
+    Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) ||
+    (Array.isArray(user?.roles) &&
+      user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin'));
+  const canSuperAdminEditTerminalFinance =
+    isSuperAdminUser && isViewMode && ['approved', 'completed'].includes(normalizedWorkflowStatus);
+  const proposalFieldsReadOnly =
+    (isViewMode && !canSuperAdminEditTerminalFinance) || isTopupWorkflow;
   const isLockedBudgetRow = (index: number) => isTopupWorkflow && index < initialBudgetRowCount;
-  const isBudgetRowEditable = (index: number) => !isViewMode && !isLockedBudgetRow(index);
+  const isBudgetRowEditable = (index: number) =>
+    (!isViewMode || canSuperAdminEditTerminalFinance) && !isLockedBudgetRow(index);
   const isReturnedFinanceResubmit =
     isEditMode &&
     !isAdminWorkflowContext &&
@@ -2517,13 +2525,6 @@ const FinanceApproval: React.FC = () => {
   const canDownloadPdf =
     ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
     (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
-
-  const isSuperAdminUser =
-    Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) ||
-    (Array.isArray(user?.roles) &&
-      user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin'));
-  const canSuperAdminEditTerminalFinance =
-    isSuperAdminUser && isViewMode && ['approved', 'completed'].includes(normalizedWorkflowStatus);
 
   const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
   const hideWorkflowActionsForFinalStatus =
@@ -4632,9 +4633,12 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={unplannedBudgetDescription}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              setUnplannedBudgetDescription(e.target.value)
-                            }
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (proposalFieldsReadOnly) return;
+                              setUnplannedBudgetDescription(e.target.value);
+                            }}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             placeholder="Enter unplanned expenditure description"
                             style={{
                               border: '1px solid #e0e0e0',
@@ -4643,7 +4647,7 @@ const FinanceApproval: React.FC = () => {
                               fontSize: '0.9rem',
                               width: '100%',
                               fontFamily: 'inherit',
-                              backgroundColor: '#fcfdff',
+                              backgroundColor: proposalFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
                               color: '#000',
                               outline: 'none',
                             }}
@@ -4667,9 +4671,12 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={unplannedBudgetAmount}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ''))
-                            }
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (proposalFieldsReadOnly) return;
+                              setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ''));
+                            }}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             placeholder="₹  0"
                             style={{
                               border: '1px solid #e0e0e0',
@@ -4678,9 +4685,9 @@ const FinanceApproval: React.FC = () => {
                               fontSize: '0.9rem',
                               width: '120px',
                               fontFamily: 'inherit',
-                              backgroundColor: '#fcfdff',
+                              backgroundColor: proposalFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
                               color: '#000',
-                              cursor: 'pointer',
+                              cursor: proposalFieldsReadOnly ? 'not-allowed' : 'pointer',
                               outline: 'none',
                               textAlign: 'left',
                               margin: '0 auto',

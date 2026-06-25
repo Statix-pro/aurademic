@@ -318,10 +318,18 @@ const normalizeBudgetRows = (rows = []) => {
       sub_head: subHead,
       head_only_match: headOnlyMatch,
       amount: toMoney(parsedAmount),
+      approved_amount:
+        row?.approved_amount !== undefined && row?.approved_amount !== null
+          ? toMoney(row.approved_amount)
+          : null,
       budget_line_id: toPositiveInt(row?.budget_line_id),
       budget_proposal_id: toPositiveInt(row?.budget_proposal_id),
       fiscal_year: toPositiveInt(row?.fiscal_year || row?.fiscalYear),
       available_amount_snapshot: hasAvailableSnapshot ? toMoney(parsedAvailableSnapshot) : null,
+      remaining_amount_snapshot:
+        row?.remaining_amount_snapshot !== undefined && row?.remaining_amount_snapshot !== null
+          ? toMoney(row.remaining_amount_snapshot)
+          : null,
       sort_order: index,
     });
   });
@@ -1641,6 +1649,15 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
   const hasBudgetSubHeadIdColumn = await hasFinanceBudgetBreakupColumn('budget_sub_head_id', {
     tx: conn,
   });
+  const hasApprovedAmountColumn = await hasFinanceBudgetBreakupColumn('approved_amount', {
+    tx: conn,
+  });
+  const hasRemainingAmountSnapshotColumn = await hasFinanceBudgetBreakupColumn(
+    'remaining_amount_snapshot',
+    {
+      tx: conn,
+    },
+  );
 
   for (const row of budgetRows) {
     let budget_head_id = toPositiveInt(row.budget_head_id);
@@ -1687,6 +1704,16 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
       const idx = columns.indexOf('amount');
       columns.splice(idx, 0, 'budget_sub_head_id');
       values.splice(idx, 0, budget_sub_head_id);
+    }
+    if (hasApprovedAmountColumn) {
+      const idx = columns.indexOf('available_amount_snapshot');
+      columns.splice(idx, 0, 'approved_amount');
+      values.splice(idx, 0, row.approved_amount ?? null);
+    }
+    if (hasRemainingAmountSnapshotColumn) {
+      const idx = columns.indexOf('sort_order');
+      columns.splice(idx, 0, 'remaining_amount_snapshot');
+      values.splice(idx, 0, row.remaining_amount_snapshot ?? null);
     }
 
     await conn.query(
@@ -2787,11 +2814,14 @@ const financeModel = {
     }
   },
 
-  async updateFinanceRequest(id, financeData, actor = null) {
-    const connection = await db.getConnection();
+  async updateFinanceRequest(id, financeData, actor = null, { tx = null } = {}) {
+    const connection = tx || (await db.getConnection());
+    const ownsTransaction = !tx;
 
     try {
-      await connection.beginTransaction();
+      if (ownsTransaction) {
+        await connection.beginTransaction();
+      }
       const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
       const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn(
         'unplanned_budget_enabled',
@@ -2898,7 +2928,9 @@ const financeModel = {
       );
 
       if (!existingRows.length) {
-        await connection.rollback();
+        if (ownsTransaction) {
+          await connection.rollback();
+        }
         return { affectedRows: 0 };
       }
 
@@ -3288,9 +3320,11 @@ const financeModel = {
         }
       }
 
-      await connection.commit();
+      if (ownsTransaction) {
+        await connection.commit();
+      }
 
-      if (hasAnnexuresInput) {
+      if (ownsTransaction && hasAnnexuresInput) {
         const previousStoredNames = new Set(
           [
             ...previousAnnexures.map((row) => normalizeText(row?.stored_name)),
@@ -3315,10 +3349,14 @@ const financeModel = {
           (hasBudgetRowsInput || hasIncomeRowsInput || hasAnnexuresInput ? 1 : 0),
       };
     } catch (error) {
-      await connection.rollback();
+      if (ownsTransaction) {
+        await connection.rollback();
+      }
       throw new Error(`Error updating finance request: ${error.message}`);
     } finally {
-      connection.release();
+      if (ownsTransaction) {
+        connection.release();
+      }
     }
   },
 
@@ -3459,14 +3497,16 @@ const financeModel = {
     }
   },
 
-  async getBudgetBreakup(financeId) {
+  async getBudgetBreakup(financeId, { tx = db } = {}) {
     try {
-      const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id');
+      const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id', {
+        tx,
+      });
       const budgetProposalSelectSql = hasBudgetProposalIdColumn
         ? 'budget_proposal_id'
         : 'NULL AS budget_proposal_id';
 
-      const [rows] = await db.query(
+      const [rows] = await tx.query(
         `SELECT
            id,
            finance_id,
