@@ -277,6 +277,22 @@ async function resolveExpenditureWorkflowContext(conn, expenditureData = {}) {
   const employeeId = toPositiveInt(expenditureData.employee_id);
   const beneficiaryValue = normalizeText(expenditureData.beneficiary_value);
 
+  // If beneficiary_type is 'Department', resolve departmentId from beneficiaryValue first
+  if (beneficiaryType === 'Department' && beneficiaryValue) {
+    const [departmentRows] = await conn.execute(
+      `SELECT id
+         FROM master_departments
+        WHERE LOWER(TRIM(CONVERT(name USING utf8mb4) COLLATE utf8mb4_unicode_ci))
+              = LOWER(TRIM(CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci))
+        LIMIT 1`,
+      [beneficiaryValue],
+    );
+
+    if (departmentRows.length) {
+      departmentId = toPositiveInt(departmentRows[0].id);
+    }
+  }
+
   if (employeeId) {
     const [employeeRows] = await conn.execute(
       `SELECT department_id, entity_id
@@ -290,21 +306,6 @@ async function resolveExpenditureWorkflowContext(conn, expenditureData = {}) {
     if (employeeRows.length) {
       departmentId = departmentId || toPositiveInt(employeeRows[0].department_id);
       beneficiaryEntityId = beneficiaryEntityId || toPositiveInt(employeeRows[0].entity_id);
-    }
-  }
-
-  if (!departmentId && beneficiaryType === 'Department' && beneficiaryValue) {
-    const [departmentRows] = await conn.execute(
-      `SELECT id
-         FROM master_departments
-        WHERE LOWER(TRIM(CONVERT(name USING utf8mb4) COLLATE utf8mb4_unicode_ci))
-              = LOWER(TRIM(CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci))
-        LIMIT 1`,
-      [beneficiaryValue],
-    );
-
-    if (departmentRows.length) {
-      departmentId = toPositiveInt(departmentRows[0].id);
     }
   }
 
