@@ -1729,3 +1729,32 @@ export async function getAnnualSummary(req, res) {
     });
   }
 }
+
+export async function getPendingCounts(req, res) {
+  try {
+    const { fiscalYear, type } = req.query;
+    if (!fiscalYear || !type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing fiscalYear or type parameters',
+      });
+    }
+
+    const rows = await AdminBudgetModel.getPendingCounts({
+      fiscalYear: Number.parseInt(fiscalYear, 10),
+      type: String(type),
+    });
+
+    return res.json({
+      success: true,
+      data: rows,
+      count: rows.length,
+    });
+  } catch (error) {
+    console.error('Pending counts fetch error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch pending counts data',
+    });
+  }
+}

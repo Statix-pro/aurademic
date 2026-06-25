@@ -3387,3 +3387,197 @@ export async function listAvailableFiscalYears() {
     .map((row) => Number.parseInt(row?.fiscal_year, 10))
     .filter((year) => Number.isInteger(year) && year > 0);
 }
+
+export async function getPendingCounts({ fiscalYear, type }) {
+  const fy = Number.parseInt(fiscalYear, 10);
+  if (!Number.isInteger(fy)) {
+    throw new Error('Invalid fiscal year');
+  }
+
+  const normalizedType = String(type || '').trim().toLowerCase();
+
+  if (normalizedType === 'budget') {
+    const sql = `
+      SELECT
+        CASE
+          WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN 'Department'
+          WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'section') THEN CONCAT(UPPER(LEFT(TRIM(bp.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(bp.beneficiary_type), 2)))
+          WHEN LOWER(TRIM(bp.beneficiary_type)) = 'professional body' THEN 'Professional Body'
+          ELSE CONCAT(UPPER(LEFT(TRIM(bp.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(bp.beneficiary_type), 2)))
+        END AS beneficiary_type,
+        CASE
+          WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN bp.department_id
+          ELSE NULL
+        END AS department_id,
+        CASE
+          WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN NULL
+          ELSE bp.beneficiary_entity_id
+        END AS beneficiary_entity_id,
+        CASE
+          WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN md.name
+          ELSE COALESCE(me.name, bp.beneficiary_value)
+        END AS beneficiary_label,
+        SUM(CASE WHEN (bp.current_stage = 'level1' OR bp.current_stage IS NULL OR bp.status = 'submitted') THEN 1 ELSE 0 END) AS hod,
+        SUM(CASE WHEN (bp.current_stage = 'level1' OR bp.current_stage IS NULL OR bp.status = 'submitted') THEN COALESCE(bp.total_amount, 0) ELSE 0 END) AS hod_amount,
+        SUM(CASE WHEN (bp.current_stage = 'dof' OR bp.status IN ('level1_approved', 'hod_approved', 'coordinator_approved', 'ithead_approved')) THEN 1 ELSE 0 END) AS dof,
+        SUM(CASE WHEN (bp.current_stage = 'dof' OR bp.status IN ('level1_approved', 'hod_approved', 'coordinator_approved', 'ithead_approved')) THEN COALESCE(bp.total_amount, 0) ELSE 0 END) AS dof_amount,
+        SUM(CASE WHEN (bp.current_stage = 'principal' OR bp.status = 'dof_approved') THEN 1 ELSE 0 END) AS principal,
+        SUM(CASE WHEN (bp.current_stage = 'principal' OR bp.status = 'dof_approved') THEN COALESCE(bp.total_amount, 0) ELSE 0 END) AS principal_amount,
+        SUM(CASE WHEN (bp.current_stage = 'chairman') THEN 1 ELSE 0 END) AS chairman,
+        SUM(CASE WHEN (bp.current_stage = 'chairman') THEN COALESCE(bp.total_amount, 0) ELSE 0 END) AS chairman_amount
+      FROM budget_proposals bp
+      LEFT JOIN master_departments md ON bp.department_id = md.id
+      LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
+      WHERE bp.fiscal_year = ?
+        AND LOWER(TRIM(bp.status)) NOT IN ('principal_approved', 'completed', 'rejected', 'archived', 'archive', 'deleted')
+        AND LOWER(TRIM(bp.status)) NOT LIKE '%rejected%'
+        AND LOWER(TRIM(bp.status)) NOT LIKE '%returned%'
+      GROUP BY beneficiary_type, department_id, beneficiary_entity_id, beneficiary_label
+    `;
+    const [rows] = await db.execute(sql, [fy]);
+    return rows;
+  } else if (normalizedType === 'finance') {
+    const sql = `
+      SELECT
+        CASE
+          WHEN LOWER(TRIM(fr.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN 'Department'
+          WHEN LOWER(TRIM(fr.beneficiary_type)) IN ('centre', 'cell', 'club', 'section') THEN CONCAT(UPPER(LEFT(TRIM(fr.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(fr.beneficiary_type), 2)))
+          WHEN LOWER(TRIM(fr.beneficiary_type)) = 'professional body' THEN 'Professional Body'
+          ELSE CONCAT(UPPER(LEFT(TRIM(fr.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(fr.beneficiary_type), 2)))
+        END AS beneficiary_type,
+        CASE
+          WHEN LOWER(TRIM(fr.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN fr.department_id
+          ELSE NULL
+        END AS department_id,
+        CASE
+          WHEN LOWER(TRIM(fr.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN NULL
+          ELSE fr.beneficiary_entity_id
+        END AS beneficiary_entity_id,
+        CASE
+          WHEN LOWER(TRIM(fr.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN md.name
+          ELSE COALESCE(me.name, fr.beneficiary_value)
+        END AS beneficiary_label,
+        SUM(CASE WHEN fr.workflow_stage = 'level1' THEN 1 ELSE 0 END) AS hod,
+        SUM(CASE WHEN fr.workflow_stage = 'level1' THEN COALESCE(fr.proposed_amount, 0) ELSE 0 END) AS hod_amount,
+        SUM(CASE WHEN fr.workflow_stage = 'dof' THEN 1 ELSE 0 END) AS dof,
+        SUM(CASE WHEN fr.workflow_stage = 'dof' THEN COALESCE(fr.proposed_amount, 0) ELSE 0 END) AS dof_amount,
+        SUM(CASE WHEN fr.workflow_stage = 'principal' THEN 1 ELSE 0 END) AS principal,
+        SUM(CASE WHEN fr.workflow_stage = 'principal' THEN COALESCE(fr.proposed_amount, 0) ELSE 0 END) AS principal_amount,
+        SUM(CASE WHEN fr.workflow_stage = 'chairman' THEN 1 ELSE 0 END) AS chairman,
+        SUM(CASE WHEN fr.workflow_stage = 'chairman' THEN COALESCE(fr.proposed_amount, 0) ELSE 0 END) AS chairman_amount
+      FROM finance_requests fr
+      LEFT JOIN master_departments md ON fr.department_id = md.id
+      LEFT JOIN master_entities me ON fr.beneficiary_entity_id = me.id
+      WHERE (
+        EXISTS (
+          SELECT 1
+            FROM finance_budget_breakup fbb_fy
+            JOIN budget_proposals bp_fy ON bp_fy.id = fbb_fy.budget_proposal_id
+           WHERE fbb_fy.finance_id = fr.id
+             AND bp_fy.fiscal_year = ?
+        )
+        OR EXISTS (
+          SELECT 1
+            FROM finance_carry_forward_allocations cf_fy
+           WHERE cf_fy.finance_request_id = fr.id
+             AND cf_fy.target_fiscal_year = ?
+             AND LOWER(TRIM(cf_fy.status)) = 'active'
+        )
+        OR (
+          NOT EXISTS (
+            SELECT 1
+              FROM finance_budget_breakup fbb_any
+             WHERE fbb_any.finance_id = fr.id
+          )
+          AND (
+            YEAR(COALESCE(fr.request_date, fr.created_at))
+              - (MONTH(COALESCE(fr.request_date, fr.created_at)) < 4)
+          ) = ?
+        )
+      )
+        AND LOWER(TRIM(fr.workflow_status)) NOT IN ('completed', 'approved', 'rejected', 'returned', 'archived', 'deleted')
+      GROUP BY beneficiary_type, department_id, beneficiary_entity_id, beneficiary_label
+    `;
+    const [rows] = await db.execute(sql, [fy, fy, fy]);
+    return rows;
+  } else if (normalizedType === 'expenditure') {
+    const sql = `
+      SELECT
+        CASE
+          WHEN LOWER(TRIM(er.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN 'Department'
+          WHEN LOWER(TRIM(er.beneficiary_type)) IN ('centre', 'cell', 'club', 'section') THEN CONCAT(UPPER(LEFT(TRIM(er.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(er.beneficiary_type), 2)))
+          WHEN LOWER(TRIM(er.beneficiary_type)) = 'professional body' THEN 'Professional Body'
+          ELSE CONCAT(UPPER(LEFT(TRIM(er.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(er.beneficiary_type), 2)))
+        END AS beneficiary_type,
+        CASE
+          WHEN LOWER(TRIM(er.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN er.department_id
+          ELSE NULL
+        END AS department_id,
+        CASE
+          WHEN LOWER(TRIM(er.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN NULL
+          ELSE er.beneficiary_entity_id
+        END AS beneficiary_entity_id,
+        CASE
+          WHEN LOWER(TRIM(er.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN md.name
+          ELSE COALESCE(me.name, er.beneficiary_value)
+        END AS beneficiary_label,
+        SUM(CASE WHEN er.workflow_stage = 'level1' THEN 1 ELSE 0 END) AS hod,
+        SUM(CASE WHEN er.workflow_stage = 'level1' THEN COALESCE(er.total_amount, 0) ELSE 0 END) AS hod_amount,
+        SUM(CASE WHEN er.workflow_stage = 'dof' THEN 1 ELSE 0 END) AS dof,
+        SUM(CASE WHEN er.workflow_stage = 'dof' THEN COALESCE(er.total_amount, 0) ELSE 0 END) AS dof_amount,
+        SUM(CASE WHEN er.workflow_stage = 'principal' THEN 1 ELSE 0 END) AS principal,
+        SUM(CASE WHEN er.workflow_stage = 'principal' THEN COALESCE(er.total_amount, 0) ELSE 0 END) AS principal_amount,
+        SUM(CASE WHEN er.workflow_stage = 'chairman' THEN 1 ELSE 0 END) AS chairman,
+        SUM(CASE WHEN er.workflow_stage = 'chairman' THEN COALESCE(er.total_amount, 0) ELSE 0 END) AS chairman_amount
+      FROM expenditure_requests er
+      LEFT JOIN master_departments md ON er.department_id = md.id
+      LEFT JOIN master_entities me ON er.beneficiary_entity_id = me.id
+      WHERE (
+        EXISTS (
+          SELECT 1
+            FROM expenditure_advance_rows ar_fy
+            JOIN budget_proposals bp_fy ON bp_fy.id = ar_fy.budget_proposal_id
+           WHERE ar_fy.expenditure_id = er.id
+             AND bp_fy.fiscal_year = ?
+        )
+        OR EXISTS (
+          SELECT 1
+            FROM expenditure_settlement_rows sr_fy
+            JOIN budget_proposals bp_fy ON bp_fy.id = sr_fy.budget_proposal_id
+           WHERE sr_fy.expenditure_id = er.id
+             AND bp_fy.fiscal_year = ?
+        )
+        OR EXISTS (
+          SELECT 1
+            FROM expenditure_line_rows lr_fy
+            JOIN budget_proposals bp_fy ON bp_fy.id = lr_fy.budget_proposal_id
+           WHERE lr_fy.expenditure_id = er.id
+             AND bp_fy.fiscal_year = ?
+        )
+        OR EXISTS (
+          SELECT 1
+            FROM finance_carry_forward_allocations cf_fy
+           WHERE cf_fy.finance_request_id = er.finance_request_id
+             AND cf_fy.target_fiscal_year = ?
+             AND LOWER(TRIM(COALESCE(cf_fy.status, 'active'))) = 'active'
+        )
+        OR (
+          NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar_any WHERE ar_any.expenditure_id = er.id AND ar_any.budget_proposal_id IS NOT NULL)
+          AND NOT EXISTS (SELECT 1 FROM expenditure_settlement_rows sr_any WHERE sr_any.expenditure_id = er.id AND sr_any.budget_proposal_id IS NOT NULL)
+          AND NOT EXISTS (SELECT 1 FROM expenditure_line_rows lr_any WHERE lr_any.expenditure_id = er.id AND lr_any.budget_proposal_id IS NOT NULL)
+          AND (
+            YEAR(COALESCE(er.request_date, er.created_at))
+              - (MONTH(COALESCE(er.request_date, er.created_at)) < 4)
+          ) = ?
+        )
+      )
+        AND LOWER(TRIM(er.workflow_status)) NOT IN ('completed', 'approved', 'rejected', 'returned', 'archived', 'deleted')
+        AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+      GROUP BY beneficiary_type, department_id, beneficiary_entity_id, beneficiary_label
+    `;
+    const [rows] = await db.execute(sql, [fy, fy, fy, fy, fy]);
+    return rows;
+  } else {
+    throw new Error('Unsupported pending status type');
+  }
+}

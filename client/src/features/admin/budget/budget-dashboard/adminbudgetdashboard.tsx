@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Form } from 'react-bootstrap';
+import { Form, Dropdown } from 'react-bootstrap';
 import Select from 'react-select';
 
 import { useAuth } from '../../../../contexts/AuthContext';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
 import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 import AdminBudgetSummary from '../budget-summary/adminbudgetsummary';
+import AdminPendingDashboard from './adminpendingdashboard';
 import './adminbudgetdashboard.css';
 
 type Option = {
@@ -57,7 +58,9 @@ const getCurrentFiscalYearOption = (): Option => {
 
 const AdminBudgetDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'budget-head' | 'beneficiary-summary'>('budget-head');
+  const [activeTab, setActiveTab] = useState<
+    'budget-head' | 'beneficiary-summary' | 'pending-finance' | 'pending-budget' | 'pending-expenditure'
+  >('budget-head');
   const [financialYear, setFinancialYear] = useState<Option | null>(getCurrentFiscalYearOption());
 
   // Shared styles for react-select components to ensure UI consistency
@@ -431,16 +434,16 @@ const AdminBudgetDashboard: React.FC = () => {
   return (
     <div className="adminbudgetdashboard-page">
       <div className="adminbudgetdashboard-container">
-        {canAccessBeneficiarySummary && (
-          <div className="adminbudgetdashboard-tabs-wrap">
-            <div className="category-toggle-container adminbudgetdashboard-tab-toggle">
-              <button
-                type="button"
-                className={activeTab === 'budget-head' ? 'active' : ''}
-                onClick={() => setActiveTab('budget-head')}
-              >
-                Budget Head
-              </button>
+        <div className="adminbudgetdashboard-tabs-wrap">
+          <div className="category-toggle-container adminbudgetdashboard-tab-toggle">
+            <button
+              type="button"
+              className={activeTab === 'budget-head' ? 'active' : ''}
+              onClick={() => setActiveTab('budget-head')}
+            >
+              Budget Head
+            </button>
+            {canAccessBeneficiarySummary && (
               <button
                 type="button"
                 className={activeTab === 'beneficiary-summary' ? 'active' : ''}
@@ -448,11 +451,31 @@ const AdminBudgetDashboard: React.FC = () => {
               >
                 Beneficiary Summary
               </button>
-            </div>
+            )}
+            <Dropdown className="adminbudgetdashboard-tab-dropdown">
+              <Dropdown.Toggle
+                variant="link"
+                className={activeTab.startsWith('pending-') ? 'active' : ''}
+                id="pending-dashboard-dropdown"
+              >
+                {activeTab === 'pending-finance'
+                  ? 'Finance'
+                  : activeTab === 'pending-budget'
+                    ? 'Budget'
+                    : activeTab === 'pending-expenditure'
+                      ? 'Expenditure'
+                      : 'Pending Status'}
+              </Dropdown.Toggle>
+              <Dropdown.Menu>
+                <Dropdown.Item onClick={() => setActiveTab('pending-finance')}>Finance</Dropdown.Item>
+                <Dropdown.Item onClick={() => setActiveTab('pending-budget')}>Budget</Dropdown.Item>
+                <Dropdown.Item onClick={() => setActiveTab('pending-expenditure')}>Expenditure</Dropdown.Item>
+              </Dropdown.Menu>
+            </Dropdown>
           </div>
-        )}
+        </div>
 
-        {activeTab === 'budget-head' ? (
+        {activeTab === 'budget-head' && (
           <div className="adminbudgetdashboard-card">
             <div className="adminbudgetdashboard-header">
               <div className="adminbudgetdashboard-header-left">
@@ -713,8 +736,16 @@ const AdminBudgetDashboard: React.FC = () => {
               )}
             </div>
           </div>
-        ) : (
-          <AdminBudgetSummary />
+        )}
+        {activeTab === 'beneficiary-summary' && <AdminBudgetSummary />}
+        {activeTab === 'pending-finance' && (
+          <AdminPendingDashboard type="finance" selectStyles={selectStyles} />
+        )}
+        {activeTab === 'pending-budget' && (
+          <AdminPendingDashboard type="budget" selectStyles={selectStyles} />
+        )}
+        {activeTab === 'pending-expenditure' && (
+          <AdminPendingDashboard type="expenditure" selectStyles={selectStyles} />
         )}
       </div>
     </div>

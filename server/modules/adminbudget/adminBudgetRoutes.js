@@ -82,6 +82,7 @@ router.get('/org-units/:type', AdminBudgetController.getOrgUnits);
 router.get('/batch', canViewAnyBudgetStats, AdminBudgetController.getBatch);
 router.get('/consolidation', canViewAnyBudgetStats, AdminBudgetController.getConsolidation);
 router.get('/annual-summary', canAccessDofQueue, AdminBudgetController.getAnnualSummary);
+router.get('/pending-status', canViewAnyBudgetStats, AdminBudgetController.getPendingCounts);
 router.get('/hod', canAccessLevel1Queue, AdminBudgetController.getHodBudgets);
 router.get('/coordinator', canAccessLevel1Queue, AdminBudgetController.getCoordinatorBudgets);
 router.get('/ithead', canAccessItheadQueue, AdminBudgetController.getItheadBudgets);

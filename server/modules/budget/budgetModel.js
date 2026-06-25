@@ -43,6 +43,7 @@ const normalizeText = sharedNormalizeText;
 const normalizeEntityName = sharedNormalizeEntityName;
 const parsePositiveAmount = sharedParsePositiveAmount;
 const getInitialApprovalStage = (flow) => sharedGetInitialApprovalStage(flow);
+const isReturnedBudgetStatus = (status) => normalizeText(status).toLowerCase().includes('returned');
 
 export const normalizeBeneficiaryType = (beneficiaryType) =>
   sharedNormalizeBeneficiaryType(beneficiaryType);
@@ -1148,7 +1149,7 @@ export async function update(
     });
     const approvalFlowString = formatApprovalFlowString(flow);
     const initialStage = getInitialApprovalStage(flow);
-    const isReturnedState = proposal.status && proposal.status.endsWith('_returned');
+    const isReturnedState = isReturnedBudgetStatus(proposal.status);
     const normalizedResubmissionRemarks = normalizeText(resubmissionRemarks);
     if (isReturnedState && !normalizedResubmissionRemarks) {
       throw new Error('Resubmission remarks are required');

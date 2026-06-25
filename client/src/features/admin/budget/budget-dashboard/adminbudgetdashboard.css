@@ -481,3 +481,46 @@
     font-size: 0.82rem;
   }
 }
+
+/* Tab Dropdown Styling */
+.adminbudgetdashboard-tab-dropdown .dropdown-toggle {
+  border: none;
+  background-color: transparent;
+  color: #5d6b8a;
+  padding: 6px 20px;
+  border-radius: 50px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+  flex: 0 0 auto;
+  font-size: 0.95rem;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.adminbudgetdashboard-tab-dropdown .dropdown-toggle.active {
+  background-color: #0069ab;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+}
+
+.adminbudgetdashboard-tab-dropdown .dropdown-toggle:hover {
+  color: #0069ab;
+}
+
+.adminbudgetdashboard-tab-dropdown .dropdown-toggle.active:hover {
+  color: #fff;
+}
+
+.adminbudgetdashboard-tab-dropdown .dropdown-toggle::after {
+  display: inline-block;
+  margin-left: 0.255em;
+  vertical-align: 0.255em;
+  content: "";
+  border-top: 0.3em solid;
+  border-right: 0.3em solid transparent;
+  border-bottom: 0;
+  border-left: 0.3em solid transparent;
+}
