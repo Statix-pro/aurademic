@@ -637,7 +637,7 @@ const buildFinanceSelectSql = ({
       fr.applicant_name
     ) AS applicant_name,
     COALESCE(e.designation, fr.designation) AS designation,
-    COALESCE(dept.name, emp_dept.name, fr.department) AS department,
+    COALESCE(emp_dept.name, fr.department) AS department,
     COALESCE(e.email, fr.email) AS email,
     COALESCE(e.mobile, fr.mobile) AS mobile,
     e.erp_id,
@@ -2248,6 +2248,21 @@ const resolveFinanceWorkflowContext = async (conn, financeData = {}) => {
   let departmentId = null;
   let beneficiaryEntityId = null;
 
+  // Resolve department ID from beneficiary_value if beneficiaryType is 'Department'
+  if (beneficiaryType === 'Department' && normalizeText(financeData.beneficiary_value)) {
+    const [departmentRows] = await conn.query(
+      `SELECT id
+         FROM master_departments
+         WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+         LIMIT 1`,
+      [financeData.beneficiary_value],
+    );
+
+    if (departmentRows.length) {
+      departmentId = toPositiveInt(departmentRows[0].id);
+    }
+  }
+
   const employeeId = toPositiveInt(financeData.employee_id);
 
   if (employeeId) {
@@ -2261,26 +2276,11 @@ const resolveFinanceWorkflowContext = async (conn, financeData = {}) => {
     );
 
     if (employeeRows.length) {
-      departmentId = toPositiveInt(employeeRows[0].department_id);
+      // Fallback to employee's department_id ONLY if it wasn't already resolved (e.g. for non-Department beneficiary types)
+      if (!departmentId) {
+        departmentId = toPositiveInt(employeeRows[0].department_id);
+      }
       beneficiaryEntityId = toPositiveInt(employeeRows[0].entity_id);
-    }
-  }
-
-  if (
-    !departmentId &&
-    beneficiaryType === 'Department' &&
-    normalizeText(financeData.beneficiary_value)
-  ) {
-    const [departmentRows] = await conn.query(
-      `SELECT id
-         FROM master_departments
-         WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
-         LIMIT 1`,
-      [financeData.beneficiary_value],
-    );
-
-    if (departmentRows.length) {
-      departmentId = toPositiveInt(departmentRows[0].id);
     }
   }
 
@@ -2303,7 +2303,6 @@ const resolveFinanceWorkflowContext = async (conn, financeData = {}) => {
 
   return {
     beneficiaryType,
-    entityTypeCode,
     departmentId,
     beneficiaryEntityId,
   };
