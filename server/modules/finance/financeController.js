@@ -567,6 +567,17 @@ const financeController = {
             });
           }
 
+          const lockedWorkflowStatus = normalizeText(
+            lockedFinanceContext.workflowStatus,
+          ).toLowerCase();
+          if (!['approved', 'completed'].includes(lockedWorkflowStatus)) {
+            await connection.rollback();
+            return res.status(409).json({
+              success: false,
+              message: 'This request is no longer eligible for topup submission',
+            });
+          }
+
           const existingBudgetRows = await financeModel.getBudgetBreakup(financeId, {
             tx: connection,
           });

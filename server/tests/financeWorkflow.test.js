@@ -243,6 +243,7 @@ describe('Finance Workflow Integration Tests', () => {
       financeModel.updateFinanceRequest.mockResolvedValue({ affectedRows: 1 });
       financeModel.getFinanceRecordContext.mockResolvedValue({
         totalBudget: 17000,
+        workflowStatus: 'approved',
       });
       workflowService.startWorkflow.mockResolvedValue({
         state: { currentStage: 'level1', status: 'in_progress' },
@@ -320,6 +321,47 @@ describe('Finance Workflow Integration Tests', () => {
       );
       expect(financeModel.updateFinanceRequest.mock.calls[0][1]).not.toHaveProperty('income_rows');
       expect(financeModel.updateFinanceWorkflowSnapshot).toHaveBeenCalled();
+    });
+
+    it('rejects topup if the locked workflow status is no longer terminal', async () => {
+      const approvedFinanceRequest = {
+        id: 201,
+        proposal_ref: '#F-2026-0001',
+        created_by: 1,
+        total_budget: 12000,
+        beneficiary_type: 'Department',
+        workflow_state: {
+          status: 'approved',
+          currentStage: null,
+        },
+      };
+
+      financeModel.getFinanceRequestById.mockResolvedValue(approvedFinanceRequest);
+      financeModel.getFinanceRecordContext.mockResolvedValue({
+        totalBudget: 12000,
+        workflowStatus: 'in_progress',
+      });
+
+      const response = await request(app)
+        .put('/api/finance-requests/201')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          topup_mode: true,
+          budget_rows: [
+            {
+              budget_head: 'Research',
+              sub_head: 'Lab Equipment',
+              amount: 5000,
+            },
+          ],
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('no longer eligible');
+      expect(financeModel.getBudgetBreakup).not.toHaveBeenCalled();
+      expect(financeModel.updateFinanceRequest).not.toHaveBeenCalled();
+      expect(workflowService.startWorkflow).not.toHaveBeenCalled();
     });
   });
 });
