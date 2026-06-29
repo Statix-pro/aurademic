@@ -553,6 +553,20 @@ const financeController = {
 
         try {
           await connection.beginTransaction();
+          const lockedFinanceContext = await financeModel.getFinanceRecordContext(financeId, {
+            tx: connection,
+            forUpdate: true,
+          });
+
+          if (!lockedFinanceContext) {
+            await connection.rollback();
+            return res.status(404).json({
+              success: false,
+              message: 'Finance request not found',
+              error: 'Finance request not found',
+            });
+          }
+
           const existingBudgetRows = await financeModel.getBudgetBreakup(financeId, {
             tx: connection,
           });
@@ -565,6 +579,7 @@ const financeController = {
               const sanitizedRow = { ...(row || {}) };
               delete sanitizedRow.approved_amount;
               delete sanitizedRow.remaining_amount_snapshot;
+              sanitizedRow.is_topup = 1;
               return sanitizedRow;
             });
 

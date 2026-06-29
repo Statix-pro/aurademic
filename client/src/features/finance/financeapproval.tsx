@@ -204,6 +204,7 @@ interface BudgetRow {
   category: string;
   head: string;
   amount: string;
+  isTopup?: boolean;
 }
 
 interface BudgetLineMeta {
@@ -546,6 +547,7 @@ const groupFinanceBudgetRowsForForm = (
         category,
         head,
         amount: Number.isFinite(amount) ? String(amount) : '',
+        isTopup: Boolean(row?.is_topup),
       });
       groupedMeta[groupIndex] = {
         budgetLineId: null,
@@ -562,6 +564,7 @@ const groupFinanceBudgetRowsForForm = (
       groupedMeta[groupIndex].availableAmount += Number.isFinite(availableAmount)
         ? availableAmount
         : 0;
+      if (row?.is_topup) groupedRows[groupIndex].isTopup = true;
     }
 
     const lineId = Number(row?.budget_line_id || 0);
@@ -865,7 +868,9 @@ const FinanceApproval: React.FC = () => {
   const [balanceAmount, setBalanceAmount] = useState<string>('');
   const [debitStatus, setDebitStatus] = useState<'credited' | 'reimbursement' | ''>('');
   const [email, setEmail] = useState<string>('');
-  const [budgetRows, setBudgetRows] = useState([{ category: '', head: '', amount: '' }]);
+  const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([
+    { category: '', head: '', amount: '' },
+  ]);
   const [initialBudgetRowCount, setInitialBudgetRowCount] = useState<number>(0);
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
@@ -1434,7 +1439,11 @@ const FinanceApproval: React.FC = () => {
     }
   };
 
-  const handleBudgetChange = (index: number, field: keyof BudgetRow, value: string) => {
+  const handleBudgetChange = (
+    index: number,
+    field: 'category' | 'head' | 'amount',
+    value: string,
+  ) => {
     const updated = [...budgetRows];
     if (field === 'category') {
       updated[index] = { ...updated[index], category: value, head: '', amount: '' };
@@ -1912,7 +1921,7 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
-      if (showIncomeSection) {
+      if (showIncomeSection && !isTopupWorkflow) {
         for (let index = 0; index < incomeRows.length; index += 1) {
           const row = incomeRows[index];
           const missingFields = getIncomeRowMissingFields(row);
@@ -2009,7 +2018,8 @@ const FinanceApproval: React.FC = () => {
       }
       const primaryAnnexure = annexuresPayload[0] || null;
 
-      const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
+      const includeIncomePayload = showIncomeSection && !isTopupWorkflow;
+      const primaryIncomeRow = includeIncomePayload ? incomeRows[0] : undefined;
       const payload = {
         employee_id: isExternalApplicant ? null : employeeId,
         applicant_name: isExternalApplicant ? applicantName : null,
@@ -2072,7 +2082,7 @@ const FinanceApproval: React.FC = () => {
             available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
           };
         }),
-        income_rows: showIncomeSection ? incomeRows : [],
+        ...(isTopupWorkflow ? {} : { income_rows: showIncomeSection ? incomeRows : [] }),
       };
 
       const result = (
@@ -2508,6 +2518,7 @@ const FinanceApproval: React.FC = () => {
     isSuperAdminUser && isViewMode && ['approved', 'completed'].includes(normalizedWorkflowStatus);
   const proposalFieldsReadOnly =
     (isViewMode && !canSuperAdminEditTerminalFinance) || isTopupWorkflow;
+  const incomeFieldsReadOnly = proposalFieldsReadOnly || isTopupWorkflow;
   const isLockedBudgetRow = (index: number) => isTopupWorkflow && index < initialBudgetRowCount;
   const isBudgetRowEditable = (index: number) =>
     (!isViewMode || canSuperAdminEditTerminalFinance) && !isLockedBudgetRow(index);
@@ -4400,6 +4411,7 @@ const FinanceApproval: React.FC = () => {
                         style={{
                           borderBottom: '1px solid #e0e0e0',
                           opacity: primaryHead ? 1 : 0.6,
+                          backgroundColor: row.isTopup ? '#fffbea' : undefined,
                         }}
                       >
                         <td
@@ -4411,6 +4423,24 @@ const FinanceApproval: React.FC = () => {
                           }}
                         >
                           {index + 1}
+                          {row.isTopup && (
+                            <span
+                              style={{
+                                display: 'block',
+                                marginTop: '4px',
+                                fontSize: '0.65rem',
+                                fontWeight: 600,
+                                color: '#b45309',
+                                background: '#fef3c7',
+                                border: '1px solid #fcd34d',
+                                borderRadius: '4px',
+                                padding: '1px 5px',
+                                letterSpacing: '0.03em',
+                              }}
+                            >
+                              TOPUP
+                            </span>
+                          )}
                         </td>
                         <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                           <CustomDropdown
@@ -4793,7 +4823,11 @@ const FinanceApproval: React.FC = () => {
                         <CustomToggle
                           name="incomeToggle"
                           checked={showIncomeSection}
-                          onChange={(checked) => setShowIncomeSection(checked)}
+                          onChange={(checked) => {
+                            if (incomeFieldsReadOnly) return;
+                            setShowIncomeSection(checked);
+                          }}
+                          disabled={incomeFieldsReadOnly}
                         />
                       </div>
                       <div
@@ -4927,6 +4961,7 @@ const FinanceApproval: React.FC = () => {
                                           toOptions(INCOME_SOURCE_OPTIONS),
                                         )}
                                         onChange={(option) => {
+                                          if (incomeFieldsReadOnly) return;
                                           const selected = option as OptionType | null;
                                           handleIncomeRowChange(
                                             row.id,
@@ -4934,6 +4969,7 @@ const FinanceApproval: React.FC = () => {
                                             selected?.value ? String(selected.value) : '',
                                           );
                                         }}
+                                        isDisabled={incomeFieldsReadOnly}
                                         placeholder="Select"
                                       />
                                     </td>
@@ -4941,13 +4977,16 @@ const FinanceApproval: React.FC = () => {
                                       <input
                                         type="text"
                                         value={row.amount}
-                                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                                          if (incomeFieldsReadOnly) return;
                                           handleIncomeRowChange(
                                             row.id,
                                             'amount',
                                             e.target.value.replace(/\D/g, ''),
-                                          )
-                                        }
+                                          );
+                                        }}
+                                        disabled={incomeFieldsReadOnly}
+                                        readOnly={incomeFieldsReadOnly}
                                         placeholder="₹  0"
                                         min="0"
                                         step="0"
@@ -4958,9 +4997,11 @@ const FinanceApproval: React.FC = () => {
                                           fontSize: '0.9rem',
                                           width: '100%',
                                           fontFamily: 'inherit',
-                                          backgroundColor: '#fcfdff',
+                                          backgroundColor: incomeFieldsReadOnly
+                                            ? '#f5f7fa'
+                                            : '#fcfdff',
                                           color: '#000',
-                                          cursor: 'pointer',
+                                          cursor: incomeFieldsReadOnly ? 'not-allowed' : 'pointer',
                                           outline: 'none',
                                           marginTop: '2px',
                                         }}
@@ -4985,6 +5026,7 @@ const FinanceApproval: React.FC = () => {
                                           toOptions(STATUS_OPTIONS),
                                         )}
                                         onChange={(option) => {
+                                          if (incomeFieldsReadOnly) return;
                                           const selected = option as OptionType | null;
                                           handleIncomeRowChange(
                                             row.id,
@@ -4992,6 +5034,7 @@ const FinanceApproval: React.FC = () => {
                                             selected?.value ? String(selected.value) : '',
                                           );
                                         }}
+                                        isDisabled={incomeFieldsReadOnly}
                                         placeholder="Select"
                                       />
                                     </td>
@@ -4999,9 +5042,12 @@ const FinanceApproval: React.FC = () => {
                                       <input
                                         type="text"
                                         value={row.remarks}
-                                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                                          handleIncomeRowChange(row.id, 'remarks', e.target.value)
-                                        }
+                                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                                          if (incomeFieldsReadOnly) return;
+                                          handleIncomeRowChange(row.id, 'remarks', e.target.value);
+                                        }}
+                                        disabled={incomeFieldsReadOnly}
+                                        readOnly={incomeFieldsReadOnly}
                                         placeholder="Enter remarks"
                                         style={{
                                           border: '1px solid #e0e0e0',
@@ -5010,9 +5056,11 @@ const FinanceApproval: React.FC = () => {
                                           fontSize: '0.9rem',
                                           width: '100%',
                                           fontFamily: 'inherit',
-                                          backgroundColor: '#fcfdff',
+                                          backgroundColor: incomeFieldsReadOnly
+                                            ? '#f5f7fa'
+                                            : '#fcfdff',
                                           color: '#000',
-                                          cursor: 'text',
+                                          cursor: incomeFieldsReadOnly ? 'not-allowed' : 'text',
                                           outline: 'none',
                                           marginTop: '2px',
                                         }}
@@ -5039,31 +5087,32 @@ const FinanceApproval: React.FC = () => {
                                       }}
                                     >
                                       <div style={actionCell}>
-                                        {(index > 0 || (index === 0 && incomeRows.length > 1)) && (
-                                          <button
-                                            type="button"
-                                            onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                                              e.preventDefault();
-                                              handleDeleteIncomeRow(row.id);
-                                            }}
-                                            style={deleteIconBtn}
-                                            title="Delete Row"
-                                            className="btn-sm"
-                                            onMouseEnter={(e) => {
-                                              (
-                                                e.currentTarget as HTMLButtonElement
-                                              ).style.background = '#ffcccc';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              (
-                                                e.currentTarget as HTMLButtonElement
-                                              ).style.background = '#ffe6e6';
-                                            }}
-                                          >
-                                            ×
-                                          </button>
-                                        )}
-                                        {isLastRow && (
+                                        {!incomeFieldsReadOnly &&
+                                          (index > 0 || (index === 0 && incomeRows.length > 1)) && (
+                                            <button
+                                              type="button"
+                                              onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                                e.preventDefault();
+                                                handleDeleteIncomeRow(row.id);
+                                              }}
+                                              style={deleteIconBtn}
+                                              title="Delete Row"
+                                              className="btn-sm"
+                                              onMouseEnter={(e) => {
+                                                (
+                                                  e.currentTarget as HTMLButtonElement
+                                                ).style.background = '#ffcccc';
+                                              }}
+                                              onMouseLeave={(e) => {
+                                                (
+                                                  e.currentTarget as HTMLButtonElement
+                                                ).style.background = '#ffe6e6';
+                                              }}
+                                            >
+                                              ×
+                                            </button>
+                                          )}
+                                        {isLastRow && !incomeFieldsReadOnly && (
                                           <button
                                             type="button"
                                             onClick={(e: MouseEvent<HTMLButtonElement>) => {
@@ -5153,13 +5202,15 @@ const FinanceApproval: React.FC = () => {
                                               name={`contribution-${row.id}`}
                                               value={option}
                                               checked={row.contribution === option}
-                                              onChange={() =>
+                                              onChange={() => {
+                                                if (incomeFieldsReadOnly) return;
                                                 handleIncomeRowChange(
                                                   row.id,
                                                   'contribution',
                                                   option,
-                                                )
-                                              }
+                                                );
+                                              }}
+                                              disabled={incomeFieldsReadOnly}
                                               style={{ accentColor: '#0069ab' }}
                                             />
                                             <span>{option}</span>
@@ -5204,6 +5255,7 @@ const FinanceApproval: React.FC = () => {
                                               accountDropdownOptions,
                                             )}
                                             onChange={(option) => {
+                                              if (incomeFieldsReadOnly) return;
                                               const selected = option as OptionType | null;
                                               handleIncomeRowChange(
                                                 row.id,
@@ -5211,6 +5263,7 @@ const FinanceApproval: React.FC = () => {
                                                 selected?.value ? String(selected.value) : '',
                                               );
                                             }}
+                                            isDisabled={incomeFieldsReadOnly}
                                             placeholder="Select"
                                           />
                                           {accountOptionsError && (
@@ -6203,7 +6256,10 @@ const FinanceApproval: React.FC = () => {
                         </thead>
                         <tbody>
                           {budgetRows.map((row, index) => (
-                            <tr key={index}>
+                            <tr
+                              key={index}
+                              style={row.isTopup ? { backgroundColor: '#fffbea' } : undefined}
+                            >
                               <td
                                 style={{
                                   padding: '2.5px 4px',
@@ -6212,6 +6268,18 @@ const FinanceApproval: React.FC = () => {
                                 }}
                               >
                                 {index + 1}
+                                {row.isTopup && (
+                                  <span
+                                    style={{
+                                      display: 'block',
+                                      fontSize: '0.55rem',
+                                      fontWeight: 700,
+                                      color: '#b45309',
+                                    }}
+                                  >
+                                    TOPUP
+                                  </span>
+                                )}
                               </td>
                               <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
                                 {row.category || '\u00A0'}

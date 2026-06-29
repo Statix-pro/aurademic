@@ -1658,6 +1658,7 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
       tx: conn,
     },
   );
+  const hasIsTopupColumn = await hasFinanceBudgetBreakupColumn('is_topup', { tx: conn });
 
   for (const row of budgetRows) {
     let budget_head_id = toPositiveInt(row.budget_head_id);
@@ -1714,6 +1715,10 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
       const idx = columns.indexOf('sort_order');
       columns.splice(idx, 0, 'remaining_amount_snapshot');
       values.splice(idx, 0, row.remaining_amount_snapshot ?? null);
+    }
+    if (hasIsTopupColumn) {
+      columns.push('is_topup');
+      values.push(row.is_topup ? 1 : 0);
     }
 
     await conn.query(
@@ -3502,9 +3507,24 @@ const financeModel = {
       const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id', {
         tx,
       });
+      const hasApprovedAmountColumn = await hasFinanceBudgetBreakupColumn('approved_amount', {
+        tx,
+      });
+      const hasRemainingAmountSnapshotColumn = await hasFinanceBudgetBreakupColumn(
+        'remaining_amount_snapshot',
+        { tx },
+      );
+      const hasIsTopupColumn = await hasFinanceBudgetBreakupColumn('is_topup', { tx });
       const budgetProposalSelectSql = hasBudgetProposalIdColumn
         ? 'budget_proposal_id'
         : 'NULL AS budget_proposal_id';
+      const approvedAmountSelectSql = hasApprovedAmountColumn
+        ? 'approved_amount'
+        : 'NULL AS approved_amount';
+      const remainingAmountSnapshotSelectSql = hasRemainingAmountSnapshotColumn
+        ? 'remaining_amount_snapshot'
+        : 'NULL AS remaining_amount_snapshot';
+      const isTopupSelectSql = hasIsTopupColumn ? 'is_topup' : '0 AS is_topup';
 
       const [rows] = await tx.query(
         `SELECT
@@ -3515,10 +3535,11 @@ const financeModel = {
            budget_head,
            sub_head,
            amount,
-           approved_amount,
+           ${approvedAmountSelectSql},
            available_amount_snapshot,
-           remaining_amount_snapshot,
+           ${remainingAmountSnapshotSelectSql},
            sort_order,
+           ${isTopupSelectSql},
            created_at
          FROM finance_budget_breakup
          WHERE finance_id = ?
