@@ -30,6 +30,8 @@ import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/
 import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
 import PublicationsPage from '../features/user-dashboard/publicationspage/PublicationsPage';
 import UserDashboard from '../features/user-dashboard/userdashboard';
+import WorkOrderDashboard from '../features/user-dashboard/workorderdashboard/workorderdashboard';
+import WorkOrder from '../features/workorder/WorkOrder';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
 import { MsalProvider } from '../shared/components/MsalProvider';
@@ -152,6 +154,22 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <ProjectsPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrderDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder/new"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
                       </ProtectedRoute>
                     }
                   />

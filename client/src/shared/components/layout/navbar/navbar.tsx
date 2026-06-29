@@ -433,6 +433,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 '/hall-booking',
                 '/eventdashboard',
                 '/event',
+                '/workorder',
               ])
                 ? 'active'
                 : ''
@@ -473,6 +474,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 onClick={handleLinkClick}
               >
                 Event
+              </Link>
+              <Link
+                to="/workorder"
+                className={`sb-sublink ${isGroupActive(['/workorder']) ? 'active' : ''}`}
+                onClick={handleLinkClick}
+              >
+                Work Order
               </Link>
             </div>
           )}
