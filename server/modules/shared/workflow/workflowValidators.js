@@ -87,7 +87,7 @@ export const validateWorkflowMeta = (meta = {}) => {
   const payload = meta && typeof meta === 'object' ? { ...meta } : {};
 
   const origin = normalizeText(payload.origin).toLowerCase() || 'api';
-  if (!['api', 'system', 'resubmit'].includes(origin)) {
+  if (!['api', 'system', 'resubmit', 'topup'].includes(origin)) {
     throw new WorkflowError('Invalid workflow meta.origin', 400, 'INVALID_WORKFLOW_META');
   }
 
