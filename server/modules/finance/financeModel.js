@@ -4043,7 +4043,8 @@ const financeModel = {
          fr.beneficiary_type,
          fr.beneficiary_entity_id,
          COALESCE(fr.department_id, scope_dept.id) AS department_id,
-         fr.total_budget
+         fr.total_budget,
+         fr.workflow_state
        FROM finance_requests fr
        LEFT JOIN master_departments scope_dept
          ON LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) = 'department'
@@ -4058,6 +4059,7 @@ const financeModel = {
     }
 
     const row = rows[0];
+    const workflowState = normalizeWorkflowState(row.workflow_state);
 
     return {
       beneficiaryType: normalizeBeneficiaryType(row.beneficiary_type),
@@ -4065,6 +4067,8 @@ const financeModel = {
       departmentId: toPositiveInt(row.department_id),
       totalBudget: toMoney(row.total_budget),
       applicantUserId: toPositiveInt(row.created_by),
+      workflowState,
+      workflowStatus: normalizeWorkflowStatus(workflowState),
     };
   },
 
