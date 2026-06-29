@@ -2,8 +2,8 @@ import { Trash2, Eye, Plus, CloudUpload } from 'lucide-react';
 import React, { useState } from 'react';
 import '../styles/EventForm.css';
 import { v4 as uuidv4 } from 'uuid';
-
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { FINANCE_INCOME_HEADS, FINANCE_BUDGET_HEADS, FINANCE_INITIAL_DOCS } from '../constants';
 
 // Type definitions
 interface IncomeRow {
@@ -182,10 +182,9 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                         }
                       >
                         <option value="">-- Select --</option>
-                        <option value="Registration Fee">Registration Fee</option>
-                        <option value="Sponsorship">Sponsorship</option>
-                        <option value="Management Contribution">Management Contribution</option>
-                        <option value="Others">Others</option>
+                        {FINANCE_INCOME_HEADS.map(head => (
+                          <option key={head} value={head}>{head}</option>
+                        ))}
                       </select>
                     ) : (
                       <input
@@ -340,13 +339,9 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                         }
                       >
                         <option value="">-- Select --</option>
-                        <option value="Honorarium">Honorarium</option>
-                        <option value="Travel">Travel</option>
-                        <option value="Printing">Printing</option>
-                        <option value="Stationary">Stationary</option>
-                        <option value="Food">Food</option>
-                        <option value="Refreshment">Refreshment</option>
-                        <option value="Others">Others</option>
+                        {FINANCE_BUDGET_HEADS.map(head => (
+                          <option key={head} value={head}>{head}</option>
+                        ))}
                       </select>
                     ) : (
                       <input
@@ -560,12 +555,11 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
 const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToTab, eventId }) => {
   const [enabled, setEnabled] = useState<boolean>(true);
 
-  const initialDocStates: DocState[] = [
-    { name: 'Sanction Order', enabled: false, file: null },
-    { name: 'Utilization Certificate', enabled: false, file: null },
-    { name: 'Bank Statement', enabled: false, file: null },
-    { name: 'Statement of Expenditure', enabled: false, file: null },
-  ];
+  const initialDocStates: DocState[] = FINANCE_INITIAL_DOCS.map(name => ({
+    name,
+    enabled: false,
+    file: null,
+  }));
 
   const [agencies, setAgencies] = useState<Agency[]>([
     {

@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
+import "../../finance/financeapproval.css";
+import "../styles/EventPage.css";
+import PreEvent from "./PreEvent";
+import EventEntry from "./EventEntry";
+import FinanceSection from "./FinanceSection";
+import EventUpdates from "./EventUpdates";
+import DocumentsPage from "./Documents";
 
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import './EventPage.css';
-import PreEvent from './PreEvent';
-import FinanceSection from './FinanceSection';
-import EventUpdates from './EventUpdates';
-import DocumentsPage from './Documents';
 
 interface EventSummary {
   title: string;
@@ -23,7 +25,7 @@ interface TabConfig {
 
 const EventPage: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
-  const [activeTab, setActiveTab] = useState('pre-event');
+  const [activeTab, setActiveTab] = useState("pre-event");
   const [summary, setSummary] = useState<EventSummary | null>(null);
 
   useEffect(() => {
@@ -31,28 +33,33 @@ const EventPage: React.FC = () => {
     authenticityUtility
       .get(`/events/${eventId}/summary`)
       .then((res) => setSummary(res as unknown as EventSummary))
-      .catch((err: unknown) => console.error('Failed to load summary:', err));
+      .catch((err: unknown) => console.error("Failed to load summary:", err));
   }, [eventId]);
 
   const tabs: TabConfig[] = [
     {
-      id: 'pre-event',
-      label: 'Pre Event Approvals',
+      id: "pre-event",
+      label: "Pre Event Approvals",
       component: PreEvent,
     },
     {
-      id: 'finance',
-      label: 'Finance',
+      id: "event-1",
+      label: "Multi Event",
+      component: EventEntry,
+    },
+    {
+      id: "finance",
+      label: "Finance",
       component: FinanceSection,
     },
     {
-      id: 'updates',
-      label: 'Event Updates',
+      id: "updates",
+      label: "Event Updates",
       component: EventUpdates,
     },
     {
-      id: 'post-event',
-      label: 'Post Event Submission',
+      id: "post-event",
+      label: "Post Event Submission",
       component: DocumentsPage,
     },
   ];
@@ -61,11 +68,14 @@ const EventPage: React.FC = () => {
     const active = tabs.find((tab) => tab.id === activeTab);
     if (!active) return null;
     const Component = active.component;
-    return <Component goToTab={setActiveTab} eventId={eventId} />;
+    const content = <Component goToTab={setActiveTab} eventId={eventId} />;
+
+    return content;
   };
 
   return (
     <>
+
       <div className="event-page">
         <header className="event-summary">
           {summary && (
@@ -73,8 +83,8 @@ const EventPage: React.FC = () => {
               <h1>{summary.title}</h1>
               <p>Status: {summary.status}</p>
               <p>
-                Created: {new Date(summary.createdAt).toLocaleString()} | Updated:{' '}
-                {new Date(summary.updatedAt).toLocaleString()}
+                Created: {new Date(summary.createdAt).toLocaleString()} |
+                Updated: {new Date(summary.updatedAt).toLocaleString()}
               </p>
             </>
           )}
@@ -84,7 +94,7 @@ const EventPage: React.FC = () => {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              className={activeTab === tab.id ? 'active' : ''}
+              className={activeTab === tab.id ? "active" : ""}
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.label}

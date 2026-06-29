@@ -1,0 +1,2566 @@
+.event-approval-page.journal-form-body {
+  --event-blue: #0069ab;
+  --event-blue-hover: #005492;
+  --event-bg: #f0f6ff;
+  --event-card-border: #d9e4f0;
+  --event-line: rgba(79, 79, 110, 0.14);
+  --event-input-border: #e0e0e0;
+  --event-input-bg: #fcfdff;
+  --event-input-text: #495057;
+  --event-heading-text: #495057;
+  --event-title-text: #0069ab;
+  --event-muted: #a1acbab9;
+  --event-band-bg: #e8f2fd;
+  --event-shadow: 0 6px 20px rgba(0, 105, 171, 0.08);
+  width: 100%;
+  min-height: auto;
+  padding: 0;
+  background: transparent;
+}
+
+.event-approval-container.journal-form-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding-top: 0;
+  padding-left: 0;
+  padding-right: 0;
+  padding-bottom: 16px;
+}
+
+@media (max-width: 768px) {
+  .event-approval-page.journal-form-body {
+    padding: 12px;
+  }
+}
+
+.event-approval-page *,
+.event-approval-page *::before,
+.event-approval-page *::after {
+  box-sizing: border-box;
+}
+
+.event-approval-card.form-card {
+  border: 1px solid var(--event-card-border);
+  border-radius: 12px;
+  padding: 24px;
+  margin: 0 0 24px;
+  background: #ffffff;
+  box-shadow: var(--event-shadow);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.event-approval-card.form-card:hover {
+  box-shadow: 0 10px 24px rgba(0, 105, 171, 0.12);
+  transform: translateY(-1px);
+}
+
+.event-approval-last-card.form-card {
+  margin-bottom: 0;
+}
+
+.event-approval-title-row,
+.event-approval-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0 0 14px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--event-line);
+  color: var(--event-title-text);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.event-approval-title-row {
+  justify-content: space-between;
+}
+
+.event-approval-title-row h2,
+.event-approval-section-heading>span {
+  margin: 0;
+  color: var(--event-title-text);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.event-approval-section-heading.spaced {
+  margin-top: 16px;
+}
+
+.event-approval-grid,
+.event-approval-band,
+.event-approval-split,
+.event-approval-row-line,
+.event-approval-coordinator-card,
+.event-approval-ceremony-row {
+  display: grid;
+  gap: 10px;
+}
+
+.event-approval-grid,
+.event-approval-band,
+.event-approval-split {
+  margin-bottom: 0px;
+  margin-top: 25px;
+}
+
+.event-approval-grid.two,
+.event-approval-band.two,
+.event-approval-split {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.event-approval-split {
+  grid-template-columns: minmax(260px, 0.85fr) minmax(420px, 1.15fr);
+  align-items: start;
+}
+
+.event-approval-grid.three {
+  grid-template-columns: 1.4fr 1fr 1fr;
+}
+
+.event-approval-grid.four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.event-approval-grid.schedule {
+  grid-template-columns: 1fr 1fr 1.6fr;
+  gap: 12px 18px;
+  align-items: end;
+}
+
+.schedule-date-from {
+  grid-column: 1;
+}
+
+.schedule-date-to {
+  grid-column: 2;
+}
+
+.schedule-days {
+  grid-column: 3;
+}
+
+.schedule-mode {
+  grid-column: 1 / 3;
+}
+
+.schedule-venue {
+  grid-column: 3 / -1;
+}
+
+.schedule-meeting {
+  grid-column: 3 / -1;
+}
+
+.schedule-venue:has(~ .schedule-meeting) {
+  grid-column: 3 / 6;
+}
+
+.schedule-venue~.schedule-meeting {
+  grid-column: 6 / -1;
+}
+
+.schedule-meeting-wide {
+  grid-column: 3;
+}
+
+.event-approval-page label.span-4 {
+  display: block;
+  width: 100%;
+  margin-bottom: 14px;
+}
+
+.event-approval-page label.span-4 input,
+.event-approval-page label.span-4 select {
+  margin-top: 8px;
+}
+
+.event-approval-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.event-approval-band {
+  padding: 10px 14px;
+  border: 1px solid #bfd4ea;
+  border-radius: 8px;
+  background: var(--event-band-bg);
+}
+
+.event-approval-theme-grid {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  margin-top: 8px;
+}
+
+.event-approval-registration-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: end;
+  gap: 22px;
+  margin-bottom: 14px;
+}
+
+.event-approval-registration-top label>select {
+  margin-top: 8px;
+}
+
+.event-approval-flyer-field {
+  position: relative;
+}
+
+.event-approval-flyer-field input {
+  position: absolute;
+  inset: auto 0 0 0;
+  width: 100%;
+  height: 36px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.event-approval-file-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  margin-top: 8px;
+  border-radius: 8px;
+  background: #e8f2fd;
+  color: var(--event-blue);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-approval-band.registration {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  justify-content: start;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  margin-top: 0;
+  margin-bottom: 12px;
+  overflow-x: visible;
+  background: transparent;
+}
+
+.event-approval-registration-box {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
+  gap: 8px 12px;
+  min-width: 0;
+  min-height: 62px;
+  padding: 10px;
+  border: 1px solid #bfd4ea;
+  border-radius: 6px;
+  background: var(--event-band-bg);
+}
+
+.event-approval-registration-box.wide {
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+}
+
+.event-approval-band.registration label,
+.event-approval-band.registration .event-approval-toggle-pair>span,
+.event-approval-band.accommodation label,
+.event-approval-band.accommodation .event-approval-segmented>span {
+  color: var(--event-blue);
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  line-height: 1.1;
+}
+
+.event-approval-band.registration label,
+.event-approval-band.registration .event-approval-toggle-pair {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: flex-start;
+}
+
+.event-approval-band.registration label {
+  display: grid;
+  grid-template-rows: 14px 1fr;
+  row-gap: 6px;
+}
+
+.event-approval-band.registration .event-approval-toggle-pair {
+  display: grid;
+  grid-template-rows: 14px 1fr;
+  row-gap: 6px;
+}
+
+.event-approval-band.registration input,
+.event-approval-band.registration select,
+.event-approval-band.registration .event-approval-toggle-pair button,
+.event-approval-band.accommodation input,
+.event-approval-band.accommodation .event-approval-segmented button {
+  height: 36px;
+  min-height: 36px;
+}
+
+.event-approval-band.registration input,
+.event-approval-band.registration select,
+.event-approval-band.registration .event-approval-toggle-pair button {
+  height: 36px;
+  min-height: 36px;
+}
+
+.event-approval-band.registration input,
+.event-approval-band.registration select,
+.event-approval-band.accommodation input {
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.event-approval-band.registration input,
+.event-approval-band.registration select {
+  background-color: #fcfdff;
+  color: #495057;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.event-approval-band.registration input::placeholder {
+  color: #a1acba;
+  opacity: 1;
+  font-weight: 400;
+}
+
+.event-approval-band.registration select {
+  appearance: auto;
+  background-image: none;
+  padding-right: 12px;
+}
+
+.event-approval-band.registration select.event-approval-select.is-placeholder {
+  color: #a1acba;
+  font-weight: 400;
+}
+
+.event-approval-band.registration .event-approval-toggle-pair,
+.event-approval-band.accommodation .event-approval-segmented {
+  gap: 6px;
+}
+
+.event-approval-band.registration .event-approval-toggle-pair-buttons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.event-approval-band.registration .event-approval-toggle-pair button {
+  flex: 1;
+  width: auto;
+  border-radius: 6px;
+  font-size: 13px;
+  padding: 6px 30px;
+}
+
+.event-approval-subsection-heading {
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--event-line);
+  color: var(--event-blue);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.event-approval-subsection-heading.spaced {
+  margin-top: 16px;
+}
+
+.event-approval-band.accommodation {
+  grid-template-columns: 1fr;
+  align-items: end;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px 16px;
+  width: 100%;
+  max-width: none;
+}
+
+.event-approval-band.accommodation .event-approval-section-heading {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+  padding-bottom: 10px;
+}
+
+.event-approval-band.accommodation .event-approval-section-heading>span {
+  font-size: 14px;
+}
+
+.event-approval-band.accommodation .event-approval-switch {
+  justify-self: end;
+}
+
+.event-approval-mini-card {
+  border: 1px solid rgba(217, 228, 240, 0.95);
+  border-radius: 18px;
+  padding: 16px;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(26, 43, 70, 0.08);
+  width: 100%;
+}
+
+.event-approval-mini-card-team {
+  max-width: none;
+}
+
+.event-approval-mini-card-doc {
+  width: 100%;
+}
+
+.event-approval-mini-card .event-approval-section-heading {
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+}
+
+.event-approval-mini-card .event-approval-grid {
+  margin-bottom: 0;
+  gap: 16px;
+}
+
+.event-approval-coordinator-card,
+.event-approval-ceremony-box {
+  padding: 16px;
+  border: 1px solid rgba(217, 228, 240, 0.95);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(26, 43, 70, 0.06);
+}
+
+.event-approval-ceremony-box {
+  gap: 16px;
+}
+
+.event-approval-page label,
+.event-approval-segmented>span,
+.event-approval-toggle-pair>span,
+.event-approval-inline-box>span,
+.event-approval-age-control>span {
+  display: block;
+  margin: 0 0 12px;
+  color: var(--event-heading-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.event-approval-grid label>input,
+.event-approval-grid label>select,
+.event-approval-ceremony-row label>input,
+.event-approval-ceremony-row label>select {
+  margin-top: 6px;
+}
+
+.event-approval-page input,
+.event-approval-page select,
+.event-approval-multi-select {
+  width: 100%;
+  min-width: 0;
+  height: 42px;
+  border: 1px solid var(--event-input-border);
+  border-radius: 12px;
+  background: var(--event-input-bg);
+  color: var(--event-input-text);
+  font: inherit;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 10px 15px;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.event-approval-page input::placeholder {
+  color: #a1acba;
+  opacity: 1;
+}
+
+.event-approval-page input[type="date"].is-placeholder,
+.event-approval-page input[type="time"].is-placeholder {
+  color: #a1acba;
+}
+
+.event-approval-page input[type="date"].is-placeholder::-webkit-datetime-edit,
+.event-approval-page input[type="time"].is-placeholder::-webkit-datetime-edit {
+  color: #a1acba;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.event-approval-page input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+.event-approval-page input[type="time"]::-webkit-datetime-edit-fields-wrapper,
+.event-approval-page input[type="date"]::-webkit-datetime-edit-text,
+.event-approval-page input[type="time"]::-webkit-datetime-edit-text,
+.event-approval-page input[type="date"]::-webkit-datetime-edit-month-field,
+.event-approval-page input[type="date"]::-webkit-datetime-edit-day-field,
+.event-approval-page input[type="date"]::-webkit-datetime-edit-year-field,
+.event-approval-page input[type="time"]::-webkit-datetime-edit-hour-field,
+.event-approval-page input[type="time"]::-webkit-datetime-edit-minute-field,
+.event-approval-page input[type="time"]::-webkit-datetime-edit-ampm-field {
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.event-approval-page input[type="date"].has-value,
+.event-approval-page input[type="time"].has-value,
+.event-approval-page input[type="date"].has-value::-webkit-datetime-edit,
+.event-approval-page input[type="time"].has-value::-webkit-datetime-edit {
+  color: #495057;
+}
+
+.event-approval-page input:focus,
+.event-approval-page select:focus {
+  border-color: var(--event-blue);
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.14);
+  background: #ffffff;
+}
+
+.event-approval-page input:disabled,
+.event-approval-page select:disabled {
+  background: #f4f7fb;
+  color: #9aa5b3;
+  cursor: not-allowed;
+}
+
+/* Override for CustomTagInput to match Event inputs exactly */
+.event-approval-page .custom-input-group .custom-input {
+  min-height: 42px !important;
+  border: 1px solid var(--event-input-border) !important;
+  border-radius: 12px !important;
+  background: var(--event-input-bg) !important;
+  padding: 4px 15px !important;
+  transition: all 0.3s ease;
+}
+
+.event-approval-page .custom-input-group .custom-input:focus-within {
+  border-color: var(--event-blue) !important;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.14) !important;
+  background: #ffffff !important;
+}
+
+.event-approval-page .custom-input-group input {
+  height: auto;
+  min-height: auto;
+  border: none;
+  background: transparent;
+  padding: 0;
+  width: auto;
+  flex: 1 1 auto;
+}
+
+.event-approval-page .custom-input-group input:focus {
+  box-shadow: none;
+  background: transparent;
+  border-color: transparent;
+}
+
+.event-approval-page select,
+.event-approval-multi-select summary {
+  appearance: auto;
+  border-radius: 12px;
+  background-color: #fcfdff;
+  background-image: none;
+  padding: 10px 15px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.event-approval-page select option {
+  color: #495057;
+  background-color: #ffffff;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.event-approval-page select option[value=""] {
+  color: #a1acba;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.event-approval-multi-select {
+  position: relative;
+  padding: 0;
+}
+
+.event-approval-multi-select summary {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  list-style: none;
+}
+
+.event-approval-multi-select summary::-webkit-details-marker {
+  display: none;
+}
+
+.event-approval-multi-select[open] {
+  border-color: var(--event-blue);
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+  background: #ffffff;
+}
+
+.event-approval-multi-select.is-placeholder summary {
+  color: var(--event-muted);
+}
+
+.event-approval-multi-select.has-value summary {
+  color: var(--event-input-text);
+}
+
+.event-approval-multi-select-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.event-approval-multi-select-chips {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.event-approval-multi-select-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: #e1f0ff;
+  color: #1f3a52;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.event-approval-multi-select-chip button,
+.event-approval-multi-select-clear {
+  border: 0;
+  background: transparent;
+  color: #6f7680;
+  font: inherit;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.event-approval-multi-select-clear {
+  margin-left: auto;
+  color: #b8bdc3;
+  font-size: 28px;
+}
+
+.event-approval-multi-select-menu label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  color: #495057;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.event-approval-multi-select-menu label:hover {
+  background: #f0f6ff;
+}
+
+.event-approval-multi-select-menu input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--event-blue);
+}
+
+.event-approval-page select.event-approval-select.is-placeholder {
+  color: var(--event-muted);
+}
+
+.event-approval-page select.event-approval-select.has-value {
+  color: var(--event-input-text);
+}
+
+.event-approval-mini-card-doc .event-approval-grid.three {
+  grid-template-columns: minmax(180px, 1.3fr) minmax(130px, 0.9fr) minmax(120px, 0.7fr);
+  gap: 18px;
+  align-items: end;
+}
+
+.event-approval-mini-card-doc .event-approval-grid.three label {
+  min-width: 0;
+}
+
+.event-approval-fieldset-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: max-content max-content max-content;
+  align-items: center;
+  justify-content: start;
+  gap: 18px 28px;
+}
+
+.event-approval-band.accommodation .event-approval-fieldset-grid label {
+  display: grid;
+  grid-template-columns: max-content 84px;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: #314a55;
+}
+
+.event-approval-band.accommodation input {
+  width: 84px;
+  justify-self: end;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.event-approval-band.accommodation .event-approval-segmented {
+  gap: 0;
+}
+
+.event-approval-band.accommodation .event-approval-segmented>div {
+  gap: 12px;
+}
+
+.event-approval-band.accommodation .event-approval-segmented button {
+  min-width: 54px;
+  padding-left: 14px;
+  padding-right: 14px;
+  border-radius: 4px;
+}
+
+.event-approval-inline-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(110px, 0.72fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 56px;
+  padding: 10px 18px;
+  border: 1px solid #bfd4ea;
+  border-radius: 8px;
+  background: #e8f2fd;
+}
+
+.event-approval-inline-box>span {
+  margin: 0;
+  color: var(--event-blue);
+  text-align: center;
+}
+
+.event-approval-inline-box.compact {
+  grid-template-columns: 50px minmax(0, 1fr);
+}
+
+.event-approval-inline-box input,
+.event-approval-inline-box select {
+  height: 42px;
+}
+
+.event-approval-segmented,
+.event-approval-toggle-pair,
+.event-approval-age-control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.event-approval-segmented>span,
+.event-approval-toggle-pair>span,
+.event-approval-age-control>span {
+  margin-bottom: 0;
+}
+
+.event-approval-segmented>div,
+.event-approval-toggle-pair-buttons,
+.event-approval-age-control-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.event-approval-toggle-pair button {
+  min-height: 32px;
+  border: 1px solid #d4dbe4;
+  border-radius: 6px;
+  background: #f5f7fb;
+  color: var(--event-blue);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 22px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.event-approval-segmented button {
+  min-height: 42px;
+  border: 1px solid #d4dbe4;
+  border-radius: 6px;
+  background: #f5f7fb;
+  color: var(--event-blue);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 30px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  flex: 1;
+}
+
+.event-approval-age-control button {
+  min-height: 36px;
+  border: 1px solid #d4dbe4;
+  border-radius: 6px;
+  background: #f5f7fb;
+  color: var(--event-blue);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 24px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.event-approval-segmented button.active,
+.event-approval-toggle-pair button.active,
+.event-approval-age-control button.active {
+  background: var(--event-blue);
+  border-color: var(--event-blue);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(0, 105, 171, 0.2);
+}
+
+.event-approval-segmented button:hover:not(.active),
+.event-approval-toggle-pair button:hover:not(.active),
+.event-approval-age-control button:hover:not(.active) {
+  border-color: #b7cae0;
+  background: #edf5ff;
+}
+
+.event-approval-age-control {
+  min-width: 0;
+  gap: 6px;
+}
+
+.event-approval-age-control-row {
+  gap: 8px;
+  align-items: stretch;
+  flex-wrap: nowrap;
+}
+
+.event-approval-age-control-row>button {
+  width: auto;
+  min-width: 90px;
+  height: 42px;
+  min-height: 42px;
+  padding: 6px 14px;
+  border-radius: 8px;
+  flex: 0 0 auto;
+}
+
+.event-approval-age-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 130px;
+  flex: 0 0 auto;
+  height: 42px;
+  border: 1px solid #d4dbe4;
+  border-radius: 8px;
+  background: #f5f7fb;
+  padding: 3px 3px 3px 12px;
+  transition: all 0.18s ease;
+  cursor: pointer;
+}
+
+.event-approval-age-option:hover {
+  border-color: #b7cae0;
+}
+
+.event-approval-age-option.active {
+  background: var(--event-blue);
+  border-color: var(--event-blue);
+  box-shadow: 0 4px 12px rgba(0, 105, 171, 0.2);
+}
+
+.event-approval-age-option span {
+  color: var(--event-blue);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: color 0.18s ease;
+}
+
+.event-approval-age-option.active span {
+  color: #ffffff;
+}
+
+.event-approval-age-option input {
+  width: 56px;
+  height: 34px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid rgba(212, 219, 228, 0.4);
+  border-radius: 6px;
+  background: #ffffff;
+  text-align: center;
+  margin: 0;
+  box-shadow: 0 2px 4px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  font-size: 14px;
+  color: var(--event-input-text);
+  pointer-events: auto;
+}
+
+.event-approval-age-option input:disabled {
+  opacity: 0.6;
+  background: #fcfcfc;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.event-approval-age-option input:focus {
+  border-color: #b7cae0;
+  box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.15), 0 2px 4px rgba(15, 23, 42, 0.08);
+  outline: none;
+}
+
+.event-approval-age-option input::placeholder {
+  color: #a1acba;
+}
+
+.event-approval-table-wrap {
+  margin: 18px 0 16px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.event-approval-table.budget-table {
+  width: 100%;
+  min-width: 0;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #ffffff;
+  border: 0;
+}
+
+.event-approval-table.budget-table .participant-category-column {
+  width: 20%;
+
+}
+
+.event-approval-table.budget-table .fee-column {
+  width: 17%;
+}
+
+.event-approval-table.budget-table .member-column {
+  width: 16%;
+}
+
+.event-approval-table.budget-table .additional-member-column {
+  width: 18%;
+
+
+}
+
+.event-approval-table.budget-table .action-column {
+  width: 12%;
+}
+
+.event-approval-table.budget-table th,
+.event-approval-table.budget-table td {
+  border: 0;
+  border-bottom: 1px solid #e0e6ed;
+  border-right: 1px solid #e0e6ed;
+}
+
+.event-approval-table.budget-table th:last-child,
+.event-approval-table.budget-table td:last-child {
+  border-right: 0;
+  text-align: center;
+}
+
+.event-approval-table.budget-table thead th {
+  background: #f4f8fc;
+  color: var(--event-blue);
+  text-align: center;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 14px 16px;
+  vertical-align: middle;
+}
+
+.event-approval-table.budget-table thead th:last-child {
+  text-align: center;
+}
+
+.event-approval-table.budget-table td {
+  padding: 16px;
+  background: #ffffff;
+  color: var(--event-input-text);
+  font-size: 14px;
+  vertical-align: middle;
+}
+
+.event-approval-table.budget-table tbody tr:hover td {
+  background: #fcfdff;
+}
+
+.event-approval-table.budget-table input,
+.event-approval-table.budget-table select {
+  width: 100%;
+  height: 57px;
+  min-height: 42px;
+  font-family: inherit;
+  font-size: 14px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  border: 1px solid #d4dbe4;
+  box-shadow: none;
+}
+
+.event-approval-table.budget-table td:last-child .event-approval-icon-actions button {
+  width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.event-approval-table.budget-table td:last-child .event-approval-icon-actions button:not(.danger) {
+  background: #f0f6ff;
+  color: var(--event-blue);
+}
+
+.event-approval-table.budget-table td:last-child .event-approval-icon-actions button.danger {
+  background: #fef0f0;
+  color: #dc2626;
+}
+
+.event-approval-fee-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.event-approval-expand-row-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #666666;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.event-approval-expand-row-button:hover {
+  background: #f5f6f8;
+  color: var(--event-blue);
+}
+
+.event-approval-expand-row-button .action-dropdown-arrow {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+.event-approval-expand-row-button .action-dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.event-approval-table.budget-table tr.event-approval-fee-details-row td {
+  padding: 16px;
+  background: #ffffff;
+}
+
+.event-approval-fee-details {
+  width: 100%;
+}
+
+.event-approval-fee-description {
+  display: block;
+  width: 100%;
+  margin-bottom: 20px;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.event-approval-fee-description textarea {
+  display: block;
+  width: 100%;
+  min-height: 60px;
+  margin-top: 8px;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background-color: #fcfdff;
+  color: #495057;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: 1.5;
+  padding: 10px 15px;
+  resize: vertical;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.event-approval-fee-description textarea:focus {
+  border-color: var(--event-blue);
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+  background: #ffffff;
+}
+
+.event-approval-fee-description textarea::placeholder {
+  color: #6c757d;
+  opacity: 1;
+}
+
+.event-approval-fee-schedule {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.event-approval-month-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+  width: min(800px, 100%);
+}
+
+.event-approval-month-box {
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  background: #fcfdff;
+  padding: 15px 12px;
+  text-align: center;
+  transition: all 0.3s ease;
+}
+
+.event-approval-month-box:hover,
+.event-approval-month-box.active {
+  border-color: var(--event-blue);
+  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.1);
+}
+
+.event-approval-month-box.active {
+  background: #e7f3ff;
+  box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.18);
+}
+
+.event-approval-month-label {
+  margin-bottom: 8px;
+  color: #495057;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.event-approval-month-box input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #495057;
+  font-family: inherit;
+  font-size: 0.95rem;
+  padding: 8px 10px;
+  text-align: center;
+  outline: none;
+}
+
+.event-approval-month-box input:focus {
+  border-color: var(--event-blue);
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
+.event-approval-month-summary {
+  min-width: 220px;
+  padding: 16px;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: #f8f9fa;
+  color: #2b2f55;
+  font-size: 13px;
+}
+
+.event-approval-month-summary h4 {
+  margin: 0 0 12px;
+  color: #2b2f55;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.event-approval-month-summary div:not(.event-approval-summary-line):not(.event-approval-remaining) {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.event-approval-summary-line {
+  height: 1px;
+  margin: 12px 0;
+  background: #dee2e6;
+}
+
+.event-approval-remaining {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.event-approval-remaining.match {
+  border-color: #c3e6cb;
+  background: #d4edda;
+  color: #155724;
+}
+
+.event-approval-remaining.pending {
+  border-color: #ffeaa7;
+  background: #fff3cd;
+  color: #856404;
+}
+
+.event-approval-remaining.over {
+  border-color: #f5c6cb;
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.event-approval-month-summary p {
+  margin: 8px 0 0;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.event-approval-row-line {
+  grid-template-columns: 24px minmax(220px, 244px) minmax(0, 1fr) auto;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.event-approval-row-line:last-of-type {
+  margin-bottom: 0;
+}
+
+.event-approval-page input.event-approval-radio-dot {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  padding: 0;
+  border: 2px solid #7f8b9c;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  accent-color: var(--event-blue);
+  cursor: pointer;
+  margin-left: 16px;
+}
+
+.event-approval-page input.event-approval-radio-dot:checked {
+  border-color: var(--event-blue);
+}
+
+.event-approval-coordinator-card {
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding-left: 0;
+}
+
+.event-approval-coordinator-card:last-of-type {
+  margin-bottom: 0;
+}
+
+.event-approval-coordinator-card .event-approval-grid.two {
+  margin-bottom: 0;
+}
+
+.event-approval-ceremony-row {
+  grid-template-columns: 170px 1fr 1fr 1.5fr;
+  align-items: center;
+  gap: 18px;
+}
+
+.event-approval-ceremony-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 140px;
+  color: var(--event-blue);
+  font-size: 15px;
+  font-weight: 700;
+  margin-top: 15px;
+}
+
+.event-approval-ceremony-label .event-approval-switch {
+  margin-top: 10px;
+}
+
+.event-approval-switch {
+  position: relative;
+  display: inline-flex;
+  width: 40px;
+  height: 22px;
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+.event-approval-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.event-approval-switch span {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  background: #c7d1dd;
+  cursor: pointer;
+  transition: background-color 0.18s ease;
+}
+
+.event-approval-switch span::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
+  transition: transform 0.18s ease;
+}
+
+.event-approval-switch input:checked+span {
+  background: var(--event-blue);
+}
+
+.event-approval-switch input:checked+span::before {
+  transform: translateX(18px);
+}
+
+.event-approval-switch.is-disabled span {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.event-approval-ceremony-row.is-disabled label {
+  color: #7d8794;
+}
+
+.event-approval-ceremony-row.is-disabled input {
+  border-color: #e3e8ef;
+  background: #f6f8fb;
+  color: #9aa5b3;
+  box-shadow: none;
+}
+
+.event-approval-icon-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.event-approval-icon-actions button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease;
+}
+
+.event-approval-icon-actions button:not(.muted):not(.danger) {
+  background: var(--event-blue);
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.22);
+}
+
+.event-approval-icon-actions button:not(.muted):not(.danger):hover {
+  background: var(--event-blue-hover);
+  transform: translateY(-1px);
+}
+
+.event-approval-icon-actions button.muted {
+  background: transparent;
+  color: #a6aeb9;
+}
+
+.event-approval-icon-actions button.muted:hover {
+  background: #f2f5f9;
+  color: #8d96a3;
+  transform: translateY(-1px);
+}
+
+.event-approval-icon-actions button.danger {
+  background: transparent;
+  color: #ef4444;
+}
+
+.event-approval-icon-actions button.danger:hover {
+  background: #fef0f0;
+  color: #dc2626;
+  transform: translateY(-1px);
+}
+
+.event-approval-title-row .event-approval-icon-actions button {
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+}
+
+.event-approval-title-row .event-approval-icon-actions {
+  gap: 6px;
+}
+
+.event-approval-title-row .event-approval-icon-actions .event-approval-header-collapse-button {
+  color: #7f8b9c;
+}
+
+.event-approval-header-collapse-button svg {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+.event-approval-header-collapse-button svg.open {
+  transform: rotate(180deg);
+}
+
+.event-approval-footer.finance-submit-buttons {
+  margin-top: 32px;
+  margin-bottom: 8px;
+}
+
+.event-approval-footer button {
+  border: 0;
+  border-radius: 14px;
+  padding: 12px 28px;
+  background: var(--event-blue);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 105, 171, 0.22);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+
+.event-approval-footer button:hover:not(:disabled) {
+  background: var(--event-blue-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 22px rgba(0, 105, 171, 0.28);
+}
+
+.event-approval-footer button:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+@media (max-width: 1180px) {
+  .event-approval-controls-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-approval-controls-row .event-approval-age-control {
+    grid-column: 1 / -1;
+  }
+
+  .event-approval-band.accommodation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-approval-fieldset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-approval-ceremony-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-approval-ceremony-label {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .event-approval-container.journal-form-container {
+    padding-bottom: 20px;
+  }
+
+  .event-approval-card.form-card {
+    padding: 16px 18px;
+    border-radius: 18px;
+  }
+
+  .event-approval-grid.four,
+  .event-approval-grid.schedule,
+  .event-approval-split,
+  .event-approval-fieldset-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-approval-band.registration {
+    grid-template-columns: 1fr;
+  }
+
+  .event-approval-registration-box,
+  .event-approval-registration-box.wide {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-approval-fee-schedule {
+    flex-direction: column;
+  }
+
+  .event-approval-month-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .event-approval-month-summary {
+    width: 100%;
+  }
+
+  .event-approval-mini-card-team {
+    max-width: none;
+  }
+
+  .schedule-date-from,
+  .schedule-date-to,
+  .schedule-days,
+  .schedule-mode,
+  .schedule-venue,
+  .schedule-meeting,
+  .schedule-meeting-wide {
+    grid-column: auto;
+  }
+
+  .event-approval-row-line {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .event-approval-row-line .event-approval-icon-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .event-approval-coordinator-card {
+    grid-template-columns: 1fr;
+  }
+
+  .event-approval-coordinator-card .event-approval-radio-dot {
+    display: none;
+  }
+
+  .event-approval-coordinator-card .event-approval-icon-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .event-approval-container.journal-form-container {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .event-approval-grid.two,
+  .event-approval-grid.three,
+  .event-approval-grid.four,
+  .event-approval-grid.schedule,
+  .event-approval-controls-row,
+  .event-approval-band.registration,
+  .event-approval-band.accommodation,
+  .event-approval-fieldset-grid,
+  .event-approval-split,
+  .event-approval-ceremony-row {
+    grid-template-columns: 1fr;
+  }
+
+  .event-approval-row-line {
+    grid-template-columns: 1fr;
+  }
+
+  .event-approval-mini-card-doc .event-approval-grid.three {
+    grid-template-columns: 1fr;
+  }
+
+  .event-approval-row-line .event-approval-radio-dot,
+  .event-approval-coordinator-card .event-approval-radio-dot {
+    display: none;
+  }
+
+  .event-approval-age-control-row,
+  .event-approval-segmented>div,
+  .event-approval-toggle-pair-buttons {
+    flex-wrap: wrap;
+  }
+
+  .event-approval-age-inputs-container {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 10px 12px;
+  }
+
+  .event-approval-coordinator-card {
+    padding: 18px 16px;
+  }
+
+  .event-approval-table-wrap {
+    border-radius: 12px;
+  }
+}
+
+/* Pre-event compact registration and accommodation layout */
+.event-approval-page .event-approval-band.registration {
+  grid-template-columns: minmax(0, 0.98fr) minmax(0, 0.82fr) minmax(0, 1.02fr);
+  gap: 8px;
+  align-items: stretch;
+  overflow: hidden;
+}
+
+.event-approval-page .event-approval-registration-box,
+.event-approval-page .event-approval-registration-box.wide {
+  grid-template-columns: minmax(150px, 0.88fr) minmax(160px, 1fr);
+  gap: 6px 14px;
+  justify-items: start;
+  min-width: 0;
+  min-height: 60px;
+  padding: 8px 10px;
+  overflow: hidden;
+}
+
+.event-approval-page .event-approval-registration-box.wide {
+  grid-template-columns: minmax(170px, 0.95fr) minmax(180px, 1fr);
+}
+
+.event-approval-page .event-approval-band.registration label,
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair {
+  min-width: 0;
+}
+
+.event-approval-page .event-approval-band.registration label,
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair>span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-approval-page .event-approval-band.registration input,
+.event-approval-page .event-approval-band.registration select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  height: 34px;
+  min-height: 34px;
+  padding: 7px 10px;
+}
+
+.event-approval-page .event-approval-registration-box label:first-child select,
+.event-approval-page .event-approval-registration-box label:first-child input {
+  max-width: 160px;
+}
+
+.event-approval-page .event-approval-registration-box label:nth-child(2) input,
+.event-approval-page .event-approval-registration-box label:nth-child(2) select {
+  max-width: 230px;
+}
+
+.event-approval-page .event-approval-registration-box.wide label:nth-child(2) input {
+  max-width: 240px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair-buttons {
+  grid-template-columns: repeat(2, 38px);
+  gap: 5px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair button {
+  height: 34px;
+  min-height: 34px;
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.event-approval-page .event-approval-accommodation-card.form-card {
+  margin-top: 16px;
+}
+
+.event-approval-page .event-approval-accommodation-card .event-approval-band.accommodation {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.event-approval-page .event-approval-accommodation-card .event-approval-fieldset-grid {
+  grid-template-columns: max-content max-content max-content;
+  gap: 14px 22px;
+}
+
+.event-approval-page .event-approval-accommodation-card .event-approval-band.accommodation .event-approval-segmented button {
+  min-width: 54px;
+  min-height: 34px;
+}
+
+.event-approval-page .event-approval-accommodation-card .event-approval-band.accommodation input {
+  width: 84px;
+  height: 34px;
+}
+
+@media (max-width: 1180px) {
+  .event-approval-page .event-approval-band.registration {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .event-approval-page .event-approval-registration-box,
+  .event-approval-page .event-approval-registration-box.wide {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    justify-items: stretch;
+  }
+
+  .event-approval-page .event-approval-registration-box label:first-child select,
+  .event-approval-page .event-approval-registration-box label:first-child input,
+  .event-approval-page .event-approval-registration-box label:nth-child(2) input,
+  .event-approval-page .event-approval-registration-box label:nth-child(2) select,
+  .event-approval-page .event-approval-registration-box.wide label:nth-child(2) input {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+
+  .event-approval-page .event-approval-registration-box,
+  .event-approval-page .event-approval-registration-box.wide {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Pre-event fine tuning */
+.event-approval-page .event-approval-title-row {
+  border-bottom: 0;
+  padding-bottom: 0;
+  margin-bottom: 12px;
+}
+
+.event-approval-page input.event-approval-radio-dot {
+  appearance: radio !important;
+  -webkit-appearance: radio !important;
+  display: inline-block !important;
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  min-height: 16px !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.event-approval-page .event-approval-registration-box:first-child {
+  grid-template-columns: 168px 220px;
+  column-gap: 8px;
+  justify-content: start;
+}
+
+.event-approval-page .event-approval-registration-box:first-child label:first-child select {
+  max-width: 140px;
+}
+
+.event-approval-page .event-approval-registration-box:first-child label:nth-child(2) input {
+  max-width: 220px;
+}
+
+@media (max-width: 1180px) {
+  .event-approval-page .event-approval-registration-box:first-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-approval-page .event-approval-registration-box:first-child label:first-child select,
+  .event-approval-page .event-approval-registration-box:first-child label:nth-child(2) input {
+    max-width: none;
+  }
+}
+
+/* Match the compact registration strip reference exactly */
+.event-approval-page .event-approval-band.registration {
+  display: grid;
+  grid-template-columns: 132px 122px 88px 122px 126px 146px;
+  align-items: end;
+  justify-content: start;
+  column-gap: 12px;
+  row-gap: 0;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 72px;
+  padding: 10px 14px;
+  border: 1px solid #bfd4ea;
+  border-radius: 8px;
+  background: #e8f2fd;
+  overflow-x: auto;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box,
+.event-approval-page .event-approval-band.registration .event-approval-registration-box.wide {
+  display: contents;
+}
+
+.event-approval-page .event-approval-band.registration label,
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair {
+  display: grid;
+  grid-template-rows: 18px 30px;
+  row-gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+}
+
+.event-approval-page .event-approval-band.registration label,
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair>span {
+  color: #0069ab;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.event-approval-page .event-approval-band.registration input,
+.event-approval-page .event-approval-band.registration select {
+  width: 100%;
+  max-width: none !important;
+  height: 30px;
+  min-height: 30px;
+  padding: 4px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 38px);
+  gap: 6px;
+  align-items: center;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair button {
+  width: 38px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .event-approval-page .event-approval-band.registration {
+    width: 50%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 10px;
+    overflow-x: visible;
+  }
+}
+
+/* Registration row: three compact groups stretched to the full card width */
+.event-approval-page .event-approval-band.registration {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box,
+.event-approval-page .event-approval-band.registration .event-approval-registration-box.wide {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.9fr) minmax(112px, 1fr);
+  align-items: end;
+  gap: 4px 6px;
+  width: 100%;
+  min-height: 84px;
+  padding: 9px 10px;
+  border: 1px solid #bfd4ea;
+  border-radius: 8px;
+  background: #e8f2fd;
+  overflow: hidden;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box.wide {
+  grid-template-columns: minmax(122px, 0.95fr) minmax(122px, 1fr);
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 6px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child label:first-child select {
+  width: 140%;
+  min-width: 0;
+  max-width: none !important;
+}
+
+.event-approval-page .event-approval-band.registration label,
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair {
+  display: grid;
+  grid-template-rows: 16px 30px;
+  row-gap: 5px;
+  min-width: 0;
+  margin: 0;
+}
+
+.event-approval-page .event-approval-band.registration label,
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair>span {
+  color: #0069ab;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 0px;
+  white-space: nowrap;
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.event-approval-page .event-approval-band.registration input,
+.event-approval-page .event-approval-band.registration select {
+  height: 30px;
+  min-height: 35px;
+  width: 100%;
+  max-width: none !important;
+  padding: 6px 9px;
+  border-radius: 7px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, 27px);
+  gap: 40px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair button {
+  width: 50px;
+  height: 30px;
+  min-height: 35px;
+  padding: 0;
+  border-radius: 5px;
+  margin-bottom: 20px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child {
+  display: grid !important;
+  grid-template-columns: minmax(110px, 0.95fr) minmax(0, 1.05fr) !important;
+  column-gap: 40px !important;
+  align-items: start !important;
+
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child>* {
+  min-width: 0;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child label:first-child select {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child label:nth-child(2) input {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child .event-approval-segmented {
+  align-self: start;
+}
+
+@media (max-width: 900px) {
+  .event-approval-page .event-approval-band.registration {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Schedule layout: black titles with stacked controls like the reference */
+.event-approval-page .event-approval-grid.schedule-top,
+.event-approval-page .event-approval-grid.schedule-bottom {
+  margin-bottom: 12px;
+  gap: 14px;
+}
+
+.event-approval-page .event-approval-grid.schedule-top {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.event-approval-page .event-approval-grid.schedule-bottom {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.event-approval-page .schedule-date-from,
+.event-approval-page .schedule-date-to,
+.event-approval-page .schedule-venue,
+.event-approval-page .schedule-meeting,
+.event-approval-page .event-approval-schedule-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: 2px;
+  min-width: 0;
+  min-height: 92px;
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid #d9dee8;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+
+
+.event-approval-page .schedule-date-from,
+.event-approval-page .schedule-date-to,
+.event-approval-page .schedule-venue,
+.event-approval-page .schedule-meeting {
+  color: #111827;
+}
+
+.event-approval-page .schedule-date-from>input,
+.event-approval-page .schedule-date-to>input,
+.event-approval-page .schedule-venue>select,
+.event-approval-page .schedule-venue>input,
+.event-approval-page .schedule-meeting>input,
+.event-approval-page .event-approval-schedule-card>input,
+.event-approval-page .schedule-mode-select {
+  width: 100%;
+  min-width: 0;
+}
+
+.event-approval-page .schedule-field-title,
+.event-approval-page .schedule-date-from,
+.event-approval-page .schedule-date-to,
+.event-approval-page .schedule-venue,
+.event-approval-page .schedule-meeting {
+  color: #111827;
+}
+
+.event-approval-page .schedule-field-title,
+.event-approval-page .schedule-date-from>span,
+.event-approval-page .schedule-date-to>span,
+.event-approval-page .schedule-venue>span,
+.event-approval-page .schedule-meeting>span {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.event-approval-page .event-approval-schedule-card {
+  align-content: start;
+}
+
+.event-approval-page .event-approval-schedule-card .schedule-field-title {
+  display: block;
+  margin: 0;
+}
+
+.event-approval-page .schedule-days input,
+.event-approval-page .schedule-mode-select,
+.event-approval-page .schedule-venue>select,
+.event-approval-page .schedule-meeting>input {
+  height: 45px;
+  min-height: 30px;
+  border: 1px solid #d9dee8;
+  border-radius: 14px;
+  background: #fcfdff;
+  color: #495057;
+  font-size: 15px;
+  padding: 9px 16px;
+  box-shadow: none;
+  margin-top: 6px;
+}
+
+.event-approval-page .schedule-mode-select {
+  appearance: auto;
+  background-image: none;
+  text-align: left;
+  border-radius: 14px;
+  padding-right: 14px;
+}
+
+.event-approval-page .schedule-mode-select.has-value {
+  background: #edf5ff;
+  border-color: #bfd4ea;
+  color: #0069ab;
+  font-weight: 700;
+  height: 45px;
+
+
+}
+
+.event-approval-page .mode-title {
+  color: #111827 !important;
+}
+
+.event-approval-page .schedule-mode .schedule-field-title {
+  display: block;
+  margin: 0px;
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+
+}
+
+.event-approval-page .schedule-session .event-approval-segmented {
+  gap: 0;
+}
+
+.event-approval-page .schedule-session .event-approval-segmented>span {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.event-approval-page .schedule-session .event-approval-segmented>div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.event-approval-page .schedule-session .event-approval-segmented button {
+  min-height: 45px;
+  width: 75px;
+  border-radius: 14px;
+  padding: 8px 12px;
+  font-size: 12px;
+  margin-top: 6px;
+}
+
+@media (max-width: 1180px) {
+  .event-approval-page .event-approval-grid.schedule-top {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-approval-page .event-approval-grid.schedule-bottom {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .event-approval-page .schedule-meeting {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+
+  .event-approval-page .event-approval-grid.schedule-top,
+  .event-approval-page .event-approval-grid.schedule-bottom {
+    grid-template-columns: 1fr;
+  }
+
+  .event-approval-page .schedule-session .event-approval-segmented>div {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Registration fees table: match the compact blue-header reference */
+.event-approval-page .event-approval-table-wrap {
+  margin: 16px 0 14px;
+  overflow-x: auto;
+  border: 1px solid #d9dee8;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.event-approval-page .event-approval-table.budget-table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: #ffffff;
+}
+
+.event-approval-page .event-approval-table.budget-table th,
+.event-approval-page .event-approval-table.budget-table td {
+  border: 1px solid #d9dee8;
+}
+
+.event-approval-page .event-approval-table.budget-table thead th {
+  background: #edf5ff;
+  color: #0069ab;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 18px 14px;
+  letter-spacing: 0.2px;
+}
+
+.event-approval-page .event-approval-table.budget-table thead tr:first-child th {
+  border-bottom: 1px solid #d9dee8;
+}
+
+.event-approval-page .event-approval-table.budget-table thead tr:nth-child(2) th {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  font-size: 14px;
+}
+
+.event-approval-page .event-approval-table.budget-table tbody td {
+  background: #ffffff;
+  padding: 18px 14px;
+  vertical-align: middle;
+  color: #495057;
+  font-size: 14px;
+  text-align: center;
+}
+
+.event-approval-page .event-approval-table.budget-table tbody tr:hover td {
+  background: #fbfdff;
+}
+
+.event-approval-page .event-approval-table.budget-table tbody td:first-child {
+  text-align: center;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.event-approval-page .event-approval-table.budget-table tbody td:last-child {
+  white-space: nowrap;
+}
+
+.event-approval-page .event-approval-table.budget-table input,
+.event-approval-page .event-approval-table.budget-table select {
+  width: 100%;
+  height: 60px;
+  min-height: 60px;
+  border: 1px solid #d9dee8;
+  border-radius: 16px;
+  background: #fcfdff;
+  color: #495057;
+  font-size: 15px;
+  padding: 14px 18px;
+  box-shadow: none;
+}
+
+.event-approval-page .event-approval-table.budget-table select.event-approval-select.is-placeholder {
+  color: var(--event-muted);
+}
+
+.event-approval-page .event-approval-table.budget-table td:last-child .event-approval-icon-actions {
+  justify-content: center;
+  gap: 10px;
+}
+
+.event-approval-page .event-approval-table.budget-table td:last-child .event-approval-icon-actions button {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border-radius: 10px;
+  background: #edf5ff;
+  color: #0069ab;
+  box-shadow: none;
+}
+
+.event-approval-page .event-approval-table.budget-table td:last-child .event-approval-icon-actions button.danger {
+  background: #fff1f2;
+  color: #e11d48;
+}
+
+.event-approval-page .event-approval-table.budget-table td:last-child .event-approval-icon-actions button.danger:hover {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+@media (max-width: 900px) {
+  .event-approval-page .event-approval-table.budget-table {
+    min-width: 720px;
+  }
+}
+
+/* Flatten schedule fields: remove card backgrounds and use toggle mode */
+.event-approval-page .event-approval-grid.schedule-top,
+.event-approval-page .event-approval-grid.schedule-bottom {
+  background: transparent;
+}
+
+.event-approval-page .schedule-date-from,
+.event-approval-page .schedule-date-to,
+.event-approval-page .schedule-days,
+.event-approval-page .schedule-session,
+.event-approval-page .schedule-mode,
+.event-approval-page .schedule-venue,
+.event-approval-page .schedule-meeting {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.event-approval-page .schedule-days input,
+.event-approval-page .schedule-venue>select,
+.event-approval-page .schedule-meeting>input {
+  width: 100%;
+}
+
+.event-approval-page .schedule-mode .event-approval-segmented>div {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.event-approval-page .schedule-mode .event-approval-segmented button {
+  min-height: 45px;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-size: 14px;
+}
+
+.event-approval-page .schedule-mode .event-approval-segmented>span,
+.event-approval-page .schedule-session .event-approval-segmented>span,
+.event-approval-page .schedule-field-title {
+  color: #111827;
+}
+
+@media (max-width: 640px) {
+  .event-approval-page .schedule-mode .event-approval-segmented>div {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Final registration-strip cleanup */
+.event-approval-page .event-approval-band.registration {
+  width: 100%;
+  margin: 10px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box,
+.event-approval-page .event-approval-band.registration .event-approval-registration-box.wide {
+  display: grid;
+  grid-template-columns: minmax(0, 0.98fr) minmax(0, 1.02fr);
+  gap: 4px 5px;
+  align-content: start;
+  min-width: 0;
+  min-height: 80px;
+  padding: 9px 10px;
+  border: 1px solid #bfd4ea;
+  border-radius: 8px;
+  background: #e8f2fd;
+  overflow: hidden;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box>*,
+.event-approval-page .event-approval-band.registration .event-approval-registration-box.wide>* {
+  min-width: 0;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child {
+  grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:nth-child(2),
+.event-approval-page .event-approval-band.registration .event-approval-registration-box.wide {
+  grid-template-columns: minmax(150px, 0.54fr) minmax(0, 1.46fr);
+  gap: 0px 0px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child {
+  width: calc(100% - 16px);
+  justify-self: end;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:nth-child(2) {
+  width: calc(100% - 16px);
+  justify-self: center;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box.wide {
+  grid-template-columns: minmax(146px, 0.54fr) minmax(0, 1.46fr);
+  width: calc(100% - 16px);
+  justify-self: start;
+}
+
+.event-approval-page .event-approval-band.registration label,
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair {
+  display: grid;
+  grid-template-rows: 16px 36px;
+  row-gap: 8px;
+  min-width: 0;
+  margin: 0;
+  align-content: start;
+}
+
+.event-approval-page .event-approval-band.registration label,
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair>span {
+  margin: 0;
+  color: #0069ab;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.event-approval-page .event-approval-band.registration input,
+.event-approval-page .event-approval-band.registration select {
+  width: 100%;
+  max-width: none !important;
+  height: 36px;
+
+  padding: 6px 10px;
+  border-radius: 7px;
+  font-size: 13px;
+  margin-top: 0;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 48px));
+  gap: 8px;
+  justify-content: start;
+  align-content: start;
+  margin-left: 6px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair button,
+.event-approval-page .event-approval-band.registration .event-approval-segmented button {
+  min-width: 0;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 5px;
+  font-size: 13px;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair button {
+  width: 48px;
+  padding: 0;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-registration-box:first-child select {
+  max-width: none !important;
+}
+
+.event-approval-page .event-approval-band.registration .event-approval-segmented>span,
+.event-approval-page .event-approval-band.registration .event-approval-toggle-pair>span,
+.event-approval-page .event-approval-band.registration label {
+  color: #0069ab;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+@media (max-width: 900px) {
+  .event-approval-page .event-approval-band.registration {
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .event-approval-page .event-approval-band.registration .event-approval-registration-box,
+  .event-approval-page .event-approval-band.registration .event-approval-registration-box.wide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.event-approval-page .tableSelect {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  padding: 2px 8px;
+  font-size: 0.95rem;
+}
+
+.event-approval-page .tableInput {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  padding: 10px 12px;
+  font-size: 0.95rem;
+}
+
+.event-approval-page .tableSelect:focus,
+.event-approval-page .tableInput:focus {
+  border-color: #0069ab;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+  outline: none;
+}
