@@ -500,6 +500,32 @@
   box-shadow: none;
 }
 
+.financecard-topup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid #d5eadc;
+  background: linear-gradient(135deg, #ecfff2 0%, #dff7e6 100%);
+  color: #157347;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(21, 115, 71, 0.08);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+.financecard-topup-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 22px rgba(21, 115, 71, 0.12);
+  filter: brightness(1.01);
+}
+
 .financecard-download-btn {
   width: 44px;
   height: 44px;
