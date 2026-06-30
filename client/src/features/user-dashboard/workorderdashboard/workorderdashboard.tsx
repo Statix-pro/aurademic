@@ -2,8 +2,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2,
-  CalendarDays,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -121,10 +119,6 @@ interface WorkOrderItem {
   };
   submittedAt: string;
 }
-
-const statusOptions = ['All', 'Pending', 'Completed', 'Procurement', 'On Hold', 'Assigned'];
-const priorityOptions = ['All', 'High', 'Medium', 'Low', 'Routine'];
-
 const formatDisplayDate = (value: string) => {
   if (!value) return '';
   const date = new Date(`${value}T00:00:00`);
@@ -239,9 +233,6 @@ const normalizeStatus = (status: string): WorkOrderStatus => {
   return 'Pending';
 };
 
-const toDropdownOptions = (values: string[]): OptionType[] =>
-  values.map((value) => ({ value, label: value }));
-
 const getSelectedOption = (value: string, options: OptionType[]): OptionType | null =>
   options.find((option) => option.value === value) || null;
 
@@ -321,19 +312,6 @@ const mapSubmissionsToRows = (submissions: StoredWorkOrderSubmission[]): WorkOrd
       if (!aIsReminder && bIsReminder) return 1;
       return new Date(b.date).getTime() - new Date(a.date).getTime();
     });
-};
-
-const getDateRangeLabel = (items: WorkOrderItem[]) => {
-  if (items.length === 0) return 'All Submitted Dates';
-  const timestamps = items
-    .map((item) => new Date(`${item.date}T00:00:00`).getTime())
-    .filter((time) => Number.isFinite(time));
-  if (timestamps.length === 0) return 'All Submitted Dates';
-  const min = new Date(Math.min(...timestamps)).toISOString().slice(0, 10);
-  const max = new Date(Math.max(...timestamps)).toISOString().slice(0, 10);
-  return min === max
-    ? formatDisplayDate(min)
-    : `${formatDisplayDate(min)} - ${formatDisplayDate(max)}`;
 };
 
 const WorkOrderDashboard: React.FC = () => {
