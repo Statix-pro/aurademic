@@ -19,6 +19,12 @@ const safeParseJSON = (value, fallback = null) => {
 };
 
 const normalizeText = (value) => String(value || '').trim();
+const parseBooleanLike = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = normalizeText(value).toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+};
 const normalizeSubHeadForLookup = (value) => {
   const normalized = normalizeText(value);
   if (!normalized) return '';
@@ -312,10 +318,18 @@ const normalizeBudgetRows = (rows = []) => {
       sub_head: subHead,
       head_only_match: headOnlyMatch,
       amount: toMoney(parsedAmount),
+      approved_amount:
+        row?.approved_amount !== undefined && row?.approved_amount !== null
+          ? toMoney(row.approved_amount)
+          : null,
       budget_line_id: toPositiveInt(row?.budget_line_id),
       budget_proposal_id: toPositiveInt(row?.budget_proposal_id),
       fiscal_year: toPositiveInt(row?.fiscal_year || row?.fiscalYear),
       available_amount_snapshot: hasAvailableSnapshot ? toMoney(parsedAvailableSnapshot) : null,
+      remaining_amount_snapshot:
+        row?.remaining_amount_snapshot !== undefined && row?.remaining_amount_snapshot !== null
+          ? toMoney(row.remaining_amount_snapshot)
+          : null,
       sort_order: index,
     });
   });
@@ -1635,6 +1649,16 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
   const hasBudgetSubHeadIdColumn = await hasFinanceBudgetBreakupColumn('budget_sub_head_id', {
     tx: conn,
   });
+  const hasApprovedAmountColumn = await hasFinanceBudgetBreakupColumn('approved_amount', {
+    tx: conn,
+  });
+  const hasRemainingAmountSnapshotColumn = await hasFinanceBudgetBreakupColumn(
+    'remaining_amount_snapshot',
+    {
+      tx: conn,
+    },
+  );
+  const hasIsTopupColumn = await hasFinanceBudgetBreakupColumn('is_topup', { tx: conn });
 
   for (const row of budgetRows) {
     let budget_head_id = toPositiveInt(row.budget_head_id);
@@ -1681,6 +1705,20 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
       const idx = columns.indexOf('amount');
       columns.splice(idx, 0, 'budget_sub_head_id');
       values.splice(idx, 0, budget_sub_head_id);
+    }
+    if (hasApprovedAmountColumn) {
+      const idx = columns.indexOf('available_amount_snapshot');
+      columns.splice(idx, 0, 'approved_amount');
+      values.splice(idx, 0, row.approved_amount ?? null);
+    }
+    if (hasRemainingAmountSnapshotColumn) {
+      const idx = columns.indexOf('sort_order');
+      columns.splice(idx, 0, 'remaining_amount_snapshot');
+      values.splice(idx, 0, row.remaining_amount_snapshot ?? null);
+    }
+    if (hasIsTopupColumn) {
+      columns.push('is_topup');
+      values.push(row.is_topup ? 1 : 0);
     }
 
     await conn.query(
@@ -2781,11 +2819,14 @@ const financeModel = {
     }
   },
 
-  async updateFinanceRequest(id, financeData, actor = null) {
-    const connection = await db.getConnection();
+  async updateFinanceRequest(id, financeData, actor = null, { tx = null } = {}) {
+    const connection = tx || (await db.getConnection());
+    const ownsTransaction = !tx;
 
     try {
-      await connection.beginTransaction();
+      if (ownsTransaction) {
+        await connection.beginTransaction();
+      }
       const hasBudgetTagColumn = await hasFinanceRequestColumn('budget_tag', { tx: connection });
       const hasUnplannedBudgetEnabledColumn = await hasFinanceRequestColumn(
         'unplanned_budget_enabled',
@@ -2892,7 +2933,9 @@ const financeModel = {
       );
 
       if (!existingRows.length) {
-        await connection.rollback();
+        if (ownsTransaction) {
+          await connection.rollback();
+        }
         return { affectedRows: 0 };
       }
 
@@ -2911,6 +2954,9 @@ const financeModel = {
       const hasBudgetRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'budget_rows');
       const hasIncomeRowsInput = Object.prototype.hasOwnProperty.call(financeData, 'income_rows');
       const hasAnnexuresInput = Object.prototype.hasOwnProperty.call(financeData, 'annexures');
+      const isTopupModeInput = Boolean(
+        parseBooleanLike(financeData.topup_mode || financeData.topupMode),
+      );
       const normalizedBudgetRows = hasBudgetRowsInput
         ? normalizeBudgetRows(Array.isArray(financeData.budget_rows) ? financeData.budget_rows : [])
         : [];
@@ -2968,6 +3014,8 @@ const financeModel = {
       delete updateData.budget_rows;
       delete updateData.income_rows;
       delete updateData.annexures;
+      delete updateData.topup_mode;
+      delete updateData.topupMode;
       if (updateData.enclosures) {
         updateData.enclosures = JSON.stringify(updateData.enclosures);
       }
@@ -3153,6 +3201,7 @@ const financeModel = {
 
       const shouldRecalculateApprovedTotals =
         toMoney(existingRecord.approved_total_amount) > 0 &&
+        !isTopupModeInput &&
         (hasBudgetRowsInput ||
           Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_enabled') ||
           Object.prototype.hasOwnProperty.call(updateData, 'unplanned_budget_amount'));
@@ -3276,9 +3325,11 @@ const financeModel = {
         }
       }
 
-      await connection.commit();
+      if (ownsTransaction) {
+        await connection.commit();
+      }
 
-      if (hasAnnexuresInput) {
+      if (ownsTransaction && hasAnnexuresInput) {
         const previousStoredNames = new Set(
           [
             ...previousAnnexures.map((row) => normalizeText(row?.stored_name)),
@@ -3303,10 +3354,14 @@ const financeModel = {
           (hasBudgetRowsInput || hasIncomeRowsInput || hasAnnexuresInput ? 1 : 0),
       };
     } catch (error) {
-      await connection.rollback();
+      if (ownsTransaction) {
+        await connection.rollback();
+      }
       throw new Error(`Error updating finance request: ${error.message}`);
     } finally {
-      connection.release();
+      if (ownsTransaction) {
+        connection.release();
+      }
     }
   },
 
@@ -3447,14 +3502,31 @@ const financeModel = {
     }
   },
 
-  async getBudgetBreakup(financeId) {
+  async getBudgetBreakup(financeId, { tx = db } = {}) {
     try {
-      const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id');
+      const hasBudgetProposalIdColumn = await hasFinanceBudgetBreakupColumn('budget_proposal_id', {
+        tx,
+      });
+      const hasApprovedAmountColumn = await hasFinanceBudgetBreakupColumn('approved_amount', {
+        tx,
+      });
+      const hasRemainingAmountSnapshotColumn = await hasFinanceBudgetBreakupColumn(
+        'remaining_amount_snapshot',
+        { tx },
+      );
+      const hasIsTopupColumn = await hasFinanceBudgetBreakupColumn('is_topup', { tx });
       const budgetProposalSelectSql = hasBudgetProposalIdColumn
         ? 'budget_proposal_id'
         : 'NULL AS budget_proposal_id';
+      const approvedAmountSelectSql = hasApprovedAmountColumn
+        ? 'approved_amount'
+        : 'NULL AS approved_amount';
+      const remainingAmountSnapshotSelectSql = hasRemainingAmountSnapshotColumn
+        ? 'remaining_amount_snapshot'
+        : 'NULL AS remaining_amount_snapshot';
+      const isTopupSelectSql = hasIsTopupColumn ? 'is_topup' : '0 AS is_topup';
 
-      const [rows] = await db.query(
+      const [rows] = await tx.query(
         `SELECT
            id,
            finance_id,
@@ -3463,10 +3535,11 @@ const financeModel = {
            budget_head,
            sub_head,
            amount,
-           approved_amount,
+           ${approvedAmountSelectSql},
            available_amount_snapshot,
-           remaining_amount_snapshot,
+           ${remainingAmountSnapshotSelectSql},
            sort_order,
+           ${isTopupSelectSql},
            created_at
          FROM finance_budget_breakup
          WHERE finance_id = ?
@@ -3970,7 +4043,8 @@ const financeModel = {
          fr.beneficiary_type,
          fr.beneficiary_entity_id,
          COALESCE(fr.department_id, scope_dept.id) AS department_id,
-         fr.total_budget
+         fr.total_budget,
+         fr.workflow_state
        FROM finance_requests fr
        LEFT JOIN master_departments scope_dept
          ON LOWER(TRIM(COALESCE(fr.beneficiary_type, ''))) = 'department'
@@ -3985,6 +4059,7 @@ const financeModel = {
     }
 
     const row = rows[0];
+    const workflowState = normalizeWorkflowState(row.workflow_state);
 
     return {
       beneficiaryType: normalizeBeneficiaryType(row.beneficiary_type),
@@ -3992,6 +4067,8 @@ const financeModel = {
       departmentId: toPositiveInt(row.department_id),
       totalBudget: toMoney(row.total_budget),
       applicantUserId: toPositiveInt(row.created_by),
+      workflowState,
+      workflowStatus: normalizeWorkflowStatus(workflowState),
     };
   },
 
