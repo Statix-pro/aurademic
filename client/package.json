@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@azure/msal-browser": "^4.27.0",
-    "@azure/msal-react": "^3.0.23",
+    "@azure/msal-browser": "^4.30.0",
+    "@azure/msal-react": "^3.0.29",
     "@casl/ability": "^6.8.0",
     "@casl/react": "^5.0.1",
     "@fullcalendar/core": "^6.1.19",
