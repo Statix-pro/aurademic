@@ -153,17 +153,16 @@
 }
 
 .workorderCategoryChips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
 }
 
 .workorderChip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   min-height: 42px;
   background: var(--bg-light);
@@ -599,11 +598,11 @@
 /* ── Responsive table ── */
 @media (max-width: 768px) {
   .workorderCategoryChips {
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
 
   .workorderChip {
-    flex: 1 1 calc(50% - 8px);
     min-width: 0;
     justify-content: center;
   }
@@ -628,13 +627,15 @@
 
 @media (min-width: 769px) and (max-width: 1180px) {
   .workorderCategoryChips {
+    grid-template-columns: repeat(4, 1fr);
     gap: 8px;
   }
 }
 
 @media (max-width: 480px) {
   .workorderCategoryChips {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
 
   .workorderBtnSubmit {
@@ -648,6 +649,57 @@
     font-size: 14px;
     margin: 0 2px;
   }
+}
+
+/* ── Priority toggle buttons (Routine & High) ── */
+.workorderPriorityToggle {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.priorityToggleBtn {
+  flex: 1;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  outline: none;
+}
+
+/* Active option style */
+.priorityToggleBtn.active {
+  background-color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 96, 169, 0.2);
+}
+
+/* Inactive option style */
+.priorityToggleBtn:not(.active) {
+  background-color: #f8f9fa;
+  border: 1px solid #d2d7de;
+  color: var(--primary-color);
+}
+
+.priorityToggleBtn:hover {
+  background-color: #e2f0fd;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.priorityToggleBtn.active:hover {
+  background-color: #005492;
+  border-color: #005492;
+  color: #ffffff;
 }
 
 /* ── Hide number spinners (matches budget.css) ── */

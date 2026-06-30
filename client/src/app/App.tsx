@@ -32,6 +32,7 @@ import PublicationsPage from '../features/user-dashboard/publicationspage/Public
 import UserDashboard from '../features/user-dashboard/userdashboard';
 import WorkOrderDashboard from '../features/user-dashboard/workorderdashboard/workorderdashboard';
 import WorkOrder from '../features/workorder/WorkOrder';
+import VehicleBooking from '../features/vehicles/VehicleBooking';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
 import { MsalProvider } from '../shared/components/MsalProvider';
@@ -428,12 +429,11 @@ function App() {
                   <Route path="/storybook" element={<Storybook />} />
                   <Route path="/" element={<Navigate to="/dashboard" />} />
 
-                  {/* UNDER CONSTRUCTION */}
                   <Route
                     path="/vehicle-booking"
                     element={
                       <ProtectedRoute>
-                        <UnderConstruction pageName="Vehicle Booking" />
+                        <VehicleBooking />
                       </ProtectedRoute>
                     }
                   />

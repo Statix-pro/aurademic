@@ -125,6 +125,17 @@ const formatDateForDisplay = (value: string) => {
   return `${day}/${month}/${year}`;
 };
 
+const formatAllotmentDateTime = (dateValue: string, timeValue: string) => {
+  const date = formatDateForDisplay(dateValue);
+  const time = normalizeTravelTimeEntry(timeValue);
+
+  if (!date && !time) {
+    return '-';
+  }
+
+  return [date, time].filter(Boolean).join(', ');
+};
+
 const formatDateEntry = (value: string) => {
   const digits = value.replace(/\D/g, '').slice(0, 8);
   const parts = [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean);
@@ -1411,27 +1422,31 @@ const GuestHouseBooking: React.FC = () => {
                           </span>
                           <span>Food</span>
                         </div>
-                        <div className="guesthousebooking-food-checkboxes">
-                          <label className="guesthousebooking-food-checkbox-label guesthousebooking-food-checkbox-label--veg">
+                        <div className="guesthousebooking-food-counts">
+                          <label className="guesthousebooking-food-count-label guesthousebooking-food-count-label--veg">
                             <span>Veg.</span>
                             <input
-                              className="guesthousebooking-checkbox guesthousebooking-checkbox--veg"
-                              type="checkbox"
-                              checked={guest.foodVeg === 'yes'}
+                              className="guesthousebooking-small-input guesthousebooking-food-count-input guesthousebooking-small-input--veg"
+                              type="number"
+                              min="0"
+                              value={guest.foodVeg}
                               onChange={(event) =>
-                                updateGuest(guest.id, 'foodVeg', event.target.checked ? 'yes' : '')
+                                updateGuest(guest.id, 'foodVeg', event.target.value)
                               }
+                              aria-label="Veg food count"
                             />
                           </label>
-                          <label className="guesthousebooking-food-checkbox-label guesthousebooking-food-checkbox-label--nonveg">
+                          <label className="guesthousebooking-food-count-label guesthousebooking-food-count-label--nonveg">
                             <span>Non-Veg.</span>
                             <input
-                              className="guesthousebooking-checkbox guesthousebooking-checkbox--nonveg"
-                              type="checkbox"
-                              checked={guest.foodNonVeg === 'yes'}
+                              className="guesthousebooking-small-input guesthousebooking-food-count-input guesthousebooking-small-input--nonveg"
+                              type="number"
+                              min="0"
+                              value={guest.foodNonVeg}
                               onChange={(event) =>
-                                updateGuest(guest.id, 'foodNonVeg', event.target.checked ? 'yes' : '')
+                                updateGuest(guest.id, 'foodNonVeg', event.target.value)
                               }
+                              aria-label="Non-veg food count"
                             />
                           </label>
                         </div>
@@ -1582,8 +1597,16 @@ const GuestHouseBooking: React.FC = () => {
               const allotment =
                 roomAllotments[guestId] || createRoomAllotmentData(guestId, guest);
               const counts = getGuestAllotmentCounts(guest);
-              const checkIn = formatDateForDisplay(travelDetails.checkInDate) || '-';
-              const checkOut = formatDateForDisplay(travelDetails.checkOutDate) || '-';
+              const checkIn = formatAllotmentDateTime(
+                travelDetails.checkInDate,
+                travelDetails.checkInTime,
+              );
+              const checkOut = formatAllotmentDateTime(
+                travelDetails.checkOutDate,
+                travelDetails.checkOutTime,
+              );
+              const priorityStatus = guest.priority || 'Routine';
+              const priorityTone = priorityStatus === 'High' ? 'high' : 'routine';
 
               return (
                 <section
@@ -1598,11 +1621,18 @@ const GuestHouseBooking: React.FC = () => {
                     <div className="guesthousebooking-allotment-entry-card">
                       <div className="guesthousebooking-allotment-summary-row">
                         <div className="guesthousebooking-allotment-guest-overview">
+                          <span
+                            className={`guesthousebooking-priority-indicator guesthousebooking-priority-indicator--${priorityTone}`}
+                            aria-label={`${priorityStatus} priority`}
+                            title={`${priorityStatus} priority`}
+                          />
                           <span className="guesthousebooking-allotment-main-icon">
                             <UsersRound size={24} />
                           </span>
                           <div className="guesthousebooking-allotment-guest-copy">
-                            <strong>{guest.name || `Guest ${index + 1}`}</strong>
+                            <div className="guesthousebooking-allotment-guest-name-row">
+                              <strong>{guest.name || `Guest ${index + 1}`}</strong>
+                            </div>
                             <span>
                               {[guest.designation || 'Designation', guest.organization || 'Organization'].join(', ')}
                             </span>
@@ -1627,11 +1657,11 @@ const GuestHouseBooking: React.FC = () => {
                         <div className="guesthousebooking-allotment-date-stack">
                           <label>
                             <span>Check-in</span>
-                            <input value={checkIn} readOnly aria-label="Check-in date" />
+                            <input value={checkIn} readOnly aria-label="Check-in date and time" />
                           </label>
                           <label>
                             <span>Check-out</span>
-                            <input value={checkOut} readOnly aria-label="Check-out date" />
+                            <input value={checkOut} readOnly aria-label="Check-out date and time" />
                           </label>
                         </div>
                       </div>

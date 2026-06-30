@@ -1213,14 +1213,22 @@ const WorkOrder: React.FC = () => {
                             />
                           </td>
                           <td>
-                            <WorkOrderDropdown
-                              name={`priority-${item.id}`}
-                              className="workorderPriorityDropdown"
-                              options={PRIORITY_DROPDOWN_OPTIONS}
-                              value={item.priority}
-                              onValueChange={(value) => handleItemChange(idx, 'priority', value)}
-                              placeholder="Select"
-                            />
+                            <div className="workorderPriorityToggle">
+                              <button
+                                type="button"
+                                className={`priorityToggleBtn ${item.priority === 'Routine' ? 'active' : ''}`}
+                                onClick={() => handleItemChange(idx, 'priority', 'Routine')}
+                              >
+                                Routine
+                              </button>
+                              <button
+                                type="button"
+                                className={`priorityToggleBtn ${item.priority === 'High' ? 'active' : ''}`}
+                                onClick={() => handleItemChange(idx, 'priority', 'High')}
+                              >
+                                High
+                              </button>
+                            </div>
                           </td>
                           <td className="centerTd workorderActionCell">
                             <div className="actionButtons">
