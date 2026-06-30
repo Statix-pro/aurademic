@@ -833,6 +833,14 @@ const FinanceCard: React.FC = () => {
     navigate(`/finance/${item.id}/edit`);
   };
 
+  const canTopupRequest = (item: FinanceCardItem) =>
+    ['approved', 'completed'].includes(getNormalizedStatus(item));
+
+  const handleTopupClick = (item: FinanceCardItem) => {
+    if (!canTopupRequest(item)) return;
+    navigate(`/finance/${item.id}/edit?topup=true`);
+  };
+
   const canDeleteRequest = (item: FinanceCardItem) => {
     const normalizedStatus = getNormalizedStatus(item);
     const currentStage = getCurrentStage(item);
@@ -1127,15 +1135,37 @@ const FinanceCard: React.FC = () => {
                               >
                                 <Eye size={18} />
                               </button>
-                              <button
-                                type="button"
-                                className="icon-btn-subtle"
-                                title={canEdit ? 'Edit' : 'Edit unavailable in current status'}
-                                onClick={() => handleEditClick(item)}
-                                disabled={!canEdit}
-                              >
-                                <Edit2 size={18} />
-                              </button>
+                              {canTopupRequest(item) && (
+                                <button
+                                  type="button"
+                                  className="financecard-topup-btn"
+                                  title="Topup"
+                                  onClick={() => handleTopupClick(item)}
+                                >
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    width={18}
+                                    height={18}
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path d="M0 0h24v24H0z" fill="none" />
+                                    <path
+                                      fill="currentColor"
+                                      d="M3 0v3H0v2h3v3h2V5h3V3H5V0zm6 3v3H6v3H3v10a2 2 0 0 0 2 2h14c1.11 0 2-.89 2-2v-1h-9a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h9V5a2 2 0 0 0-2-2zm3 5v8h10V8zm4 2.5c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5"
+                                    />
+                                  </svg>
+                                </button>
+                              )}
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  className="icon-btn-subtle"
+                                  title="Edit"
+                                  onClick={() => handleEditClick(item)}
+                                >
+                                  <Edit2 size={18} />
+                                </button>
+                              )}
                               {canDelete && (
                                 <button
                                   type="button"

@@ -30,7 +30,11 @@ const ensureSafeIdentifier = (value, label) => {
   return token;
 };
 
-const withTransaction = async (callback) => {
+const withTransaction = async (callback, { tx = null } = {}) => {
+  if (tx) {
+    return callback(tx);
+  }
+
   const conn = await db.getConnection();
 
   try {
@@ -497,75 +501,82 @@ const canAccessStageByRole = ({ moduleKey, actor = {}, stageKey = '' }) => {
     : false;
 };
 
-export async function startWorkflow({ moduleKey, recordId, metadata = {} }) {
+export async function startWorkflow({ moduleKey, recordId, metadata = {}, tx = null }) {
   const moduleConfig = getWorkflowModule(moduleKey);
 
-  return withTransaction(async (conn) => {
-    const context = await moduleConfig.adapter.getRecordContext(recordId, {
-      tx: conn,
-      forUpdate: true,
-    });
+  return withTransaction(
+    async (conn) => {
+      const context = await moduleConfig.adapter.getRecordContext(recordId, {
+        tx: conn,
+        forUpdate: true,
+      });
 
-    if (!context) {
-      throw new WorkflowError('Record not found', 404, 'WORKFLOW_RECORD_NOT_FOUND');
-    }
+      if (!context) {
+        throw new WorkflowError('Record not found', 404, 'WORKFLOW_RECORD_NOT_FOUND');
+      }
 
-    const normalizedMeta = await validateAdapterModuleMeta({
-      moduleConfig,
-      normalizedMeta: validateWorkflowMeta(metadata),
-      operation: 'start',
-      recordId,
-      context,
-    });
+      const normalizedMeta = await validateAdapterModuleMeta({
+        moduleConfig,
+        normalizedMeta: validateWorkflowMeta(metadata),
+        operation: 'start',
+        recordId,
+        context,
+      });
 
-    const entityTypeCode = await resolveEntityTypeCodeFromContext(conn, context);
-    const adapterFlowResolver = moduleConfig?.adapter?.resolveStartFlow;
-    const adapterResolvedFlow =
-      typeof adapterFlowResolver === 'function'
-        ? adapterFlowResolver({
-            context,
-            metadata: normalizedMeta,
-          })
-        : null;
+      const entityTypeCode = await resolveEntityTypeCodeFromContext(conn, context);
+      const adapterFlowResolver = moduleConfig?.adapter?.resolveStartFlow;
+      const adapterResolvedFlow =
+        typeof adapterFlowResolver === 'function'
+          ? adapterFlowResolver({
+              context,
+              metadata: normalizedMeta,
+            })
+          : null;
 
-    const flow =
-      Array.isArray(adapterResolvedFlow) && adapterResolvedFlow.length > 0
-        ? validateFlowArray(adapterResolvedFlow, { field: 'workflow adapter start flow' })
-        : await resolveFlowConfig(conn, {
-            moduleKey,
-            beneficiaryType: context.beneficiaryType,
-            entityTypeCode,
-          });
+      const flow =
+        Array.isArray(adapterResolvedFlow) && adapterResolvedFlow.length > 0
+          ? validateFlowArray(adapterResolvedFlow, { field: 'workflow adapter start flow' })
+          : await resolveFlowConfig(conn, {
+              moduleKey,
+              beneficiaryType: context.beneficiaryType,
+              entityTypeCode,
+            });
 
-    const initialState = buildInitialState(flow, {
-      submittedTotalBudget: Number(context.totalBudget || 0),
-    });
+      const initialState = buildInitialState(flow, {
+        submittedTotalBudget: Number(context.totalBudget || 0),
+      });
 
-    const financeMeta = normalizedMeta?.moduleMeta?.financeMeta;
-    if (financeMeta && typeof financeMeta === 'object' && !Array.isArray(financeMeta)) {
-      initialState.financeMeta = {
-        ...financeMeta,
+      const financeMeta = normalizedMeta?.moduleMeta?.financeMeta;
+      if (financeMeta && typeof financeMeta === 'object' && !Array.isArray(financeMeta)) {
+        initialState.financeMeta = {
+          ...financeMeta,
+        };
+      }
+
+      const expenditureMeta = normalizedMeta?.moduleMeta?.expenditureMeta;
+      if (
+        expenditureMeta &&
+        typeof expenditureMeta === 'object' &&
+        !Array.isArray(expenditureMeta)
+      ) {
+        initialState.expenditureMeta = {
+          ...expenditureMeta,
+        };
+      }
+
+      await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, initialState, {
+        tx: conn,
+        metadata: normalizedMeta,
+      });
+
+      return {
+        moduleKey,
+        recordId: toPositiveInt(recordId),
+        state: initialState,
       };
-    }
-
-    const expenditureMeta = normalizedMeta?.moduleMeta?.expenditureMeta;
-    if (expenditureMeta && typeof expenditureMeta === 'object' && !Array.isArray(expenditureMeta)) {
-      initialState.expenditureMeta = {
-        ...expenditureMeta,
-      };
-    }
-
-    await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, initialState, {
-      tx: conn,
-      metadata: normalizedMeta,
-    });
-
-    return {
-      moduleKey,
-      recordId: toPositiveInt(recordId),
-      state: initialState,
-    };
-  });
+    },
+    { tx },
+  );
 }
 
 export async function getWorkflow({ moduleKey, recordId }) {
