@@ -1775,6 +1775,27 @@ const FinanceApproval: React.FC = () => {
       : 'Add Row';
   };
 
+  const getBudgetSubHeadDropdownOptions = (budgetHead: string): OptionType[] => {
+    const options = getSubHeadDropdownOptions(budgetHead);
+    const seen = new Set(options.map((option) => normalizeText(String(option.value))));
+    const normalizedHead = normalizeText(budgetHead);
+
+    budgetRows.forEach((row) => {
+      if (normalizeText(row.category) !== normalizedHead) return;
+
+      const subHead = normalizeText(row.head);
+      if (!subHead || seen.has(subHead)) return;
+
+      options.push({
+        value: subHead,
+        label: getSubHeadDisplayText(subHead),
+      });
+      seen.add(subHead);
+    });
+
+    return options;
+  };
+
   const getIncomeRowMissingFields = (row: IncomeRow): string[] => {
     const missing: string[] = [];
 
@@ -4485,11 +4506,11 @@ const FinanceApproval: React.FC = () => {
                           <CustomDropdown
                             // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
                             name={`subHead-${index}`}
-                            options={getSubHeadDropdownOptions(row.category)}
+                            options={getBudgetSubHeadDropdownOptions(row.category)}
                             value={
                               getSelectedOption(
                                 row.head,
-                                getSubHeadDropdownOptions(row.category),
+                                getBudgetSubHeadDropdownOptions(row.category),
                               ) ||
                               (row.head
                                 ? { value: row.head, label: getSubHeadDisplayText(row.head) }
