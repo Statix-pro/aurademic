@@ -1775,6 +1775,29 @@ const FinanceApproval: React.FC = () => {
       : 'Add Row';
   };
 
+  const getBudgetSubHeadDropdownOptions = (budgetHead: string): OptionType[] => {
+    const options = getSubHeadDropdownOptions(budgetHead);
+    if (!isTopupWorkflow) return options;
+
+    const seen = new Set(options.map((option) => normalizeText(String(option.value))));
+    const normalizedHead = normalizeText(budgetHead);
+
+    budgetRows.forEach((row) => {
+      if (normalizeText(row.category) !== normalizedHead) return;
+
+      const subHead = normalizeText(row.head);
+      if (!subHead || seen.has(subHead)) return;
+
+      options.push({
+        value: subHead,
+        label: getSubHeadDisplayText(subHead),
+      });
+      seen.add(subHead);
+    });
+
+    return options;
+  };
+
   const getIncomeRowMissingFields = (row: IncomeRow): string[] => {
     const missing: string[] = [];
 
@@ -2639,6 +2662,9 @@ const FinanceApproval: React.FC = () => {
         const currentStageFromRecord = String(
           record.workflow_state?.currentStage || record.workflow_stage || '',
         ).toLowerCase();
+        const recordWorkflowStatus = String(
+          record.workflow_state?.status || record.workflow_status || record.overall_status || '',
+        ).toLowerCase();
         const budgetRowsFromApi = Array.isArray(record.budget) ? record.budget : [];
         const incomeRowsFromApi = Array.isArray(record.income_rows) ? record.income_rows : [];
         const statusUpdatesFromApi = Array.isArray(record.status_updates)
@@ -2702,8 +2728,16 @@ const FinanceApproval: React.FC = () => {
         );
         setBeneficiaryType(record.beneficiary_type || '');
         setBeneficiaryValue(record.beneficiary_value || '');
-        setPrimaryHead(record.primary_head || '');
-        setEventSubHead(record.event_sub_head || '');
+        const recordPrimaryHead = normalizeText(record.primary_head);
+        const recordEventSubHead = normalizeText(record.event_sub_head);
+        const topupHoacGroup =
+          isTopupRoute && ['approved', 'completed'].includes(recordWorkflowStatus)
+            ? getHoacGroupForHead(recordPrimaryHead)
+            : '';
+        const shouldPromoteTopupHoacHead =
+          Boolean(topupHoacGroup) && topupHoacGroup !== recordPrimaryHead;
+        setPrimaryHead(shouldPromoteTopupHoacHead ? String(topupHoacGroup) : recordPrimaryHead);
+        setEventSubHead(shouldPromoteTopupHoacHead ? recordPrimaryHead : recordEventSubHead);
         setIsBudgetProposed(record.is_budget_proposed || 'No');
         setAmountProposed(
           record.proposed_amount !== null && record.proposed_amount !== undefined
@@ -2767,11 +2801,7 @@ const FinanceApproval: React.FC = () => {
         if (annexureFileInputRef.current) {
           annexureFileInputRef.current.value = '';
         }
-        setLoadedWorkflowStatus(
-          String(
-            record.workflow_state?.status || record.workflow_status || record.overall_status || '',
-          ).toLowerCase(),
-        );
+        setLoadedWorkflowStatus(recordWorkflowStatus);
         setLoadedWorkflowLastDecision(
           String(
             record.workflow_state?.lastDecision || record.workflow_last_decision || '',
@@ -4485,11 +4515,11 @@ const FinanceApproval: React.FC = () => {
                           <CustomDropdown
                             // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
                             name={`subHead-${index}`}
-                            options={getSubHeadDropdownOptions(row.category)}
+                            options={getBudgetSubHeadDropdownOptions(row.category)}
                             value={
                               getSelectedOption(
                                 row.head,
-                                getSubHeadDropdownOptions(row.category),
+                                getBudgetSubHeadDropdownOptions(row.category),
                               ) ||
                               (row.head
                                 ? { value: row.head, label: getSubHeadDisplayText(row.head) }
