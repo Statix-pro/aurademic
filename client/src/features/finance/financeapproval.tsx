@@ -47,6 +47,7 @@ import {
   BUDGET_HEAD_GROUPS,
   SUB_HEAD_BY_BUDGET_HEAD,
   HOAC_SUBHEAD_OPTIONS,
+  HOAC_GROUPS,
   HEAD_TO_GROUP,
   subscribeBudgetCatalog,
 } from '../../shared/hooks/budgetCatalogStore';
@@ -366,10 +367,10 @@ const CATEGORY_TYPE_OPTIONS = [
   'Institution',
 ];
 
-// 1. Shared HOAC Sub-Heads (for Events & Competitions, Meetings & Audits)
+// 1. Shared HOAC Sub-Heads (for Events & Competitions, Meetings & Audits groups)
 // Used in the 'extra' top-level dropdown (eventSubHead) when a HOAC group is active.
-
-const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
+// HOAC_GROUPS is imported from budgetCatalogStore — contains the group labels
+// 'Events & Competitions' and 'Meetings & Audits'.
 
 const flattenOptions = (
   options: Array<OptionType | { label: string; options: OptionType[] }>,
@@ -398,7 +399,8 @@ const getPrimaryHeadOptions = (): Array<{ label: string; options: OptionType[] }
   }));
 
 const getHoacGroupForHead = (head: string): string | undefined => {
-  if (HOAC_GROUPS.has(head)) return head;
+  // Heads like 'Academic Events' map to group label 'Events & Competitions' via HEAD_TO_GROUP.
+  // The group label is checked against HOAC_GROUPS to determine if the extra dropdown is needed.
   const mapped = HEAD_TO_GROUP[head];
   if (mapped && HOAC_GROUPS.has(mapped)) return mapped;
   return undefined;
@@ -3017,44 +3019,14 @@ const FinanceApproval: React.FC = () => {
   const hoacSubheadDropdownOptions = useMemo(() => {
     if (!activeHoacGroup) return [];
 
-    // The user specifically wants Academic Events, Club Activities, etc. for Events & Competitions
-    if (activeHoacGroup === 'Events & Competitions') {
-      return toOptions([
-        'Academic Events',
-        'Club Activities',
-        'College Events',
-        'Conferences & Conclaves',
-        'Association Activities',
-        'Outreach Events',
-        'Cultural & Celebrations',
-        'Sports',
-        'Competitions',
-      ]);
+    // The extra dropdown shows the head-specific sub-heads for the selected head.
+    // e.g. for 'Academic Events' → Expert Visit, FDP, Guest Lecture, etc.
+    const headSpecific = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
+    if (headSpecific.length > 0) {
+      return toOptions(headSpecific);
     }
 
-    // And for Meetings & Audits
-    if (activeHoacGroup === 'Meetings & Audits') {
-      return toOptions([
-        'Institutional Governance Meetings',
-        'Academic Governance Meetings',
-        'Institutional Audits',
-        'Government Meetings',
-      ]);
-    }
-
-    // Pull the HOAC category options (e.g. Academic Events, Club Activities) from the budget head groups
-    const categoryGroup = BUDGET_HEAD_GROUPS.find((g) => g.label === activeHoacGroup);
-    if (categoryGroup && categoryGroup.options.length > 0) {
-      return toOptions(categoryGroup.options);
-    }
-
-    const groupSubHeads = HOAC_SUBHEAD_OPTIONS[activeHoacGroup] || [];
-    if (groupSubHeads.length > 0) {
-      return toOptions(groupSubHeads);
-    }
-
-    const firstLevelSubHeads = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
-    return toOptions(firstLevelSubHeads);
+    return [];
   }, [primaryHead, activeHoacGroup, catalogVersion]);
   useEffect(() => {
     const nextFetchKeys: Record<number, string> = {};

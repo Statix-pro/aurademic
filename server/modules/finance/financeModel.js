@@ -639,6 +639,7 @@ const buildFinanceSelectSql = ({
   SELECT
     fr.id,
     fr.employee_id,
+    e.user_id AS applicant_user_id,
     fr.created_by,
     COALESCE(
       TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))),
@@ -4946,9 +4947,10 @@ const financeModel = {
     }
 
     const [rows] = await db.query(
-      `SELECT id, created_by
-         FROM finance_requests
-         WHERE id = ?
+      `SELECT fr.id, fr.employee_id, fr.created_by, me.user_id AS applicant_user_id
+         FROM finance_requests fr
+         LEFT JOIN master_employees me ON me.id = fr.employee_id
+         WHERE fr.id = ?
          LIMIT 1`,
       [normalizedRecordId],
     );
