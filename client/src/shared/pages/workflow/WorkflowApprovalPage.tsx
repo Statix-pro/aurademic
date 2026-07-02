@@ -3318,6 +3318,25 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                       {tag && tag.trim() !== '' && (
                                         <span className="fw-tag-pill">{tag}</span>
                                       )}
+                                      {Boolean(
+                                        record.has_topup || record.workflow_state?.topupAt,
+                                      ) && (
+                                        <span
+                                          style={{
+                                            fontSize: '11px',
+                                            fontWeight: 600,
+                                            color: '#059669',
+                                            backgroundColor: '#d1fae5',
+                                            border: '1px solid #10b981',
+                                            borderRadius: '12px',
+                                            padding: '2px 8px',
+                                            letterSpacing: '0.03em',
+                                            marginLeft: '8px',
+                                          }}
+                                        >
+                                          Top-up
+                                        </span>
+                                      )}
                                     </>
                                   )}
                                 </div>

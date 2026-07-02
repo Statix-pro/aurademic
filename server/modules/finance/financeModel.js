@@ -3986,12 +3986,13 @@ const financeModel = {
           e.erp_id,
           CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
           e.designation,
-          d.name AS department,
+          COALESCE(d.name, ent.name) AS department,
           e.email,
           e.mobile,
           e.employee_type
         FROM master_employees e
         LEFT JOIN master_departments d ON e.department_id = d.id
+        LEFT JOIN master_entities ent ON e.entity_id = ent.id
         WHERE e.status = 'Active'
         ORDER BY e.first_name, e.last_name
         LIMIT 20`;
@@ -4001,12 +4002,13 @@ const financeModel = {
           e.erp_id,
           CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
           e.designation,
-          d.name AS department,
+          COALESCE(d.name, ent.name) AS department,
           e.email,
           e.mobile,
           e.employee_type
         FROM master_employees e
         LEFT JOIN master_departments d ON e.department_id = d.id
+        LEFT JOIN master_entities ent ON e.entity_id = ent.id
         WHERE e.status = 'Active'
           AND (
             e.first_name LIKE ?

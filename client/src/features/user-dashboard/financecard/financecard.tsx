@@ -49,7 +49,9 @@ interface FinanceCardItem {
     lastDecision?: string | null;
     isEditableByApplicant?: boolean;
     submittedTotalBudget?: number | string | null;
+    topupAt?: string | null;
   };
+  has_topup?: boolean | number | null;
   principal_document?: {
     id?: number | null;
     original_name?: string | null;
@@ -1109,6 +1111,23 @@ const FinanceCard: React.FC = () => {
                             <span className="card-id-pill">{getProposalRef(item)}</span>
                             <span className="card-applicant-name">{item.applicant_name}</span>
                             <span className="card-category-tag">{item.budget_tag || '-'}</span>
+                            {Boolean(item.workflow_state?.topupAt) && (
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  fontWeight: 600,
+                                  color: '#059669',
+                                  backgroundColor: '#d1fae5',
+                                  border: '1px solid #10b981',
+                                  borderRadius: '12px',
+                                  padding: '2px 8px',
+                                  letterSpacing: '0.03em',
+                                  marginLeft: '8px',
+                                }}
+                              >
+                                Top-up
+                              </span>
+                            )}
                           </div>
 
                           <div className="card-header-right">
