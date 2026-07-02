@@ -398,9 +398,16 @@ const getPrimaryHeadOptions = (): Array<{ label: string; options: OptionType[] }
     options: toOptions(group.options),
   }));
 
+// Heads that aren't in an HOAC group by default but should still use the HOAC
+// extra-dropdown + shared expense sub-heads pattern. Maps head name → HOAC event_type.
+const HEAD_HOAC_OVERRIDE: Record<string, string> = {
+  'Student Capacity Building': 'Events & Competitions',
+};
+
 const getHoacGroupForHead = (head: string): string | undefined => {
+  // Direct override for specific heads outside HOAC groups
+  if (HEAD_HOAC_OVERRIDE[head]) return HEAD_HOAC_OVERRIDE[head];
   // Heads like 'Academic Events' map to group label 'Events & Competitions' via HEAD_TO_GROUP.
-  // The group label is checked against HOAC_GROUPS to determine if the extra dropdown is needed.
   const mapped = HEAD_TO_GROUP[head];
   if (mapped && HOAC_GROUPS.has(mapped)) return mapped;
   return undefined;
@@ -1143,9 +1150,9 @@ const FinanceApproval: React.FC = () => {
   };
 
   const getSubHeadOptions = (budgetHead: string): string[] => {
-    const headGroup = HEAD_TO_GROUP[budgetHead];
-    if (headGroup && HOAC_GROUPS.has(headGroup) && HOAC_SUBHEAD_OPTIONS[headGroup]) {
-      return HOAC_SUBHEAD_OPTIONS[headGroup];
+    const hoacGroup = getHoacGroupForHead(budgetHead);
+    if (hoacGroup && HOAC_SUBHEAD_OPTIONS[hoacGroup]) {
+      return HOAC_SUBHEAD_OPTIONS[hoacGroup];
     }
     return SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
   };
