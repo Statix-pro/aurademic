@@ -1678,7 +1678,7 @@ export default function MasterDataPage() {
                       </td>
                       <td style={{ fontSize: '0.8rem' }}>{emp.email}</td>
                       <td>{emp.designation || '—'}</td>
-                      <td>{emp.department_name || '—'}</td>
+                      <td>{emp.department_name || emp.entity_name || '—'}</td>
                       <td>
                         <Badge bg="info">{emp.employee_type}</Badge>
                       </td>
@@ -1800,7 +1800,9 @@ export default function MasterDataPage() {
               </div>
               <div className="detail-row">
                 <span className="detail-label">Department</span>
-                <span className="detail-value">{viewingEmp.department_name || '—'}</span>
+                <span className="detail-value">
+                  {viewingEmp.department_name || viewingEmp.entity_name || '—'}
+                </span>
               </div>
               <div className="detail-row">
                 <span className="detail-label">Entity</span>

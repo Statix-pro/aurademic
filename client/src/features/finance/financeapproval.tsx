@@ -2112,6 +2112,7 @@ const FinanceApproval: React.FC = () => {
               : budgetLineMetaByRow[index]?.budgetProposalId || null,
             fiscal_year: budgetAvailabilityFiscalYear || null,
             available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
+            is_topup: row.isTopup || (isTopupWorkflow && index >= initialBudgetRowCount) ? 1 : 0,
           };
         }),
         ...(isTopupWorkflow ? {} : { income_rows: showIncomeSection ? incomeRows : [] }),
@@ -4406,238 +4407,256 @@ const FinanceApproval: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {budgetRows.map((row, index) => (
-                      <tr
-                        key={index}
-                        style={{
-                          borderBottom: '1px solid #e0e0e0',
-                          opacity: primaryHead ? 1 : 0.6,
-                          backgroundColor: row.isTopup ? '#fffbea' : undefined,
-                        }}
-                      >
-                        <td
+                    {budgetRows.map((row, index) => {
+                      const isTopupRow =
+                        row.isTopup || (isTopupWorkflow && index >= initialBudgetRowCount);
+                      return (
+                        <tr
+                          key={index}
                           style={{
-                            padding: '12px',
-                            border: '1px solid #e0e0e0',
-                            textAlign: 'center',
-                            color: '#495057',
+                            borderBottom: '1px solid #e0e0e0',
+                            opacity: primaryHead ? 1 : 0.6,
+                            backgroundColor: isTopupRow ? '#f0fdf4' : undefined,
                           }}
                         >
-                          {index + 1}
-                          {row.isTopup && (
-                            <span
-                              style={{
-                                display: 'block',
-                                marginTop: '4px',
-                                fontSize: '0.65rem',
-                                fontWeight: 600,
-                                color: '#b45309',
-                                background: '#fef3c7',
-                                border: '1px solid #fcd34d',
-                                borderRadius: '4px',
-                                padding: '1px 5px',
-                                letterSpacing: '0.03em',
-                              }}
-                            >
-                              TOPUP
-                            </span>
-                          )}
-                        </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <CustomDropdown
-                            name={`budgetHead-${index}`}
-                            options={getBudgetHeadSearchOptions()}
-                            value={
-                              row.category
-                                ? {
-                                    value: `head::${row.category}`,
-                                    label: row.category,
-                                    budgetHead: row.category,
-                                    subHead: row.head || '',
-                                    optionType: 'budget-head',
-                                  }
-                                : null
-                            }
-                            onChange={(option) => {
-                              if (!isBudgetRowEditable(index)) return;
-                              handleBudgetHeadSelection(index, option as OptionType | null);
-                            }}
-                            filterOption={(candidate: any, input: string) => {
-                              const option = (candidate?.data || {}) as BudgetHeadSearchOption;
-                              const query = normalizeText(input).toLowerCase();
-                              const budgetHead = normalizeText(option.budgetHead).toLowerCase();
-                              const subHead = normalizeText(option.subHead).toLowerCase();
-
-                              if (!query) {
-                                return option.optionType === 'budget-head';
-                              }
-
-                              if (option.optionType === 'head-sub-head') {
-                                return subHead.includes(query) || budgetHead.includes(query);
-                              }
-
-                              return budgetHead.includes(query);
-                            }}
-                            placeholder="Select"
-                            isDisabled={!primaryHead || !isBudgetRowEditable(index)}
-                          />
-                        </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <CustomDropdown
-                            // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
-                            name={`subHead-${index}`}
-                            options={getBudgetSubHeadDropdownOptions(row.category)}
-                            value={
-                              getSelectedOption(
-                                row.head,
-                                getBudgetSubHeadDropdownOptions(row.category),
-                              ) ||
-                              (row.head
-                                ? { value: row.head, label: getSubHeadDisplayText(row.head) }
-                                : null)
-                            }
-                            onChange={(option) => {
-                              if (!isBudgetRowEditable(index)) return;
-                              const selected = option as OptionType | null;
-                              handleBudgetChange(
-                                index,
-                                'head',
-                                selected?.value ? String(selected.value) : '',
-                              );
-                            }}
-                            placeholder="Select"
-                            isDisabled={
-                              !row.category || !primaryHead || !isBudgetRowEditable(index)
-                            }
-                          />
-                        </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <input
-                            type="text"
-                            value={row.amount}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              !isBudgetRowEditable(index)
-                                ? undefined
-                                : handleBudgetChange(index, 'amount', e.target.value)
-                            }
-                            disabled={!primaryHead || !isBudgetRowEditable(index)}
-                            placeholder={`₹  ${getRemainingAvailableForRow(index)}`}
+                          <td
                             style={{
+                              padding: '12px',
                               border: '1px solid #e0e0e0',
-                              borderRadius: '8px',
-                              padding: '8px 12px',
-                              fontSize: '0.9rem',
-                              width: '120px',
-                              fontFamily: 'inherit',
-                              backgroundColor: primaryHead ? '#fcfdff' : '#f8f9fa',
-                              color: primaryHead ? '#000' : '#6c757d',
-                              cursor:
-                                primaryHead && isBudgetRowEditable(index)
-                                  ? 'pointer'
-                                  : 'not-allowed',
-                              outline: 'none',
-                              textAlign: 'left',
-                              margin: '0 auto',
-                              display: 'block',
-                            }}
-                            onFocus={(e) => {
-                              e.currentTarget.style.borderColor = '#0069ab';
-                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                            }}
-                            onBlur={(e) => {
-                              e.currentTarget.style.borderColor = '#e0e0e0';
-                              e.currentTarget.style.boxShadow = 'none';
-                            }}
-                          />
-                        </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              gap: '10px',
+                              textAlign: 'center',
+                              color: '#495057',
                             }}
                           >
-                            {(index > 0 || (index === 0 && budgetRows.length > 1)) &&
-                              !isLockedBudgetRow(index) &&
-                              isBudgetRowEditable(index) && (
+                            {index + 1}
+                            {isTopupRow && (
+                              <span
+                                style={{
+                                  display: 'inline-block',
+                                  marginTop: '6px',
+                                  fontSize: '10px',
+                                  fontWeight: 600,
+                                  color: '#059669',
+                                  backgroundColor: '#d1fae5',
+                                  border: '1px solid #10b981',
+                                  borderRadius: '12px',
+                                  padding: '2px 6px',
+                                  letterSpacing: '0.03em',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                Top-up
+                              </span>
+                            )}
+                          </td>
+                          <td
+                            style={{
+                              padding: '12px',
+                              border: '1px solid #e0e0e0',
+                              backgroundColor: isTopupRow ? '#f0fdf4' : undefined,
+                            }}
+                          >
+                            <CustomDropdown
+                              name={`budgetHead-${index}`}
+                              options={getBudgetHeadSearchOptions()}
+                              value={
+                                row.category
+                                  ? {
+                                      value: `head::${row.category}`,
+                                      label: row.category,
+                                      budgetHead: row.category,
+                                      subHead: row.head || '',
+                                      optionType: 'budget-head',
+                                    }
+                                  : null
+                              }
+                              onChange={(option) => {
+                                if (!isBudgetRowEditable(index)) return;
+                                handleBudgetHeadSelection(index, option as OptionType | null);
+                              }}
+                              filterOption={(candidate: any, input: string) => {
+                                const option = (candidate?.data || {}) as BudgetHeadSearchOption;
+                                const query = normalizeText(input).toLowerCase();
+                                const budgetHead = normalizeText(option.budgetHead).toLowerCase();
+                                const subHead = normalizeText(option.subHead).toLowerCase();
+
+                                if (!query) {
+                                  return option.optionType === 'budget-head';
+                                }
+
+                                if (option.optionType === 'head-sub-head') {
+                                  return subHead.includes(query) || budgetHead.includes(query);
+                                }
+
+                                return budgetHead.includes(query);
+                              }}
+                              placeholder="Select"
+                              isDisabled={!primaryHead || !isBudgetRowEditable(index)}
+                            />
+                          </td>
+                          <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                            <CustomDropdown
+                              // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
+                              name={`subHead-${index}`}
+                              options={getBudgetSubHeadDropdownOptions(row.category)}
+                              value={
+                                getSelectedOption(
+                                  row.head,
+                                  getBudgetSubHeadDropdownOptions(row.category),
+                                ) ||
+                                (row.head
+                                  ? { value: row.head, label: getSubHeadDisplayText(row.head) }
+                                  : null)
+                              }
+                              onChange={(option) => {
+                                if (!isBudgetRowEditable(index)) return;
+                                const selected = option as OptionType | null;
+                                handleBudgetChange(
+                                  index,
+                                  'head',
+                                  selected?.value ? String(selected.value) : '',
+                                );
+                              }}
+                              placeholder="Select"
+                              isDisabled={
+                                !row.category || !primaryHead || !isBudgetRowEditable(index)
+                              }
+                            />
+                          </td>
+                          <td
+                            style={{
+                              padding: '12px',
+                              border: '1px solid #e0e0e0',
+                              backgroundColor: isTopupRow ? '#f0fdf4' : undefined,
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={row.amount}
+                              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                                !isBudgetRowEditable(index)
+                                  ? undefined
+                                  : handleBudgetChange(index, 'amount', e.target.value)
+                              }
+                              disabled={!primaryHead || !isBudgetRowEditable(index)}
+                              placeholder={`₹  ${getRemainingAvailableForRow(index)}`}
+                              style={{
+                                border: '1px solid #e0e0e0',
+                                borderRadius: '8px',
+                                padding: '8px 12px',
+                                fontSize: '0.9rem',
+                                width: '120px',
+                                fontFamily: 'inherit',
+                                backgroundColor: primaryHead ? '#fcfdff' : '#f8f9fa',
+                                color: primaryHead ? '#000' : '#6c757d',
+                                cursor:
+                                  primaryHead && isBudgetRowEditable(index)
+                                    ? 'pointer'
+                                    : 'not-allowed',
+                                outline: 'none',
+                                textAlign: 'left',
+                                margin: '0 auto',
+                                display: 'block',
+                              }}
+                              onFocus={(e) => {
+                                e.currentTarget.style.borderColor = '#0069ab';
+                                e.currentTarget.style.boxShadow =
+                                  '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = '#e0e0e0';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                gap: '10px',
+                              }}
+                            >
+                              {(index > 0 || (index === 0 && budgetRows.length > 1)) &&
+                                !isLockedBudgetRow(index) &&
+                                isBudgetRowEditable(index) && (
+                                  <button
+                                    onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                      e.preventDefault();
+                                      handleDeleteRow(index);
+                                    }}
+                                    style={{
+                                      width: '36px',
+                                      height: '36px',
+                                      borderRadius: '50%',
+                                      border: 'none',
+                                      background: '#ffe6e6',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '18px',
+                                      transition: 'all 0.15s ease',
+                                      color: '#dc3545',
+                                    }}
+                                    title="Delete Row"
+                                    onMouseEnter={(e) => {
+                                      (e.currentTarget as HTMLButtonElement).style.background =
+                                        '#ffcccc';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      (e.currentTarget as HTMLButtonElement).style.background =
+                                        '#ffe6e6';
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              {index === budgetRows.length - 1 && (
                                 <button
+                                  type="button"
                                   onClick={(e: MouseEvent<HTMLButtonElement>) => {
                                     e.preventDefault();
-                                    handleDeleteRow(index);
+                                    handleAddRow();
                                   }}
+                                  disabled={!canAddBudgetRowFromIndex(index)}
                                   style={{
                                     width: '36px',
                                     height: '36px',
                                     borderRadius: '50%',
                                     border: 'none',
-                                    background: '#ffe6e6',
-                                    cursor: 'pointer',
+                                    background: '#f5f6f8',
+                                    cursor: canAddBudgetRowFromIndex(index)
+                                      ? 'pointer'
+                                      : 'not-allowed',
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     fontSize: '18px',
                                     transition: 'all 0.15s ease',
-                                    color: '#dc3545',
+                                    opacity: canAddBudgetRowFromIndex(index) ? 1 : 0.5,
+                                    color: '#0069ab',
                                   }}
-                                  title="Delete Row"
+                                  title={getBudgetAddTooltip(index)}
                                   onMouseEnter={(e) => {
-                                    (e.currentTarget as HTMLButtonElement).style.background =
-                                      '#ffcccc';
+                                    if (canAddBudgetRowFromIndex(index)) {
+                                      (e.currentTarget as HTMLButtonElement).style.background =
+                                        '#e8f5e9';
+                                    }
                                   }}
                                   onMouseLeave={(e) => {
                                     (e.currentTarget as HTMLButtonElement).style.background =
-                                      '#ffe6e6';
+                                      '#f5f6f8';
                                   }}
                                 >
-                                  ×
+                                  +
                                 </button>
                               )}
-                            {index === budgetRows.length - 1 && (
-                              <button
-                                type="button"
-                                onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                                  e.preventDefault();
-                                  handleAddRow();
-                                }}
-                                disabled={!canAddBudgetRowFromIndex(index)}
-                                style={{
-                                  width: '36px',
-                                  height: '36px',
-                                  borderRadius: '50%',
-                                  border: 'none',
-                                  background: '#f5f6f8',
-                                  cursor: canAddBudgetRowFromIndex(index)
-                                    ? 'pointer'
-                                    : 'not-allowed',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '18px',
-                                  transition: 'all 0.15s ease',
-                                  opacity: canAddBudgetRowFromIndex(index) ? 1 : 0.5,
-                                  color: '#0069ab',
-                                }}
-                                title={getBudgetAddTooltip(index)}
-                                onMouseEnter={(e) => {
-                                  if (canAddBudgetRowFromIndex(index)) {
-                                    (e.currentTarget as HTMLButtonElement).style.background =
-                                      '#e8f5e9';
-                                  }
-                                }}
-                                onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLButtonElement).style.background =
-                                    '#f5f6f8';
-                                }}
-                              >
-                                +
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {hasUnplannedBudgetPreview && (
                       <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
                         <td
