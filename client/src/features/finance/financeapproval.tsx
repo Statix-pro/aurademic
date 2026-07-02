@@ -2728,16 +2728,8 @@ const FinanceApproval: React.FC = () => {
         );
         setBeneficiaryType(record.beneficiary_type || '');
         setBeneficiaryValue(record.beneficiary_value || '');
-        const recordPrimaryHead = normalizeText(record.primary_head);
-        const recordEventSubHead = normalizeText(record.event_sub_head);
-        const topupHoacGroup =
-          isTopupRoute && ['approved', 'completed'].includes(recordWorkflowStatus)
-            ? getHoacGroupForHead(recordPrimaryHead)
-            : '';
-        const shouldPromoteTopupHoacHead =
-          Boolean(topupHoacGroup) && topupHoacGroup !== recordPrimaryHead;
-        setPrimaryHead(shouldPromoteTopupHoacHead ? String(topupHoacGroup) : recordPrimaryHead);
-        setEventSubHead(shouldPromoteTopupHoacHead ? recordPrimaryHead : recordEventSubHead);
+        setPrimaryHead(record.primary_head || '');
+        setEventSubHead(record.event_sub_head || '');
         setIsBudgetProposed(record.is_budget_proposed || 'No');
         setAmountProposed(
           record.proposed_amount !== null && record.proposed_amount !== undefined
