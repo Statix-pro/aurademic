@@ -3401,8 +3401,16 @@ const financeModel = {
       query += ` AND ${FINANCE_NOT_DELETED_CONDITION_SQL}`;
 
       if (mine) {
-        query += ' AND fr.created_by = ?';
-        params.push(userId);
+        query += ` AND (
+          EXISTS (
+            SELECT 1
+              FROM master_employees me_owner
+             WHERE me_owner.id = fr.employee_id
+               AND me_owner.user_id = ?
+          )
+          OR (fr.employee_id IS NULL AND fr.created_by = ?)
+        )`;
+        params.push(userId, userId);
       }
 
       if (status) {

@@ -2353,7 +2353,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const statusStats = useMemo(() => {
     if (
       queueStatusCounts &&
-      !searchTerm.trim() &&
       !amountFilter &&
       (!enableSecondaryFilter || beneficiaryFilter === 'All Beneficiary') &&
       !secondaryFilter
