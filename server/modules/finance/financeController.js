@@ -276,6 +276,23 @@ const hasFinanceStagePermission = (req, stage) => {
 const hasFinanceWorkflowEditorAccess = (req) =>
   isSuperAdminRequest(req) || hasAnyFinanceWorkflowPermission(req);
 
+const isFinanceApplicantOwner = (userId, financeRecord) => {
+  const normalizedUserId = toPositiveInt(userId);
+  if (!normalizedUserId || !financeRecord) {
+    return false;
+  }
+
+  const applicantUserId = toPositiveInt(financeRecord.applicant_user_id);
+  if (applicantUserId && applicantUserId === normalizedUserId) {
+    return true;
+  }
+
+  return (
+    !toPositiveInt(financeRecord.employee_id) &&
+    toPositiveInt(financeRecord.created_by) === normalizedUserId
+  );
+};
+
 const canAccessFinanceRecord = (req, financeRecord) => {
   const actorUserId = toPositiveInt(req.user?.id);
 
@@ -287,7 +304,7 @@ const canAccessFinanceRecord = (req, financeRecord) => {
     return true;
   }
 
-  if (actorUserId && actorUserId === toPositiveInt(financeRecord.created_by)) {
+  if (isFinanceApplicantOwner(actorUserId, financeRecord)) {
     return true;
   }
 
@@ -508,7 +525,7 @@ const financeController = {
         });
       }
 
-      const isCreator = Boolean(userId && toPositiveInt(finance.created_by) === userId);
+      const isApplicantOwner = isFinanceApplicantOwner(userId, finance);
       const isWorkflowEditor = hasFinanceWorkflowEditorAccess(req);
       const workflowStatus = normalizeText(finance.workflow_state?.status).toLowerCase();
       const isTopupMode = parseBooleanLike(req.body?.topup_mode || req.body?.topupMode);
@@ -517,7 +534,7 @@ const financeController = {
         workflowStatus,
       );
 
-      if (!isCreator && !isWorkflowEditor) {
+      if (!isApplicantOwner && !isWorkflowEditor) {
         return res.status(403).json({
           success: false,
           message: 'You are not allowed to update this request',
@@ -531,7 +548,7 @@ const financeController = {
         workflowStatus === 'submitted' ||
         currentStage === 'level1';
 
-      if (isCreator && !isWorkflowEditor && !isApplicantEditable && !isTopupEditable) {
+      if (isApplicantOwner && !isWorkflowEditor && !isApplicantEditable && !isTopupEditable) {
         return res.status(403).json({
           success: false,
           message: 'This request is not editable in current workflow state',
@@ -726,7 +743,7 @@ const financeController = {
         });
       }
 
-      if (!userId || toPositiveInt(finance.created_by) !== userId) {
+      if (!isFinanceApplicantOwner(userId, finance)) {
         return res.status(403).json({
           success: false,
           message: 'Only applicant can resubmit this request',
@@ -836,7 +853,7 @@ const financeController = {
         });
       }
 
-      if (!isSuperAdmin && (!userId || toPositiveInt(finance.created_by) !== userId)) {
+      if (!isSuperAdmin && !isFinanceApplicantOwner(userId, finance)) {
         return res.status(403).json({
           success: false,
           message: 'Only applicant can delete this request',
