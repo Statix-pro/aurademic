@@ -85,8 +85,6 @@ const journalModel = {
         quartile: journalData.quartile,
         impact_factor: journalData.impact_factor,
         cite_score: journalData.cite_score,
-        anna_university_listed: journalData.anna_university_listed,
-        anna_university_annexure_no: journalData.anna_university_annexure_no,
         acknowledgement: JSON.stringify(journalData.acknowledgement),
         author_affiliation: JSON.stringify(journalData.author_affiliation),
         external_details: journalData.external_details
