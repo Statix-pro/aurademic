@@ -33,12 +33,6 @@ components:
           type: number
           format: float
           example: 7.2
-        anna_university_listed:
-          type: boolean
-          example: true
-        anna_university_annexure_no:
-          type: string
-          example: '12345'
         acknowledgement:
           type: object
         date_of_submission:

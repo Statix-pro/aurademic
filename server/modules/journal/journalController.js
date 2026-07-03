@@ -205,8 +205,6 @@ const journalController = {
         'quartile',
         'impact_factor',
         'cite_score',
-        'anna_university_listed',
-        'anna_university_annexure_no',
         'acknowledgement',
         'author_affiliation',
         'external_details',
@@ -250,14 +248,13 @@ const journalController = {
       // Filter data for each table
       const journalUpdateData = Object.fromEntries(
         Object.entries(journalData).filter(
-          ([key, value]) => journalFields.includes(key) && value !== null && value !== undefined,
+          ([key, value]) => journalFields.includes(key) && value !== undefined,
         ),
       );
 
       const journalOptionsUpdateData = Object.fromEntries(
         Object.entries(journalData).filter(
-          ([key, value]) =>
-            journalOptionsFields.includes(key) && value !== null && value !== undefined,
+          ([key, value]) => journalOptionsFields.includes(key) && value !== undefined,
         ),
       );
 
