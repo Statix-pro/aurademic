@@ -11,7 +11,7 @@ import express from 'express';
 import swaggerUi from 'swagger-ui-express';
 
 import specs from './config/swagger.js';
-import { errorHandler } from './middleware/errorMiddleware.js';
+import { errorHandler, registerProcessErrorHandlers } from './middleware/errorMiddleware.js';
 import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import accountOptionsRoutes from './modules/accountOptions/accountOptionsRoutes.js';
 import adminBudgetRoutes from './modules/adminbudget/adminBudgetRoutes.js';
@@ -35,8 +35,12 @@ import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
+import observabilityRoutes from './modules/observability/observabilityRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
+import logger from './observability/logger.js';
+import { requestLogger } from './observability/requestLogger.js';
+import { startRetentionSchedule } from './observability/store.js';
 
 // FinanceCard routes
 // import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
@@ -61,6 +65,14 @@ const corsOptions = {
 /* ================= MIDDLEWARE ================= */
 
 app.use(cors(corsOptions));
+
+// Request tracing + latency logging must run before everything else so every
+// request gets an X-Request-Id and a timing entry.
+app.use(requestLogger);
+
+// Mounted before the global 50mb json parser so this module's stricter
+// per-route body limits apply to browser telemetry ingest.
+app.use('/api/observability', observabilityRoutes);
 
 // const globalLimiter = rateLimit({
 //   windowMs: 15 * 60 * 1000,
@@ -187,8 +199,12 @@ app.use(errorHandler);
 
 /* ================= SERVER ================= */
 
+registerProcessErrorHandlers();
+startRetentionSchedule();
+
 export const startServer = (port = process.env.PORT || 5000) =>
   app.listen(port, () => {
+    logger.info({ port }, 'server started');
     console.log(`Server running on port ${port}`);
     console.log('- /api/finance-cards (FinanceCard API)');
     console.log('- /api-docs (Swagger API docs)');
