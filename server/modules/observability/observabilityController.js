@@ -23,20 +23,28 @@ export const ingestClientErrors = async (req, res) => {
 
     const record = {
       time: new Date().toISOString(),
-      sessionId: clip(entry.sessionId, 64),
-      reportedEmail: clip(entry.userEmail, 200) || null,
-      url: clip(entry.url, 500),
-      source: clip(entry.source, 50),
-      message: clip(entry.message, 2000),
-      stack: resolvedStack,
-      requestId: clip(entry.requestId, 64) || null,
-      userAgent: clip(req.headers['user-agent'], 300),
       ip: req.ip,
+      userAgent: clip(req.headers['user-agent'], 300),
+      client: {
+        sessionId: clip(entry.sessionId, 64),
+        reportedEmail: clip(entry.userEmail, 200) || null,
+        url: clip(entry.url, 500),
+        source: clip(entry.source, 50),
+        message: clip(entry.message, 2000),
+        stack: resolvedStack,
+        requestId: clip(entry.requestId, 64) || null,
+      },
     };
 
     await appendClientError(record);
     logger.warn(
-      { clientError: { message: record.message, url: record.url, sessionId: record.sessionId } },
+      {
+        clientError: {
+          message: record.client.message,
+          url: record.client.url,
+          sessionId: record.client.sessionId,
+        },
+      },
       'client error reported',
     );
   }
@@ -70,10 +78,19 @@ export const getMetrics = (req, res) => {
 export const getErrors = async (req, res, next) => {
   try {
     const limit = Math.min(Number(req.query.limit) || 100, 500);
-    const [clientErrors, serverErrors] = await Promise.all([
+    const [clientErrorsRaw, serverErrors] = await Promise.all([
       readClientErrors(limit),
       readServerErrors(limit),
     ]);
+
+    // Flatten client errors for UI backward compatibility
+    const clientErrors = clientErrorsRaw.map((e) => {
+      if (e.client) {
+        return { time: e.time, ip: e.ip, userAgent: e.userAgent, ...e.client };
+      }
+      return e;
+    });
+
     res.json({ success: true, data: { clientErrors, serverErrors } });
   } catch (error) {
     next(error);
