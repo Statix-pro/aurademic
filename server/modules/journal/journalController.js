@@ -248,14 +248,13 @@ const journalController = {
       // Filter data for each table
       const journalUpdateData = Object.fromEntries(
         Object.entries(journalData).filter(
-          ([key, value]) => journalFields.includes(key) && value !== null && value !== undefined,
+          ([key, value]) => journalFields.includes(key) && value !== undefined,
         ),
       );
 
       const journalOptionsUpdateData = Object.fromEntries(
         Object.entries(journalData).filter(
-          ([key, value]) =>
-            journalOptionsFields.includes(key) && value !== null && value !== undefined,
+          ([key, value]) => journalOptionsFields.includes(key) && value !== undefined,
         ),
       );
 
