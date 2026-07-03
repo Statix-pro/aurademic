@@ -6,13 +6,27 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const SESSION_KEY = 'obs-session-id';
 
-export const getObservabilitySessionId = (): string => {
-  let id = sessionStorage.getItem(SESSION_KEY);
-  if (!id) {
-    id = crypto.randomUUID();
-    sessionStorage.setItem(SESSION_KEY, id);
+let fallbackSessionId: string | null = null;
+
+const createSessionId = (): string => {
+  if (typeof crypto?.randomUUID === 'function') {
+    return crypto.randomUUID();
   }
-  return id;
+  return `obs-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+export const getObservabilitySessionId = (): string => {
+  try {
+    let id = sessionStorage.getItem(SESSION_KEY);
+    if (!id) {
+      id = createSessionId();
+      sessionStorage.setItem(SESSION_KEY, id);
+    }
+    return id;
+  } catch {
+    fallbackSessionId ||= createSessionId();
+    return fallbackSessionId;
+  }
 };
 
 const getUserEmail = (): string | null => {

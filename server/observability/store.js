@@ -17,14 +17,22 @@ const MAX_LOG_FILE_BYTES = 20 * 1024 * 1024; // rotate JSONL files past 20 MB
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
+const activeFileAgeMs = new Map();
+
 const rotateIfNeeded = async (file) => {
   try {
     const stat = await fsp.stat(file);
-    const ageMs = Date.now() - stat.birthtimeMs;
+    let birthMs = activeFileAgeMs.get(file);
+    if (!birthMs) {
+      birthMs = stat.birthtimeMs > 0 ? stat.birthtimeMs : Date.now();
+      activeFileAgeMs.set(file, birthMs);
+    }
+    const ageMs = Date.now() - birthMs;
     const maxAgeMs = RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
     if (stat.size > MAX_LOG_FILE_BYTES || ageMs > maxAgeMs) {
       await fsp.rename(file, `${file}.1`); // keep one previous generation
+      activeFileAgeMs.set(file, Date.now());
     }
   } catch {
     // file does not exist yet
@@ -82,6 +90,22 @@ export const cleanupOldData = async () => {
         if (stat.mtime.getTime() < cutoff) await fsp.unlink(rotated);
       } catch {
         // no rotated file
+      }
+
+      // Rotate active files if they have exceeded retention age
+      try {
+        const baseStat = await fsp.stat(file);
+        let birthMs = activeFileAgeMs.get(file);
+        if (!birthMs) {
+          birthMs = baseStat.birthtimeMs > 0 ? baseStat.birthtimeMs : Date.now();
+          activeFileAgeMs.set(file, birthMs);
+        }
+        if (birthMs < cutoff) {
+          await fsp.rename(file, rotated);
+          activeFileAgeMs.set(file, Date.now());
+        }
+      } catch {
+        // active file doesn't exist
       }
     }
   } catch (error) {

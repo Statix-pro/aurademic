@@ -66,6 +66,6 @@ export const registerProcessErrorHandlers = () => {
       source: 'uncaughtException',
       message: err.message,
       stack: err.stack,
-    }).catch(() => {});
+    }).finally(() => process.exit(1));
   });
 };
