@@ -24,7 +24,7 @@ export const ingestClientErrors = async (req, res) => {
     const record = {
       time: new Date().toISOString(),
       sessionId: clip(entry.sessionId, 64),
-      userEmail: entry.userEmail ? `${clip(entry.userEmail, 200)} (unverified)` : null,
+      reportedEmail: clip(entry.userEmail, 200) || null,
       url: clip(entry.url, 500),
       source: clip(entry.source, 50),
       message: clip(entry.message, 2000),

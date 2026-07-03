@@ -12,7 +12,10 @@ const createSessionId = (): string => {
   if (typeof crypto?.randomUUID === 'function') {
     return crypto.randomUUID();
   }
-  return `obs-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  const randomPart = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `obs-${Date.now()}-${randomPart}`;
 };
 
 export const getObservabilitySessionId = (): string => {
@@ -24,7 +27,14 @@ export const getObservabilitySessionId = (): string => {
     }
     return id;
   } catch {
-    fallbackSessionId ||= createSessionId();
+    if (!fallbackSessionId) {
+      try {
+        fallbackSessionId = createSessionId();
+      } catch {
+        // Ultimate fallback if both storage and crypto fail
+        fallbackSessionId = `obs-${Date.now()}-fallback`;
+      }
+    }
     return fallbackSessionId;
   }
 };

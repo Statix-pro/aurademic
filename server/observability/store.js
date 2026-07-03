@@ -19,12 +19,29 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const activeFileAgeMs = new Map();
 
+const getFirstLineTime = async (file) => {
+  try {
+    const stream = fs.createReadStream(file, { encoding: 'utf8', highWaterMark: 1024 });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      rl.close();
+      stream.destroy();
+      return new Date(JSON.parse(line).time).getTime() || 0;
+    }
+  } catch {
+    return 0;
+  }
+  return 0;
+};
+
 const rotateIfNeeded = async (file) => {
   try {
     const stat = await fsp.stat(file);
     let birthMs = activeFileAgeMs.get(file);
     if (!birthMs) {
-      birthMs = stat.birthtimeMs > 0 ? stat.birthtimeMs : Date.now();
+      birthMs =
+        stat.birthtimeMs > 0 ? stat.birthtimeMs : (await getFirstLineTime(file)) || Date.now();
       activeFileAgeMs.set(file, birthMs);
     }
     const ageMs = Date.now() - birthMs;
@@ -97,7 +114,10 @@ export const cleanupOldData = async () => {
         const baseStat = await fsp.stat(file);
         let birthMs = activeFileAgeMs.get(file);
         if (!birthMs) {
-          birthMs = baseStat.birthtimeMs > 0 ? baseStat.birthtimeMs : Date.now();
+          birthMs =
+            baseStat.birthtimeMs > 0
+              ? baseStat.birthtimeMs
+              : (await getFirstLineTime(file)) || Date.now();
           activeFileAgeMs.set(file, birthMs);
         }
         if (birthMs < cutoff) {

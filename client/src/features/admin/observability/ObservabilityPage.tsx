@@ -60,7 +60,7 @@ interface ServerError {
 interface ClientError {
   time: string;
   sessionId: string;
-  userEmail: string | null;
+  reportedEmail: string | null;
   url: string;
   source: string;
   message: string;
@@ -364,8 +364,10 @@ const ObservabilityPage = () => {
                               </div>
                             ) : (
                               <div className="col-md-6">
-                                <div className="fw-bold text-muted mb-1">User (Client)</div>
-                                <div>{(e as ClientError).userEmail || 'Anonymous'}</div>
+                                <div className="fw-bold text-muted mb-1">
+                                  User (Client-Reported)
+                                </div>
+                                <div>{(e as ClientError).reportedEmail || 'Anonymous'}</div>
                               </div>
                             )}
 
