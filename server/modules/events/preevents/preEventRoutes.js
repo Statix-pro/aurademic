@@ -1,4 +1,5 @@
 import express from 'express';
+
 import {
   getPreEvents,
   getPreEventById,
@@ -6,8 +7,12 @@ import {
   updatePreEvent,
   deletePreEvent,
 } from './preEventController.js';
+import { authMiddleware } from '../../../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+// All pre-event endpoints require authentication.
+router.use(authMiddleware);
 
 // Pre-events APIs (normalized schema)
 router.get('/', getPreEvents); // GET all pre-events

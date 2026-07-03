@@ -145,7 +145,6 @@ const editRequestController = {
   async updateEditRequestStatus(req, res) {
     try {
       const { entityType, entityId } = req.params;
-      const { status, userId } = req.body;
 
       // Validate entityType
       if (!['journals', 'research_projects'].includes(entityType)) {
@@ -155,11 +154,18 @@ const editRequestController = {
         });
       }
 
-      // Validate status
-      if (!['approved', 'rejected', 'pending', 'none'].includes(status)) {
-        return res.status(400).json({
+      // This is the user-facing reset endpoint ("clear my edit request after
+      // submission"). It must NOT allow a user to approve/reject their own request
+      // (that is the admin-only approveEditRequest/rejectEditRequest flow), so the
+      // status is forced to 'none' and the owner is derived from the authenticated
+      // token rather than trusting a client-supplied userId.
+      const status = 'none';
+      const userId = req.user?.id;
+
+      if (!userId) {
+        return res.status(401).json({
           success: false,
-          message: 'Invalid status.',
+          message: 'Authentication required.',
         });
       }
 

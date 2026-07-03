@@ -1,4 +1,5 @@
 import express from 'express';
+
 import {
   getFinanceRecords,
   getFinanceById,
@@ -6,8 +7,12 @@ import {
   updateFinance,
   deleteFinance,
 } from './financeController.js';
+import { authMiddleware } from '../../../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+// All event-finance endpoints require authentication.
+router.use(authMiddleware);
 
 // Finance APIs
 router.get('/', getFinanceRecords); // GET all finance records

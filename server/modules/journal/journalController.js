@@ -24,6 +24,33 @@ const isRequesterSuperAdmin = (requestUser = {}) => {
 const hasAdminOverride = (requestUser = {}) =>
   isRequesterAdmin(requestUser) || isRequesterSuperAdmin(requestUser);
 
+// Verify the requester is an author of the journal (or an admin) before allowing
+// mutations to its authors/indexes/files. Writes the appropriate error response
+// and returns false when access is denied; returns true when access is granted.
+const ensureJournalAuthorAccess = async (req, res, journalId) => {
+  if (hasAdminOverride(req.user)) {
+    return true;
+  }
+
+  const workflowAccess = await journalModel.getJournalWorkflowAccess(
+    journalId,
+    req.user?.id,
+    req.user?.email,
+  );
+
+  if (!workflowAccess) {
+    res.status(404).json({ message: 'Journal not found' });
+    return false;
+  }
+
+  if (!workflowAccess.is_author) {
+    res.status(403).json({ message: 'You are not authorized to modify this journal' });
+    return false;
+  }
+
+  return true;
+};
+
 const journalController = {
   async createJournal(req, res) {
     try {
@@ -339,6 +366,10 @@ const journalController = {
       const dbAuthorId = req.params.dbAuthorId;
       const { is_first_author, is_primary } = req.body;
 
+      if (!(await ensureJournalAuthorAccess(req, res, journalId))) {
+        return;
+      }
+
       const result = await journalModel.updateAuthorInJournal(journalId, dbAuthorId, {
         is_first_author,
         is_primary,
@@ -401,6 +432,10 @@ const journalController = {
     try {
       const journalId = parseInt(req.params.id);
       const authorData = req.body;
+
+      if (!(await ensureJournalAuthorAccess(req, res, journalId))) {
+        return;
+      }
 
       if (authorData.designation === 'faculty') {
         if (!authorData.author_id) {
@@ -487,6 +522,11 @@ const journalController = {
     try {
       const { id: journalId } = req.params;
       const { indexName } = req.body;
+
+      if (!(await ensureJournalAuthorAccess(req, res, journalId))) {
+        return;
+      }
+
       const result = await journalModel.addIndex(journalId, indexName);
       res.status(201).json({ message: 'Index added successfully', id: result.insertId });
     } catch (error) {
@@ -515,6 +555,10 @@ const journalController = {
             message: 'No file was uploaded.',
           },
         });
+      }
+
+      if (!(await ensureJournalAuthorAccess(req, res, journalId))) {
+        return;
       }
 
       const file = req.file;

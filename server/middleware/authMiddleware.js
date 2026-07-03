@@ -26,7 +26,8 @@ const decodeTokenFromRequest = (req, res) => {
   }
 
   try {
-    return jwt.verify(token, process.env.JWT_SECRET);
+    // Pin the algorithm so a token cannot dictate a weaker/unexpected verification path.
+    return jwt.verify(token, process.env.JWT_SECRET, { algorithms: ['HS256'] });
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
       res.status(401).json({

@@ -20,14 +20,13 @@ import authRoutes from './modules/auth/authRoutes.js';
 import budgetRoutes from './modules/budget/budgetRoutes.js';
 
 // Events routes
-import updatesRoutes from './modules/events/updates/updatesRoutes.js';
-import documentsRoutes from './modules/events/documents/documentsRoutes.js';
-import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
 import budgetCatalogRoutes from './modules/budgetCatalog/budgetCatalogRoutes.js';
 import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
+import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import eventRoutes from './modules/events/events/eventRoutes.js';
 import financeRoutes from './modules/events/finance/financeRoutes.js';
 import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
+import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
 import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
 
@@ -35,6 +34,7 @@ import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUse
 import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
+import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
 
@@ -84,7 +84,20 @@ if (process.env.NODE_ENV !== 'production') {
 
 console.log('Attempting to serve static files from:', path.join(__dirname, '..', 'uploads'));
 
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// Serve user uploads defensively: uploaded files may carry attacker-controlled
+// content (e.g. an .html or .svg with embedded script). Force browsers to treat
+// them as downloads with a neutral type and disable MIME sniffing so they cannot
+// execute in this app's origin (stored XSS / JWT theft from localStorage).
+app.use(
+  '/uploads',
+  express.static(path.join(process.cwd(), 'uploads'), {
+    setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Disposition', 'attachment');
+      res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    },
+  }),
+);
 
 /* ================= ENSURE UPLOAD DIRS ================= */
 
