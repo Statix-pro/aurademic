@@ -205,8 +205,6 @@ const journalController = {
         'quartile',
         'impact_factor',
         'cite_score',
-        'anna_university_listed',
-        'anna_university_annexure_no',
         'acknowledgement',
         'author_affiliation',
         'external_details',
