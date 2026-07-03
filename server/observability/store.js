@@ -35,6 +35,41 @@ const getFirstLineTime = async (file) => {
   return 0;
 };
 
+const pruneJsonlByRecordTime = async (file, cutoff) => {
+  const retained = [];
+  let earliestRetainedMs = 0;
+
+  try {
+    await fsp.access(file);
+  } catch {
+    return 0;
+  }
+
+  const stream = fs.createReadStream(file, { encoding: 'utf8' });
+  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+
+  for await (const line of rl) {
+    if (!line.trim()) continue;
+    try {
+      const record = JSON.parse(line);
+      const recordMs = new Date(record.time).getTime();
+      if (!recordMs || recordMs < cutoff) continue;
+      retained.push(JSON.stringify(record));
+      if (!earliestRetainedMs || recordMs < earliestRetainedMs) earliestRetainedMs = recordMs;
+    } catch {
+      // Drop corrupt records during retention cleanup.
+    }
+  }
+
+  if (retained.length) {
+    await fsp.writeFile(file, `${retained.join('\n')}\n`, 'utf8');
+  } else {
+    await fsp.unlink(file);
+  }
+
+  return earliestRetainedMs;
+};
+
 const rotateIfNeeded = async (file) => {
   try {
     const stat = await fsp.stat(file);
@@ -111,6 +146,14 @@ export const cleanupOldData = async () => {
         if (stat.mtime.getTime() < cutoff) await fsp.unlink(rotated);
       } catch {
         // no rotated file
+      }
+
+      const earliestRetainedMs = await pruneJsonlByRecordTime(file, cutoff);
+      if (earliestRetainedMs) {
+        activeFileAgeMs.set(file, earliestRetainedMs);
+      } else {
+        activeFileAgeMs.delete(file);
+        continue;
       }
 
       // Rotate active files if they have exceeded retention age
