@@ -20,7 +20,10 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 const rotateIfNeeded = async (file) => {
   try {
     const stat = await fsp.stat(file);
-    if (stat.size > MAX_LOG_FILE_BYTES) {
+    const ageMs = Date.now() - stat.birthtimeMs;
+    const maxAgeMs = RETENTION_DAYS * 24 * 60 * 60 * 1000;
+
+    if (stat.size > MAX_LOG_FILE_BYTES || ageMs > maxAgeMs) {
       await fsp.rename(file, `${file}.1`); // keep one previous generation
     }
   } catch {
