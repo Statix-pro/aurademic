@@ -62,25 +62,29 @@ const appendJsonl = async (file, record) => {
 };
 
 const readJsonlTail = async (file, limit) => {
-  try {
-    await fsp.access(file);
-  } catch {
-    return [];
-  }
-
   const records = [];
-  const stream = fs.createReadStream(file, { encoding: 'utf8' });
-  const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
 
-  for await (const line of rl) {
-    if (!line.trim()) continue;
+  const readLines = async (targetFile) => {
     try {
-      records.push(JSON.parse(line));
-      if (records.length > limit * 2) records.splice(0, records.length - limit);
+      await fsp.access(targetFile);
     } catch {
-      // skip corrupt line
+      return;
     }
-  }
+    const stream = fs.createReadStream(targetFile, { encoding: 'utf8' });
+    const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      try {
+        records.push(JSON.parse(line));
+        if (records.length > limit * 2) records.splice(0, records.length - limit);
+      } catch {
+        // skip corrupt line
+      }
+    }
+  };
+
+  await readLines(`${file}.1`);
+  await readLines(file);
 
   return records.slice(-limit).reverse();
 };
