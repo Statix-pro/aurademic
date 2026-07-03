@@ -12,8 +12,8 @@
 -- columns is permanently lost. Back up the journals table before running in prod.
 
 ALTER TABLE `journals`
-  DROP COLUMN IF EXISTS `anna_university_listed`,
-  DROP COLUMN IF EXISTS `anna_university_annexure_no`;
+  DROP COLUMN `anna_university_listed`,
+  DROP COLUMN `anna_university_annexure_no`;
 
 -- ============================================
 -- ROLLBACK (Keep commented - use if you need to undo)
