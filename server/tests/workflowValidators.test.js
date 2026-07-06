@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { WorkflowError, validateWorkflowMeta } from '../modules/shared/workflow/workflowValidators.js';
+import {
+  WorkflowError,
+  validateWorkflowMeta,
+} from '../modules/shared/workflow/workflowValidators.js';
 
 describe('workflowValidators', () => {
   it('allows topup as a workflow origin', () => {

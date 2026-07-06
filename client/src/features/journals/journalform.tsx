@@ -18,6 +18,7 @@ import {
   Upload,
   FileText,
   CheckCircle,
+  ExternalLink,
 } from 'lucide-react';
 
 // Type definitions
@@ -307,6 +308,10 @@ const JournalForm: React.FC = () => {
   const [doi, setDoi] = useState<string>('');
   const [scopusId, setScopusId] = useState<string>('');
   const [scieId, setScieId] = useState<string>('');
+  const [wosId, setWosId] = useState<string>('');
+  const [pubmedPmid, setPubmedPmid] = useState<string>('');
+  const [openAccess, setOpenAccess] = useState<'Yes' | 'No'>('No');
+  const [year, setYear] = useState<string>('');
 
   // Add new state for page/article number choice
   const [pageOrArticleChoice, setPageOrArticleChoice] = useState<PageOrArticleChoice>('pages');
@@ -1702,11 +1707,7 @@ const JournalForm: React.FC = () => {
     setSearchQueries((prevQueries) => {
       const prevArray = Array.isArray(prevQueries) ? prevQueries : Array(MAX_AUTHORS).fill('');
       const newQueries = [...prevArray];
-      const normalizedDesignation = computeDesignation(selectedAuthor);
-      newQueries[index] =
-        normalizedDesignation === 'student'
-          ? selectedAuthor.student_id || ''
-          : selectedAuthor.author_id || '';
+      newQueries[index] = selectedAuthor.name || '';
       return newQueries;
     });
 
@@ -1730,17 +1731,6 @@ const JournalForm: React.FC = () => {
       return (
         <>
           <div className="author-input-group">
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Register No."
-              name="register_no"
-              value={author.register_no || ''}
-              onChange={(e) =>
-                handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
-              }
-              disabled={!editMode && isViewMode}
-            />
             <input
               type="text"
               className="form-control"
@@ -1797,17 +1787,6 @@ const JournalForm: React.FC = () => {
             <input
               type="text"
               className="form-control"
-              placeholder="Department"
-              name="department"
-              value={author.department || ''}
-              onChange={(e) =>
-                handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
-              }
-              disabled={!editMode && isViewMode}
-            />
-            <input
-              type="text"
-              className="form-control"
               placeholder="Organization"
               name="organization"
               value={author.organization || ''}
@@ -1838,15 +1817,8 @@ const JournalForm: React.FC = () => {
             <input
               type="text"
               className="form-control"
-              placeholder="Search or enter Author ID"
-              value={
-                isViewMode
-                  ? (authorDesignations[index] || author.designation || 'faculty').toLowerCase() ===
-                    'student'
-                    ? author.register_no || ''
-                    : author.author_id || ''
-                  : searchQueries[index] || ''
-              }
+              placeholder="Name (Searchable)"
+              value={author.name || searchQueries[index] || ''}
               onChange={(e) => handleSearchInputChange(e, index)}
               onFocus={() => {
                 // Skip if author was just added to prevent auto-dropdown
@@ -1918,13 +1890,6 @@ const JournalForm: React.FC = () => {
             )}
           </div>
           {/* These readOnly fields will display the data after a faculty member is selected */}
-          <input
-            type="text"
-            className="form-control"
-            placeholder="Name"
-            value={author.name || ''}
-            readOnly
-          />
           <input
             type="text"
             className="form-control"
@@ -2489,6 +2454,10 @@ const JournalForm: React.FC = () => {
       reference_number: referenceNumber,
       accepted_date: getFormValue('acceptedDateInput'),
       available_online_date: getFormValue('availableDateInput'),
+      open_access: openAccess || null,
+      year: year || null,
+      wos_id: wosId || null,
+      pubmed_pmid: pubmedPmid || null,
     };
 
     // Add publication_details for Conference, Book Chapter, and Book
@@ -3063,32 +3032,95 @@ const JournalForm: React.FC = () => {
                         )}
                       </div> */}
                     </div>
+
+                    {/* Acknowledgement Section - SDG-style multi-select - Hidden for Book category */}
+                    {!effectiveIsBook && (
+                      <div className="mb-3 mt-3">
+                        <label className="form-label">Acknowledgement</label>
+                        <CustomTagInput
+                          name="acknowledgement"
+                          value={selectedAcknowledgements}
+                          onChange={(newTags) => {
+                            if (
+                              newTags.includes('Nil') &&
+                              !selectedAcknowledgements.includes('Nil')
+                            ) {
+                              setSelectedAcknowledgements(['Nil']);
+                              setOtherAcknowledgement('');
+                            } else if (newTags.length > 1 && newTags.includes('Nil')) {
+                              // If currently have "Nil" and added something else, remove "Nil"
+                              const withoutNil = newTags.filter((t) => t !== 'Nil');
+                              setSelectedAcknowledgements(withoutNil);
+                            } else {
+                              setSelectedAcknowledgements(newTags);
+                            }
+                          }}
+                          suggestions={allAcknowledgements.filter(
+                            (ack) =>
+                              ack
+                                .toLowerCase()
+                                .includes(acknowledgementSearchQuery.toLowerCase()) &&
+                              !selectedAcknowledgements.includes(ack),
+                          )}
+                          onSearch={setAcknowledgementSearchQuery}
+                          placeholder={
+                            selectedAcknowledgements.length === 0
+                              ? 'Type to search and select acknowledgements'
+                              : ''
+                          }
+                          disabled={!editMode && isViewMode}
+                        />
+                      </div>
+                    )}
+
+                    {/* Sustainable Development Goals Section */}
+                    <div className="mb-3">
+                      <label className="form-label">Sustainable Development Goals (SDGs)</label>
+                      <CustomTagInput
+                        name="sdgs"
+                        value={selectedSDGs}
+                        onChange={setSelectedSDGs}
+                        suggestions={allSDGs.filter(
+                          (sdg) =>
+                            sdg.toLowerCase().includes(sdgSearchQuery.toLowerCase()) &&
+                            !selectedSDGs.includes(sdg),
+                        )}
+                        onSearch={setSdgSearchQuery}
+                        placeholder={
+                          selectedSDGs.length === 0 ? 'Type to search and select SDGs' : ''
+                        }
+                        disabled={!editMode && isViewMode}
+                        renderTag={(tag) =>
+                          typeof tag === 'string' && tag.includes('.') ? tag.split('.')[0] : tag
+                        }
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div className="col-lg-6">
                   {/* Right Column Card */}
                   <div className="form-card h-100" style={{ padding: '24px' }}>
-                    <h6 className="form-section-title section-title-divider mb-3">
-                      Journal Details
-                    </h6>
+                    <div className="d-flex justify-content-between align-items-center mb-3 section-title-divider">
+                      <h6 className="form-section-title mb-0">Journal Details</h6>
+                      {effectiveIsJournal && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-add-journal"
+                          onClick={() => setShowJournalRequestModal(true)}
+                          disabled={!editMode && isViewMode}
+                        >
+                          Add Journal
+                        </button>
+                      )}
+                    </div>
                     {/* Only show journal search for Journal */}
                     {effectiveIsJournal && (
                       <div className="mb-3 position-relative">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
+                        <div className="mb-2">
                           <label htmlFor="journalSearch" className="form-label mb-0">
                             Journal Name
                           </label>
-                          <div>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-add-journal me-2"
-                              onClick={() => setShowJournalRequestModal(true)}
-                              disabled={!editMode && isViewMode}
-                            >
-                              Add Journal
-                            </button>
-                          </div>
                         </div>
                         <input
                           type="text"
@@ -3684,89 +3716,9 @@ const JournalForm: React.FC = () => {
                         </div>
                       </div>
                     )}
-
-                    {/* Modal backdrop */}
-                    {showConferenceRequestModal && <div className="modal-backdrop fade show"></div>}
-
-                    {/* Modal backdrop */}
-                    {showJournalRequestModal && <div className="modal-backdrop fade show"></div>}
-                  </div>
-                </div>
-
-                {/* Row 2: Acknowledgement/SDGs + Metrics/Status */}
-                <div className="col-lg-6">
-                  {/* Acknowledgement & SDGs Card */}
-                  <div className="form-card h-100" style={{ padding: '24px' }}>
-                    {/* Acknowledgement Section - SDG-style multi-select - Hidden for Book category */}
-                    {!effectiveIsBook && (
-                      <div className="mb-3">
-                        <label className="form-label">Acknowledgement</label>
-                        <CustomTagInput
-                          name="acknowledgement"
-                          value={selectedAcknowledgements}
-                          onChange={(newTags) => {
-                            if (
-                              newTags.includes('Nil') &&
-                              !selectedAcknowledgements.includes('Nil')
-                            ) {
-                              setSelectedAcknowledgements(['Nil']);
-                              setOtherAcknowledgement('');
-                            } else if (newTags.length > 1 && newTags.includes('Nil')) {
-                              // If currently have "Nil" and added something else, remove "Nil"
-                              const withoutNil = newTags.filter((t) => t !== 'Nil');
-                              setSelectedAcknowledgements(withoutNil);
-                            } else {
-                              setSelectedAcknowledgements(newTags);
-                            }
-                          }}
-                          suggestions={allAcknowledgements.filter(
-                            (ack) =>
-                              ack
-                                .toLowerCase()
-                                .includes(acknowledgementSearchQuery.toLowerCase()) &&
-                              !selectedAcknowledgements.includes(ack),
-                          )}
-                          onSearch={setAcknowledgementSearchQuery}
-                          placeholder={
-                            selectedAcknowledgements.length === 0
-                              ? 'Type to search and select acknowledgements'
-                              : ''
-                          }
-                          disabled={!editMode && isViewMode}
-                        />
-                      </div>
-                    )}
-
-                    {/* Sustainable Development Goals Section */}
-                    <div className="mb-3">
-                      <label className="form-label">Sustainable Development Goals (SDGs)</label>
-                      <CustomTagInput
-                        name="sdgs"
-                        value={selectedSDGs}
-                        onChange={setSelectedSDGs}
-                        suggestions={allSDGs.filter(
-                          (sdg) =>
-                            sdg.toLowerCase().includes(sdgSearchQuery.toLowerCase()) &&
-                            !selectedSDGs.includes(sdg),
-                        )}
-                        onSearch={setSdgSearchQuery}
-                        placeholder={
-                          selectedSDGs.length === 0 ? 'Type to search and select SDGs' : ''
-                        }
-                        disabled={!editMode && isViewMode}
-                        renderTag={(tag) =>
-                          typeof tag === 'string' && tag.includes('.') ? tag.split('.')[0] : tag
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="col-lg-6">
-                  {/* Metrics & Status Card */}
-                  <div className="form-card h-100" style={{ padding: '24px' }}>
+                    {/* Metrics & Status Section */}
                     {effectiveIsJournal && (
-                      <div className="mb-3">
+                      <div className="mb-3 mt-4">
                         <div className="row g-3">
                           <div className="col-6">
                             <label
@@ -3815,7 +3767,7 @@ const JournalForm: React.FC = () => {
                         </div>
                       </div>
                     )}
-                    <div className="row g-3">
+                    <div className="row g-3 mb-2">
                       <div className="col-6">
                         <label
                           className="form-label"
@@ -3873,6 +3825,12 @@ const JournalForm: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* Modal backdrop */}
+                    {showConferenceRequestModal && <div className="modal-backdrop fade show"></div>}
+
+                    {/* Modal backdrop */}
+                    {showJournalRequestModal && <div className="modal-backdrop fade show"></div>}
                   </div>
                 </div>
               </div>
@@ -3940,73 +3898,119 @@ const JournalForm: React.FC = () => {
                   </div>
 
                   {/* Publication Details Card */}
-                  <div className="form-card" style={{ padding: '24px' }}>
-                    <h6 className="form-section-title section-title-divider mb-3">
+                  <div className="form-card mb-4" style={{ padding: '24px' }}>
+                    <h6 className="form-section-title section-title-divider mb-4">
                       Publication Details
                     </h6>
-                    <div className="pub-row">
-                      <div className="pub-field">
-                        <label className="form-label mb-0">Volume</label>
-                        <input
-                          type="text"
-                          id="volumeInput"
-                          className="form-control pub-input-sm"
-                          placeholder="Number"
-                          disabled={!editMode && isViewMode}
-                        />
-                      </div>
-
-                      <div className="pub-field">
-                        <label className="form-label mb-0">Issue</label>
-                        <label className="toggle-switch mb-0">
+                    <div className="row g-4">
+                      {/* Left Column */}
+                      <div className="col-lg-7">
+                        <div className="pub-field-horizontal">
+                          <label className="form-label">Volume</label>
                           <input
-                            type="checkbox"
-                            id="issueToggle"
-                            checked={metrics.issue}
-                            onChange={() => handleMetricToggle('issue')}
+                            type="text"
+                            id="volumeInput"
+                            className="form-control"
+                            style={{ maxWidth: '120px' }}
+                            placeholder="Number"
                             disabled={!editMode && isViewMode}
                           />
-                          <span className="slider"></span>
-                        </label>
-                        <input
-                          type="text"
-                          id="issueInput"
-                          className="form-control pub-input-sm"
-                          placeholder="Number"
-                          disabled={!metrics.issue || (!editMode && isViewMode)}
-                        />
-                      </div>
 
-                      {!effectiveIsBook && !effectiveIsBookChapter && (
-                        <div className="radio-group">
-                          <div className="radio-item">
-                            <input
-                              type="radio"
-                              id="regularIssue"
-                              name="issueType"
-                              value="Regular Issue"
-                              disabled={!metrics.issue || (!editMode && isViewMode)}
-                            />
-                            <label htmlFor="regularIssue">Regular Issue</label>
-                          </div>
-                          <div className="radio-item">
-                            <input
-                              type="radio"
-                              id="specialIssue"
-                              name="issueType"
-                              value="Special Issue"
-                              disabled={!metrics.issue || (!editMode && isViewMode)}
-                            />
-                            <label htmlFor="specialIssue">Special Issue</label>
+                          <div className="d-flex align-items-center ms-4 gap-3">
+                            <label className="form-label mb-0 text-primary">Open Access</label>
+                            <div
+                              className="bg-light-blue py-1 px-3 d-flex gap-3"
+                              style={{ borderRadius: '8px' }}
+                            >
+                              <div className="form-check mb-0">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="openAccess"
+                                  id="oaYes"
+                                  value="Yes"
+                                  checked={openAccess === 'Yes'}
+                                  onChange={(e) => setOpenAccess(e.target.value as 'Yes' | 'No')}
+                                  disabled={!editMode && isViewMode}
+                                />
+                                <label className="form-check-label" htmlFor="oaYes">
+                                  Yes
+                                </label>
+                              </div>
+                              <div className="form-check mb-0">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="openAccess"
+                                  id="oaNo"
+                                  value="No"
+                                  checked={openAccess === 'No'}
+                                  onChange={(e) => setOpenAccess(e.target.value as 'Yes' | 'No')}
+                                  disabled={!editMode && isViewMode}
+                                />
+                                <label className="form-check-label" htmlFor="oaNo">
+                                  No
+                                </label>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      )}
 
-                      <div className="pub-field">
-                        <label className="form-label mb-0">
-                          {pageOrArticleChoice === 'article' ? 'Article Number' : 'Page Number'}
-                        </label>
-                        <div className="custom-tooltip">
+                        <div className="pub-field-horizontal">
+                          <label className="form-label">Issue</label>
+                          <label className="toggle-switch mb-0">
+                            <input
+                              type="checkbox"
+                              id="issueToggle"
+                              checked={metrics.issue}
+                              onChange={() => handleMetricToggle('issue')}
+                              disabled={!editMode && isViewMode}
+                            />
+                            <span className="slider"></span>
+                          </label>
+                          <input
+                            type="text"
+                            id="issueInput"
+                            className="form-control"
+                            style={{ maxWidth: '120px' }}
+                            placeholder="Number"
+                            disabled={!metrics.issue || (!editMode && isViewMode)}
+                          />
+
+                          {!effectiveIsBook && !effectiveIsBookChapter && (
+                            <div className="d-flex gap-3 ms-3">
+                              <div className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="issueType"
+                                  id="regularIssue"
+                                  value="Regular Issue"
+                                  disabled={!metrics.issue || (!editMode && isViewMode)}
+                                />
+                                <label className="form-check-label" htmlFor="regularIssue">
+                                  Regular Issue
+                                </label>
+                              </div>
+                              <div className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="issueType"
+                                  id="specialIssue"
+                                  value="Special Issue"
+                                  disabled={!metrics.issue || (!editMode && isViewMode)}
+                                />
+                                <label className="form-check-label" htmlFor="specialIssue">
+                                  Special Issue
+                                </label>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="pub-field-horizontal align-items-center">
+                          <label className="form-label">Page No.</label>
                           <label className="toggle-switch mb-0">
                             <input
                               type="checkbox"
@@ -4019,167 +4023,186 @@ const JournalForm: React.FC = () => {
                             />
                             <span className="slider"></span>
                           </label>
-                          <span className="tooltip-text">
-                            Toggle to switch between Page Number and Article Number
-                          </span>
-                        </div>
-                        {pageOrArticleChoice === 'pages' && (
-                          <div className="d-flex gap-2">
-                            <input
-                              type="number"
-                              id="pagesFromInput"
-                              className="form-control pub-input-sm"
-                              placeholder="From"
-                              disabled={!editMode && isViewMode}
-                            />
-                            <input
-                              type="number"
-                              id="pagesToInput"
-                              className="form-control pub-input-sm"
-                              placeholder="To"
-                              disabled={!editMode && isViewMode}
-                            />
-                          </div>
-                        )}
-                        {pageOrArticleChoice === 'article' && (
-                          <input
-                            type="text"
-                            id="articleNumberInput"
-                            className="form-control pub-input"
-                            placeholder="Enter article number"
-                            disabled={!editMode && isViewMode}
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="pub-row">
-                      <div className="pub-field">
-                        <label className="form-label mb-0">Accepted on</label>
-                        <input
-                          type="date"
-                          id="acceptedDateInput"
-                          className="form-control pub-date"
-                          placeholder="dd-mm-yyyy"
-                          disabled={!editMode && isViewMode}
-                        />
-                      </div>
-
-                      <div className="pub-field">
-                        <label className="form-label mb-0">Published on</label>
-                        <input
-                          type="date"
-                          id="availableDateInput"
-                          className="form-control pub-date"
-                          placeholder="dd-mm-yyyy"
-                          disabled={!editMode && isViewMode}
-                        />
-                      </div>
-
-                      <div className="pub-field">
-                        <label className="form-label mb-0">DOI</label>
-                        {isViewMode && !editMode ? (
-                          // View mode - display as clickable link
-                          doi ? (
-                            <div className="form-control-plaintext">
-                              {(() => {
-                                // Use the DOI value from state
-                                const doiValue = doi;
-                                if (!doiValue) return 'N/A';
-
-                                // Create the full DOI URL
-                                const fullDoiUrl = doiValue.startsWith('http')
-                                  ? doiValue
-                                  : `https://www.doi.org/${doiValue}`;
-                                return (
-                                  <a
-                                    href={fullDoiUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-primary text-decoration-none"
-                                  >
-                                    {doiValue}
-                                  </a>
-                                );
-                              })()}
+                          {pageOrArticleChoice === 'pages' ? (
+                            <div className="d-flex gap-2">
+                              <input
+                                type="number"
+                                id="pagesFromInput"
+                                className="form-control"
+                                style={{ maxWidth: '100px' }}
+                                placeholder="From"
+                                disabled={!editMode && isViewMode}
+                              />
+                              <input
+                                type="number"
+                                id="pagesToInput"
+                                className="form-control"
+                                style={{ maxWidth: '100px' }}
+                                placeholder="To"
+                                disabled={!editMode && isViewMode}
+                              />
                             </div>
                           ) : (
-                            <div className="form-control-plaintext text-muted">
-                              DOI not provided
-                            </div>
-                          )
-                        ) : (
-                          // Edit mode - display with prefix input and preview button
-                          <div className="d-flex align-items-center">
-                            <span className="text-muted me-1" style={{ fontSize: '0.875rem' }}>
-                              https://www.doi.org/
-                            </span>
                             <input
                               type="text"
-                              id="doiInput"
-                              className="form-control pub-input"
-                              placeholder="10.1109/ICACCS60874.2024.10717004"
-                              value={doi}
-                              onChange={(e) => setDoi(e.target.value)}
+                              id="articleNumberInput"
+                              className="form-control"
+                              style={{ maxWidth: '208px' }}
+                              placeholder="Enter article number"
                               disabled={!editMode && isViewMode}
                             />
-                            <button
-                              type="button"
-                              className="btn btn-outline-secondary btn-sm ms-2"
-                              onClick={() => {
-                                const doiInput = document.getElementById(
-                                  'doiInput',
-                                ) as HTMLInputElement;
-                                const doiValue = doiInput ? doiInput.value.trim() : '';
-                                if (doiValue) {
-                                  const fullDoiUrl = doiValue.startsWith('http')
-                                    ? doiValue
-                                    : `https://www.doi.org/${doiValue}`;
-                                  window.open(fullDoiUrl, '_blank', 'noopener,noreferrer');
-                                } else {
-                                  alert('Please enter a DOI first');
-                                }
-                              }}
-                              title="Preview DOI URL"
-                            >
-                              Preview
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                          )}
 
-                  {/* Published Article + IDs Card */}
-                  <div className="form-card-dashed container-gap" style={{ padding: '24px' }}>
-                    <div className="row g-4 align-items-start">
-                      <div className="col-lg-6">
+                          <div
+                            className="bg-light-blue ms-3 py-1 px-3 d-flex align-items-center gap-2"
+                            style={{ borderRadius: '8px' }}
+                          >
+                            <label className="form-label mb-0 text-primary">Year</label>
+                            <input
+                              type="text"
+                              className="form-control"
+                              style={{ maxWidth: '100px' }}
+                              value={year}
+                              onChange={(e) => setYear(e.target.value)}
+                              disabled={!editMode && isViewMode}
+                            />
+                          </div>
+                        </div>
+
+                        <div
+                          className="bg-light-blue mt-4 d-flex align-items-center gap-3"
+                          style={{ borderRadius: '8px' }}
+                        >
+                          <label
+                            className="form-label mb-0 text-primary"
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            Credits to
+                          </label>
+                          <select
+                            className="form-control"
+                            value={selectedCreditTo[0] || ''}
+                            onChange={(e) => {
+                              const newSelected = [...selectedCreditTo];
+                              newSelected[0] = e.target.value;
+                              setSelectedCreditTo(newSelected.filter((v) => v));
+                            }}
+                            disabled={!editMode && isViewMode}
+                          >
+                            <option value="">Select Author</option>
+                            {authors
+                              .filter(
+                                (author) =>
+                                  author.name &&
+                                  author.name.trim() &&
+                                  author.designation === 'faculty',
+                              )
+                              .map((author) => (
+                                <option
+                                  key={author.id}
+                                  value={author.author_id || author.register_no}
+                                >
+                                  {author.name} ({author.author_id || author.register_no})
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Right Column */}
+                      <div className="col-lg-5">
+                        {/* Important Dates Box */}
+                        <div className="bg-light-blue mb-4">
+                          <div
+                            className="text-center text-primary font-weight-bold mb-3"
+                            style={{ fontWeight: 600 }}
+                          >
+                            Important Dates
+                          </div>
+                          <div className="d-flex align-items-center justify-content-between mb-3">
+                            <label
+                              className="form-label mb-0 text-secondary"
+                              style={{ fontSize: '13px' }}
+                            >
+                              Accepted for Publication on
+                            </label>
+                            <input
+                              type="date"
+                              id="acceptedDateInput"
+                              className="form-control"
+                              style={{ maxWidth: '160px' }}
+                              disabled={!editMode && isViewMode}
+                            />
+                          </div>
+                          <div className="d-flex align-items-center justify-content-between">
+                            <label
+                              className="form-label mb-0 text-secondary"
+                              style={{ fontSize: '13px' }}
+                            >
+                              Article Published online on
+                            </label>
+                            <input
+                              type="date"
+                              id="availableDateInput"
+                              className="form-control"
+                              style={{ maxWidth: '160px' }}
+                              disabled={!editMode && isViewMode}
+                            />
+                          </div>
+                        </div>
+
                         {/* File Upload Box */}
-                        <div className="publish-upload-box">
-                          <div className="publish-upload-info">
-                            <FileText size={32} className="publish-upload-icon" />
+                        <div className="pub-upload-box-modern">
+                          <div className="pub-upload-info-modern">
+                            <FileText size={32} className="pub-upload-icon-modern" />
                             <div>
-                              <div className="publish-upload-title">Published Article</div>
-                              <div className="publish-upload-subtitle">PDF (Maximum 5 MB)</div>
+                              <div className="pub-upload-title-modern">Published Article</div>
+                              <div className="pub-upload-subtitle-modern">PDF (Maximum 5 MB)</div>
+                              {(selectedFile || uploadedFile) && !(isViewMode && !editMode) && (
+                                <div className="mt-1" style={{ fontSize: '12px' }}>
+                                  <a
+                                    href={
+                                      selectedFile
+                                        ? URL.createObjectURL(selectedFile)
+                                        : getFileUrl(uploadedFile!.path)
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    {selectedFile ? selectedFile.name : uploadedFile!.name}
+                                  </a>
+                                  {editMode && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-link text-danger p-0 ms-2"
+                                      onClick={handleFileDelete}
+                                      title="Delete file"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
+
                           {isViewMode && !editMode ? (
-                            // VIEW MODE ONLY - link to the saved file
                             uploadedFile ? (
                               <a
                                 href={getFileUrl(uploadedFile.path)}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="publish-choose-file"
+                                className="btn-upload-modern"
                               >
-                                <Upload size={16} /> View File
+                                <Upload size={16} /> View
                               </a>
                             ) : (
-                              <span className="text-muted">No file uploaded</span>
+                              <span className="text-muted" style={{ fontSize: '13px' }}>
+                                No file
+                              </span>
                             )
                           ) : (
-                            // EDIT or CREATE MODE
-                            <label htmlFor="file-upload" className="publish-choose-file">
+                            <label htmlFor="file-upload" className="btn-upload-modern mb-0">
                               <Upload size={16} />
                               {uploadedFile || selectedFile ? 'Change File' : 'Choose File'}
                               <input
@@ -4192,110 +4215,125 @@ const JournalForm: React.FC = () => {
                             </label>
                           )}
                         </div>
-
-                        {/* Selected / uploaded file name + delete */}
-                        {(selectedFile || uploadedFile) && !(isViewMode && !editMode) && (
-                          <div className="publish-file-name">
-                            <a
-                              href={
-                                selectedFile
-                                  ? URL.createObjectURL(selectedFile)
-                                  : getFileUrl(uploadedFile!.path)
-                              }
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              {selectedFile ? selectedFile.name : uploadedFile!.name}
-                            </a>
-                            {editMode && (
-                              <button
-                                type="button"
-                                className="btn-delete-file"
-                                onClick={handleFileDelete}
-                                title="Delete file"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
-                          </div>
-                        )}
                       </div>
-                      <div className="col-lg-6">
-                        {/* Scopus ID Field */}
-                        {selectedIndexes.includes('Scopus') && (
-                          <div className="publish-id-field">
-                            <label className="form-label mb-0">Scopus ID</label>
-                            <input
-                              type="text"
-                              id="scopusIdInput"
-                              className="form-control"
-                              value={scopusId}
-                              onChange={(e) => setScopusId(e.target.value)}
-                              placeholder="Enter Scopus ID"
-                              disabled={!editMode && isViewMode}
-                            />
-                          </div>
-                        )}
+                    </div>
+                  </div>
 
-                        {/* SCIE ID Field */}
-                        {selectedIndexes.includes('SCIE') && (
-                          <div className="publish-id-field">
-                            <label className="form-label mb-0">SCIE ID</label>
-                            <input
-                              type="text"
-                              id="scieIdInput"
-                              className="form-control"
-                              value={scieId}
-                              onChange={(e) => setScieId(e.target.value)}
-                              placeholder="Enter SCIE ID"
-                              disabled={!editMode && isViewMode}
-                            />
-                          </div>
-                        )}
+                  {/* Reference Numbers Box */}
+                  <div className="border-dashed-blue mb-4">
+                    <div className="row g-4">
+                      {/* DOI */}
+                      <div className="col-lg-6 d-flex align-items-center">
+                        <label
+                          className="form-label mb-0 me-3 font-weight-bold"
+                          style={{ minWidth: '40px', fontWeight: 600 }}
+                        >
+                          DOI
+                        </label>
+                        <a href="#" className="pub-id-prefix-link me-2 text-decoration-none">
+                          https://www.doi.org/
+                        </a>
+                        <input
+                          type="text"
+                          id="doiInput"
+                          className="form-control flex-grow-1"
+                          placeholder="10.1109/IC..."
+                          value={doi}
+                          onChange={(e) => setDoi(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                        />
+                        <a
+                          href="#"
+                          className="pub-id-icon-link ms-1"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (doi) {
+                              const fullDoiUrl = doi.startsWith('http')
+                                ? doi
+                                : `https://www.doi.org/${doi}`;
+                              window.open(fullDoiUrl, '_blank', 'noopener,noreferrer');
+                            }
+                          }}
+                        >
+                          <ExternalLink size={20} />
+                        </a>
+                      </div>
 
-                        {/* Credit To Field */}
-                        {(selectedIndexes.includes('SCIE') ||
-                          selectedIndexes.includes('Scopus') ||
-                          selectedIndexes.includes('PubMed') ||
-                          selectedIndexes.includes('Google Scholar')) &&
-                          authors.length > 0 && (
-                            <div className="publish-id-field">
-                              <label className="form-label mb-0">Credit to</label>
-                              <select
-                                className="form-control"
-                                value={selectedCreditTo[0] || ''}
-                                onChange={(e) => {
-                                  const newSelected = [...selectedCreditTo];
-                                  newSelected[0] = e.target.value;
-                                  setSelectedCreditTo(newSelected.filter((v) => v));
-                                }}
-                                disabled={!editMode && isViewMode}
-                              >
-                                <option value="">Select Author</option>
-                                {authors
-                                  .filter(
-                                    (author) =>
-                                      author.name &&
-                                      author.name.trim() &&
-                                      author.designation === 'faculty',
-                                  )
-                                  .map((author) => (
-                                    <option
-                                      key={author.id}
-                                      value={author.author_id || author.register_no}
-                                    >
-                                      {author.name} ({author.author_id || author.register_no})
-                                    </option>
-                                  ))}
-                              </select>
-                            </div>
-                          )}
+                      {/* Scopus EID */}
+                      <div className="col-lg-6 d-flex align-items-center">
+                        <label
+                          className="form-label mb-0 me-3 font-weight-bold"
+                          style={{ minWidth: '80px', fontWeight: 600 }}
+                        >
+                          Scopus EID
+                        </label>
+                        <span
+                          className="pub-id-prefix-link me-2 text-decoration-none"
+                          style={{ minWidth: '50px' }}
+                        >
+                          2-s2.0-
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control flex-grow-1"
+                          value={scopusId}
+                          onChange={(e) => setScopusId(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                        />
+                        <a href="#" className="pub-id-icon-link ms-1">
+                          <ExternalLink size={20} />
+                        </a>
+                      </div>
+
+                      {/* WoS ID */}
+                      <div className="col-lg-6 d-flex align-items-center">
+                        <label
+                          className="form-label mb-0 me-3 font-weight-bold"
+                          style={{ minWidth: '40px', fontWeight: 600 }}
+                        >
+                          WoS ID
+                        </label>
+                        <span
+                          className="pub-id-prefix-link me-2 text-decoration-none"
+                          style={{ minWidth: '50px' }}
+                        >
+                          WOS:
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control flex-grow-1"
+                          value={wosId}
+                          onChange={(e) => setWosId(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                        />
+                        <a href="#" className="pub-id-icon-link ms-1">
+                          <ExternalLink size={20} />
+                        </a>
+                      </div>
+
+                      {/* PubMed PMID */}
+                      <div className="col-lg-6 d-flex align-items-center">
+                        <label
+                          className="form-label mb-0 me-3 font-weight-bold"
+                          style={{ minWidth: '80px', fontWeight: 600 }}
+                        >
+                          PubMed PMID
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control flex-grow-1"
+                          value={pubmedPmid}
+                          onChange={(e) => setPubmedPmid(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                        />
+                        <a href="#" className="pub-id-icon-link ms-1">
+                          <ExternalLink size={20} />
+                        </a>
                       </div>
                     </div>
                   </div>
                 </>
               )}
-
               {/* Submit Button */}
               <div className="text-center mt-4 mb-5">
                 <button

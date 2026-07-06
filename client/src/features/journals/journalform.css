@@ -166,10 +166,9 @@
   flex-wrap: nowrap;
 }
 
-.author-input-group .form-control {
-  flex: 1;
+.author-input-group > * {
+  flex: 1 1 0px;
   min-width: 100px;
-  max-width: 200px;
 }
 
 .author-input-group .form-control[readOnly] {
@@ -186,9 +185,7 @@
 
 .author-search-container {
   position: relative;
-  flex: 1;
-  min-width: 150px;
-  max-width: 200px;
+  width: 100%;
 }
 
 .author-suggestions-list {
@@ -1460,10 +1457,9 @@ input[type='checkbox'],
     gap: 0.5rem;
   }
 
-  .author-input-group .form-control {
+  .author-input-group > * {
     flex: 1 1 100%;
     min-width: 100% !important;
-    max-width: 100% !important;
   }
 
   .author-search-container {
@@ -1508,4 +1504,100 @@ input[type='checkbox'],
     width: 36px;
     height: 36px;
   }
+}
+
+/* Redesigned Publication Details Styles */
+.bg-light-blue {
+  background-color: #f0f6ff;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #dce4f0;
+}
+
+.border-dashed-blue {
+  background-color: #ffffff;
+  border: 1px dashed #0d6efd;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.pub-upload-box-modern {
+  background-color: #ffffff;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pub-upload-info-modern {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pub-upload-icon-modern {
+  color: #6c757d;
+}
+
+.pub-upload-title-modern {
+  font-weight: 600;
+  color: #343a40;
+  font-size: 14px;
+}
+
+.pub-upload-subtitle-modern {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.btn-upload-modern {
+  background-color: #0d6efd;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-upload-modern:hover {
+  background-color: #0b5ed7;
+  color: #fff;
+}
+
+.pub-field-horizontal {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pub-field-horizontal .form-label {
+  min-width: 80px;
+  font-weight: 600;
+  color: #495057;
+  font-size: 14px;
+  margin-bottom: 0;
+}
+
+.pub-id-prefix-link {
+  font-size: 14px;
+  color: #0d6efd;
+  text-decoration: underline;
+  font-weight: 500;
+  min-width: 140px;
+}
+
+.pub-id-icon-link {
+  color: #0d6efd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
 }
