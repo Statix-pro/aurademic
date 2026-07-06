@@ -1,13 +1,36 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
+  AirVent,
+  Armchair,
+  Bath,
+  Bed,
   BedDouble,
   Calendar,
+  Cable,
+  CircleCheck,
   ChevronDown,
   ChevronUp,
+  Droplets,
+  Eye,
+  Fan,
+  House,
+  HousePlug,
+  Info,
+  Lamp,
+  Lightbulb,
+  Moon,
+  PencilLine,
   PlusCircle,
+  PlugZap,
+  ShowerHead,
+  Sofa,
+  Table,
   Trash2,
+  Tv,
   UsersRound,
   Utensils,
+  WashingMachine,
+  Wifi,
 } from 'lucide-react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useAuth } from '../../contexts/AuthContext';
@@ -17,6 +40,13 @@ import './guesthousebooking.css';
 type Gender = 'Male' | 'Female' | 'Others' | '';
 type GuestPriority = 'Routine' | 'High' | '';
 type RoomType = 'Single' | 'Double' | 'Deluxe';
+type GuestAmenityKey =
+  | 'roomCleaning'
+  | 'welcomeKit'
+  | 'waterBottle'
+  | 'towel'
+  | 'blanket'
+  | 'remoteBattery';
 
 interface ApplicantDetails {
   employeeId: string;
@@ -69,6 +99,15 @@ interface FoodRequirementRow {
   dinnerNonVeg: string;
 }
 
+interface BeneficiaryDetails {
+  beneficiaryType: 'Staff' | 'Faculty' | 'Institution' | '';
+  staffName: string;
+  tag: string;
+}
+
+const BENEFICIARY_TYPE_OPTIONS = ['Staff', 'Faculty', 'Institution'];
+const BENEFICIARY_TAG_OPTIONS = ['Skilling', 'Research', 'Office', 'Events', 'Academics'];
+
 interface RoomAllotmentRow {
   id: string;
   roomType: RoomType;
@@ -81,6 +120,7 @@ interface RoomAllotmentRow {
 interface RoomAllotmentData {
   guestId: string;
   rows: RoomAllotmentRow[];
+  amenities: Record<GuestAmenityKey, boolean>;
   spoc: string;
   mobile: string;
 }
@@ -92,15 +132,36 @@ interface RoomBlockOption {
 
 type ApiRecord = Record<string, unknown>;
 type RoomAllotmentsByGuest = Record<string, RoomAllotmentData>;
+type ActiveRoomDetail = { guestId: string; rowId: string } | null;
+type RoomDetailOption = { label: string; Icon: React.ElementType };
+type RoomDetailGroup = { title: string; items: RoomDetailOption[] };
 type RoomRequirementField = 'roomSingle' | 'roomDouble' | 'roomDeluxe';
 type TravelTimeField = 'checkInTime' | 'checkOutTime';
-type TravelTimePart = 'hour' | 'minute' | 'period';
+type ManagedRoomStatus = 'Active' | 'Maintenance';
+type CareTakerStatus = 'Active' | 'Leave';
 
 type GuestField = Exclude<keyof GuestDetails, 'id'>;
 type FoodField = Exclude<keyof FoodRequirementRow, 'id'>;
 type TravelDateField = 'checkInDate' | 'checkOutDate';
 
-const numberOnly = (value: string) => Math.max(0, Number(value) || 0);
+interface ManagedRoomRow {
+  id: number;
+  roomType: RoomType;
+  block: string;
+  floor: string;
+  roomNumber: string;
+  status: ManagedRoomStatus;
+}
+
+interface CareTakerRow {
+  id: number;
+  name: string;
+  mobile: string;
+  status: CareTakerStatus;
+}
+
+const MAX_ROOM_COUNT = 50;
+const numberOnly = (value: string) => Math.min(MAX_ROOM_COUNT, Math.max(0, Number(value) || 0));
 
 const formatDateInput = (date: Date) => {
   const year = date.getFullYear();
@@ -125,17 +186,6 @@ const formatDateForDisplay = (value: string) => {
   }
 
   return `${day}/${month}/${year}`;
-};
-
-const formatAllotmentDateTime = (dateValue: string, timeValue: string) => {
-  const date = formatDateForDisplay(dateValue);
-  const time = normalizeTravelTimeEntry(timeValue);
-
-  if (!date && !time) {
-    return '-';
-  }
-
-  return [date, time].filter(Boolean).join(', ');
 };
 
 const formatDateEntry = (value: string) => {
@@ -202,6 +252,89 @@ const normalizeTravelTimeEntry = (value: string) => {
   }
 
   return `${String(hour).padStart(2, '0')}:${minuteValue} ${periodValue.toUpperCase()}`;
+};
+
+// --- Advanced manual "HH:MM AM/PM" auto-formatting (single text box) ---
+// As the user types digits, the hour/minute segments and the ':' separator
+// are inserted automatically; typing "A" or "P" auto-completes to "AM"/"PM".
+const extractTimeDigitsAndPeriod = (value: string) => {
+  const cleaned = value.toUpperCase().replace(/[^0-9AP]/g, '');
+  const digits = cleaned.replace(/[AP]/g, '').slice(0, 4);
+  const periodMatch = cleaned.match(/[AP]/);
+  return { digits, periodLetter: periodMatch ? periodMatch[0] : '' };
+};
+
+const buildTimeSegments = (digits: string) => {
+  let hour = '';
+  let minute = '';
+  let reachedMinute = false;
+
+  for (const digit of digits) {
+    if (!reachedMinute) {
+      if (hour.length === 0) {
+        hour = digit;
+        if (digit !== '0' && digit !== '1') {
+          reachedMinute = true;
+        }
+      } else {
+        const combined = hour + digit;
+        const combinedNum = Number(combined);
+        if (combinedNum >= 1 && combinedNum <= 12) {
+          hour = combined;
+        } else {
+          minute += digit;
+        }
+        reachedMinute = true;
+      }
+    } else if (minute.length < 2) {
+      if (minute.length === 0) {
+        if (digit <= '5') {
+          minute = digit;
+        }
+      } else {
+        const combined = minute + digit;
+        if (Number(combined) <= 59) {
+          minute = combined;
+        }
+      }
+    }
+  }
+
+  return { hour, minute, reachedMinute };
+};
+
+const formatTimeAsYouType = (rawValue: string, previousDisplayValue: string) => {
+  let working = rawValue;
+
+  // If the user just deleted a single character and that character was an
+  // auto-inserted separator (":" / " ") or the trailing "M" of AM/PM, remove
+  // one more character so backspace feels natural instead of "sticking".
+  if (
+    working.length === previousDisplayValue.length - 1 &&
+    previousDisplayValue.startsWith(working)
+  ) {
+    const removedChar = previousDisplayValue[working.length];
+    if (removedChar === ':' || removedChar === ' ' || removedChar === 'M') {
+      working = working.slice(0, -1);
+    }
+  }
+
+  const { digits, periodLetter } = extractTimeDigitsAndPeriod(working);
+  const { hour, minute, reachedMinute } = buildTimeSegments(digits);
+
+  let result = hour;
+
+  if (periodLetter && hour) {
+    // AM/PM typed before the minute was fully entered — auto-complete the
+    // minute instead of leaving a blank gap like "09: AM".
+    const finalMinute = reachedMinute ? minute.padEnd(2, '0') : '00';
+    result += `:${finalMinute}`;
+    result += periodLetter === 'A' ? ' AM' : ' PM';
+  } else if (reachedMinute) {
+    result += `:${minute}`;
+  }
+
+  return result;
 };
 
 const parseTimeToMinutes = (value: string) => {
@@ -342,6 +475,46 @@ const createFoodRow = (date = ''): FoodRequirementRow => ({
   dinnerNonVeg: '',
 });
 
+const initialManagedRooms: ManagedRoomRow[] = [
+  {
+    id: 1,
+    roomType: 'Single',
+    block: 'Tangore',
+    floor: 'Ground',
+    roomNumber: 'T006',
+    status: 'Active',
+  },
+  {
+    id: 2,
+    roomType: 'Double',
+    block: 'Tangore',
+    floor: 'Ground',
+    roomNumber: 'T007',
+    status: 'Maintenance',
+  },
+];
+
+const initialCareTakers: CareTakerRow[] = [
+  { id: 1, name: 'Velavan C', mobile: '9876543210', status: 'Active' },
+  { id: 2, name: 'Senthil Kumar R', mobile: '9876543210', status: 'Leave' },
+];
+
+const createManagedRoomRow = (): ManagedRoomRow => ({
+  id: Date.now() + Math.random(),
+  roomType: 'Single',
+  block: '',
+  floor: '',
+  roomNumber: '',
+  status: 'Active',
+});
+
+const createCareTakerRow = (): CareTakerRow => ({
+  id: Date.now() + Math.random(),
+  name: '',
+  mobile: '',
+  status: 'Active',
+});
+
 
 const ROOM_REQUIREMENT_CONFIG: Array<{
   field: RoomRequirementField;
@@ -353,6 +526,78 @@ const ROOM_REQUIREMENT_CONFIG: Array<{
   { field: 'roomDeluxe', roomType: 'Deluxe', occupants: '2' },
 ];
 
+
+const GUEST_AMENITY_OPTIONS: Array<{ key: GuestAmenityKey; label: string }> = [
+  { key: 'roomCleaning', label: 'Room Cleaning' },
+  { key: 'welcomeKit', label: 'Welcome Kit' },
+  { key: 'waterBottle', label: 'Water Bottle' },
+  { key: 'towel', label: 'Towel' },
+  { key: 'blanket', label: 'Blanket' },
+  { key: 'remoteBattery', label: 'Remote Battery' },
+];
+
+const ROOM_DETAIL_AMENITY_GROUPS: RoomDetailGroup[] = [
+  {
+    title: 'Comfort',
+    items: [
+      { label: 'Air Conditioner', Icon: AirVent },
+      { label: 'Television', Icon: Tv },
+      { label: 'Attached Washroom', Icon: ShowerHead },
+      { label: 'Wash Basin', Icon: Bath },
+      { label: 'Water Heater', Icon: Droplets },
+    ],
+  },
+  {
+    title: 'Connectivity',
+    items: [
+      { label: 'LAN', Icon: Cable },
+      { label: 'Wi-fi', Icon: Wifi },
+      { label: 'Intercom', Icon: HousePlug },
+      { label: 'Charging Ports', Icon: PlugZap },
+    ],
+  },
+  {
+    title: 'Furniture',
+    items: [
+      { label: 'Bed', Icon: Bed },
+      { label: 'Sofa', Icon: Sofa },
+      { label: 'Study Table', Icon: Table },
+      { label: 'Wardrobe', Icon: BedDouble },
+      { label: 'Chairs', Icon: Armchair },
+    ],
+  },
+];
+
+const ROOM_DETAIL_ESSENTIALS: RoomDetailOption[] = [
+  { label: 'Fan', Icon: Fan },
+  { label: 'Lights', Icon: Lightbulb },
+  { label: 'Night Lamp', Icon: Moon },
+  { label: 'Table Lamp', Icon: Lamp },
+  { label: 'Bedsheet', Icon: Bed },
+  { label: 'Pillows', Icon: BedDouble },
+  { label: 'Bucket & Mug', Icon: Bath },
+  { label: 'Face Mirror', Icon: Info },
+  { label: 'Floor Mat', Icon: Table },
+  { label: 'Window Screen', Icon: Table },
+  { label: 'Musquito Net', Icon: Cable },
+  { label: 'Shoe Rack', Icon: Table },
+];
+
+const ROOM_DETAIL_SERVICES: RoomDetailOption[] = [
+  { label: 'Laundry', Icon: WashingMachine },
+  { label: 'Additional Bed', Icon: BedDouble },
+];
+
+const createGuestAmenities = (
+  previous?: Partial<Record<GuestAmenityKey, boolean>>,
+): Record<GuestAmenityKey, boolean> =>
+  GUEST_AMENITY_OPTIONS.reduce(
+    (amenities, option) => ({
+      ...amenities,
+      [option.key]: Boolean(previous?.[option.key]),
+    }),
+    {} as Record<GuestAmenityKey, boolean>,
+  );
 
 const createRoomAllotmentRow = (roomType: RoomType, occupants = '1'): RoomAllotmentRow => ({
   id: `${roomType}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -392,6 +637,7 @@ const createRoomAllotmentData = (
 ): RoomAllotmentData => ({
   guestId,
   rows: buildRoomAllotmentRows(guest, previous?.rows || []),
+  amenities: createGuestAmenities(previous?.amenities),
   spoc: previous?.spoc || '',
   mobile: previous?.mobile || '',
 });
@@ -541,19 +787,6 @@ const getGuestAllotmentCounts = (guest: GuestDetails) => ({
   children: numberOnly(guest.accompaniedChildren),
 });
 
-const splitTravelTime = (value: string) => {
-  const match = normalizeTravelTimeEntry(value).match(/^(\d{1,2})?:?(\d{0,2})?\s*(AM|PM)?$/i);
-  return {
-    hour: match?.[1] || '',
-    minute: match?.[2] || '',
-    period: (match?.[3] || '').toUpperCase(),
-  };
-};
-
-const formatTravelTimeParts = (parts: Record<TravelTimePart, string>) => {
-  const time = parts.hour || parts.minute ? `${parts.hour}:${parts.minute}` : '';
-  return [time, parts.period].filter(Boolean).join(' ');
-};
 const MaleAllotmentIcon = () => (
   <svg
     className="guesthousebooking-allotment-person-icon"
@@ -622,9 +855,20 @@ const GuestHouseBooking: React.FC = () => {
   });
   const [foodRows, setFoodRows] = useState<FoodRequirementRow[]>([createFoodRow()]);
   const [foodDateInputs, setFoodDateInputs] = useState<Record<number, string>>({});
+  const [beneficiaryDetails, setBeneficiaryDetails] = useState<BeneficiaryDetails>({
+    beneficiaryType: 'Staff',
+    staffName: '',
+    tag: 'Skilling',
+  });
   const [roomBlockOptions, setRoomBlockOptions] = useState<RoomBlockOption[]>([]);
   const [spocOptions, setSpocOptions] = useState<string[]>([]);
   const [roomAllotments, setRoomAllotments] = useState<RoomAllotmentsByGuest>({});
+  const [activeRoomDetail, setActiveRoomDetail] = useState<ActiveRoomDetail>(null);
+  const [managedRooms, setManagedRooms] = useState<ManagedRoomRow[]>(initialManagedRooms);
+  const [careTakers, setCareTakers] = useState<CareTakerRow[]>(initialCareTakers);
+  const [editingManagedRoomId, setEditingManagedRoomId] = useState<number | null>(null);
+  const [viewingManagedRoomId, setViewingManagedRoomId] = useState<number | null>(null);
+  const [editingCareTakerId, setEditingCareTakerId] = useState<number | null>(null);
 
   const applicantUiDetails = useMemo(
     () => buildApplicantDetails(user as unknown as ApiRecord | null, applicantProfile),
@@ -812,6 +1056,10 @@ const GuestHouseBooking: React.FC = () => {
     );
   };
 
+  const updateBeneficiaryDetails = (field: keyof BeneficiaryDetails, value: string) => {
+    setBeneficiaryDetails((prev) => ({ ...prev, [field]: value }));
+  };
+
   const addGuest = () => {
     setGuests((prevGuests) => [...prevGuests, createGuest()]);
   };
@@ -982,41 +1230,108 @@ const GuestHouseBooking: React.FC = () => {
     });
   };
 
-  const updateTravelTimePart = (
-    field: TravelTimeField,
-    part: TravelTimePart,
-    value: string,
+  const updateAllotmentAmenity = (
+    guestId: string,
+    amenity: GuestAmenityKey,
+    checked: boolean,
   ) => {
-    const currentParts = splitTravelTime(travelDetails[field]);
-    const nextValue = part === 'period' ? value.toUpperCase() : value.replace(/\D/g, '').slice(0, 2);
-    const nextParts = {
-      ...currentParts,
-      [part]: nextValue,
-    };
+    setRoomAllotments((prevAllotments) => {
+      const allotment = prevAllotments[guestId];
 
-    updateTravelDetails(field, formatTravelTimeParts(nextParts));
+      if (!allotment) {
+        return prevAllotments;
+      }
+
+      return {
+        ...prevAllotments,
+        [guestId]: {
+          ...allotment,
+          amenities: {
+            ...allotment.amenities,
+            [amenity]: checked,
+          },
+        },
+      };
+    });
   };
 
-  const normalizeTravelTimePart = (field: TravelTimeField) => {
-    const currentParts = splitTravelTime(travelDetails[field]);
-    const hour = currentParts.hour ? Math.min(12, Math.max(1, Number(currentParts.hour))) : '';
-    const minute = currentParts.minute
-      ? Math.min(59, Math.max(0, Number(currentParts.minute)))
-      : '';
-
-    updateTravelDetails(
-      field,
-      formatTravelTimeParts({
-        hour: hour === '' ? '' : String(hour).padStart(2, '0'),
-        minute: minute === '' ? '' : String(minute).padStart(2, '0'),
-        period: currentParts.period,
-      }),
+  const toggleRoomDetails = (guestId: string, rowId: string) => {
+    setActiveRoomDetail((previousRoom) =>
+      previousRoom?.guestId === guestId && previousRoom.rowId === rowId
+        ? null
+        : { guestId, rowId },
     );
   };
+
+  const updateManagedRoom = (
+    id: number,
+    field: keyof Omit<ManagedRoomRow, 'id'>,
+    value: string,
+  ) => {
+    setManagedRooms((prevRooms) =>
+      prevRooms.map((room) => (room.id === id ? { ...room, [field]: value } : room)),
+    );
+  };
+
+  const addManagedRoom = () => {
+    const room = createManagedRoomRow();
+    setManagedRooms((prevRooms) => [...prevRooms, room]);
+    setEditingManagedRoomId(room.id);
+    setViewingManagedRoomId(room.id);
+  };
+
+  const removeManagedRoom = (id: number) => {
+    setManagedRooms((prevRooms) =>
+      prevRooms.length === 1 ? prevRooms : prevRooms.filter((room) => room.id !== id),
+    );
+
+    setEditingManagedRoomId((currentId) => (currentId === id ? null : currentId));
+    setViewingManagedRoomId((currentId) => (currentId === id ? null : currentId));
+  };
+
+  const updateCareTaker = (
+    id: number,
+    field: keyof Omit<CareTakerRow, 'id'>,
+    value: string,
+  ) => {
+    setCareTakers((prevCareTakers) =>
+      prevCareTakers.map((careTaker) =>
+        careTaker.id === id ? { ...careTaker, [field]: value } : careTaker,
+      ),
+    );
+  };
+
+  const addCareTaker = () => {
+    const careTaker = createCareTakerRow();
+    setCareTakers((prevCareTakers) => [...prevCareTakers, careTaker]);
+    setEditingCareTakerId(careTaker.id);
+  };
+
+  const removeCareTaker = (id: number) => {
+    setCareTakers((prevCareTakers) =>
+      prevCareTakers.length === 1
+        ? prevCareTakers
+        : prevCareTakers.filter((careTaker) => careTaker.id !== id),
+    );
+
+    setEditingCareTakerId((currentId) => (currentId === id ? null : currentId));
+  };
+
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    // Validate checkout is after checkin
+    const start = buildTravelDateTime(travelDetails.checkInDate, travelDetails.checkInTime);
+    const end = buildTravelDateTime(travelDetails.checkOutDate, travelDetails.checkOutTime);
+
+    if (start && end && end <= start) {
+      setSubmitMessage('Check-out date/time must be after check-in date/time.');
+      return;
+    }
+
     const payload = {
       applicant: applicantUiDetails,
+      beneficiary: beneficiaryDetails,
       guests,
       travelDetails,
       numberOfDays: stayDates.length,
@@ -1025,7 +1340,9 @@ const GuestHouseBooking: React.FC = () => {
       roomAllotments: guests.map((guest) => roomAllotments[String(guest.id)] || createRoomAllotmentData(String(guest.id), guest)),
     };
 
-    console.log('Guest house booking payload:', payload);
+    if (import.meta.env.DEV) {
+      console.log('Guest house booking payload:', payload);
+    }
     setSubmitMessage('Guest house booking form is ready.');
   };
 
@@ -1081,10 +1398,12 @@ const GuestHouseBooking: React.FC = () => {
         type="text"
         placeholder="HH:MM AM/PM"
         value={travelDetails[field]}
-        onChange={(event) => updateTravelDetails(field, event.target.value)}
+        onChange={(event) =>
+          updateTravelDetails(field, formatTimeAsYouType(event.target.value, travelDetails[field]))
+        }
         onBlur={() => updateTravelDetails(field, normalizeTravelTimeEntry(travelDetails[field]))}
         inputMode="text"
-        maxLength={8}
+        maxLength={9}
         pattern="(0?[1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM|am|pm)"
         title="Enter time as HH:MM AM or HH:MM PM"
         aria-label={`${label} time`}
@@ -1151,6 +1470,384 @@ const GuestHouseBooking: React.FC = () => {
     </div>
   );
 
+  const getRoomFloor = (roomNumber: string) => {
+    const floorDigit = roomNumber.match(/\d/)?.[0] || '';
+    return floorDigit ? `${floorDigit} Floor` : '';
+  };
+
+  const renderRoomDetailControl = (label: string, value: string, asSelect = false) => (
+    <label className="guesthousebooking-room-detail-meta-field">
+      <span>{label}</span>
+      {asSelect ? (
+        <select value={value} disabled aria-label={`Room details ${label}`}>
+          <option value={value}>{value}</option>
+        </select>
+      ) : (
+        <input value={value} readOnly aria-label={`Room details ${label}`} />
+      )}
+    </label>
+  );
+
+  const renderRoomDetailItem = (item: RoomDetailOption) => {
+    const Icon = item.Icon;
+
+    return (
+      <label className="guesthousebooking-room-detail-item" key={item.label}>
+        <input
+          className="guesthousebooking-checkbox guesthousebooking-room-detail-checkbox"
+          type="checkbox"
+        />
+        <Icon className="guesthousebooking-room-detail-item-icon" size={22} aria-hidden="true" />
+        <span>{item.label}</span>
+        <Info className="guesthousebooking-room-detail-info-icon" size={14} aria-hidden="true" />
+      </label>
+    );
+  };
+
+  const renderRoomDetailSectionTitle = (title: string) => (
+    <div className="guesthousebooking-room-detail-section-title">
+      <span>{title}</span>
+    </div>
+  );
+
+  const renderRoomDetailsCard = (row: RoomAllotmentRow) => {
+    const status = row.roomNumber ? 'Ready' : 'Pending';
+
+    return (
+      <div className="guesthousebooking-room-details-card" id={`room-details-${row.id}`}>
+        <div className="guesthousebooking-room-details-header">
+          <span>Room Details</span>
+        </div>
+
+        <div className="guesthousebooking-room-details-content">
+          <div className="guesthousebooking-room-details-meta-row">
+            {renderRoomDetailControl('Number', row.roomNumber)}
+            {renderRoomDetailControl('Type', row.roomType, true)}
+            {renderRoomDetailControl('Floor', getRoomFloor(row.roomNumber), true)}
+            {renderRoomDetailControl('Block', row.block, true)}
+            {renderRoomDetailControl('Status', status, true)}
+            <CircleCheck className="guesthousebooking-room-detail-ready-icon" size={18} aria-hidden="true" />
+          </div>
+
+          <section className="guesthousebooking-room-detail-section" aria-label="Amenities">
+            {renderRoomDetailSectionTitle('Amenities')}
+            <div className="guesthousebooking-room-detail-groups">
+              {ROOM_DETAIL_AMENITY_GROUPS.map((group) => (
+                <div className="guesthousebooking-room-detail-group" key={group.title}>
+                  <h3>{group.title}</h3>
+                  <div className="guesthousebooking-room-detail-group-items">
+                    {group.items.map(renderRoomDetailItem)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="guesthousebooking-room-detail-section" aria-label="Essentials">
+            {renderRoomDetailSectionTitle('Essentials')}
+            <div className="guesthousebooking-room-detail-flat-list">
+              {ROOM_DETAIL_ESSENTIALS.map(renderRoomDetailItem)}
+            </div>
+          </section>
+
+          <section className="guesthousebooking-room-detail-section" aria-label="Services">
+            {renderRoomDetailSectionTitle('Services')}
+            <div className="guesthousebooking-room-detail-flat-list guesthousebooking-room-detail-services-list">
+              {ROOM_DETAIL_SERVICES.map(renderRoomDetailItem)}
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  };
+  const renderGuesthouseManagementActions = (
+    onAdd: () => void,
+    onEdit: () => void,
+    onView: () => void,
+    onDelete: () => void,
+    deleteDisabled: boolean,
+    isEditing: boolean,
+    isViewing: boolean,
+    label: string,
+  ) => (
+    <div className="guesthousebooking-management-actions">
+      <button
+        className="guesthousebooking-management-icon-button guesthousebooking-management-icon-button--add"
+        type="button"
+        onClick={onAdd}
+        aria-label={`Add ${label}`}
+        title={`Add ${label}`}
+      >
+        <PlusCircle size={16} />
+      </button>
+      <button
+        className={`guesthousebooking-management-icon-button${isEditing ? ' is-active' : ''}`}
+        type="button"
+        onClick={onEdit}
+        aria-label={`${isEditing ? 'Finish editing' : 'Edit'} ${label}`}
+        title={`${isEditing ? 'Finish editing' : 'Edit'} ${label}`}
+      >
+        <PencilLine size={15} />
+      </button>
+      <button
+        className={`guesthousebooking-management-icon-button guesthousebooking-management-icon-button--view${isViewing ? ' is-active' : ''}`}
+        type="button"
+        onClick={onView}
+        aria-label={`View ${label}`}
+        title={`View ${label}`}
+      >
+        <Eye size={17} />
+      </button>
+      <button
+        className="guesthousebooking-management-icon-button guesthousebooking-management-icon-button--delete"
+        type="button"
+        onClick={onDelete}
+        aria-label={`Delete ${label}`}
+        title={`Delete ${label}`}
+        disabled={deleteDisabled}
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
+
+  const renderCareTakerManagementActions = (
+    onAdd: () => void,
+    onEdit: () => void,
+    onDelete: () => void,
+    deleteDisabled: boolean,
+    isEditing: boolean,
+    label: string,
+  ) => (
+    <div className="guesthousebooking-management-actions guesthousebooking-management-actions--compact">
+      <button
+        className="guesthousebooking-management-icon-button guesthousebooking-management-icon-button--add"
+        type="button"
+        onClick={onAdd}
+        aria-label={`Add ${label}`}
+        title={`Add ${label}`}
+      >
+        <PlusCircle size={16} />
+      </button>
+      <button
+        className={`guesthousebooking-management-icon-button${isEditing ? ' is-active' : ''}`}
+        type="button"
+        onClick={onEdit}
+        aria-label={`${isEditing ? 'Finish editing' : 'Edit'} ${label}`}
+        title={`${isEditing ? 'Finish editing' : 'Edit'} ${label}`}
+      >
+        <PencilLine size={15} />
+      </button>
+      <button
+        className="guesthousebooking-management-icon-button guesthousebooking-management-icon-button--delete"
+        type="button"
+        onClick={onDelete}
+        aria-label={`Delete ${label}`}
+        title={`Delete ${label}`}
+        disabled={deleteDisabled}
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
+  const renderGuesthouseAdminManagement = () => (
+    <section className="guesthousebooking-card guesthousebooking-management-card">
+      <div className="guesthousebooking-management-panel">
+        <div className="guesthousebooking-management-title">Room Management</div>
+        <div className="guesthousebooking-management-table-wrap">
+          <table className="guesthousebooking-management-table guesthousebooking-room-management-table">
+            <thead>
+              <tr>
+                <th>S.No.</th>
+                <th>Room Type</th>
+                <th>Block</th>
+                <th>Floor</th>
+                <th>Room Number</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {managedRooms.map((room, index) => {
+                const isEditing = editingManagedRoomId === room.id;
+                const isViewing = viewingManagedRoomId === room.id;
+
+                return (
+                  <tr className={isViewing ? 'is-viewing' : ''} key={room.id}>
+                    <td>{index + 1}</td>
+                    <td>
+                      <select
+                        className="guesthousebooking-management-control"
+                        value={room.roomType}
+                        onChange={(event) =>
+                          updateManagedRoom(room.id, 'roomType', event.target.value)
+                        }
+                        disabled={!isEditing}
+                        aria-label="Room type"
+                      >
+                        {ROOM_REQUIREMENT_CONFIG.map((option) => (
+                          <option key={option.roomType} value={option.roomType}>
+                            {option.roomType}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        className="guesthousebooking-management-control"
+                        type="text"
+                        value={room.block}
+                        onChange={(event) =>
+                          updateManagedRoom(room.id, 'block', event.target.value)
+                        }
+                        readOnly={!isEditing}
+                        aria-label="Room block"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="guesthousebooking-management-control"
+                        type="text"
+                        value={room.floor}
+                        onChange={(event) =>
+                          updateManagedRoom(room.id, 'floor', event.target.value)
+                        }
+                        readOnly={!isEditing}
+                        aria-label="Room floor"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="guesthousebooking-management-control"
+                        type="text"
+                        value={room.roomNumber}
+                        onChange={(event) =>
+                          updateManagedRoom(room.id, 'roomNumber', event.target.value)
+                        }
+                        readOnly={!isEditing}
+                        aria-label="Room number"
+                      />
+                    </td>
+                    <td>
+                      <select
+                        className={`guesthousebooking-management-status guesthousebooking-management-status--${room.status.toLowerCase()}`}
+                        value={room.status}
+                        onChange={(event) =>
+                          updateManagedRoom(room.id, 'status', event.target.value)
+                        }
+                        disabled={!isEditing}
+                        aria-label="Room status"
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Maintenance">Maintenance</option>
+                      </select>
+                    </td>
+                    <td>
+                      {renderGuesthouseManagementActions(
+                        addManagedRoom,
+                        () =>
+                          setEditingManagedRoomId((currentId) =>
+                            currentId === room.id ? null : room.id,
+                          ),
+                        () =>
+                          setViewingManagedRoomId((currentId) =>
+                            currentId === room.id ? null : room.id,
+                          ),
+                        () => removeManagedRoom(room.id),
+                        managedRooms.length === 1,
+                        isEditing,
+                        isViewing,
+                        'room',
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="guesthousebooking-management-title guesthousebooking-management-title--spaced">
+          Care Taker Management
+        </div>
+        <div className="guesthousebooking-management-table-wrap guesthousebooking-caretaker-management-wrap">
+          <table className="guesthousebooking-management-table guesthousebooking-caretaker-management-table">
+            <thead>
+              <tr>
+                <th>S.No.</th>
+                <th>Care Taker Name</th>
+                <th>Mobile Number</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {careTakers.map((careTaker, index) => {
+                const isEditing = editingCareTakerId === careTaker.id;
+
+                return (
+                  <tr key={careTaker.id}>
+                    <td>{index + 1}</td>
+                    <td>
+                      <input
+                        className="guesthousebooking-management-control"
+                        type="text"
+                        value={careTaker.name}
+                        onChange={(event) =>
+                          updateCareTaker(careTaker.id, 'name', event.target.value)
+                        }
+                        readOnly={!isEditing}
+                        aria-label="Care taker name"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="guesthousebooking-management-control"
+                        type="tel"
+                        value={careTaker.mobile}
+                        onChange={(event) =>
+                          updateCareTaker(careTaker.id, 'mobile', event.target.value)
+                        }
+                        readOnly={!isEditing}
+                        aria-label="Care taker mobile number"
+                      />
+                    </td>
+                    <td>
+                      <select
+                        className={`guesthousebooking-management-status guesthousebooking-management-status--${careTaker.status.toLowerCase()}`}
+                        value={careTaker.status}
+                        onChange={(event) =>
+                          updateCareTaker(careTaker.id, 'status', event.target.value)
+                        }
+                        disabled={!isEditing}
+                        aria-label="Care taker status"
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Leave">Leave</option>
+                      </select>
+                    </td>
+                    <td>
+                      {renderCareTakerManagementActions(
+                        addCareTaker,
+                        () =>
+                          setEditingCareTakerId((currentId) =>
+                            currentId === careTaker.id ? null : careTaker.id,
+                          ),
+                        () => removeCareTaker(careTaker.id),
+                        careTakers.length === 1,
+                        isEditing,
+                        'care taker',
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
   return (
     <div className="guesthousebooking-page">
       <div className="guesthousebooking-shell">
@@ -1192,6 +1889,53 @@ const GuestHouseBooking: React.FC = () => {
                 </div>
               </div>
             )}
+          </section>
+
+          <section className="guesthousebooking-card guesthousebooking-beneficiary-card">
+            <div className="guesthousebooking-beneficiary-grid">
+              <div className="guesthousebooking-beneficiary-field">
+                <label className="guesthousebooking-beneficiary-label">Beneficiary</label>
+                <select
+                  className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
+                  value={beneficiaryDetails.beneficiaryType}
+                  onChange={(event) =>
+                    updateBeneficiaryDetails('beneficiaryType', event.target.value)
+                  }
+                >
+                  {BENEFICIARY_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="guesthousebooking-beneficiary-field">
+                <label className="guesthousebooking-beneficiary-label">
+                  {beneficiaryDetails.beneficiaryType === 'Faculty' ? 'Faculty Name' : 'Staff Name'}
+                </label>
+                <input
+                  className="guesthousebooking-beneficiary-control"
+                  value={beneficiaryDetails.staffName}
+                  onChange={(event) => updateBeneficiaryDetails('staffName', event.target.value)}
+                  placeholder="Search staff by name or ERP ID"
+                />
+              </div>
+              <div className="guesthousebooking-beneficiary-field">
+                <label className="guesthousebooking-beneficiary-label">Tag</label>
+                <select
+                  className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
+                  value={beneficiaryDetails.tag}
+                  onChange={(event) => updateBeneficiaryDetails('tag', event.target.value)}
+                >
+                  {BENEFICIARY_TAG_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
           </section>
 
           <div className="guesthousebooking-guest-list" aria-label="Guest Details">
@@ -1692,16 +2436,20 @@ const GuestHouseBooking: React.FC = () => {
               const allotment =
                 roomAllotments[guestId] || createRoomAllotmentData(guestId, guest);
               const counts = getGuestAllotmentCounts(guest);
-              const checkIn = formatAllotmentDateTime(
-                travelDetails.checkInDate,
-                travelDetails.checkInTime,
-              );
-              const checkOut = formatAllotmentDateTime(
-                travelDetails.checkOutDate,
-                travelDetails.checkOutTime,
-              );
+              const checkInDate = formatDateForDisplay(travelDetails.checkInDate);
+              const checkInTime = normalizeTravelTimeEntry(travelDetails.checkInTime);
+              const checkOutDate = formatDateForDisplay(travelDetails.checkOutDate);
+              const checkOutTime = normalizeTravelTimeEntry(travelDetails.checkOutTime);
+              const totalRooms =
+                numberOnly(guest.roomSingle) +
+                numberOnly(guest.roomDouble) +
+                numberOnly(guest.roomDeluxe);
               const priorityStatus = guest.priority || 'Routine';
               const priorityTone = priorityStatus === 'High' ? 'high' : 'routine';
+              const activeRoomDetailRow =
+                activeRoomDetail?.guestId === guestId
+                  ? allotment.rows.find((row) => row.id === activeRoomDetail.rowId)
+                  : undefined;
 
               return (
                 <section
@@ -1729,7 +2477,7 @@ const GuestHouseBooking: React.FC = () => {
                               <strong>{guest.name || `Guest ${index + 1}`}</strong>
                             </div>
                             <span>
-                              {[guest.designation || 'Designation', guest.organization || 'Organization'].join(', ')}
+                              {guest.organization || 'Organization'}
                             </span>
                           </div>
                         </div>
@@ -1747,16 +2495,26 @@ const GuestHouseBooking: React.FC = () => {
                             <ChildAllotmentIcon />
                             <input value={counts.children} readOnly aria-label="Number of children" />
                           </label>
+                          <label className="guesthousebooking-allotment-occupancy-item">
+                            <House className="guesthousebooking-allotment-person-icon" aria-hidden="true" />
+                            <input value={totalRooms} readOnly aria-label="Number of rooms requested" />
+                          </label>
                         </div>
 
                         <div className="guesthousebooking-allotment-date-stack">
-                          <label>
-                            <span>Check-in</span>
-                            <input value={checkIn} readOnly aria-label="Check-in date and time" />
+                          <label className="guesthousebooking-allotment-datetime-row">
+                            <span className="guesthousebooking-allotment-datetime-title">Check-in</span>
+                            <input value={checkInDate} readOnly aria-label="Check-in date" />
+
+                            <input value={checkInTime} readOnly aria-label="Check-in time" />
+                            <CircleCheck className="guesthousebooking-allotment-check-icon" size={18} aria-hidden="true" />
                           </label>
-                          <label>
-                            <span>Check-out</span>
-                            <input value={checkOut} readOnly aria-label="Check-out date and time" />
+                          <label className="guesthousebooking-allotment-datetime-row">
+                            <span className="guesthousebooking-allotment-datetime-title">Check-out</span>
+                            <input value={checkOutDate} readOnly aria-label="Check-out date" />
+
+                            <input value={checkOutTime} readOnly aria-label="Check-out time" />
+                            <CircleCheck className="guesthousebooking-allotment-check-icon" size={18} aria-hidden="true" />
                           </label>
                         </div>
                       </div>
@@ -1777,6 +2535,8 @@ const GuestHouseBooking: React.FC = () => {
                             {allotment.rows.length ? (
                               allotment.rows.map((row, idx) => {
                                 const roomNumbers = getRoomNumberOptions(row.block, row.roomNumber);
+                                const isRoomDetailActive =
+                                  activeRoomDetail?.guestId === guestId && activeRoomDetail.rowId === row.id;
 
                                 return (
                                   <tr key={row.id}>
@@ -1818,26 +2578,38 @@ const GuestHouseBooking: React.FC = () => {
                                       </select>
                                     </td>
                                     <td>
-                                      <select
-                                        className="guesthousebooking-food-date guesthousebooking-allotment-compact-control"
-                                        value={row.roomNumber}
-                                        onChange={(event) =>
-                                          updateAllotmentRow(
-                                            guestId,
-                                            row.id,
-                                            'roomNumber',
-                                            event.target.value,
-                                          )
-                                        }
-                                        disabled={!row.block}
-                                      >
-                                        <option value=""></option>
-                                        {roomNumbers.map((roomNumber) => (
-                                          <option key={roomNumber} value={roomNumber}>
-                                            {roomNumber}
-                                          </option>
-                                        ))}
-                                      </select>
+                                      <div className="guesthousebooking-room-number-cell">
+                                        <select
+                                          className="guesthousebooking-food-date guesthousebooking-allotment-compact-control"
+                                          value={row.roomNumber}
+                                          onChange={(event) =>
+                                            updateAllotmentRow(
+                                              guestId,
+                                              row.id,
+                                              'roomNumber',
+                                              event.target.value,
+                                            )
+                                          }
+                                          disabled={!row.block}
+                                        >
+                                          <option value=""></option>
+                                          {roomNumbers.map((roomNumber) => (
+                                            <option key={roomNumber} value={roomNumber}>
+                                              {roomNumber}
+                                            </option>
+                                          ))}
+                                        </select>
+                                        <button
+                                          className={`guesthousebooking-room-detail-trigger${isRoomDetailActive ? ' guesthousebooking-room-detail-trigger--active' : ''}`}
+                                          type="button"
+                                          onClick={() => toggleRoomDetails(guestId, row.id)}
+                                          aria-label="Open room details"
+                                          aria-expanded={isRoomDetailActive}
+                                          title="Room Details"
+                                        >
+                                          <Info size={12} aria-hidden="true" />
+                                        </button>
+                                      </div>
                                     </td>
                                     <td>
                                       <input
@@ -1883,11 +2655,38 @@ const GuestHouseBooking: React.FC = () => {
                           </tbody>
                         </table>
                       </div>
+                      <div className="guesthousebooking-allotment-amenities-row" aria-label="Guest amenities">
+                        <div className="guesthousebooking-allotment-amenities-list">
+                          {GUEST_AMENITY_OPTIONS.map((amenity) => (
+                            <label className="guesthousebooking-allotment-amenity" key={amenity.key}>
+                              <input
+                                className="guesthousebooking-checkbox guesthousebooking-amenity-checkbox"
+                                type="checkbox"
+                                checked={Boolean(allotment.amenities[amenity.key])}
+                                onChange={(event) =>
+                                  updateAllotmentAmenity(
+                                    guestId,
+                                    amenity.key,
+                                    event.target.checked,
+                                  )
+                                }
+                              />
+                              <span>{amenity.label}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <span className="guesthousebooking-allotment-amenities-title">
+                          Guest Amenities
+                        </span>
+                      </div>
                     </div>
 
-                    <div className="guesthousebooking-allotment-spoc-bar">
-                      <div className="guesthousebooking-spoc-field">
-                        <span>Single Point of Contact (SPOC)</span>
+                    {activeRoomDetailRow && renderRoomDetailsCard(activeRoomDetailRow)}
+
+                    <div className="guesthousebooking-allotment-caretaker-bar">
+                      <span className="guesthousebooking-caretaker-title">Care Taker Details</span>
+                      <div className="guesthousebooking-spoc-field guesthousebooking-caretaker-field">
+                        <span>Care Taker Name</span>
                         <select
                           className="guesthousebooking-input guesthousebooking-spoc-control"
                           value={allotment.spoc}
@@ -1895,7 +2694,7 @@ const GuestHouseBooking: React.FC = () => {
                             updateAllotmentContact(guestId, 'spoc', event.target.value)
                           }
                         >
-                          <option value="">Select SPOC</option>
+                          <option value="">Select Care Taker</option>
                           {spocOptions.map((spoc) => (
                             <option key={spoc} value={spoc}>
                               {spoc}
@@ -1903,7 +2702,7 @@ const GuestHouseBooking: React.FC = () => {
                           ))}
                         </select>
                       </div>
-                      <div className="guesthousebooking-spoc-field">
+                      <div className="guesthousebooking-spoc-field guesthousebooking-caretaker-field">
                         <span>Mobile Number</span>
                         <input
                           type="text"
@@ -1928,6 +2727,7 @@ const GuestHouseBooking: React.FC = () => {
               Submit Booking
             </button>
           </div>
+          {renderGuesthouseAdminManagement()}
         </form>
       </div>
     </div>
@@ -1935,14 +2735,3 @@ const GuestHouseBooking: React.FC = () => {
 };
 
 export default GuestHouseBooking;
-
-
-
-
-
-
-
-
-
-
-
