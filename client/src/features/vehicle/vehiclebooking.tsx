@@ -3,23 +3,53 @@ import {
   BadgeAlert,
   CarFront,
   ClipboardCheck,
+  Eye,
   MapPin,
+  PencilLine,
   Plus,
   PlusCircle,
   Trash2,
   UsersRound,
+  Wind,
+  Cctv,
+  Speaker,
+  Armchair,
+  Umbrella,
+  Bluetooth,
+  Usb,
+  Box,
+  Tv,
+  BriefcaseMedical,
+  Droplet,
+  Info,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import authenticityUtility from '../../shared/utils/authenticityUtility';
-import './VehicleBooking.css';
+import './vehiclebooking.css';
 
-type Priority = string;
-type VehicleRequirement = string;
-type BookingFor = string;
-type ServiceType = string;
-type TravelMode = string;
-type ShuttleBookingMode = string;
-type ShuttleRequirement = string;
+type Priority = 'Routine' | 'High';
+type VehicleRequirement =
+  | 'Car'
+  | 'Van'
+  | 'Bus'
+  | 'Shuttle Vehicle'
+  | 'Mini Truck'
+  | 'Eicher'
+  | 'Lorry';
+type BookingFor =
+  | 'External Guest'
+  | 'College Staff'
+  | 'Students'
+  | 'Outside Participants'
+  | 'Logistics Transport'
+  | 'Others';
+type ServiceType = 'Free' | 'Paid';
+type TravelMode = 'Outside' | 'Shuttle';
+type ShuttleBookingMode = 'Day Booking' | 'Trip Booking';
+type ShuttleRequirement = 'Full Day' | 'FN Session' | 'AN Session' | 'Night';
+type ManagedVehicleStatus = 'Active' | 'Service';
+type DriverCategory = 'Car Driver' | 'Bus Driver';
+type DriverStatus = 'Active' | 'Leave';
 
 interface ApplicantDetails {
   employeeId: string;
@@ -30,6 +60,15 @@ interface ApplicantDetails {
   email: string;
   mobile: string;
 }
+
+interface BeneficiaryDetails {
+  beneficiaryType: 'Staff' | 'Faculty' | 'Institution' | '';
+  staffName: string;
+  tag: string;
+}
+
+const BENEFICIARY_TYPE_OPTIONS = ['Staff', 'Faculty', 'Institution'];
+const BENEFICIARY_TAG_OPTIONS = ['Skilling', 'Research', 'Office', 'Events', 'Academics'];
 
 interface TransportBookingDetails {
   purpose: string;
@@ -78,122 +117,68 @@ interface VehicleAllotmentRow {
   mobile: string;
 }
 
-type ApiRecord = Record<string, unknown>;
-
-interface VehicleBookingOptions {
-  priorities: Priority[];
-  vehicleRequirements: VehicleRequirement[];
-  bookingForOptions: BookingFor[];
-  logisticsVehicleRequirements: VehicleRequirement[];
-  logisticsBookingForOptions: BookingFor[];
-  serviceTypes: ServiceType[];
-  travelModes: TravelMode[];
-  shuttleBookingModes: ShuttleBookingMode[];
-  shuttleRequirements: ShuttleRequirement[];
-  shuttlePurposes: string[];
-  vehicleNumbers: string[];
-  drivers: string[];
+interface ManagedVehicleRow {
+  id: number;
+  vehicleType: VehicleRequirement;
+  number: string;
+  make: string;
+  seating: string;
+  status: ManagedVehicleStatus;
+  fuelType?: 'Petrol' | 'Diesel' | 'CNG' | 'Electric' | 'Hybrid';
+  model?: string;
+  transmission?: 'Manual' | 'Automatic';
+  yearOfRegistration?: string;
+  yearOfPurchase?: string;
+  features?: Record<string, boolean>;
 }
 
-const createEmptyVehicleBookingOptions = (): VehicleBookingOptions => ({
-  priorities: [],
-  vehicleRequirements: [],
-  bookingForOptions: [],
-  logisticsVehicleRequirements: [],
-  logisticsBookingForOptions: [],
-  serviceTypes: [],
-  travelModes: [],
-  shuttleBookingModes: [],
-  shuttleRequirements: [],
-  shuttlePurposes: [],
-  vehicleNumbers: [],
-  drivers: [],
-});
-
-const getPayloadData = (payload: unknown) => {
-  if (payload && typeof payload === 'object' && !Array.isArray(payload) && 'data' in payload) {
-    return (payload as ApiRecord).data as unknown;
-  }
-
-  return payload;
+const DEFAULT_VEHICLE_FEATURES: Record<string, boolean> = {
+  'Air Conditioner': false,
+  'GPS Tracking': false,
+  'CCTV Camera': false,
+  'Audio System': false,
+  'Push Back Seats': false,
+  'Umbrella': false,
+  'Bluetooth Audio': false,
+  'USB Charging Ports': false,
+  'Tissue Box': false,
+  'Video System': false,
+  'First Aid Kit': false,
+  'Water Bottle': false,
 };
 
-const getTextValue = (source: ApiRecord, keys: string[]) => {
-  const value = keys.map((key) => source[key]).find((item) => item !== undefined && item !== null);
-  return String(value || '').trim();
-};
+interface DriverManagementRow {
+  id: number;
+  name: string;
+  mobile: string;
+  category: DriverCategory;
+  status: DriverStatus;
+}
 
-const getOptionSource = (source: ApiRecord, keys: string[]) =>
-  keys.map((key) => source[key]).find((value) => value !== undefined && value !== null);
+const vehicleRequirements: VehicleRequirement[] = [
+  'Car',
+  'Van',
+  'Bus',
+  'Shuttle Vehicle',
+  'Mini Truck',
+  'Eicher',
+  'Lorry',
+];
 
-const normalizeTextOptions = (value: unknown, keys: string[]) => {
-  const source = getPayloadData(value);
-  const items = Array.isArray(source)
-    ? source
-    : source && typeof source === 'object'
-      ? (source as ApiRecord).items || (source as ApiRecord).options || (source as ApiRecord).data || []
-      : [];
+const bookingForOptions: BookingFor[] = [
+  'External Guest',
+  'College Staff',
+  'Students',
+  'Outside Participants',
+  'Logistics Transport',
+];
 
-  if (!Array.isArray(items)) {
-    return [];
-  }
+const logisticsVehicleRequirements: VehicleRequirement[] = ['Mini Truck', 'Eicher', 'Lorry'];
 
-  return Array.from(
-    new Set(
-      items
-        .map((item) => {
-          if (typeof item === 'object' && item !== null) {
-            return getTextValue(item as ApiRecord, keys);
-          }
+const logisticsBookingForOptions: BookingFor[] = ['Logistics Transport', 'Others'];
 
-          return String(item || '').trim();
-        })
-        .filter(Boolean),
-    ),
-  );
-};
-
-const normalizeVehicleBookingOptions = (payload: unknown): VehicleBookingOptions => {
-  const source = getPayloadData(payload);
-  const record = source && typeof source === 'object' && !Array.isArray(source) ? source as ApiRecord : {};
-
-  return {
-    priorities: normalizeTextOptions(getOptionSource(record, ['priorities', 'priorityOptions', 'priority_options']), ['name', 'label', 'value', 'priority']),
-    vehicleRequirements: normalizeTextOptions(getOptionSource(record, ['vehicleRequirements', 'vehicle_requirements', 'requirements']), ['name', 'label', 'value', 'type']),
-    bookingForOptions: normalizeTextOptions(getOptionSource(record, ['bookingForOptions', 'booking_for_options', 'bookingFor']), ['name', 'label', 'value']),
-    logisticsVehicleRequirements: normalizeTextOptions(getOptionSource(record, ['logisticsVehicleRequirements', 'logistics_vehicle_requirements']), ['name', 'label', 'value', 'type']),
-    logisticsBookingForOptions: normalizeTextOptions(getOptionSource(record, ['logisticsBookingForOptions', 'logistics_booking_for_options']), ['name', 'label', 'value']),
-    serviceTypes: normalizeTextOptions(getOptionSource(record, ['serviceTypes', 'service_types', 'services']), ['name', 'label', 'value']),
-    travelModes: normalizeTextOptions(getOptionSource(record, ['travelModes', 'travel_modes']), ['name', 'label', 'value']),
-    shuttleBookingModes: normalizeTextOptions(getOptionSource(record, ['shuttleBookingModes', 'shuttle_booking_modes']), ['name', 'label', 'value', 'mode']),
-    shuttleRequirements: normalizeTextOptions(getOptionSource(record, ['shuttleRequirements', 'shuttle_requirements']), ['name', 'label', 'value', 'requirement']),
-    shuttlePurposes: normalizeTextOptions(getOptionSource(record, ['shuttlePurposes', 'shuttle_purposes', 'purposes']), ['name', 'label', 'value', 'purpose']),
-    vehicleNumbers: normalizeTextOptions(getOptionSource(record, ['vehicleNumbers', 'vehicle_numbers', 'vehicles']), ['vehicleNo', 'vehicle_no', 'registrationNumber', 'registration_number', 'number', 'name', 'label', 'value']),
-    drivers: normalizeTextOptions(getOptionSource(record, ['drivers', 'driverOptions', 'driver_options']), ['driver', 'driverName', 'driver_name', 'name', 'full_name', 'fullName', 'label', 'value']),
-  };
-};
-
-const buildApplicantDetails = (
-  user: ApiRecord | null | undefined,
-  profile: ApiRecord | null,
-): ApplicantDetails => {
-  const sources = [user, profile].filter(Boolean) as ApiRecord[];
-  const read = (keys: string[]) =>
-    sources.reduce((value, source) => value || getTextValue(source, keys), '');
-
-  return {
-    employeeId: read(['employee_id', 'employeeId', 'erp_id', 'erpId', 'id']),
-    name: read(['name', 'full_name', 'fullName']),
-    date: formatDateInput(new Date()),
-    department: read(['department', 'department_name', 'departmentName']),
-    designation: read(['designation', 'role_name', 'roleName']),
-    email: read(['email', 'mail']),
-    mobile: read(['mobile', 'phone', 'phone_number', 'phoneNumber', 'contact']),
-  };
-};
-
-const selectKnownOrFirst = (value: string, options: string[]) =>
-  value && options.includes(value) ? value : options[0] || '';
+const vehicleNumberOptions = ['TN 37 AB 1234', 'TN 38 CD 4567', 'TN 39 EF 7890'];
+const driverOptions = ['Ravi Kumar', 'Suresh Mani', 'Arun Prakash'];
 
 const formatDateInput = (date: Date) => {
   const year = date.getFullYear();
@@ -260,6 +245,89 @@ const normalizeTimeEntry = (value: string) => {
   return `${hour}:${minute} ${period}`;
 };
 
+// --- Advanced manual "HH:MM AM/PM" auto-formatting (single text box) ---
+// As the user types digits, the hour/minute segments and the ':' separator
+// are inserted automatically; typing "A" or "P" auto-completes to "AM"/"PM".
+const extractTimeDigitsAndPeriod = (value: string) => {
+  const cleaned = value.toUpperCase().replace(/[^0-9AP]/g, '');
+  const digits = cleaned.replace(/[AP]/g, '').slice(0, 4);
+  const periodMatch = cleaned.match(/[AP]/);
+  return { digits, periodLetter: periodMatch ? periodMatch[0] : '' };
+};
+
+const buildTimeSegments = (digits: string) => {
+  let hour = '';
+  let minute = '';
+  let reachedMinute = false;
+
+  for (const digit of digits) {
+    if (!reachedMinute) {
+      if (hour.length === 0) {
+        hour = digit;
+        if (digit !== '0' && digit !== '1') {
+          reachedMinute = true;
+        }
+      } else {
+        const combined = hour + digit;
+        const combinedNum = Number(combined);
+        if (combinedNum >= 1 && combinedNum <= 12) {
+          hour = combined;
+        } else {
+          minute += digit;
+        }
+        reachedMinute = true;
+      }
+    } else if (minute.length < 2) {
+      if (minute.length === 0) {
+        if (digit <= '5') {
+          minute = digit;
+        }
+      } else {
+        const combined = minute + digit;
+        if (Number(combined) <= 59) {
+          minute = combined;
+        }
+      }
+    }
+  }
+
+  return { hour, minute, reachedMinute };
+};
+
+const formatTimeAsYouType = (rawValue: string, previousDisplayValue: string) => {
+  let working = rawValue;
+
+  // If the user just deleted a single character and that character was an
+  // auto-inserted separator (":" / " ") or the trailing "M" of AM/PM, remove
+  // one more character so backspace feels natural instead of "sticking".
+  if (
+    working.length === previousDisplayValue.length - 1 &&
+    previousDisplayValue.startsWith(working)
+  ) {
+    const removedChar = previousDisplayValue[working.length];
+    if (removedChar === ':' || removedChar === ' ' || removedChar === 'M') {
+      working = working.slice(0, -1);
+    }
+  }
+
+  const { digits, periodLetter } = extractTimeDigitsAndPeriod(working);
+  const { hour, minute, reachedMinute } = buildTimeSegments(digits);
+
+  let result = hour;
+
+  if (periodLetter && hour) {
+    // AM/PM typed before the minute was fully entered — auto-complete the
+    // minute instead of leaving a blank gap like "09: AM".
+    const finalMinute = reachedMinute ? minute.padEnd(2, '0') : '00';
+    result += `:${finalMinute}`;
+    result += periodLetter === 'A' ? ' AM' : ' PM';
+  } else if (reachedMinute) {
+    result += `:${minute}`;
+  }
+
+  return result;
+};
+
 const createTravelPlanRow = (): TravelPlanRow => ({
   id: Date.now() + Math.random(),
   boardingDate: '',
@@ -278,10 +346,10 @@ const createShuttleTripRow = (): ShuttleTripRow => ({
   trips: '',
 });
 
-const createShuttleDayRow = (requirement = ''): ShuttleDayRow => ({
+const createShuttleDayRow = (): ShuttleDayRow => ({
   id: Date.now() + Math.random(),
   date: '',
-  requirement,
+  requirement: 'Full Day',
 });
 
 const createVehicleAllotmentRow = (): VehicleAllotmentRow => ({
@@ -293,54 +361,93 @@ const createVehicleAllotmentRow = (): VehicleAllotmentRow => ({
   mobile: '',
 });
 
-const MaleAllotmentIcon = () => (
-  <svg
-    className="vehiclebooking-allotment-person-icon"
-    viewBox="0 0 72 72"
-    aria-hidden="true"
-    focusable="false"
-  >
-    <circle cx="36" cy="16" r="13" />
-    <path d="M15 64v-7.5C15 43.8 24.4 34 36 34s21 9.8 21 22.5V64H15z" />
-    <path
-      className="vehiclebooking-allotment-person-icon-detail"
-      d="M29.5 36.5 36 45l6.5-8.5 2.2 27.5H27.3l2.2-27.5z"
-    />
-    <path
-      className="vehiclebooking-allotment-person-icon-detail"
-      d="M27.2 36.8 36 47.2l8.8-10.4-3.8 4.1L36 38.2l-5 2.7-3.8-4.1z"
-    />
-  </svg>
-);
+const initialManagedVehicles: ManagedVehicleRow[] = [
+  {
+    id: 1,
+    vehicleType: 'Car',
+    number: 'TN 34 AM 1213',
+    make: 'Toyota Innova',
+    seating: '6+1',
+    status: 'Active',
+    fuelType: 'Petrol',
+    model: 'Innova Crysta',
+    transmission: 'Manual',
+    yearOfRegistration: '2019',
+    yearOfPurchase: '2019',
+    features: {
+      ...DEFAULT_VEHICLE_FEATURES,
+      'Air Conditioner': true,
+      'GPS Tracking': true,
+      'Audio System': true,
+      'Push Back Seats': true,
+      'Bluetooth Audio': true,
+      'USB Charging Ports': true,
+      'First Aid Kit': true,
+      'Water Bottle': true,
+    },
+  },
+  {
+    id: 2,
+    vehicleType: 'Shuttle Vehicle',
+    number: '-',
+    make: 'ABCD',
+    seating: '12+1',
+    status: 'Service',
+    fuelType: 'Diesel',
+    model: 'Traveller',
+    transmission: 'Manual',
+    yearOfRegistration: '2021',
+    yearOfPurchase: '2021',
+    features: {
+      ...DEFAULT_VEHICLE_FEATURES,
+      'Air Conditioner': true,
+      'GPS Tracking': true,
+      'CCTV Camera': true,
+      'Audio System': true,
+      'USB Charging Ports': true,
+      'Tissue Box': true,
+      'Video System': true,
+      'First Aid Kit': true,
+      'Water Bottle': true,
+    },
+  },
+];
 
-const FemaleAllotmentIcon = () => (
-  <svg
-    className="vehiclebooking-allotment-person-icon"
-    viewBox="0 0 72 72"
-    aria-hidden="true"
-    focusable="false"
-  >
-    <path d="M16 64v-4.6C16 50 24.6 42.8 36 42.8S56 59.4V64H16z" />
-    <path d="M17.8 43.5V31.2C17.8 17.1 25.4 7 36 7s18.2 10.1 18.2 24.2v12.3H17.8z" />
-    <path
-      className="vehiclebooking-allotment-person-icon-detail"
-      d="M23.8 30.5c5.9-.9 10.3-4.4 13.3-10.2 2.7 5.2 6.5 8.7 11.1 10.2v4.7C48.2 43.3 42.7 50 36 50s-12.2-6.7-12.2-14.8v-4.7z"
-    />
-    <path d="M25 45.7 36 57l11-11.3c7.4 3 12 9.2 12 17.4V64H13v-.9c0-8.2 4.6-14.4 12-17.4z" />
-  </svg>
-);
+const initialDrivers: DriverManagementRow[] = [
+  { id: 1, name: 'Velavan C', mobile: '9876543210', category: 'Car Driver', status: 'Active' },
+  { id: 2, name: 'Senthil Kumar R', mobile: '9876543210', category: 'Bus Driver', status: 'Leave' },
+];
 
-const ChildAllotmentIcon = () => (
-  <svg
-    className="vehiclebooking-allotment-person-icon"
-    viewBox="0 0 72 72"
-    aria-hidden="true"
-    focusable="false"
-  >
-    <circle cx="36" cy="14" r="10" />
-    <path d="M21 31.5c0-3 2.4-5.5 5.5-5.5h19c3.1 0 5.5 2.5 5.5 5.5V47h-7v17H28V47h-7V31.5z" />
-  </svg>
-);
+const createManagedVehicleRow = (): ManagedVehicleRow => ({
+  id: Date.now() + Math.random(),
+  vehicleType: 'Car',
+  number: '',
+  make: '',
+  seating: '',
+  status: 'Active',
+  fuelType: 'Petrol',
+  model: '',
+  transmission: 'Manual',
+  yearOfRegistration: '',
+  yearOfPurchase: '',
+  features: { ...DEFAULT_VEHICLE_FEATURES },
+});
+
+const createDriverManagementRow = (): DriverManagementRow => ({
+  id: Date.now() + Math.random(),
+  name: '',
+  mobile: '',
+  category: 'Car Driver',
+  status: 'Active',
+});
+
+// applicantUiDetails is built inside the component from user context
+
+
+
+
+
+
 
 const MapPinWithBase = ({ size = 22, className = '' }: { size?: number; className?: string }) => (
   <svg
@@ -361,25 +468,42 @@ const MapPinWithBase = ({ size = 22, className = '' }: { size?: number; classNam
 
 const VehicleBooking: React.FC = () => {
   const { user } = useAuth();
-  const [applicantProfile, setApplicantProfile] = useState<ApiRecord | null>(null);
-  const [bookingOptions, setBookingOptions] = useState<VehicleBookingOptions>(() =>
-    createEmptyVehicleBookingOptions(),
-  );
+
+  const applicantUiDetails: ApplicantDetails = useMemo(() => {
+    const u = user as Record<string, unknown> | null | undefined;
+    const read = (keys: string[]) =>
+      keys.map((k) => u?.[k]).find((v) => v !== undefined && v !== null);
+    return {
+      employeeId: String(read(['employee_id', 'employeeId', 'erp_id', 'id']) || ''),
+      name: String(read(['name', 'full_name', 'fullName']) || ''),
+      date: formatDateInput(new Date()),
+      department: String(read(['department', 'department_name', 'departmentName']) || ''),
+      designation: String(read(['designation', 'role_name', 'roleName']) || ''),
+      email: String(read(['email', 'mail']) || ''),
+      mobile: String(read(['mobile', 'phone', 'phone_number', 'phoneNumber']) || ''),
+    };
+  }, [user]);
   const [transportDetails, setTransportDetails] = useState<TransportBookingDetails>({
     purpose: '',
-    priority: '',
-    vehicleRequirement: '',
+    priority: 'Routine',
+    vehicleRequirement: 'Car',
     numberOfVehicles: '',
-    bookingFor: '',
-    serviceType: '',
+    bookingFor: 'External Guest',
+    serviceType: 'Free',
     accompaniedMale: '',
     accompaniedFemale: '',
     accompaniedChildren: '',
     remarks: '',
-    travelMode: '',
+    travelMode: 'Outside',
+  });
+  const [beneficiaryDetails, setBeneficiaryDetails] = useState<BeneficiaryDetails>({
+    beneficiaryType: 'Staff',
+    staffName: '',
+    tag: 'Skilling',
   });
   const [travelPlanRows, setTravelPlanRows] = useState<TravelPlanRow[]>([createTravelPlanRow()]);
-  const [shuttleBookingMode, setShuttleBookingMode] = useState<ShuttleBookingMode>('');
+  const [shuttleBookingMode, setShuttleBookingMode] =
+    useState<ShuttleBookingMode>('Day Booking');
   const [shuttleTripRows, setShuttleTripRows] = useState<ShuttleTripRow[]>([
     createShuttleTripRow(),
   ]);
@@ -389,98 +513,28 @@ const VehicleBooking: React.FC = () => {
   const [vehicleAllotmentRows, setVehicleAllotmentRows] = useState<
     VehicleAllotmentRow[]
   >([createVehicleAllotmentRow()]);
+  const [managedVehicles, setManagedVehicles] = useState<ManagedVehicleRow[]>(initialManagedVehicles);
+  const [drivers, setDrivers] = useState<DriverManagementRow[]>(initialDrivers);
+  const [editingManagedVehicleId, setEditingManagedVehicleId] = useState<number | null>(null);
+  const [viewingManagedVehicleId, setViewingManagedVehicleId] = useState<number | null>(null);
+  const [editingDriverId, setEditingDriverId] = useState<number | null>(null);
+  const [viewingDriverId, setViewingDriverId] = useState<number | null>(null);
+
+  const [standaloneVehicleDetails, setStandaloneVehicleDetails] = useState<ManagedVehicleRow>(
+    createManagedVehicleRow()
+  );
+
+  const updateStandaloneVehicleDetails = (
+    field: keyof Omit<ManagedVehicleRow, 'id'>,
+    value: any
+  ) => {
+    setStandaloneVehicleDetails((prevVehicle) => ({ ...prevVehicle, [field]: value }));
+  };
 
   const [travelPlanBoardingDateInputs, setTravelPlanBoardingDateInputs] = useState<Record<number, string>>({});
   const [travelPlanDroppingDateInputs, setTravelPlanDroppingDateInputs] = useState<Record<number, string>>({});
   const [shuttleTripDateInputs, setShuttleTripDateInputs] = useState<Record<number, string>>({});
   const [shuttleDayDateInputs, setShuttleDayDateInputs] = useState<Record<number, string>>({});
-
-  const applicantUiDetails = useMemo(
-    () => buildApplicantDetails(user as unknown as ApiRecord | null, applicantProfile),
-    [applicantProfile, user],
-  );
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadApplicantProfile = async () => {
-      try {
-        const response = await authenticityUtility.get('/dashboard/profile');
-        const profile = getPayloadData(response);
-
-        if (isMounted && profile && typeof profile === 'object' && !Array.isArray(profile)) {
-          setApplicantProfile(profile as ApiRecord);
-        }
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.info('Vehicle applicant profile could not be loaded.', error);
-        }
-      }
-    };
-
-    loadApplicantProfile();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const loadBookingOptions = async () => {
-      try {
-        const response = await authenticityUtility.get('/vehicle-booking/options');
-        const options = normalizeVehicleBookingOptions(response);
-
-        if (isMounted) {
-          setBookingOptions(options);
-        }
-      } catch (error) {
-        if (import.meta.env.DEV) {
-          console.info('Vehicle booking options could not be loaded.', error);
-        }
-      }
-    };
-
-    loadBookingOptions();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    setTransportDetails((prevDetails) => {
-      const vehicleRequirement = selectKnownOrFirst(
-        prevDetails.vehicleRequirement,
-        bookingOptions.vehicleRequirements,
-      );
-      const bookingForChoices = bookingOptions.logisticsVehicleRequirements.includes(vehicleRequirement)
-        ? bookingOptions.logisticsBookingForOptions
-        : bookingOptions.bookingForOptions;
-      const nextDetails = {
-        ...prevDetails,
-        priority: selectKnownOrFirst(prevDetails.priority, bookingOptions.priorities),
-        vehicleRequirement,
-        bookingFor: selectKnownOrFirst(prevDetails.bookingFor, bookingForChoices),
-        serviceType: selectKnownOrFirst(prevDetails.serviceType, bookingOptions.serviceTypes),
-        travelMode: selectKnownOrFirst(prevDetails.travelMode, bookingOptions.travelModes),
-      };
-
-      return JSON.stringify(nextDetails) === JSON.stringify(prevDetails) ? prevDetails : nextDetails;
-    });
-
-    setShuttleBookingMode((prevMode) =>
-      selectKnownOrFirst(prevMode, bookingOptions.shuttleBookingModes),
-    );
-    setShuttleDayRows((prevRows) =>
-      prevRows.map((row) => {
-        const requirement = selectKnownOrFirst(row.requirement, bookingOptions.shuttleRequirements);
-        return requirement === row.requirement ? row : { ...row, requirement };
-      }),
-    );
-  }, [bookingOptions]);
 
   useEffect(() => {
     setTravelPlanBoardingDateInputs((prevInputs) =>
@@ -532,10 +586,10 @@ const VehicleBooking: React.FC = () => {
 
   const availableBookingForOptions = useMemo(
     () =>
-      bookingOptions.logisticsVehicleRequirements.includes(transportDetails.vehicleRequirement)
-        ? bookingOptions.logisticsBookingForOptions
-        : bookingOptions.bookingForOptions,
-    [bookingOptions, transportDetails.vehicleRequirement]
+      logisticsVehicleRequirements.includes(transportDetails.vehicleRequirement)
+        ? logisticsBookingForOptions
+        : bookingForOptions,
+    [transportDetails.vehicleRequirement]
   );
 
   const updateTransportDetails = (
@@ -545,18 +599,22 @@ const VehicleBooking: React.FC = () => {
     setTransportDetails((prevDetails) => ({ ...prevDetails, [field]: value }));
   };
 
+  const updateBeneficiaryDetails = (field: keyof BeneficiaryDetails, value: string) => {
+    setBeneficiaryDetails((prevDetails) => ({ ...prevDetails, [field]: value }));
+  };
+
   const handleVehicleRequirementSelect = (value: VehicleRequirement) => {
     setTransportDetails((prevDetails) => {
-      const nextBookingOptions = bookingOptions.logisticsVehicleRequirements.includes(value)
-        ? bookingOptions.logisticsBookingForOptions
-        : bookingOptions.bookingForOptions;
+      const nextBookingOptions = logisticsVehicleRequirements.includes(value)
+        ? logisticsBookingForOptions
+        : bookingForOptions;
 
       return {
         ...prevDetails,
         vehicleRequirement: value,
         bookingFor: nextBookingOptions.includes(prevDetails.bookingFor)
           ? prevDetails.bookingFor
-          : nextBookingOptions[0] || '',
+          : nextBookingOptions[0],
       };
     });
   };
@@ -674,6 +732,62 @@ const VehicleBooking: React.FC = () => {
     );
   };
 
+  const updateManagedVehicle = (
+    id: number,
+    field: keyof Omit<ManagedVehicleRow, 'id'>,
+    value: any
+  ) => {
+    setManagedVehicles((prevVehicles) =>
+      prevVehicles.map((vehicle) =>
+        vehicle.id === id ? { ...vehicle, [field]: value } : vehicle
+      )
+    );
+  };
+
+  const addManagedVehicle = () => {
+    const vehicle = createManagedVehicleRow();
+    setManagedVehicles((prevVehicles) => [...prevVehicles, vehicle]);
+    setEditingManagedVehicleId(vehicle.id);
+    setViewingManagedVehicleId(vehicle.id);
+  };
+
+  const removeManagedVehicle = (id: number) => {
+    setManagedVehicles((prevVehicles) =>
+      prevVehicles.length === 1
+        ? prevVehicles
+        : prevVehicles.filter((vehicle) => vehicle.id !== id)
+    );
+    setEditingManagedVehicleId((currentId) => (currentId === id ? null : currentId));
+    setViewingManagedVehicleId((currentId) => (currentId === id ? null : currentId));
+  };
+
+  const updateDriver = (
+    id: number,
+    field: keyof Omit<DriverManagementRow, 'id'>,
+    value: string
+  ) => {
+    setDrivers((prevDrivers) =>
+      prevDrivers.map((driver) =>
+        driver.id === id ? { ...driver, [field]: value } : driver
+      )
+    );
+  };
+
+  const addDriver = () => {
+    const driver = createDriverManagementRow();
+    setDrivers((prevDrivers) => [...prevDrivers, driver]);
+    setEditingDriverId(driver.id);
+    setViewingDriverId(driver.id);
+  };
+
+  const removeDriver = (id: number) => {
+    setDrivers((prevDrivers) =>
+      prevDrivers.length === 1 ? prevDrivers : prevDrivers.filter((driver) => driver.id !== id)
+    );
+    setEditingDriverId((currentId) => (currentId === id ? null : currentId));
+    setViewingDriverId((currentId) => (currentId === id ? null : currentId));
+  };
+
   const removeTravelPlanRow = (id: number) => {
     setTravelPlanRows((prevRows) =>
       prevRows.length === 1 ? prevRows : prevRows.filter((row) => row.id !== id)
@@ -701,16 +815,20 @@ const VehicleBooking: React.FC = () => {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    console.log('Vehicle transport booking payload:', {
-      applicant: applicantUiDetails,
-      transportDetails,
-      totalTravelers,
-      travelPlanRows,
-      shuttleBookingMode,
-      shuttleTripRows,
-      shuttleDayRows,
-      vehicleAllotmentRows,
-    });
+    if (import.meta.env.DEV) {
+      console.log('Vehicle transport booking payload:', {
+        applicant: applicantUiDetails,
+        beneficiary: beneficiaryDetails,
+        transportDetails,
+        totalTravelers,
+        travelPlanRows,
+        shuttleBookingMode,
+        shuttleTripRows,
+        shuttleDayRows,
+        vehicleAllotmentRows,
+        standaloneVehicleDetails,
+      });
+    }
   };
 
   const renderReadOnlyInput = (
@@ -782,8 +900,554 @@ const VehicleBooking: React.FC = () => {
     </div>
   );
 
-  const priorityStatus = transportDetails.priority;
-  const priorityTone = priorityStatus.toLowerCase() === 'high' ? 'high' : 'routine';
+  const renderVehicleManagementActions = (
+    onAdd: () => void,
+    onEdit: () => void,
+    onView: () => void,
+    onDelete: () => void,
+    deleteDisabled: boolean,
+    isEditing: boolean,
+    isViewing: boolean,
+    label: string
+  ) => (
+    <div className="vehiclebooking-management-actions">
+      <button
+        className="vehiclebooking-management-icon-button vehiclebooking-management-icon-button--add"
+        type="button"
+        onClick={onAdd}
+        aria-label={`Add ${label}`}
+        title={`Add ${label}`}
+      >
+        <PlusCircle size={16} />
+      </button>
+      <button
+        className={`vehiclebooking-management-icon-button${isEditing ? ' is-active' : ''}`}
+        type="button"
+        onClick={onEdit}
+        aria-label={`${isEditing ? 'Finish editing' : 'Edit'} ${label}`}
+        title={`${isEditing ? 'Finish editing' : 'Edit'} ${label}`}
+      >
+        <PencilLine size={15} />
+      </button>
+      <button
+        className={`vehiclebooking-management-icon-button vehiclebooking-management-icon-button--view${isViewing ? ' is-active' : ''}`}
+        type="button"
+        onClick={onView}
+        aria-label={`View ${label}`}
+        title={`View ${label}`}
+      >
+        <Eye size={17} />
+      </button>
+      <button
+        className="vehiclebooking-management-icon-button vehiclebooking-management-icon-button--delete"
+        type="button"
+        onClick={onDelete}
+        aria-label={`Delete ${label}`}
+        title={`Delete ${label}`}
+        disabled={deleteDisabled}
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
+
+  const renderDriverManagementActions = (
+    onAdd: () => void,
+    onEdit: () => void,
+    onDelete: () => void,
+    deleteDisabled: boolean,
+    isEditing: boolean,
+    label: string
+  ) => (
+    <div className="vehiclebooking-management-actions vehiclebooking-management-actions--compact">
+      <button
+        className="vehiclebooking-management-icon-button vehiclebooking-management-icon-button--add"
+        type="button"
+        onClick={onAdd}
+        aria-label={`Add ${label}`}
+        title={`Add ${label}`}
+      >
+        <PlusCircle size={16} />
+      </button>
+      <button
+        className={`vehiclebooking-management-icon-button${isEditing ? ' is-active' : ''}`}
+        type="button"
+        onClick={onEdit}
+        aria-label={`${isEditing ? 'Finish editing' : 'Edit'} ${label}`}
+        title={`${isEditing ? 'Finish editing' : 'Edit'} ${label}`}
+      >
+        <PencilLine size={15} />
+      </button>
+      <button
+        className="vehiclebooking-management-icon-button vehiclebooking-management-icon-button--delete"
+        type="button"
+        onClick={onDelete}
+        aria-label={`Delete ${label}`}
+        title={`Delete ${label}`}
+        disabled={deleteDisabled}
+      >
+        <Trash2 size={16} />
+      </button>
+    </div>
+  );
+
+  const renderVehicleDetailsCard = (
+    vehicle: ManagedVehicleRow,
+    isEditing: boolean,
+    onUpdate: (field: keyof Omit<ManagedVehicleRow, 'id'>, value: any) => void
+  ) => {
+    const vehicleFeatures = vehicle.features || DEFAULT_VEHICLE_FEATURES;
+    const currentFuelType = vehicle.fuelType || 'Petrol';
+    const currentTransmission = vehicle.transmission || 'Manual';
+
+    const handleFeatureToggle = (featureName: string) => {
+      if (!isEditing) return;
+      const updatedFeatures = {
+        ...vehicleFeatures,
+        [featureName]: !vehicleFeatures[featureName],
+      };
+      onUpdate('features', updatedFeatures);
+    };
+
+    const handleFuelTypeChange = (fuel: 'Petrol' | 'Diesel' | 'CNG' | 'Electric' | 'Hybrid') => {
+      if (!isEditing) return;
+      onUpdate('fuelType', fuel);
+    };
+
+    const handleTransmissionChange = (trans: 'Manual' | 'Automatic') => {
+      if (!isEditing) return;
+      onUpdate('transmission', trans);
+    };
+
+    const featureIcons: Record<string, React.ReactNode> = {
+      'Air Conditioner': <Wind size={20} className="vehicle-feature-main-icon" />,
+      'GPS Tracking': <MapPin size={20} className="vehicle-feature-main-icon" />,
+      'CCTV Camera': <Cctv size={20} className="vehicle-feature-main-icon" />,
+      'Audio System': <Speaker size={20} className="vehicle-feature-main-icon" />,
+      'Push Back Seats': <Armchair size={20} className="vehicle-feature-main-icon" />,
+      'Umbrella': <Umbrella size={20} className="vehicle-feature-main-icon" />,
+      'Bluetooth Audio': <Bluetooth size={20} className="vehicle-feature-main-icon" />,
+      'USB Charging Ports': <Usb size={20} className="vehicle-feature-main-icon" />,
+      'Tissue Box': <Box size={20} className="vehicle-feature-main-icon" />,
+      'Video System': <Tv size={20} className="vehicle-feature-main-icon" />,
+      'First Aid Kit': <BriefcaseMedical size={20} className="vehicle-feature-main-icon" />,
+      'Water Bottle': <Droplet size={20} className="vehicle-feature-main-icon" />,
+    };
+
+    return (
+      <div className="vehicle-details-card-container">
+        <section className="vehicle-details-main-card">
+          <div className="vehicle-details-card-header-bar">
+            <span>Vehicle Details</span>
+          </div>
+          
+          <div className="vehicle-details-card-body-form">
+            <div className="vehicle-details-form-panel">
+            <div className="vehicle-details-grid-row vehicle-details-grid-row-3">
+              {/* Type Dropdown */}
+              <div className="vehicle-details-form-field">
+                <label className="vehicle-details-form-label">Type</label>
+                <select
+                  className="vehicle-details-form-select"
+                  value={vehicle.vehicleType}
+                  onChange={(e) => onUpdate('vehicleType', e.target.value)}
+                  disabled={!isEditing}
+                >
+                  {vehicleRequirements.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Vehicle Number */}
+              <div className="vehicle-details-form-field">
+                <label className="vehicle-details-form-label">Vehicle Number</label>
+                <input
+                  type="text"
+                  className="vehicle-details-form-input"
+                  value={vehicle.number}
+                  onChange={(e) => onUpdate('number', e.target.value)}
+                  readOnly={!isEditing}
+                  placeholder="e.g. TN 37 AB 1234"
+                />
+              </div>
+
+              {/* Fuel Type Pills */}
+              <div className="vehicle-details-form-field">
+                <label className="vehicle-details-form-label">Fuel Type</label>
+                <div className="vehicle-details-pills-row">
+                  {(['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'] as const).map((fuel) => (
+                    <button
+                      key={fuel}
+                      type="button"
+                      className={`vehicle-details-pill-btn ${currentFuelType === fuel ? 'active' : ''}`}
+                      onClick={() => handleFuelTypeChange(fuel)}
+                      disabled={!isEditing}
+                    >
+                      {fuel}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="vehicle-details-grid-row vehicle-details-grid-row-3">
+              {/* Make */}
+              <div className="vehicle-details-form-field">
+                <label className="vehicle-details-form-label">Make</label>
+                <input
+                  type="text"
+                  className="vehicle-details-form-input"
+                  value={vehicle.make}
+                  onChange={(e) => onUpdate('make', e.target.value)}
+                  readOnly={!isEditing}
+                  placeholder="e.g. Toyota"
+                />
+              </div>
+
+              {/* Model */}
+              <div className="vehicle-details-form-field">
+                <label className="vehicle-details-form-label">Model</label>
+                <input
+                  type="text"
+                  className="vehicle-details-form-input"
+                  value={vehicle.model || ''}
+                  onChange={(e) => onUpdate('model', e.target.value)}
+                  readOnly={!isEditing}
+                  placeholder="e.g. Innova"
+                />
+              </div>
+
+              {/* Transmission Pills */}
+              <div className="vehicle-details-form-field">
+                <label className="vehicle-details-form-label">Transmission</label>
+                <div className="vehicle-details-pills-row">
+                  {(['Manual', 'Automatic'] as const).map((trans) => (
+                    <button
+                      key={trans}
+                      type="button"
+                      className={`vehicle-details-pill-btn ${currentTransmission === trans ? 'active' : ''}`}
+                      onClick={() => handleTransmissionChange(trans)}
+                      disabled={!isEditing}
+                    >
+                      {trans}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="vehicle-details-grid-row vehicle-details-grid-row-4">
+              {/* Year of Registration */}
+              <div className="vehicle-details-form-field">
+                <label className="vehicle-details-form-label">Year of Registration</label>
+                <input
+                  type="text"
+                  className="vehicle-details-form-input"
+                  value={vehicle.yearOfRegistration || ''}
+                  onChange={(e) => onUpdate('yearOfRegistration', e.target.value)}
+                  readOnly={!isEditing}
+                  placeholder="e.g. 2019"
+                />
+              </div>
+
+              {/* Year of Purchase */}
+              <div className="vehicle-details-form-field">
+                <label className="vehicle-details-form-label">Year of Purchase</label>
+                <input
+                  type="text"
+                  className="vehicle-details-form-input"
+                  value={vehicle.yearOfPurchase || ''}
+                  onChange={(e) => onUpdate('yearOfPurchase', e.target.value)}
+                  readOnly={!isEditing}
+                  placeholder="e.g. 2019"
+                />
+              </div>
+
+              {/* Sealing (representing Seating) */}
+              <div className="vehicle-details-form-field field-sealing">
+                <label className="vehicle-details-form-label">Sealing</label>
+                <input
+                  type="text"
+                  className="vehicle-details-form-input"
+                  value={vehicle.seating}
+                  onChange={(e) => onUpdate('seating', e.target.value)}
+                  readOnly={!isEditing}
+                  placeholder="e.g. 6+1"
+                />
+              </div>
+
+              {/* Status */}
+              <div className="vehicle-details-form-field field-status-row">
+                <label className="vehicle-details-form-label">Status</label>
+                <div className="status-input-validated-wrapper">
+                  <select
+                    className="vehicle-details-form-select"
+                    value={vehicle.status}
+                    onChange={(e) => onUpdate('status', e.target.value)}
+                    disabled={!isEditing}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Service">Service</option>
+                  </select>
+                  {vehicle.status === 'Active' && (
+                    <CheckCircle2 className="vehicle-details-validated-checkmark" size={18} />
+                  )}
+                </div>
+              </div>
+            </div>
+            </div>
+
+            <div className="vehicle-features-panel">
+              <div className="vehicle-features-section-title">Features</div>
+              <hr className="vehicle-details-card-divider" />
+
+              <div className="vehicle-features-grid">
+                {Object.keys(DEFAULT_VEHICLE_FEATURES).map((featureName) => {
+                  const isChecked = !!vehicleFeatures[featureName];
+                  return (
+                    <div
+                      key={featureName}
+                      className={`vehicle-feature-card ${isChecked ? 'checked' : ''} ${!isEditing ? 'disabled-view' : ''}`}
+                      onClick={() => handleFeatureToggle(featureName)}
+                    >
+                      <div className="vehicle-feature-left-wrap">
+                        <input
+                          type="checkbox"
+                          className="vehicle-feature-checkbox"
+                          checked={isChecked}
+                          onChange={() => {}} // handled by click on the card
+                          disabled={!isEditing}
+                        />
+                        <span className="vehicle-feature-icon-span">
+                          {featureIcons[featureName]}
+                        </span>
+                        <span className="vehicle-feature-label-text">{featureName}</span>
+                      </div>
+                      <span className="vehicle-feature-info-icon-span">
+                        <Info size={16} />
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  };
+
+  const renderVehicleAdminManagement = () => (
+    <section className="vehiclebooking-card vehiclebooking-management-card">
+      <div className="vehiclebooking-management-panel">
+        <div className="vehiclebooking-management-title">Vehicle Management</div>
+        <div className="vehiclebooking-management-table-wrap">
+          <table className="vehiclebooking-management-table vehiclebooking-vehicle-management-table">
+            <thead>
+              <tr>
+                <th>S.No.</th>
+                <th>Vehicle Type</th>
+                <th>Number</th>
+                <th>Make</th>
+                <th>Seating</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {managedVehicles.map((vehicle, index) => {
+                const isEditing = editingManagedVehicleId === vehicle.id;
+                const isViewing = viewingManagedVehicleId === vehicle.id;
+
+                return (
+                  <tr className={isViewing ? 'is-viewing' : ''} key={vehicle.id}>
+                    <td>{index + 1}</td>
+                    <td>
+                      <select
+                        className="vehiclebooking-management-control"
+                        value={vehicle.vehicleType}
+                        onChange={(event) =>
+                          updateManagedVehicle(vehicle.id, 'vehicleType', event.target.value)
+                        }
+                        disabled={!isEditing}
+                        aria-label="Vehicle type"
+                      >
+                        {vehicleRequirements.map((type) => (
+                          <option value={type} key={type}>
+                            {type}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <input
+                        className="vehiclebooking-management-control"
+                        type="text"
+                        value={vehicle.number}
+                        onChange={(event) =>
+                          updateManagedVehicle(vehicle.id, 'number', event.target.value)
+                        }
+                        readOnly={!isEditing}
+                        aria-label="Vehicle number"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="vehiclebooking-management-control"
+                        type="text"
+                        value={vehicle.make}
+                        onChange={(event) =>
+                          updateManagedVehicle(vehicle.id, 'make', event.target.value)
+                        }
+                        readOnly={!isEditing}
+                        aria-label="Vehicle make"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="vehiclebooking-management-control"
+                        type="text"
+                        value={vehicle.seating}
+                        onChange={(event) =>
+                          updateManagedVehicle(vehicle.id, 'seating', event.target.value)
+                        }
+                        readOnly={!isEditing}
+                        aria-label="Vehicle seating"
+                      />
+                    </td>
+                    <td>
+                      <select
+                        className={`vehiclebooking-management-status vehiclebooking-management-status--${vehicle.status.toLowerCase()}`}
+                        value={vehicle.status}
+                        onChange={(event) =>
+                          updateManagedVehicle(vehicle.id, 'status', event.target.value)
+                        }
+                        disabled={!isEditing}
+                        aria-label="Vehicle status"
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Service">Service</option>
+                      </select>
+                    </td>
+                    <td>
+                      {renderVehicleManagementActions(
+                        addManagedVehicle,
+                        () =>
+                          setEditingManagedVehicleId((currentId) =>
+                            currentId === vehicle.id ? null : vehicle.id,
+                          ),
+                        () =>
+                          setViewingManagedVehicleId((currentId) =>
+                            currentId === vehicle.id ? null : vehicle.id,
+                          ),
+                        () => removeManagedVehicle(vehicle.id),
+                        managedVehicles.length === 1,
+                        isEditing,
+                        isViewing,
+                        'vehicle'
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="vehiclebooking-management-title vehiclebooking-management-title--spaced">
+          Driver Management
+        </div>
+        <div className="vehiclebooking-management-table-wrap vehiclebooking-driver-management-wrap">
+          <table className="vehiclebooking-management-table vehiclebooking-driver-management-table">
+            <thead>
+              <tr>
+                <th>S.No.</th>
+                <th>Driver Name</th>
+                <th>Mobile Number</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {drivers.map((driver, index) => {
+                const isEditing = editingDriverId === driver.id;
+                const isViewing = viewingDriverId === driver.id;
+
+                return (
+                  <tr className={isViewing ? 'is-viewing' : ''} key={driver.id}>
+                    <td>{index + 1}</td>
+                    <td>
+                      <input
+                        className="vehiclebooking-management-control"
+                        type="text"
+                        value={driver.name}
+                        onChange={(event) => updateDriver(driver.id, 'name', event.target.value)}
+                        readOnly={!isEditing}
+                        aria-label="Driver name"
+                      />
+                    </td>
+                    <td>
+                      <input
+                        className="vehiclebooking-management-control"
+                        type="tel"
+                        value={driver.mobile}
+                        onChange={(event) => updateDriver(driver.id, 'mobile', event.target.value)}
+                        readOnly={!isEditing}
+                        aria-label="Driver mobile number"
+                      />
+                    </td>
+                    <td>
+                      <select
+                        className="vehiclebooking-management-control"
+                        value={driver.category}
+                        onChange={(event) => updateDriver(driver.id, 'category', event.target.value)}
+                        disabled={!isEditing}
+                        aria-label="Driver category"
+                      >
+                        <option value="Car Driver">Car Driver</option>
+                        <option value="Bus Driver">Bus Driver</option>
+                      </select>
+                    </td>
+                    <td>
+                      <select
+                        className={`vehiclebooking-management-status vehiclebooking-management-status--${driver.status.toLowerCase()}`}
+                        value={driver.status}
+                        onChange={(event) => updateDriver(driver.id, 'status', event.target.value)}
+                        disabled={!isEditing}
+                        aria-label="Driver status"
+                      >
+                        <option value="Active">Active</option>
+                        <option value="Leave">Leave</option>
+                      </select>
+                    </td>
+                    <td>
+                      {renderDriverManagementActions(
+                        addDriver,
+                        () =>
+                          setEditingDriverId((currentId) =>
+                            currentId === driver.id ? null : driver.id,
+                          ),
+                        () => removeDriver(driver.id),
+                        drivers.length === 1,
+                        isEditing,
+                        'driver'
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+  const priorityStatus = transportDetails.priority || 'Routine';
+  const priorityTone = priorityStatus === 'High' ? 'high' : 'routine';
 
   return (
     <div className="vehiclebooking-page">
@@ -820,6 +1484,58 @@ const VehicleBooking: React.FC = () => {
             </div>
           </section>
 
+          <section className="vehiclebooking-card vehiclebooking-beneficiary-card">
+            <div className="vehiclebooking-beneficiary-grid">
+              <div className="vehiclebooking-beneficiary-field vehiclebooking-beneficiary-field--type">
+                <label className="vehiclebooking-beneficiary-label">Beneficiary</label>
+                <select
+                  className="vehiclebooking-beneficiary-control vehiclebooking-beneficiary-select"
+                  value={beneficiaryDetails.beneficiaryType}
+                  onChange={(event) =>
+                    updateBeneficiaryDetails('beneficiaryType', event.target.value)
+                  }
+                >
+                  {BENEFICIARY_TYPE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="vehiclebooking-beneficiary-field vehiclebooking-beneficiary-field--name">
+                <label className="vehiclebooking-beneficiary-label">
+                  {beneficiaryDetails.beneficiaryType === 'Faculty' ? 'Faculty Name' : 'Staff Name'}
+                </label>
+                <input
+                  className="vehiclebooking-beneficiary-control"
+                  value={beneficiaryDetails.staffName}
+                  onChange={(event) => updateBeneficiaryDetails('staffName', event.target.value)}
+                  placeholder={
+                    beneficiaryDetails.beneficiaryType === 'Faculty'
+                      ? 'Search faculty by name or ERP ID'
+                      : 'Search staff by name or ERP ID'
+                  }
+                />
+              </div>
+
+              <div className="vehiclebooking-beneficiary-field vehiclebooking-beneficiary-field--tag">
+                <label className="vehiclebooking-beneficiary-label">Tag</label>
+                <select
+                  className="vehiclebooking-beneficiary-control vehiclebooking-beneficiary-select"
+                  value={beneficiaryDetails.tag}
+                  onChange={(event) => updateBeneficiaryDetails('tag', event.target.value)}
+                >
+                  {BENEFICIARY_TAG_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </section>
+
           <section className="vehiclebooking-card vehiclebooking-large-card">
             <div className="vehiclebooking-card-inner">
               <div className="vehiclebooking-section-title">Transport Booking</div>
@@ -844,7 +1560,7 @@ const VehicleBooking: React.FC = () => {
                     </span>
                     <span className="vehiclebooking-panel-label">Priority</span>
                     <div className="vehiclebooking-radio-group vehiclebooking-segment-group">
-                      {bookingOptions.priorities.map((priority) =>
+                      {(['Routine', 'High'] as Priority[]).map((priority) =>
                         renderChoiceButton(
                           priority,
                           transportDetails.priority,
@@ -862,7 +1578,7 @@ const VehicleBooking: React.FC = () => {
                   <div className="vehiclebooking-layout-row vehiclebooking-layout-row--vehicle vehiclebooking-row-container">
                     <div className="vehiclebooking-option-panel">
                       <div className="vehiclebooking-radio-group vehiclebooking-option-strip">
-                        {bookingOptions.vehicleRequirements.map((vehicleRequirement) =>
+                        {vehicleRequirements.map((vehicleRequirement) =>
                           renderChoiceButton(
                             vehicleRequirement,
                             transportDetails.vehicleRequirement,
@@ -915,7 +1631,7 @@ const VehicleBooking: React.FC = () => {
                       </span>
                       <span className="vehiclebooking-panel-label">Service</span>
                       <div className="vehiclebooking-radio-group vehiclebooking-segment-group">
-                        {bookingOptions.serviceTypes.map((serviceType) =>
+                        {(['Free', 'Paid'] as ServiceType[]).map((serviceType) =>
                           renderChoiceButton(
                             serviceType,
                             transportDetails.serviceType,
@@ -1020,7 +1736,7 @@ const VehicleBooking: React.FC = () => {
                       </span>
                       <span className="vehiclebooking-panel-label">Travel</span>
                       <div className="vehiclebooking-radio-group vehiclebooking-segment-group">
-                        {bookingOptions.travelModes.map((travelMode) =>
+                        {(['Outside', 'Shuttle'] as TravelMode[]).map((travelMode) =>
                           renderChoiceButton(
                             travelMode,
                             transportDetails.travelMode,
@@ -1049,7 +1765,7 @@ const VehicleBooking: React.FC = () => {
                       <th>Boarding Point</th>
                       <th>Date</th>
                       <th>Time</th>
-                      <th>Droping Point</th>
+                      <th>Dropping Point</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -1083,16 +1799,21 @@ const VehicleBooking: React.FC = () => {
                         </td>
                         <td>
                           <input
-                            className="vehiclebooking-input vehiclebooking-table-input"
+                            className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-input--time"
                             type="text"
-                            placeholder="09:30 AM"
+                            placeholder="HH:MM AM/PM"
                             inputMode="text"
                             autoCapitalize="characters"
+                            maxLength={9}
                             pattern="^(0?[1-9]|1[0-2]):[0-5][0-9] ?(AM|PM|am|pm)$"
-                            title="Enter time as HH:MM AM/PM, for example 09:30 AM"
+                            title="Enter time as HH:MM AM or HH:MM PM"
                             value={row.boardingTime}
                             onChange={(event) =>
-                              updateTravelPlanRow(row.id, 'boardingTime', event.target.value)
+                              updateTravelPlanRow(
+                                row.id,
+                                'boardingTime',
+                                formatTimeAsYouType(event.target.value, row.boardingTime)
+                              )
                             }
                             onBlur={(event) =>
                               updateTravelPlanRow(
@@ -1142,16 +1863,21 @@ const VehicleBooking: React.FC = () => {
                         </td>
                         <td>
                           <input
-                            className="vehiclebooking-input vehiclebooking-table-input"
+                            className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-input--time"
                             type="text"
-                            placeholder="09:30 AM"
+                            placeholder="HH:MM AM/PM"
                             inputMode="text"
                             autoCapitalize="characters"
+                            maxLength={9}
                             pattern="^(0?[1-9]|1[0-2]):[0-5][0-9] ?(AM|PM|am|pm)$"
-                            title="Enter time as HH:MM AM/PM, for example 09:30 AM"
+                            title="Enter time as HH:MM AM or HH:MM PM"
                             value={row.droppingTime}
                             onChange={(event) =>
-                              updateTravelPlanRow(row.id, 'droppingTime', event.target.value)
+                              updateTravelPlanRow(
+                                row.id,
+                                'droppingTime',
+                                formatTimeAsYouType(event.target.value, row.droppingTime)
+                              )
                             }
                             onBlur={(event) =>
                               updateTravelPlanRow(
@@ -1171,7 +1897,7 @@ const VehicleBooking: React.FC = () => {
                             onChange={(event) =>
                               updateTravelPlanRow(row.id, 'droppingPoint', event.target.value)
                             }
-                            aria-label="Droping point"
+                            aria-label="Dropping point"
                           />
                         </td>
                         <td>
@@ -1198,7 +1924,7 @@ const VehicleBooking: React.FC = () => {
               </div>
 
               <div className="vehiclebooking-radio-group vehiclebooking-centered-toggle">
-                {bookingOptions.shuttleBookingModes.map((mode) =>
+                {(['Day Booking', 'Trip Booking'] as ShuttleBookingMode[]).map((mode) =>
                   renderChoiceButton(mode, shuttleBookingMode, 'vehicle-shuttle-mode', (value) =>
                     setShuttleBookingMode(value)
                   )
@@ -1246,16 +1972,21 @@ const VehicleBooking: React.FC = () => {
                         </td>
                         <td>
                           <input
-                            className="vehiclebooking-input vehiclebooking-table-input"
+                            className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-input--time"
                             type="text"
-                            placeholder="09:30 AM"
+                            placeholder="HH:MM AM/PM"
                             inputMode="text"
                             autoCapitalize="characters"
+                            maxLength={9}
                             pattern="^(0?[1-9]|1[0-2]):[0-5][0-9] ?(AM|PM|am|pm)$"
-                            title="Enter time as HH:MM AM/PM, for example 09:30 AM"
+                            title="Enter time as HH:MM AM or HH:MM PM"
                             value={row.time}
                             onChange={(event) =>
-                              updateShuttleTripRow(row.id, 'time', event.target.value)
+                              updateShuttleTripRow(
+                                row.id,
+                                'time',
+                                formatTimeAsYouType(event.target.value, row.time)
+                              )
                             }
                             onBlur={(event) =>
                               updateShuttleTripRow(
@@ -1277,11 +2008,10 @@ const VehicleBooking: React.FC = () => {
                             aria-label="Shuttle trip purpose"
                           >
                             <option value=""></option>
-                            {bookingOptions.shuttlePurposes.map((purpose) => (
-                              <option key={purpose} value={purpose}>
-                                {purpose}
-                              </option>
-                            ))}
+                            <option value="Academic">Academic</option>
+                            <option value="Official">Official</option>
+                            <option value="Guest Pickup">Guest Pickup</option>
+                            <option value="Logistics">Logistics</option>
                           </select>
                         </td>
                         <td>
@@ -1354,7 +2084,7 @@ const VehicleBooking: React.FC = () => {
                         </td>
                         <td>
                           <div className="vehiclebooking-radio-group vehiclebooking-requirement-group">
-                            {bookingOptions.shuttleRequirements.map(
+                            {(['Full Day', 'FN Session', 'AN Session', 'Night'] as ShuttleRequirement[]).map(
                               (requirement) =>
                                 renderChoiceButton(
                                   requirement,
@@ -1370,7 +2100,7 @@ const VehicleBooking: React.FC = () => {
                             () =>
                               setShuttleDayRows((prevRows) => [
                                 ...prevRows,
-                                createShuttleDayRow(bookingOptions.shuttleRequirements[0] || ''),
+                                createShuttleDayRow(),
                               ]),
                             () => removeShuttleDayRow(row.id),
                             shuttleDayRows.length === 1,
@@ -1399,7 +2129,7 @@ const VehicleBooking: React.FC = () => {
                       title={`${priorityStatus} priority`}
                     />
                     <span className="vehiclebooking-allotment-applicant-icon">
-                      <UsersRound size={20} />
+                      <UsersRound size={16} />
                     </span>
                     <div>
                       <strong>{applicantUiDetails.name || 'Applicant Name'}</strong>
@@ -1458,7 +2188,7 @@ const VehicleBooking: React.FC = () => {
                         <th>Boarding Point</th>
                         <th>Date</th>
                         <th>Time</th>
-                        <th>Droping Point</th>
+                        <th>Dropping Point</th>
                         <th>Action</th>
                       </tr>
                     </thead>
@@ -1492,11 +2222,28 @@ const VehicleBooking: React.FC = () => {
                           </td>
                           <td>
                             <input
-                              className="vehiclebooking-input vehiclebooking-table-input"
+                              className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-input--time"
                               type="text"
+                              placeholder="HH:MM AM/PM"
+                              inputMode="text"
+                              autoCapitalize="characters"
+                              maxLength={9}
+                              pattern="^(0?[1-9]|1[0-2]):[0-5][0-9] ?(AM|PM|am|pm)$"
+                              title="Enter time as HH:MM AM or HH:MM PM"
                               value={row.boardingTime}
                               onChange={(event) =>
-                                updateTravelPlanRow(row.id, 'boardingTime', event.target.value)
+                                updateTravelPlanRow(
+                                  row.id,
+                                  'boardingTime',
+                                  formatTimeAsYouType(event.target.value, row.boardingTime)
+                                )
+                              }
+                              onBlur={(event) =>
+                                updateTravelPlanRow(
+                                  row.id,
+                                  'boardingTime',
+                                  normalizeTimeEntry(event.target.value)
+                                )
                               }
                               aria-label="Allotment boarding time"
                             />
@@ -1539,11 +2286,28 @@ const VehicleBooking: React.FC = () => {
                           </td>
                           <td>
                             <input
-                              className="vehiclebooking-input vehiclebooking-table-input"
+                              className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-input--time"
                               type="text"
+                              placeholder="HH:MM AM/PM"
+                              inputMode="text"
+                              autoCapitalize="characters"
+                              maxLength={9}
+                              pattern="^(0?[1-9]|1[0-2]):[0-5][0-9] ?(AM|PM|am|pm)$"
+                              title="Enter time as HH:MM AM or HH:MM PM"
                               value={row.droppingTime}
                               onChange={(event) =>
-                                updateTravelPlanRow(row.id, 'droppingTime', event.target.value)
+                                updateTravelPlanRow(
+                                  row.id,
+                                  'droppingTime',
+                                  formatTimeAsYouType(event.target.value, row.droppingTime)
+                                )
+                              }
+                              onBlur={(event) =>
+                                updateTravelPlanRow(
+                                  row.id,
+                                  'droppingTime',
+                                  normalizeTimeEntry(event.target.value)
+                                )
                               }
                               aria-label="Allotment dropping time"
                             />
@@ -1556,7 +2320,7 @@ const VehicleBooking: React.FC = () => {
                               onChange={(event) =>
                                 updateTravelPlanRow(row.id, 'droppingPoint', event.target.value)
                               }
-                              aria-label="Allotment droping point"
+                              aria-label="Allotment dropping point"
                             />
                           </td>
                           <td>
@@ -1593,7 +2357,7 @@ const VehicleBooking: React.FC = () => {
                       aria-label="Vehicle type"
                     >
                       <option value="">Type</option>
-                      {bookingOptions.vehicleRequirements.map((type) => (
+                      {vehicleRequirements.map((type) => (
                         <option value={type} key={type}>
                           {type}
                         </option>
@@ -1609,7 +2373,7 @@ const VehicleBooking: React.FC = () => {
                       aria-label="Vehicle number"
                     >
                       <option value="">No.</option>
-                      {bookingOptions.vehicleNumbers.map((vehicleNo) => (
+                      {vehicleNumberOptions.map((vehicleNo) => (
                         <option value={vehicleNo} key={vehicleNo}>
                           {vehicleNo}
                         </option>
@@ -1637,7 +2401,7 @@ const VehicleBooking: React.FC = () => {
                       aria-label="Driver"
                     >
                       <option value=""></option>
-                      {bookingOptions.drivers.map((driver) => (
+                      {driverOptions.map((driver) => (
                         <option value={driver} key={driver}>
                           {driver}
                         </option>
@@ -1671,6 +2435,24 @@ const VehicleBooking: React.FC = () => {
               </div>
             </div>
           </section>
+
+          <section className="vehiclebooking-card vehiclebooking-vehicle-details-standalone">
+            {renderVehicleDetailsCard(
+              standaloneVehicleDetails,
+              true,
+              updateStandaloneVehicleDetails
+            )}
+          </section>
+          {renderVehicleAdminManagement()}
+
+          <div className="vehiclebooking-submit-actions">
+            <button
+              type="submit"
+              className="vehiclebooking-submit-btn"
+            >
+              Submit Booking
+            </button>
+          </div>
         </form>
       </div>
     </div>
