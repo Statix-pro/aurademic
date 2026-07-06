@@ -112,6 +112,10 @@ const journalModel = {
           : null,
         scopus_id: journalData.scopus_id,
         scie_id: journalData.scie_id,
+        open_access: journalData.open_access,
+        year: journalData.year,
+        wos_id: journalData.wos_id,
+        pubmed_pmid: journalData.pubmed_pmid,
       };
 
       // Insert journal

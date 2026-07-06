@@ -1,11 +1,12 @@
+import fs from 'fs';
+import path from 'path';
+
 import financeModel from './financeModel.js';
-import './financeWorkflowAdapter.js';
+import financeWorkflowAdapter from './financeWorkflowAdapter.js';
 import db from '../../config/connection.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
-import fs from 'fs';
-import path from 'path';
 
 const normalizeText = (value) => String(value || '').trim();
 
@@ -703,6 +704,50 @@ const financeController = {
       const result = await financeModel.updateFinanceRequest(financeId, req.body || {}, actor);
 
       if (result.affectedRows > 0) {
+        try {
+          const updatedFinanceContext = await financeModel.getFinanceRecordContext(financeId);
+          if (updatedFinanceContext && updatedFinanceContext.workflowState) {
+            const currentState = updatedFinanceContext.workflowState;
+            if (currentState.status === 'in_progress' || currentState.status === 'returned') {
+              const currentTotal = Number(updatedFinanceContext.totalBudget || 0);
+              const newAmountBand = currentTotal > 10000 ? 'gt_10k' : 'lte_10k';
+
+              const newFlow = financeWorkflowAdapter.resolveStartFlow({
+                metadata: {
+                  moduleMeta: {
+                    amountBand: newAmountBand,
+                    beneficiaryType: normalizeText(updatedFinanceContext.beneficiary_type) || null,
+                  },
+                },
+              });
+
+              const currentFlowStr = JSON.stringify(currentState.flow || []);
+              const newFlowStr = JSON.stringify(newFlow);
+
+              if (currentFlowStr !== newFlowStr) {
+                const updatedState = {
+                  ...currentState,
+                  flow: newFlow,
+                  submittedTotalBudget: currentTotal,
+                  updatedAt: new Date().toISOString(),
+                };
+
+                // If current stage is no longer in the new flow, auto-complete
+                if (currentState.currentStage && !newFlow.includes(currentState.currentStage)) {
+                  updatedState.status = 'completed';
+                  updatedState.currentStage = null;
+                  updatedState.lastDecision = 'approved';
+                  updatedState.resolvedAt = updatedState.updatedAt;
+                }
+
+                await financeModel.updateFinanceWorkflowSnapshot(financeId, updatedState);
+              }
+            }
+          }
+        } catch (workflowRecalcError) {
+          console.error('Workflow recalculation failed:', workflowRecalcError);
+        }
+
         return res.status(200).json({
           success: true,
           message: 'Finance request updated successfully',
