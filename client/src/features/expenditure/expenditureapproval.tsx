@@ -194,6 +194,16 @@ interface FinanceRequestContext {
   event_sub_head?: string;
   budget_tag?: string;
   approved_amount?: number;
+  finance_annexures?: FinanceAnnexureRecord[];
+}
+interface FinanceAnnexureRecord {
+  id: number;
+  annexure_type?: string | null;
+  original_name?: string | null;
+  file_url?: string | null;
+  file_path?: string | null;
+  mime_type?: string | null;
+  file_size?: number | null;
 }
 interface WorkflowStateSnapshot {
   status?: string;
@@ -215,6 +225,7 @@ interface BillFileRecord {
   file_path?: string | null;
   stored_name?: string | null;
   mime_type?: string | null;
+  source_finance_annexure_id?: number | null;
 }
 interface ApprovedBudgetOption {
   budgetLineId: number | null;
@@ -971,10 +982,12 @@ const ExpenditureApproval: React.FC = () => {
   });
   const bulkNeftInputRef = useRef<HTMLInputElement>(null);
   const [bulkNeftFile, setBulkNeftFile] = useState<File | null>(null);
+  const [existingBulkNeftFile, setExistingBulkNeftFile] = useState<BillFileRecord | null>(null);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
   const [uploadedPaymentProofs, setUploadedPaymentProofs] = useState<File[]>([]);
   const [existingPaymentProofs, setExistingPaymentProofs] = useState<BillFileRecord[]>([]);
   const [existingPayeeBills, setExistingPayeeBills] = useState<BillFileRecord[]>([]);
+  const [financeAnnexures, setFinanceAnnexures] = useState<FinanceAnnexureRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [isExternalApplicant, setIsExternalApplicant] = useState<boolean>(false);
@@ -992,10 +1005,13 @@ const ExpenditureApproval: React.FC = () => {
   >([]);
   const [showApplicantDropdown, setShowApplicantDropdown] = useState<boolean>(false);
   const isFinalApprovedWorkflow = ['approved', 'completed'].includes(loadedWorkflowStatus);
+  const isDofUser =
+    Array.isArray(user?.roles) &&
+    user.roles.some((role) => String(role || '').toLowerCase() === 'dof');
   const canEditPaymentStatus = Boolean(
     submittedRequestIdFromState &&
     isReadOnlyView &&
-    !isAdminWorkflowContext &&
+    (!isAdminWorkflowContext || isDofUser) &&
     isFinalApprovedWorkflow,
   );
   const componentRef = useRef<HTMLDivElement>(null);
@@ -1122,6 +1138,9 @@ const ExpenditureApproval: React.FC = () => {
         }
 
         const financeContext = response.data;
+        setFinanceAnnexures(
+          Array.isArray(financeContext.finance_annexures) ? financeContext.finance_annexures : [],
+        );
         const nextCategoryType = mapFinanceBeneficiaryTypeToExpenditureCategory(
           financeContext.beneficiary_type || '',
         );
@@ -1197,6 +1216,7 @@ const ExpenditureApproval: React.FC = () => {
   useEffect(() => {
     if (!submittedRequestIdFromState) {
       setExistingPayeeBills([]);
+      setExistingBulkNeftFile(null);
       setIsReturnedWorkflowRequest(false);
       setLoadedWorkflowStatus('');
       setLoadedCurrentStage('');
@@ -1526,8 +1546,14 @@ const ExpenditureApproval: React.FC = () => {
           debitAccount: String(record.payment_debit_account || ''),
         });
         setShowBulkNEFT(Boolean(record.bulk_neft_file));
+        setExistingBulkNeftFile(record.bulk_neft_file || null);
+        setBulkNeftFile(null);
         setShowDebitAccountDropdown(Boolean(record.payment_debit_account));
-        setExistingPayeeBills(Array.isArray(record.bill_files) ? record.bill_files : []);
+        setExistingPayeeBills(
+          Array.isArray(record.bill_files)
+            ? record.bill_files.filter((file: BillFileRecord) => !file.source_finance_annexure_id)
+            : [],
+        );
         setExistingPaymentProofs(
           Array.isArray(record.payment_proof_files) ? record.payment_proof_files : [],
         );
@@ -3425,6 +3451,7 @@ const ExpenditureApproval: React.FC = () => {
 
   const removeBulkNeftFile = () => {
     setBulkNeftFile(null);
+    setExistingBulkNeftFile(null);
     if (bulkNeftInputRef.current) {
       bulkNeftInputRef.current.value = '';
     }
@@ -3843,7 +3870,11 @@ const ExpenditureApproval: React.FC = () => {
 
           <div className="bulk-neft-panel">
             <div className="bulk-neft-file-name">
-              <p>{bulkNeftFile?.name || 'No Bulk NEFT file uploaded yet.'}</p>
+              <p>
+                {bulkNeftFile?.name ||
+                  existingBulkNeftFile?.original_name ||
+                  'No Bulk NEFT file uploaded yet.'}
+              </p>
             </div>
             <div className="bulk-neft-actions">
               <input
@@ -3854,43 +3885,54 @@ const ExpenditureApproval: React.FC = () => {
                 onChange={handleBulkNeftUpload}
               />
               <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  className="payee-row-btn"
-                  style={{ backgroundColor: '#0069ab', color: 'white' }}
-                  title="Upload"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    bulkNeftInputRef.current?.click();
-                  }}
-                >
-                  <Upload size={20} />
-                </button>
+                {!isReadOnlyView && (
+                  <button
+                    className="payee-row-btn"
+                    style={{ backgroundColor: '#0069ab', color: 'white' }}
+                    title="Upload"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      bulkNeftInputRef.current?.click();
+                    }}
+                  >
+                    <Upload size={20} />
+                  </button>
+                )}
                 <button
                   className="payee-row-btn"
                   style={{ backgroundColor: '#629ac4', color: 'white' }}
                   title="View"
-                  disabled={!bulkNeftFile}
+                  disabled={!bulkNeftFile && !existingBulkNeftFile}
                   onClick={(e) => {
                     e.preventDefault();
                     if (bulkNeftFile) {
                       window.open(URL.createObjectURL(bulkNeftFile), '_blank');
+                      return;
+                    }
+                    const fileUrl = existingBulkNeftFile
+                      ? resolveBillFileUrl(existingBulkNeftFile)
+                      : '';
+                    if (fileUrl) {
+                      window.open(fileUrl, '_blank');
                     }
                   }}
                 >
                   <Eye size={20} />
                 </button>
-                <button
-                  className="payee-row-btn"
-                  style={{ backgroundColor: '#fff5f5', color: '#ff4d4f' }}
-                  title="Delete"
-                  disabled={!bulkNeftFile}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    removeBulkNeftFile();
-                  }}
-                >
-                  <Trash2 size={20} />
-                </button>
+                {!isReadOnlyView && (
+                  <button
+                    className="payee-row-btn"
+                    style={{ backgroundColor: '#fff5f5', color: '#ff4d4f' }}
+                    title="Delete"
+                    disabled={!bulkNeftFile && !existingBulkNeftFile}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      removeBulkNeftFile();
+                    }}
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                )}
               </div>
               <button
                 className="payee-toolbar-btn payee-toolbar-btn-secondary"
@@ -4128,11 +4170,11 @@ const ExpenditureApproval: React.FC = () => {
                               type="radio"
                               name={`tds-${row.id}`}
                               value="Yes"
-                              checked={row.tdsSection === 'Yes'}
+                              checked={row.tdsDetails === 'Yes'}
                               onChange={() =>
                                 updatePayeeRow(row.id, (r) => ({
                                   ...r,
-                                  tdsSection: 'Yes',
+                                  tdsDetails: 'Yes',
                                 }))
                               }
                             />{' '}
@@ -4143,11 +4185,11 @@ const ExpenditureApproval: React.FC = () => {
                               type="radio"
                               name={`tds-${row.id}`}
                               value="No"
-                              checked={row.tdsSection === 'No'}
+                              checked={row.tdsDetails === 'No'}
                               onChange={() =>
                                 updatePayeeRow(row.id, (r) => ({
                                   ...r,
-                                  tdsSection: 'No',
+                                  tdsDetails: 'No',
                                 }))
                               }
                             />{' '}
@@ -4259,6 +4301,46 @@ const ExpenditureApproval: React.FC = () => {
               </label>
             )}
         </div>
+
+        {financeAnnexures.length > 0 && (
+          <div
+            className="payee-uploaded-files"
+            style={{ marginTop: '14px', pointerEvents: 'auto' }}
+          >
+            <div className="payee-uploaded-files-header">
+              <span>S.No</span>
+              <span>Bills from Finance Request</span>
+              <span>Action</span>
+            </div>
+            {financeAnnexures.map((annexure, i) => {
+              const fileUrl = resolveBillFileUrl(annexure);
+              const displayName = normalizeText(
+                annexure.original_name || annexure.file_path || `File ${i + 1}`,
+              );
+
+              return (
+                <div key={`finance-annexure-${annexure.id}`} className="payee-uploaded-file-row">
+                  <span className="payee-uploaded-file-index">{i + 1}</span>
+                  <span className="payee-uploaded-file-name" title={displayName}>
+                    {displayName}
+                  </span>
+                  <div className="payee-upload-actions">
+                    <button
+                      className="payee-upload-view-btn"
+                      disabled={!fileUrl}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (fileUrl) window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                      }}
+                    >
+                      <Eye size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {(existingPayeeBills.length > 0 || uploadedPayeeBills.length > 0) && (
           <div
@@ -5268,6 +5350,7 @@ const ExpenditureApproval: React.FC = () => {
       setPayeeRows([createPayeeRow()]);
       setShowBulkNEFT(false);
       setBulkNeftFile(null);
+      setExistingBulkNeftFile(null);
       setUploadedPayeeBills([]);
       setExistingPayeeBills([]);
       setUploadedPaymentProofs([]);

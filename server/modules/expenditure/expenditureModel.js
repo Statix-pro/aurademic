@@ -2321,6 +2321,8 @@ export async function getFinanceRequestContext(financeRequestId) {
   const row = rows[0];
   if (!row) return null;
 
+  const financeAnnexures = await getFinanceAnnexuresForExpenditure(financeId);
+
   return {
     finance_request_id: toPositiveInt(row.finance_request_id),
     created_by: toPositiveInt(row.created_by),
@@ -2339,6 +2341,15 @@ export async function getFinanceRequestContext(financeRequestId) {
     event_sub_head: normalizeText(row.event_sub_head),
     approved_amount: toMoney(row.approved_amount),
     budget_tag: row.budget_tag ? normalizeText(row.budget_tag) : null,
+    finance_annexures: financeAnnexures.map((annexure) => ({
+      id: annexure.id,
+      annexure_type: annexure.annexure_type,
+      original_name: annexure.original_name,
+      file_path: annexure.file_path,
+      file_url: annexure.file_path,
+      mime_type: annexure.mime_type,
+      file_size: annexure.file_size,
+    })),
   };
 }
 
@@ -3550,6 +3561,65 @@ async function insertBillFiles(conn, expenditureId, files = [], fileCategory = '
   }
 }
 
+async function getFinanceAnnexuresForExpenditure(financeRequestId) {
+  const financeId = toPositiveInt(financeRequestId);
+  if (!financeId) return [];
+
+  const [rows] = await db.query(
+    `SELECT id, finance_id, annexure_type, original_name, stored_name, file_path,
+            mime_type, file_size, sort_order, created_at
+       FROM finance_request_annexures
+      WHERE finance_id = ?
+      ORDER BY sort_order ASC, id ASC`,
+    [financeId],
+  );
+  return rows;
+}
+
+async function linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeRequestId) {
+  const annexures = await getFinanceAnnexuresForExpenditure(financeRequestId);
+  if (!annexures.length) return;
+
+  const [existingRows] = await conn.execute(
+    `SELECT source_finance_annexure_id
+       FROM expenditure_request_bills
+      WHERE expenditure_id = ?
+        AND source_finance_annexure_id IS NOT NULL`,
+    [expenditureId],
+  );
+  const alreadyLinked = new Set(existingRows.map((row) => Number(row.source_finance_annexure_id)));
+
+  const [rows] = await conn.execute(
+    `SELECT COALESCE(MAX(sort_order), -1) AS max_sort_order
+       FROM expenditure_request_bills
+      WHERE expenditure_id = ?
+        AND file_category = 'bill'`,
+    [expenditureId],
+  );
+  let sortOrder = Number(rows[0]?.max_sort_order ?? -1) + 1;
+
+  for (const annexure of annexures) {
+    if (alreadyLinked.has(Number(annexure.id))) continue;
+
+    await conn.execute(
+      `INSERT INTO expenditure_request_bills
+         (expenditure_id, payee_row_id, file_category, original_name, stored_name, file_path, mime_type, file_size, sort_order, source_finance_annexure_id)
+       VALUES (?, NULL, 'bill', ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        expenditureId,
+        sanitizeRowValue(annexure.original_name),
+        sanitizeRowValue(annexure.stored_name),
+        sanitizeRowValue(annexure.file_path),
+        sanitizeRowValue(annexure.mime_type),
+        Number(annexure.file_size) || 0,
+        sortOrder,
+        annexure.id,
+      ],
+    );
+    sortOrder += 1;
+  }
+}
+
 async function upsertBulkNeftFile(conn, expenditureId, file = null, templateVersion = null) {
   if (!file?.filename || !file?.path) return;
 
@@ -4444,6 +4514,7 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
     await insertUnplannedRows(conn, expenditureId, normalizedUnplanned.rows);
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
     await insertBillFiles(conn, expenditureId, uploads.paymentProofFiles, 'payment_proof');
+    await linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeRequestId);
     await upsertBulkNeftFile(
       conn,
       expenditureId,
@@ -4940,6 +5011,7 @@ export async function updateExpenditureRequest(
       uploads.paymentProofFiles,
       'payment_proof',
     );
+    await linkFinanceAnnexuresToExpenditure(conn, normalizedExpenditureId, financeRequestId);
     await upsertBulkNeftFile(
       conn,
       normalizedExpenditureId,
@@ -5043,7 +5115,7 @@ export async function getExpenditureDetails(id) {
     ),
     db.execute(
       `SELECT id, payee_row_id, original_name, stored_name, file_path, mime_type, file_size,
-              sort_order, created_at
+              sort_order, created_at, source_finance_annexure_id
          FROM expenditure_request_bills
         WHERE expenditure_id = ?
           AND file_category = 'bill'

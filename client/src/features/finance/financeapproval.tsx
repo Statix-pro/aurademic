@@ -876,6 +876,8 @@ const FinanceApproval: React.FC = () => {
   const [isBudgetProposed, setIsBudgetProposed] = useState<string>('');
   const [balanceAmount, setBalanceAmount] = useState<string>('');
   const [debitStatus, setDebitStatus] = useState<'credited' | 'reimbursement' | ''>('');
+  const [showDebitAccountDropdown, setShowDebitAccountDropdown] = useState<boolean>(false);
+  const [debitAccount, setDebitAccount] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([
     { category: '', head: '', amount: '' },
@@ -1858,6 +1860,7 @@ const FinanceApproval: React.FC = () => {
   };
 
   const handleSubmit = async (resubmissionComment?: string): Promise<void> => {
+    if (isLoading) return;
     try {
       if (isViewMode && !canSuperAdminEditTerminalFinance) {
         return;
@@ -1869,6 +1872,8 @@ const FinanceApproval: React.FC = () => {
         setResubmitPopupOpen(true);
         return;
       }
+
+      setIsLoading(true);
 
       if (!hasFilledText(applicantName)) {
         showAlert('Please fill Applicant Name.', 'warning');
@@ -2092,6 +2097,7 @@ const FinanceApproval: React.FC = () => {
         annexures: annexuresPayload,
         credit_status: primaryIncomeRow?.status || '',
         debit_status: debitStatus || null,
+        payment_debit_account: normalizeText(debitAccount) || null,
         partial_amount: primaryIncomeRow?.amount || null,
         topup_mode: isTopupWorkflow,
         budget_rows: budgetRows.map((row, index) => {
@@ -2192,6 +2198,8 @@ const FinanceApproval: React.FC = () => {
     } catch (error) {
       console.error('Finance submit error:', error);
       showAlert(getFinanceSubmitErrorMessage(error), 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -2379,6 +2387,8 @@ const FinanceApproval: React.FC = () => {
       setPrimaryHead('');
       setEventSubHead('');
       setDebitStatus('');
+      setShowDebitAccountDropdown(false);
+      setDebitAccount('');
       setBalanceAmount('');
       setIsBudgetProposed('');
       setShowUnplannedBudget(false);
@@ -2547,14 +2557,13 @@ const FinanceApproval: React.FC = () => {
     Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) ||
     (Array.isArray(user?.roles) &&
       user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin'));
-  const canSuperAdminEditTerminalFinance =
-    isSuperAdminUser && isViewMode && ['approved', 'completed'].includes(normalizedWorkflowStatus);
-  const proposalFieldsReadOnly =
-    (isViewMode && !canSuperAdminEditTerminalFinance) || isTopupWorkflow;
+  // View mode is always read-only — editing (even for super admins on approved/
+  // completed requests) must go through the dedicated Edit route.
+  const canSuperAdminEditTerminalFinance = false;
+  const proposalFieldsReadOnly = isViewMode || isTopupWorkflow;
   const incomeFieldsReadOnly = proposalFieldsReadOnly || isTopupWorkflow;
   const isLockedBudgetRow = (index: number) => isTopupWorkflow && index < initialBudgetRowCount;
-  const isBudgetRowEditable = (index: number) =>
-    (!isViewMode || canSuperAdminEditTerminalFinance) && !isLockedBudgetRow(index);
+  const isBudgetRowEditable = (index: number) => !isViewMode && !isLockedBudgetRow(index);
   const isReturnedFinanceResubmit =
     isEditMode &&
     !isAdminWorkflowContext &&
@@ -2752,6 +2761,8 @@ const FinanceApproval: React.FC = () => {
             : '',
         );
         setDebitStatus(record.debit_status || '');
+        setDebitAccount(String(record.payment_debit_account || ''));
+        setShowDebitAccountDropdown(Boolean(record.payment_debit_account));
         setSelectedTag(resolveTagValue(record.budget_tag, tagOptions));
         const annexuresFromApi = Array.isArray(record.annexures) ? record.annexures : [];
         const fallbackLegacyAnnexure =
@@ -4858,6 +4869,7 @@ const FinanceApproval: React.FC = () => {
                         }}
                       />
                     </div>
+
                     {showIncomeSection && (
                       <>
                         <table
@@ -5386,6 +5398,69 @@ const FinanceApproval: React.FC = () => {
                         )}
                       </>
                     )}
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '20px',
+                        marginTop: '20px',
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '20px',
+                          flex: 1,
+                          minWidth: 0,
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: '14px',
+                            color: '#495057',
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          Debit Account
+                        </span>
+                        {showDebitAccountDropdown && (
+                          <div style={{ flex: '1 1 320px', minWidth: '260px', maxWidth: '480px' }}>
+                            <CustomDropdown
+                              name="debitAccount"
+                              options={accountDropdownOptions}
+                              value={getSelectedOption(debitAccount, accountDropdownOptions)}
+                              onChange={(option) =>
+                                setDebitAccount(String((option as OptionType)?.value || ''))
+                              }
+                              placeholder="Select debit account"
+                              isDisabled={proposalFieldsReadOnly}
+                              className="mb-0"
+                            />
+                            {accountOptionsError && (
+                              <div
+                                style={{ marginTop: '6px', fontSize: '0.8rem', color: '#d92d20' }}
+                              >
+                                {accountOptionsError}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <CustomToggle
+                        name="debitAccountToggle"
+                        checked={showDebitAccountDropdown}
+                        onChange={(checked) => {
+                          if (proposalFieldsReadOnly) return;
+                          setShowDebitAccountDropdown(checked);
+                          if (!checked) setDebitAccount('');
+                        }}
+                        disabled={proposalFieldsReadOnly}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>

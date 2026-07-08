@@ -352,6 +352,7 @@ const JournalForm: React.FC = () => {
     category: '',
   });
   const [conferenceRequestLoading, setConferenceRequestLoading] = useState<boolean>(false);
+  const [isFormSubmitting, setIsFormSubmitting] = useState<boolean>(false);
   const [conferenceRequestError, setConferenceRequestError] = useState<string>('');
 
   // Add state for Abstract and Keywords
@@ -2247,6 +2248,7 @@ const JournalForm: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isFormSubmitting) return;
 
     // Collect all validation errors
     const errors: string[] = [];
@@ -2504,6 +2506,7 @@ const JournalForm: React.FC = () => {
         citeScoreValue && citeScoreValue !== '' ? parseFloat(citeScoreValue) : null;
     }
 
+    setIsFormSubmitting(true);
     try {
       let currentJournalId: string;
       const isEditFlow = Boolean(journalId);
@@ -2643,6 +2646,8 @@ const JournalForm: React.FC = () => {
       console.error('Error submitting journal:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
       alert(`Error submitting journal: ${errorMessage}`);
+    } finally {
+      setIsFormSubmitting(false);
     }
   };
 
@@ -4339,9 +4344,9 @@ const JournalForm: React.FC = () => {
                 <button
                   type="submit"
                   className="btn-submit-approval"
-                  disabled={!editMode && isViewMode}
+                  disabled={(!editMode && isViewMode) || isFormSubmitting}
                 >
-                  Submit for approval
+                  {isFormSubmitting ? 'Submitting...' : 'Submit for approval'}
                 </button>
               </div>
             </form>

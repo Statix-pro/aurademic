@@ -373,6 +373,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = '1' }) => {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [popupMessage, setPopupMessage] = useState('');
+  const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -495,12 +496,16 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = '1' }) => {
   };
 
   const handleSubmitApproval = async () => {
+    if (isSubmittingApproval) return;
+    setIsSubmittingApproval(true);
     try {
       await authenticityUtility.post(`/documents/${eventId}/submit`);
       setPopupMessage('Your form has been submitted for approval!');
     } catch (error) {
       console.error('Error submitting for approval:', error);
       setPopupMessage('Failed to submit for approval. Please try again.');
+    } finally {
+      setIsSubmittingApproval(false);
     }
   };
 
@@ -605,8 +610,13 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = '1' }) => {
         <button type="button" className="event-btn event-submit" onClick={handleEditRequest}>
           Edit Request
         </button>
-        <button type="button" className="event-btn event-submit" onClick={handleSubmitApproval}>
-          Submit for Approval
+        <button
+          type="button"
+          className="event-btn event-submit"
+          onClick={handleSubmitApproval}
+          disabled={isSubmittingApproval}
+        >
+          {isSubmittingApproval ? 'Submitting...' : 'Submit for Approval'}
         </button>
       </div>
 
