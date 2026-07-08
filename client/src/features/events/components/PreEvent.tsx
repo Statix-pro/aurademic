@@ -179,6 +179,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
 
   // Mode state
   const [mode, setMode] = useState<'Physical' | 'Virtual' | 'Hybrid'>('Physical');
+  const [isSubmittingEvent, setIsSubmittingEvent] = useState(false);
   const [modeVenueDropdown, setModeVenueDropdown] = useState('');
   const [modeVenueOther, setModeVenueOther] = useState('');
 
@@ -257,7 +258,8 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
   // Submit handler
   const handleSubmitToBackend = async (): Promise<void> => {
     // console.log("🔴 Submit button clicked!");
-
+    if (isSubmittingEvent) return;
+    setIsSubmittingEvent(true);
     try {
       const eventSubmitData = {
         name: eventData.name,
@@ -322,6 +324,8 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
       console.error('🔴 Frontend error:', error);
       console.error('🔴 Error response:', error.response?.data);
       alert(`❌ Failed to create event: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setIsSubmittingEvent(false);
     }
   };
 
@@ -1185,8 +1189,9 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                   setShowBudgetModal(false);
                 }}
                 className="event-submit-btn"
+                disabled={isSubmittingEvent}
               >
-                Final Submit
+                {isSubmittingEvent ? 'Submitting...' : 'Final Submit'}
               </button>
             </div>
           </div>

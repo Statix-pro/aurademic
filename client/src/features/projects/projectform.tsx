@@ -149,6 +149,7 @@ interface SearchResult {
 
 const ResearchProjectForm: React.FC = () => {
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [isFormSubmitting, setIsFormSubmitting] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
   const [editMode, setEditMode] = useState(false);
@@ -1604,6 +1605,7 @@ const ResearchProjectForm: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
+    if (isFormSubmitting) return;
     // Collect all validation errors
     const errors: ValidationErrors = {
       title: validateTitle(),
@@ -1636,6 +1638,7 @@ const ResearchProjectForm: React.FC = () => {
       return;
     }
 
+    setIsFormSubmitting(true);
     try {
       // Format project details for the details endpoint (which may update an existing details record)
       const formattedProjectDetails = {
@@ -1773,6 +1776,8 @@ const ResearchProjectForm: React.FC = () => {
         response: error.response,
         stack: error.stack,
       });
+    } finally {
+      setIsFormSubmitting(false);
     }
   };
 
@@ -2942,9 +2947,9 @@ const ResearchProjectForm: React.FC = () => {
               <button
                 type="submit"
                 className="btn-submit-approval "
-                disabled={isFormDisabled || (isViewMode && !editMode)}
+                disabled={isFormDisabled || (isViewMode && !editMode) || isFormSubmitting}
               >
-                Submit for approval
+                {isFormSubmitting ? 'Submitting...' : 'Submit for approval'}
               </button>
             </div>
           </form>

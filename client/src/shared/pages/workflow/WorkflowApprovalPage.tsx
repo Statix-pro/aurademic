@@ -2328,27 +2328,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
   }, [secondaryFilter, secondaryFilterOptions]);
 
-  const searchScopedRows = useMemo(() => {
-    let filtered = amountScopedRows;
-
-    if (searchTerm.trim()) {
-      const query = searchTerm.trim().toLowerCase();
-      filtered = filtered.filter((record) => {
-        const tag = getWorkflowRecordTag(record);
-        const searchable = [
-          record.applicant_name,
-          record.beneficiary_type || record.beneficiaryType,
-          record.proposal_ref || formatProposalRef(record),
-          tag,
-        ]
-          .map((value) => String(value || '').toLowerCase())
-          .join(' ');
-        return searchable.includes(query);
-      });
-    }
-
-    return filtered;
-  }, [amountScopedRows, searchTerm]);
+  // The backend queue endpoint already filters `rows` by the search term (see
+  // financeModel.listFinanceQueueRecords / expenditureModel's equivalent) across a
+  // much broader field set than we could cheaply replicate here. Re-filtering
+  // client-side on a narrower field set made the visible list narrower than the
+  // (search-aware) server-computed statusCounts, producing a mismatch. Trust the
+  // server's filtering and don't re-filter by searchTerm on the client.
+  const searchScopedRows = amountScopedRows;
 
   const statusStats = useMemo(() => {
     if (
@@ -2387,7 +2373,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     enableSecondaryFilter,
     queueStatusCounts,
     searchScopedRows,
-    searchTerm,
     secondaryFilter,
     resolveStatusCategory,
   ]);

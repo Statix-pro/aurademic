@@ -635,6 +635,7 @@ const buildFinanceSelectSql = ({
   annexureFilePathSelectSql = 'NULL AS annexure_file_path',
   annexureMimeTypeSelectSql = 'NULL AS annexure_mime_type',
   annexureFileSizeSelectSql = 'NULL AS annexure_file_size',
+  paymentDebitAccountSelectSql = 'NULL AS payment_debit_account',
 } = {}) => `
   SELECT
     fr.id,
@@ -677,6 +678,7 @@ const buildFinanceSelectSql = ({
     fr.income_amount_type,
     fr.credit_status,
     fr.debit_status,
+    ${paymentDebitAccountSelectSql},
     fr.partial_amount,
     fr.enclosures,
     ${annexureTypeSelectSql},
@@ -774,6 +776,7 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
   const hasAnnexureFilePath = await hasFinanceRequestColumn('annexure_file_path', { tx });
   const hasAnnexureMimeType = await hasFinanceRequestColumn('annexure_mime_type', { tx });
   const hasAnnexureFileSize = await hasFinanceRequestColumn('annexure_file_size', { tx });
+  const hasPaymentDebitAccount = await hasFinanceRequestColumn('payment_debit_account', { tx });
   return buildFinanceSelectSql({
     budgetTagSelectSql: hasBudgetTag ? 'fr.budget_tag' : 'NULL AS budget_tag',
     unplannedBudgetEnabledSelectSql: hasUnplannedBudgetEnabled
@@ -801,6 +804,9 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
     annexureFileSizeSelectSql: hasAnnexureFileSize
       ? 'fr.annexure_file_size'
       : 'NULL AS annexure_file_size',
+    paymentDebitAccountSelectSql: hasPaymentDebitAccount
+      ? 'fr.payment_debit_account'
+      : 'NULL AS payment_debit_account',
   });
 };
 
@@ -920,6 +926,7 @@ const buildFinanceUpdateAudit = ({
     credit_status: updateData.credit_status ?? previousRecord.credit_status,
     debit_status: updateData.debit_status ?? previousRecord.debit_status,
     partial_amount: updateData.partial_amount ?? previousRecord.partial_amount,
+    payment_debit_account: nextValue('payment_debit_account'),
   };
 
   const fieldChanges = collectChangedFields(previousRecord, nextRecord, [
@@ -2668,6 +2675,9 @@ const financeModel = {
       const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', {
         tx: connection,
       });
+      const hasPaymentDebitAccountColumn = await hasFinanceRequestColumn('payment_debit_account', {
+        tx: connection,
+      });
 
       const workflowContext = await resolveFinanceWorkflowContext(connection, financeData);
       const normalizedBudgetRows = normalizeBudgetRows(
@@ -2779,6 +2789,10 @@ const financeModel = {
           ? parsedAnnexureSize
           : null;
       }
+      if (hasPaymentDebitAccountColumn) {
+        financeEntry.payment_debit_account =
+          normalizeText(financeData.payment_debit_account) || null;
+      }
 
       // NEW: resolve catalog IDs for primary_head + event_sub_head.
       // Stored alongside the snapshot text columns so matching survives
@@ -2865,6 +2879,9 @@ const financeModel = {
       const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', {
         tx: connection,
       });
+      const hasPaymentDebitAccountColumn = await hasFinanceRequestColumn('payment_debit_account', {
+        tx: connection,
+      });
       const budgetTagSelectSql = hasBudgetTagColumn ? 'fr.budget_tag' : 'NULL AS budget_tag';
       const unplannedBudgetEnabledSelectSql = hasUnplannedBudgetEnabledColumn
         ? 'fr.unplanned_budget_enabled'
@@ -2893,6 +2910,9 @@ const financeModel = {
       const annexureFileSizeSelectSql = hasAnnexureFileSizeColumn
         ? 'fr.annexure_file_size'
         : 'NULL AS annexure_file_size';
+      const paymentDebitAccountSelectSql = hasPaymentDebitAccountColumn
+        ? 'fr.payment_debit_account'
+        : 'NULL AS payment_debit_account';
 
       const [existingRows] = await connection.query(
         `SELECT
@@ -2924,6 +2944,7 @@ const financeModel = {
            fr.income_amount_type,
            fr.credit_status,
            fr.debit_status,
+           ${paymentDebitAccountSelectSql},
            fr.partial_amount,
            u.email AS created_by_email
          FROM finance_requests fr
@@ -3120,6 +3141,15 @@ const financeModel = {
             : null;
         } else {
           delete updateData.annexure_file_size;
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(updateData, 'payment_debit_account')) {
+        if (hasPaymentDebitAccountColumn) {
+          updateData.payment_debit_account =
+            normalizeText(updateData.payment_debit_account) || null;
+        } else {
+          delete updateData.payment_debit_account;
         }
       }
 
@@ -3403,13 +3433,13 @@ const financeModel = {
 
       if (mine) {
         query += ` AND (
-          EXISTS (
+          fr.created_by = ?
+          OR EXISTS (
             SELECT 1
               FROM master_employees me_owner
              WHERE me_owner.id = fr.employee_id
                AND me_owner.user_id = ?
           )
-          OR (fr.employee_id IS NULL AND fr.created_by = ?)
         )`;
         params.push(userId, userId);
       }

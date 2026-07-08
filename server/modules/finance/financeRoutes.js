@@ -44,13 +44,10 @@ const canDeleteFinanceRequest = async (req, res, next) => {
     }
 
     const applicantUserId = Number.parseInt(owner.applicant_user_id, 10);
-    const employeeId = Number.parseInt(owner.employee_id, 10);
     const creatorUserId = Number.parseInt(owner.created_by, 10);
     const isApplicantOwner =
       (Number.isInteger(applicantUserId) && applicantUserId === userId) ||
-      (!Number.isInteger(employeeId) &&
-        Number.isInteger(creatorUserId) &&
-        creatorUserId === userId);
+      (Number.isInteger(creatorUserId) && creatorUserId === userId);
 
     if (isApplicantOwner) {
       return next();
