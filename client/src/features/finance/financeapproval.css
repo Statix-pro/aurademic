@@ -191,6 +191,78 @@
   color: #ffffff;
 }
 
+.finance-debit-card {
+  background-color: #ffffff;
+  padding: 30px;
+  border-radius: 20px;
+  margin-bottom: 20px;
+  min-height: 132px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.finance-debit-row {
+  width: 100%;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.finance-debit-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 48px;
+}
+
+.finance-debit-fields {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  min-width: 0;
+}
+
+.finance-debit-label {
+  color: #495057;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.finance-debit-dropdown {
+  flex: 1;
+  min-width: 260px;
+}
+
+.finance-debit-dropdown .custom-input-group {
+  margin-bottom: 0;
+}
+
+.finance-debit-toggle {
+  flex: 0 0 auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  margin-bottom: 0;
+  transform: translateY(-13px);
+}
+
+.finance-debit-toggle .custom-toggle.form-check.form-switch {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0;
+  min-height: 48px;
+}
+
+.finance-debit-toggle .custom-toggle.form-check.form-switch .form-check-input {
+  margin-top: 0 !important;
+  align-self: center;
+}
+
 @media (max-width: 900px) {
   .finance-workflow-actions {
     justify-content: flex-start;

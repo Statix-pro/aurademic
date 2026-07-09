@@ -5398,37 +5398,21 @@ const FinanceApproval: React.FC = () => {
                         )}
                       </>
                     )}
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '20px',
-                        marginTop: '20px',
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '20px',
-                          flex: 1,
-                          minWidth: 0,
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: '14px',
-                            color: '#495057',
-                            fontWeight: 600,
-                            whiteSpace: 'nowrap',
-                          }}
-                        >
-                          Debit Account
-                        </span>
+            {/* Debit Account Section */}
+            <div className="finance-debit-card">
+              <div className="row finance-debit-row">
+                <div className="col-md-12">
+                  <div className="form-group">
+                    <div className="finance-debit-control">
+                      <div className="finance-debit-fields">
+                        <span className="finance-debit-label">Debit Account</span>
                         {showDebitAccountDropdown && (
-                          <div style={{ flex: '1 1 320px', minWidth: '260px', maxWidth: '480px' }}>
+                          <div className="finance-debit-dropdown">
                             <CustomDropdown
                               name="debitAccount"
                               options={accountDropdownOptions}
@@ -5452,6 +5436,7 @@ const FinanceApproval: React.FC = () => {
                       </div>
                       <CustomToggle
                         name="debitAccountToggle"
+                        className="finance-debit-toggle"
                         checked={showDebitAccountDropdown}
                         onChange={(checked) => {
                           if (proposalFieldsReadOnly) return;

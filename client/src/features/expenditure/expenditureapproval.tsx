@@ -194,6 +194,10 @@ interface FinanceRequestContext {
   event_sub_head?: string;
   budget_tag?: string;
   approved_amount?: number;
+  payment_debit_account?: string | null;
+  unplanned_budget_enabled?: boolean;
+  unplanned_budget_amount?: number | null;
+  unplanned_budget_description?: string | null;
   finance_annexures?: FinanceAnnexureRecord[];
 }
 interface FinanceAnnexureRecord {
@@ -958,6 +962,7 @@ const ExpenditureApproval: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [budgetRows, setBudgetRows] = useState([{ category: '', head: '', amount: '' }]);
   const [showUnplannedBudget, setShowUnplannedBudget] = useState<boolean>(false);
+  const [financeUnplannedAllowed, setFinanceUnplannedAllowed] = useState<boolean>(false);
   const [unplannedRows, setUnplannedRows] = useState<UnplannedBudgetRow[]>([
     createUnplannedBudgetRow(),
   ]);
@@ -1160,6 +1165,14 @@ const ExpenditureApproval: React.FC = () => {
         setEventSubHead((prev) => prev || financeContext.event_sub_head || '');
         setCategoryType((prev) => prev || nextCategoryType);
         setCategoryItem((prev) => prev || financeContext.beneficiary_value || '');
+        setFinanceUnplannedAllowed(Boolean(financeContext.unplanned_budget_enabled));
+        if (financeContext.payment_debit_account) {
+          setPaymentDetails((prev) => ({
+            ...prev,
+            debitAccount: prev.debitAccount || financeContext.payment_debit_account || '',
+          }));
+          setShowDebitAccountDropdown(true);
+        }
         const financeContextTagRaw = extractTagCandidate(
           financeContext as FinanceRequestContext & Record<string, unknown>,
         );
@@ -4302,14 +4315,17 @@ const ExpenditureApproval: React.FC = () => {
             )}
         </div>
 
-        {financeAnnexures.length > 0 && (
+        {(financeAnnexures.length > 0 ||
+          existingPayeeBills.length > 0 ||
+          uploadedPayeeBills.length > 0) && (
           <div
             className="payee-uploaded-files"
             style={{ marginTop: '14px', pointerEvents: 'auto' }}
           >
-            <div className="payee-uploaded-files-header">
+            <div className="payee-uploaded-files-header payee-uploaded-files-header--with-category">
               <span>S.No</span>
-              <span>Bills from Finance Request</span>
+              <span>Category</span>
+              <span>Document Name</span>
               <span>Action</span>
             </div>
             {financeAnnexures.map((annexure, i) => {
@@ -4317,10 +4333,17 @@ const ExpenditureApproval: React.FC = () => {
               const displayName = normalizeText(
                 annexure.original_name || annexure.file_path || `File ${i + 1}`,
               );
+              const category = normalizeText(annexure.annexure_type) || 'Bill';
 
               return (
-                <div key={`finance-annexure-${annexure.id}`} className="payee-uploaded-file-row">
+                <div
+                  key={`finance-annexure-${annexure.id}`}
+                  className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
+                >
                   <span className="payee-uploaded-file-index">{i + 1}</span>
+                  <span className="payee-uploaded-file-category" title={category}>
+                    {category}
+                  </span>
                   <span className="payee-uploaded-file-name" title={displayName}>
                     {displayName}
                   </span>
@@ -4339,19 +4362,6 @@ const ExpenditureApproval: React.FC = () => {
                 </div>
               );
             })}
-          </div>
-        )}
-
-        {(existingPayeeBills.length > 0 || uploadedPayeeBills.length > 0) && (
-          <div
-            className="payee-uploaded-files"
-            style={{ marginTop: '14px', pointerEvents: 'auto' }}
-          >
-            <div className="payee-uploaded-files-header">
-              <span>S.No</span>
-              <span>Bills File</span>
-              <span>Action</span>
-            </div>
             {existingPayeeBills.map((file, i) => {
               const fileUrl = resolveBillFileUrl(file);
               const displayName = normalizeText(
@@ -4359,8 +4369,16 @@ const ExpenditureApproval: React.FC = () => {
               );
 
               return (
-                <div key={`existing-${file.id ?? i}`} className="payee-uploaded-file-row">
-                  <span className="payee-uploaded-file-index">{i + 1}</span>
+                <div
+                  key={`existing-${file.id ?? i}`}
+                  className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
+                >
+                  <span className="payee-uploaded-file-index">
+                    {financeAnnexures.length + i + 1}
+                  </span>
+                  <span className="payee-uploaded-file-category" title="Bill">
+                    Bill
+                  </span>
                   <span className="payee-uploaded-file-name" title={displayName}>
                     {displayName}
                   </span>
@@ -4391,9 +4409,15 @@ const ExpenditureApproval: React.FC = () => {
               );
             })}
             {uploadedPayeeBills.map((file, i) => (
-              <div key={`uploaded-${i}`} className="payee-uploaded-file-row">
+              <div
+                key={`uploaded-${i}`}
+                className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
+              >
                 <span className="payee-uploaded-file-index">
-                  {existingPayeeBills.length + i + 1}
+                  {financeAnnexures.length + existingPayeeBills.length + i + 1}
+                </span>
+                <span className="payee-uploaded-file-category" title="Bill">
+                  Bill
                 </span>
                 <span className="payee-uploaded-file-name" title={file.name}>
                   {file.name}
@@ -4764,7 +4788,8 @@ const ExpenditureApproval: React.FC = () => {
       }
 
       const hasExistingBills = isEditingExistingRequest && existingPayeeBills.length > 0;
-      if (uploadedPayeeBills.length === 0 && !hasExistingBills) {
+      const hasFinanceAnnexureBills = financeAnnexures.length > 0;
+      if (uploadedPayeeBills.length === 0 && !hasExistingBills && !hasFinanceAnnexureBills) {
         showAlert('Please upload bills before submitting the form.', 'warning');
         return;
       }
@@ -6798,73 +6823,6 @@ const ExpenditureApproval: React.FC = () => {
           </div>
         </div>
 
-        <div
-          style={{
-            backgroundColor: '#fff',
-            padding: '18px 24px',
-            borderRadius: '16px',
-            marginBottom: '20px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '16px',
-              flexWrap: 'wrap',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: '14px',
-                  color: '#495057',
-                  fontWeight: 600,
-                }}
-              >
-                Unplanned Expenditure
-              </span>
-              <CustomToggle
-                name="unplannedBudgetToggle"
-                label=""
-                checked={showUnplannedBudget}
-                onChange={(checked) => {
-                  setShowUnplannedBudget(checked);
-                  if (!checked) {
-                    setUnplannedRows([createUnplannedBudgetRow()]);
-                  }
-                }}
-              />
-            </div>
-            {hasUnplannedBudgetPreview && (
-              <div style={{ flex: '1 1 360px', maxWidth: '520px' }}>
-                <CustomDropdown
-                  className="mb-0"
-                  options={getUnplannedHeadOfAccountOptions()}
-                  value={getUnplannedHeadOfAccountSelectedOption(firstUnplannedRow)}
-                  onChange={(option) =>
-                    handleUnplannedHeadOfAccountForFormChange(option as OptionType | null)
-                  }
-                  filterOption={filterUnplannedHeadOfAccountOption}
-                  placeholder={isApprovedBudgetLoading ? 'Loading...' : 'Select Head of Accounts'}
-                  isDisabled={isReadOnlyView}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {renderUnplannedExpenditureTable()}
-
         {activeTab === 'Advance' && (
           <div
             style={{
@@ -8130,6 +8088,78 @@ const ExpenditureApproval: React.FC = () => {
                 </tfoot>
               </table>
             </div>
+
+            {(financeUnplannedAllowed || showUnplannedBudget) && (
+              <div
+                style={{
+                  backgroundColor: '#fff',
+                  padding: '18px 24px',
+                  borderRadius: '16px',
+                  marginTop: '20px',
+                  marginBottom: '20px',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: '14px',
+                        color: '#495057',
+                        fontWeight: 600,
+                      }}
+                    >
+                      Unplanned Expenditure
+                    </span>
+                    <CustomToggle
+                      name="unplannedBudgetToggle"
+                      label=""
+                      checked={showUnplannedBudget}
+                      onChange={(checked) => {
+                        setShowUnplannedBudget(checked);
+                        if (!checked) {
+                          setUnplannedRows([createUnplannedBudgetRow()]);
+                        }
+                      }}
+                    />
+                  </div>
+                  {hasUnplannedBudgetPreview && (
+                    <div style={{ flex: '1 1 360px', maxWidth: '520px' }}>
+                      <CustomDropdown
+                        className="mb-0"
+                        options={getUnplannedHeadOfAccountOptions()}
+                        value={getUnplannedHeadOfAccountSelectedOption(firstUnplannedRow)}
+                        onChange={(option) =>
+                          handleUnplannedHeadOfAccountForFormChange(option as OptionType | null)
+                        }
+                        filterOption={filterUnplannedHeadOfAccountOption}
+                        placeholder={
+                          isApprovedBudgetLoading ? 'Loading...' : 'Select Head of Accounts'
+                        }
+                        isDisabled={isReadOnlyView}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {renderUnplannedExpenditureTable()}
           </div>
         )}
 

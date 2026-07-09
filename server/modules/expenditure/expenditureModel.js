@@ -2275,6 +2275,24 @@ export async function getFinanceRequestContext(financeRequestId) {
 
   const hasBudgetTag = await hasFinanceRequestColumn('budget_tag');
   const budgetTagSql = hasBudgetTag ? 'fr.budget_tag,' : 'NULL AS budget_tag,';
+  const hasPaymentDebitAccount = await hasFinanceRequestColumn('payment_debit_account');
+  const paymentDebitAccountSql = hasPaymentDebitAccount
+    ? 'fr.payment_debit_account,'
+    : 'NULL AS payment_debit_account,';
+  const hasUnplannedBudgetEnabled = await hasFinanceRequestColumn('unplanned_budget_enabled');
+  const unplannedBudgetEnabledSql = hasUnplannedBudgetEnabled
+    ? 'fr.unplanned_budget_enabled,'
+    : 'NULL AS unplanned_budget_enabled,';
+  const hasUnplannedBudgetAmount = await hasFinanceRequestColumn('unplanned_budget_amount');
+  const unplannedBudgetAmountSql = hasUnplannedBudgetAmount
+    ? 'fr.unplanned_budget_amount,'
+    : 'NULL AS unplanned_budget_amount,';
+  const hasUnplannedBudgetDescription = await hasFinanceRequestColumn(
+    'unplanned_budget_description',
+  );
+  const unplannedBudgetDescriptionSql = hasUnplannedBudgetDescription
+    ? 'fr.unplanned_budget_description,'
+    : 'NULL AS unplanned_budget_description,';
 
   const [rows] = await db.query(
     `SELECT
@@ -2298,6 +2316,10 @@ export async function getFinanceRequestContext(financeRequestId) {
        fr.primary_head,
        fr.event_sub_head,
        ${budgetTagSql}
+       ${paymentDebitAccountSql}
+       ${unplannedBudgetEnabledSql}
+       ${unplannedBudgetAmountSql}
+       ${unplannedBudgetDescriptionSql}
        COALESCE(
          NULLIF(fr.approved_total_amount, 0),
          NULLIF(fr.total_budget, 0),
@@ -2341,6 +2363,10 @@ export async function getFinanceRequestContext(financeRequestId) {
     event_sub_head: normalizeText(row.event_sub_head),
     approved_amount: toMoney(row.approved_amount),
     budget_tag: row.budget_tag ? normalizeText(row.budget_tag) : null,
+    payment_debit_account: normalizeText(row.payment_debit_account) || null,
+    unplanned_budget_enabled: Boolean(row.unplanned_budget_enabled),
+    unplanned_budget_amount: toMoney(row.unplanned_budget_amount),
+    unplanned_budget_description: normalizeText(row.unplanned_budget_description) || null,
     finance_annexures: financeAnnexures.map((annexure) => ({
       id: annexure.id,
       annexure_type: annexure.annexure_type,
