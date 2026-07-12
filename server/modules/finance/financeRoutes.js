@@ -106,6 +106,7 @@ router.post(
 );
 router.post('/:id/resubmit', financeController.resubmitFinanceRequest);
 router.delete('/:id', canDeleteFinanceRequest, financeController.deleteFinanceRequest);
+router.patch('/:id/close', canDeleteFinanceRequest, financeController.closeFinanceRequest);
 
 // Timeline / compatibility endpoint
 router.get('/:id/timeline', financeController.getFinanceTimeline);

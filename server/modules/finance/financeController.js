@@ -7,7 +7,6 @@ import db from '../../config/connection.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
-
 const normalizeText = (value) => String(value || '').trim();
 
 const parseBooleanLike = (value) => {
@@ -937,6 +936,65 @@ const financeController = {
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in deleteFinanceRequest');
+    }
+  },
+
+  async closeFinanceRequest(req, res) {
+    try {
+      const financeId = toPositiveInt(req.params.id);
+      const userId = toPositiveInt(req.user?.id);
+      const isSuperAdmin = isSuperAdminRequest(req);
+
+      if (!financeId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      const finance = await financeModel.getFinanceRequestById(financeId);
+      if (!finance) {
+        return res.status(404).json({
+          success: false,
+          message: 'Finance request not found',
+        });
+      }
+
+      if (!isSuperAdmin && !isFinanceApplicantOwner(userId, finance)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the applicant can finalize and close this finance card',
+        });
+      }
+
+      const closed = await financeModel.closeFinanceRequest(financeId, userId);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Finance card finalized and closed',
+        data: closed,
+      });
+    } catch (error) {
+      const code = error?.code;
+      const statusByCode = {
+        INVALID_FINANCE_ID: 400,
+        NOT_FOUND: 404,
+        ALREADY_CLOSED: 409,
+        NOT_ELIGIBLE: 409,
+        MIGRATION_REQUIRED: 503,
+      };
+      const statusCode = statusByCode[code] || 500;
+
+      if (statusCode === 500) {
+        console.error('Error in closeFinanceRequest', error);
+      }
+
+      return res.status(statusCode).json({
+        success: false,
+        message: error.message || 'Unable to close this finance card',
+        error: error.message || 'Unable to close this finance card',
+        code,
+      });
     }
   },
 

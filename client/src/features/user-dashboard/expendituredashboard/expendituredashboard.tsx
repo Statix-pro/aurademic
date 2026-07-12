@@ -84,10 +84,12 @@ interface ExpenditureProposalCard {
   balanceAmount: number;
   sourceFiscalYear?: number | null;
   carryForwardTargetYears?: string;
+  closedAt?: string | null;
 }
 
 interface ExpenditureDashboardCardApi {
   financerequestid?: number;
+  closed_at?: string | null;
   finance_request_id?: number;
   requestref?: string;
   request_ref?: string;
@@ -370,11 +372,15 @@ const buildWorkflowRequestRefMap = (requests: ExpenditureItem[]) => {
 const getRequestStatusLabel = (item: ExpenditureItem) =>
   getWorkflowApprovalLabel(parseWorkflowState(item.workflow_state));
 
-const matchesStatusFilter = (item: ExpenditureItem, filter: StatusFilterKey) => {
+const matchesStatusFilter = (
+  item: ExpenditureItem,
+  filter: StatusFilterKey,
+  closedFinanceIds: Set<string>,
+) => {
   if (filter === 'all') return true;
 
   const statusLabel = getRequestStatusLabel(item);
-  const isPaid = normalizeStatus(item.payment_status) === 'paid';
+  const isCardClosed = closedFinanceIds.has(String(item.financeid ?? ''));
 
   if (filter === 'pending') {
     return statusLabel === 'Pending' || statusLabel === 'Resubmitted';
@@ -386,10 +392,10 @@ const matchesStatusFilter = (item: ExpenditureItem, filter: StatusFilterKey) => 
     return statusLabel === 'Approved';
   }
   if (filter === 'pending_payment') {
-    return statusLabel === 'Approved' && !isPaid;
+    return statusLabel === 'Approved' && !isCardClosed;
   }
   if (filter === 'closed') {
-    return statusLabel === 'Approved' && isPaid;
+    return statusLabel === 'Approved' && isCardClosed;
   }
 
   return true;
@@ -521,6 +527,7 @@ const ExpenditureDashboard: React.FC = () => {
   >({});
   const [showAddPayeeModal, setShowAddPayeeModal] = useState(false);
   const [isSubmittingPayee, setIsSubmittingPayee] = useState(false);
+  const [closingFinanceId, setClosingFinanceId] = useState<string | null>(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -613,6 +620,14 @@ const ExpenditureDashboard: React.FC = () => {
 
   const normalizedFinanceIdQuery = financeIdQuery.trim().toLowerCase();
 
+  const closedFinanceIds = useMemo(
+    () =>
+      new Set(
+        proposalCards.filter((card) => Boolean(card.closedAt)).map((card) => card.financeRequestId),
+      ),
+    [proposalCards],
+  );
+
   const beneficiaryOptions = useMemo(() => {
     const beneficiaryTypes = Array.from(
       new Set(data.map((item) => String(item.beneficiarytype || '').trim()).filter(Boolean)),
@@ -690,6 +705,15 @@ const ExpenditureDashboard: React.FC = () => {
 
     searchFilteredProposalCards.forEach((card) => {
       const rows = cardRows[card.financeRequestId] ?? [];
+
+      if (selectedStatusFilter === 'closed') {
+        // Closed is a finalized state on the whole finance card, not a
+        // per-row/per-option payment status - show all rows once the card
+        // has actually been finalized via Finalize & Close.
+        next[card.financeRequestId] = closedFinanceIds.has(card.financeRequestId) ? rows : [];
+        return;
+      }
+
       next[card.financeRequestId] = rows.filter((row) => {
         const matchesStatus =
           selectedStatusFilter === 'all'
@@ -704,7 +728,13 @@ const ExpenditureDashboard: React.FC = () => {
     });
 
     return next;
-  }, [cardRows, searchFilteredProposalCards, selectedStatusFilter, selectedTypeFilter]);
+  }, [
+    cardRows,
+    closedFinanceIds,
+    searchFilteredProposalCards,
+    selectedStatusFilter,
+    selectedTypeFilter,
+  ]);
 
   const filteredProposalCards = useMemo(
     () =>
@@ -744,16 +774,16 @@ const ExpenditureDashboard: React.FC = () => {
       total++;
       totalAmount += Number(item.amount || 0);
 
-      if (matchesStatusFilter(item, 'pending')) {
+      if (matchesStatusFilter(item, 'pending', closedFinanceIds)) {
         pending++;
         pendingAmount += Number(item.amount || 0);
-      } else if (matchesStatusFilter(item, 'return')) {
+      } else if (matchesStatusFilter(item, 'return', closedFinanceIds)) {
         returned++;
         returnedAmount += Number(item.amount || 0);
-      } else if (matchesStatusFilter(item, 'approved')) {
+      } else if (matchesStatusFilter(item, 'approved', closedFinanceIds)) {
         approved++;
         approvedAmount += Number(item.amount || 0);
-        if (matchesStatusFilter(item, 'closed')) {
+        if (matchesStatusFilter(item, 'closed', closedFinanceIds)) {
           closed++;
           closedAmount += Number(item.amount || 0);
         } else {
@@ -777,7 +807,7 @@ const ExpenditureDashboard: React.FC = () => {
       pendingPaymentAmount,
       closedAmount,
     };
-  }, [data, selectedBeneficiary, selectedTypeFilter]);
+  }, [data, closedFinanceIds, selectedBeneficiary, selectedTypeFilter]);
 
   const kpiCards = [
     {
@@ -837,7 +867,7 @@ const ExpenditureDashboard: React.FC = () => {
         return false;
       }
 
-      const matchesStatus = matchesStatusFilter(item, selectedStatusFilter);
+      const matchesStatus = matchesStatusFilter(item, selectedStatusFilter, closedFinanceIds);
       const matchesType =
         selectedTypeFilter === 'all'
           ? true
@@ -845,7 +875,7 @@ const ExpenditureDashboard: React.FC = () => {
 
       return matchesStatus && matchesType;
     });
-  }, [data, filteredProposalCards, selectedStatusFilter, selectedTypeFilter]);
+  }, [data, closedFinanceIds, filteredProposalCards, selectedStatusFilter, selectedTypeFilter]);
 
   const formatAmount = (amount: number) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 
@@ -1861,6 +1891,7 @@ const ExpenditureDashboard: React.FC = () => {
           carryForwardTargetYears: String(
             card.carryforwardtargetyears ?? card.carry_forward_target_years ?? '',
           ),
+          closedAt: card.closed_at ?? null,
         }),
       );
 
@@ -1878,6 +1909,49 @@ const ExpenditureDashboard: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const handleFinalizeCloseCard = async (financeRequestId: string) => {
+    const normalizedFinanceRequestId = Number.parseInt(financeRequestId, 10);
+    if (!Number.isInteger(normalizedFinanceRequestId) || normalizedFinanceRequestId <= 0) return;
+
+    showDialog({
+      title: 'Finalize & Close',
+      message:
+        'This will permanently mark this finance card as closed. Every submitted advance, expenditure and settlement request under it must already be approved and paid. Continue?',
+      variant: 'warning',
+      confirmText: 'Finalize & Close',
+      cancelText: 'Cancel',
+      onConfirm: async () => {
+        closeDialog();
+        try {
+          setClosingFinanceId(financeRequestId);
+          const response = (await authenticityUtility.patch(
+            `/finance-requests/${normalizedFinanceRequestId}/close`,
+            {},
+          )) as { success?: boolean; message?: string };
+
+          if (response.success !== true) {
+            throw new Error(response.message || 'Unable to close this finance card');
+          }
+
+          await fetchDashboard(financeRequestId);
+        } catch (error) {
+          console.error('Failed to finalize & close finance card:', error);
+          const apiMessage = (error as any)?.response?.data?.message || (error as any)?.message;
+          showDialog({
+            title: 'Unable to Close',
+            message:
+              apiMessage ||
+              'This finance card cannot be closed right now. Make sure every submitted request is approved and paid.',
+            variant: 'danger',
+          });
+        } finally {
+          setClosingFinanceId((prev) => (prev === financeRequestId ? null : prev));
+        }
+      },
+    });
+  };
+
   useEffect(() => {
     const state = location.state as DashboardReturnState | null;
 
@@ -2051,8 +2125,10 @@ const ExpenditureDashboard: React.FC = () => {
                 const cardExpenditureAmount = Number(card.expenditureAmount || 0);
                 const cardBalanceAmount = Math.max(Number(card.balanceAmount || 0), 0);
                 const rows = filteredCardRows[card.financeRequestId] ?? [];
+                const allCardRows = cardRows[card.financeRequestId] ?? [];
                 const canAddRow = cardBalanceAmount > 0;
-                const isFullyClosed = isFinanceCardFullyClosed(rows);
+                const isCardClosed = Boolean(card.closedAt);
+                const canFinalizeClose = !isCardClosed && isFinanceCardFullyClosed(allCardRows);
                 const selectedFiscalYearStart = Number.parseInt(financialYear.split('-')[0], 10);
                 const sourceFiscalYear = Number(card.sourceFiscalYear || 0);
                 const showCarryForwardLabel =
@@ -2066,7 +2142,7 @@ const ExpenditureDashboard: React.FC = () => {
                   <div
                     key={card.financeRequestId + card.applicantName}
                     className={`expenditure-demo-card ${isCardOpen ? 'open' : ''} ${
-                      isFullyClosed ? 'expenditure-demo-card--closed' : ''
+                      isCardClosed ? 'expenditure-demo-card--closed' : ''
                     }`}
                   >
                     <button
@@ -2505,6 +2581,37 @@ const ExpenditureDashboard: React.FC = () => {
                               })}
                             </div>
                           </div>
+                        </div>
+
+                        <div className="expenditure-demo-card-footer">
+                          {isCardClosed ? (
+                            <div className="expenditure-demo-card-footer__closed">
+                              <Lock size={12} />
+                              <span>
+                                Closed
+                                {card.closedAt ? ` on ${formatDateTime(card.closedAt)}` : ''}
+                              </span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="expenditure-demo-card-footer__close-btn"
+                              disabled={
+                                !canFinalizeClose || closingFinanceId === card.financeRequestId
+                              }
+                              title={
+                                canFinalizeClose
+                                  ? 'Finalize and close this finance card'
+                                  : 'Available once every submitted request under this card is approved and paid'
+                              }
+                              onClick={() => handleFinalizeCloseCard(card.financeRequestId)}
+                            >
+                              <Lock size={12} />
+                              {closingFinanceId === card.financeRequestId
+                                ? 'Closing...'
+                                : 'Finalize & Close'}
+                            </button>
+                          )}
                         </div>
                       </div>
                     )}

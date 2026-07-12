@@ -35,6 +35,8 @@ interface FinanceCardItem {
   proposed_amount?: number | string | null;
   total_budget?: number | string | null;
   approved_total_amount?: number | string | null;
+  balance_amount?: number | string | null;
+  topup_amount?: number | string | null;
   overall_status: string;
   workflow_status?: string;
   fiscal_year?: number | string | null;
@@ -259,16 +261,35 @@ const FinanceCard: React.FC = () => {
     return 'pending';
   };
 
+  const hasTopup = (item: FinanceCardItem) => Boolean(item.workflow_state?.topupAt);
+
+  const getTopupAmount = (item: FinanceCardItem) => {
+    const parsedAmount = Number(item.topup_amount ?? 0);
+    return Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  };
+
+  const isFullyClaimed = (item: FinanceCardItem) => {
+    const approvedAmount = Number(item.approved_total_amount ?? 0);
+    if (!(approvedAmount > 0)) return false;
+    // A missing/NULL balance means it was never tracked (not that it hit zero),
+    // so don't treat it as fully claimed.
+    if (item.balance_amount === null || item.balance_amount === undefined) return false;
+    const balanceAmount = Number(item.balance_amount);
+    return Number.isFinite(balanceAmount) && balanceAmount <= 0;
+  };
+
   const getFinanceStatusLabel = (item: FinanceCardItem) => {
     const normalizedStatus = getNormalizedStatus(item);
-    if (normalizedStatus === 'submitted') return 'Submitted';
-    if (normalizedStatus === 'pending') return 'Pending';
-    if (normalizedStatus === 'approved') return 'Approved';
+    const isTopupInProgress = hasTopup(item) && normalizedStatus !== 'approved';
+    if (isTopupInProgress) return 'Top-up';
+    if (normalizedStatus === 'submitted') return 'Proposed';
+    if (normalizedStatus === 'pending') return 'Proposed';
+    if (normalizedStatus === 'approved') return isFullyClaimed(item) ? 'Claimed' : 'Approved';
     if (normalizedStatus === 'rejected') return 'Rejected';
     if (normalizedStatus === 'returned') return 'Returned';
     if (normalizedStatus === 'archived') return 'Archive';
-    if (normalizedStatus === 'resubmitted') return 'Resubmitted';
-    return 'Submitted';
+    if (normalizedStatus === 'resubmitted') return 'Proposed';
+    return 'Proposed';
   };
 
   const isPendingLikeStatus = (item: FinanceCardItem) => {
@@ -1131,8 +1152,18 @@ const FinanceCard: React.FC = () => {
                           </div>
 
                           <div className="card-header-right">
+                            {hasTopup(item) && getTopupAmount(item) > 0 && (
+                              <div className="card-amount-box">
+                                <span className="amount-label">Top-up</span>
+                                <span className="amount-value">
+                                  ₹{getTopupAmount(item).toLocaleString()}
+                                </span>
+                              </div>
+                            )}
                             <div className="card-amount-box">
-                              <span className="amount-label">Proposed</span>
+                              <span className="amount-label">
+                                {status === 'approved' ? 'Approved' : 'Proposed'}
+                              </span>
                               <span className="amount-value">
                                 ₹{getDisplayAmount(item).toLocaleString()}
                               </span>

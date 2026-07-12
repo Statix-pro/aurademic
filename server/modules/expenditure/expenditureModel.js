@@ -2060,9 +2060,17 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
     expenditureParams.push(fyStart, fyStart);
   }
 
+  // FALLBACK: finance_requests.closed_at may not exist before the
+  // 20260710_add_closed_status_to_finance_requests migration runs; emit NULL so
+  // the dashboard treats every card as not-closed. Remove after the migration is
+  // applied everywhere.
+  const hasClosedAtColumn = await hasFinanceRequestColumn('closed_at');
+  const closedAtSelectSql = hasClosedAtColumn ? 'fr.closed_at' : 'NULL AS closed_at';
+
   const [cardRows] = await db.execute(
     `SELECT
        fr.id AS finance_request_id,
+       ${closedAtSelectSql},
        COALESCE(frr.request_ref, CONCAT('#F-', fr.id)) AS request_ref,
        COALESCE(
          NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''),
@@ -2139,6 +2147,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        ${financeFySql}
      GROUP BY
        fr.id,
+       closed_at,
        frr.request_ref,
        applicant_name,
        designation,
@@ -2563,11 +2572,13 @@ __OPTIONAL_UNPLANNED_HEAD_COLUMNS__
     COALESCE(NULLIF(TRIM(d.name), ''), NULLIF(TRIM(er.department), ''), '') AS department,
     COALESCE(NULLIF(TRIM(e.email), ''), NULLIF(TRIM(er.email), ''), '') AS email,
     COALESCE(NULLIF(TRIM(e.mobile), ''), NULLIF(TRIM(er.mobile), ''), '') AS mobile,
-    e.erp_id
+    e.erp_id,
+    creator_user.email AS created_by_email
   FROM expenditure_requests er
   LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
   LEFT JOIN master_employees e ON e.id = er.employee_id
   LEFT JOIN master_departments d ON d.id = e.department_id
+  LEFT JOIN users creator_user ON creator_user.id = er.created_by
   LEFT JOIN (
     SELECT
       ranked.expenditure_id,
