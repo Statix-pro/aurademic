@@ -636,6 +636,7 @@ const buildFinanceSelectSql = ({
   annexureMimeTypeSelectSql = 'NULL AS annexure_mime_type',
   annexureFileSizeSelectSql = 'NULL AS annexure_file_size',
   paymentDebitAccountSelectSql = 'NULL AS payment_debit_account',
+  topupAmountSelectSql = '0 AS topup_amount',
 } = {}) => `
   SELECT
     fr.id,
@@ -673,6 +674,7 @@ const buildFinanceSelectSql = ({
     ${unplannedBudgetDescriptionSelectSql},
     fr.total_budget,
     fr.approved_total_amount,
+    ${topupAmountSelectSql},
     fr.income_type,
     fr.income_status,
     fr.income_amount_type,
@@ -751,6 +753,7 @@ const buildFinanceSelectSql = ({
        LIMIT 1
     ) AS workflow_stage_decision,
     frr.request_ref AS proposal_ref,
+    creator_user.email AS created_by_email,
     fr.created_at,
     fr.updated_at
   FROM finance_requests fr
@@ -758,6 +761,7 @@ const buildFinanceSelectSql = ({
   LEFT JOIN master_employees e ON fr.employee_id = e.id
   LEFT JOIN master_departments dept ON fr.department_id = dept.id
   LEFT JOIN master_departments emp_dept ON e.department_id = emp_dept.id
+  LEFT JOIN users creator_user ON creator_user.id = fr.created_by
 `;
 
 const getFinanceSelectSql = async ({ tx = db } = {}) => {
@@ -777,6 +781,18 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
   const hasAnnexureMimeType = await hasFinanceRequestColumn('annexure_mime_type', { tx });
   const hasAnnexureFileSize = await hasFinanceRequestColumn('annexure_file_size', { tx });
   const hasPaymentDebitAccount = await hasFinanceRequestColumn('payment_debit_account', { tx });
+  // FALLBACK: finance_budget_breakup.is_topup may not exist on older deployments;
+  // emit 0 so top-up totals default to zero until the column is present. Remove
+  // once every environment has the is_topup column.
+  const hasIsTopupColumn = await hasFinanceBudgetBreakupColumn('is_topup', { tx });
+  const topupAmountSelectSql = hasIsTopupColumn
+    ? `(
+        SELECT COALESCE(SUM(fbb_topup.amount), 0)
+          FROM finance_budget_breakup fbb_topup
+         WHERE fbb_topup.finance_id = fr.id
+           AND fbb_topup.is_topup = 1
+      ) AS topup_amount`
+    : '0 AS topup_amount';
   return buildFinanceSelectSql({
     budgetTagSelectSql: hasBudgetTag ? 'fr.budget_tag' : 'NULL AS budget_tag',
     unplannedBudgetEnabledSelectSql: hasUnplannedBudgetEnabled
@@ -807,6 +823,7 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
     paymentDebitAccountSelectSql: hasPaymentDebitAccount
       ? 'fr.payment_debit_account'
       : 'NULL AS payment_debit_account',
+    topupAmountSelectSql,
   });
 };
 
@@ -4988,6 +5005,87 @@ const financeModel = {
     );
 
     return rows.length ? rows[0] : null;
+  },
+
+  async closeFinanceRequest(financeId, userId) {
+    const normalizedFinanceId = toPositiveInt(financeId);
+    const normalizedUserId = toPositiveInt(userId);
+
+    if (!normalizedFinanceId) {
+      const error = new Error('Invalid finance request id');
+      error.code = 'INVALID_FINANCE_ID';
+      throw error;
+    }
+
+    // FALLBACK: guard against deployments that have not yet run the
+    // 20260710_add_closed_status_to_finance_requests migration. Remove this
+    // check once closed_at/closed_by exist in every environment.
+    const hasClosedAtColumn = await hasFinanceRequestColumn('closed_at');
+    const hasClosedByColumn = await hasFinanceRequestColumn('closed_by');
+    if (!hasClosedAtColumn || !hasClosedByColumn) {
+      const error = new Error('Finalize & Close is not available yet on this deployment');
+      error.code = 'MIGRATION_REQUIRED';
+      throw error;
+    }
+
+    const [financeRows] = await db.query(
+      `SELECT id, closed_at FROM finance_requests WHERE id = ? LIMIT 1`,
+      [normalizedFinanceId],
+    );
+
+    if (!financeRows.length) {
+      const error = new Error('Finance request not found');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    if (financeRows[0].closed_at) {
+      const error = new Error('This finance card is already closed');
+      error.code = 'ALREADY_CLOSED';
+      throw error;
+    }
+
+    // A finance card can only be finalized once every submitted advance,
+    // expenditure and settlement request under it has been approved and paid.
+    const [eligibilityRows] = await db.query(
+      `SELECT
+         COUNT(*) AS total_count,
+         SUM(
+           CASE
+             WHEN LOWER(TRIM(COALESCE(overall_status, 'pending'))) IN ('approved', 'completed')
+               AND LOWER(TRIM(COALESCE(payment_status, ''))) = 'paid'
+             THEN 1
+             ELSE 0
+           END
+         ) AS eligible_count
+         FROM expenditure_requests
+        WHERE finance_request_id = ?
+          AND LOWER(TRIM(COALESCE(overall_status, 'pending'))) <> 'deleted'`,
+      [normalizedFinanceId],
+    );
+
+    const totalCount = Number(eligibilityRows?.[0]?.total_count || 0);
+    const eligibleCount = Number(eligibilityRows?.[0]?.eligible_count || 0);
+
+    if (totalCount === 0 || eligibleCount !== totalCount) {
+      const error = new Error(
+        'This finance card cannot be closed until every submitted advance, expenditure and settlement request is approved and paid.',
+      );
+      error.code = 'NOT_ELIGIBLE';
+      throw error;
+    }
+
+    await db.query(`UPDATE finance_requests SET closed_at = NOW(), closed_by = ? WHERE id = ?`, [
+      normalizedUserId || null,
+      normalizedFinanceId,
+    ]);
+
+    const [updatedRows] = await db.query(
+      `SELECT id, closed_at, closed_by FROM finance_requests WHERE id = ? LIMIT 1`,
+      [normalizedFinanceId],
+    );
+
+    return updatedRows[0];
   },
 
   async getPrincipalDocument(recordId) {
