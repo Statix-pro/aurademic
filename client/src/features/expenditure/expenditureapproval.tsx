@@ -4372,7 +4372,7 @@ const ExpenditureApproval: React.FC = () => {
               const displayName = normalizeText(
                 annexure.original_name || annexure.file_path || `File ${i + 1}`,
               );
-              const category = normalizeText(annexure.annexure_type) || 'Bill';
+              const category = normalizeText(annexure.annexure_type) || 'Bills';
 
               return (
                 <div
@@ -4415,8 +4415,8 @@ const ExpenditureApproval: React.FC = () => {
                   <span className="payee-uploaded-file-index">
                     {financeAnnexures.length + i + 1}
                   </span>
-                  <span className="payee-uploaded-file-category" title="Bill">
-                    Bill
+                  <span className="payee-uploaded-file-category" title="Bills">
+                    Bills
                   </span>
                   <span className="payee-uploaded-file-name" title={displayName}>
                     {displayName}
@@ -4455,8 +4455,8 @@ const ExpenditureApproval: React.FC = () => {
                 <span className="payee-uploaded-file-index">
                   {financeAnnexures.length + existingPayeeBills.length + i + 1}
                 </span>
-                <span className="payee-uploaded-file-category" title="Bill">
-                  Bill
+                <span className="payee-uploaded-file-category" title="Bills">
+                  Bills
                 </span>
                 <span className="payee-uploaded-file-name" title={file.name}>
                   {file.name}

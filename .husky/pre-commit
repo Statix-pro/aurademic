@@ -1,1 +1,6 @@
+#!/bin/sh
+# Add common macOS PATHs for GUI Git clients (which don't load shell profiles)
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 npx lint-staged
+
