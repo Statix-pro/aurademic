@@ -853,10 +853,9 @@ hr {
 
 .grant-table-head,
 .grant-disbursement-row {
-  grid-template-columns: minmax(100px, 0.55fr) minmax(130px, 0.9fr) minmax(100px, 0.5fr) minmax(
-      120px,
-      0.6fr
-    ) minmax(110px, 0.65fr) minmax(110px, 0.65fr) 38px;
+  grid-template-columns:
+    minmax(100px, 0.55fr) minmax(130px, 0.9fr) minmax(100px, 0.5fr) minmax(120px, 0.6fr)
+    minmax(110px, 0.65fr) minmax(110px, 0.65fr) 38px;
 }
 
 .grant-disbursement-row > :nth-child(5),
@@ -939,10 +938,9 @@ hr {
 
   .grant-table-head,
   .grant-disbursement-row {
-    grid-template-columns: minmax(90px, 0.55fr) minmax(110px, 0.9fr) minmax(90px, 0.5fr) minmax(
-        105px,
-        0.6fr
-      ) minmax(95px, 0.65fr) minmax(95px, 0.65fr) 38px;
+    grid-template-columns:
+      minmax(90px, 0.55fr) minmax(110px, 0.9fr) minmax(90px, 0.5fr) minmax(105px, 0.6fr)
+      minmax(95px, 0.65fr) minmax(95px, 0.65fr) 38px;
   }
 }
 

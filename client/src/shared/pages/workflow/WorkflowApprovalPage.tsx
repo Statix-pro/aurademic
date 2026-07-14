@@ -1257,7 +1257,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   const isResubmittedRecord = useCallback(
     (record: Record<string, any>) => {
-      return getRecordWorkflowDecision(record) === 'resubmitted';
+      const resubAt = record.workflow_state?.resubmittedAt || record.resubmittedAt;
+      const hasResubmittedTime =
+        resubAt &&
+        String(resubAt).trim() !== '' &&
+        !isNaN(new Date(resubAt).getTime()) &&
+        new Date(resubAt).getTime() > 0;
+      return getRecordWorkflowDecision(record) === 'resubmitted' || Boolean(hasResubmittedTime);
     },
     [getRecordWorkflowDecision],
   );

@@ -180,6 +180,22 @@ interface ExpenditureLogEvent {
   dateLabel: string;
 }
 
+interface IndividualExpenditureCard {
+  key: string;
+  cardFinanceRequestId: string;
+  card: ExpenditureProposalCard;
+  row: WorkflowRow;
+  module: WorkflowModule | 'Advance2';
+  requestId: number | null;
+  requestRef: string;
+  amount: number;
+  subHead: string;
+  status: string;
+  paymentStatus: string;
+  statusLabel: string;
+  requestType: string;
+}
+
 const formatFY = (fyStart: number) => `${fyStart}-${String(fyStart + 1).slice(-2)}`;
 
 const getDefaultFilterFY = () => {
@@ -877,6 +893,85 @@ const ExpenditureDashboard: React.FC = () => {
     });
   }, [data, closedFinanceIds, filteredProposalCards, selectedStatusFilter, selectedTypeFilter]);
 
+  const isGroupedView = selectedStatusFilter === 'all' || selectedStatusFilter === 'closed';
+
+  const individualCards = useMemo((): IndividualExpenditureCard[] => {
+    if (isGroupedView) return [];
+
+    const result: IndividualExpenditureCard[] = [];
+
+    filteredProposalCards.forEach((card) => {
+      const rows = filteredCardRows[card.financeRequestId] ?? [];
+
+      rows.forEach((row) => {
+        const modules: Array<WorkflowModule | 'Advance2'> = [
+          'Advance',
+          'Advance2',
+          'Settlement',
+          'Expenditure',
+        ];
+
+        modules.forEach((module) => {
+          const requestRef = getWorkflowRowOptionRequestRef(row, module);
+          const amount = getWorkflowRowOptionAmount(row, module);
+          const hasRequest = Boolean(requestRef) || amount > 0;
+          if (!hasRequest) return;
+
+          const status = getWorkflowRowOptionStatus(row, module);
+          const paymentStatus = getWorkflowRowOptionPaymentStatus(row, module);
+
+          // Check if this option matches the current status filter
+          if (!matchesWorkflowRowOptionStatusFilter(row, module, selectedStatusFilter)) return;
+
+          // Apply type filter
+          const effectiveModule = module === 'Advance2' ? 'Advance' : module;
+          if (selectedTypeFilter !== 'all' && effectiveModule !== selectedTypeFilter) return;
+
+          const statusCategory = getWorkflowStatusCategory(status);
+          const requestId =
+            module === 'Advance2'
+              ? row.advanceRequestId2
+              : module === 'Advance'
+                ? row.advanceRequestId
+                : module === 'Settlement'
+                  ? row.settlementRequestId
+                  : row.expenditureRequestId;
+
+          result.push({
+            key: `${card.financeRequestId}-${row.id}-${module}`,
+            cardFinanceRequestId: card.financeRequestId,
+            card,
+            row,
+            module,
+            requestId: requestId ?? null,
+            requestRef,
+            amount,
+            subHead:
+              module === 'Advance2'
+                ? row.advanceSubHead2 || ''
+                : module === 'Advance'
+                  ? row.advanceSubHead || ''
+                  : module === 'Settlement'
+                    ? row.settlementSubHead || ''
+                    : row.expenditureSubHead || '',
+            status,
+            paymentStatus,
+            statusLabel: statusCategory,
+            requestType: module === 'Advance2' ? 'Interim Advance' : module,
+          });
+        });
+      });
+    });
+
+    return result;
+  }, [
+    isGroupedView,
+    filteredProposalCards,
+    filteredCardRows,
+    selectedStatusFilter,
+    selectedTypeFilter,
+  ]);
+
   const formatAmount = (amount: number) => `₹${Number(amount || 0).toLocaleString('en-IN')}`;
 
   const formatDateTime = (value?: string | null) => {
@@ -1457,7 +1552,9 @@ const ExpenditureDashboard: React.FC = () => {
 
     if (normalizedLabel.includes('approved')) return 'expenditure-status-pill--approved';
     if (normalizedLabel.includes('pending')) return 'expenditure-status-pill--pending';
+    if (normalizedLabel.includes('resubmitted')) return 'expenditure-status-pill--pending';
     if (normalizedLabel.includes('rejected')) return 'expenditure-status-pill--rejected';
+    if (normalizedLabel.includes('returned')) return 'expenditure-status-pill--returned';
 
     return '';
   };
@@ -2119,635 +2216,719 @@ const ExpenditureDashboard: React.FC = () => {
               })}
             </div>
 
-            <div className="expenditure-demo-wrap">
-              {filteredProposalCards.map((card) => {
-                const isCardOpen = openCardId === card.financeRequestId;
-                const cardExpenditureAmount = Number(card.expenditureAmount || 0);
-                const cardBalanceAmount = Math.max(Number(card.balanceAmount || 0), 0);
-                const rows = filteredCardRows[card.financeRequestId] ?? [];
-                const allCardRows = cardRows[card.financeRequestId] ?? [];
-                const canAddRow = cardBalanceAmount > 0;
-                const isCardClosed = Boolean(card.closedAt);
-                const canFinalizeClose = !isCardClosed && isFinanceCardFullyClosed(allCardRows);
-                const selectedFiscalYearStart = Number.parseInt(financialYear.split('-')[0], 10);
-                const sourceFiscalYear = Number(card.sourceFiscalYear || 0);
-                const showCarryForwardLabel =
-                  sourceFiscalYear > 0 &&
-                  selectedFiscalYearStart > 0 &&
-                  sourceFiscalYear !== selectedFiscalYearStart;
-                const hasCarryForwardTarget =
-                  String(card.carryForwardTargetYears || '').trim() !== '';
+            {isGroupedView ? (
+              <div className="expenditure-demo-wrap">
+                {filteredProposalCards.map((card) => {
+                  const isCardOpen = openCardId === card.financeRequestId;
+                  const cardExpenditureAmount = Number(card.expenditureAmount || 0);
+                  const cardBalanceAmount = Math.max(Number(card.balanceAmount || 0), 0);
+                  const rows = filteredCardRows[card.financeRequestId] ?? [];
+                  const allCardRows = cardRows[card.financeRequestId] ?? [];
+                  const canAddRow = cardBalanceAmount > 0;
+                  const isCardClosed = Boolean(card.closedAt);
+                  const canFinalizeClose = !isCardClosed && isFinanceCardFullyClosed(allCardRows);
+                  const selectedFiscalYearStart = Number.parseInt(financialYear.split('-')[0], 10);
+                  const sourceFiscalYear = Number(card.sourceFiscalYear || 0);
+                  const showCarryForwardLabel =
+                    sourceFiscalYear > 0 &&
+                    selectedFiscalYearStart > 0 &&
+                    sourceFiscalYear !== selectedFiscalYearStart;
+                  const hasCarryForwardTarget =
+                    String(card.carryForwardTargetYears || '').trim() !== '';
 
-                return (
-                  <div
-                    key={card.financeRequestId + card.applicantName}
-                    className={`expenditure-demo-card ${isCardOpen ? 'open' : ''} ${
-                      isCardClosed ? 'expenditure-demo-card--closed' : ''
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      className="expenditure-demo-trigger"
-                      onClick={() =>
-                        setOpenCardId((prev) =>
-                          prev === card.financeRequestId ? null : card.financeRequestId,
-                        )
-                      }
+                  return (
+                    <div
+                      key={card.financeRequestId + card.applicantName}
+                      className={`expenditure-demo-card ${isCardOpen ? 'open' : ''} ${
+                        isCardClosed ? 'expenditure-demo-card--closed' : ''
+                      }`}
                     >
-                      <div className="expenditure-demo-trigger__content">
-                        {(() => {
-                          const proposalText = String(card.proposalId || '').trim();
-                          const shortToken =
-                            proposalText.split('_').filter(Boolean).pop() || proposalText;
-                          const isCompact = /^[AE]\d+$/i.test(shortToken);
+                      <button
+                        type="button"
+                        className="expenditure-demo-trigger"
+                        onClick={() =>
+                          setOpenCardId((prev) =>
+                            prev === card.financeRequestId ? null : card.financeRequestId,
+                          )
+                        }
+                      >
+                        <div className="expenditure-demo-trigger__content">
+                          {(() => {
+                            const proposalText = String(card.proposalId || '').trim();
+                            const shortToken =
+                              proposalText.split('_').filter(Boolean).pop() || proposalText;
+                            const isCompact = /^[AE]\d+$/i.test(shortToken);
 
-                          return (
-                            <div
-                              className={`expenditure-demo-trigger__id ${
-                                isCompact ? 'expenditure-demo-trigger__id--compact' : ''
-                              }`}
-                            >
-                              {isCompact ? shortToken : proposalText}
-                            </div>
-                          );
-                        })()}
+                            return (
+                              <div
+                                className={`expenditure-demo-trigger__id ${
+                                  isCompact ? 'expenditure-demo-trigger__id--compact' : ''
+                                }`}
+                              >
+                                {isCompact ? shortToken : proposalText}
+                              </div>
+                            );
+                          })()}
 
-                        <div className="expenditure-demo-trigger__title">{card.applicantName}</div>
+                          <div className="expenditure-demo-trigger__title">
+                            {card.applicantName}
+                          </div>
 
-                        <div className="expenditure-demo-trigger__meta">
-                          {card.beneficiaryName && (
-                            <span className="expenditure-demo-trigger__meta-text">
-                              {card.beneficiaryName}
+                          <div className="expenditure-demo-trigger__meta">
+                            {card.beneficiaryName && (
+                              <span className="expenditure-demo-trigger__meta-text">
+                                {card.beneficiaryName}
+                              </span>
+                            )}
+                            {card.tag && (
+                              <span className="expenditure-demo-trigger__meta-tag">{card.tag}</span>
+                            )}
+                            {showCarryForwardLabel && hasCarryForwardTarget && (
+                              <span className="expenditure-demo-trigger__meta-tag">
+                                Carry Forward Card
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="expenditure-demo-trigger__summary">
+                          <div className="expenditure-demo-trigger__summary-item">
+                            <span className="expenditure-demo-trigger__summary-label">
+                              Approved
                             </span>
-                          )}
-                          {card.tag && (
-                            <span className="expenditure-demo-trigger__meta-tag">{card.tag}</span>
-                          )}
-                          {showCarryForwardLabel && hasCarryForwardTarget && (
-                            <span className="expenditure-demo-trigger__meta-tag">
-                              Carry Forward Card
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                            <strong>{formatAmount(card.totalAmount)}</strong>
+                          </div>
 
-                      <div className="expenditure-demo-trigger__summary">
-                        <div className="expenditure-demo-trigger__summary-item">
-                          <span className="expenditure-demo-trigger__summary-label">Approved</span>
-                          <strong>{formatAmount(card.totalAmount)}</strong>
+                          <div className="expenditure-demo-trigger__summary-item">
+                            <span className="expenditure-demo-trigger__summary-label">Balance</span>
+                            <strong>{formatAmount(cardBalanceAmount)}</strong>
+                          </div>
                         </div>
 
-                        <div className="expenditure-demo-trigger__summary-item">
-                          <span className="expenditure-demo-trigger__summary-label">Balance</span>
-                          <strong>{formatAmount(cardBalanceAmount)}</strong>
-                        </div>
-                      </div>
+                        <ChevronDown
+                          size={20}
+                          className={`expenditure-demo-trigger__arrow ${isCardOpen ? 'open' : ''}`}
+                        />
+                      </button>
 
-                      <ChevronDown
-                        size={20}
-                        className={`expenditure-demo-trigger__arrow ${isCardOpen ? 'open' : ''}`}
-                      />
-                    </button>
+                      {isCardOpen && (
+                        <div className="expenditure-demo-dropdown">
+                          <div className="expenditure-demo-dropdown__layout">
+                            <div className="expenditure-demo-dropdown__left">
+                              <div className="expenditure-demo-rows">
+                                {rows.map((row) => {
+                                  const actions = getRowActions(row);
+                                  const isLastRow = rows[rows.length - 1]?.id === row.id;
+                                  const isCompleted = isWorkflowRowCompleted(row);
+                                  const isActionLocked = isWorkflowActionLocked(row);
+                                  const hasProposal = hasSubmittedProposal(row);
+                                  const rowDisplaySubHead = getRowDisplaySubHead(row);
+                                  const isReturnedRow =
+                                    normalizeStatus(row.latestWorkflowStatus) === 'returned';
+                                  const isRejectedRow =
+                                    normalizeStatus(row.latestWorkflowStatus) === 'rejected';
+                                  const canAddWorkflowRow =
+                                    !isReturnedRow && !isRejectedRow && isLastRow && canAddRow;
+                                  const canEditRow =
+                                    hasProposal &&
+                                    !isActionLocked &&
+                                    (row.latestWorkflowStatus
+                                      ? isEditableWorkflowStatus(row.latestWorkflowStatus)
+                                      : !row.latestRequestId);
 
-                    {isCardOpen && (
-                      <div className="expenditure-demo-dropdown">
-                        <div className="expenditure-demo-dropdown__layout">
-                          <div className="expenditure-demo-dropdown__left">
-                            <div className="expenditure-demo-rows">
-                              {rows.map((row) => {
-                                const actions = getRowActions(row);
-                                const isLastRow = rows[rows.length - 1]?.id === row.id;
-                                const isCompleted = isWorkflowRowCompleted(row);
-                                const isActionLocked = isWorkflowActionLocked(row);
-                                const hasProposal = hasSubmittedProposal(row);
-                                const rowDisplaySubHead = getRowDisplaySubHead(row);
-                                const isReturnedRow =
-                                  normalizeStatus(row.latestWorkflowStatus) === 'returned';
-                                const isRejectedRow =
-                                  normalizeStatus(row.latestWorkflowStatus) === 'rejected';
-                                const canAddWorkflowRow =
-                                  !isReturnedRow && !isRejectedRow && isLastRow && canAddRow;
-                                const canEditRow =
-                                  hasProposal &&
-                                  !isActionLocked &&
-                                  (row.latestWorkflowStatus
-                                    ? isEditableWorkflowStatus(row.latestWorkflowStatus)
-                                    : !row.latestRequestId);
+                                  return (
+                                    <div
+                                      key={row.id}
+                                      className={`expenditure-demo-row ${
+                                        isCompleted ? 'expenditure-demo-row--completed' : ''
+                                      }`}
+                                    >
+                                      <div className="expenditure-demo-row__header">
+                                        <div className="expenditure-demo-row__left">
+                                          <div className="expenditure-demo-row__buttons">
+                                            {actions.map((option) => {
+                                              // Skip hidden buttons
+                                              if (option.hidden) return null;
+                                              const gateMessage = getWorkflowGateMessage(
+                                                row,
+                                                option.module,
+                                              );
+                                              const optionRequestRef = option.submitted
+                                                ? getWorkflowOptionRequestRef(row, option.module)
+                                                : '';
+                                              const optionRequestCode =
+                                                getWorkflowRequestDisplayCode(optionRequestRef);
+                                              const optionAmount = option.submitted
+                                                ? getWorkflowOptionAmount(row, option.module)
+                                                : 0;
+                                              const showOptionDetails = Boolean(
+                                                optionRequestRef || optionAmount > 0,
+                                              );
+                                              const isConstructionOption = option.label
+                                                ?.toLowerCase()
+                                                .includes('construction');
+                                              const paymentToneClass = option.submitted
+                                                ? getWorkflowOptionPaymentToneClass(
+                                                    row,
+                                                    option.module,
+                                                  )
+                                                : '';
 
-                                return (
-                                  <div
-                                    key={row.id}
-                                    className={`expenditure-demo-row ${
-                                      isCompleted ? 'expenditure-demo-row--completed' : ''
-                                    }`}
-                                  >
-                                    <div className="expenditure-demo-row__header">
-                                      <div className="expenditure-demo-row__left">
-                                        <div className="expenditure-demo-row__buttons">
-                                          {actions.map((option) => {
-                                            // Skip hidden buttons
-                                            if (option.hidden) return null;
-                                            const gateMessage = getWorkflowGateMessage(
-                                              row,
-                                              option.module,
-                                            );
-                                            const optionRequestRef = option.submitted
-                                              ? getWorkflowOptionRequestRef(row, option.module)
-                                              : '';
-                                            const optionRequestCode =
-                                              getWorkflowRequestDisplayCode(optionRequestRef);
-                                            const optionAmount = option.submitted
-                                              ? getWorkflowOptionAmount(row, option.module)
-                                              : 0;
-                                            const showOptionDetails = Boolean(
-                                              optionRequestRef || optionAmount > 0,
-                                            );
-                                            const isConstructionOption = option.label
-                                              ?.toLowerCase()
-                                              .includes('construction');
-                                            const paymentToneClass = option.submitted
-                                              ? getWorkflowOptionPaymentToneClass(
-                                                  row,
-                                                  option.module,
-                                                )
-                                              : '';
-
-                                            return (
-                                              <button
-                                                key={`${row.id}-${option.label}`}
-                                                type="button"
-                                                className={`expenditure-demo-option ${
-                                                  option.submitted ? 'submitted' : ''
-                                                } ${gateMessage ? 'disabled' : ''} ${
-                                                  showOptionDetails
-                                                    ? 'expenditure-demo-option--detailed'
-                                                    : ''
-                                                } ${
-                                                  row.primaryChoice === option.module ||
-                                                  (option.module === 'Settlement' &&
-                                                    row.settlementAmount > 0)
-                                                    ? 'chosen'
-                                                    : ''
-                                                } ${
-                                                  isConstructionOption && !showOptionDetails
-                                                    ? 'expenditure-demo-option--construction'
-                                                    : ''
-                                                } ${paymentToneClass}`}
-                                                onClick={() =>
-                                                  gateMessage
-                                                    ? showDialog({
-                                                        title: 'Action Not Available',
-                                                        message: gateMessage,
-                                                        variant: 'warning',
-                                                      })
-                                                    : handleModuleLaunch(row, option.module, card, {
-                                                        mode:
-                                                          (option.module === 'Advance' &&
-                                                            Boolean(row.advanceRequestId)) ||
-                                                          (option.module === 'Advance2' &&
-                                                            Boolean(row.advanceRequestId2)) ||
-                                                          (option.module === 'Settlement' &&
-                                                            Boolean(row.settlementRequestId)) ||
-                                                          (option.module === 'Expenditure' &&
-                                                            Boolean(row.expenditureRequestId))
-                                                            ? 'view'
-                                                            : 'create',
-                                                        forceNew:
-                                                          option.module === 'Advance2' &&
-                                                          !row.advanceRequestId2,
-                                                      })
-                                                }
-                                                title={gateMessage || undefined}
-                                              >
-                                                {showOptionDetails && (
-                                                  <span className="expenditure-demo-option__detail-grid">
-                                                    <span
-                                                      className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--ref"
-                                                      title={optionRequestRef || undefined}
-                                                      aria-label={
-                                                        optionRequestRef
-                                                          ? `Reference Request ID: ${optionRequestRef}`
-                                                          : 'Reference Request ID unavailable'
-                                                      }
-                                                    >
-                                                      <strong className="expenditure-demo-option__detail-ref-value">
-                                                        {optionRequestCode || '-'}
-                                                      </strong>
-                                                    </span>
-                                                    <span className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--amount">
-                                                      <span className="expenditure-demo-option__detail-module">
-                                                        {option.label}
-                                                      </span>
-                                                      {optionAmount > 0 && (
-                                                        <strong className="expenditure-demo-option__detail-amount-value">
-                                                          {formatAmount(optionAmount)}
+                                              return (
+                                                <button
+                                                  key={`${row.id}-${option.label}`}
+                                                  type="button"
+                                                  className={`expenditure-demo-option ${
+                                                    option.submitted ? 'submitted' : ''
+                                                  } ${gateMessage ? 'disabled' : ''} ${
+                                                    showOptionDetails
+                                                      ? 'expenditure-demo-option--detailed'
+                                                      : ''
+                                                  } ${
+                                                    row.primaryChoice === option.module ||
+                                                    (option.module === 'Settlement' &&
+                                                      row.settlementAmount > 0)
+                                                      ? 'chosen'
+                                                      : ''
+                                                  } ${
+                                                    isConstructionOption && !showOptionDetails
+                                                      ? 'expenditure-demo-option--construction'
+                                                      : ''
+                                                  } ${paymentToneClass}`}
+                                                  onClick={() =>
+                                                    gateMessage
+                                                      ? showDialog({
+                                                          title: 'Action Not Available',
+                                                          message: gateMessage,
+                                                          variant: 'warning',
+                                                        })
+                                                      : handleModuleLaunch(
+                                                          row,
+                                                          option.module,
+                                                          card,
+                                                          {
+                                                            mode:
+                                                              (option.module === 'Advance' &&
+                                                                Boolean(row.advanceRequestId)) ||
+                                                              (option.module === 'Advance2' &&
+                                                                Boolean(row.advanceRequestId2)) ||
+                                                              (option.module === 'Settlement' &&
+                                                                Boolean(row.settlementRequestId)) ||
+                                                              (option.module === 'Expenditure' &&
+                                                                Boolean(row.expenditureRequestId))
+                                                                ? 'view'
+                                                                : 'create',
+                                                            forceNew:
+                                                              option.module === 'Advance2' &&
+                                                              !row.advanceRequestId2,
+                                                          },
+                                                        )
+                                                  }
+                                                  title={gateMessage || undefined}
+                                                >
+                                                  {showOptionDetails && (
+                                                    <span className="expenditure-demo-option__detail-grid">
+                                                      <span
+                                                        className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--ref"
+                                                        title={optionRequestRef || undefined}
+                                                        aria-label={
+                                                          optionRequestRef
+                                                            ? `Reference Request ID: ${optionRequestRef}`
+                                                            : 'Reference Request ID unavailable'
+                                                        }
+                                                      >
+                                                        <strong className="expenditure-demo-option__detail-ref-value">
+                                                          {optionRequestCode || '-'}
                                                         </strong>
-                                                      )}
+                                                      </span>
+                                                      <span className="expenditure-demo-option__detail-box expenditure-demo-option__detail-box--amount">
+                                                        <span className="expenditure-demo-option__detail-module">
+                                                          {option.label}
+                                                        </span>
+                                                        {optionAmount > 0 && (
+                                                          <strong className="expenditure-demo-option__detail-amount-value">
+                                                            {formatAmount(optionAmount)}
+                                                          </strong>
+                                                        )}
+                                                      </span>
                                                     </span>
-                                                  </span>
-                                                )}
-                                                {!showOptionDetails && (
-                                                  <span
-                                                    className={`expenditure-demo-option__label ${
-                                                      option.label
-                                                        ?.toLowerCase()
-                                                        .includes('construction')
-                                                        ? 'expenditure-demo-option__label--construction'
-                                                        : ''
-                                                    }`}
-                                                  >
-                                                    {option.label}
-                                                  </span>
-                                                )}
-                                              </button>
-                                            );
-                                          })}
-                                        </div>
-                                      </div>
-
-                                      <div className="expenditure-demo-row__status">
-                                        <div
-                                          className={`expenditure-demo-row__subhead ${
-                                            rowDisplaySubHead
-                                              ? ''
-                                              : 'expenditure-demo-row__subhead--empty'
-                                          } ${
-                                            rowDisplaySubHead
-                                              ?.toLowerCase()
-                                              .includes('construction')
-                                              ? 'expenditure-demo-row__subhead--construction'
-                                              : ''
-                                          }`}
-                                          title={rowDisplaySubHead || 'Sub head not selected'}
-                                        >
-                                          <strong className="expenditure-demo-row__subhead-value">
-                                            {rowDisplaySubHead || 'Sub Head -'}
-                                          </strong>
+                                                  )}
+                                                  {!showOptionDetails && (
+                                                    <span
+                                                      className={`expenditure-demo-option__label ${
+                                                        option.label
+                                                          ?.toLowerCase()
+                                                          .includes('construction')
+                                                          ? 'expenditure-demo-option__label--construction'
+                                                          : ''
+                                                      }`}
+                                                    >
+                                                      {option.label}
+                                                    </span>
+                                                  )}
+                                                </button>
+                                              );
+                                            })}
+                                          </div>
                                         </div>
 
-                                        {/* Edit button - only show for submitted proposals */}
-                                        {hasProposal && (
+                                        <div className="expenditure-demo-row__status">
+                                          <div
+                                            className={`expenditure-demo-row__subhead ${
+                                              rowDisplaySubHead
+                                                ? ''
+                                                : 'expenditure-demo-row__subhead--empty'
+                                            } ${
+                                              rowDisplaySubHead
+                                                ?.toLowerCase()
+                                                .includes('construction')
+                                                ? 'expenditure-demo-row__subhead--construction'
+                                                : ''
+                                            }`}
+                                            title={rowDisplaySubHead || 'Sub head not selected'}
+                                          >
+                                            <strong className="expenditure-demo-row__subhead-value">
+                                              {rowDisplaySubHead || 'Sub Head -'}
+                                            </strong>
+                                          </div>
+
+                                          {/* Edit button - only show for submitted proposals */}
+                                          {hasProposal && (
+                                            <button
+                                              type="button"
+                                              className="expenditure-demo-row__icon-btn"
+                                              disabled={!canEditRow}
+                                              onClick={() => {
+                                                if (!canEditRow) return;
+
+                                                // Navigate to the last submitted module for editing
+                                                if (
+                                                  row.latestRequestType === 'Advance' &&
+                                                  row.advanceRequestId2
+                                                ) {
+                                                  handleModuleLaunch(row, 'Advance2', card, {
+                                                    mode: 'edit',
+                                                  });
+                                                } else if (
+                                                  row.latestRequestType === 'Advance' &&
+                                                  row.advanceRequestId
+                                                ) {
+                                                  handleModuleLaunch(row, 'Advance', card, {
+                                                    mode: 'edit',
+                                                  });
+                                                } else if (
+                                                  row.latestRequestType === 'Expenditure' &&
+                                                  row.expenditureRequestId
+                                                ) {
+                                                  handleModuleLaunch(row, 'Expenditure', card, {
+                                                    mode: 'edit',
+                                                  });
+                                                } else if (
+                                                  row.latestRequestType === 'Settlement' &&
+                                                  row.settlementRequestId
+                                                ) {
+                                                  handleModuleLaunch(row, 'Settlement', card, {
+                                                    mode: 'edit',
+                                                  });
+                                                } else if (row.advanceRequestId2) {
+                                                  handleModuleLaunch(row, 'Advance2', card, {
+                                                    mode: 'edit',
+                                                  });
+                                                } else if (row.advanceRequestId) {
+                                                  handleModuleLaunch(row, 'Advance', card, {
+                                                    mode: 'edit',
+                                                  });
+                                                } else if (row.settlementRequestId) {
+                                                  handleModuleLaunch(row, 'Settlement', card, {
+                                                    mode: 'edit',
+                                                  });
+                                                } else if (row.expenditureRequestId) {
+                                                  handleModuleLaunch(row, 'Expenditure', card, {
+                                                    mode: 'edit',
+                                                  });
+                                                }
+                                              }}
+                                              title={
+                                                canEditRow
+                                                  ? 'Edit proposal'
+                                                  : 'Editing is disabled while approval is in progress'
+                                              }
+                                              aria-label="Edit proposal"
+                                            >
+                                              <Edit2 size={14} />
+                                            </button>
+                                          )}
+
+                                          {hasProposal && (
+                                            <button
+                                              type="button"
+                                              className="expenditure-demo-row__icon-btn"
+                                              onClick={() => handleInfoClick(row.latestRequestId)}
+                                              title="Logs"
+                                              aria-label="View request logs"
+                                            >
+                                              <Info size={14} />
+                                            </button>
+                                          )}
+
+                                          {hasProposal &&
+                                            (() => {
+                                              const rowStatusLabel = getRowWorkflowLabel(row);
+
+                                              return (
+                                                <button
+                                                  type="button"
+                                                  className={`expenditure-status-pill ${getStatusPillToneClass(
+                                                    rowStatusLabel,
+                                                  )} ${
+                                                    showWorkflowStatusDetail[row.id]
+                                                      ? 'expenditure-status-pill--active'
+                                                      : ''
+                                                  }`}
+                                                  onClick={() =>
+                                                    setShowWorkflowStatusDetail((prev) => ({
+                                                      ...prev,
+                                                      [row.id]: !prev[row.id],
+                                                    }))
+                                                  }
+                                                  aria-expanded={Boolean(
+                                                    showWorkflowStatusDetail[row.id],
+                                                  )}
+                                                  aria-label={`Toggle approval status for ${row.id}`}
+                                                >
+                                                  {rowStatusLabel}
+                                                </button>
+                                              );
+                                            })()}
+
+                                          {hasProposal && showWorkflowStatusDetail[row.id] && (
+                                            <div className="expenditure-status-detail-line">
+                                              {(['hod', 'dof', 'principal'] as const).map(
+                                                (stage, stepIndex, array) => {
+                                                  const stageState = getWorkflowTimelineState(
+                                                    row,
+                                                    stage,
+                                                  );
+
+                                                  return (
+                                                    <React.Fragment key={stage}>
+                                                      <div
+                                                        className={`expenditure-status-line-circle expenditure-status-circle-${stageState}`}
+                                                        title={stage.toUpperCase()}
+                                                      />
+                                                      {stepIndex < array.length - 1 && (
+                                                        <div
+                                                          className={`expenditure-status-line-connector expenditure-status-line-connector--${stageState}`}
+                                                        />
+                                                      )}
+                                                    </React.Fragment>
+                                                  );
+                                                },
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        <div className="expenditure-demo-row__actions">
                                           <button
                                             type="button"
                                             className="expenditure-demo-row__icon-btn"
-                                            disabled={!canEditRow}
+                                            disabled={!canAddWorkflowRow}
                                             onClick={() => {
-                                              if (!canEditRow) return;
-
-                                              // Navigate to the last submitted module for editing
-                                              if (
-                                                row.latestRequestType === 'Advance' &&
-                                                row.advanceRequestId2
-                                              ) {
-                                                handleModuleLaunch(row, 'Advance2', card, {
-                                                  mode: 'edit',
-                                                });
-                                              } else if (
-                                                row.latestRequestType === 'Advance' &&
-                                                row.advanceRequestId
-                                              ) {
-                                                handleModuleLaunch(row, 'Advance', card, {
-                                                  mode: 'edit',
-                                                });
-                                              } else if (
-                                                row.latestRequestType === 'Expenditure' &&
-                                                row.expenditureRequestId
-                                              ) {
-                                                handleModuleLaunch(row, 'Expenditure', card, {
-                                                  mode: 'edit',
-                                                });
-                                              } else if (
-                                                row.latestRequestType === 'Settlement' &&
-                                                row.settlementRequestId
-                                              ) {
-                                                handleModuleLaunch(row, 'Settlement', card, {
-                                                  mode: 'edit',
-                                                });
-                                              } else if (row.advanceRequestId2) {
-                                                handleModuleLaunch(row, 'Advance2', card, {
-                                                  mode: 'edit',
-                                                });
-                                              } else if (row.advanceRequestId) {
-                                                handleModuleLaunch(row, 'Advance', card, {
-                                                  mode: 'edit',
-                                                });
-                                              } else if (row.settlementRequestId) {
-                                                handleModuleLaunch(row, 'Settlement', card, {
-                                                  mode: 'edit',
-                                                });
-                                              } else if (row.expenditureRequestId) {
-                                                handleModuleLaunch(row, 'Expenditure', card, {
-                                                  mode: 'edit',
-                                                });
-                                              }
+                                              if (!canAddWorkflowRow) return;
+                                              addRow(card.financeRequestId);
                                             }}
                                             title={
-                                              canEditRow
-                                                ? 'Edit proposal'
-                                                : 'Editing is disabled while approval is in progress'
+                                              canAddWorkflowRow
+                                                ? 'Add row'
+                                                : 'Only the latest addable row can create a new row'
                                             }
-                                            aria-label="Edit proposal"
+                                            aria-label="Add workflow row"
                                           >
-                                            <Edit2 size={14} />
+                                            <Plus size={14} />
                                           </button>
-                                        )}
 
-                                        {hasProposal && (
                                           <button
                                             type="button"
-                                            className="expenditure-demo-row__icon-btn"
-                                            onClick={() => handleInfoClick(row.latestRequestId)}
-                                            title="Logs"
-                                            aria-label="View request logs"
-                                          >
-                                            <Info size={14} />
-                                          </button>
-                                        )}
-
-                                        {hasProposal &&
-                                          (() => {
-                                            const rowStatusLabel = getRowWorkflowLabel(row);
-
-                                            return (
-                                              <button
-                                                type="button"
-                                                className={`expenditure-status-pill ${getStatusPillToneClass(
-                                                  rowStatusLabel,
-                                                )} ${
-                                                  showWorkflowStatusDetail[row.id]
-                                                    ? 'expenditure-status-pill--active'
-                                                    : ''
-                                                }`}
-                                                onClick={() =>
-                                                  setShowWorkflowStatusDetail((prev) => ({
-                                                    ...prev,
-                                                    [row.id]: !prev[row.id],
-                                                  }))
-                                                }
-                                                aria-expanded={Boolean(
-                                                  showWorkflowStatusDetail[row.id],
-                                                )}
-                                                aria-label={`Toggle approval status for ${row.id}`}
-                                              >
-                                                {rowStatusLabel}
-                                              </button>
-                                            );
-                                          })()}
-
-                                        {hasProposal && showWorkflowStatusDetail[row.id] && (
-                                          <div className="expenditure-status-detail-line">
-                                            {(['hod', 'dof', 'principal'] as const).map(
-                                              (stage, stepIndex, array) => {
-                                                const stageState = getWorkflowTimelineState(
-                                                  row,
-                                                  stage,
-                                                );
-
-                                                return (
-                                                  <React.Fragment key={stage}>
-                                                    <div
-                                                      className={`expenditure-status-line-circle expenditure-status-circle-${stageState}`}
-                                                      title={stage.toUpperCase()}
-                                                    />
-                                                    {stepIndex < array.length - 1 && (
-                                                      <div
-                                                        className={`expenditure-status-line-connector expenditure-status-line-connector--${stageState}`}
-                                                      />
-                                                    )}
-                                                  </React.Fragment>
-                                                );
-                                              },
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
-
-                                      <div className="expenditure-demo-row__actions">
-                                        <button
-                                          type="button"
-                                          className="expenditure-demo-row__icon-btn"
-                                          disabled={!canAddWorkflowRow}
-                                          onClick={() => {
-                                            if (!canAddWorkflowRow) return;
-                                            addRow(card.financeRequestId);
-                                          }}
-                                          title={
-                                            canAddWorkflowRow
-                                              ? 'Add row'
-                                              : 'Only the latest addable row can create a new row'
-                                          }
-                                          aria-label="Add workflow row"
-                                        >
-                                          <Plus size={14} />
-                                        </button>
-
-                                        <button
-                                          type="button"
-                                          className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
-                                          disabled={
-                                            isActionLocked ||
-                                            row.latestWorkflowStatus === 'approved' ||
-                                            row.latestWorkflowStatus === 'completed' ||
-                                            row.latestWorkflowStatus === 'archived' ||
-                                            isReturnedRow ||
-                                            isRejectedRow
-                                          }
-                                          onClick={() => {
-                                            if (
+                                            className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
+                                            disabled={
                                               isActionLocked ||
                                               row.latestWorkflowStatus === 'approved' ||
                                               row.latestWorkflowStatus === 'completed' ||
                                               row.latestWorkflowStatus === 'archived' ||
                                               isReturnedRow ||
                                               isRejectedRow
-                                            ) {
-                                              return;
                                             }
-                                            deleteWorkflowRow(card.financeRequestId, row);
-                                          }}
-                                          title={
-                                            isActionLocked
-                                              ? 'Delete is disabled while approval is in progress'
-                                              : 'Delete row'
-                                          }
-                                          aria-label="Delete workflow row"
-                                        >
-                                          <Trash2 size={14} />
-                                        </button>
+                                            onClick={() => {
+                                              if (
+                                                isActionLocked ||
+                                                row.latestWorkflowStatus === 'approved' ||
+                                                row.latestWorkflowStatus === 'completed' ||
+                                                row.latestWorkflowStatus === 'archived' ||
+                                                isReturnedRow ||
+                                                isRejectedRow
+                                              ) {
+                                                return;
+                                              }
+                                              deleteWorkflowRow(card.financeRequestId, row);
+                                            }}
+                                            title={
+                                              isActionLocked
+                                                ? 'Delete is disabled while approval is in progress'
+                                                : 'Delete row'
+                                            }
+                                            aria-label="Delete workflow row"
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
-                                );
-                              })}
+                                  );
+                                })}
+                              </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="expenditure-demo-card-footer">
-                          {isCardClosed ? (
-                            <div className="expenditure-demo-card-footer__closed">
-                              <Lock size={12} />
-                              <span>
-                                Closed
-                                {card.closedAt ? ` on ${formatDateTime(card.closedAt)}` : ''}
-                              </span>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              className="expenditure-demo-card-footer__close-btn"
-                              disabled={
-                                !canFinalizeClose || closingFinanceId === card.financeRequestId
-                              }
-                              title={
-                                canFinalizeClose
-                                  ? 'Finalize and close this finance card'
-                                  : 'Available once every submitted request under this card is approved and paid'
-                              }
-                              onClick={() => handleFinalizeCloseCard(card.financeRequestId)}
-                            >
-                              <Lock size={12} />
-                              {closingFinanceId === card.financeRequestId
-                                ? 'Closing...'
-                                : 'Finalize & Close'}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {!loading && filteredData.length > 0 && (
-              <div className="expenditure-request-list">
-                {filteredData.map((item, idx) => {
-                  const isExpanded = Boolean(showRequestStatusDetail[item.id]);
-                  const statusLabel = getRequestStatusLabel(item);
-
-                  return (
-                    <div key={item.id} className="expenditure-request-card">
-                      <div className="expenditure-request-cardtop">
-                        <div className="expenditure-request-cardleft">
-                          <div className="expenditure-request-cardindex">{idx + 1}</div>
-
-                          <div className="expenditure-request-cardcontent">
-                            <div className="expenditure-request-cardname">{item.applicantname}</div>
-
-                            <div className="expenditure-request-cardmeta">
-                              <span>{item.beneficiarytype}</span>
-                              <span className="expenditure-demo-triggermeta-dot" />
-                              <span>{item.primaryhead}</span>
-                            </div>
-
-                            <div className="expenditure-request-cardsub">
-                              Submitted:{' '}
-                              {item.createdat ? new Date(item.createdat).toLocaleDateString() : '-'}
-                            </div>
+                          <div className="expenditure-demo-card-footer">
+                            {isCardClosed ? (
+                              <div className="expenditure-demo-card-footer__closed">
+                                <Lock size={12} />
+                                <span>
+                                  Closed
+                                  {card.closedAt ? ` on ${formatDateTime(card.closedAt)}` : ''}
+                                </span>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="expenditure-demo-card-footer__close-btn"
+                                disabled={
+                                  !canFinalizeClose || closingFinanceId === card.financeRequestId
+                                }
+                                title={
+                                  canFinalizeClose
+                                    ? 'Finalize and close this finance card'
+                                    : 'Available once every submitted request under this card is approved and paid'
+                                }
+                                onClick={() => handleFinalizeCloseCard(card.financeRequestId)}
+                              >
+                                <Lock size={12} />
+                                {closingFinanceId === card.financeRequestId
+                                  ? 'Closing...'
+                                  : 'Finalize & Close'}
+                              </button>
+                            )}
                           </div>
-                        </div>
-
-                        <div className="expenditure-request-cardright">
-                          <div className="expenditure-request-cardamount">
-                            ₹{Number(item.amount || 0).toLocaleString('en-IN')}
-                          </div>
-
-                          <div className="expenditure-request-cardactions">
-                            <button
-                              type="button"
-                              title="View"
-                              className="expenditure-action-global"
-                              onClick={() => navigate(`/expenditure/${item.id}`)}
-                            >
-                              <Eye size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              title="Info"
-                              className="expenditure-action-global"
-                              onClick={() => handleInfoClick(item.id)}
-                            >
-                              <Info size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              title="Edit"
-                              className="expenditure-action-global"
-                              disabled={!isEditableWorkflowStatus(getRequestWorkflowStatus(item))}
-                              onClick={() => {
-                                if (!isEditableWorkflowStatus(getRequestWorkflowStatus(item)))
-                                  return;
-                                navigate(`/expenditure/${item.id}/edit`);
-                              }}
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              title="Delete"
-                              className="expenditure-action-global"
-                              disabled={!isEditableWorkflowStatus(getRequestWorkflowStatus(item))}
-                              onClick={() => {
-                                if (!isEditableWorkflowStatus(getRequestWorkflowStatus(item)))
-                                  return;
-                                deleteExpenditureRequest(item.id);
-                              }}
-                              style={{ color: '#dc2626' }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-
-                          <button
-                            type="button"
-                            className={`expenditure-status-pill ${getStatusPillToneClass(
-                              statusLabel,
-                            )} ${isExpanded ? 'expenditure-status-pill--active' : ''}`}
-                            onClick={() =>
-                              setShowRequestStatusDetail((prev) => ({
-                                ...prev,
-                                [item.id]: !prev[item.id],
-                              }))
-                            }
-                            aria-expanded={isExpanded}
-                            aria-label={`Toggle status for ${item.applicantname}`}
-                          >
-                            {statusLabel}
-                          </button>
-                        </div>
-                      </div>
-
-                      {isExpanded && (
-                        <div className="expenditure-request-cardtimeline">
-                          {(['hod', 'dof', 'principal'] as const).map((stage, stageIndex, arr) => {
-                            const stageState = getRequestTimelineState(item, stage);
-
-                            return (
-                              <React.Fragment key={stage}>
-                                <div
-                                  className={`expenditure-status-line-circle expenditure-status-circle-${stageState}`}
-                                  title={stage.toUpperCase()}
-                                />
-                                {stageIndex < arr.length - 1 && (
-                                  <div
-                                    className={`expenditure-status-line-connector expenditure-status-line-connector--${stageState}`}
-                                  />
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
                         </div>
                       )}
                     </div>
                   );
                 })}
               </div>
+            ) : (
+              <div className="expenditure-individual-cards">
+                {individualCards.length > 0 ? (
+                  individualCards.map((ic) => {
+                    const financeBaseRef = normalizeFinanceRequestRefBase(
+                      ic.card.proposalId,
+                      ic.card.financeRequestId,
+                    );
+                    const displayCode = getWorkflowRequestDisplayCode(ic.requestRef);
+                    const canEdit =
+                      ic.requestId &&
+                      isEditableWorkflowStatus(ic.status) &&
+                      !isWorkflowActionLocked(ic.row);
+                    const isPaid = normalizeStatus(ic.paymentStatus) === 'paid';
+                    const statusAccent =
+                      ic.statusLabel === 'Returned'
+                        ? 'expenditure-individual-card--returned'
+                        : ic.statusLabel === 'Pending' || ic.statusLabel === 'Resubmitted'
+                          ? 'expenditure-individual-card--pending'
+                          : ic.statusLabel === 'Approved' && isPaid
+                            ? 'expenditure-individual-card--paid'
+                            : ic.statusLabel === 'Approved'
+                              ? 'expenditure-individual-card--approved'
+                              : '';
+                    const typeBadgeClass =
+                      ic.module === 'Advance' || ic.module === 'Advance2'
+                        ? 'expenditure-individual-card__type-badge--advance'
+                        : ic.module === 'Settlement'
+                          ? 'expenditure-individual-card__type-badge--settlement'
+                          : 'expenditure-individual-card__type-badge--expenditure';
+
+                    return (
+                      <div
+                        key={ic.key}
+                        className={`expenditure-individual-card ${statusAccent}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          if (ic.requestId) {
+                            navigate(`/expenditure/${ic.requestId}`);
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if ((e.key === 'Enter' || e.key === ' ') && ic.requestId) {
+                            e.preventDefault();
+                            navigate(`/expenditure/${ic.requestId}`);
+                          }
+                        }}
+                      >
+                        <div className="expenditure-individual-card__header">
+                          <div className="expenditure-individual-card__header-left">
+                            <span className="expenditure-individual-card__finance-ref">
+                              {financeBaseRef}
+                            </span>
+                            <h5 className="expenditure-individual-card__name">
+                              {ic.card.applicantName}
+                            </h5>
+                            <span
+                              className={`expenditure-individual-card__type-badge ${typeBadgeClass}`}
+                            >
+                              {ic.requestType}
+                            </span>
+                            {displayCode && (
+                              <span className="expenditure-individual-card__request-code">
+                                {displayCode}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="expenditure-individual-card__header-right">
+                            <div className="expenditure-individual-card__amount">
+                              {formatAmount(ic.amount)}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="expenditure-individual-card__body">
+                          <div className="expenditure-individual-card__meta">
+                            {ic.card.beneficiaryName && (
+                              <span className="expenditure-individual-card__beneficiary">
+                                {ic.card.beneficiaryName}
+                              </span>
+                            )}
+                            {ic.card.tag && (
+                              <span className="expenditure-individual-card__tag">
+                                {ic.card.tag}
+                              </span>
+                            )}
+                            {ic.subHead && (
+                              <span className="expenditure-individual-card__subhead">
+                                {ic.subHead}
+                              </span>
+                            )}
+                          </div>
+
+                          {selectedStatusFilter === 'pending_payment' && (
+                            <div className="expenditure-individual-card__payment-status">
+                              <span
+                                className={`expenditure-individual-card__payment-pill ${
+                                  isPaid
+                                    ? 'expenditure-individual-card__payment-pill--paid'
+                                    : 'expenditure-individual-card__payment-pill--unpaid'
+                                }`}
+                              >
+                                {isPaid ? 'Paid' : 'Payment Pending'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="expenditure-individual-card__footer">
+                          <div className="expenditure-individual-card__status-area">
+                            <span
+                              className={`expenditure-status-pill ${getStatusPillToneClass(
+                                ic.statusLabel,
+                              )}`}
+                            >
+                              {ic.statusLabel}
+                            </span>
+
+                            <div className="expenditure-individual-card__timeline">
+                              {(['hod', 'dof', 'principal'] as const).map(
+                                (stage, stageIndex, arr) => {
+                                  const stageState = getWorkflowTimelineState(ic.row, stage);
+
+                                  return (
+                                    <React.Fragment key={stage}>
+                                      <div
+                                        className={`expenditure-status-line-circle expenditure-status-circle-${stageState}`}
+                                        title={stage.toUpperCase()}
+                                      />
+                                      {stageIndex < arr.length - 1 && (
+                                        <div
+                                          className={`expenditure-status-line-connector expenditure-status-line-connector--${stageState}`}
+                                        />
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                },
+                              )}
+                            </div>
+                          </div>
+
+                          <div
+                            className="expenditure-individual-card__actions"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              title="View"
+                              className="expenditure-individual-card__action-btn"
+                              onClick={() => {
+                                if (ic.requestId) navigate(`/expenditure/${ic.requestId}`);
+                              }}
+                            >
+                              <Eye size={15} />
+                            </button>
+
+                            {canEdit && (
+                              <button
+                                type="button"
+                                title="Edit"
+                                className="expenditure-individual-card__action-btn"
+                                onClick={() => {
+                                  if (ic.requestId) navigate(`/expenditure/${ic.requestId}/edit`);
+                                }}
+                              >
+                                <Edit2 size={15} />
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              title="Logs"
+                              className="expenditure-individual-card__action-btn"
+                              onClick={() => handleInfoClick(ic.requestId)}
+                            >
+                              <Info size={15} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="expenditure-individual-cards__empty">
+                    No{' '}
+                    {selectedStatusFilter === 'pending'
+                      ? 'pending'
+                      : selectedStatusFilter === 'return'
+                        ? 'returned'
+                        : selectedStatusFilter === 'approved'
+                          ? 'approved'
+                          : 'payable'}{' '}
+                    requests found for FY {financialYear}.
+                  </div>
+                )}
+              </div>
             )}
 
             {loading && <div className="expenditure-state">Loading expenditure requests...</div>}
 
-            {!loading && filteredProposalCards.length === 0 && (
+            {!loading && filteredProposalCards.length === 0 && isGroupedView && (
               <div className="expenditure-state expenditure-state--empty">
                 <div style={{ color: '#6b7280', fontSize: '15px', marginTop: '10px' }}>
                   {financeIdQuery.trim()
