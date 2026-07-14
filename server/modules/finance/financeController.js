@@ -287,10 +287,9 @@ const isFinanceApplicantOwner = (userId, financeRecord) => {
     return true;
   }
 
-  return (
-    !toPositiveInt(financeRecord.employee_id) &&
-    toPositiveInt(financeRecord.created_by) === normalizedUserId
-  );
+  // LEGACY: fallback to created_by when master_employees.user_id is not populated.
+  // Remove after all master_employees rows have correct user_id values.
+  return toPositiveInt(financeRecord.created_by) === normalizedUserId;
 };
 
 const canAccessFinanceRecord = (req, financeRecord) => {

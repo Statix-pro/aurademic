@@ -675,7 +675,13 @@ const expenditureController = {
       const context = await expenditureModel.getFinanceRequestContext(financeId);
       if (!context) return sendError(res, 404, 'Finance request not found');
 
-      if (!isSuperAdmin && toPositiveInt(context.created_by) !== userId) {
+      const isOwner = userId && toPositiveInt(context.created_by) === userId;
+      if (
+        !isSuperAdmin &&
+        !isOwner &&
+        !hasAnyExpenditureWorkflowPermission(req) &&
+        !canAccessExpenditureByRole(req)
+      ) {
         return sendError(res, 403, 'Access denied');
       }
 
