@@ -565,3 +565,522 @@ hr {
 .toggle-switch input:checked + .slider:before {
   transform: translateX(20px);
 }
+
+/* Project form layout — scoped here so the shared Journal form remains unchanged. */
+.journal-form-body {
+  min-height: 100vh;
+  background: #eef5fc;
+}
+
+.journal-form-container {
+  max-width: 1540px;
+  padding: 2rem clamp(1rem, 3vw, 4rem) 3.5rem;
+}
+
+.research-form {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.research-form .form-card {
+  margin-bottom: 0;
+}
+
+.project-section {
+  padding: clamp(1.25rem, 2.2vw, 2rem);
+  border: 1px solid rgba(211, 224, 237, 0.82);
+  border-radius: 22px;
+  box-shadow: 0 12px 32px rgba(42, 83, 125, 0.09);
+}
+
+.project-section-header,
+.project-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 38px;
+  padding-bottom: 0.85rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #cfd8e2;
+}
+
+.project-section-header .form-section-title,
+.project-section-heading,
+.project-column-title {
+  margin: 0;
+  color: #0965a6 !important;
+  font-size: 1.08rem;
+  font-weight: 700;
+}
+
+.project-section .form-label {
+  color: #3c4249;
+  font-size: 0.94rem;
+  font-weight: 650;
+}
+
+.project-section .form-control,
+.project-section .form-select {
+  min-height: 48px;
+  border-color: #c7ced6;
+  border-radius: 13px !important;
+  background-color: #fff;
+  font-size: 0.96rem;
+}
+
+.project-section .form-control::placeholder {
+  color: #a2a8b0;
+  opacity: 1;
+}
+
+.project-section .btn-add {
+  border-radius: 9px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.88rem;
+}
+
+/* Investigator rows */
+.investigator-card .project-section-header {
+  margin-bottom: 1.25rem;
+}
+
+.investigator-card .project-section-header > div:last-child {
+  gap: 0.6rem;
+}
+
+.investigator-card .radio-group {
+  gap: 1.25rem;
+}
+
+.investigator-row {
+  display: grid;
+  grid-template-columns: 24px 188px minmax(0, 1fr) 76px;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 0.85rem !important;
+}
+
+.investigator-input-group {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(120px, 1fr));
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.investigator-input-group .form-control,
+.investigator-search-container {
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+}
+
+.investigator-search-container {
+  position: relative;
+}
+
+.designation-select {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+}
+
+.investigator-row-radio {
+  width: 20px;
+  height: 20px;
+  border-color: #7e8790;
+}
+
+.investigator-row-radio:checked {
+  border-color: #178b69;
+}
+
+.investigator-row-radio::after {
+  background-color: #178b69;
+}
+
+.investigator-action-buttons {
+  width: auto;
+  justify-content: flex-end;
+}
+
+.btn-add-author,
+.btn-delete-author {
+  width: 34px;
+  height: 34px;
+  border-radius: 50% !important;
+}
+
+.btn-delete-author,
+.btn-delete-author:hover {
+  color: #f33e3e !important;
+  background: transparent !important;
+}
+
+/* Proposal and call details */
+.proposal-details-grid {
+  --bs-gutter-x: 2rem;
+}
+
+.proposal-details-grid > [class*='col-'] + [class*='col-'] {
+  border-left: 1px solid #dbe2e9;
+}
+
+.project-column-title {
+  padding-bottom: 0.8rem;
+  margin-bottom: 1.1rem;
+  border-bottom: 1px solid #d2dbe4;
+}
+
+.proposal-details-card .radio-group {
+  gap: 0.7rem 1.35rem;
+}
+
+.proposal-details-card .radio-item label {
+  color: #4c535b;
+  font-size: 0.9rem;
+}
+
+.proposal-details-card .row.g-2 {
+  --bs-gutter-x: 0.75rem;
+}
+
+/* Table-like collection rows */
+.project-table-head,
+.project-table-row {
+  display: grid;
+  align-items: center;
+  column-gap: 0.9rem;
+}
+
+.project-table-head {
+  min-height: 46px;
+  margin-bottom: 0.55rem;
+  padding: 0.6rem 0.8rem;
+  color: #0965a6;
+  background: #e5f1fc;
+  border: 1px solid #c2d3e5;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.project-table-row {
+  min-height: 68px;
+  margin: 0 !important;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #d5dde5;
+  border-top: 0;
+  background: #fff;
+}
+
+.project-table-row > [class*='col'] {
+  width: auto;
+  padding: 0;
+}
+
+.financial-table-head,
+.financial-contribution-card .project-table-row {
+  grid-template-columns: 48px minmax(220px, 1.3fr) minmax(180px, 1fr) minmax(120px, 0.55fr) 38px;
+}
+
+.collaboration-table-head,
+.collaboration-card .project-table-row {
+  grid-template-columns: 48px minmax(210px, 1.25fr) minmax(180px, 1fr) minmax(150px, 0.7fr) 38px;
+}
+
+.project-table-row .btn-delete-author {
+  margin-left: auto;
+}
+
+.agency-type-input-wrapper .dropdown-menu {
+  max-height: 230px;
+  overflow-y: auto;
+}
+
+/* Submission and project outcome areas */
+.project-dual-section {
+  --bs-gutter-x: 1.5rem;
+  margin: 0 !important;
+}
+
+.project-upload-card .custom-input-group,
+.project-details-card .custom-input-group {
+  margin: 0;
+}
+
+.date-submission-card > div:first-child {
+  display: grid !important;
+  grid-template-columns: auto auto minmax(130px, 1fr) minmax(145px, 1fr);
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.date-submission-card > div:first-child .me-2,
+.date-submission-card > div:first-child .me-3 {
+  margin: 0 !important;
+}
+
+.date-submission-card input[type='date'],
+.date-submission-card select {
+  width: 100% !important;
+}
+
+.project-details-card hr {
+  margin: 1.4rem 0;
+  border-color: #d4dce5;
+}
+
+.project-details-grid {
+  --bs-gutter-x: 1.25rem;
+  --bs-gutter-y: 0.85rem;
+}
+
+.project-detail-field {
+  display: grid !important;
+  grid-template-columns: minmax(180px, 1fr) auto minmax(160px, 0.9fr);
+  gap: 0.75rem;
+}
+
+.project-detail-field .me-auto,
+.project-detail-field .me-2 {
+  margin: 0 !important;
+}
+
+.project-detail-field .form-label {
+  min-width: 0 !important;
+  margin: 0;
+}
+
+.grant-table-head,
+.grant-disbursement-row {
+  grid-template-columns: minmax(100px, 0.55fr) minmax(130px, 0.9fr) minmax(100px, 0.5fr) minmax(
+      120px,
+      0.6fr
+    ) minmax(110px, 0.65fr) minmax(110px, 0.65fr) 38px;
+}
+
+.grant-disbursement-row > :nth-child(5),
+.grant-disbursement-row > :nth-child(6) {
+  display: inline-flex;
+  min-width: 0;
+}
+
+.grant-disbursement-row .custom-input-group .d-flex {
+  gap: 0.35rem !important;
+}
+
+.grant-disbursement-row .custom-input-group .text-muted.small {
+  display: none;
+}
+
+.grant-disbursement-row .custom-input-group .btn {
+  padding: 0.45rem 0.65rem !important;
+  border-radius: 8px !important;
+  font-size: 0.78rem;
+}
+
+.project-outcome-row {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.project-outcome-row .form-section-title {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.project-outcome-row .checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.4rem;
+}
+
+.project-documents-grid {
+  --bs-gutter-x: 1.25rem;
+  --bs-gutter-y: 1.25rem;
+}
+
+.project-document-item {
+  min-height: 88px;
+  padding: 0.85rem;
+  border: 1px solid #cad4df;
+  border-radius: 13px;
+  background: #fff;
+}
+
+.project-document-item > .form-label {
+  min-width: 0 !important;
+  flex: 1;
+}
+
+.project-document-item .custom-input-group .d-flex {
+  gap: 0.5rem !important;
+}
+
+.project-document-item .custom-input-group .text-muted.small {
+  display: none;
+}
+
+.project-document-item .custom-input-group .btn {
+  padding: 0.5rem 0.75rem !important;
+  border-radius: 8px !important;
+  font-size: 0.84rem;
+}
+
+@media (max-width: 1199.98px) {
+  .investigator-row {
+    grid-template-columns: 24px 160px minmax(0, 1fr) 72px;
+  }
+
+  .investigator-input-group {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+
+  .grant-table-head,
+  .grant-disbursement-row {
+    grid-template-columns: minmax(90px, 0.55fr) minmax(110px, 0.9fr) minmax(90px, 0.5fr) minmax(
+        105px,
+        0.6fr
+      ) minmax(95px, 0.65fr) minmax(95px, 0.65fr) 38px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .journal-form-container {
+    padding: 1rem 0.75rem 2.5rem;
+  }
+
+  .research-form {
+    gap: 1rem;
+  }
+
+  .project-section {
+    padding: 1rem;
+    border-radius: 16px;
+  }
+
+  .project-section-header {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .proposal-details-grid > [class*='col-'] + [class*='col-'] {
+    margin-top: 1.25rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid #dbe2e9;
+    border-left: 0;
+  }
+
+  .investigator-row {
+    grid-template-columns: 24px minmax(0, 1fr) 36px;
+  }
+
+  .investigator-row > :nth-child(2) {
+    grid-column: 2;
+  }
+
+  .investigator-input-group {
+    grid-column: 2 / -1;
+    grid-template-columns: 1fr;
+  }
+
+  .investigator-action-buttons {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .project-table-head {
+    display: none;
+  }
+
+  .project-table-row,
+  .financial-contribution-card .project-table-row,
+  .collaboration-card .project-table-row,
+  .grant-disbursement-row {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    margin-top: 0.75rem !important;
+    border-top: 1px solid #d5dde5;
+  }
+
+  .project-table-row > [class*='col']::before {
+    display: block;
+    margin-bottom: 0.3rem;
+    color: #0965a6;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+
+  .financial-contribution-card .project-table-row > :nth-child(1)::before,
+  .collaboration-card .project-table-row > :nth-child(1)::before {
+    content: 'S.No.';
+  }
+
+  .financial-contribution-card .project-table-row > :nth-child(2)::before {
+    content: 'Agency Type';
+  }
+
+  .financial-contribution-card .project-table-row > :nth-child(3)::before {
+    content: 'Agency';
+  }
+
+  .financial-contribution-card .project-table-row > :nth-child(4)::before {
+    content: 'Amount';
+  }
+
+  .collaboration-card .project-table-row > :nth-child(2)::before {
+    content: 'Partner';
+  }
+
+  .collaboration-card .project-table-row > :nth-child(3)::before {
+    content: 'Address';
+  }
+
+  .collaboration-card .project-table-row > :nth-child(4)::before {
+    content: 'Support';
+  }
+
+  .grant-disbursement-row > :nth-child(1)::before {
+    content: 'Financial Year';
+  }
+  .grant-disbursement-row > :nth-child(2)::before {
+    content: 'Agency';
+  }
+  .grant-disbursement-row > :nth-child(3)::before {
+    content: 'Amount';
+  }
+  .grant-disbursement-row > :nth-child(4)::before {
+    content: 'Date';
+  }
+  .grant-disbursement-row > :nth-child(5)::before {
+    content: 'Sanction Letter';
+  }
+  .grant-disbursement-row > :nth-child(6)::before {
+    content: 'UC & SoE';
+  }
+
+  .date-submission-card > div:first-child,
+  .project-detail-field {
+    grid-template-columns: 1fr;
+  }
+
+  .project-detail-field .form-check {
+    justify-self: start;
+  }
+
+  .project-outcome-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .project-document-item {
+    align-items: flex-start !important;
+    flex-wrap: wrap;
+  }
+
+  .project-document-item > .form-label {
+    width: 70%;
+  }
+}
