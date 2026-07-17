@@ -16,6 +16,7 @@ vi.mock('../modules/finance/financeModel.js', () => {
   return {
     default: {
       getFinanceRequestById: vi.fn(),
+      getFinanceOwner: vi.fn(),
       getFinanceRecordContext: vi.fn(),
       getBudgetBreakup: vi.fn(),
       updateFinanceWorkflowSnapshot: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('../modules/finance/financeModel.js', () => {
       getBudgetAvailabilityForUser: vi.fn(),
       createFinanceRequest: vi.fn(),
       updateFinanceRequest: vi.fn(),
+      deleteFinanceRequest: vi.fn(),
       addBudgetBreakup: vi.fn(),
       hardDeleteFinanceRequest: vi.fn(),
     },
@@ -362,6 +364,32 @@ describe('Finance Workflow Integration Tests', () => {
       expect(financeModel.getBudgetBreakup).not.toHaveBeenCalled();
       expect(financeModel.updateFinanceRequest).not.toHaveBeenCalled();
       expect(workflowService.startWorkflow).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('DELETE /api/finance-requests/:id - Topup Protection', () => {
+    it('rejects deleting a topup while it is awaiting Level-1 approval', async () => {
+      const topupFinanceRequest = {
+        id: 201,
+        created_by: 1,
+        workflow_state: {
+          status: 'in_progress',
+          currentStage: 'level1',
+          topupAt: '2026-06-06T10:00:00.000Z',
+        },
+      };
+
+      financeModel.getFinanceRequestById.mockResolvedValue(topupFinanceRequest);
+      financeModel.getFinanceOwner.mockResolvedValue({ applicant_user_id: 1, created_by: 1 });
+
+      const response = await request(app)
+        .delete('/api/finance-requests/201')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(409);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('Top-up requests cannot be deleted');
+      expect(financeModel.deleteFinanceRequest).not.toHaveBeenCalled();
     });
   });
 });

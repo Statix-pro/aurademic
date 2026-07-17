@@ -456,6 +456,7 @@ const getWorkflowStatusCategory = (status: unknown) => {
   if (['approved', 'completed', 'principal_approved'].includes(normalized)) {
     return 'Approved';
   }
+  if (normalized === 'draft') return 'Draft';
   return 'Pending';
 };
 
@@ -475,7 +476,9 @@ const matchesWorkflowRowOptionStatusFilter = (
   const isPaid = normalizeStatus(getWorkflowRowOptionPaymentStatus(row, module)) === 'paid';
 
   if (filter === 'pending') {
-    return statusCategory === 'Pending' || statusCategory === 'Resubmitted';
+    return (
+      statusCategory === 'Pending' || statusCategory === 'Resubmitted' || statusCategory === 'Draft'
+    );
   }
   if (filter === 'return') {
     return statusCategory === 'Returned';
@@ -1293,6 +1296,39 @@ const ExpenditureDashboard: React.FC = () => {
     });
   };
 
+  const handleDocumentClick = async (ic: IndividualExpenditureCard) => {
+    if (!ic.requestId) return;
+    try {
+      const res = (await authenticityUtility.get(`/expenditure/${ic.requestId}`)) as any;
+      const requestData = res?.data ?? res;
+      const bills = requestData?.bill_files ?? [];
+
+      if (bills.length > 0) {
+        const firstBill = bills[0];
+        const rawUrl = String(
+          firstBill.file_url ?? firstBill.download_url ?? firstBill.file_path ?? '',
+        ).trim();
+        if (rawUrl) {
+          const baseUrl = authenticityUtility.getBaseURL();
+          const fileUrl = /^https?:\/\//i.test(rawUrl)
+            ? rawUrl
+            : rawUrl.startsWith('/')
+              ? `${baseUrl}${rawUrl}`
+              : `${baseUrl}/${rawUrl}`;
+
+          window.open(fileUrl, '_blank', 'noopener,noreferrer');
+          return;
+        }
+      }
+
+      // Fallback: open in view mode
+      handleModuleLaunch(ic.row, ic.module, ic.card, { mode: 'view' });
+    } catch (err) {
+      console.error('Failed to fetch expenditure bills:', err);
+      handleModuleLaunch(ic.row, ic.module, ic.card, { mode: 'view' });
+    }
+  };
+
   const getRowActions = (row: WorkflowRow) => {
     const isCompleted = isWorkflowRowCompleted(row);
     const hasAdvance1 = Boolean(row.advanceRequestId);
@@ -1552,6 +1588,7 @@ const ExpenditureDashboard: React.FC = () => {
 
     if (normalizedLabel.includes('approved')) return 'expenditure-status-pill--approved';
     if (normalizedLabel.includes('pending')) return 'expenditure-status-pill--pending';
+    if (normalizedLabel.includes('proposed')) return 'expenditure-status-pill--pending';
     if (normalizedLabel.includes('resubmitted')) return 'expenditure-status-pill--pending';
     if (normalizedLabel.includes('rejected')) return 'expenditure-status-pill--rejected';
     if (normalizedLabel.includes('returned')) return 'expenditure-status-pill--returned';
@@ -1685,7 +1722,9 @@ const ExpenditureDashboard: React.FC = () => {
             requestId: latestModuleRow?.id ?? null,
             amount: moduleRows.reduce((sum, req) => sum + Number(req.amount ?? 0), 0),
             subHead: normalizeText(latestModuleRow?.sub_head),
-            status: normalizeStatus(latestModuleRow?.overallstatus),
+            status: latestModuleRow
+              ? getRequestWorkflowStatus(latestModuleRow)
+              : normalizeStatus(undefined),
             paymentStatus: normalizeText(latestModuleRow?.payment_status),
           };
         };
@@ -1707,7 +1746,9 @@ const ExpenditureDashboard: React.FC = () => {
           requestId: firstAdvance?.id ?? null,
           amount: Number(firstAdvance?.amount ?? 0),
           subHead: normalizeText(firstAdvance?.sub_head),
-          status: normalizeStatus(firstAdvance?.overallstatus),
+          status: firstAdvance
+            ? getRequestWorkflowStatus(firstAdvance)
+            : normalizeStatus(undefined),
           paymentStatus: normalizeText(firstAdvance?.payment_status),
         };
 
@@ -1716,7 +1757,7 @@ const ExpenditureDashboard: React.FC = () => {
               requestId: secondAdvance.id,
               amount: Number(secondAdvance.amount ?? 0),
               subHead: normalizeText(secondAdvance.sub_head),
-              status: normalizeStatus(secondAdvance.overallstatus),
+              status: getRequestWorkflowStatus(secondAdvance),
               paymentStatus: normalizeText(secondAdvance.payment_status),
             }
           : null;
@@ -2739,172 +2780,184 @@ const ExpenditureDashboard: React.FC = () => {
                       ic.requestId &&
                       isEditableWorkflowStatus(ic.status) &&
                       !isWorkflowActionLocked(ic.row);
-                    const isPaid = normalizeStatus(ic.paymentStatus) === 'paid';
-                    const statusAccent =
-                      ic.statusLabel === 'Returned'
-                        ? 'expenditure-individual-card--returned'
-                        : ic.statusLabel === 'Pending' || ic.statusLabel === 'Resubmitted'
-                          ? 'expenditure-individual-card--pending'
-                          : ic.statusLabel === 'Approved' && isPaid
-                            ? 'expenditure-individual-card--paid'
-                            : ic.statusLabel === 'Approved'
-                              ? 'expenditure-individual-card--approved'
-                              : '';
-                    const typeBadgeClass =
-                      ic.module === 'Advance' || ic.module === 'Advance2'
-                        ? 'expenditure-individual-card__type-badge--advance'
-                        : ic.module === 'Settlement'
-                          ? 'expenditure-individual-card__type-badge--settlement'
-                          : 'expenditure-individual-card__type-badge--expenditure';
 
                     return (
                       <div
                         key={ic.key}
-                        className={`expenditure-individual-card ${statusAccent}`}
+                        className="expenditure-individual-card"
                         role="button"
                         tabIndex={0}
                         onClick={() => {
-                          if (ic.requestId) {
-                            navigate(`/expenditure/${ic.requestId}`);
-                          }
+                          handleModuleLaunch(ic.row, ic.module, ic.card, { mode: 'view' });
                         }}
                         onKeyDown={(e) => {
-                          if ((e.key === 'Enter' || e.key === ' ') && ic.requestId) {
+                          if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault();
-                            navigate(`/expenditure/${ic.requestId}`);
+                            handleModuleLaunch(ic.row, ic.module, ic.card, { mode: 'view' });
                           }
                         }}
                       >
-                        <div className="expenditure-individual-card__header">
-                          <div className="expenditure-individual-card__header-left">
-                            <span className="expenditure-individual-card__finance-ref">
-                              {financeBaseRef}
-                            </span>
+                        {/* ROW 1: Header */}
+                        <div className="expenditure-individual-card__row1">
+                          <div className="expenditure-individual-card__row1-left">
                             <h5 className="expenditure-individual-card__name">
                               {ic.card.applicantName}
                             </h5>
-                            <span
-                              className={`expenditure-individual-card__type-badge ${typeBadgeClass}`}
-                            >
-                              {ic.requestType}
+
+                            {/* Circle badge for request type */}
+                            {(() => {
+                              const letter = ic.requestType
+                                ? ic.requestType.charAt(0).toUpperCase()
+                                : 'E';
+                              const badgeType =
+                                ic.module === 'Advance' || ic.module === 'Advance2'
+                                  ? 'advance'
+                                  : ic.module === 'Settlement'
+                                    ? 'settlement'
+                                    : 'expenditure';
+                              return (
+                                <span
+                                  className={`expenditure-individual-card__type-circle-badge expenditure-individual-card__type-circle-badge--${badgeType}`}
+                                >
+                                  {letter}
+                                </span>
+                              );
+                            })()}
+
+                            {/* Blue Reference Pill */}
+                            <span className="expenditure-individual-card__full-ref">
+                              {displayCode ? `${financeBaseRef}-${displayCode}` : financeBaseRef}
                             </span>
-                            {displayCode && (
-                              <span className="expenditure-individual-card__request-code">
-                                {displayCode}
-                              </span>
-                            )}
-                          </div>
-
-                          <div className="expenditure-individual-card__header-right">
-                            <div className="expenditure-individual-card__amount">
-                              {formatAmount(ic.amount)}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="expenditure-individual-card__body">
-                          <div className="expenditure-individual-card__meta">
-                            {ic.card.beneficiaryName && (
-                              <span className="expenditure-individual-card__beneficiary">
-                                {ic.card.beneficiaryName}
-                              </span>
-                            )}
-                            {ic.card.tag && (
-                              <span className="expenditure-individual-card__tag">
-                                {ic.card.tag}
-                              </span>
-                            )}
-                            {ic.subHead && (
-                              <span className="expenditure-individual-card__subhead">
-                                {ic.subHead}
-                              </span>
-                            )}
-                          </div>
-
-                          {selectedStatusFilter === 'pending_payment' && (
-                            <div className="expenditure-individual-card__payment-status">
-                              <span
-                                className={`expenditure-individual-card__payment-pill ${
-                                  isPaid
-                                    ? 'expenditure-individual-card__payment-pill--paid'
-                                    : 'expenditure-individual-card__payment-pill--unpaid'
-                                }`}
-                              >
-                                {isPaid ? 'Paid' : 'Payment Pending'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="expenditure-individual-card__footer">
-                          <div className="expenditure-individual-card__status-area">
-                            <span
-                              className={`expenditure-status-pill ${getStatusPillToneClass(
-                                ic.statusLabel,
-                              )}`}
-                            >
-                              {ic.statusLabel}
-                            </span>
-
-                            <div className="expenditure-individual-card__timeline">
-                              {(['hod', 'dof', 'principal'] as const).map(
-                                (stage, stageIndex, arr) => {
-                                  const stageState = getWorkflowTimelineState(ic.row, stage);
-
-                                  return (
-                                    <React.Fragment key={stage}>
-                                      <div
-                                        className={`expenditure-status-line-circle expenditure-status-circle-${stageState}`}
-                                        title={stage.toUpperCase()}
-                                      />
-                                      {stageIndex < arr.length - 1 && (
-                                        <div
-                                          className={`expenditure-status-line-connector expenditure-status-line-connector--${stageState}`}
-                                        />
-                                      )}
-                                    </React.Fragment>
-                                  );
-                                },
-                              )}
-                            </div>
                           </div>
 
                           <div
-                            className="expenditure-individual-card__actions"
+                            className="expenditure-individual-card__row1-right"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <button
-                              type="button"
-                              title="View"
-                              className="expenditure-individual-card__action-btn"
-                              onClick={() => {
-                                if (ic.requestId) navigate(`/expenditure/${ic.requestId}`);
-                              }}
-                            >
-                              <Eye size={15} />
-                            </button>
+                            {/* Amount */}
+                            <div className="expenditure-individual-card__amount-block">
+                              <span className="expenditure-individual-card__amount-label">
+                                Amount
+                              </span>
+                              <span className="expenditure-individual-card__amount-value">
+                                {formatAmount(ic.amount)}
+                              </span>
+                            </div>
 
-                            {canEdit && (
+                            {/* Top Actions: Info, Eye, Edit */}
+                            <div className="expenditure-individual-card__actions-top">
                               <button
                                 type="button"
-                                title="Edit"
-                                className="expenditure-individual-card__action-btn"
+                                title="Logs"
+                                className="expenditure-individual-card__action-circle-btn"
+                                onClick={() => handleInfoClick(ic.requestId)}
+                              >
+                                <Info size={15} />
+                              </button>
+
+                              <button
+                                type="button"
+                                title="View"
+                                className="expenditure-individual-card__action-circle-btn"
                                 onClick={() => {
-                                  if (ic.requestId) navigate(`/expenditure/${ic.requestId}/edit`);
+                                  handleModuleLaunch(ic.row, ic.module, ic.card, { mode: 'view' });
                                 }}
                               >
-                                <Edit2 size={15} />
+                                <Eye size={15} />
                               </button>
-                            )}
 
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  title="Edit"
+                                  className="expenditure-individual-card__action-circle-btn"
+                                  onClick={() => {
+                                    handleModuleLaunch(ic.row, ic.module, ic.card, {
+                                      mode: 'edit',
+                                    });
+                                  }}
+                                >
+                                  <Edit2 size={15} />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="expenditure-individual-card__divider" />
+
+                        {/* ROW 2: Details and Bottom Actions */}
+                        <div className="expenditure-individual-card__row2">
+                          <div className="expenditure-individual-card__meta-details">
+                            {ic.card.beneficiaryName && (
+                              <div className="expenditure-individual-card__meta-row">
+                                Beneficiary : <strong>{ic.card.beneficiaryName}</strong>
+                              </div>
+                            )}
+                            {(ic.subHead || ic.card.tag) && (
+                              <div className="expenditure-individual-card__meta-row">
+                                Head : <strong>{ic.subHead || ic.card.tag}</strong>
+                              </div>
+                            )}
+                          </div>
+
+                          <div
+                            className="expenditure-individual-card__row2-right"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {/* Document Button */}
                             <button
                               type="button"
-                              title="Logs"
-                              className="expenditure-individual-card__action-btn"
-                              onClick={() => handleInfoClick(ic.requestId)}
+                              title="View Document"
+                              className="expenditure-individual-card__action-circle-btn expenditure-individual-card__action-circle-btn--doc"
+                              onClick={() => {
+                                handleDocumentClick(ic);
+                              }}
                             >
-                              <Info size={15} />
+                              <FileText size={15} />
                             </button>
+
+                            {/* Status Pill */}
+                            <button
+                              type="button"
+                              className={`expenditure-status-pill ${getStatusPillToneClass(ic.statusLabel)} ${ic.requestId && showRequestStatusDetail[ic.requestId] ? 'expenditure-status-pill--active' : ''}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (ic.requestId) {
+                                  setShowRequestStatusDetail((prev) => ({
+                                    ...prev,
+                                    [ic.requestId!]: !prev[ic.requestId!],
+                                  }));
+                                }
+                              }}
+                            >
+                              {ic.statusLabel}
+                            </button>
+
+                            {/* Workflow Timeline Details */}
+                            {ic.requestId && showRequestStatusDetail[ic.requestId] && (
+                              <div className="expenditure-status-detail-line">
+                                {(['hod', 'dof', 'principal'] as const).map(
+                                  (stage, stageIndex, array) => {
+                                    const stageState = getWorkflowTimelineState(ic.row, stage);
+                                    return (
+                                      <React.Fragment key={stage}>
+                                        <div
+                                          className={`expenditure-status-line-circle expenditure-status-circle-${stageState}`}
+                                          title={stage.toUpperCase()}
+                                        />
+                                        {stageIndex < array.length - 1 && (
+                                          <div
+                                            className={`expenditure-status-line-connector expenditure-status-line-connector--${stageState}`}
+                                          />
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  },
+                                )}
+                              </div>
+                            )}
                           </div>
                         </div>
                       </div>
