@@ -1652,18 +1652,17 @@
 .expenditure-individual-card {
   position: relative;
   border: 1px solid #e2e8f0;
-  border-left: 4px solid #cbd5e1;
   border-radius: 14px;
   background: #ffffff;
-  padding: 16px 20px;
+  padding: 20px 24px;
   cursor: pointer;
   transition: all 0.22s ease;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
 }
 
 .expenditure-individual-card:hover {
-  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.09);
-  border-color: #94a3b8;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  border-color: #cbd5e1;
   transform: translateY(-1px);
 }
 
@@ -1672,59 +1671,24 @@
   outline-offset: 2px;
 }
 
-/* Status accent borders */
-.expenditure-individual-card--pending {
-  border-left-color: #f59e0b;
-}
-
-.expenditure-individual-card--returned {
-  border-left-color: #f97316;
-}
-
-.expenditure-individual-card--approved {
-  border-left-color: #22c55e;
-}
-
-.expenditure-individual-card--paid {
-  border-left-color: #059669;
-}
-
-/* Card header */
-.expenditure-individual-card__header {
+/* Card Row 1 */
+.expenditure-individual-card__row1 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  margin-bottom: 10px;
+  gap: 16px;
 }
 
-.expenditure-individual-card__header-left {
+.expenditure-individual-card__row1-left {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
   flex: 1;
-  flex-wrap: wrap;
-}
-
-.expenditure-individual-card__header-right {
-  flex-shrink: 0;
-}
-
-.expenditure-individual-card__finance-ref {
-  font-size: 12px;
-  font-weight: 700;
-  color: #0069ab;
-  background: #eaf4ff;
-  border: 1px solid #b9d8f5;
-  border-radius: 8px;
-  padding: 3px 10px;
-  white-space: nowrap;
-  letter-spacing: 0.02em;
 }
 
 .expenditure-individual-card__name {
-  font-size: 1.02rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: #0f172a;
   margin: 0;
@@ -1732,156 +1696,96 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 280px;
+  max-width: 320px;
 }
 
-.expenditure-individual-card__type-badge {
+/* Type Circle Badge */
+.expenditure-individual-card__type-circle-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 11px;
   font-weight: 700;
-  border-radius: 6px;
-  padding: 3px 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
 }
 
-.expenditure-individual-card__type-badge--advance {
-  background: #dbeafe;
+.expenditure-individual-card__type-circle-badge--advance {
+  background: #eff6ff;
   color: #1d4ed8;
-  border: 1px solid #93c5fd;
 }
 
-.expenditure-individual-card__type-badge--expenditure {
-  background: #fce7f3;
-  color: #be185d;
-  border: 1px solid #f9a8d4;
+.expenditure-individual-card__type-circle-badge--expenditure {
+  background: #fef9c3;
+  color: #a16207;
 }
 
-.expenditure-individual-card__type-badge--settlement {
-  background: #e0e7ff;
-  color: #4338ca;
-  border: 1px solid #a5b4fc;
+.expenditure-individual-card__type-circle-badge--settlement {
+  background: #f0fdf4;
+  color: #15803d;
 }
 
-.expenditure-individual-card__request-code {
-  font-size: 11px;
-  font-weight: 600;
-  color: #64748b;
-  background: #f1f5f9;
-  border-radius: 6px;
-  padding: 3px 8px;
+/* Solid Blue Full Reference Pill */
+.expenditure-individual-card__full-ref {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #0069ab;
+  border-radius: 9999px;
+  padding: 4px 12px;
   white-space: nowrap;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
 }
 
-.expenditure-individual-card__amount {
-  font-size: 1.08rem;
-  font-weight: 800;
-  color: #0a2540;
-  white-space: nowrap;
-}
-
-/* Card body */
-.expenditure-individual-card__body {
+/* Row 1 Right */
+.expenditure-individual-card__row1-right {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.expenditure-individual-card__meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.expenditure-individual-card__beneficiary {
-  font-size: 13px;
-  font-weight: 600;
-  color: #334155;
-}
-
-.expenditure-individual-card__tag {
-  font-size: 11px;
-  font-weight: 600;
-  background: #f0f9ff;
-  color: #0369a1;
-  border: 1px solid #bae6fd;
-  border-radius: 10px;
-  padding: 2px 10px;
-  white-space: nowrap;
-}
-
-.expenditure-individual-card__subhead {
-  font-size: 12px;
-  color: #64748b;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 220px;
-}
-
-.expenditure-individual-card__payment-status {
+  gap: 20px;
   flex-shrink: 0;
 }
 
-.expenditure-individual-card__payment-pill {
-  font-size: 11px;
-  font-weight: 700;
-  border-radius: 10px;
-  padding: 3px 12px;
-  letter-spacing: 0.02em;
+.expenditure-individual-card__amount-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
 }
 
-.expenditure-individual-card__payment-pill--paid {
-  background: #d1fae5;
-  color: #059669;
-  border: 1px solid #6ee7b7;
+.expenditure-individual-card__amount-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
 }
 
-.expenditure-individual-card__payment-pill--unpaid {
-  background: #fef3c7;
-  color: #d97706;
-  border: 1px solid #fcd34d;
+.expenditure-individual-card__amount-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
 }
 
-/* Card footer */
-.expenditure-individual-card__footer {
+.expenditure-individual-card__actions-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding-top: 10px;
-  border-top: 1px solid #f1f5f9;
+  gap: 8px;
 }
 
-.expenditure-individual-card__status-area {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.expenditure-individual-card__timeline {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.expenditure-individual-card__actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.expenditure-individual-card__action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
-  color: #475569;
+/* Circular Buttons */
+.expenditure-individual-card__action-circle-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f5f9;
+  color: #64748b;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1889,11 +1793,99 @@
   transition: all 0.2s ease;
 }
 
-.expenditure-individual-card__action-btn:hover {
-  background: #e2e8f0;
+.expenditure-individual-card__action-circle-btn:hover:not(:disabled) {
+  background: #cbd5e1;
   color: #0f172a;
-  border-color: #94a3b8;
   transform: translateY(-1px);
+}
+
+.expenditure-individual-card__action-circle-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Divider Line */
+.expenditure-individual-card__divider {
+  border-top: 1px solid #f1f5f9;
+  margin: 14px 0;
+}
+
+/* Card Row 2 */
+.expenditure-individual-card__row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.expenditure-individual-card__meta-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.expenditure-individual-card__meta-row {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expenditure-individual-card__meta-row strong {
+  color: #0f172a;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.expenditure-individual-card__row2-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Custom Bottom Row Button Styles */
+.expenditure-individual-card__action-circle-btn--doc {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.expenditure-individual-card__action-circle-btn--doc:hover:not(:disabled) {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.expenditure-individual-card__action-circle-btn--rotate {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.expenditure-individual-card__action-circle-btn--rotate:hover:not(:disabled) {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.expenditure-individual-card__action-circle-btn--trash {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.expenditure-individual-card__action-circle-btn--trash:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.expenditure-individual-card__action-circle-btn--box {
+  background: #faf5ff;
+  color: #7c3aed;
+}
+
+.expenditure-individual-card__action-circle-btn--box:hover:not(:disabled) {
+  background: #f3e8ff;
+  color: #7c3aed;
 }
 
 /* Global actions */

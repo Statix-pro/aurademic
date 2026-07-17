@@ -865,6 +865,11 @@ const FinanceCard: React.FC = () => {
   };
 
   const canDeleteRequest = (item: FinanceCardItem) => {
+    // A top-up has already been submitted into the approval workflow. It must
+    // not be removable by regular users while it is waiting for HOD/Coordinator
+    // approval. Keep the existing super-admin exception consistent with the API.
+    if (hasTopup(item) && !isSuperAdminUser) return false;
+
     const normalizedStatus = getNormalizedStatus(item);
     const currentStage = getCurrentStage(item);
 

@@ -906,8 +906,16 @@ const financeController = {
       const workflowState = finance.workflow_state || null;
       const workflowStatus = normalizeText(workflowState?.status).toLowerCase();
       const currentStage = normalizeText(workflowState?.currentStage).toLowerCase();
+      const isTopupRequest = Boolean(normalizeText(workflowState?.topupAt));
       const hasStartedApproval =
         Boolean(workflowState) && currentStage && currentStage !== 'level1';
+
+      if (!isSuperAdmin && isTopupRequest) {
+        return res.status(409).json({
+          success: false,
+          message: 'Top-up requests cannot be deleted after submission',
+        });
+      }
 
       if (
         !isSuperAdmin &&
