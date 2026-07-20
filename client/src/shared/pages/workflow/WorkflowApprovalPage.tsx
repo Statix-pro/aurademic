@@ -1542,16 +1542,34 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
         const mapped = mapQueueResponse(response);
 
-        let items = Array.isArray(mapped.items) ? mapped.items : [];
+        const fetchedItems = Array.isArray(mapped.items) ? mapped.items : [];
+        let items = fetchedItems;
         if (!isAllProposalsTab) {
-          items = items.filter((item) => isVisibleInWorkflowList(item, stage));
+          items = fetchedItems.filter((item) => isVisibleInWorkflowList(item, stage));
         }
+        // Records hidden by isVisibleInWorkflowList are ones the server counted (in `total`
+        // and `statusCounts`) but that don't belong on this stage's list — without this
+        // adjustment the stat tiles/pagination text would show a count higher than the
+        // number of rows actually rendered on this page.
+        const hiddenCount = fetchedItems.length - items.length;
 
         setRows(items);
-        setQueueStatusCounts(mapped.statusCounts);
         const nextLimit = Number(mapped.limit || limit || config.queueDefaultLimit || 20);
         const normalizedMappedPage = Math.max(Number(mapped.page || requestedPage || 1), 1);
-        const normalizedMappedTotal = Math.max(Number(mapped.total || 0), 0);
+        const normalizedMappedTotal = Math.max(Number(mapped.total || 0) - hiddenCount, 0);
+
+        if (mapped.statusCounts && hiddenCount > 0) {
+          // isVisibleInWorkflowList only stage-checks records that resolve to the
+          // 'pending' category (all other categories are always visible), so every
+          // hidden record was counted as 'pending' server-side.
+          setQueueStatusCounts({
+            ...mapped.statusCounts,
+            total: normalizedMappedTotal,
+            pending: Math.max(Number(mapped.statusCounts.pending || 0) - hiddenCount, 0),
+          });
+        } else {
+          setQueueStatusCounts(mapped.statusCounts);
+        }
 
         setTotalRows(normalizedMappedTotal);
         setPage(normalizedMappedPage);
