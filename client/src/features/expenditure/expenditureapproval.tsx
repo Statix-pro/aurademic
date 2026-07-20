@@ -1612,6 +1612,9 @@ const ExpenditureApproval: React.FC = () => {
         if (budgetFiscalYearFromState) {
           query.set('fiscal_year', String(budgetFiscalYearFromState));
         }
+        if (submittedRequestIdFromState) {
+          query.set('expenditure_request_id', String(submittedRequestIdFromState));
+        }
         const budgetUrl = `/expenditure/budget/approved?${query.toString()}`;
         const response = (await authenticityUtility.get(budgetUrl)) as {
           status?: string;
@@ -1642,7 +1645,7 @@ const ExpenditureApproval: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [budgetFiscalYearFromState, resolvedFinanceRequestId]);
+  }, [budgetFiscalYearFromState, resolvedFinanceRequestId, submittedRequestIdFromState]);
   const rowReferenceIdFromState = (() => {
     const state = location.state as { rowReferenceId?: unknown } | null;
     const value = String(state?.rowReferenceId ?? '').trim();

@@ -1674,6 +1674,7 @@ export async function getApprovedBudgets({
   financeRequestId,
   fiscalYear = null,
   allowAnyApprovedFinance = false,
+  excludeExpenditureId = null,
 } = {}) {
   const uid = toPositiveInt(userId);
   const financeId = toPositiveInt(financeRequestId);
@@ -1724,6 +1725,7 @@ export async function getApprovedBudgets({
     const usageByBreakupId = await getFinanceRequestBudgetUsageByBreakup(db, {
       financeRequestId: financeId,
       budgetBreakups: financeRows,
+      excludeExpenditureId,
     });
 
     return financeRows
