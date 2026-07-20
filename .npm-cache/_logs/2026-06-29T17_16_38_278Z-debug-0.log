@@ -1,0 +1,678 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@11.6.2
+2 info using node@v25.2.1
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:D:\C BACKUP\Desktop\user_events\aurademic\server\.npmrc
+5 silly config load:file:C:\Users\Admin\.npmrc
+6 silly config load:file:D:\C BACKUP\Desktop\user_events\aurademic\server\etc\npmrc
+7 verbose title npm install
+8 verbose argv "install" "--prefix" "aurademic/server" "--cache" "D:\\C BACKUP\\Desktop\\user_events\\.npm-cache" "--no-audit" "--no-fund"
+9 verbose logfile logs-max:10 dir:D:\C BACKUP\Desktop\user_events\.npm-cache\_logs\2026-06-29T17_16_38_278Z-
+10 verbose logfile D:\C BACKUP\Desktop\user_events\.npm-cache\_logs\2026-06-29T17_16_38_278Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4496293888 maxSize:1124073472 maxEntrySize:562036736
+13 silly idealTree buildDeps
+14 http fetch GET https://registry.npmjs.org/npm attempt 1 failed with EACCES
+15 silly reify mark retired [
+15 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\abbrev'
+15 silly reify ]
+16 silly reify mark retired [
+16 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\agent-base'
+16 silly reify ]
+17 silly reify mark retired [
+17 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\assertion-error'
+17 silly reify ]
+18 silly reify mark retired [
+18 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\base64-js'
+18 silly reify ]
+19 silly reify mark retired [
+19 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\body-parser'
+19 silly reify ]
+20 silly reify mark retired [
+20 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\brace-expansion'
+20 silly reify ]
+21 silly reify mark retired [
+21 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\bignumber.js'
+21 silly reify ]
+22 silly reify mark retired [
+22 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\call-me-maybe'
+22 silly reify ]
+23 silly reify mark retired [
+23 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\chai'
+23 silly reify ]
+24 silly reify mark retired [
+24 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\commander'
+24 silly reify ]
+25 silly reify mark retired [
+25 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\concat-stream'
+25 silly reify ]
+26 silly reify mark retired [
+26 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\cookie-signature'
+26 silly reify ]
+27 silly reify mark retired [
+27 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\cors'
+27 silly reify ]
+28 silly reify mark retired [
+28 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\csv-parse'
+28 silly reify ]
+29 silly reify mark retired [
+29 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\dotenv'
+29 silly reify ]
+30 silly reify mark retired [
+30 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\estree-walker'
+30 silly reify ]
+31 silly reify mark retired [
+31 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\expect-type'
+31 silly reify ]
+32 silly reify mark retired [
+32 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\express'
+32 silly reify ]
+33 silly reify mark retired [
+33 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\express-rate-limit'
+33 silly reify ]
+34 silly reify mark retired [
+34 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\extend'
+34 silly reify ]
+35 silly reify mark retired [
+35 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\gaxios'
+35 silly reify ]
+36 silly reify mark retired [
+36 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\gcp-metadata'
+36 silly reify ]
+37 silly reify mark retired [
+37 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\glob'
+37 silly reify ]
+38 silly reify mark retired [
+38 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\google-auth-library'
+38 silly reify ]
+39 silly reify mark retired [
+39 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\gtoken'
+39 silly reify ]
+40 silly reify mark retired [
+40 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\https-proxy-agent'
+40 silly reify ]
+41 silly reify mark retired [
+41 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\ip-address'
+41 silly reify ]
+42 silly reify mark retired [
+42 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\json-bigint'
+42 silly reify ]
+43 silly reify mark retired [
+43 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\jsonwebtoken'
+43 silly reify ]
+44 silly reify mark retired [
+44 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lodash.get'
+44 silly reify ]
+45 silly reify mark retired [
+45 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lodash.isequal'
+45 silly reify ]
+46 silly reify mark retired [
+46 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lodash.mergewith'
+46 silly reify ]
+47 silly reify mark retired [
+47 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\long'
+47 silly reify ]
+48 silly reify mark retired [
+48 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lru-cache'
+48 silly reify ]
+49 silly reify mark retired [
+49 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lru.min'
+49 silly reify ]
+50 silly reify mark retired [
+50 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\minimatch'
+50 silly reify ]
+51 silly reify mark retired [
+51 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\multer'
+51 silly reify ]
+52 silly reify mark retired [
+52 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\mysql2'
+52 silly reify ]
+53 silly reify mark retired [
+53 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\named-placeholders'
+53 silly reify ]
+54 silly reify mark retired [
+54 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\node-fetch'
+54 silly reify ]
+55 silly reify mark retired [
+55 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\nodemon'
+55 silly reify ]
+56 silly reify mark retired [
+56 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\nopt'
+56 silly reify ]
+57 silly reify mark retired [
+57 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\obug'
+57 silly reify ]
+58 silly reify mark retired [
+58 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\openapi-types'
+58 silly reify ]
+59 silly reify mark retired [
+59 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\path-to-regexp'
+59 silly reify ]
+60 silly reify mark retired [
+60 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\picomatch'
+60 silly reify ]
+61 silly reify mark retired [
+61 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\qs'
+61 silly reify ]
+62 silly reify mark retired [
+62 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\rolldown'
+62 silly reify ]
+63 silly reify mark retired [
+63 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\semver'
+63 silly reify ]
+64 silly reify mark retired [
+64 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\side-channel-list'
+64 silly reify ]
+65 silly reify mark retired [
+65 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\siginfo'
+65 silly reify ]
+66 silly reify mark retired [
+66 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\stackback'
+66 silly reify ]
+67 silly reify mark retired [
+67 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\std-env'
+67 silly reify ]
+68 silly reify mark retired [
+68 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\swagger-jsdoc'
+68 silly reify ]
+69 silly reify mark retired [
+69 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\swagger-parser'
+69 silly reify ]
+70 silly reify mark retired [
+70 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\swagger-ui-dist'
+70 silly reify ]
+71 silly reify mark retired [
+71 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\swagger-ui-express'
+71 silly reify ]
+72 silly reify mark retired [
+72 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\tinybench'
+72 silly reify ]
+73 silly reify mark retired [
+73 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\tinyrainbow'
+73 silly reify ]
+74 silly reify mark retired [
+74 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\touch'
+74 silly reify ]
+75 silly reify mark retired [
+75 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\tr46'
+75 silly reify ]
+76 silly reify mark retired [
+76 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\uuid'
+76 silly reify ]
+77 silly reify mark retired [
+77 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\validator'
+77 silly reify ]
+78 silly reify mark retired [
+78 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\vitest'
+78 silly reify ]
+79 silly reify mark retired [
+79 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\webidl-conversions'
+79 silly reify ]
+80 silly reify mark retired [
+80 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\whatwg-url'
+80 silly reify ]
+81 silly reify mark retired [
+81 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\why-is-node-running'
+81 silly reify ]
+82 silly reify mark retired [
+82 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\yallist'
+82 silly reify ]
+83 silly reify mark retired [
+83 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\yaml'
+83 silly reify ]
+84 silly reify mark retired [
+84 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\z-schema'
+84 silly reify ]
+85 silly reify mark retired [
+85 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@jsdevtools\\ono'
+85 silly reify ]
+86 silly reify mark retired [
+86 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@rolldown\\binding-win32-x64-msvc'
+86 silly reify ]
+87 silly reify mark retired [
+87 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@rolldown\\pluginutils'
+87 silly reify ]
+88 silly reify mark retired [
+88 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@oxc-project\\types'
+88 silly reify ]
+89 silly reify mark retired [
+89 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\json-schema-ref-parser'
+89 silly reify ]
+90 silly reify mark retired [
+90 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\swagger-parser'
+90 silly reify ]
+91 silly reify mark retired [
+91 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@scarf\\scarf'
+91 silly reify ]
+92 silly reify mark retired [
+92 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\swagger-methods'
+92 silly reify ]
+93 silly reify mark retired [
+93 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\openapi-schemas'
+93 silly reify ]
+94 silly reify mark retired [
+94 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\expect'
+94 silly reify ]
+95 silly reify mark retired [
+95 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\pretty-format'
+95 silly reify ]
+96 silly reify mark retired [
+96 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\runner'
+96 silly reify ]
+97 silly reify mark retired [
+97 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\snapshot'
+97 silly reify ]
+98 silly reify mark retired [
+98 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\spy'
+98 silly reify ]
+99 silly reify mark retired [
+99 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\utils'
+99 silly reify ]
+100 silly reify mark retired [
+100 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@types\\chai'
+100 silly reify ]
+101 silly reify mark retired [
+101 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@types\\deep-eql'
+101 silly reify ]
+102 silly reify mark retired [
+102 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\js-yaml',
+102 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\js-yaml',
+102 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\js-yaml.cmd',
+102 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\js-yaml.ps1'
+102 silly reify ]
+103 silly reify mark retired [
+103 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\mime',
+103 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mime',
+103 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mime.cmd',
+103 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mime.ps1'
+103 silly reify ]
+104 silly reify mark retired [
+104 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\mkdirp',
+104 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mkdirp',
+104 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mkdirp.cmd',
+104 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mkdirp.ps1'
+104 silly reify ]
+105 silly reify mark retired [
+105 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\nanoid',
+105 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\nanoid',
+105 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\nanoid.cmd',
+105 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\nanoid.ps1'
+105 silly reify ]
+106 silly reify mark retired [
+106 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\mime',
+106 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.bin\\mime',
+106 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.bin\\mime.cmd',
+106 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.bin\\mime.ps1'
+106 silly reify ]
+107 silly reify moves {
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\abbrev': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.abbrev-ZEIhMX6b',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\agent-base': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.agent-base-9boUzQ33',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\assertion-error': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.assertion-error-cS13P9wI',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\base64-js': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.base64-js-AQoGRNZC',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\body-parser': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.body-parser-z34lB5d9',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\brace-expansion': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.brace-expansion-ypP5w2FC',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\bignumber.js': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bignumber.js-L8pnvzmd',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\call-me-maybe': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.call-me-maybe-97tIhloB',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\chai': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.chai-GPe1QUox',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\commander': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.commander-vNGRr1IY',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\concat-stream': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.concat-stream-geqvhXGY',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\cookie-signature': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.cookie-signature-i4cEbJ9p',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\cors': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.cors-urBWUU2W',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\csv-parse': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.csv-parse-1OIpD5bk',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\dotenv': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.dotenv-AilQ0GB4',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\estree-walker': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.estree-walker-UEVjPJj2',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\expect-type': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.expect-type-9XuINQqv',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\express': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.express-bf5RmVMC',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\express-rate-limit': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.express-rate-limit-350MBy4z',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\extend': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.extend-78oRfZOn',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\gaxios': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.gaxios-jDRsofeJ',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\gcp-metadata': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.gcp-metadata-M2RYOdyR',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\glob': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.glob-Sbqq1PIU',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\google-auth-library': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.google-auth-library-uqBjR0V8',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\gtoken': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.gtoken-LAL7v2IC',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\https-proxy-agent': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.https-proxy-agent-PwHK6R0I',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\ip-address': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.ip-address-7iEEdPFz',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\json-bigint': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.json-bigint-f9ozhoyQ',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\jsonwebtoken': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.jsonwebtoken-ZA2jWnKW',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lodash.get': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.lodash.get-ZqKdUOAh',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lodash.isequal': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.lodash.isequal-AukfdzDQ',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lodash.mergewith': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.lodash.mergewith-IYmGgmuT',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\long': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.long-gRjVzuit',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lru-cache': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.lru-cache-DJqMdkON',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\lru.min': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.lru.min-xAtlwcI0',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\minimatch': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.minimatch-p1Oc4ppD',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\multer': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.multer-0IAuDMhl',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\mysql2': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.mysql2-CCLTALAG',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\named-placeholders': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.named-placeholders-GLOYZOKy',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\node-fetch': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.node-fetch-k7beXzso',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\nodemon': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.nodemon-2FLhLiNS',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\nopt': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.nopt-8OB7Nkpj',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\obug': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.obug-DjB2Smyo',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\openapi-types': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.openapi-types-ngXY6zje',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\path-to-regexp': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.path-to-regexp-1KbkibEW',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\picomatch': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.picomatch-9uCox5un',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\qs': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.qs-oedgZhHE',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\rolldown': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.rolldown-qk9AFAXt',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\semver': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.semver-aQUDpHlS',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\side-channel-list': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.side-channel-list-uhfxeSpU',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\siginfo': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.siginfo-FJcnVgaI',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\stackback': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.stackback-oM34tEqU',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\std-env': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.std-env-PCHAm4WQ',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\swagger-jsdoc': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.swagger-jsdoc-0d5xVxNg',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\swagger-parser': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.swagger-parser-JegFIOHh',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\swagger-ui-dist': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.swagger-ui-dist-mXHBJhoi',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\swagger-ui-express': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.swagger-ui-express-vpqMmr3I',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\tinybench': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.tinybench-uM8eA5Ft',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\tinyrainbow': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.tinyrainbow-1Yeaib4V',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\touch': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.touch-xk3nVp1g',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\tr46': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.tr46-6Se8gh2z',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\uuid': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.uuid-GvNilLxE',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\validator': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.validator-E1R2K1d0',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\vitest': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.vitest-rx5LI79h',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\webidl-conversions': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.webidl-conversions-znt9DtcG',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\whatwg-url': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.whatwg-url-jD15u1UD',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\why-is-node-running': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.why-is-node-running-Yv5VYvEk',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\yallist': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.yallist-4zDbQmsf',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\yaml': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.yaml-SP2ODGlu',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\z-schema': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.z-schema-BgHprxVb',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@jsdevtools\\ono': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@jsdevtools\\.ono-6wLYPHME',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@rolldown\\binding-win32-x64-msvc': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@rolldown\\.binding-win32-x64-msvc-Gu6FECne',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@rolldown\\pluginutils': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@rolldown\\.pluginutils-ksDh8W0l',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@oxc-project\\types': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@oxc-project\\.types-2wYHqgbQ',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\json-schema-ref-parser': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\.json-schema-ref-parser-KVqvv6fD',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\swagger-parser': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\.swagger-parser-obM8svI3',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@scarf\\scarf': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@scarf\\.scarf-e7HveyT7',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\swagger-methods': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\.swagger-methods-HiLad0lQ',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\openapi-schemas': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@apidevtools\\.openapi-schemas-MiNPqvw3',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\expect': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\.expect-xG9VC98R',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\pretty-format': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\.pretty-format-EIeKqBtO',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\runner': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\.runner-tQk5dNrD',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\snapshot': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\.snapshot-k05kIi3N',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\spy': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\.spy-h0jJulWs',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\utils': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@vitest\\.utils-XYEOgvrB',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@types\\chai': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@types\\.chai-aDEgqKNp',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@types\\deep-eql': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\@types\\.deep-eql-DkxJpBVM',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\js-yaml': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.js-yaml-PhteXCl4',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\js-yaml': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.js-yaml-Drsd9v7U',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\js-yaml.cmd': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.js-yaml.cmd-Xgg2tWwy',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\js-yaml.ps1': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.js-yaml.ps1-OmTTSuP0',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\mime': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.mime-yoeSgj5K',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mime': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.mime-HSeihDmg',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mime.cmd': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.mime.cmd-KgquI3cs',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mime.ps1': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.mime.ps1-nDO92JOb',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\mkdirp': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.mkdirp-6WBcs77Q',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mkdirp': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.mkdirp-9NGzZrfs',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mkdirp.cmd': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.mkdirp.cmd-b8MV3E93',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\mkdirp.ps1': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.mkdirp.ps1-05CrrRLD',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\nanoid': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.nanoid-DNL6Xb9V',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\nanoid': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.nanoid-dGkT6laK',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\nanoid.cmd': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.nanoid.cmd-3CTiQBcx',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\nanoid.ps1': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\.bin\\.nanoid.ps1-zMJNAK8u',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\mime': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.mime-mGk5VZ2e',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.bin\\mime': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.bin\\.mime-wsC6YlLP',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.bin\\mime.cmd': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.bin\\.mime.cmd-o12Z5v3F',
+107 silly reify   'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.bin\\mime.ps1': 'D:\\C BACKUP\\Desktop\\user_events\\aurademic\\server\\node_modules\\superagent\\node_modules\\.bin\\.mime.ps1-Uk3hrjfZ'
+107 silly reify }
+108 http cache @types/deep-eql@https://registry.npmjs.org/@types/deep-eql/-/deep-eql-4.0.2.tgz 1ms (cache hit)
+109 http cache nanoid@https://registry.npmjs.org/nanoid/-/nanoid-3.3.12.tgz 0ms (cache hit)
+110 http cache mkdirp@https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.6.tgz 0ms (cache hit)
+111 http cache @types/chai@https://registry.npmjs.org/@types/chai/-/chai-5.2.3.tgz 0ms (cache hit)
+112 http cache mime@https://registry.npmjs.org/mime/-/mime-1.6.0.tgz 0ms (cache hit)
+113 http cache @vitest/utils@https://registry.npmjs.org/@vitest/utils/-/utils-4.1.8.tgz 0ms (cache hit)
+114 http cache js-yaml@https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.1.tgz 0ms (cache hit)
+115 http cache @vitest/pretty-format@https://registry.npmjs.org/@vitest/pretty-format/-/pretty-format-4.1.8.tgz 0ms (cache hit)
+116 http cache @vitest/spy@https://registry.npmjs.org/@vitest/spy/-/spy-4.1.8.tgz 0ms (cache hit)
+117 http cache @vitest/runner@https://registry.npmjs.org/@vitest/runner/-/runner-4.1.8.tgz 0ms (cache hit)
+118 http cache @vitest/expect@https://registry.npmjs.org/@vitest/expect/-/expect-4.1.8.tgz 0ms (cache hit)
+119 http cache @vitest/snapshot@https://registry.npmjs.org/@vitest/snapshot/-/snapshot-4.1.8.tgz 0ms (cache hit)
+120 http cache @scarf/scarf@https://registry.npmjs.org/@scarf/scarf/-/scarf-1.4.0.tgz 0ms (cache hit)
+121 http cache @oxc-project/types@https://registry.npmjs.org/@oxc-project/types/-/types-0.133.0.tgz 0ms (cache hit)
+122 http cache @apidevtools/swagger-methods@https://registry.npmjs.org/@apidevtools/swagger-methods/-/swagger-methods-3.0.2.tgz 0ms (cache hit)
+123 http cache @rolldown/pluginutils@https://registry.npmjs.org/@rolldown/pluginutils/-/pluginutils-1.0.1.tgz 0ms (cache hit)
+124 http cache @apidevtools/openapi-schemas@https://registry.npmjs.org/@apidevtools/openapi-schemas/-/openapi-schemas-2.1.0.tgz 0ms (cache hit)
+125 http cache @rolldown/binding-win32-x64-msvc@https://registry.npmjs.org/@rolldown/binding-win32-x64-msvc/-/binding-win32-x64-msvc-1.0.3.tgz 0ms (cache hit)
+126 http cache @jsdevtools/ono@https://registry.npmjs.org/@jsdevtools/ono/-/ono-7.1.3.tgz 0ms (cache hit)
+127 http cache @apidevtools/json-schema-ref-parser@https://registry.npmjs.org/@apidevtools/json-schema-ref-parser/-/json-schema-ref-parser-9.1.2.tgz 0ms (cache hit)
+128 http cache @apidevtools/swagger-parser@https://registry.npmjs.org/@apidevtools/swagger-parser/-/swagger-parser-10.0.3.tgz 0ms (cache hit)
+129 http cache yaml@https://registry.npmjs.org/yaml/-/yaml-2.0.0-1.tgz 0ms (cache hit)
+130 http cache z-schema@https://registry.npmjs.org/z-schema/-/z-schema-5.0.5.tgz 0ms (cache hit)
+131 http cache yallist@https://registry.npmjs.org/yallist/-/yallist-4.0.0.tgz 0ms (cache hit)
+132 http cache why-is-node-running@https://registry.npmjs.org/why-is-node-running/-/why-is-node-running-2.3.0.tgz 0ms (cache hit)
+133 http cache whatwg-url@https://registry.npmjs.org/whatwg-url/-/whatwg-url-5.0.0.tgz 0ms (cache hit)
+134 http cache vitest@https://registry.npmjs.org/vitest/-/vitest-4.1.8.tgz 0ms (cache hit)
+135 http cache webidl-conversions@https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-3.0.1.tgz 0ms (cache hit)
+136 http cache validator@https://registry.npmjs.org/validator/-/validator-13.15.23.tgz 0ms (cache hit)
+137 http cache uuid@https://registry.npmjs.org/uuid/-/uuid-9.0.1.tgz 0ms (cache hit)
+138 http cache tr46@https://registry.npmjs.org/tr46/-/tr46-0.0.3.tgz 0ms (cache hit)
+139 http cache swagger-ui-express@https://registry.npmjs.org/swagger-ui-express/-/swagger-ui-express-5.0.1.tgz 0ms (cache hit)
+140 http cache touch@https://registry.npmjs.org/touch/-/touch-3.1.0.tgz 0ms (cache hit)
+141 http cache tinyrainbow@https://registry.npmjs.org/tinyrainbow/-/tinyrainbow-3.1.0.tgz 0ms (cache hit)
+142 http cache swagger-ui-dist@https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-5.30.3.tgz 0ms (cache hit)
+143 http cache tinybench@https://registry.npmjs.org/tinybench/-/tinybench-2.9.0.tgz 0ms (cache hit)
+144 http cache swagger-jsdoc@https://registry.npmjs.org/swagger-jsdoc/-/swagger-jsdoc-6.2.8.tgz 0ms (cache hit)
+145 http cache std-env@https://registry.npmjs.org/std-env/-/std-env-4.1.0.tgz 0ms (cache hit)
+146 http cache swagger-parser@https://registry.npmjs.org/swagger-parser/-/swagger-parser-10.0.3.tgz 0ms (cache hit)
+147 http cache siginfo@https://registry.npmjs.org/siginfo/-/siginfo-2.0.0.tgz 0ms (cache hit)
+148 http cache stackback@https://registry.npmjs.org/stackback/-/stackback-0.0.2.tgz 0ms (cache hit)
+149 http cache side-channel-list@https://registry.npmjs.org/side-channel-list/-/side-channel-list-1.0.0.tgz 0ms (cache hit)
+150 http cache semver@https://registry.npmjs.org/semver/-/semver-7.6.0.tgz 0ms (cache hit)
+151 http cache rolldown@https://registry.npmjs.org/rolldown/-/rolldown-1.0.3.tgz 0ms (cache hit)
+152 http cache qs@https://registry.npmjs.org/qs/-/qs-6.14.2.tgz 0ms (cache hit)
+153 http cache openapi-types@https://registry.npmjs.org/openapi-types/-/openapi-types-12.1.3.tgz 0ms (cache hit)
+154 http cache obug@https://registry.npmjs.org/obug/-/obug-2.1.2.tgz 0ms (cache hit)
+155 http cache picomatch@https://registry.npmjs.org/picomatch/-/picomatch-2.3.1.tgz 0ms (cache hit)
+156 http cache nopt@https://registry.npmjs.org/nopt/-/nopt-1.0.10.tgz 0ms (cache hit)
+157 http cache multer@https://registry.npmjs.org/multer/-/multer-1.4.5-lts.1.tgz 0ms (cache hit)
+158 http cache nodemon@https://registry.npmjs.org/nodemon/-/nodemon-3.1.0.tgz 0ms (cache hit)
+159 http cache path-to-regexp@https://registry.npmjs.org/path-to-regexp/-/path-to-regexp-0.1.12.tgz 0ms (cache hit)
+160 http cache named-placeholders@https://registry.npmjs.org/named-placeholders/-/named-placeholders-1.1.3.tgz 0ms (cache hit)
+161 http cache node-fetch@https://registry.npmjs.org/node-fetch/-/node-fetch-2.7.0.tgz 0ms (cache hit)
+162 http cache lru-cache@https://registry.npmjs.org/lru-cache/-/lru-cache-6.0.0.tgz 0ms (cache hit)
+163 http cache minimatch@https://registry.npmjs.org/minimatch/-/minimatch-3.1.2.tgz 0ms (cache hit)
+164 http cache lru.min@https://registry.npmjs.org/lru.min/-/lru.min-1.1.3.tgz 0ms (cache hit)
+165 http cache long@https://registry.npmjs.org/long/-/long-5.2.3.tgz 0ms (cache hit)
+166 http cache lodash.mergewith@https://registry.npmjs.org/lodash.mergewith/-/lodash.mergewith-4.6.2.tgz 0ms (cache hit)
+167 http cache lodash.isequal@https://registry.npmjs.org/lodash.isequal/-/lodash.isequal-4.5.0.tgz 0ms (cache hit)
+168 http cache mysql2@https://registry.npmjs.org/mysql2/-/mysql2-3.16.0.tgz 0ms (cache hit)
+169 http cache lodash.get@https://registry.npmjs.org/lodash.get/-/lodash.get-4.4.2.tgz 0ms (cache hit)
+170 http cache jsonwebtoken@https://registry.npmjs.org/jsonwebtoken/-/jsonwebtoken-9.0.2.tgz 0ms (cache hit)
+171 http cache json-bigint@https://registry.npmjs.org/json-bigint/-/json-bigint-1.0.0.tgz 0ms (cache hit)
+172 http cache ip-address@https://registry.npmjs.org/ip-address/-/ip-address-10.1.0.tgz 0ms (cache hit)
+173 http cache google-auth-library@https://registry.npmjs.org/google-auth-library/-/google-auth-library-9.14.2.tgz 0ms (cache hit)
+174 http cache gtoken@https://registry.npmjs.org/gtoken/-/gtoken-7.1.0.tgz 0ms (cache hit)
+175 http cache glob@https://registry.npmjs.org/glob/-/glob-7.1.6.tgz 0ms (cache hit)
+176 http cache https-proxy-agent@https://registry.npmjs.org/https-proxy-agent/-/https-proxy-agent-7.0.5.tgz 0ms (cache hit)
+177 http cache extend@https://registry.npmjs.org/extend/-/extend-3.0.2.tgz 0ms (cache hit)
+178 http cache gaxios@https://registry.npmjs.org/gaxios/-/gaxios-6.7.1.tgz 0ms (cache hit)
+179 http cache gcp-metadata@https://registry.npmjs.org/gcp-metadata/-/gcp-metadata-6.1.0.tgz 0ms (cache hit)
+180 http cache express@https://registry.npmjs.org/express/-/express-4.22.1.tgz 0ms (cache hit)
+181 http cache express-rate-limit@https://registry.npmjs.org/express-rate-limit/-/express-rate-limit-8.4.1.tgz 0ms (cache hit)
+182 http cache expect-type@https://registry.npmjs.org/expect-type/-/expect-type-1.3.0.tgz 0ms (cache hit)
+183 http cache dotenv@https://registry.npmjs.org/dotenv/-/dotenv-16.4.5.tgz 0ms (cache hit)
+184 http cache cors@https://registry.npmjs.org/cors/-/cors-2.8.5.tgz 0ms (cache hit)
+185 http cache estree-walker@https://registry.npmjs.org/estree-walker/-/estree-walker-3.0.3.tgz 0ms (cache hit)
+186 http cache concat-stream@https://registry.npmjs.org/concat-stream/-/concat-stream-1.6.2.tgz 0ms (cache hit)
+187 http cache cookie-signature@https://registry.npmjs.org/cookie-signature/-/cookie-signature-1.0.6.tgz 0ms (cache hit)
+188 http cache commander@https://registry.npmjs.org/commander/-/commander-6.2.0.tgz 0ms (cache hit)
+189 http cache csv-parse@https://registry.npmjs.org/csv-parse/-/csv-parse-6.1.0.tgz 0ms (cache hit)
+190 http cache bignumber.js@https://registry.npmjs.org/bignumber.js/-/bignumber.js-9.1.2.tgz 0ms (cache hit)
+191 http cache call-me-maybe@https://registry.npmjs.org/call-me-maybe/-/call-me-maybe-1.0.2.tgz 0ms (cache hit)
+192 http cache brace-expansion@https://registry.npmjs.org/brace-expansion/-/brace-expansion-1.1.12.tgz 0ms (cache hit)
+193 http cache body-parser@https://registry.npmjs.org/body-parser/-/body-parser-1.20.4.tgz 0ms (cache hit)
+194 http cache assertion-error@https://registry.npmjs.org/assertion-error/-/assertion-error-2.0.1.tgz 0ms (cache hit)
+195 http cache base64-js@https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz 0ms (cache hit)
+196 http cache chai@https://registry.npmjs.org/chai/-/chai-6.2.2.tgz 0ms (cache hit)
+197 http cache commander@https://registry.npmjs.org/commander/-/commander-9.5.0.tgz 0ms (cache hit)
+198 http cache agent-base@https://registry.npmjs.org/agent-base/-/agent-base-7.1.1.tgz 0ms (cache hit)
+199 http cache abbrev@https://registry.npmjs.org/abbrev/-/abbrev-1.1.1.tgz 0ms (cache hit)
+200 http cache @vitest/mocker@https://registry.npmjs.org/@vitest/mocker/-/mocker-4.1.8.tgz 0ms (cache hit)
+201 http cache vite@https://registry.npmjs.org/vite/-/vite-8.0.16.tgz 0ms (cache hit)
+202 http cache mime@https://registry.npmjs.org/mime/-/mime-2.6.0.tgz 0ms (cache hit)
+203 http cache ms@https://registry.npmjs.org/ms/-/ms-2.1.2.tgz 0ms (cache hit)
+204 http cache lru-cache@https://registry.npmjs.org/lru-cache/-/lru-cache-7.18.3.tgz 0ms (cache hit)
+205 http cache jws@https://registry.npmjs.org/jws/-/jws-3.2.3.tgz 0ms (cache hit)
+206 http cache debug@https://registry.npmjs.org/debug/-/debug-4.3.4.tgz 0ms (cache hit)
+207 http cache iconv-lite@https://registry.npmjs.org/iconv-lite/-/iconv-lite-0.7.1.tgz 0ms (cache hit)
+208 http cache jwa@https://registry.npmjs.org/jwa/-/jwa-1.4.2.tgz 0ms (cache hit)
+209 silly tarball no local data for @types/deep-eql@https://registry.npmjs.org/@types/deep-eql/-/deep-eql-4.0.2.tgz. Extracting by manifest.
+210 silly tarball no local data for nanoid@https://registry.npmjs.org/nanoid/-/nanoid-3.3.12.tgz. Extracting by manifest.
+211 silly tarball no local data for mkdirp@https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.6.tgz. Extracting by manifest.
+212 silly tarball no local data for @types/chai@https://registry.npmjs.org/@types/chai/-/chai-5.2.3.tgz. Extracting by manifest.
+213 silly tarball no local data for mime@https://registry.npmjs.org/mime/-/mime-1.6.0.tgz. Extracting by manifest.
+214 http cache debug@https://registry.npmjs.org/debug/-/debug-4.3.7.tgz 0ms (cache hit)
+215 http cache debug@https://registry.npmjs.org/debug/-/debug-4.3.7.tgz 0ms (cache hit)
+216 silly tarball no local data for @vitest/utils@https://registry.npmjs.org/@vitest/utils/-/utils-4.1.8.tgz. Extracting by manifest.
+217 silly tarball no local data for js-yaml@https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.1.tgz. Extracting by manifest.
+218 silly tarball no local data for @vitest/pretty-format@https://registry.npmjs.org/@vitest/pretty-format/-/pretty-format-4.1.8.tgz. Extracting by manifest.
+219 silly tarball no local data for @vitest/spy@https://registry.npmjs.org/@vitest/spy/-/spy-4.1.8.tgz. Extracting by manifest.
+220 silly tarball no local data for @vitest/runner@https://registry.npmjs.org/@vitest/runner/-/runner-4.1.8.tgz. Extracting by manifest.
+221 silly tarball no local data for @vitest/expect@https://registry.npmjs.org/@vitest/expect/-/expect-4.1.8.tgz. Extracting by manifest.
+222 silly tarball no local data for @vitest/snapshot@https://registry.npmjs.org/@vitest/snapshot/-/snapshot-4.1.8.tgz. Extracting by manifest.
+223 silly tarball no local data for @scarf/scarf@https://registry.npmjs.org/@scarf/scarf/-/scarf-1.4.0.tgz. Extracting by manifest.
+224 silly tarball no local data for @oxc-project/types@https://registry.npmjs.org/@oxc-project/types/-/types-0.133.0.tgz. Extracting by manifest.
+225 silly tarball no local data for @apidevtools/swagger-methods@https://registry.npmjs.org/@apidevtools/swagger-methods/-/swagger-methods-3.0.2.tgz. Extracting by manifest.
+226 silly tarball no local data for @rolldown/pluginutils@https://registry.npmjs.org/@rolldown/pluginutils/-/pluginutils-1.0.1.tgz. Extracting by manifest.
+227 silly tarball no local data for @apidevtools/openapi-schemas@https://registry.npmjs.org/@apidevtools/openapi-schemas/-/openapi-schemas-2.1.0.tgz. Extracting by manifest.
+228 silly tarball no local data for @rolldown/binding-win32-x64-msvc@https://registry.npmjs.org/@rolldown/binding-win32-x64-msvc/-/binding-win32-x64-msvc-1.0.3.tgz. Extracting by manifest.
+229 silly tarball no local data for @jsdevtools/ono@https://registry.npmjs.org/@jsdevtools/ono/-/ono-7.1.3.tgz. Extracting by manifest.
+230 silly tarball no local data for @apidevtools/json-schema-ref-parser@https://registry.npmjs.org/@apidevtools/json-schema-ref-parser/-/json-schema-ref-parser-9.1.2.tgz. Extracting by manifest.
+231 silly tarball no local data for @apidevtools/swagger-parser@https://registry.npmjs.org/@apidevtools/swagger-parser/-/swagger-parser-10.0.3.tgz. Extracting by manifest.
+232 silly tarball no local data for yaml@https://registry.npmjs.org/yaml/-/yaml-2.0.0-1.tgz. Extracting by manifest.
+233 silly tarball no local data for z-schema@https://registry.npmjs.org/z-schema/-/z-schema-5.0.5.tgz. Extracting by manifest.
+234 silly tarball no local data for yallist@https://registry.npmjs.org/yallist/-/yallist-4.0.0.tgz. Extracting by manifest.
+235 silly tarball no local data for why-is-node-running@https://registry.npmjs.org/why-is-node-running/-/why-is-node-running-2.3.0.tgz. Extracting by manifest.
+236 silly tarball no local data for whatwg-url@https://registry.npmjs.org/whatwg-url/-/whatwg-url-5.0.0.tgz. Extracting by manifest.
+237 silly tarball no local data for vitest@https://registry.npmjs.org/vitest/-/vitest-4.1.8.tgz. Extracting by manifest.
+238 silly tarball no local data for webidl-conversions@https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-3.0.1.tgz. Extracting by manifest.
+239 silly tarball no local data for validator@https://registry.npmjs.org/validator/-/validator-13.15.23.tgz. Extracting by manifest.
+240 silly tarball no local data for uuid@https://registry.npmjs.org/uuid/-/uuid-9.0.1.tgz. Extracting by manifest.
+241 silly tarball no local data for tr46@https://registry.npmjs.org/tr46/-/tr46-0.0.3.tgz. Extracting by manifest.
+242 silly tarball no local data for swagger-ui-express@https://registry.npmjs.org/swagger-ui-express/-/swagger-ui-express-5.0.1.tgz. Extracting by manifest.
+243 silly tarball no local data for touch@https://registry.npmjs.org/touch/-/touch-3.1.0.tgz. Extracting by manifest.
+244 silly tarball no local data for tinyrainbow@https://registry.npmjs.org/tinyrainbow/-/tinyrainbow-3.1.0.tgz. Extracting by manifest.
+245 silly tarball no local data for swagger-ui-dist@https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-5.30.3.tgz. Extracting by manifest.
+246 silly tarball no local data for tinybench@https://registry.npmjs.org/tinybench/-/tinybench-2.9.0.tgz. Extracting by manifest.
+247 silly tarball no local data for swagger-jsdoc@https://registry.npmjs.org/swagger-jsdoc/-/swagger-jsdoc-6.2.8.tgz. Extracting by manifest.
+248 silly tarball no local data for std-env@https://registry.npmjs.org/std-env/-/std-env-4.1.0.tgz. Extracting by manifest.
+249 silly tarball no local data for swagger-parser@https://registry.npmjs.org/swagger-parser/-/swagger-parser-10.0.3.tgz. Extracting by manifest.
+250 silly tarball no local data for siginfo@https://registry.npmjs.org/siginfo/-/siginfo-2.0.0.tgz. Extracting by manifest.
+251 silly tarball no local data for stackback@https://registry.npmjs.org/stackback/-/stackback-0.0.2.tgz. Extracting by manifest.
+252 silly tarball no local data for side-channel-list@https://registry.npmjs.org/side-channel-list/-/side-channel-list-1.0.0.tgz. Extracting by manifest.
+253 silly tarball no local data for semver@https://registry.npmjs.org/semver/-/semver-7.6.0.tgz. Extracting by manifest.
+254 silly tarball no local data for rolldown@https://registry.npmjs.org/rolldown/-/rolldown-1.0.3.tgz. Extracting by manifest.
+255 silly tarball no local data for qs@https://registry.npmjs.org/qs/-/qs-6.14.2.tgz. Extracting by manifest.
+256 silly tarball no local data for openapi-types@https://registry.npmjs.org/openapi-types/-/openapi-types-12.1.3.tgz. Extracting by manifest.
+257 silly tarball no local data for obug@https://registry.npmjs.org/obug/-/obug-2.1.2.tgz. Extracting by manifest.
+258 silly tarball no local data for picomatch@https://registry.npmjs.org/picomatch/-/picomatch-2.3.1.tgz. Extracting by manifest.
+259 silly tarball no local data for nopt@https://registry.npmjs.org/nopt/-/nopt-1.0.10.tgz. Extracting by manifest.
+260 silly tarball no local data for multer@https://registry.npmjs.org/multer/-/multer-1.4.5-lts.1.tgz. Extracting by manifest.
+261 silly tarball no local data for nodemon@https://registry.npmjs.org/nodemon/-/nodemon-3.1.0.tgz. Extracting by manifest.
+262 silly tarball no local data for path-to-regexp@https://registry.npmjs.org/path-to-regexp/-/path-to-regexp-0.1.12.tgz. Extracting by manifest.
+263 silly tarball no local data for named-placeholders@https://registry.npmjs.org/named-placeholders/-/named-placeholders-1.1.3.tgz. Extracting by manifest.
+264 silly tarball no local data for node-fetch@https://registry.npmjs.org/node-fetch/-/node-fetch-2.7.0.tgz. Extracting by manifest.
+265 silly tarball no local data for lru-cache@https://registry.npmjs.org/lru-cache/-/lru-cache-6.0.0.tgz. Extracting by manifest.
+266 silly tarball no local data for minimatch@https://registry.npmjs.org/minimatch/-/minimatch-3.1.2.tgz. Extracting by manifest.
+267 silly tarball no local data for lru.min@https://registry.npmjs.org/lru.min/-/lru.min-1.1.3.tgz. Extracting by manifest.
+268 silly tarball no local data for long@https://registry.npmjs.org/long/-/long-5.2.3.tgz. Extracting by manifest.
+269 silly tarball no local data for lodash.mergewith@https://registry.npmjs.org/lodash.mergewith/-/lodash.mergewith-4.6.2.tgz. Extracting by manifest.
+270 silly tarball no local data for lodash.isequal@https://registry.npmjs.org/lodash.isequal/-/lodash.isequal-4.5.0.tgz. Extracting by manifest.
+271 silly tarball no local data for mysql2@https://registry.npmjs.org/mysql2/-/mysql2-3.16.0.tgz. Extracting by manifest.
+272 silly tarball no local data for lodash.get@https://registry.npmjs.org/lodash.get/-/lodash.get-4.4.2.tgz. Extracting by manifest.
+273 silly tarball no local data for jsonwebtoken@https://registry.npmjs.org/jsonwebtoken/-/jsonwebtoken-9.0.2.tgz. Extracting by manifest.
+274 silly tarball no local data for json-bigint@https://registry.npmjs.org/json-bigint/-/json-bigint-1.0.0.tgz. Extracting by manifest.
+275 silly tarball no local data for ip-address@https://registry.npmjs.org/ip-address/-/ip-address-10.1.0.tgz. Extracting by manifest.
+276 silly tarball no local data for google-auth-library@https://registry.npmjs.org/google-auth-library/-/google-auth-library-9.14.2.tgz. Extracting by manifest.
+277 silly tarball no local data for gtoken@https://registry.npmjs.org/gtoken/-/gtoken-7.1.0.tgz. Extracting by manifest.
+278 silly tarball no local data for glob@https://registry.npmjs.org/glob/-/glob-7.1.6.tgz. Extracting by manifest.
+279 silly tarball no local data for https-proxy-agent@https://registry.npmjs.org/https-proxy-agent/-/https-proxy-agent-7.0.5.tgz. Extracting by manifest.
+280 silly tarball no local data for extend@https://registry.npmjs.org/extend/-/extend-3.0.2.tgz. Extracting by manifest.
+281 silly tarball no local data for gaxios@https://registry.npmjs.org/gaxios/-/gaxios-6.7.1.tgz. Extracting by manifest.
+282 silly tarball no local data for gcp-metadata@https://registry.npmjs.org/gcp-metadata/-/gcp-metadata-6.1.0.tgz. Extracting by manifest.
+283 silly tarball no local data for express@https://registry.npmjs.org/express/-/express-4.22.1.tgz. Extracting by manifest.
+284 silly tarball no local data for express-rate-limit@https://registry.npmjs.org/express-rate-limit/-/express-rate-limit-8.4.1.tgz. Extracting by manifest.
+285 silly tarball no local data for expect-type@https://registry.npmjs.org/expect-type/-/expect-type-1.3.0.tgz. Extracting by manifest.
+286 silly tarball no local data for dotenv@https://registry.npmjs.org/dotenv/-/dotenv-16.4.5.tgz. Extracting by manifest.
+287 silly tarball no local data for cors@https://registry.npmjs.org/cors/-/cors-2.8.5.tgz. Extracting by manifest.
+288 silly tarball no local data for estree-walker@https://registry.npmjs.org/estree-walker/-/estree-walker-3.0.3.tgz. Extracting by manifest.
+289 silly tarball no local data for concat-stream@https://registry.npmjs.org/concat-stream/-/concat-stream-1.6.2.tgz. Extracting by manifest.
+290 silly tarball no local data for cookie-signature@https://registry.npmjs.org/cookie-signature/-/cookie-signature-1.0.6.tgz. Extracting by manifest.
+291 silly tarball no local data for commander@https://registry.npmjs.org/commander/-/commander-6.2.0.tgz. Extracting by manifest.
+292 silly tarball no local data for csv-parse@https://registry.npmjs.org/csv-parse/-/csv-parse-6.1.0.tgz. Extracting by manifest.
+293 silly tarball no local data for bignumber.js@https://registry.npmjs.org/bignumber.js/-/bignumber.js-9.1.2.tgz. Extracting by manifest.
+294 silly tarball no local data for call-me-maybe@https://registry.npmjs.org/call-me-maybe/-/call-me-maybe-1.0.2.tgz. Extracting by manifest.
+295 silly tarball no local data for brace-expansion@https://registry.npmjs.org/brace-expansion/-/brace-expansion-1.1.12.tgz. Extracting by manifest.
+296 silly tarball no local data for body-parser@https://registry.npmjs.org/body-parser/-/body-parser-1.20.4.tgz. Extracting by manifest.
+297 silly tarball no local data for assertion-error@https://registry.npmjs.org/assertion-error/-/assertion-error-2.0.1.tgz. Extracting by manifest.
+298 silly tarball no local data for chai@https://registry.npmjs.org/chai/-/chai-6.2.2.tgz. Extracting by manifest.
+299 silly tarball no local data for base64-js@https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz. Extracting by manifest.
+300 silly tarball no local data for commander@https://registry.npmjs.org/commander/-/commander-9.5.0.tgz. Extracting by manifest.
+301 silly tarball no local data for agent-base@https://registry.npmjs.org/agent-base/-/agent-base-7.1.1.tgz. Extracting by manifest.
+302 silly tarball no local data for abbrev@https://registry.npmjs.org/abbrev/-/abbrev-1.1.1.tgz. Extracting by manifest.
+303 silly tarball no local data for @vitest/mocker@https://registry.npmjs.org/@vitest/mocker/-/mocker-4.1.8.tgz. Extracting by manifest.
+304 silly tarball no local data for vite@https://registry.npmjs.org/vite/-/vite-8.0.16.tgz. Extracting by manifest.
+305 silly tarball no local data for mime@https://registry.npmjs.org/mime/-/mime-2.6.0.tgz. Extracting by manifest.
+306 silly tarball no local data for ms@https://registry.npmjs.org/ms/-/ms-2.1.2.tgz. Extracting by manifest.
+307 silly tarball no local data for lru-cache@https://registry.npmjs.org/lru-cache/-/lru-cache-7.18.3.tgz. Extracting by manifest.
+308 silly tarball no local data for jws@https://registry.npmjs.org/jws/-/jws-3.2.3.tgz. Extracting by manifest.
+309 silly tarball no local data for debug@https://registry.npmjs.org/debug/-/debug-4.3.4.tgz. Extracting by manifest.
+310 silly tarball no local data for iconv-lite@https://registry.npmjs.org/iconv-lite/-/iconv-lite-0.7.1.tgz. Extracting by manifest.
+311 silly tarball no local data for jwa@https://registry.npmjs.org/jwa/-/jwa-1.4.2.tgz. Extracting by manifest.
+312 silly tarball no local data for debug@https://registry.npmjs.org/debug/-/debug-4.3.7.tgz. Extracting by manifest.
+313 silly tarball no local data for debug@https://registry.npmjs.org/debug/-/debug-4.3.7.tgz. Extracting by manifest.
+314 http fetch GET https://registry.npmjs.org/@types/deep-eql/-/deep-eql-4.0.2.tgz attempt 1 failed with EACCES
+315 http fetch GET https://registry.npmjs.org/nanoid/-/nanoid-3.3.12.tgz attempt 1 failed with EACCES
+316 http fetch GET https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.6.tgz attempt 1 failed with EACCES
+317 http fetch GET https://registry.npmjs.org/@types/chai/-/chai-5.2.3.tgz attempt 1 failed with EACCES
+318 http fetch GET https://registry.npmjs.org/mime/-/mime-1.6.0.tgz attempt 1 failed with EACCES
+319 http fetch GET https://registry.npmjs.org/@vitest/utils/-/utils-4.1.8.tgz attempt 1 failed with EACCES
+320 http fetch GET https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.1.tgz attempt 1 failed with EACCES
+321 http fetch GET https://registry.npmjs.org/@vitest/pretty-format/-/pretty-format-4.1.8.tgz attempt 1 failed with EACCES
+322 http fetch GET https://registry.npmjs.org/@vitest/spy/-/spy-4.1.8.tgz attempt 1 failed with EACCES
+323 http fetch GET https://registry.npmjs.org/@vitest/runner/-/runner-4.1.8.tgz attempt 1 failed with EACCES
+324 http fetch GET https://registry.npmjs.org/@vitest/expect/-/expect-4.1.8.tgz attempt 1 failed with EACCES
+325 http fetch GET https://registry.npmjs.org/@vitest/snapshot/-/snapshot-4.1.8.tgz attempt 1 failed with EACCES
+326 http fetch GET https://registry.npmjs.org/@scarf/scarf/-/scarf-1.4.0.tgz attempt 1 failed with EACCES
+327 http fetch GET https://registry.npmjs.org/@oxc-project/types/-/types-0.133.0.tgz attempt 1 failed with EACCES
+328 http fetch GET https://registry.npmjs.org/@apidevtools/swagger-methods/-/swagger-methods-3.0.2.tgz attempt 1 failed with EACCES
+329 http fetch GET https://registry.npmjs.org/npm attempt 2 failed with EACCES
+330 http fetch GET https://registry.npmjs.org/@types/deep-eql/-/deep-eql-4.0.2.tgz attempt 2 failed with EACCES
+331 http fetch GET https://registry.npmjs.org/nanoid/-/nanoid-3.3.12.tgz attempt 2 failed with EACCES
+332 http fetch GET https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.6.tgz attempt 2 failed with EACCES
+333 http fetch GET https://registry.npmjs.org/@types/chai/-/chai-5.2.3.tgz attempt 2 failed with EACCES
+334 http fetch GET https://registry.npmjs.org/mime/-/mime-1.6.0.tgz attempt 2 failed with EACCES
+335 http fetch GET https://registry.npmjs.org/@vitest/utils/-/utils-4.1.8.tgz attempt 2 failed with EACCES
+336 http fetch GET https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.1.tgz attempt 2 failed with EACCES
+337 http fetch GET https://registry.npmjs.org/@vitest/pretty-format/-/pretty-format-4.1.8.tgz attempt 2 failed with EACCES
+338 http fetch GET https://registry.npmjs.org/@vitest/spy/-/spy-4.1.8.tgz attempt 2 failed with EACCES
+339 http fetch GET https://registry.npmjs.org/@vitest/runner/-/runner-4.1.8.tgz attempt 2 failed with EACCES
+340 http fetch GET https://registry.npmjs.org/@vitest/expect/-/expect-4.1.8.tgz attempt 2 failed with EACCES
+341 http fetch GET https://registry.npmjs.org/@vitest/snapshot/-/snapshot-4.1.8.tgz attempt 2 failed with EACCES
+342 http fetch GET https://registry.npmjs.org/@scarf/scarf/-/scarf-1.4.0.tgz attempt 2 failed with EACCES
+343 http fetch GET https://registry.npmjs.org/@oxc-project/types/-/types-0.133.0.tgz attempt 2 failed with EACCES
+344 http fetch GET https://registry.npmjs.org/@apidevtools/swagger-methods/-/swagger-methods-3.0.2.tgz attempt 2 failed with EACCES
+345 http fetch GET https://registry.npmjs.org/npm attempt 3 failed with EACCES
+346 http fetch GET https://registry.npmjs.org/@types/deep-eql/-/deep-eql-4.0.2.tgz attempt 3 failed with EACCES
+347 http fetch GET https://registry.npmjs.org/nanoid/-/nanoid-3.3.12.tgz attempt 3 failed with EACCES
+348 http fetch GET https://registry.npmjs.org/mkdirp/-/mkdirp-0.5.6.tgz attempt 3 failed with EACCES
+349 http fetch GET https://registry.npmjs.org/@types/chai/-/chai-5.2.3.tgz attempt 3 failed with EACCES
+350 http fetch GET https://registry.npmjs.org/mime/-/mime-1.6.0.tgz attempt 3 failed with EACCES
+351 http fetch GET https://registry.npmjs.org/@vitest/utils/-/utils-4.1.8.tgz attempt 3 failed with EACCES
+352 http fetch GET https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.1.tgz attempt 3 failed with EACCES
+353 http fetch GET https://registry.npmjs.org/@vitest/pretty-format/-/pretty-format-4.1.8.tgz attempt 3 failed with EACCES
+354 http fetch GET https://registry.npmjs.org/@vitest/spy/-/spy-4.1.8.tgz attempt 3 failed with EACCES
+355 http fetch GET https://registry.npmjs.org/@vitest/runner/-/runner-4.1.8.tgz attempt 3 failed with EACCES
+356 http fetch GET https://registry.npmjs.org/@vitest/expect/-/expect-4.1.8.tgz attempt 3 failed with EACCES
+357 http fetch GET https://registry.npmjs.org/@vitest/snapshot/-/snapshot-4.1.8.tgz attempt 3 failed with EACCES
+358 http fetch GET https://registry.npmjs.org/@scarf/scarf/-/scarf-1.4.0.tgz attempt 3 failed with EACCES
+359 http fetch GET https://registry.npmjs.org/@oxc-project/types/-/types-0.133.0.tgz attempt 3 failed with EACCES
+360 http fetch GET https://registry.npmjs.org/@apidevtools/swagger-methods/-/swagger-methods-3.0.2.tgz attempt 3 failed with EACCES
+361 verbose cwd D:\C BACKUP\Desktop\user_events
+362 verbose os Windows_NT 10.0.26200
+363 verbose node v25.2.1
+364 verbose npm  v11.6.2
+365 error Exit handler never called!
+366 error This is an error with npm itself. Please report this error at:
+367 error   <https://github.com/npm/cli/issues>
+368 verbose exit 1
+369 verbose code 1
+370 error A complete log of this run can be found in: D:\C BACKUP\Desktop\user_events\.npm-cache\_logs\2026-06-29T17_16_38_278Z-debug-0.log

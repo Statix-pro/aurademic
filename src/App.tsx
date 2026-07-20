@@ -1,0 +1,44 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './hooks/useAuth'
+import { ProfileProvider } from './context/ProfileContext'
+import { EventsProvider } from './context/EventsContext'
+import AppLayout from './components/layout/AppLayout'
+import AuthPage from './pages/AuthPage'
+import HomePage from './pages/HomePage'
+import RegistrationPage from './pages/RegistrationPage'
+import EventRegistrationPage from './pages/EventRegistrationPage'
+import RegistrationsPage from './pages/RegistrationsPage'
+import ProfilePage from './pages/ProfilePage'
+import PaymentPage from './pages/PaymentPage'
+import AccommodationPage from './pages/registration/Accommodation'
+import FeedbackPage from './pages/FeedbackPage'
+import CertificatesPage from './pages/CertificatesPage'
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <ProfileProvider>
+          <EventsProvider>
+            <Routes>
+              <Route path="/login" element={<AuthPage />} />
+              <Route element={<AppLayout />}>
+                <Route path="/home" element={<HomePage />} />
+                <Route path="/event-register" element={<EventRegistrationPage />} />
+                <Route path="/accommodation" element={<AccommodationPage />} />
+                <Route path="/register" element={<RegistrationPage />} />
+                <Route path="/payment" element={<PaymentPage />} />
+                <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/registrations" element={<RegistrationsPage />} />
+                <Route path="/feedback" element={<FeedbackPage />} />
+                <Route path="/certificates" element={<CertificatesPage />} />
+                <Route path="/" element={<Navigate to="/home" replace />} />
+              </Route>
+              <Route path="*" element={<Navigate to="/login" replace />} />
+            </Routes>
+          </EventsProvider>
+        </ProfileProvider>
+      </AuthProvider>
+    </BrowserRouter>
+  )
+}
