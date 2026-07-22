@@ -408,7 +408,7 @@ const matchesStatusFilter = (
     return statusLabel === 'Approved';
   }
   if (filter === 'pending_payment') {
-    return statusLabel === 'Approved' && !isCardClosed;
+    return statusLabel === 'Approved' && normalizeStatus(item.payment_status) === 'paid';
   }
   if (filter === 'closed') {
     return statusLabel === 'Approved' && isCardClosed;
@@ -487,7 +487,7 @@ const matchesWorkflowRowOptionStatusFilter = (
     return statusCategory === 'Approved';
   }
   if (filter === 'pending_payment') {
-    return statusCategory === 'Approved' && !isPaid;
+    return statusCategory === 'Approved' && isPaid;
   }
   if (filter === 'closed') {
     return statusCategory === 'Approved' && isPaid;
@@ -724,12 +724,19 @@ const ExpenditureDashboard: React.FC = () => {
 
     searchFilteredProposalCards.forEach((card) => {
       const rows = cardRows[card.financeRequestId] ?? [];
+      const isCardClosed = closedFinanceIds.has(card.financeRequestId);
 
       if (selectedStatusFilter === 'closed') {
         // Closed is a finalized state on the whole finance card, not a
         // per-row/per-option payment status - show all rows once the card
         // has actually been finalized via Finalize & Close.
-        next[card.financeRequestId] = closedFinanceIds.has(card.financeRequestId) ? rows : [];
+        next[card.financeRequestId] = isCardClosed ? rows : [];
+        return;
+      }
+
+      if (isCardClosed) {
+        // Once a card is finalized it only ever appears under the Closed tab.
+        next[card.financeRequestId] = [];
         return;
       }
 
@@ -758,10 +765,18 @@ const ExpenditureDashboard: React.FC = () => {
   const filteredProposalCards = useMemo(
     () =>
       searchFilteredProposalCards.filter((card) => {
-        if (selectedStatusFilter === 'all' && selectedTypeFilter === 'all') return true;
+        if (selectedStatusFilter === 'all' && selectedTypeFilter === 'all') {
+          return !closedFinanceIds.has(card.financeRequestId);
+        }
         return (filteredCardRows[card.financeRequestId] ?? []).length > 0;
       }),
-    [filteredCardRows, searchFilteredProposalCards, selectedStatusFilter, selectedTypeFilter],
+    [
+      closedFinanceIds,
+      filteredCardRows,
+      searchFilteredProposalCards,
+      selectedStatusFilter,
+      selectedTypeFilter,
+    ],
   );
 
   const stats = useMemo(() => {
@@ -790,6 +805,17 @@ const ExpenditureDashboard: React.FC = () => {
         if (itemType !== selectedTypeFilter) return;
       }
 
+      // Once a card is finalized via Finalize & Close it moves out of the
+      // Active bucket entirely and is only ever reflected under Closed.
+      const isCardClosed = closedFinanceIds.has(String(item.financeid ?? ''));
+      if (isCardClosed) {
+        if (matchesStatusFilter(item, 'closed', closedFinanceIds)) {
+          closed++;
+          closedAmount += Number(item.amount || 0);
+        }
+        return;
+      }
+
       total++;
       totalAmount += Number(item.amount || 0);
 
@@ -802,10 +828,10 @@ const ExpenditureDashboard: React.FC = () => {
       } else if (matchesStatusFilter(item, 'approved', closedFinanceIds)) {
         approved++;
         approvedAmount += Number(item.amount || 0);
-        if (matchesStatusFilter(item, 'closed', closedFinanceIds)) {
-          closed++;
-          closedAmount += Number(item.amount || 0);
-        } else {
+
+        // A card's items are already routed to the isCardClosed branch above once
+        // finalized, so "paid" here only ever reflects requests still on an active card.
+        if (matchesStatusFilter(item, 'pending_payment', closedFinanceIds)) {
           pendingPayment++;
           pendingPaymentAmount += Number(item.amount || 0);
         }
@@ -832,7 +858,7 @@ const ExpenditureDashboard: React.FC = () => {
     {
       key: 'all' as const,
       className: 'total',
-      label: 'Total',
+      label: 'Active',
       value: stats.total,
       amount: stats.totalAmount,
       icon: <FileText size={20} className="expenditure-stats-icon" />,
@@ -864,7 +890,7 @@ const ExpenditureDashboard: React.FC = () => {
     {
       key: 'pending_payment' as const,
       className: 'pending-payment',
-      label: 'Payable',
+      label: 'Paid',
       value: stats.pendingPayment,
       amount: stats.pendingPaymentAmount,
       icon: <CreditCard size={20} className="expenditure-stats-icon" />,
@@ -1536,6 +1562,30 @@ const ExpenditureDashboard: React.FC = () => {
     return getWorkflowApprovalLabel(parseWorkflowState(row.latestWorkflowState));
   };
 
+  // A row can hold sibling requests across modules (Advance/Advance2/Expenditure/Settlement)
+  // that share the same dashboardRowId. The badge must reflect the row as a whole, not just
+  // whichever sibling was created most recently, otherwise an already-approved module can be
+  // masked by a newer pending one (or vice versa).
+  const getRowAggregateStatusLabel = (row: WorkflowRow) => {
+    const moduleStatuses: string[] = [];
+    if (row.advanceRequestId) moduleStatuses.push(row.advanceStatus);
+    if (row.advanceRequestId2) moduleStatuses.push(row.advanceStatus2);
+    if (row.expenditureRequestId) moduleStatuses.push(row.expenditureStatus);
+    if (row.settlementRequestId) moduleStatuses.push(row.settlementStatus);
+
+    if (moduleStatuses.length === 0) {
+      return getWorkflowStatusLabel(row);
+    }
+
+    const categories = moduleStatuses.map(getWorkflowStatusCategory);
+
+    if (categories.includes('Rejected')) return 'Rejected';
+    if (categories.includes('Returned')) return 'Returned';
+    if (categories.includes('Resubmitted')) return 'Resubmitted';
+    if (categories.some((category) => category !== 'Approved')) return 'Pending';
+    return 'Approved';
+  };
+
   const getWorkflowTimelineState = (row: WorkflowRow, stage: 'hod' | 'dof' | 'principal') => {
     return getWorkflowApprovalStageState(parseWorkflowState(row.latestWorkflowState), stage);
   };
@@ -1641,7 +1691,7 @@ const ExpenditureDashboard: React.FC = () => {
       return 'Not Submitted';
     }
 
-    return getWorkflowStatusLabel(row);
+    return getRowAggregateStatusLabel(row);
   };
 
   const buildRowsFromRequests = (
@@ -2972,7 +3022,7 @@ const ExpenditureDashboard: React.FC = () => {
                         ? 'returned'
                         : selectedStatusFilter === 'approved'
                           ? 'approved'
-                          : 'payable'}{' '}
+                          : 'paid'}{' '}
                     requests found for FY {financialYear}.
                   </div>
                 )}
