@@ -405,7 +405,7 @@ const matchesStatusFilter = (
     return statusLabel === 'Returned';
   }
   if (filter === 'approved') {
-    return statusLabel === 'Approved';
+    return statusLabel === 'Approved' && normalizeStatus(item.payment_status) !== 'paid';
   }
   if (filter === 'pending_payment') {
     return statusLabel === 'Approved' && normalizeStatus(item.payment_status) === 'paid';
@@ -484,7 +484,7 @@ const matchesWorkflowRowOptionStatusFilter = (
     return statusCategory === 'Returned';
   }
   if (filter === 'approved') {
-    return statusCategory === 'Approved';
+    return statusCategory === 'Approved' && !isPaid;
   }
   if (filter === 'pending_payment') {
     return statusCategory === 'Approved' && isPaid;
@@ -825,16 +825,14 @@ const ExpenditureDashboard: React.FC = () => {
       } else if (matchesStatusFilter(item, 'return', closedFinanceIds)) {
         returned++;
         returnedAmount += Number(item.amount || 0);
+      } else if (matchesStatusFilter(item, 'pending_payment', closedFinanceIds)) {
+        // Paid takes priority over "approved" so a proposal only ever sits in one
+        // category: once its payment_status is updated it moves out of Approved.
+        pendingPayment++;
+        pendingPaymentAmount += Number(item.amount || 0);
       } else if (matchesStatusFilter(item, 'approved', closedFinanceIds)) {
         approved++;
         approvedAmount += Number(item.amount || 0);
-
-        // A card's items are already routed to the isCardClosed branch above once
-        // finalized, so "paid" here only ever reflects requests still on an active card.
-        if (matchesStatusFilter(item, 'pending_payment', closedFinanceIds)) {
-          pendingPayment++;
-          pendingPaymentAmount += Number(item.amount || 0);
-        }
       }
     });
 
@@ -2794,15 +2792,24 @@ const ExpenditureDashboard: React.FC = () => {
                               <button
                                 type="button"
                                 className="expenditure-demo-card-footer__close-btn"
-                                disabled={
-                                  !canFinalizeClose || closingFinanceId === card.financeRequestId
-                                }
+                                disabled={closingFinanceId === card.financeRequestId}
                                 title={
                                   canFinalizeClose
                                     ? 'Finalize and close this finance card'
                                     : 'Available once every submitted request under this card is approved and paid'
                                 }
-                                onClick={() => handleFinalizeCloseCard(card.financeRequestId)}
+                                onClick={() => {
+                                  if (!canFinalizeClose) {
+                                    showDialog({
+                                      title: 'Unable to Close',
+                                      message:
+                                        'Please update the Payment Status for all expenditure entries before closing this proposal.',
+                                      variant: 'warning',
+                                    });
+                                    return;
+                                  }
+                                  handleFinalizeCloseCard(card.financeRequestId);
+                                }}
                               >
                                 <Lock size={12} />
                                 {closingFinanceId === card.financeRequestId

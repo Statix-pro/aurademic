@@ -2400,6 +2400,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
         settlement_amount: settlementAmount,
         balance_amount: Math.max(0, approvedAmount - effectiveUsageAmount - expenditureAmount),
         expenditure_request_count: Number(row.expenditure_request_count || 0),
+        closed_at: row.closed_at ?? null,
       };
     }),
     requests: requestRows.map((row) => ({
