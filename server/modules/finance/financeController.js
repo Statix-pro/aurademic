@@ -988,6 +988,7 @@ const financeController = {
         NOT_FOUND: 404,
         ALREADY_CLOSED: 409,
         NOT_ELIGIBLE: 409,
+        NOT_SETTLED: 409,
         MIGRATION_REQUIRED: 503,
       };
       const statusCode = statusByCode[code] || 500;

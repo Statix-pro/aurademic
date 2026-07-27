@@ -388,6 +388,14 @@ const buildWorkflowRequestRefMap = (requests: ExpenditureItem[]) => {
 const getRequestStatusLabel = (item: ExpenditureItem) =>
   getWorkflowApprovalLabel(parseWorkflowState(item.workflow_state));
 
+const CLOSE_BLOCKER_MESSAGES = {
+  'no-requests': 'Submit at least one expenditure entry before closing this proposal.',
+  unsettled:
+    'Please complete the Settlement for every advance payment before closing this proposal.',
+  unpaid:
+    'Please update the Payment Status for all expenditure entries before closing this proposal.',
+} as const;
+
 const matchesStatusFilter = (
   item: ExpenditureItem,
   filter: StatusFilterKey,
@@ -734,8 +742,9 @@ const ExpenditureDashboard: React.FC = () => {
         return;
       }
 
-      if (isCardClosed) {
-        // Once a card is finalized it only ever appears under the Closed tab.
+      if (isCardClosed && selectedStatusFilter !== 'pending_payment') {
+        // Once a card is finalized it drops out of the active tabs. Paid is the
+        // exception - it reflects payment status, which survives finalization.
         next[card.financeRequestId] = [];
         return;
       }
@@ -790,7 +799,9 @@ const ExpenditureDashboard: React.FC = () => {
     let returned = 0;
     let approved = 0;
     let pendingPayment = 0;
-    let closed = 0;
+    // Closed renders as a grouped view, so the KPI counts finance cards rather
+    // than individual requests (one card can hold several requests).
+    const closedCardIds = new Set<string>();
 
     let totalAmount = 0;
     let pendingAmount = 0;
@@ -805,34 +816,41 @@ const ExpenditureDashboard: React.FC = () => {
         if (itemType !== selectedTypeFilter) return;
       }
 
+      const financeId = String(item.financeid ?? '');
+      const isCardClosed = closedFinanceIds.has(financeId);
+      const itemAmount = Number(item.amount || 0);
+
+      // Paid reflects payment status, which survives finalization, so it is
+      // counted for closed and active cards alike.
+      if (matchesStatusFilter(item, 'pending_payment', closedFinanceIds)) {
+        pendingPayment++;
+        pendingPaymentAmount += itemAmount;
+      }
+
       // Once a card is finalized via Finalize & Close it moves out of the
       // Active bucket entirely and is only ever reflected under Closed.
-      const isCardClosed = closedFinanceIds.has(String(item.financeid ?? ''));
       if (isCardClosed) {
         if (matchesStatusFilter(item, 'closed', closedFinanceIds)) {
-          closed++;
-          closedAmount += Number(item.amount || 0);
+          closedCardIds.add(financeId);
+          closedAmount += itemAmount;
         }
         return;
       }
 
       total++;
-      totalAmount += Number(item.amount || 0);
+      totalAmount += itemAmount;
 
       if (matchesStatusFilter(item, 'pending', closedFinanceIds)) {
         pending++;
-        pendingAmount += Number(item.amount || 0);
+        pendingAmount += itemAmount;
       } else if (matchesStatusFilter(item, 'return', closedFinanceIds)) {
         returned++;
-        returnedAmount += Number(item.amount || 0);
-      } else if (matchesStatusFilter(item, 'pending_payment', closedFinanceIds)) {
-        // Paid takes priority over "approved" so a proposal only ever sits in one
-        // category: once its payment_status is updated it moves out of Approved.
-        pendingPayment++;
-        pendingPaymentAmount += Number(item.amount || 0);
+        returnedAmount += itemAmount;
       } else if (matchesStatusFilter(item, 'approved', closedFinanceIds)) {
+        // matchesStatusFilter already excludes paid items here, so a request
+        // never sits in both Approved and Paid.
         approved++;
-        approvedAmount += Number(item.amount || 0);
+        approvedAmount += itemAmount;
       }
     });
 
@@ -842,7 +860,7 @@ const ExpenditureDashboard: React.FC = () => {
       returned,
       approved,
       pendingPayment,
-      closed,
+      closed: closedCardIds.size,
       totalAmount,
       pendingAmount,
       returnedAmount,
@@ -1543,17 +1561,31 @@ const ExpenditureDashboard: React.FC = () => {
   const isWorkflowOptionPaymentPaid = (row: WorkflowRow, module: WorkflowModule | 'Advance2') =>
     normalizeStatus(getWorkflowOptionPaymentStatus(row, module)) === 'paid';
 
-  const isFinanceCardFullyClosed = (rows: WorkflowRow[]) => {
+  // A row that drew an advance is only squared off once its settlement has been
+  // submitted and approved - until then the advance is unreconciled money.
+  const hasUnsettledAdvance = (row: WorkflowRow) => {
+    const hasAdvance = Boolean(row.advanceRequestId || row.advanceRequestId2);
+    if (!hasAdvance) return false;
+
+    return (
+      !row.settlementRequestId || getWorkflowStatusCategory(row.settlementStatus) !== 'Approved'
+    );
+  };
+
+  const getFinanceCardCloseBlocker = (rows: WorkflowRow[]) => {
     const submittedOptions = rows.flatMap((row) =>
       getRowActions(row)
         .filter((option) => !option.hidden && option.submitted)
         .map((option) => ({ row, module: option.module })),
     );
 
-    return (
-      submittedOptions.length > 0 &&
-      submittedOptions.every(({ row, module }) => isWorkflowOptionPaymentPaid(row, module))
-    );
+    if (submittedOptions.length === 0) return 'no-requests' as const;
+    if (rows.some(hasUnsettledAdvance)) return 'unsettled' as const;
+    if (!submittedOptions.every(({ row, module }) => isWorkflowOptionPaymentPaid(row, module))) {
+      return 'unpaid' as const;
+    }
+
+    return null;
   };
 
   const getWorkflowStatusLabel = (row: WorkflowRow) => {
@@ -2313,9 +2345,11 @@ const ExpenditureDashboard: React.FC = () => {
                   const cardBalanceAmount = Math.max(Number(card.balanceAmount || 0), 0);
                   const rows = filteredCardRows[card.financeRequestId] ?? [];
                   const allCardRows = cardRows[card.financeRequestId] ?? [];
-                  const canAddRow = cardBalanceAmount > 0;
                   const isCardClosed = Boolean(card.closedAt);
-                  const canFinalizeClose = !isCardClosed && isFinanceCardFullyClosed(allCardRows);
+                  // A closed card is read-only: no new rows, edits or deletions.
+                  const canAddRow = cardBalanceAmount > 0 && !isCardClosed;
+                  const closeBlocker = getFinanceCardCloseBlocker(allCardRows);
+                  const canFinalizeClose = !isCardClosed && closeBlocker === null;
                   const selectedFiscalYearStart = Number.parseInt(financialYear.split('-')[0], 10);
                   const sourceFiscalYear = Number(card.sourceFiscalYear || 0);
                   const showCarryForwardLabel =
@@ -2421,6 +2455,7 @@ const ExpenditureDashboard: React.FC = () => {
                                   const canEditRow =
                                     hasProposal &&
                                     !isActionLocked &&
+                                    !isCardClosed &&
                                     (row.latestWorkflowStatus
                                       ? isEditableWorkflowStatus(row.latestWorkflowStatus)
                                       : !row.latestRequestId);
@@ -2438,10 +2473,12 @@ const ExpenditureDashboard: React.FC = () => {
                                             {actions.map((option) => {
                                               // Skip hidden buttons
                                               if (option.hidden) return null;
-                                              const gateMessage = getWorkflowGateMessage(
-                                                row,
-                                                option.module,
-                                              );
+                                              // A closed card is read-only, so only already-submitted
+                                              // options stay clickable (they open in view mode).
+                                              const gateMessage =
+                                                isCardClosed && !option.submitted
+                                                  ? 'This proposal is closed. No new entries can be added.'
+                                                  : getWorkflowGateMessage(row, option.module);
                                               const optionRequestRef = option.submitted
                                                 ? getWorkflowOptionRequestRef(row, option.module)
                                                 : '';
@@ -2730,7 +2767,9 @@ const ExpenditureDashboard: React.FC = () => {
                                             title={
                                               canAddWorkflowRow
                                                 ? 'Add row'
-                                                : 'Only the latest addable row can create a new row'
+                                                : isCardClosed
+                                                  ? 'This proposal is closed and cannot be modified'
+                                                  : 'Only the latest addable row can create a new row'
                                             }
                                             aria-label="Add workflow row"
                                           >
@@ -2741,6 +2780,7 @@ const ExpenditureDashboard: React.FC = () => {
                                             type="button"
                                             className="expenditure-demo-row__icon-btn expenditure-demo-row__icon-btn--danger"
                                             disabled={
+                                              isCardClosed ||
                                               isActionLocked ||
                                               row.latestWorkflowStatus === 'approved' ||
                                               row.latestWorkflowStatus === 'completed' ||
@@ -2750,6 +2790,7 @@ const ExpenditureDashboard: React.FC = () => {
                                             }
                                             onClick={() => {
                                               if (
+                                                isCardClosed ||
                                                 isActionLocked ||
                                                 row.latestWorkflowStatus === 'approved' ||
                                                 row.latestWorkflowStatus === 'completed' ||
@@ -2762,9 +2803,11 @@ const ExpenditureDashboard: React.FC = () => {
                                               deleteWorkflowRow(card.financeRequestId, row);
                                             }}
                                             title={
-                                              isActionLocked
-                                                ? 'Delete is disabled while approval is in progress'
-                                                : 'Delete row'
+                                              isCardClosed
+                                                ? 'This proposal is closed and cannot be modified'
+                                                : isActionLocked
+                                                  ? 'Delete is disabled while approval is in progress'
+                                                  : 'Delete row'
                                             }
                                             aria-label="Delete workflow row"
                                           >
@@ -2796,14 +2839,14 @@ const ExpenditureDashboard: React.FC = () => {
                                 title={
                                   canFinalizeClose
                                     ? 'Finalize and close this finance card'
-                                    : 'Available once every submitted request under this card is approved and paid'
+                                    : CLOSE_BLOCKER_MESSAGES[closeBlocker ?? 'no-requests']
                                 }
                                 onClick={() => {
                                   if (!canFinalizeClose) {
                                     showDialog({
                                       title: 'Unable to Close',
                                       message:
-                                        'Please update the Payment Status for all expenditure entries before closing this proposal.',
+                                        CLOSE_BLOCKER_MESSAGES[closeBlocker ?? 'no-requests'],
                                       variant: 'warning',
                                     });
                                     return;
@@ -2833,8 +2876,11 @@ const ExpenditureDashboard: React.FC = () => {
                       ic.card.financeRequestId,
                     );
                     const displayCode = getWorkflowRequestDisplayCode(ic.requestRef);
+                    // The Paid tab surfaces entries from closed cards too, so the
+                    // read-only rule has to hold in this view as well.
                     const canEdit =
                       ic.requestId &&
+                      !ic.card.closedAt &&
                       isEditableWorkflowStatus(ic.status) &&
                       !isWorkflowActionLocked(ic.row);
 
