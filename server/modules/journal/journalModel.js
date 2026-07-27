@@ -85,8 +85,6 @@ const journalModel = {
         quartile: journalData.quartile,
         impact_factor: journalData.impact_factor,
         cite_score: journalData.cite_score,
-        anna_university_listed: journalData.anna_university_listed,
-        anna_university_annexure_no: journalData.anna_university_annexure_no,
         acknowledgement: JSON.stringify(journalData.acknowledgement),
         author_affiliation: JSON.stringify(journalData.author_affiliation),
         external_details: journalData.external_details
@@ -114,6 +112,10 @@ const journalModel = {
           : null,
         scopus_id: journalData.scopus_id,
         scie_id: journalData.scie_id,
+        open_access: journalData.open_access,
+        year: journalData.year,
+        wos_id: journalData.wos_id,
+        pubmed_pmid: journalData.pubmed_pmid,
       };
 
       // Insert journal

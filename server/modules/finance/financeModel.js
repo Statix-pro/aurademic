@@ -635,10 +635,13 @@ const buildFinanceSelectSql = ({
   annexureFilePathSelectSql = 'NULL AS annexure_file_path',
   annexureMimeTypeSelectSql = 'NULL AS annexure_mime_type',
   annexureFileSizeSelectSql = 'NULL AS annexure_file_size',
+  paymentDebitAccountSelectSql = 'NULL AS payment_debit_account',
+  topupAmountSelectSql = '0 AS topup_amount',
 } = {}) => `
   SELECT
     fr.id,
     fr.employee_id,
+    e.user_id AS applicant_user_id,
     fr.created_by,
     COALESCE(
       TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))),
@@ -671,11 +674,13 @@ const buildFinanceSelectSql = ({
     ${unplannedBudgetDescriptionSelectSql},
     fr.total_budget,
     fr.approved_total_amount,
+    ${topupAmountSelectSql},
     fr.income_type,
     fr.income_status,
     fr.income_amount_type,
     fr.credit_status,
     fr.debit_status,
+    ${paymentDebitAccountSelectSql},
     fr.partial_amount,
     fr.enclosures,
     ${annexureTypeSelectSql},
@@ -748,6 +753,7 @@ const buildFinanceSelectSql = ({
        LIMIT 1
     ) AS workflow_stage_decision,
     frr.request_ref AS proposal_ref,
+    creator_user.email AS created_by_email,
     fr.created_at,
     fr.updated_at
   FROM finance_requests fr
@@ -755,6 +761,7 @@ const buildFinanceSelectSql = ({
   LEFT JOIN master_employees e ON fr.employee_id = e.id
   LEFT JOIN master_departments dept ON fr.department_id = dept.id
   LEFT JOIN master_departments emp_dept ON e.department_id = emp_dept.id
+  LEFT JOIN users creator_user ON creator_user.id = fr.created_by
 `;
 
 const getFinanceSelectSql = async ({ tx = db } = {}) => {
@@ -773,6 +780,19 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
   const hasAnnexureFilePath = await hasFinanceRequestColumn('annexure_file_path', { tx });
   const hasAnnexureMimeType = await hasFinanceRequestColumn('annexure_mime_type', { tx });
   const hasAnnexureFileSize = await hasFinanceRequestColumn('annexure_file_size', { tx });
+  const hasPaymentDebitAccount = await hasFinanceRequestColumn('payment_debit_account', { tx });
+  // FALLBACK: finance_budget_breakup.is_topup may not exist on older deployments;
+  // emit 0 so top-up totals default to zero until the column is present. Remove
+  // once every environment has the is_topup column.
+  const hasIsTopupColumn = await hasFinanceBudgetBreakupColumn('is_topup', { tx });
+  const topupAmountSelectSql = hasIsTopupColumn
+    ? `(
+        SELECT COALESCE(SUM(fbb_topup.amount), 0)
+          FROM finance_budget_breakup fbb_topup
+         WHERE fbb_topup.finance_id = fr.id
+           AND fbb_topup.is_topup = 1
+      ) AS topup_amount`
+    : '0 AS topup_amount';
   return buildFinanceSelectSql({
     budgetTagSelectSql: hasBudgetTag ? 'fr.budget_tag' : 'NULL AS budget_tag',
     unplannedBudgetEnabledSelectSql: hasUnplannedBudgetEnabled
@@ -800,6 +820,10 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
     annexureFileSizeSelectSql: hasAnnexureFileSize
       ? 'fr.annexure_file_size'
       : 'NULL AS annexure_file_size',
+    paymentDebitAccountSelectSql: hasPaymentDebitAccount
+      ? 'fr.payment_debit_account'
+      : 'NULL AS payment_debit_account',
+    topupAmountSelectSql,
   });
 };
 
@@ -919,6 +943,7 @@ const buildFinanceUpdateAudit = ({
     credit_status: updateData.credit_status ?? previousRecord.credit_status,
     debit_status: updateData.debit_status ?? previousRecord.debit_status,
     partial_amount: updateData.partial_amount ?? previousRecord.partial_amount,
+    payment_debit_account: nextValue('payment_debit_account'),
   };
 
   const fieldChanges = collectChangedFields(previousRecord, nextRecord, [
@@ -2667,6 +2692,9 @@ const financeModel = {
       const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', {
         tx: connection,
       });
+      const hasPaymentDebitAccountColumn = await hasFinanceRequestColumn('payment_debit_account', {
+        tx: connection,
+      });
 
       const workflowContext = await resolveFinanceWorkflowContext(connection, financeData);
       const normalizedBudgetRows = normalizeBudgetRows(
@@ -2778,6 +2806,10 @@ const financeModel = {
           ? parsedAnnexureSize
           : null;
       }
+      if (hasPaymentDebitAccountColumn) {
+        financeEntry.payment_debit_account =
+          normalizeText(financeData.payment_debit_account) || null;
+      }
 
       // NEW: resolve catalog IDs for primary_head + event_sub_head.
       // Stored alongside the snapshot text columns so matching survives
@@ -2864,6 +2896,9 @@ const financeModel = {
       const hasEventSubHeadIdColumn = await hasFinanceRequestColumn('event_sub_head_id', {
         tx: connection,
       });
+      const hasPaymentDebitAccountColumn = await hasFinanceRequestColumn('payment_debit_account', {
+        tx: connection,
+      });
       const budgetTagSelectSql = hasBudgetTagColumn ? 'fr.budget_tag' : 'NULL AS budget_tag';
       const unplannedBudgetEnabledSelectSql = hasUnplannedBudgetEnabledColumn
         ? 'fr.unplanned_budget_enabled'
@@ -2892,6 +2927,9 @@ const financeModel = {
       const annexureFileSizeSelectSql = hasAnnexureFileSizeColumn
         ? 'fr.annexure_file_size'
         : 'NULL AS annexure_file_size';
+      const paymentDebitAccountSelectSql = hasPaymentDebitAccountColumn
+        ? 'fr.payment_debit_account'
+        : 'NULL AS payment_debit_account';
 
       const [existingRows] = await connection.query(
         `SELECT
@@ -2923,6 +2961,7 @@ const financeModel = {
            fr.income_amount_type,
            fr.credit_status,
            fr.debit_status,
+           ${paymentDebitAccountSelectSql},
            fr.partial_amount,
            u.email AS created_by_email
          FROM finance_requests fr
@@ -3119,6 +3158,15 @@ const financeModel = {
             : null;
         } else {
           delete updateData.annexure_file_size;
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(updateData, 'payment_debit_account')) {
+        if (hasPaymentDebitAccountColumn) {
+          updateData.payment_debit_account =
+            normalizeText(updateData.payment_debit_account) || null;
+        } else {
+          delete updateData.payment_debit_account;
         }
       }
 
@@ -3401,8 +3449,16 @@ const financeModel = {
       query += ` AND ${FINANCE_NOT_DELETED_CONDITION_SQL}`;
 
       if (mine) {
-        query += ' AND fr.created_by = ?';
-        params.push(userId);
+        query += ` AND (
+          fr.created_by = ?
+          OR EXISTS (
+            SELECT 1
+              FROM master_employees me_owner
+             WHERE me_owner.id = fr.employee_id
+               AND me_owner.user_id = ?
+          )
+        )`;
+        params.push(userId, userId);
       }
 
       if (status) {
@@ -3977,12 +4033,13 @@ const financeModel = {
           e.erp_id,
           CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
           e.designation,
-          d.name AS department,
+          COALESCE(d.name, ent.name) AS department,
           e.email,
           e.mobile,
           e.employee_type
         FROM master_employees e
         LEFT JOIN master_departments d ON e.department_id = d.id
+        LEFT JOIN master_entities ent ON e.entity_id = ent.id
         WHERE e.status = 'Active'
         ORDER BY e.first_name, e.last_name
         LIMIT 20`;
@@ -3992,12 +4049,13 @@ const financeModel = {
           e.erp_id,
           CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS name,
           e.designation,
-          d.name AS department,
+          COALESCE(d.name, ent.name) AS department,
           e.email,
           e.mobile,
           e.employee_type
         FROM master_employees e
         LEFT JOIN master_departments d ON e.department_id = d.id
+        LEFT JOIN master_entities ent ON e.entity_id = ent.id
         WHERE e.status = 'Active'
           AND (
             e.first_name LIKE ?
@@ -4938,14 +4996,136 @@ const financeModel = {
     }
 
     const [rows] = await db.query(
-      `SELECT id, created_by
-         FROM finance_requests
-         WHERE id = ?
+      `SELECT fr.id, fr.employee_id, fr.created_by, me.user_id AS applicant_user_id
+         FROM finance_requests fr
+         LEFT JOIN master_employees me ON me.id = fr.employee_id
+         WHERE fr.id = ?
          LIMIT 1`,
       [normalizedRecordId],
     );
 
     return rows.length ? rows[0] : null;
+  },
+
+  async closeFinanceRequest(financeId, userId) {
+    const normalizedFinanceId = toPositiveInt(financeId);
+    const normalizedUserId = toPositiveInt(userId);
+
+    if (!normalizedFinanceId) {
+      const error = new Error('Invalid finance request id');
+      error.code = 'INVALID_FINANCE_ID';
+      throw error;
+    }
+
+    // FALLBACK: guard against deployments that have not yet run the
+    // 20260710_add_closed_status_to_finance_requests migration. Remove this
+    // check once closed_at/closed_by exist in every environment.
+    const hasClosedAtColumn = await hasFinanceRequestColumn('closed_at');
+    const hasClosedByColumn = await hasFinanceRequestColumn('closed_by');
+    if (!hasClosedAtColumn || !hasClosedByColumn) {
+      const error = new Error('Finalize & Close is not available yet on this deployment');
+      error.code = 'MIGRATION_REQUIRED';
+      throw error;
+    }
+
+    const [financeRows] = await db.query(
+      `SELECT id, closed_at FROM finance_requests WHERE id = ? LIMIT 1`,
+      [normalizedFinanceId],
+    );
+
+    if (!financeRows.length) {
+      const error = new Error('Finance request not found');
+      error.code = 'NOT_FOUND';
+      throw error;
+    }
+
+    if (financeRows[0].closed_at) {
+      const error = new Error('This finance card is already closed');
+      error.code = 'ALREADY_CLOSED';
+      throw error;
+    }
+
+    // A finance card can only be finalized once every submitted advance,
+    // expenditure and settlement request under it has been approved and paid.
+    const [eligibilityRows] = await db.query(
+      `SELECT
+         COUNT(*) AS total_count,
+         SUM(
+           CASE
+             WHEN LOWER(TRIM(COALESCE(overall_status, 'pending'))) IN ('approved', 'completed')
+               AND LOWER(TRIM(COALESCE(payment_status, ''))) = 'paid'
+             THEN 1
+             ELSE 0
+           END
+         ) AS eligible_count
+         FROM expenditure_requests
+        WHERE finance_request_id = ?
+          AND LOWER(TRIM(COALESCE(overall_status, 'pending'))) <> 'deleted'`,
+      [normalizedFinanceId],
+    );
+
+    const totalCount = Number(eligibilityRows?.[0]?.total_count || 0);
+    const eligibleCount = Number(eligibilityRows?.[0]?.eligible_count || 0);
+
+    if (totalCount === 0 || eligibleCount !== totalCount) {
+      const error = new Error(
+        'This finance card cannot be closed until every submitted advance, expenditure and settlement request is approved and paid.',
+      );
+      error.code = 'NOT_ELIGIBLE';
+      throw error;
+    }
+
+    // An advance is unreconciled money until its settlement is approved, so a
+    // workflow row that drew an advance without an approved settlement blocks
+    // closure. Rows are grouped by the dashboard row id kept in workflow_state.
+    //
+    // LEGACY: requests created before workflow_state carried dashboardRowId all
+    // collapse into a single '' group, so one approved settlement can cover
+    // several legacy advances here. The dashboard applies the same rule per row
+    // and is the stricter gate. Remove this note once every expenditure_requests
+    // row has a dashboardRowId in workflow_state.
+    const [settlementRows] = await db.query(
+      `SELECT
+         LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.dashboardRowId')), ''))) AS row_key,
+         SUM(CASE WHEN er.request_type = 'Advance' THEN 1 ELSE 0 END) AS advance_count,
+         SUM(
+           CASE
+             WHEN er.request_type = 'Settlement'
+               AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) IN ('approved', 'completed')
+             THEN 1
+             ELSE 0
+           END
+         ) AS settled_count
+         FROM expenditure_requests er
+        WHERE er.finance_request_id = ?
+          AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+        GROUP BY row_key`,
+      [normalizedFinanceId],
+    );
+
+    const hasUnsettledAdvance = settlementRows.some(
+      (row) => Number(row.advance_count || 0) > 0 && Number(row.settled_count || 0) === 0,
+    );
+
+    if (hasUnsettledAdvance) {
+      const error = new Error(
+        'This finance card cannot be closed until the settlement for every advance payment is approved.',
+      );
+      error.code = 'NOT_SETTLED';
+      throw error;
+    }
+
+    await db.query(`UPDATE finance_requests SET closed_at = NOW(), closed_by = ? WHERE id = ?`, [
+      normalizedUserId || null,
+      normalizedFinanceId,
+    ]);
+
+    const [updatedRows] = await db.query(
+      `SELECT id, closed_at, closed_by FROM finance_requests WHERE id = ? LIMIT 1`,
+      [normalizedFinanceId],
+    );
+
+    return updatedRows[0];
   },
 
   async getPrincipalDocument(recordId) {

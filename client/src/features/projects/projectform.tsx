@@ -149,6 +149,7 @@ interface SearchResult {
 
 const ResearchProjectForm: React.FC = () => {
   const [projectId, setProjectId] = useState<string | null>(null);
+  const [isFormSubmitting, setIsFormSubmitting] = useState(false);
   const navigate = useNavigate();
   const { user } = useAuth();
   const [editMode, setEditMode] = useState(false);
@@ -1604,6 +1605,7 @@ const ResearchProjectForm: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>): Promise<void> => {
     event.preventDefault();
+    if (isFormSubmitting) return;
     // Collect all validation errors
     const errors: ValidationErrors = {
       title: validateTitle(),
@@ -1636,6 +1638,7 @@ const ResearchProjectForm: React.FC = () => {
       return;
     }
 
+    setIsFormSubmitting(true);
     try {
       // Format project details for the details endpoint (which may update an existing details record)
       const formattedProjectDetails = {
@@ -1773,6 +1776,8 @@ const ResearchProjectForm: React.FC = () => {
         response: error.response,
         stack: error.stack,
       });
+    } finally {
+      setIsFormSubmitting(false);
     }
   };
 
@@ -1988,8 +1993,8 @@ const ResearchProjectForm: React.FC = () => {
         {activeTab === 'form' ? (
           <form onSubmit={handleSubmit} className="research-form">
             {/* Investigators Card */}
-            <div className="form-card">
-              <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="form-card project-section investigator-card">
+              <div className="project-section-header">
                 <h6 className="form-section-title">Investigators:</h6>
                 <div className="d-flex align-items-center">
                   <span className="me-3">Driven by:</span>
@@ -2105,9 +2110,10 @@ const ResearchProjectForm: React.FC = () => {
             </div>
 
             {/* Title, Type, Agency, Scheme, Duration Card */}
-            <div className="form-card">
-              <div className="row">
+            <div className="form-card project-section proposal-details-card">
+              <div className="row proposal-details-grid">
                 <div className="col-md-6">
+                  <h6 className="form-section-title project-column-title">Proposal Details</h6>
                   <div className="form-group mb-3">
                     <label className="form-label">Title</label>
                     <input
@@ -2156,6 +2162,7 @@ const ResearchProjectForm: React.FC = () => {
                   </div>
                 </div>
                 <div className="col-md-6">
+                  <h6 className="form-section-title project-column-title">Call for Details</h6>
                   {/* Agency & Scheme */}
                   <div className="form-group mb-3">
                     <div className="d-flex align-items-center mb-1">
@@ -2353,8 +2360,8 @@ const ResearchProjectForm: React.FC = () => {
             </div>
 
             {/* Financial Contribution Card */}
-            <div className="form-card">
-              <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="form-card project-section financial-contribution-card">
+              <div className="project-section-header">
                 <h6 className="form-section-title">Financial Contribution</h6>
                 <div className="d-flex gap-2">
                   <button
@@ -2383,8 +2390,18 @@ const ResearchProjectForm: React.FC = () => {
                   </button>
                 </div>
               </div>
+              <div className="project-table-head financial-table-head" aria-hidden="true">
+                <span>S.No.</span>
+                <span>Agency Type</span>
+                <span>Agency</span>
+                <span>Amount</span>
+                <span>Action</span>
+              </div>
               {financialContributions.map((contribution, index) => (
-                <div key={contribution.id} className="row align-items-center mb-2">
+                <div
+                  key={contribution.id}
+                  className="row align-items-center mb-2 project-table-row"
+                >
                   <div className="col-auto">{index + 1}.</div>
                   <div className="col position-relative agency-type-input-wrapper">
                     <input
@@ -2509,8 +2526,8 @@ const ResearchProjectForm: React.FC = () => {
               ))}
             </div>
 
-            <div className="form-card">
-              <div className="d-flex justify-content-between align-items-center mb-3">
+            <div className="form-card project-section collaboration-card">
+              <div className="project-section-header">
                 <h6 className="form-section-title">Collaboration</h6>
                 <div className="d-flex align-items-center">
                   <div className="form-check form-switch me-3">
@@ -2535,9 +2552,18 @@ const ResearchProjectForm: React.FC = () => {
                   </button>
                 </div>
               </div>
+              {enableCollaboration && (
+                <div className="project-table-head collaboration-table-head" aria-hidden="true">
+                  <span>S.No.</span>
+                  <span>Partner</span>
+                  <span>Address</span>
+                  <span>Support</span>
+                  <span>Action</span>
+                </div>
+              )}
               {enableCollaboration &&
                 collaborations.map((collab, index) => (
-                  <div key={collab.id} className="row align-items-center mb-2">
+                  <div key={collab.id} className="row align-items-center mb-2 project-table-row">
                     <div className="col-auto">{index + 1}.</div>
                     <div className="col">
                       <input
@@ -2592,10 +2618,10 @@ const ResearchProjectForm: React.FC = () => {
             </div>
 
             {/* Journal Article & Submission Card */}
-            <div className="row mb-4 journal-submission-row">
+            <div className="row mb-4 journal-submission-row project-dual-section">
               {/* Journal Article Card */}
               <div className="col-md-6">
-                <div className="form-card h-100">
+                <div className="form-card project-section h-100 project-upload-card">
                   <div>
                     <CustomFileUploader
                       label="Journal Article"
@@ -2619,7 +2645,7 @@ const ResearchProjectForm: React.FC = () => {
               </div>
               {/* Date of Submission Card */}
               <div className="col-md-6">
-                <div className="form-card h-100 date-submission-card">
+                <div className="form-card project-section h-100 date-submission-card">
                   <div className="mb-3 d-flex align-items-center">
                     <label className="form-label mb-0 me-3">Date of Submission</label>
                     <div className="form-check form-switch me-3">
@@ -2678,10 +2704,10 @@ const ResearchProjectForm: React.FC = () => {
 
             {/* Main Details Section */}
             {dateOfSubmission && submissionStatus === 'published' && (
-              <div className="form-card-dashed mb-4">
+              <div className="form-card project-section project-details-card mb-4">
                 {/* Project Details */}
                 <h6 className="form-section-title mb-3">Project Details:</h6>
-                <div className="row mb-3">
+                <div className="row mb-3 project-details-grid">
                   {/* Simplified project details mapping */}
                   {[
                     {
@@ -2708,7 +2734,7 @@ const ResearchProjectForm: React.FC = () => {
                     },
                   ].map((item) => (
                     <div className="col-md-6 mb-2" key={item.key}>
-                      <div className="d-flex align-items-center">
+                      <div className="d-flex align-items-center project-detail-field">
                         <label className="form-label me-auto" style={{ minWidth: '220px' }}>
                           {item.label}
                         </label>
@@ -2743,7 +2769,7 @@ const ResearchProjectForm: React.FC = () => {
                 <hr />
 
                 {/* Grant Disbursement */}
-                <div className="d-flex justify-content-between align-items-center my-3">
+                <div className="project-section-header my-3">
                   <h6 className="form-section-title">Grant Disbursement:</h6>
                   <button
                     type="button"
@@ -2754,10 +2780,22 @@ const ResearchProjectForm: React.FC = () => {
                     + Add
                   </button>
                 </div>
+                <div className="project-table-head grant-table-head" aria-hidden="true">
+                  <span>Financial Year</span>
+                  <span>Agency</span>
+                  <span>Amount</span>
+                  <span>Date</span>
+                  <span>Sanction</span>
+                  <span>UC &amp; SoE</span>
+                  <span>Action</span>
+                </div>
                 {grantDisbursements.map((grant, index) => {
                   const grantIdentifier = grant.id != null ? grant.id : grant.tempId;
                   return (
-                    <div key={grant.id ?? grant.tempId} className="row g-2 align-items-center mb-2">
+                    <div
+                      key={grant.id ?? grant.tempId}
+                      className="row g-2 align-items-center mb-2 project-table-row grant-disbursement-row"
+                    >
                       <div className="col">
                         <input
                           type="text"
@@ -2851,7 +2889,7 @@ const ResearchProjectForm: React.FC = () => {
                 })}
                 <hr />
 
-                <div className="d-flex align-items-center my-3">
+                <div className="project-outcome-row my-3">
                   <h6 className="form-section-title me-4">Outcome:</h6>
                   <div className="checkbox-group">
                     {[
@@ -2882,7 +2920,7 @@ const ResearchProjectForm: React.FC = () => {
 
                 {/* Documents */}
                 <h6 className="form-section-title my-3">Documents:</h6>
-                <div className="row">
+                <div className="row project-documents-grid">
                   {[
                     { key: 'sanctionOrder', label: 'Sanction Order' },
                     {
@@ -2897,7 +2935,7 @@ const ResearchProjectForm: React.FC = () => {
                     { key: 'bankStatement', label: 'Bank Statement' },
                   ].map((doc) => (
                     <div className="col-md-6 mb-3" key={doc.key}>
-                      <div className="d-flex align-items-center gap-2">
+                      <div className="d-flex align-items-center gap-2 project-document-item">
                         <label className="form-label mb-0" style={{ minWidth: '180px' }}>
                           {doc.label}
                         </label>
@@ -2942,9 +2980,9 @@ const ResearchProjectForm: React.FC = () => {
               <button
                 type="submit"
                 className="btn-submit-approval "
-                disabled={isFormDisabled || (isViewMode && !editMode)}
+                disabled={isFormDisabled || (isViewMode && !editMode) || isFormSubmitting}
               >
-                Submit for approval
+                {isFormSubmitting ? 'Submitting...' : 'Submit for approval'}
               </button>
             </div>
           </form>

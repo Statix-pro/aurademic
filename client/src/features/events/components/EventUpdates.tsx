@@ -485,6 +485,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
 
   const eventId = 1;
 
+  const [isSubmittingUpdates, setIsSubmittingUpdates] = useState(false);
   const [websiteEnabled, setWebsiteEnabled] = useState(false);
   const [websiteDate, setWebsiteDate] = useState("");
   const [websiteFile, setWebsiteFile] = useState<File | null>(null);
@@ -533,6 +534,9 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
 
   const handleSubmit = async (): Promise<void> => {
     console.log("handleSubmit called");
+    console.log('handleSubmit called');
+    if (isSubmittingUpdates) return;
+    setIsSubmittingUpdates(true);
     try {
       let websiteUploadId: number | null = null;
       if (websiteEnabled && websiteFile) {
@@ -594,6 +598,10 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
     } catch (error) {
       console.error("Error in handleSubmit:", error);
       alert("Error occurred, please check console.");
+      console.error('Error in handleSubmit:', error);
+      alert('Error occurred, please check console.');
+    } finally {
+      setIsSubmittingUpdates(false);
     }
   };
 
@@ -699,8 +707,13 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
         >
           ← Previous
         </button>
-        <button type="button" className="event-next-btn" onClick={handleSubmit}>
-          Save & Next →
+        <button
+          type="button"
+          className="event-next-btn"
+          onClick={handleSubmit}
+          disabled={isSubmittingUpdates}
+        >
+          {isSubmittingUpdates ? 'Saving...' : 'Save & Next →'}
         </button>
       </div>
     </div>

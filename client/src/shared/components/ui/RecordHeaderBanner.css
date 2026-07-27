@@ -1,0 +1,28 @@
+.record-header-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  background-color: #eaf3fd;
+  border-radius: 14px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+}
+
+.record-header-banner-badge {
+  background-color: #0069ab;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 8px 18px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.record-header-banner-creator {
+  color: #0069ab;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}

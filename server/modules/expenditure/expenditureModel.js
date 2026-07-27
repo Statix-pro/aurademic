@@ -383,6 +383,12 @@ const ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL = `
   LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) NOT IN ('rejected', 'deleted', 'archived')
 `;
 
+// Normalize a text column to a single charset/collation so it can be combined
+// across tables in a UNION. Different expenditure tables were created with
+// differing column collations, which triggers ER_CANT_AGGREGATE_NCOLLATIONS
+// (Illegal mix of collations) on UNION. Force a common collation here.
+const collateBudgetText = (expr) => `CONVERT(${expr} USING utf8mb4) COLLATE utf8mb4_unicode_ci`;
+
 const FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL = `
   (
     LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
@@ -943,21 +949,47 @@ async function getCumulativeAdvanceSummary(
   };
 }
 
-async function getFinanceRequestBudgetUsageByLine(
+const getFinanceBudgetUsageMatchKey = ({ budgetLineId, budgetHead, subHead }) => {
+  const lineId = toPositiveInt(budgetLineId);
+  const head = normalizeText(budgetHead).replace(/\s+/g, ' ').toLowerCase();
+  const sub = normalizeText(subHead).replace(/\s+/g, ' ').toLowerCase();
+  return lineId && head && sub ? `${lineId}::${head}::${sub}` : null;
+};
+
+async function getFinanceRequestBudgetUsageByBreakup(
   connOrDb,
-  { financeRequestId, budgetLineIds = [], excludeExpenditureId = null } = {},
+  { financeRequestId, budgetBreakups = [], excludeExpenditureId = null } = {},
 ) {
   const financeId = toPositiveInt(financeRequestId);
   if (!financeId) return new Map();
   const excludedRequestId = toPositiveInt(excludeExpenditureId);
 
-  const normalizedBudgetLineIds = Array.from(
-    new Set(
-      (Array.isArray(budgetLineIds) ? budgetLineIds : [])
-        .map((id) => toPositiveInt(id))
-        .filter(Boolean),
-    ),
-  );
+  const normalizedBreakups = (Array.isArray(budgetBreakups) ? budgetBreakups : [])
+    .map((breakup) => ({
+      id: toPositiveInt(breakup?.finance_budget_breakup_id ?? breakup?.id),
+      budgetLineId: toPositiveInt(breakup?.budget_line_id ?? breakup?.budgetLineId),
+      budgetHead: normalizeText(breakup?.head ?? breakup?.budget_head),
+      subHead: normalizeText(breakup?.sub_head ?? breakup?.subHead),
+    }))
+    .filter((breakup) => breakup.id && breakup.budgetLineId);
+
+  const breakupsById = new Map(normalizedBreakups.map((breakup) => [breakup.id, breakup]));
+  const breakupsByLegacyKey = new Map();
+  const breakupsByLineId = new Map();
+  for (const breakup of normalizedBreakups) {
+    const legacyKey = getFinanceBudgetUsageMatchKey(breakup);
+    if (legacyKey) {
+      const matching = breakupsByLegacyKey.get(legacyKey) || [];
+      matching.push(breakup);
+      breakupsByLegacyKey.set(legacyKey, matching);
+    }
+
+    const lineMatching = breakupsByLineId.get(breakup.budgetLineId) || [];
+    lineMatching.push(breakup);
+    breakupsByLineId.set(breakup.budgetLineId, lineMatching);
+  }
+
+  const normalizedBudgetLineIds = Array.from(breakupsByLineId.keys());
 
   const source = connOrDb || db;
   const lineFilterSql = normalizedBudgetLineIds.length
@@ -967,7 +999,10 @@ async function getFinanceRequestBudgetUsageByLine(
        UNION ALL
 
        SELECT
+         NULL AS finance_budget_breakup_id,
          eur.head_of_account_budget_line_id AS budget_line_id,
+         ${collateBudgetText('eur.budget_head')} AS budget_head,
+         ${collateBudgetText('eur.sub_head')} AS sub_head,
          eur.amount AS amount_delta
        FROM expenditure_unplanned_rows eur
        JOIN expenditure_requests er ON er.id = eur.expenditure_id
@@ -979,7 +1014,10 @@ async function getFinanceRequestBudgetUsageByLine(
        UNION ALL
 
        SELECT
+         NULL AS finance_budget_breakup_id,
          er.unplanned_head_of_account_budget_line_id AS budget_line_id,
+         ${collateBudgetText('er.unplanned_budget_head')} AS budget_head,
+         ${collateBudgetText('er.unplanned_budget_sub_head')} AS sub_head,
          er.unplanned_budget_amount AS amount_delta
        FROM expenditure_requests er
        WHERE er.finance_request_id = ?
@@ -996,11 +1034,17 @@ async function getFinanceRequestBudgetUsageByLine(
 
   const [rows] = await source.execute(
     `SELECT
+       usage_rows.finance_budget_breakup_id,
        usage_rows.budget_line_id,
+       usage_rows.budget_head,
+       usage_rows.sub_head,
        GREATEST(0, COALESCE(SUM(usage_rows.amount_delta), 0)) AS consumed_amount
      FROM (
        SELECT
+         ar.finance_budget_breakup_id,
          ar.budget_line_id,
+         ${collateBudgetText('ar.budget_head')} AS budget_head,
+         ${collateBudgetText('ar.sub_head')} AS sub_head,
          ar.advance_amount AS amount_delta
        FROM expenditure_advance_rows ar
        JOIN expenditure_requests er ON er.id = ar.expenditure_id
@@ -1011,7 +1055,10 @@ async function getFinanceRequestBudgetUsageByLine(
        UNION ALL
 
        SELECT
+         lr.finance_budget_breakup_id,
          lr.budget_line_id,
+         ${collateBudgetText('lr.budget_head')} AS budget_head,
+         ${collateBudgetText('lr.sub_head')} AS sub_head,
          lr.auto_sum_amount AS amount_delta
        FROM expenditure_line_rows lr
        JOIN expenditure_requests er ON er.id = lr.expenditure_id
@@ -1023,7 +1070,10 @@ async function getFinanceRequestBudgetUsageByLine(
 
     ) AS usage_rows
      ${lineFilterSql}
-     GROUP BY usage_rows.budget_line_id`,
+     GROUP BY usage_rows.finance_budget_breakup_id,
+              usage_rows.budget_line_id,
+              usage_rows.budget_head,
+              usage_rows.sub_head`,
     normalizedBudgetLineIds.length
       ? [
           financeId,
@@ -1056,9 +1106,97 @@ async function getFinanceRequestBudgetUsageByLine(
         ],
   );
 
-  return new Map(
-    rows.map((row) => [toPositiveInt(row.budget_line_id), toMoney(row.consumed_amount)]),
+  const usageByBreakupId = new Map();
+  for (const row of rows) {
+    const consumedAmount = toMoney(row.consumed_amount);
+    if (!(consumedAmount > 0)) continue;
+
+    const explicitBreakupId = toPositiveInt(row.finance_budget_breakup_id);
+    let matchedBreakup = explicitBreakupId ? breakupsById.get(explicitBreakupId) : null;
+
+    // LEGACY: rows created before finance_budget_breakup_id was persisted don't
+    // carry it, so match them by their stored budget line plus head/sub-head
+    // instead. When more than one breakup shares that key, attribute the usage
+    // to the earliest (lowest id) breakup rather than drop it, since dropping
+    // it would understate consumed amount and overstate available budget.
+    // Remove once all expenditure_advance_rows/expenditure_line_rows have
+    // finance_budget_breakup_id populated.
+    if (!matchedBreakup) {
+      const legacyKey = getFinanceBudgetUsageMatchKey({
+        budgetLineId: row.budget_line_id,
+        budgetHead: row.budget_head,
+        subHead: row.sub_head,
+      });
+      const legacyMatches = legacyKey ? breakupsByLegacyKey.get(legacyKey) || [] : [];
+      const lineMatches = breakupsByLineId.get(toPositiveInt(row.budget_line_id)) || [];
+      const candidates = legacyMatches.length ? legacyMatches : lineMatches;
+      matchedBreakup = candidates.reduce(
+        (earliest, candidate) => (!earliest || candidate.id < earliest.id ? candidate : earliest),
+        null,
+      );
+    }
+
+    if (!matchedBreakup) continue;
+    usageByBreakupId.set(
+      matchedBreakup.id,
+      toMoney((usageByBreakupId.get(matchedBreakup.id) || 0) + consumedAmount),
+    );
+  }
+
+  return usageByBreakupId;
+}
+
+// Line-keyed view of finance budget usage, for callers that budget per budget
+// line rather than per finance breakup (approved-head total checks and the
+// per-line remaining-budget lock). Loads the finance's breakups for the given
+// lines, delegates to getFinanceRequestBudgetUsageByBreakup, then folds the
+// breakup-keyed usage back down to a Map keyed by budget_line_id.
+async function getFinanceRequestBudgetUsageByLine(
+  connOrDb,
+  { financeRequestId, budgetLineIds = [], excludeExpenditureId = null } = {},
+) {
+  const financeId = toPositiveInt(financeRequestId);
+  if (!financeId) return new Map();
+
+  const normalizedBudgetLineIds = Array.from(
+    new Set(
+      (Array.isArray(budgetLineIds) ? budgetLineIds : [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean),
+    ),
   );
+  if (normalizedBudgetLineIds.length === 0) return new Map();
+
+  const source = connOrDb || db;
+  const placeholders = normalizedBudgetLineIds.map(() => '?').join(', ');
+  const [breakupRows] = await source.execute(
+    `SELECT id AS finance_budget_breakup_id, budget_line_id, budget_head AS head, sub_head
+       FROM finance_budget_breakup
+      WHERE finance_id = ?
+        AND budget_line_id IN (${placeholders})`,
+    [financeId, ...normalizedBudgetLineIds],
+  );
+
+  const usageByBreakupId = await getFinanceRequestBudgetUsageByBreakup(source, {
+    financeRequestId: financeId,
+    budgetBreakups: breakupRows,
+    excludeExpenditureId,
+  });
+
+  const lineIdByBreakupId = new Map(
+    breakupRows.map((row) => [
+      toPositiveInt(row.finance_budget_breakup_id),
+      toPositiveInt(row.budget_line_id),
+    ]),
+  );
+
+  const usageByLineId = new Map();
+  for (const [breakupId, amount] of usageByBreakupId.entries()) {
+    const lineId = lineIdByBreakupId.get(toPositiveInt(breakupId));
+    if (!lineId) continue;
+    usageByLineId.set(lineId, toMoney((usageByLineId.get(lineId) || 0) + toMoney(amount)));
+  }
+  return usageByLineId;
 }
 
 // ─── Transaction helper (same signature as budgetModel.withTransaction) ────────
@@ -1536,6 +1674,7 @@ export async function getApprovedBudgets({
   financeRequestId,
   fiscalYear = null,
   allowAnyApprovedFinance = false,
+  excludeExpenditureId = null,
 } = {}) {
   const uid = toPositiveInt(userId);
   const financeId = toPositiveInt(financeRequestId);
@@ -1562,6 +1701,7 @@ export async function getApprovedBudgets({
   try {
     const [financeRows] = await db.execute(
       `SELECT
+         fbb.id AS finance_budget_breakup_id,
          fbb.budget_line_id,
          COALESCE(fbb.budget_proposal_id, bpl.budget_proposal_id)          AS budget_proposal_id,
          COALESCE(frr.request_ref, '')                                     AS finance_request_ref,
@@ -1582,15 +1722,18 @@ export async function getApprovedBudgets({
       [financeId],
     );
 
-    const usageByLineId = await getFinanceRequestBudgetUsageByLine(db, {
+    const usageByBreakupId = await getFinanceRequestBudgetUsageByBreakup(db, {
       financeRequestId: financeId,
-      budgetLineIds: financeRows.map((row) => row.budget_line_id),
+      budgetBreakups: financeRows,
+      excludeExpenditureId,
     });
 
     return financeRows
       .map((r) => {
         const totalAmount = toMoney(r.total_amount);
-        const usedAmount = toMoney(usageByLineId.get(toPositiveInt(r.budget_line_id)));
+        const usedAmount = toMoney(
+          usageByBreakupId.get(toPositiveInt(r.finance_budget_breakup_id)),
+        );
         const head = normalizeText(r.head);
         const subHead = normalizeText(r.sub_head);
         if (!head || !subHead || totalAmount <= 0) return null;
@@ -2060,9 +2203,17 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
     expenditureParams.push(fyStart, fyStart);
   }
 
+  // FALLBACK: finance_requests.closed_at may not exist before the
+  // 20260710_add_closed_status_to_finance_requests migration runs; emit NULL so
+  // the dashboard treats every card as not-closed. Remove after the migration is
+  // applied everywhere.
+  const hasClosedAtColumn = await hasFinanceRequestColumn('closed_at');
+  const closedAtSelectSql = hasClosedAtColumn ? 'fr.closed_at' : 'NULL AS closed_at';
+
   const [cardRows] = await db.execute(
     `SELECT
        fr.id AS finance_request_id,
+       ${closedAtSelectSql},
        COALESCE(frr.request_ref, CONCAT('#F-', fr.id)) AS request_ref,
        COALESCE(
          NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''),
@@ -2139,6 +2290,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        ${financeFySql}
      GROUP BY
        fr.id,
+       closed_at,
        frr.request_ref,
        applicant_name,
        designation,
@@ -2190,21 +2342,21 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
            FROM (
              SELECT
                ar.expenditure_id,
-               ar.sub_head,
+               ${collateBudgetText('ar.sub_head')} AS sub_head,
                ar.sort_order,
                ar.id
              FROM expenditure_advance_rows ar
              UNION ALL
              SELECT
                sr.expenditure_id,
-               sr.sub_head,
+               ${collateBudgetText('sr.sub_head')} AS sub_head,
                sr.sort_order,
                sr.id
              FROM expenditure_settlement_rows sr
              UNION ALL
              SELECT
                lr.expenditure_id,
-               lr.sub_head,
+               ${collateBudgetText('lr.sub_head')} AS sub_head,
                lr.sort_order,
                lr.id
              FROM expenditure_line_rows lr
@@ -2248,6 +2400,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
         settlement_amount: settlementAmount,
         balance_amount: Math.max(0, approvedAmount - effectiveUsageAmount - expenditureAmount),
         expenditure_request_count: Number(row.expenditure_request_count || 0),
+        closed_at: row.closed_at ?? null,
       };
     }),
     requests: requestRows.map((row) => ({
@@ -2275,6 +2428,24 @@ export async function getFinanceRequestContext(financeRequestId) {
 
   const hasBudgetTag = await hasFinanceRequestColumn('budget_tag');
   const budgetTagSql = hasBudgetTag ? 'fr.budget_tag,' : 'NULL AS budget_tag,';
+  const hasPaymentDebitAccount = await hasFinanceRequestColumn('payment_debit_account');
+  const paymentDebitAccountSql = hasPaymentDebitAccount
+    ? 'fr.payment_debit_account,'
+    : 'NULL AS payment_debit_account,';
+  const hasUnplannedBudgetEnabled = await hasFinanceRequestColumn('unplanned_budget_enabled');
+  const unplannedBudgetEnabledSql = hasUnplannedBudgetEnabled
+    ? 'fr.unplanned_budget_enabled,'
+    : 'NULL AS unplanned_budget_enabled,';
+  const hasUnplannedBudgetAmount = await hasFinanceRequestColumn('unplanned_budget_amount');
+  const unplannedBudgetAmountSql = hasUnplannedBudgetAmount
+    ? 'fr.unplanned_budget_amount,'
+    : 'NULL AS unplanned_budget_amount,';
+  const hasUnplannedBudgetDescription = await hasFinanceRequestColumn(
+    'unplanned_budget_description',
+  );
+  const unplannedBudgetDescriptionSql = hasUnplannedBudgetDescription
+    ? 'fr.unplanned_budget_description,'
+    : 'NULL AS unplanned_budget_description,';
 
   const [rows] = await db.query(
     `SELECT
@@ -2298,6 +2469,10 @@ export async function getFinanceRequestContext(financeRequestId) {
        fr.primary_head,
        fr.event_sub_head,
        ${budgetTagSql}
+       ${paymentDebitAccountSql}
+       ${unplannedBudgetEnabledSql}
+       ${unplannedBudgetAmountSql}
+       ${unplannedBudgetDescriptionSql}
        COALESCE(
          NULLIF(fr.approved_total_amount, 0),
          NULLIF(fr.total_budget, 0),
@@ -2321,6 +2496,8 @@ export async function getFinanceRequestContext(financeRequestId) {
   const row = rows[0];
   if (!row) return null;
 
+  const financeAnnexures = await getFinanceAnnexuresForExpenditure(financeId);
+
   return {
     finance_request_id: toPositiveInt(row.finance_request_id),
     created_by: toPositiveInt(row.created_by),
@@ -2339,6 +2516,19 @@ export async function getFinanceRequestContext(financeRequestId) {
     event_sub_head: normalizeText(row.event_sub_head),
     approved_amount: toMoney(row.approved_amount),
     budget_tag: row.budget_tag ? normalizeText(row.budget_tag) : null,
+    payment_debit_account: normalizeText(row.payment_debit_account) || null,
+    unplanned_budget_enabled: Boolean(row.unplanned_budget_enabled),
+    unplanned_budget_amount: toMoney(row.unplanned_budget_amount),
+    unplanned_budget_description: normalizeText(row.unplanned_budget_description) || null,
+    finance_annexures: financeAnnexures.map((annexure) => ({
+      id: annexure.id,
+      annexure_type: annexure.annexure_type,
+      original_name: annexure.original_name,
+      file_path: annexure.file_path,
+      file_url: annexure.file_path,
+      mime_type: annexure.mime_type,
+      file_size: annexure.file_size,
+    })),
   };
 }
 
@@ -2526,11 +2716,13 @@ __OPTIONAL_UNPLANNED_HEAD_COLUMNS__
     COALESCE(NULLIF(TRIM(d.name), ''), NULLIF(TRIM(er.department), ''), '') AS department,
     COALESCE(NULLIF(TRIM(e.email), ''), NULLIF(TRIM(er.email), ''), '') AS email,
     COALESCE(NULLIF(TRIM(e.mobile), ''), NULLIF(TRIM(er.mobile), ''), '') AS mobile,
-    e.erp_id
+    e.erp_id,
+    creator_user.email AS created_by_email
   FROM expenditure_requests er
   LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
   LEFT JOIN master_employees e ON e.id = er.employee_id
   LEFT JOIN master_departments d ON d.id = e.department_id
+  LEFT JOIN users creator_user ON creator_user.id = er.created_by
   LEFT JOIN (
     SELECT
       ranked.expenditure_id,
@@ -2554,8 +2746,8 @@ __OPTIONAL_UNPLANNED_HEAD_COLUMNS__
           ar.expenditure_id,
           ar.budget_line_id,
           ar.budget_proposal_id,
-          ar.budget_head,
-          ar.sub_head,
+          ${collateBudgetText('ar.budget_head')} AS budget_head,
+          ${collateBudgetText('ar.sub_head')} AS sub_head,
           ar.sort_order,
           ar.id
         FROM expenditure_advance_rows ar
@@ -2564,8 +2756,8 @@ __OPTIONAL_UNPLANNED_HEAD_COLUMNS__
           sr.expenditure_id,
           sr.budget_line_id,
           sr.budget_proposal_id,
-          sr.budget_head,
-          sr.sub_head,
+          ${collateBudgetText('sr.budget_head')} AS budget_head,
+          ${collateBudgetText('sr.sub_head')} AS sub_head,
           sr.sort_order,
           sr.id
         FROM expenditure_settlement_rows sr
@@ -2574,8 +2766,8 @@ __OPTIONAL_UNPLANNED_HEAD_COLUMNS__
           lr.expenditure_id,
           lr.budget_line_id,
           lr.budget_proposal_id,
-          lr.budget_head,
-          lr.sub_head,
+          ${collateBudgetText('lr.budget_head')} AS budget_head,
+          ${collateBudgetText('lr.sub_head')} AS sub_head,
           lr.sort_order,
           lr.id
         FROM expenditure_line_rows lr
@@ -3109,6 +3301,33 @@ async function insertPayeeRows(conn, expenditureId, rows = [], userId = null) {
   }
 }
 
+async function resolveFinanceBudgetBreakupIdForExpenditureRow(
+  conn,
+  { financeRequestId, budgetLineId, budgetHead, subHead } = {},
+) {
+  const financeId = toPositiveInt(financeRequestId);
+  const lineId = toPositiveInt(budgetLineId);
+  const head = normalizeText(budgetHead);
+  const sub = normalizeText(subHead);
+  if (!financeId || !lineId || !head || !sub) return null;
+
+  const [rows] = await conn.execute(
+    `SELECT id
+       FROM finance_budget_breakup
+      WHERE finance_id = ?
+        AND budget_line_id = ?
+        AND LOWER(TRIM(CONVERT(budget_head USING utf8mb4))) COLLATE utf8mb4_unicode_ci =
+            LOWER(TRIM(CONVERT(? USING utf8mb4))) COLLATE utf8mb4_unicode_ci
+        AND LOWER(TRIM(CONVERT(sub_head USING utf8mb4))) COLLATE utf8mb4_unicode_ci =
+            LOWER(TRIM(CONVERT(? USING utf8mb4))) COLLATE utf8mb4_unicode_ci
+      ORDER BY id ASC
+      LIMIT 2`,
+    [financeId, lineId, head, sub],
+  );
+
+  return rows.length === 1 ? toPositiveInt(rows[0].id) : null;
+}
+
 async function insertAdvanceRows(
   conn,
   expenditureId,
@@ -3126,6 +3345,14 @@ async function insertAdvanceRows(
     const budgetProposalId = toPositiveInt(row.budgetProposalId || row.budget_proposal_id);
     const budgetLineId = toPositiveInt(row.budgetLineId || row.budget_line_id);
     const budgetSnapshot = budgetSnapshotsByLine.get(budgetLineId) || null;
+    const financeBudgetBreakupId =
+      toPositiveInt(row.financeBudgetBreakupId || row.finance_budget_breakup_id) ||
+      (await resolveFinanceBudgetBreakupIdForExpenditureRow(conn, {
+        financeRequestId: workflowRowIdentity.financeRequestId,
+        budgetLineId,
+        budgetHead,
+        subHead,
+      }));
     let preAdvanceAmount = moneyOrNull(row.preAdvance || row.pre_advance_amount);
     const advanceAmount = toMoney(row.advance || row.advance_amount);
 
@@ -3166,9 +3393,10 @@ async function insertAdvanceRows(
            advance_amount,
            available_amount_snapshot, remaining_amount_snapshot,
            unplanned_available_snapshot, sort_order)
-       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       [
         expenditureId,
+        financeBudgetBreakupId,
         budgetProposalId,
         budgetLineId,
         budgetHead,
@@ -3211,6 +3439,14 @@ async function insertSettlementRows(
     const budgetProposalId = toPositiveInt(row.budgetProposalId || row.budget_proposal_id);
     const budgetLineId = toPositiveInt(row.budgetLineId || row.budget_line_id);
     const budgetSnapshot = budgetSnapshotsByLine.get(budgetLineId) || null;
+    const financeBudgetBreakupId =
+      toPositiveInt(row.financeBudgetBreakupId || row.finance_budget_breakup_id) ||
+      (await resolveFinanceBudgetBreakupIdForExpenditureRow(conn, {
+        financeRequestId,
+        budgetLineId,
+        budgetHead,
+        subHead,
+      }));
     const settlementAmount = toMoney(row.settlement || row.settlement_amount);
     if (!budgetHead && !subHead && settlementAmount === 0) continue;
 
@@ -3238,9 +3474,10 @@ async function insertSettlementRows(
            budget_amount, advance_amount,
            settlement_amount, available_amount_snapshot, remaining_amount_snapshot,
            unplanned_available_snapshot, sort_order)
-       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       [
         expenditureId,
+        financeBudgetBreakupId,
         budgetProposalId,
         budgetLineId,
         budgetHead,
@@ -3426,6 +3663,7 @@ async function insertExpenditureRows(
   expenditureId,
   rows = [],
   budgetSnapshotsByLine = new Map(),
+  financeRequestId = null,
 ) {
   const validRows = Array.isArray(rows) ? rows : [];
   let sortOrder = 0;
@@ -3436,6 +3674,14 @@ async function insertExpenditureRows(
     const budgetProposalId = toPositiveInt(row.budgetProposalId || row.budget_proposal_id);
     const budgetLineId = toPositiveInt(row.budgetLineId || row.budget_line_id);
     const budgetSnapshot = budgetSnapshotsByLine.get(budgetLineId) || null;
+    const financeBudgetBreakupId =
+      toPositiveInt(row.financeBudgetBreakupId || row.finance_budget_breakup_id) ||
+      (await resolveFinanceBudgetBreakupIdForExpenditureRow(conn, {
+        financeRequestId,
+        budgetLineId,
+        budgetHead,
+        subHead,
+      }));
     const expenditureInput = sanitizeRowValue(
       row.expenditure || row.expenditure_input || row.autoSum || row.auto_sum_amount,
     );
@@ -3452,9 +3698,10 @@ async function insertExpenditureRows(
            budget_amount, expenditure_input,
            auto_sum_amount, available_amount_snapshot, remaining_amount_snapshot,
            unplanned_available_snapshot, sort_order)
-       VALUES (?, NULL, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
+       VALUES (?, ?, ?, ?, 'planned', ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)`,
       [
         expenditureId,
+        financeBudgetBreakupId,
         budgetProposalId,
         budgetLineId,
         budgetHead,
@@ -3544,6 +3791,65 @@ async function insertBillFiles(conn, expenditureId, files = [], fileCategory = '
         sanitizeRowValue(file.mimetype),
         Number(file.size) || 0,
         sortOrder,
+      ],
+    );
+    sortOrder += 1;
+  }
+}
+
+async function getFinanceAnnexuresForExpenditure(financeRequestId) {
+  const financeId = toPositiveInt(financeRequestId);
+  if (!financeId) return [];
+
+  const [rows] = await db.query(
+    `SELECT id, finance_id, annexure_type, original_name, stored_name, file_path,
+            mime_type, file_size, sort_order, created_at
+       FROM finance_request_annexures
+      WHERE finance_id = ?
+      ORDER BY sort_order ASC, id ASC`,
+    [financeId],
+  );
+  return rows;
+}
+
+async function linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeRequestId) {
+  const annexures = await getFinanceAnnexuresForExpenditure(financeRequestId);
+  if (!annexures.length) return;
+
+  const [existingRows] = await conn.execute(
+    `SELECT source_finance_annexure_id
+       FROM expenditure_request_bills
+      WHERE expenditure_id = ?
+        AND source_finance_annexure_id IS NOT NULL`,
+    [expenditureId],
+  );
+  const alreadyLinked = new Set(existingRows.map((row) => Number(row.source_finance_annexure_id)));
+
+  const [rows] = await conn.execute(
+    `SELECT COALESCE(MAX(sort_order), -1) AS max_sort_order
+       FROM expenditure_request_bills
+      WHERE expenditure_id = ?
+        AND file_category = 'bill'`,
+    [expenditureId],
+  );
+  let sortOrder = Number(rows[0]?.max_sort_order ?? -1) + 1;
+
+  for (const annexure of annexures) {
+    if (alreadyLinked.has(Number(annexure.id))) continue;
+
+    await conn.execute(
+      `INSERT INTO expenditure_request_bills
+         (expenditure_id, payee_row_id, file_category, original_name, stored_name, file_path, mime_type, file_size, sort_order, source_finance_annexure_id)
+       VALUES (?, NULL, 'bill', ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        expenditureId,
+        sanitizeRowValue(annexure.original_name),
+        sanitizeRowValue(annexure.stored_name),
+        sanitizeRowValue(annexure.file_path),
+        sanitizeRowValue(annexure.mime_type),
+        Number(annexure.file_size) || 0,
+        sortOrder,
+        annexure.id,
       ],
     );
     sortOrder += 1;
@@ -4440,10 +4746,17 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       workflowRowRef: workflowRowIdentity.workflowRowRef,
       sourceRequestId,
     });
-    await insertExpenditureRows(conn, expenditureId, expenditureRows, budgetSnapshotsByLine);
+    await insertExpenditureRows(
+      conn,
+      expenditureId,
+      expenditureRows,
+      budgetSnapshotsByLine,
+      financeRequestId,
+    );
     await insertUnplannedRows(conn, expenditureId, normalizedUnplanned.rows);
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
     await insertBillFiles(conn, expenditureId, uploads.paymentProofFiles, 'payment_proof');
+    await linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeRequestId);
     await upsertBulkNeftFile(
       conn,
       expenditureId,
@@ -4931,6 +5244,7 @@ export async function updateExpenditureRequest(
       normalizedExpenditureId,
       expenditureRows,
       budgetSnapshotsByLine,
+      financeRequestId,
     );
     await insertUnplannedRows(conn, normalizedExpenditureId, normalizedUnplanned.rows);
     await insertBillFiles(conn, normalizedExpenditureId, uploads.billFiles);
@@ -4940,6 +5254,7 @@ export async function updateExpenditureRequest(
       uploads.paymentProofFiles,
       'payment_proof',
     );
+    await linkFinanceAnnexuresToExpenditure(conn, normalizedExpenditureId, financeRequestId);
     await upsertBulkNeftFile(
       conn,
       normalizedExpenditureId,
@@ -5043,7 +5358,7 @@ export async function getExpenditureDetails(id) {
     ),
     db.execute(
       `SELECT id, payee_row_id, original_name, stored_name, file_path, mime_type, file_size,
-              sort_order, created_at
+              sort_order, created_at, source_finance_annexure_id
          FROM expenditure_request_bills
         WHERE expenditure_id = ?
           AND file_category = 'bill'
