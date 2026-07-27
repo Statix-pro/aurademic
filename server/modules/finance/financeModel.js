@@ -5075,6 +5075,46 @@ const financeModel = {
       throw error;
     }
 
+    // An advance is unreconciled money until its settlement is approved, so a
+    // workflow row that drew an advance without an approved settlement blocks
+    // closure. Rows are grouped by the dashboard row id kept in workflow_state.
+    //
+    // LEGACY: requests created before workflow_state carried dashboardRowId all
+    // collapse into a single '' group, so one approved settlement can cover
+    // several legacy advances here. The dashboard applies the same rule per row
+    // and is the stricter gate. Remove this note once every expenditure_requests
+    // row has a dashboardRowId in workflow_state.
+    const [settlementRows] = await db.query(
+      `SELECT
+         LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.dashboardRowId')), ''))) AS row_key,
+         SUM(CASE WHEN er.request_type = 'Advance' THEN 1 ELSE 0 END) AS advance_count,
+         SUM(
+           CASE
+             WHEN er.request_type = 'Settlement'
+               AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) IN ('approved', 'completed')
+             THEN 1
+             ELSE 0
+           END
+         ) AS settled_count
+         FROM expenditure_requests er
+        WHERE er.finance_request_id = ?
+          AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+        GROUP BY row_key`,
+      [normalizedFinanceId],
+    );
+
+    const hasUnsettledAdvance = settlementRows.some(
+      (row) => Number(row.advance_count || 0) > 0 && Number(row.settled_count || 0) === 0,
+    );
+
+    if (hasUnsettledAdvance) {
+      const error = new Error(
+        'This finance card cannot be closed until the settlement for every advance payment is approved.',
+      );
+      error.code = 'NOT_SETTLED';
+      throw error;
+    }
+
     await db.query(`UPDATE finance_requests SET closed_at = NOW(), closed_by = ? WHERE id = ?`, [
       normalizedUserId || null,
       normalizedFinanceId,
