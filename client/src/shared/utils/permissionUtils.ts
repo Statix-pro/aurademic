@@ -135,6 +135,23 @@ export const canAccessModuleWorkflow = (user: User | null | undefined, moduleKey
 export const canAccessFinanceWorkflow = (user?: User | null) =>
   canAccessModuleWorkflow(user, 'finance');
 
+export const canAccessGuesthouseWorkflow = (user?: User | null) => {
+  if (!user) {
+    return false;
+  }
+
+  if (isSuperAdmin(user) || canAccessAdminArea(user)) {
+    return true;
+  }
+
+  if (canAccessModuleWorkflow(user, 'guesthouse')) {
+    return true;
+  }
+
+  const normalizedRoles = normalizeRoleCodes(user).map((role) => role.toLowerCase());
+  return ['hod', 'principal', 'guesthouse_admin'].some((role) => normalizedRoles.includes(role));
+};
+
 const isAdminOrWorkflowRole = (user?: User | null) => {
   if (!user) {
     return false;

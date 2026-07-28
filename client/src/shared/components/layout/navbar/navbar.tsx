@@ -10,6 +10,7 @@ import {
   canAccessExpenditureWorkflow,
   canAccessFinanceWorkflow,
   canManageAccessControl,
+  hasPermission,
   isSuperAdmin,
 } from '../../../utils/permissionUtils';
 
@@ -237,10 +238,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showBudgetApproval = canAccessBudgetApproval(user);
   const showFinanceWorkflow = canAccessFinanceWorkflow(user);
   const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
+  const showGuesthouseApproval = showAdminDashboard || isSuperAdmin(user) || hasPermission(user, 'guesthouse.workflow.*') || ['hod', 'principal', 'guesthouse_admin'].some((stage) => hasPermission(user, `guesthouse.workflow.${stage}`));
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu =
-    showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow;
+    showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow || showGuesthouseApproval;
   const showSuperAdminMenu = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
@@ -499,6 +501,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                   '/project-dashboard',
                   '/admin-dashboard',
                   '/admin/budget',
+                  '/admin/guesthouse',
                   '/workflow/finance',
                   '/workflow/expenditure',
                 ])
@@ -564,6 +567,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     onClick={handleLinkClick}
                   >
                     Expenditure Approval
+                  </Link>
+                )}
+                {showGuesthouseApproval && (
+                  <Link
+                    to="/admin/guesthouse"
+                    className={`sb-sublink ${isActive('/admin/guesthouse') ? 'active' : ''}`}
+                    onClick={handleLinkClick}
+                  >
+                    Guesthouse Approval
                   </Link>
                 )}
               </div>

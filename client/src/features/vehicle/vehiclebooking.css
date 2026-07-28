@@ -657,6 +657,14 @@
   background: var(--booking-white, #ffffff);
 }
 
+/* When a table-wrap immediately follows a section heading, the heading
+   already draws a bottom border; remove the table-wrap's top border to
+   avoid a double-line appearance. */
+.vehiclebooking-section-title + .vehiclebooking-table-wrap,
+.vehiclebooking-subsection-title + .vehiclebooking-table-wrap {
+  border-top: 0;
+}
+
 .vehiclebooking-table {
   width: 100%;
   border-collapse: collapse;
@@ -667,7 +675,9 @@
 .vehiclebooking-table th {
   height: 38px;
   padding: 7px;
+  /* remove top border to avoid double-line with surrounding wrapper */
   border: 1px solid var(--booking-border-light, #e0e0e0);
+  border-top: 0;
   background: var(--booking-bg-tint, #f0f6ff);
   color: var(--primary-color, #0069ab);
   font-size: 14px;
@@ -676,6 +686,11 @@
   vertical-align: middle;
 }
 
+/* Ensure thead cells don't draw a top border so the wrapper's border
+   (from .vehiclebooking-table-wrap) appears as a single line. */
+.vehiclebooking-table thead th {
+  border-top: 0 !important;
+}
 .vehiclebooking-table th:last-child {
   border-right: 1px solid var(--booking-border-light, #e0e0e0);
 }
@@ -701,6 +716,9 @@
 .vehiclebooking-route-table th,
 .vehiclebooking-allotment-route-table th {
   border: 1px solid var(--booking-border-light, #e0e0e0) !important;
+  /* avoid drawing a top border on these table heads to prevent a
+     double-line where the table-wrap already provides the top border */
+  border-top: 0 !important;
 }
 
 .vehiclebooking-route-table th:last-child,
@@ -1472,6 +1490,13 @@
 .vehiclebooking-driver-management-wrap {
   width: min(920px, 100%);
   margin: 0 auto;
+  overflow-x: auto;
+}
+
+.vehiclebooking-success {
+  color: #16734a;
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .vehiclebooking-driver-management-table {
