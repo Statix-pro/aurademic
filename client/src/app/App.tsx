@@ -18,6 +18,7 @@ import EventEntry from '../features/events/components/EventEntry';
 import EventPage from '../features/events/components/EventPage';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';
+import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-approval/AdminGuesthouseApproval';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import Journalform from '../features/journals/journalform';
 import ProfilePage from '../features/profile/ProfilePage';
@@ -39,6 +40,7 @@ import {
   AdminRoute,
   BudgetApprovalRoute,
   FinanceWorkflowRoute,
+  GuesthouseWorkflowRoute,
   ModuleWorkflowRoute,
   SuperAdminRoute,
   ExpenditureApprovalRoute,
@@ -202,6 +204,22 @@ function App() {
                   {/* GUEST HOUSE */}
                   <Route
                     path="/guesthouse-booking"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse/new"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse/:id"
                     element={
                       <ProtectedRoute>
                         <GuestHouseBooking />
@@ -473,6 +491,14 @@ function App() {
                       <ProtectedRoute>
                         <UnderConstruction pageName="Expenditure Reports" />
                       </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/guesthouse"
+                    element={
+                      <GuesthouseWorkflowRoute>
+                        <AdminGuesthouseApproval />
+                      </GuesthouseWorkflowRoute>
                     }
                   />
                   <Route

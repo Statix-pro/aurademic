@@ -25,6 +25,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
 import './vehiclebooking.css';
 
 type Priority = 'Routine' | 'High';
@@ -68,7 +69,7 @@ interface BeneficiaryDetails {
 }
 
 const BENEFICIARY_TYPE_OPTIONS = ['Staff', 'Faculty', 'Institution'];
-const BENEFICIARY_TAG_OPTIONS = ['Skilling', 'Research', 'Office', 'Events', 'Academics'];
+const BENEFICIARY_TAG_OPTIONS = ['Booking Dates', 'Research', 'Office', 'Events', 'Academics'];
 
 interface TransportBookingDetails {
   purpose: string;
@@ -468,9 +469,13 @@ const MapPinWithBase = ({ size = 22, className = '' }: { size?: number; classNam
 
 const VehicleBooking: React.FC = () => {
   const { user } = useAuth();
+  const canManageVehicles = Boolean(
+    user && (isSuperAdmin(user) || user.is_admin || hasPermission(user, 'vehicle.manage')),
+  );
+  const [submitMessage, setSubmitMessage] = useState('');
 
   const applicantUiDetails: ApplicantDetails = useMemo(() => {
-    const u = user as Record<string, unknown> | null | undefined;
+    const u = user as unknown as Record<string, unknown> | null | undefined;
     const read = (keys: string[]) =>
       keys.map((k) => u?.[k]).find((v) => v !== undefined && v !== null);
     return {
@@ -499,7 +504,7 @@ const VehicleBooking: React.FC = () => {
   const [beneficiaryDetails, setBeneficiaryDetails] = useState<BeneficiaryDetails>({
     beneficiaryType: 'Staff',
     staffName: '',
-    tag: 'Skilling',
+    tag: 'Booking Dates',
   });
   const [travelPlanRows, setTravelPlanRows] = useState<TravelPlanRow[]>([createTravelPlanRow()]);
   const [shuttleBookingMode, setShuttleBookingMode] =
@@ -814,21 +819,7 @@ const VehicleBooking: React.FC = () => {
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    if (import.meta.env.DEV) {
-      console.log('Vehicle transport booking payload:', {
-        applicant: applicantUiDetails,
-        beneficiary: beneficiaryDetails,
-        transportDetails,
-        totalTravelers,
-        travelPlanRows,
-        shuttleBookingMode,
-        shuttleTripRows,
-        shuttleDayRows,
-        vehicleAllotmentRows,
-        standaloneVehicleDetails,
-      });
-    }
+    setSubmitMessage('Vehicle booking details saved locally.');
   };
 
   const renderReadOnlyInput = (
@@ -1487,7 +1478,7 @@ const VehicleBooking: React.FC = () => {
           <section className="vehiclebooking-card vehiclebooking-beneficiary-card">
             <div className="vehiclebooking-beneficiary-grid">
               <div className="vehiclebooking-beneficiary-field vehiclebooking-beneficiary-field--type">
-                <label className="vehiclebooking-beneficiary-label">Beneficiary</label>
+                <label className="vehiclebooking-beneficiary-label">Guest Details</label>
                 <select
                   className="vehiclebooking-beneficiary-control vehiclebooking-beneficiary-select"
                   value={beneficiaryDetails.beneficiaryType}
@@ -2436,16 +2427,21 @@ const VehicleBooking: React.FC = () => {
             </div>
           </section>
 
-          <section className="vehiclebooking-card vehiclebooking-vehicle-details-standalone">
-            {renderVehicleDetailsCard(
-              standaloneVehicleDetails,
-              true,
-              updateStandaloneVehicleDetails
-            )}
-          </section>
-          {renderVehicleAdminManagement()}
+          {canManageVehicles && (
+            <>
+              <section className="vehiclebooking-card vehiclebooking-vehicle-details-standalone">
+                {renderVehicleDetailsCard(
+                  standaloneVehicleDetails,
+                  true,
+                  updateStandaloneVehicleDetails
+                )}
+              </section>
+              {renderVehicleAdminManagement()}
+            </>
+          )}
 
           <div className="vehiclebooking-submit-actions">
+            {submitMessage && <span className="vehiclebooking-success">{submitMessage}</span>}
             <button
               type="submit"
               className="vehiclebooking-submit-btn"

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   AirVent,
   Armchair,
@@ -34,6 +35,7 @@ import {
 } from 'lucide-react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useAuth } from '../../contexts/AuthContext';
+import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import './guesthousebooking.css';
 
@@ -50,6 +52,7 @@ type GuestAmenityKey =
 
 interface ApplicantDetails {
   employeeId: string;
+  departmentId: string;
   name: string;
   date: string;
   department: string;
@@ -100,13 +103,52 @@ interface FoodRequirementRow {
 }
 
 interface BeneficiaryDetails {
-  beneficiaryType: 'Staff' | 'Faculty' | 'Institution' | '';
+  beneficiaryType: string;
   staffName: string;
+  departmentId: string;
   tag: string;
 }
 
-const BENEFICIARY_TYPE_OPTIONS = ['Staff', 'Faculty', 'Institution'];
-const BENEFICIARY_TAG_OPTIONS = ['Skilling', 'Research', 'Office', 'Events', 'Academics'];
+interface BeneficiaryEmployeeOption {
+  employee_id?: number | string;
+  name?: string;
+  department?: string;
+  department_id?: number | string;
+  departmentId?: number | string;
+}
+
+interface BeneficiaryEntityOption {
+  id: string;
+  name: string;
+}
+
+type BeneficiaryEntityOptions = Record<string, BeneficiaryEntityOption[]>;
+
+const BENEFICIARY_TYPE_OPTIONS = [
+  'Faculty',
+  'Staff',
+  'Department',
+  'Centre',
+  'Cell',
+  'Club',
+  'Section',
+  'Professional Body',
+];
+const BENEFICIARY_TAG_OPTIONS = [
+  'Laboratory',
+  'Association',
+  'Skilling',
+  'Research',
+  'Outreach',
+  'Office',
+  'Academics',
+  'Essentials',
+  'Events',
+  'Innovation',
+  'Start-up',
+  'Entrepreneurship',
+  'CoE Claims',
+];
 
 interface RoomAllotmentRow {
   id: string;
@@ -686,14 +728,15 @@ const buildApplicantDetails = (
   user: ApiRecord | null | undefined,
   profile: ApiRecord | null,
 ): ApplicantDetails => {
-  const sources = [user, profile].filter(Boolean) as ApiRecord[];
+  const sources = [profile, user].filter(Boolean) as ApiRecord[];
   const read = (keys: string[]) =>
     sources.reduce((value, source) => value || getTextValue(source, keys), '');
 
   return {
     employeeId: read(['employee_id', 'employeeId', 'erp_id', 'erpId', 'id']),
+    departmentId: read(['department_id', 'departmentId']),
     name: read(['name', 'full_name', 'fullName']),
-    date: todayInputValue(),
+    date: read(['request_date', 'requestDate', 'date']) || todayInputValue(),
     department: read(['department', 'department_name', 'departmentName']),
     designation: read(['designation', 'role_name', 'roleName']),
     email: read(['email', 'mail']),
@@ -844,7 +887,16 @@ const emptyTravelDetails: TravelDetails = {
 
 const GuestHouseBooking: React.FC = () => {
   const { user } = useAuth();
+  const canManageGuesthouse = Boolean(
+    user && (isSuperAdmin(user) || user.is_admin || hasPermission(user, 'guesthouse.manage')),
+  );
+  const navigate = useNavigate();
+  const { id: bookingIdParam } = useParams<{ id?: string }>();
+  const bookingId = Number.parseInt(bookingIdParam || '', 10);
+  const isViewingBooking = Number.isInteger(bookingId) && bookingId > 0;
   const [applicantProfile, setApplicantProfile] = useState<ApiRecord | null>(null);
+  const [applicantSearch, setApplicantSearch] = useState('');
+  const [applicantResults, setApplicantResults] = useState<ApiRecord[]>([]);
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(true);
   const [submitMessage, setSubmitMessage] = useState('');
   const [guests, setGuests] = useState<GuestDetails[]>([createGuest(1)]);
@@ -858,8 +910,14 @@ const GuestHouseBooking: React.FC = () => {
   const [beneficiaryDetails, setBeneficiaryDetails] = useState<BeneficiaryDetails>({
     beneficiaryType: 'Staff',
     staffName: '',
+    departmentId: '',
     tag: 'Skilling',
   });
+  const [beneficiaryEntityOptions, setBeneficiaryEntityOptions] =
+    useState<BeneficiaryEntityOptions>({});
+  const [beneficiaryEmployeeOptions, setBeneficiaryEmployeeOptions] =
+    useState<BeneficiaryEmployeeOption[]>([]);
+  const [beneficiarySearchOpen, setBeneficiarySearchOpen] = useState(false);
   const [roomBlockOptions, setRoomBlockOptions] = useState<RoomBlockOption[]>([]);
   const [spocOptions, setSpocOptions] = useState<string[]>([]);
   const [roomAllotments, setRoomAllotments] = useState<RoomAllotmentsByGuest>({});
@@ -876,6 +934,28 @@ const GuestHouseBooking: React.FC = () => {
   );
 
   useEffect(() => {
+    const query = applicantSearch.trim();
+    if (query.length < 2 || query === applicantUiDetails.name.trim()) {
+      setApplicantResults([]);
+      return;
+    }
+
+    const searchApplicants = async () => {
+      try {
+        const response = (await authenticityUtility.get(
+          `/budget/search-applicant?q=${encodeURIComponent(query)}`,
+        )) as any;
+        setApplicantResults(Array.isArray(response?.data) ? response.data : []);
+      } catch (error) {
+        console.error('Failed to search guesthouse applicant:', error);
+        setApplicantResults([]);
+      }
+    };
+
+    void searchApplicants();
+  }, [applicantSearch, applicantUiDetails.name]);
+
+  useEffect(() => {
     setTravelDateInputs({
       checkInDate: formatDateForDisplay(travelDetails.checkInDate),
       checkOutDate: formatDateForDisplay(travelDetails.checkOutDate),
@@ -883,6 +963,10 @@ const GuestHouseBooking: React.FC = () => {
   }, [travelDetails.checkInDate, travelDetails.checkOutDate]);
 
   useEffect(() => {
+    if (isViewingBooking) {
+      return;
+    }
+
     let isMounted = true;
 
     const loadApplicantProfile = async () => {
@@ -905,7 +989,110 @@ const GuestHouseBooking: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isViewingBooking]);
+
+  useEffect(() => {
+    if (!isViewingBooking) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const toInputDate = (value: unknown) => {
+      const text = String(value || '').trim();
+      return text ? text.slice(0, 10) : '';
+    };
+    const toText = (value: unknown) => (value === null || value === undefined ? '' : String(value));
+
+    const loadBooking = async () => {
+      try {
+        const response = await authenticityUtility.get(`/guesthouse/${bookingId}`);
+        const booking = getPayloadData(response) as ApiRecord | null;
+        if (!isMounted || !booking || typeof booking !== 'object') {
+          return;
+        }
+
+        setApplicantProfile({
+          employee_id: booking.employee_id,
+          name: booking.applicant_name,
+          request_date: toInputDate(booking.request_date),
+          department: booking.department,
+          designation: booking.designation,
+          email: booking.email,
+          mobile: booking.mobile,
+        });
+        setBeneficiaryDetails({
+          beneficiaryType: toText(booking.beneficiary_type),
+          staffName: toText(booking.beneficiary_value),
+          departmentId: toText(booking.department_id),
+          tag: toText(booking.budget_tag),
+        });
+        setTravelDetails({
+          checkInDate: toInputDate(booking.check_in_date),
+          checkInTime: toText(booking.check_in_time),
+          checkOutDate: toInputDate(booking.check_out_date),
+          checkOutTime: toText(booking.check_out_time),
+        });
+
+        const bookingGuests = Array.isArray(booking.guests) ? booking.guests : [];
+        setGuests(
+          bookingGuests.map((guest: any) => {
+            const roomRequests = Array.isArray(guest.roomRequests) ? guest.roomRequests : [];
+            const roomCount = (roomType: RoomType) =>
+              toText(roomRequests.find((request: any) => request.room_type === roomType)?.requested_count);
+            return {
+              id: Number(guest.id),
+              name: toText(guest.name),
+              gender: guest.gender || '',
+              priority: guest.priority || 'Routine',
+              designation: toText(guest.designation),
+              email: toText(guest.email),
+              organization: toText(guest.organization),
+              city: toText(guest.city),
+              state: toText(guest.state),
+              accompaniedMale: toText(guest.accompanied_male),
+              accompaniedFemale: toText(guest.accompanied_female),
+              accompaniedChildren: toText(guest.accompanied_children),
+              roomSingle: roomCount('Single'),
+              roomDouble: roomCount('Double'),
+              roomDeluxe: roomCount('Deluxe'),
+              foodVeg: toText(guest.food_veg),
+              foodNonVeg: toText(guest.food_nonveg),
+              remarks: toText(guest.remarks),
+            };
+          }),
+        );
+
+        const requirements = Array.isArray(booking.foodRequirements) ? booking.foodRequirements : [];
+        if (requirements.length) {
+          setFoodRows(
+            requirements.map((row: any) => ({
+              id: Number(row.id),
+              date: toInputDate(row.req_date),
+              morningRefreshment: toText(row.morning_refreshment),
+              breakfastVeg: toText(row.breakfast_veg),
+              breakfastNonVeg: toText(row.breakfast_nonveg),
+              lunchVeg: toText(row.lunch_veg),
+              lunchNonVeg: toText(row.lunch_nonveg),
+              eveningRefreshment: toText(row.evening_refreshment),
+              dinnerVeg: toText(row.dinner_veg),
+              dinnerNonVeg: toText(row.dinner_nonveg),
+            })),
+          );
+        }
+      } catch (error) {
+        console.error('Failed to load guesthouse booking:', error);
+        if (isMounted) {
+          setSubmitMessage('Unable to load this guesthouse booking.');
+        }
+      }
+    };
+
+    void loadBooking();
+    return () => {
+      isMounted = false;
+    };
+  }, [bookingId, isViewingBooking]);
 
 
   useEffect(() => {
@@ -1057,8 +1244,61 @@ const GuestHouseBooking: React.FC = () => {
   };
 
   const updateBeneficiaryDetails = (field: keyof BeneficiaryDetails, value: string) => {
-    setBeneficiaryDetails((prev) => ({ ...prev, [field]: value }));
+    setBeneficiaryDetails((prev) => ({
+      ...prev,
+      [field]: value,
+      ...(field === 'beneficiaryType' || field === 'staffName' ? { departmentId: '' } : {}),
+    }));
   };
+
+  useEffect(() => {
+    const loadBeneficiaryEntities = async () => {
+      try {
+        const response = (await authenticityUtility.get('/budget/org-units')) as any;
+        const grouped = response?.data?.grouped || {};
+        const options: BeneficiaryEntityOptions = {};
+        Object.entries(grouped).forEach(([type, rows]) => {
+          options[type] = Array.isArray(rows)
+            ? rows
+                .map((row: any) => ({
+                  id: String(row?.id || row?.department_id || row?.entity_id || ''),
+                  name: String(row?.name || row?.label || row?.unit_name || row?.value || '').trim(),
+                }))
+                .filter((option) => option.name)
+            : [];
+        });
+        setBeneficiaryEntityOptions(options);
+      } catch (error) {
+        console.error('Failed to load guesthouse beneficiary options:', error);
+      }
+    };
+
+    loadBeneficiaryEntities();
+  }, []);
+
+  useEffect(() => {
+    if (!['Faculty', 'Staff'].includes(beneficiaryDetails.beneficiaryType)) return;
+    const query = beneficiaryDetails.staffName.trim();
+    if (query.length < 1 && !beneficiarySearchOpen) {
+      setBeneficiaryEmployeeOptions([]);
+      return;
+    }
+
+    const loadEmployees = async () => {
+      try {
+        const type = beneficiaryDetails.beneficiaryType === 'Faculty' ? 'Teaching' : 'Non-Teaching';
+        const response = (await authenticityUtility.get(
+          `/budget/search-applicant?q=${encodeURIComponent(query || 'a')}&type=${type}`,
+        )) as any;
+        setBeneficiaryEmployeeOptions(Array.isArray(response?.data) ? response.data : []);
+      } catch (error) {
+        console.error('Failed to load beneficiary employees:', error);
+        setBeneficiaryEmployeeOptions([]);
+      }
+    };
+
+    void loadEmployees();
+  }, [beneficiaryDetails.beneficiaryType, beneficiaryDetails.staffName, beneficiarySearchOpen]);
 
   const addGuest = () => {
     setGuests((prevGuests) => [...prevGuests, createGuest()]);
@@ -1317,7 +1557,7 @@ const GuestHouseBooking: React.FC = () => {
     setEditingCareTakerId((currentId) => (currentId === id ? null : currentId));
   };
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     // Validate checkout is after checkin
@@ -1329,10 +1569,25 @@ const GuestHouseBooking: React.FC = () => {
       return;
     }
 
+    if (!applicantUiDetails.name || !beneficiaryDetails.beneficiaryType || !beneficiaryDetails.staffName) {
+      setSubmitMessage('Applicant and beneficiary details are required.');
+      return;
+    }
+
+    if (!travelDetails.checkInDate || !travelDetails.checkOutDate || !travelDetails.checkInTime || !travelDetails.checkOutTime) {
+      setSubmitMessage('Check-in and check-out date and time are required.');
+      return;
+    }
+
+    if (guests.some((guest) => !guest.name.trim())) {
+      setSubmitMessage('Enter a name for every guest.');
+      return;
+    }
+
     const payload = {
       applicant: applicantUiDetails,
       beneficiary: beneficiaryDetails,
-      guests,
+      guests: guests.map((guest) => ({ ...guest, travel: travelDetails })),
       travelDetails,
       numberOfDays: stayDates.length,
       duration: travelDuration,
@@ -1340,10 +1595,21 @@ const GuestHouseBooking: React.FC = () => {
       roomAllotments: guests.map((guest) => roomAllotments[String(guest.id)] || createRoomAllotmentData(String(guest.id), guest)),
     };
 
-    if (import.meta.env.DEV) {
-      console.log('Guest house booking payload:', payload);
+    try {
+      const response = (await authenticityUtility.post('/guesthouse', payload)) as any;
+      if (!response?.success) {
+        throw new Error(response?.message || 'Guesthouse booking submission failed');
+      }
+      setSubmitMessage('Guesthouse booking submitted successfully.');
+      navigate('/guestHouse-dashboard', { replace: true });
+    } catch (error: any) {
+      console.error('Guesthouse booking submission failed:', error);
+      setSubmitMessage(
+        error?.response?.data?.message ||
+          error?.message ||
+          'Unable to submit guesthouse booking.',
+      );
     }
-    setSubmitMessage('Guest house booking form is ready.');
   };
 
   const renderReadOnlyInput = (
@@ -1865,12 +2131,37 @@ const GuestHouseBooking: React.FC = () => {
             {isApplicantCardOpen && (
               <div className="guesthousebooking-card-body">
                 <div className="guesthousebooking-form-grid">
-                  {renderReadOnlyInput(
-                    'Applicant Name',
-                    applicantUiDetails.name,
-                    'text',
-                    'Search employee by name or ERP ID',
-                  )}
+                  <div className="guesthousebooking-field" style={{ position: 'relative' }}>
+                    <label className="guesthousebooking-label">Applicant Name</label>
+                    <input
+                      className="guesthousebooking-input"
+                      value={applicantSearch || applicantUiDetails.name}
+                      onChange={(event) => setApplicantSearch(event.target.value)}
+                      placeholder="Search employee by name or ERP ID"
+                    />
+                    {applicantResults.length > 0 && (
+                      <div className="guesthousebooking-employee-dropdown">
+                        {applicantResults.map((employee, index) => (
+                          <button
+                            type="button"
+                            className="guesthousebooking-employee-option"
+                            key={`${employee.employee_id || employee.id || employee.name}-${index}`}
+                            onClick={() => {
+                              setApplicantProfile(employee);
+                              setApplicantSearch('');
+                              setApplicantResults([]);
+                            }}
+                          >
+                            <strong>{getTextValue(employee, ['name', 'full_name', 'fullName'])}</strong>
+                            <span>
+                              {getTextValue(employee, ['designation', 'role_name'])} |{' '}
+                              {getTextValue(employee, ['department', 'department_name'])}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   {renderReadOnlyInput('Date', applicantUiDetails.date, 'date')}
                   {renderReadOnlyInput('Department', applicantUiDetails.department)}
                   {renderReadOnlyInput(
@@ -1911,14 +2202,77 @@ const GuestHouseBooking: React.FC = () => {
               </div>
               <div className="guesthousebooking-beneficiary-field">
                 <label className="guesthousebooking-beneficiary-label">
-                  {beneficiaryDetails.beneficiaryType === 'Faculty' ? 'Faculty Name' : 'Staff Name'}
+                  {['Faculty', 'Staff'].includes(beneficiaryDetails.beneficiaryType)
+                    ? `${beneficiaryDetails.beneficiaryType} Name`
+                    : beneficiaryDetails.beneficiaryType}
                 </label>
-                <input
-                  className="guesthousebooking-beneficiary-control"
-                  value={beneficiaryDetails.staffName}
-                  onChange={(event) => updateBeneficiaryDetails('staffName', event.target.value)}
-                  placeholder="Search staff by name or ERP ID"
-                />
+                {['Faculty', 'Staff'].includes(beneficiaryDetails.beneficiaryType) ? (
+                  <>
+                    <input
+                      className="guesthousebooking-beneficiary-control"
+                      value={beneficiaryDetails.staffName}
+                      onChange={(event) => updateBeneficiaryDetails('staffName', event.target.value)}
+                      placeholder={`Search ${beneficiaryDetails.beneficiaryType.toLowerCase()} by name or ERP ID`}
+                      onFocus={() => setBeneficiarySearchOpen(true)}
+                      onBlur={() => window.setTimeout(() => setBeneficiarySearchOpen(false), 200)}
+                    />
+                    {beneficiaryEmployeeOptions.length > 0 && (
+                      <div className="guesthousebooking-employee-dropdown">
+                        {beneficiaryEmployeeOptions.map((employee, index) => (
+                          <button
+                            type="button"
+                            className="guesthousebooking-employee-option"
+                            key={`${employee.employee_id || employee.name || 'employee'}-${index}`}
+                            onClick={() => {
+                              setBeneficiaryDetails((prev) => ({
+                                ...prev,
+                                staffName: employee.name || '',
+                                departmentId: String(
+                                  employee.department_id || employee.departmentId || '',
+                                ),
+                              }));
+                              setBeneficiaryEmployeeOptions([]);
+                              setBeneficiarySearchOpen(false);
+                            }}
+                          >
+                            <strong>{employee.name}</strong>
+                            <span>{employee.department || 'Employee'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <select
+                    className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
+                    value={beneficiaryDetails.staffName}
+                    onChange={(event) => {
+                      const selectedName = event.target.value;
+                      const selectedOption = (
+                        beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType.toUpperCase()] ||
+                        beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
+                        []
+                      ).find((option) => option.name === selectedName);
+                      setBeneficiaryDetails((prev) => ({
+                        ...prev,
+                        staffName: selectedName,
+                        departmentId:
+                          beneficiaryDetails.beneficiaryType === 'Department'
+                            ? selectedOption?.id || ''
+                            : '',
+                      }));
+                    }}
+                  >
+                    <option value="">Select {beneficiaryDetails.beneficiaryType.toLowerCase()}</option>
+                    {(beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType.toUpperCase()] ||
+                      beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
+                      []).map((option) => (
+                      <option key={`${option.id}-${option.name}`} value={option.name}>
+                        {option.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div className="guesthousebooking-beneficiary-field">
                 <label className="guesthousebooking-beneficiary-label">Tag</label>
@@ -2430,7 +2784,7 @@ const GuestHouseBooking: React.FC = () => {
           </section>
 
           {/* Room Allotment Cards */}
-          <div className="guesthousebooking-allotment-list" aria-label="Room Allotment">
+          {false && <div className="guesthousebooking-allotment-list" aria-label="Room Allotment">
             {guests.map((guest, index) => {
               const guestId = String(guest.id);
               const allotment =
@@ -2719,15 +3073,15 @@ const GuestHouseBooking: React.FC = () => {
                 </section>
               );
             })}
-          </div>
+          </div>}
           <div className="guesthousebooking-actions">
             {submitMessage && <span className="guesthousebooking-success">{submitMessage}</span>}
 
-            <button className="guesthousebooking-submit-button" type="submit">
-              Submit Booking
+            <button className="guesthousebooking-submit-button" type="submit" disabled={isViewingBooking}>
+              {isViewingBooking ? 'Viewing Booking' : 'Submit Booking'}
             </button>
           </div>
-          {renderGuesthouseAdminManagement()}
+          {canManageGuesthouse && renderGuesthouseAdminManagement()}
         </form>
       </div>
     </div>
