@@ -32,6 +32,7 @@ export interface EventApprovalFormData {
   minAge: string;
   maxAge: string;
   eventFlyerName: string;
+  isMultiEventEnabled: boolean;
   registrationSettingsEnabled: boolean;
   registrationStatus: string;
   lastDate: string;
@@ -46,6 +47,9 @@ export interface EventApprovalFormData {
   documentName: string;
   documentType: string;
   documentSize: string;
+  documentTextFieldEnabled: boolean;
+  feedbackEnabled: boolean;
+  certificateEnabled: boolean;
   registrationFeeEnabled: boolean;
   feeRows: FeeRow[];
   collaborators: CollaboratorRow[];
@@ -64,6 +68,7 @@ export interface EventApprovalFormData {
   valedictoryDate: string;
   valedictoryTime: string;
   valedictoryVenue: string;
+  sponsoringAgencyEnabled: boolean;
 }
 
 interface FeeRow {
@@ -98,6 +103,9 @@ interface EventApprovalCardsProps {
   showFooter?: boolean;
   showHeaderActions?: boolean;
   showExtendedSections?: boolean;
+  showMultiEventToggle?: boolean;
+  isSubEvent?: boolean;
+  onAddEvent?: () => void;
   onSubmit?: (data: EventApprovalFormData) => void | Promise<void>;
 }
 
@@ -156,6 +164,7 @@ const createInitialFormData = (): EventApprovalFormData => ({
   minAge: "",
   maxAge: "",
   eventFlyerName: "",
+  isMultiEventEnabled: false,
   registrationSettingsEnabled: false,
   registrationStatus: "Open",
   lastDate: "",
@@ -170,6 +179,9 @@ const createInitialFormData = (): EventApprovalFormData => ({
   documentName: "",
   documentType: "",
   documentSize: "",
+  documentTextFieldEnabled: false,
+  feedbackEnabled: false,
+  certificateEnabled: false,
   registrationFeeEnabled: false,
   feeRows: [createFeeRow()],
   collaborators: [createCollaborator()],
@@ -188,6 +200,7 @@ const createInitialFormData = (): EventApprovalFormData => ({
   valedictoryDate: "",
   valedictoryTime: "",
   valedictoryVenue: "",
+  sponsoringAgencyEnabled: false,
 });
 
 const options = EVENT_APPROVAL_OPTIONS;
@@ -199,10 +212,15 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   showFooter = true,
   showHeaderActions = true,
   showExtendedSections = false,
+  showMultiEventToggle = false,
+  isSubEvent = false,
+  onAddEvent,
   onSubmit,
 }) => {
   const [formData, setFormData] = useState<EventApprovalFormData>(createInitialFormData);
   const [additionalEvents, setAdditionalEvents] = useState(0);
+  const [isMultiEvent, setIsMultiEvent] = useState(false);
+  const [multiEventsList, setMultiEventsList] = useState<{id: string, name: string, type: string}[]>([{ id: makeId(), name: "", type: "" }]);
   const [submitting, setSubmitting] = useState(false);
   const [themeSearchQuery, setThemeSearchQuery] = useState('');
   const [sdgSearchQuery, setSdgSearchQuery] = useState('');
@@ -313,7 +331,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
     if (!onSubmit) return;
     setSubmitting(true);
     try {
-      await onSubmit({ ...formData, numberOfDays });
+      await onSubmit({ ...formData, numberOfDays, isMultiEventEnabled: isMultiEvent });
     } finally {
       setSubmitting(false);
     }
@@ -322,9 +340,8 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   const showMeetingLink = formData.mode === "Virtual" || formData.mode === "Hybrid";
   const sessionOptions = EVENT_SESSION_OPTIONS;
 
-  return (
-    <div className="event-approval-page journal-form-body">
-      <div className="journal-form-container event-approval-container">
+  const content = (
+    <>
       <section className="event-approval-card form-card">
         {(title || showHeaderActions) && (
           <div className="event-approval-title-row">
@@ -335,9 +352,11 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                   expanded={eventExpanded}
                   onClick={() => setEventExpanded((expanded) => !expanded)}
                 />
-                <button type="button" title="Add event" aria-label="Add event" onClick={addEvent}>
-                  <Plus size={18} />
-                </button>
+                {onAddEvent && (
+                  <button type="button" title="Add event" aria-label="Add event" onClick={onAddEvent}>
+                    <Plus size={18} />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="muted"
@@ -355,10 +374,24 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
         {eventExpanded && (
           <>
         <div className="event-approval-section-heading">Event Details</div>
-        <label className="span-4">
-          Event Name
-          <input placeholder="Event Name" value={formData.name} onChange={(event) => setField("name", event.target.value)} />
-        </label>
+        <div className="event-approval-grid event-approval-name-flyer-grid">
+          <label>
+            Event Name
+            <input placeholder="Event Name" value={formData.name} onChange={(event) => setField("name", event.target.value)} />
+          </label>
+          <label className="event-approval-flyer-field">
+            Event Flyer
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              onChange={(event) => setField("eventFlyerName", event.target.files?.[0]?.name || "")}
+            />
+            <span className="event-approval-file-button">
+              <Upload size={14} />
+              {formData.eventFlyerName || "Choose File"}
+            </span>
+          </label>
+        </div>
         <div className="event-approval-grid four">
           <label>Category{select("category", options.categories)}</label>
           <label>Type{select("eventType", options.types)}</label>
@@ -401,7 +434,9 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
           </label>
         </div>
 
-        <div className="event-approval-section-heading spaced">Schedule & Venue</div>
+        <div className="event-approval-section-heading spaced">
+          <span>Schedule & Venue</span>
+        </div>
         <div className="event-approval-grid schedule-top">
           <label className="schedule-date-from">
             Date (From)
@@ -425,7 +460,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
           </div>
         </div>
         <div className="event-approval-grid schedule-bottom">
-          <div className="event-approval-schedule-card schedule-mode">
+          <div className="schedule-mode">
             <Segmented
               label="Mode"
               value={formData.mode}
@@ -457,20 +492,8 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
         {formData.registrationSettingsEnabled && (
         <>
           <div className="event-approval-registration-top">
-          <label>Eligible Participants{select("eligibleParticipants", options.participants)}</label>
-          <label className="event-approval-flyer-field">
-            Event Flyer
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={(event) => setField("eventFlyerName", event.target.files?.[0]?.name || "")}
-            />
-            <span className="event-approval-file-button">
-              <Upload size={14} />
-              {formData.eventFlyerName || "Choose File"}
-            </span>
-          </label>
-        </div>
+            <label>Eligible Participants{select("eligibleParticipants", options.participants)}</label>
+          </div>
         <div className="event-approval-controls-row">
           <Segmented label="Open to" value={formData.openTo} options={EVENT_OPEN_TO_OPTIONS} onChange={(value) => setField("openTo", value)} />
           <Segmented label="Gender Restriction" value={formData.genderRestriction} options={EVENT_GENDER_RESTRICTION_OPTIONS} onChange={(value) => setField("genderRestriction", value)} />
@@ -548,13 +571,33 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
             title="Document Upload"
             enabled={formData.documentEnabled}
             onToggle={(value) => setField("documentEnabled", value)}
-            columns={3}
+            columns={4}
             className="event-approval-mini-card-doc"
           >
             <label>Document Name{select("documentName", options.documentName)}</label>
             <label>Type{select("documentType", options.documentType)}</label>
             <label>Size{select("documentSize", options.documentSize)}</label>
+            <label className="event-approval-mini-card-doc-field">
+              <span>Text Field</span>
+              <input type="checkbox" checked={formData.documentTextFieldEnabled} onChange={(event) => setField("documentTextFieldEnabled", event.target.checked)} />
+            </label>
           </MiniCard>
+        </div>
+        <div className="event-approval-split">
+          <MiniCard
+            title="Feedback"
+            enabled={formData.feedbackEnabled}
+            onToggle={(value) => setField("feedbackEnabled", value)}
+            className="event-approval-mini-card-feedback"
+            columns={1}
+          />
+          <MiniCard
+            title="Certificate"
+            enabled={formData.certificateEnabled}
+            onToggle={(value) => setField("certificateEnabled", value)}
+            className="event-approval-mini-card-certificate"
+            columns={1}
+          />
         </div>
         </>
         )}
@@ -601,11 +644,14 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
           </div>
         )}
 
-        <div className="event-approval-subsection-heading spaced">Host & Collaborator</div>
+      </section>
+
+      <section className="event-approval-card form-card">
+        <div className="event-approval-section-heading">Host & Collaborator</div>
         {formData.collaborators.map((row, index) => (
           <div className="event-approval-row-line" key={row.id}>
             <input
@@ -621,9 +667,14 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
             <IconActions showAdd={index === formData.collaborators.length - 1} onAdd={() => addRow("collaborators")} onDelete={() => deleteRow("collaborators", row.id)} />
           </div>
         ))}
+      </section>
 
-        <div className="event-approval-subsection-heading spaced">Sponsoring Agency</div>
-        {formData.sponsoringAgencies.map((row, index) => (
+      <section className="event-approval-card form-card">
+        <div className="event-approval-section-heading with-toggle">
+          <span>Sponsoring Agency</span>
+          <Switch checked={formData.sponsoringAgencyEnabled} onChange={(value) => setField("sponsoringAgencyEnabled", value)} />
+        </div>
+        {formData.sponsoringAgencyEnabled && formData.sponsoringAgencies.map((row, index) => (
           <div className="event-approval-row-line" key={row.id}>
             <input
               type="radio"
@@ -639,7 +690,6 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
             <IconActions showAdd={index === formData.sponsoringAgencies.length - 1} onAdd={() => addRow("sponsoringAgencies")} onDelete={() => deleteRow("sponsoringAgencies", row.id)} />
           </div>
         ))}
-
       </section>
 
       <section className="event-approval-card form-card">
@@ -665,7 +715,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
         ))}
       </section>
 
-      {(eventNumber !== 1 || showExtendedSections) && (
+      {showExtendedSections && (
         <section className="event-approval-card event-approval-last-card form-card">
           <div className="event-approval-section-heading with-toggle">
             <span>Inaugural and Valedictory Details</span>
@@ -704,7 +754,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
         </section>
       )}
 
-      {(eventNumber !== 1 || showExtendedSections) && (
+      {showExtendedSections && (
         <section className="event-approval-card event-approval-accommodation-card form-card">
           <div className="event-approval-section-heading with-toggle">
             <span>Accommodation</span>
@@ -721,21 +771,78 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
           )}
         </section>
       )}
+
+      {showMultiEventToggle && eventNumber === 1 && (
+        <section className="event-approval-card form-card event-approval-multi-event-card">
+          <div className="event-approval-section-heading with-toggle">
+            <span>Multi Event</span>
+            <Switch
+              checked={isMultiEvent}
+              onChange={(value) => {
+                setIsMultiEvent(value);
+                if (value && multiEventsList.length === 0) {
+                  setMultiEventsList([{ id: makeId(), name: "", type: "" }]);
+                }
+              }}
+            />
+          </div>
+          {isMultiEvent && (
+            <div className="event-approval-table-wrap" style={{ marginTop: "16px" }}>
+              <table className="budgetEntryTable" style={{ width: "100%" }}>
+                <thead>
+                  <tr>
+                    <th style={{ width: "60px", textAlign: "center" }}>S.No</th>
+                    <th>Event Name</th>
+                    <th>Event Type</th>
+                    <th style={{ width: "100px", textAlign: "center" }}>Create</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {multiEventsList.map((row, index) => (
+                    <tr key={row.id}>
+                      <td style={{ textAlign: "center" }}>{index + 1}</td>
+                      <td>
+                        <input 
+                          className="tableInput" 
+                          placeholder="Event Name" 
+                          value={row.name} 
+                          onChange={(e) => setMultiEventsList(curr => curr.map(r => r.id === row.id ? { ...r, name: e.target.value } : r))}
+                        />
+                      </td>
+                      <td>
+                        <select 
+                          className="tableSelect" 
+                          value={row.type} 
+                          onChange={(e) => setMultiEventsList(curr => curr.map(r => r.id === row.id ? { ...r, type: e.target.value } : r))}
+                        >
+                          <option value="">Select</option>
+                          {options.types.map((t) => <option key={t}>{t}</option>)}
+                        </select>
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <button 
+                          type="button" 
+                          className="event-dashboard-add-btn" 
+                          style={{ padding: "4px 12px", fontSize: "12px" }}
+                          onClick={() => {
+                             if (index === multiEventsList.length - 1) {
+                               setMultiEventsList(curr => [...curr, { id: makeId(), name: "", type: "" }]);
+                             }
+                          }}
+                        >
+                          {index === multiEventsList.length - 1 ? "Add +" : "Save"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
         </>
       )}
-
-      {Array.from({ length: additionalEvents }, (_, index) => (
-        <EventApprovalCards
-          key={`${eventNumber}-${index}`}
-          title={`Event ${eventNumber + index + 1}`}
-          eventNumber={eventNumber + index + 1}
-          submitLabel={submitLabel}
-          showHeaderActions={showHeaderActions}
-          showExtendedSections={showExtendedSections}
-          showFooter={false}
-          onSubmit={onSubmit}
-        />
-      ))}
 
       {showFooter && eventExpanded && (
         <div className="event-approval-footer finance-submit-buttons">
@@ -745,6 +852,15 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
           </button>
         </div>
       )}
+    </>
+  );
+
+  if (isSubEvent) return content;
+
+  return (
+    <div className="event-approval-page journal-form-body">
+      <div className="journal-form-container event-approval-container">
+        {content}
       </div>
     </div>
   );
@@ -811,8 +927,8 @@ const MiniCard = ({
   title: string;
   enabled: boolean;
   onToggle: (value: boolean) => void;
-  children: React.ReactNode;
-  columns?: 2 | 3;
+  children?: React.ReactNode;
+  columns?: 1 | 2 | 3 | 4;
   className?: string;
 }) => (
   <div className={`event-approval-mini-card ${className}`.trim()}>
@@ -820,7 +936,11 @@ const MiniCard = ({
       <span>{title}</span>
       <Switch checked={enabled} onChange={onToggle} />
     </div>
-    {enabled && <div className={`event-approval-grid ${columns === 3 ? "three" : "two"}`}>{children}</div>}
+    {enabled && children && (
+      <div className={`event-approval-grid ${columns === 4 ? "four" : columns === 3 ? "three" : columns === 1 ? "one" : "two"}`}>
+        {children}
+      </div>
+    )}
   </div>
 );
 

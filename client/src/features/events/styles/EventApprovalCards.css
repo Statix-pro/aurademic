@@ -113,7 +113,7 @@
 }
 
 .event-approval-split {
-  grid-template-columns: minmax(260px, 0.85fr) minmax(420px, 1.15fr);
+  grid-template-columns: minmax(240px, 0.75fr) minmax(460px, 1.25fr);
   align-items: start;
 }
 
@@ -198,6 +198,22 @@
   border: 0;
   background: transparent;
   margin-top: 8px;
+  grid-template-columns: 1fr 1fr !important;
+  gap: 16px !important;
+}
+
+.event-approval-name-flyer-grid {
+  grid-template-columns: 3.4fr 0.6fr !important;
+  gap: 16px !important;
+  margin-top: 12px !important;
+  margin-bottom: 14px !important;
+}
+
+@media (max-width: 768px) {
+  .event-approval-theme-grid,
+  .event-approval-name-flyer-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 
 .event-approval-registration-top {
@@ -220,7 +236,7 @@
   position: absolute;
   inset: auto 0 0 0;
   width: 100%;
-  height: 36px;
+  height: 42px;
   opacity: 0;
   cursor: pointer;
 }
@@ -231,12 +247,12 @@
   justify-content: center;
   gap: 8px;
   width: 100%;
-  height: 36px;
-  margin-top: 8px;
-  border-radius: 8px;
+  height: 42px;
+  margin-top: 6px;
+  border-radius: 12px;
   background: #e8f2fd;
   color: var(--event-blue);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -421,11 +437,64 @@
   width: 100%;
 }
 
+.event-approval-mini-card.simple-toggle .event-approval-section-heading {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+  border-bottom: none !important;
+}
+
 .event-approval-mini-card-team {
   max-width: none;
 }
 
 .event-approval-mini-card-doc {
+  width: 100%;
+}
+
+.event-approval-mini-card-doc-name {
+  min-width: 0;
+}
+
+.event-approval-mini-card-doc .event-approval-grid.three {
+  grid-template-columns: minmax(150px, 1.15fr) minmax(130px, 0.95fr) minmax(120px, 0.8fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.event-approval-mini-card-doc .event-approval-grid.four {
+  grid-template-columns: minmax(170px, 1.3fr) minmax(120px, 0.9fr) minmax(110px, 0.75fr) minmax(70px, 0.35fr);
+  gap: 14px;
+  align-items: end;
+}
+
+.event-approval-page .event-approval-mini-card-doc-field {
+  display: flex !important;
+  flex-direction: column;
+  align-items: flex-start;
+  align-self: stretch;
+  min-width: 0;
+  margin: 0 !important;
+}
+
+.event-approval-mini-card-doc-field > span {
+  display: block;
+  margin: 0;
+  color: var(--event-heading-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.event-approval-mini-card-doc-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: auto;
+  cursor: pointer;
+  accent-color: var(--event-blue);
+}
+
+.event-approval-mini-card-doc input[type="text"] {
   width: 100%;
 }
 
@@ -722,12 +791,6 @@
 
 .event-approval-page select.event-approval-select.has-value {
   color: var(--event-input-text);
-}
-
-.event-approval-mini-card-doc .event-approval-grid.three {
-  grid-template-columns: minmax(180px, 1.3fr) minmax(130px, 0.9fr) minmax(120px, 0.7fr);
-  gap: 18px;
-  align-items: end;
 }
 
 .event-approval-mini-card-doc .event-approval-grid.three label {
@@ -1327,17 +1390,22 @@
 .event-approval-coordinator-card {
   grid-template-columns: 24px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 18px;
+  gap: 14px;
   margin-bottom: 18px;
-  padding-left: 0;
+  padding: 12px 16px !important; /* Keeps the radio inset while tightening the card height */
 }
 
 .event-approval-coordinator-card:last-of-type {
   margin-bottom: 0;
 }
 
+.event-approval-coordinator-card .event-approval-radio-dot {
+  margin: 0 !important;
+}
+
 .event-approval-coordinator-card .event-approval-grid.two {
-  margin-bottom: 0;
+  margin: 0;
+  gap: 12px;
 }
 
 .event-approval-ceremony-row {
@@ -1677,7 +1745,7 @@
   }
 
   .event-approval-coordinator-card {
-    padding: 18px 16px;
+    padding: 14px 16px;
   }
 
   .event-approval-table-wrap {

@@ -15,36 +15,44 @@ export const EVENT_DASHBOARD_MONTHS = [
 
 export const DUMMY_EVENTS = [
   {
+    status: "pending",
+    proposedBy: "Ms Vijayapriya C",
     category: "Workshop",
     department: "EE (VLSI D&T)",
     time: "09:00 AM - 12:30 PM",
     name: "3D Printing Materials Mechanical Engineering Mechanical Engineering Mechanical Engineering",
     venue: "Cyberdome",
-    date: "2025-10-07",
+    date: "2026-10-07",
   },
   {
+    status: "approved",
+    proposedBy: "Ms Vijayapriya C",
     category: "Seminar",
     department: "Computer Science",
     time: "01:00 PM - 03:00 PM",
     name: "AI in Industry 4.0",
     venue: "Innovation Lab",
-    date: "2025-10-09",
+    date: "2026-10-09",
   },
   {
+    status: "rejected",
+    proposedBy: "Ms Vijayapriya C",
     category: "Competition",
     department: "SM Volunteers",
     time: "03:30 PM - 05:30 PM",
     name: "Robotics Challenge",
     venue: "Robotics Lab",
-    date: "2025-10-07",
+    date: "2026-10-07",
   },
   {
+    status: "archived",
+    proposedBy: "Ms Vijayapriya C",
     category: "Workshop",
     department: "Civil",
     time: "10:00 AM - 01:00 PM",
     name: "Sustainable Materials",
     venue: "Auditorium",
-    date: "2025-10-12",
+    date: "2026-10-12",
   },
 ];
 
@@ -141,6 +149,99 @@ export const EVENT_SESSION_OPTIONS = ["FN", "AN", "Full Day"];
 export const EVENT_OPEN_TO_OPTIONS = ["Any", "Internal", "External"];
 export const EVENT_GENDER_RESTRICTION_OPTIONS = ["Any", "Male", "Female"];
 export const EVENT_ACCOMMODATION_TYPE_OPTIONS = ["Free", "Paid"];
+export const EVENT_PAGE_TABS = [
+  { id: "pre-event", label: "Pre Event Approvals" },
+  { id: "finance", label: "Finance" },
+  { id: "updates", label: "Event Updates" },
+  { id: "participants", label: "Participants" },
+  { id: "feedback", label: "Feedback" },
+] as const;
+
+export const EVENT_FEEDBACK_TOGGLES = ["food", "refreshment", "presentation", "evaluation", "enjoyment"] as const;
+export const EVENT_FEEDBACK_AWARENESS_CHANNELS = [
+  "Circular",
+  "Social Media",
+  "Email",
+  "Friends",
+  "Website",
+  "Colleagues",
+  "Others",
+] as const;
+export const EVENT_RESOURCE_PERSON_OPTIONS = [
+  "Dr. A. Kumar, Department of Computer Science",
+  "Dr. S. Priya, Department of Electronics",
+  "Ms. R. Anitha, Industry Expert",
+  "Mr. K. Vinoth, Research & Innovation",
+] as const;
+
+export const EVENT_COPY = {
+  chooseFile: "Choose File",
+  select: "Select",
+  selectParticipantType: "-- Select Participant Type --",
+  selectMainEvent: "Select Main Event",
+  noMainEventsAvailable: "No Main Events available with Multi Event enabled.",
+  feedbackLink: "Feedback Link",
+  totalParticipants: "Total Participants",
+  submitFeedback: "Submit Feedback",
+  submitNext: "Submit & Next",
+  socialMedia: "Social Media",
+  resourcePersonLabel: "Resource Person:",
+  notSent: "Not Sent",
+  scheduleVenue: "Schedule & Venue",
+  registrationSettings: "Registration Settings",
+  accommodation: "Accommodation",
+  expectedParticipants: "Expected Participants",
+  noOfDays: "No. of Days",
+  add: "Add +",
+  save: "Save",
+  preview: "Preview",
+  sendMail: "Send Mail",
+  lettersTitle: "Letters",
+  participantsTitle: "Participants",
+  documentsTitle: "Documents",
+  importantLinksTitle: "Important Links",
+  loadingParticipants: "Loading participants...",
+  noParticipantsFound: "No participants found.",
+  totalParticipantsLabel: "Total Participants",
+  feedbackLinkLabel: "Feedback Link",
+  enterFeedbackLink: "Enter feedback link",
+  eventFeedbackTitle: "Event:",
+  accommodationTitle: "Accommodation",
+  noMainEventOption: "-- Select an Event --",
+  selectMainEventError: "Select Main Event",
+  resourcePersonPrefix: "Resource Person",
+  invitationLabel: "Invitation",
+  thanksLabel: "Thanks",
+  previewInvitation: "Previewing Invitation for",
+  previewThanks: "Previewing Thank You letter for",
+  topicPlaceholder: "Topic / Title of presentation...",
+  publicityTitle: "Publicity",
+  socialMediaLinksTitle: "Social Media Links",
+  websiteScrolling: "Website Scrolling",
+  newspaperEngagement: "Newspaper Engagement",
+  pressReport: "Press Report",
+  facebookLink: "Facebook link",
+  xLink: "X link",
+  instagramLink: "Instagram link",
+  linkedinLink: "Linkedin link",
+  eventFlyer: "Event Flyer",
+  eventName: "Event Name",
+  chooseFile: "Choose File",
+  noOfDaysLabel: "No. of Days",
+  scheduleVenueLabel: "Schedule & Venue",
+  registrationSettingsLabel: "Registration Settings",
+  accommodationLabel: "Accommodation",
+  expectedParticipantsLabel: "Expected Participants",
+} as const;
+
+export const EVENT_MAIL_TEMPLATES = {
+  invitationSubject: (name: string) => `Invitation to be Resource Person`,
+  invitationBody: (name: string) =>
+    `Dear ${name || "Sir/Madam"},\n\nWe would like to invite you as a resource person...`,
+  thankYouSubject: () => `Thank you for being Resource Person`,
+  thankYouBody: (name: string) =>
+    `Dear ${name || "Sir/Madam"},\n\nThank you for sharing your expertise...`,
+} as const;
 
 export const FINANCE_INCOME_HEADS = [
   "Registration Fee",

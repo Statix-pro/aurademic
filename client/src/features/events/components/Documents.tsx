@@ -2,7 +2,7 @@ import React, { useState, useEffect, ChangeEvent } from "react";
 import "../styles/EventForm.css";
 import { CloudUpload, Eye, Plus, Trash2 } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
-import { DOCUMENT_PARTICIPANT_TYPES, EVENT_DOCUMENTS } from "../constants";
+import { DOCUMENT_PARTICIPANT_TYPES, EVENT_DOCUMENTS, EVENT_COPY } from "../constants";
 
 interface ParticipantType {
   value: string;
@@ -91,7 +91,7 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
 
   return (
     <div className="event-card-section">
-      <h2 className="event-section-title">Participants</h2>
+      <h2 className="event-section-title">{EVENT_COPY.participantsTitle}</h2>
 
       <div className="event-participant-card">
         <select
@@ -99,7 +99,7 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
           value={selectedType}
           onChange={(e) => setSelectedType(e.target.value)}
         >
-          <option value="">-- Select Participant Type --</option>
+          <option value="">{EVENT_COPY.selectParticipantType}</option>
           {participantTypes.map((type) => (
             <option key={type.value} value={type.value}>
               {type.label}
@@ -167,7 +167,7 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
           </table>
 
           <div className="event-participants-total">
-            <strong>Total Participants:</strong> {total}
+            <strong>{EVENT_COPY.totalParticipantsLabel}:</strong> {total}
           </div>
         </div>
       )}
@@ -224,11 +224,11 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
 
   return (
     <div className="event-card-section">
-      <h2 className="event-section-title">Important Links</h2>
+      <h2 className="event-section-title">{EVENT_COPY.importantLinksTitle}</h2>
       <div className="event-links-stack">
         <div className="event-link-card event-feedback-card">
           <div className="event-link-head">
-            <span className="event-doc-label">Feedback Link</span>
+            <span className="event-doc-label">{EVENT_COPY.feedbackLinkLabel}</span>
             <label className="event-switch">
               <input
                 type="checkbox"
@@ -245,7 +245,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
           <div className="event-input-with-icon event-feedback-input">
             <input
               type="url"
-              placeholder="Enter feedback link"
+              placeholder={EVENT_COPY.enterFeedbackLink}
               className="event-full-width-input event-feedback-link-input"
               value={feedback.url}
               onChange={(e) => {
@@ -504,7 +504,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
     if (doc === "Photos") {
       const photoFiles = docState[doc].file as (File | null)[];
       return (
-        <div className="event-doc-row" key={doc}>
+        <div className="event-doc-row event-doc-row-photos" key={doc}>
           <span className="event-doc-label">{doc}</span>
           <label className="event-switch">
             <input
@@ -514,34 +514,31 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
             />
             <span className="event-slider"></span>
           </label>
+          <div className="event-doc-actions">
+            <div className="event-doc-actions-photos">
+              {photoFiles.map((_, i) => (
+                <div key={i} className="event-photo-pair">
+                  <label
+                    className={`event-photo-slot ${!docState[doc].active ? "disabled" : ""}`}
+                  >
+                    <CloudUpload size={16} />
+                    <input
+                      type="file"
+                      onChange={(e) => handleFileUpload(doc, e, i)}
+                      style={{ display: "none" }}
+                      disabled={!docState[doc].active}
+                    />
+                  </label>
 
-          <div className="event-multi-upload">
-            {photoFiles.map((_, i) => (
-              <div key={i} className="event-upload-box">
-                <label
-                  className={`event-upload-icon ${!docState[doc].active ? "disabled" : ""
-                    }`}
-                >
-                  <CloudUpload size={16} />
-                  <input
-                    type="file"
-                    onChange={(e) => handleFileUpload(doc, e, i)}
-                    style={{ display: "none" }}
-                    disabled={!docState[doc].active}
-                  />
-                </label>
-
-                <span
-                  className={`event-eye-icon ${!photoFiles[i] ? "disabled" : ""
-                    }`}
-                  onClick={() =>
-                    photoFiles[i] && handleViewFile(doc, i)
-                  }
-                >
-                  <Eye size={16} />
-                </span>
-              </div>
-            ))}
+                  <span
+                    className={`event-photo-slot ${!photoFiles[i] ? "disabled" : ""}`}
+                    onClick={() => photoFiles[i] && handleViewFile(doc, i)}
+                  >
+                    <Eye size={16} />
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       );

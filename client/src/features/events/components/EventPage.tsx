@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import "../../finance/financeapproval.css";
 import "../styles/EventPage.css";
 import PreEvent from "./PreEvent";
-import EventEntry from "./EventEntry";
 import FinanceSection from "./FinanceSection";
 import EventUpdates from "./EventUpdates";
-import DocumentsPage from "./Documents";
+import ParticipantDetails from "./ParticipantDetails";
+import Feedback from "./Feedback";
+import { EVENT_PAGE_TABS } from "../constants";
 
 
 interface EventSummary {
@@ -15,60 +16,79 @@ interface EventSummary {
   status: string;
   createdAt: string;
   updatedAt: string;
+  feedbackEnabled?: boolean;
 }
 
 interface TabConfig {
   id: string;
   label: string;
-  component: React.ComponentType<{ goToTab: (tab: string) => void; eventId?: string }>;
+  component: React.ComponentType<{ goToTab: (tab: string) => void; eventId?: string; isSubEvent?: boolean }>;
 }
 
 const EventPage: React.FC = () => {
   const { eventId } = useParams<{ eventId: string }>();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState("pre-event");
   const [summary, setSummary] = useState<EventSummary | null>(null);
 
+  const isSubEvent = new URLSearchParams(location.search).get("isSubEvent") === "true";
+  const requestedTab = new URLSearchParams(location.search).get("tab");
+
   useEffect(() => {
-    if (!eventId) return;
+    const params = new URLSearchParams(location.search);
+    const requestedTabParam = params.get("tab");
+    
+    let allowedTabs = new Set([
+      "pre-event",
+      "finance",
+      "updates",
+      "participants",
+      "feedback",
+    ]);
+
+    if (isSubEvent) {
+      allowedTabs = new Set([
+        "pre-event",
+        "participants",
+        "feedback",
+      ]);
+    }
+
+    if (requestedTabParam && allowedTabs.has(requestedTabParam)) {
+      setActiveTab(requestedTabParam);
+      return;
+    }
+
+    setActiveTab("pre-event");
+  }, [location.search, isSubEvent]);
+
+  useEffect(() => {
+    if (!eventId || eventId === "new") return;
     authenticityUtility
       .get(`/events/${eventId}/summary`)
       .then((res) => setSummary(res as unknown as EventSummary))
       .catch((err: unknown) => console.error("Failed to load summary:", err));
   }, [eventId]);
 
-  const tabs: TabConfig[] = [
-    {
-      id: "pre-event",
-      label: "Pre Event Approvals",
-      component: PreEvent,
-    },
-    {
-      id: "event-1",
-      label: "Multi Event",
-      component: EventEntry,
-    },
-    {
-      id: "finance",
-      label: "Finance",
-      component: FinanceSection,
-    },
-    {
-      id: "updates",
-      label: "Event Updates",
-      component: EventUpdates,
-    },
-    {
-      id: "post-event",
-      label: "Post Event Submission",
-      component: DocumentsPage,
-    },
-  ];
+  const tabs: TabConfig[] = EVENT_PAGE_TABS.map((tab) => ({
+    ...tab,
+    component:
+      tab.id === "pre-event"
+        ? PreEvent
+        : tab.id === "finance"
+          ? FinanceSection
+          : tab.id === "updates"
+            ? EventUpdates
+            : tab.id === "participants"
+              ? ParticipantDetails
+              : Feedback,
+  }));
 
   const renderContent = () => {
     const active = tabs.find((tab) => tab.id === activeTab);
     if (!active) return null;
     const Component = active.component;
-    const content = <Component goToTab={setActiveTab} eventId={eventId} />;
+    const content = <Component goToTab={setActiveTab} eventId={eventId} isSubEvent={isSubEvent} />;
 
     return content;
   };
@@ -77,21 +97,12 @@ const EventPage: React.FC = () => {
     <>
 
       <div className="event-page">
-        <header className="event-summary">
-          {summary && (
-            <>
-              <h1>{summary.title}</h1>
-              <p>Status: {summary.status}</p>
-              <p>
-                Created: {new Date(summary.createdAt).toLocaleString()} |
-                Updated: {new Date(summary.updatedAt).toLocaleString()}
-              </p>
-            </>
-          )}
-        </header>
+
 
         <div className="event-form-navigation">
-          {tabs.map((tab) => (
+          {tabs
+            .filter(tab => !isSubEvent || ["pre-event", "participants", "feedback"].includes(tab.id))
+            .map((tab) => (
             <button
               key={tab.id}
               className={activeTab === tab.id ? "active" : ""}
