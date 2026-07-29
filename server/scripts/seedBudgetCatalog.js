@@ -54,8 +54,27 @@ export const BUDGET_HEAD_GROUPS = [
     ],
   },
   {
-    label: 'Events & Engagement',
-    heads: ['Events & Competitions', 'Meetings & Audits'],
+    label: 'Events & Competitions',
+    heads: [
+      'Academic Events',
+      'Club Activities',
+      'College Events',
+      'Conferences & Conclaves',
+      'Association Activities',
+      'Outreach Events',
+      'Cultural & Celebrations',
+      'Sports',
+      'Competitions',
+    ],
+  },
+  {
+    label: 'Meetings & Audits',
+    heads: [
+      'Institutional Governance Meetings',
+      'Academic Governance Meetings',
+      'Institutional Audits',
+      'Government Meetings',
+    ],
   },
 
   {

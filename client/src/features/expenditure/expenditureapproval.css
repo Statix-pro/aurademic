@@ -1180,6 +1180,18 @@
   align-items: center;
 }
 
+.payee-uploaded-files-header--with-category,
+.payee-uploaded-file-row--with-category {
+  grid-template-columns: 70px 160px minmax(0, 1fr) 110px;
+}
+
+.payee-uploaded-file-category {
+  color: #495057;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .payee-uploaded-files-header {
   background: #f0f6ff;
   color: #0069ab;

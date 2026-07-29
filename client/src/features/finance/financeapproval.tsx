@@ -8,6 +8,7 @@ import {
   Upload,
   Eye,
   Trash2,
+  PlusCircle,
 } from 'lucide-react';
 import React, {
   useState,
@@ -42,10 +43,12 @@ import CustomInput from '../../shared/components/ui/CustomInput';
 import CustomModal from '../../shared/components/ui/CustomModal';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 import CustomToggle from '../../shared/components/ui/CustomToggle';
+import RecordHeaderBanner from '../../shared/components/ui/RecordHeaderBanner';
 import {
   BUDGET_HEAD_GROUPS,
   SUB_HEAD_BY_BUDGET_HEAD,
   HOAC_SUBHEAD_OPTIONS,
+  HOAC_GROUPS,
   HEAD_TO_GROUP,
   subscribeBudgetCatalog,
 } from '../../shared/hooks/budgetCatalogStore';
@@ -203,6 +206,7 @@ interface BudgetRow {
   category: string;
   head: string;
   amount: string;
+  isTopup?: boolean;
 }
 
 interface BudgetLineMeta {
@@ -364,10 +368,10 @@ const CATEGORY_TYPE_OPTIONS = [
   'Institution',
 ];
 
-// 1. Shared HOAC Sub-Heads (for Events & Competitions, Meetings & Audits)
+// 1. Shared HOAC Sub-Heads (for Events & Competitions, Meetings & Audits groups)
 // Used in the 'extra' top-level dropdown (eventSubHead) when a HOAC group is active.
-
-const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
+// HOAC_GROUPS is imported from budgetCatalogStore — contains the group labels
+// 'Events & Competitions' and 'Meetings & Audits'.
 
 const flattenOptions = (
   options: Array<OptionType | { label: string; options: OptionType[] }>,
@@ -395,8 +399,16 @@ const getPrimaryHeadOptions = (): Array<{ label: string; options: OptionType[] }
     options: toOptions(group.options),
   }));
 
+// Heads that aren't in an HOAC group by default but should still use the HOAC
+// extra-dropdown + shared expense sub-heads pattern. Maps head name → HOAC event_type.
+const HEAD_HOAC_OVERRIDE: Record<string, string> = {
+  'Student Capacity Building': 'Events & Competitions',
+};
+
 const getHoacGroupForHead = (head: string): string | undefined => {
-  if (HOAC_GROUPS.has(head)) return head;
+  // Direct override for specific heads outside HOAC groups
+  if (HEAD_HOAC_OVERRIDE[head]) return HEAD_HOAC_OVERRIDE[head];
+  // Heads like 'Academic Events' map to group label 'Events & Competitions' via HEAD_TO_GROUP.
   const mapped = HEAD_TO_GROUP[head];
   if (mapped && HOAC_GROUPS.has(mapped)) return mapped;
   return undefined;
@@ -545,6 +557,7 @@ const groupFinanceBudgetRowsForForm = (
         category,
         head,
         amount: Number.isFinite(amount) ? String(amount) : '',
+        isTopup: Boolean(row?.is_topup),
       });
       groupedMeta[groupIndex] = {
         budgetLineId: null,
@@ -561,6 +574,7 @@ const groupFinanceBudgetRowsForForm = (
       groupedMeta[groupIndex].availableAmount += Number.isFinite(availableAmount)
         ? availableAmount
         : 0;
+      if (row?.is_topup) groupedRows[groupIndex].isTopup = true;
     }
 
     const lineId = Number(row?.budget_line_id || 0);
@@ -863,8 +877,13 @@ const FinanceApproval: React.FC = () => {
   const [isBudgetProposed, setIsBudgetProposed] = useState<string>('');
   const [balanceAmount, setBalanceAmount] = useState<string>('');
   const [debitStatus, setDebitStatus] = useState<'credited' | 'reimbursement' | ''>('');
+  const [showDebitAccountDropdown, setShowDebitAccountDropdown] = useState<boolean>(false);
+  const [debitAccount, setDebitAccount] = useState<string>('');
   const [email, setEmail] = useState<string>('');
-  const [budgetRows, setBudgetRows] = useState([{ category: '', head: '', amount: '' }]);
+  const [budgetRows, setBudgetRows] = useState<BudgetRow[]>([
+    { category: '', head: '', amount: '' },
+  ]);
+  const [initialBudgetRowCount, setInitialBudgetRowCount] = useState<number>(0);
   const [showIncomeSection, setShowIncomeSection] = useState<boolean>(false);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([createIncomeRow()]);
   const [accountOptions, setAccountOptions] = useState<AccountOption[]>([]);
@@ -874,6 +893,7 @@ const FinanceApproval: React.FC = () => {
   );
   const [statusUpdates, setStatusUpdates] = useState<any[]>([]);
   const [proposalRef, setProposalRef] = useState<string>('');
+  const [createdByEmail, setCreatedByEmail] = useState<string>('');
   const [expandedTimelineDetails, setExpandedTimelineDetails] = useState<Record<string, boolean>>(
     {},
   );
@@ -1134,9 +1154,9 @@ const FinanceApproval: React.FC = () => {
   };
 
   const getSubHeadOptions = (budgetHead: string): string[] => {
-    const headGroup = HEAD_TO_GROUP[budgetHead];
-    if (headGroup && HOAC_GROUPS.has(headGroup) && HOAC_SUBHEAD_OPTIONS[headGroup]) {
-      return HOAC_SUBHEAD_OPTIONS[headGroup];
+    const hoacGroup = getHoacGroupForHead(budgetHead);
+    if (hoacGroup && HOAC_SUBHEAD_OPTIONS[hoacGroup]) {
+      return HOAC_SUBHEAD_OPTIONS[hoacGroup];
     }
     return SUB_HEAD_BY_BUDGET_HEAD[budgetHead] ?? [];
   };
@@ -1432,7 +1452,11 @@ const FinanceApproval: React.FC = () => {
     }
   };
 
-  const handleBudgetChange = (index: number, field: keyof BudgetRow, value: string) => {
+  const handleBudgetChange = (
+    index: number,
+    field: 'category' | 'head' | 'amount',
+    value: string,
+  ) => {
     const updated = [...budgetRows];
     if (field === 'category') {
       updated[index] = { ...updated[index], category: value, head: '', amount: '' };
@@ -1746,6 +1770,9 @@ const FinanceApproval: React.FC = () => {
     return getBudgetRowMissingFields(row).length === 0;
   };
 
+  const canAddBudgetRowFromIndex = (index: number): boolean =>
+    isBudgetRowReadyForAdd(index) || (isTopupWorkflow && index >= initialBudgetRowCount - 1);
+
   const getBudgetAddTooltip = (index: number): string => {
     const row = budgetRows[index];
     if (!hasFilledText(primaryHead)) {
@@ -1759,6 +1786,29 @@ const FinanceApproval: React.FC = () => {
     return missing.length
       ? `Fill ${missing.join(', ')} in row ${index + 1} to add a new row`
       : 'Add Row';
+  };
+
+  const getBudgetSubHeadDropdownOptions = (budgetHead: string): OptionType[] => {
+    const options = getSubHeadDropdownOptions(budgetHead);
+    if (!isTopupWorkflow) return options;
+
+    const seen = new Set(options.map((option) => normalizeText(String(option.value))));
+    const normalizedHead = normalizeText(budgetHead);
+
+    budgetRows.forEach((row) => {
+      if (normalizeText(row.category) !== normalizedHead) return;
+
+      const subHead = normalizeText(row.head);
+      if (!subHead || seen.has(subHead)) return;
+
+      options.push({
+        value: subHead,
+        label: getSubHeadDisplayText(subHead),
+      });
+      seen.add(subHead);
+    });
+
+    return options;
   };
 
   const getIncomeRowMissingFields = (row: IncomeRow): string[] => {
@@ -1812,6 +1862,7 @@ const FinanceApproval: React.FC = () => {
   };
 
   const handleSubmit = async (resubmissionComment?: string): Promise<void> => {
+    if (isLoading) return;
     try {
       if (isViewMode && !canSuperAdminEditTerminalFinance) {
         return;
@@ -1823,6 +1874,8 @@ const FinanceApproval: React.FC = () => {
         setResubmitPopupOpen(true);
         return;
       }
+
+      setIsLoading(true);
 
       if (!hasFilledText(applicantName)) {
         showAlert('Please fill Applicant Name.', 'warning');
@@ -1907,7 +1960,7 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
-      if (showIncomeSection) {
+      if (showIncomeSection && !isTopupWorkflow) {
         for (let index = 0; index < incomeRows.length; index += 1) {
           const row = incomeRows[index];
           const missingFields = getIncomeRowMissingFields(row);
@@ -2004,7 +2057,8 @@ const FinanceApproval: React.FC = () => {
       }
       const primaryAnnexure = annexuresPayload[0] || null;
 
-      const primaryIncomeRow = showIncomeSection ? incomeRows[0] : undefined;
+      const includeIncomePayload = showIncomeSection && !isTopupWorkflow;
+      const primaryIncomeRow = includeIncomePayload ? incomeRows[0] : undefined;
       const payload = {
         employee_id: isExternalApplicant ? null : employeeId,
         applicant_name: isExternalApplicant ? applicantName : null,
@@ -2045,7 +2099,9 @@ const FinanceApproval: React.FC = () => {
         annexures: annexuresPayload,
         credit_status: primaryIncomeRow?.status || '',
         debit_status: debitStatus || null,
+        payment_debit_account: normalizeText(debitAccount) || null,
         partial_amount: primaryIncomeRow?.amount || null,
+        topup_mode: isTopupWorkflow,
         budget_rows: budgetRows.map((row, index) => {
           const normalizedBudgetHead = normalizeText(row.category) || normalizeText(primaryHead);
           const normalizedSubHead = normalizeText(row.head);
@@ -2064,9 +2120,10 @@ const FinanceApproval: React.FC = () => {
               : budgetLineMetaByRow[index]?.budgetProposalId || null,
             fiscal_year: budgetAvailabilityFiscalYear || null,
             available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
+            is_topup: row.isTopup || (isTopupWorkflow && index >= initialBudgetRowCount) ? 1 : 0,
           };
         }),
-        income_rows: showIncomeSection ? incomeRows : [],
+        ...(isTopupWorkflow ? {} : { income_rows: showIncomeSection ? incomeRows : [] }),
       };
 
       const result = (
@@ -2116,16 +2173,17 @@ const FinanceApproval: React.FC = () => {
           result.data?.proposal_ref ||
           proposalRef,
       );
+      const successMessage = isTopupWorkflow
+        ? 'Topup submitted successfully!'
+        : shouldResubmitAfterSave
+          ? 'Finance request resubmitted successfully!'
+          : isEditMode
+            ? 'Finance request updated successfully!'
+            : 'Finance request submitted successfully!';
 
       showAlert(
         <div>
-          <div>
-            {shouldResubmitAfterSave
-              ? 'Finance request resubmitted successfully!'
-              : isEditMode
-                ? 'Finance request updated successfully!'
-                : 'Finance request submitted successfully!'}
-          </div>
+          <div>{successMessage}</div>
           {refNo && (
             <div style={{ marginTop: '8px', fontWeight: 'bold' }}>Reference No.: {refNo}</div>
           )}
@@ -2142,6 +2200,8 @@ const FinanceApproval: React.FC = () => {
     } catch (error) {
       console.error('Finance submit error:', error);
       showAlert(getFinanceSubmitErrorMessage(error), 'error');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -2329,12 +2389,15 @@ const FinanceApproval: React.FC = () => {
       setPrimaryHead('');
       setEventSubHead('');
       setDebitStatus('');
+      setShowDebitAccountDropdown(false);
+      setDebitAccount('');
       setBalanceAmount('');
       setIsBudgetProposed('');
       setShowUnplannedBudget(false);
       setUnplannedBudgetAmount('');
       setUnplannedBudgetDescription('');
       setBudgetRows([{ category: '', head: '', amount: '' }]);
+      setInitialBudgetRowCount(0);
       setBudgetLineMetaByRow({});
       setAmountProposed('');
       setShowIncomeSection(false);
@@ -2437,6 +2500,7 @@ const FinanceApproval: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const isEditMode = Boolean(id && location.pathname.includes('edit'));
   const isViewMode = Boolean(id && !isEditMode);
+  const isTopupRoute = new URLSearchParams(location.search).get('topup') === 'true';
   const isAdminWorkflowContext = new URLSearchParams(location.search).get('admin') === 'true';
   const isApprovalMode = isViewMode && isAdminWorkflowContext;
   const routeFiscalYearStart = normalizeFiscalYearStart((location.state as any)?.fiscalYear);
@@ -2488,6 +2552,20 @@ const FinanceApproval: React.FC = () => {
   }, [isApprovalMode]);
 
   const normalizedWorkflowStatus = String(loadedWorkflowStatus || '').toLowerCase();
+  const isTopupWorkflow = Boolean(
+    isEditMode && isTopupRoute && ['approved', 'completed'].includes(normalizedWorkflowStatus),
+  );
+  const isSuperAdminUser =
+    Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) ||
+    (Array.isArray(user?.roles) &&
+      user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin'));
+  // View mode is always read-only — editing (even for super admins on approved/
+  // completed requests) must go through the dedicated Edit route.
+  const canSuperAdminEditTerminalFinance = false;
+  const proposalFieldsReadOnly = isViewMode || isTopupWorkflow;
+  const incomeFieldsReadOnly = proposalFieldsReadOnly || isTopupWorkflow;
+  const isLockedBudgetRow = (index: number) => isTopupWorkflow && index < initialBudgetRowCount;
+  const isBudgetRowEditable = (index: number) => !isViewMode && !isLockedBudgetRow(index);
   const isReturnedFinanceResubmit =
     isEditMode &&
     !isAdminWorkflowContext &&
@@ -2502,13 +2580,6 @@ const FinanceApproval: React.FC = () => {
   const canDownloadPdf =
     ['approved', 'completed'].includes(normalizedWorkflowStatus) ||
     (isAdminWorkflowContext && totalBudget > 10000 && hasDofApproval);
-
-  const isSuperAdminUser =
-    Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) ||
-    (Array.isArray(user?.roles) &&
-      user.roles.some((role) => String(role || '').toLowerCase() === 'super_admin'));
-  const canSuperAdminEditTerminalFinance =
-    isSuperAdminUser && isViewMode && ['approved', 'completed'].includes(normalizedWorkflowStatus);
 
   const routeStateIsActionablePending = (location.state as any)?.isActionablePending;
   const hideWorkflowActionsForFinalStatus =
@@ -2612,6 +2683,9 @@ const FinanceApproval: React.FC = () => {
         const currentStageFromRecord = String(
           record.workflow_state?.currentStage || record.workflow_stage || '',
         ).toLowerCase();
+        const recordWorkflowStatus = String(
+          record.workflow_state?.status || record.workflow_status || record.overall_status || '',
+        ).toLowerCase();
         const budgetRowsFromApi = Array.isArray(record.budget) ? record.budget : [];
         const incomeRowsFromApi = Array.isArray(record.income_rows) ? record.income_rows : [];
         const statusUpdatesFromApi = Array.isArray(record.status_updates)
@@ -2628,6 +2702,7 @@ const FinanceApproval: React.FC = () => {
         setMobile(record.mobile || '');
         setDescription(record.description || '');
         setProposalRef(record.proposal_ref || '');
+        setCreatedByEmail(record.created_by_email || '');
         setEmployeeId(record.employee_id ? Number(record.employee_id) : null);
         setIsExternalApplicant(!record.employee_id);
         setSubmittedAt(
@@ -2689,6 +2764,8 @@ const FinanceApproval: React.FC = () => {
             : '',
         );
         setDebitStatus(record.debit_status || '');
+        setDebitAccount(String(record.payment_debit_account || ''));
+        setShowDebitAccountDropdown(Boolean(record.payment_debit_account));
         setSelectedTag(resolveTagValue(record.budget_tag, tagOptions));
         const annexuresFromApi = Array.isArray(record.annexures) ? record.annexures : [];
         const fallbackLegacyAnnexure =
@@ -2740,11 +2817,7 @@ const FinanceApproval: React.FC = () => {
         if (annexureFileInputRef.current) {
           annexureFileInputRef.current.value = '';
         }
-        setLoadedWorkflowStatus(
-          String(
-            record.workflow_state?.status || record.workflow_status || record.overall_status || '',
-          ).toLowerCase(),
-        );
+        setLoadedWorkflowStatus(recordWorkflowStatus);
         setLoadedWorkflowLastDecision(
           String(
             record.workflow_state?.lastDecision || record.workflow_last_decision || '',
@@ -2777,6 +2850,7 @@ const FinanceApproval: React.FC = () => {
         );
         setShowIncomeSection(incomeRowsFromApi.length > 0);
         const groupedBudgetRows = groupFinanceBudgetRowsForForm(budgetRowsFromApi);
+        setInitialBudgetRowCount(groupedBudgetRows.rows.length);
         setBudgetRows(
           groupedBudgetRows.rows.length > 0
             ? groupedBudgetRows.rows
@@ -2967,44 +3041,14 @@ const FinanceApproval: React.FC = () => {
   const hoacSubheadDropdownOptions = useMemo(() => {
     if (!activeHoacGroup) return [];
 
-    // The user specifically wants Academic Events, Club Activities, etc. for Events & Competitions
-    if (activeHoacGroup === 'Events & Competitions') {
-      return toOptions([
-        'Academic Events',
-        'Club Activities',
-        'College Events',
-        'Conferences & Conclaves',
-        'Association Activities',
-        'Outreach Events',
-        'Cultural & Celebrations',
-        'Sports',
-        'Competitions',
-      ]);
+    // The extra dropdown shows the head-specific sub-heads for the selected head.
+    // e.g. for 'Academic Events' → Expert Visit, FDP, Guest Lecture, etc.
+    const headSpecific = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
+    if (headSpecific.length > 0) {
+      return toOptions(headSpecific);
     }
 
-    // And for Meetings & Audits
-    if (activeHoacGroup === 'Meetings & Audits') {
-      return toOptions([
-        'Institutional Governance Meetings',
-        'Academic Governance Meetings',
-        'Institutional Audits',
-        'Government Meetings',
-      ]);
-    }
-
-    // Pull the HOAC category options (e.g. Academic Events, Club Activities) from the budget head groups
-    const categoryGroup = BUDGET_HEAD_GROUPS.find((g) => g.label === activeHoacGroup);
-    if (categoryGroup && categoryGroup.options.length > 0) {
-      return toOptions(categoryGroup.options);
-    }
-
-    const groupSubHeads = HOAC_SUBHEAD_OPTIONS[activeHoacGroup] || [];
-    if (groupSubHeads.length > 0) {
-      return toOptions(groupSubHeads);
-    }
-
-    const firstLevelSubHeads = SUB_HEAD_BY_BUDGET_HEAD[primaryHead] || [];
-    return toOptions(firstLevelSubHeads);
+    return [];
   }, [primaryHead, activeHoacGroup, catalogVersion]);
   useEffect(() => {
     const nextFetchKeys: Record<number, string> = {};
@@ -3166,6 +3210,27 @@ const FinanceApproval: React.FC = () => {
     >
       {!showPreview && (
         <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
+          {isTopupWorkflow && (
+            <div
+              style={{
+                marginTop: '18px',
+                marginBottom: '12px',
+                padding: '14px 18px',
+                borderRadius: '14px',
+                background: 'linear-gradient(135deg, #ecfff2 0%, #dff7e6 100%)',
+                border: '1px solid #bfe6cc',
+                color: '#156b45',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+              }}
+            >
+              <PlusCircle size={18} />
+              Topup mode is active. The approved proposal is locked, and only additional budget rows
+              can be added.
+            </div>
+          )}
           <div
             style={
               isViewMode && !canSuperAdminEditTerminalFinance
@@ -3173,6 +3238,12 @@ const FinanceApproval: React.FC = () => {
                 : undefined
             }
           >
+            <RecordHeaderBanner
+              referenceLabel="Proposal ID"
+              referenceValue={proposalRef}
+              createdByEmail={createdByEmail}
+            />
+
             {/* Applicant Details Section */}
             <div
               data-readonly-applicant-card="true"
@@ -3317,16 +3388,16 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={
-                              isViewMode
+                              proposalFieldsReadOnly
                                 ? applicantName
                                 : isExternalApplicant
                                   ? applicantName
                                   : applicantSearchQuery
                             }
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               if (isExternalApplicant) {
                                 setApplicantName(e.target.value);
                               } else {
@@ -3362,7 +3433,7 @@ const FinanceApproval: React.FC = () => {
                                 : 'Search employee by name or ERP ID'
                             }
                           />
-                          {!isViewMode &&
+                          {!proposalFieldsReadOnly &&
                             showApplicantDropdown &&
                             applicantSearchResults.length > 0 && (
                               <div
@@ -3433,7 +3504,7 @@ const FinanceApproval: React.FC = () => {
                                 ))}
                               </div>
                             )}
-                          {!isViewMode &&
+                          {!proposalFieldsReadOnly &&
                             showApplicantDropdown &&
                             applicantSearchQuery.length >= 2 &&
                             applicantSearchResults.length === 0 && (
@@ -3496,10 +3567,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="date"
                             value={date}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setDate(e.target.value);
                             }}
                             style={{
@@ -3544,10 +3615,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={department}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setDepartment(e.target.value);
                             }}
                             style={{
@@ -3589,10 +3660,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={designation}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setDesignation(e.target.value);
                             }}
                             style={{
@@ -3637,10 +3708,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="email"
                             value={email}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setEmail(e.target.value);
                             }}
                             style={{
@@ -3682,10 +3753,10 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="tel"
                             value={mobile}
-                            disabled={isViewMode}
-                            readOnly={isViewMode}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                              if (isViewMode) return;
+                              if (proposalFieldsReadOnly) return;
                               setMobile(e.target.value);
                             }}
                             style={{
@@ -3764,7 +3835,9 @@ const FinanceApproval: React.FC = () => {
                                 ? { value: beneficiaryType, label: beneficiaryType }
                                 : null
                             }
+                            isDisabled={proposalFieldsReadOnly}
                             onChange={(option) => {
+                              if (proposalFieldsReadOnly) return;
                               const selected = option as OptionType | null;
                               const next = selected?.value ? String(selected.value) : '';
                               setBeneficiaryType(next);
@@ -3800,15 +3873,18 @@ const FinanceApproval: React.FC = () => {
                               type="text"
                               value={beneficiarySearchQuery || beneficiaryValue}
                               onChange={(e) => {
+                                if (proposalFieldsReadOnly) return;
                                 setBeneficiaryValue(e.target.value);
                                 setBeneficiaryEmployeeId(null);
                                 setBeneficiarySearchQuery(e.target.value);
                                 handleBeneficiarySearch(e.target.value);
                               }}
+                              disabled={proposalFieldsReadOnly}
+                              readOnly={proposalFieldsReadOnly}
                               onFocus={(e) => {
                                 e.currentTarget.style.borderColor = '#0069ab';
                                 e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,105,171,0.15)';
-                                if (!showBeneficiaryDropdown)
+                                if (!showBeneficiaryDropdown && !proposalFieldsReadOnly)
                                   handleBeneficiarySearch(beneficiarySearchQuery);
                               }}
                               onBlur={(e) => {
@@ -3897,6 +3973,7 @@ const FinanceApproval: React.FC = () => {
                               type="text"
                               value="K.S.Rangasamy College of Technology"
                               readOnly
+                              disabled={proposalFieldsReadOnly}
                               style={{
                                 borderRadius: 12,
                                 border: '1px solid #e0e0e0',
@@ -3933,7 +4010,9 @@ const FinanceApproval: React.FC = () => {
                                 beneficiaryValue,
                                 subcategoryOptionsByType['Professional Body'] || [],
                               )}
+                              isDisabled={proposalFieldsReadOnly}
                               onChange={(option) => {
+                                if (proposalFieldsReadOnly) return;
                                 const selected = option as OptionType | null;
                                 setBeneficiaryValue(selected?.value ? String(selected.value) : '');
                                 setCategorySelections([]);
@@ -3980,7 +4059,9 @@ const FinanceApproval: React.FC = () => {
                                   name="beneficiaryValue"
                                   options={subcategoryOptions}
                                   value={getSelectedOption(beneficiaryValue, subcategoryOptions)}
+                                  isDisabled={proposalFieldsReadOnly}
                                   onChange={(option) => {
+                                    if (proposalFieldsReadOnly) return;
                                     const selected = option as OptionType | null;
                                     setBeneficiaryValue(
                                       selected?.value ? String(selected.value) : '',
@@ -4014,7 +4095,9 @@ const FinanceApproval: React.FC = () => {
                               value={
                                 selectedTag ? { value: selectedTag, label: selectedTag } : null
                               }
+                              isDisabled={proposalFieldsReadOnly}
                               onChange={(option) => {
+                                if (proposalFieldsReadOnly) return;
                                 const selected = option as OptionType | null;
                                 setSelectedTag(selected?.value ? String(selected.value) : '');
                               }}
@@ -4042,7 +4125,12 @@ const FinanceApproval: React.FC = () => {
                 </label>
                 <textarea
                   value={description}
-                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
+                  onChange={(e: ChangeEvent<HTMLTextAreaElement>) => {
+                    if (proposalFieldsReadOnly) return;
+                    setDescription(e.target.value);
+                  }}
+                  disabled={proposalFieldsReadOnly}
+                  readOnly={proposalFieldsReadOnly}
                   style={{
                     borderRadius: '12px',
                     border: '1px solid #e0e0e0',
@@ -4123,7 +4211,9 @@ const FinanceApproval: React.FC = () => {
                                 padding: '0 12px',
                               }),
                             }}
+                            isDisabled={proposalFieldsReadOnly}
                             onChange={(option) => {
+                              if (proposalFieldsReadOnly) return;
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
                               setEventSubHead('');
@@ -4140,7 +4230,9 @@ const FinanceApproval: React.FC = () => {
                             options={hoacSubheadDropdownOptions}
                             value={getSelectedOption(eventSubHead, hoacSubheadDropdownOptions)}
                             className="mb-0"
+                            isDisabled={proposalFieldsReadOnly}
                             onChange={(option) => {
+                              if (proposalFieldsReadOnly) return;
                               const selected = option as OptionType | null;
                               setEventSubHead(selected?.value ? String(selected.value) : '');
                               setEventSubHeadError('');
@@ -4166,7 +4258,10 @@ const FinanceApproval: React.FC = () => {
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={handleUnplannedBudgetToggle}
+                            onChange={
+                              proposalFieldsReadOnly ? () => {} : handleUnplannedBudgetToggle
+                            }
+                            disabled={proposalFieldsReadOnly}
                           />
                         </div>
                       </div>
@@ -4199,7 +4294,9 @@ const FinanceApproval: React.FC = () => {
                                 padding: '0 12px',
                               }),
                             }}
+                            isDisabled={proposalFieldsReadOnly}
                             onChange={(option) => {
+                              if (proposalFieldsReadOnly) return;
                               const selected = option as OptionType | null;
                               setPrimaryHead(selected?.value ? String(selected.value) : '');
                               setEventSubHead('');
@@ -4224,7 +4321,10 @@ const FinanceApproval: React.FC = () => {
                             name="unplannedBudgetToggle"
                             label=""
                             checked={showUnplannedBudget}
-                            onChange={handleUnplannedBudgetToggle}
+                            onChange={
+                              proposalFieldsReadOnly ? () => {} : handleUnplannedBudgetToggle
+                            }
+                            disabled={proposalFieldsReadOnly}
                           />
                         </div>
                       </div>
@@ -4327,206 +4427,256 @@ const FinanceApproval: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {budgetRows.map((row, index) => (
-                      <tr
-                        key={index}
-                        style={{
-                          borderBottom: '1px solid #e0e0e0',
-                          opacity: primaryHead ? 1 : 0.6,
-                        }}
-                      >
-                        <td
+                    {budgetRows.map((row, index) => {
+                      const isTopupRow =
+                        row.isTopup || (isTopupWorkflow && index >= initialBudgetRowCount);
+                      return (
+                        <tr
+                          key={index}
                           style={{
-                            padding: '12px',
-                            border: '1px solid #e0e0e0',
-                            textAlign: 'center',
-                            color: '#495057',
+                            borderBottom: '1px solid #e0e0e0',
+                            opacity: primaryHead ? 1 : 0.6,
+                            backgroundColor: isTopupRow ? '#f0fdf4' : undefined,
                           }}
                         >
-                          {index + 1}
-                        </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <CustomDropdown
-                            name={`budgetHead-${index}`}
-                            options={getBudgetHeadSearchOptions()}
-                            value={
-                              row.category
-                                ? {
-                                    value: `head::${row.category}`,
-                                    label: row.category,
-                                    budgetHead: row.category,
-                                    subHead: row.head || '',
-                                    optionType: 'budget-head',
-                                  }
-                                : null
-                            }
-                            onChange={(option) => {
-                              handleBudgetHeadSelection(index, option as OptionType | null);
-                            }}
-                            filterOption={(candidate: any, input: string) => {
-                              const option = (candidate?.data || {}) as BudgetHeadSearchOption;
-                              const query = normalizeText(input).toLowerCase();
-                              const budgetHead = normalizeText(option.budgetHead).toLowerCase();
-                              const subHead = normalizeText(option.subHead).toLowerCase();
-
-                              if (!query) {
-                                return option.optionType === 'budget-head';
-                              }
-
-                              if (option.optionType === 'head-sub-head') {
-                                return subHead.includes(query) || budgetHead.includes(query);
-                              }
-
-                              return budgetHead.includes(query);
-                            }}
-                            placeholder="Select"
-                            isDisabled={!primaryHead}
-                          />
-                        </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <CustomDropdown
-                            // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
-                            name={`subHead-${index}`}
-                            options={getSubHeadDropdownOptions(row.category)}
-                            value={
-                              getSelectedOption(
-                                row.head,
-                                getSubHeadDropdownOptions(row.category),
-                              ) ||
-                              (row.head
-                                ? { value: row.head, label: getSubHeadDisplayText(row.head) }
-                                : null)
-                            }
-                            onChange={(option) => {
-                              const selected = option as OptionType | null;
-                              handleBudgetChange(
-                                index,
-                                'head',
-                                selected?.value ? String(selected.value) : '',
-                              );
-                            }}
-                            placeholder="Select"
-                            isDisabled={!row.category || !primaryHead}
-                          />
-                        </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <input
-                            type="text"
-                            value={row.amount}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              handleBudgetChange(index, 'amount', e.target.value)
-                            }
-                            disabled={!primaryHead}
-                            placeholder={`₹  ${getRemainingAvailableForRow(index)}`}
+                          <td
                             style={{
+                              padding: '12px',
                               border: '1px solid #e0e0e0',
-                              borderRadius: '8px',
-                              padding: '8px 12px',
-                              fontSize: '0.9rem',
-                              width: '120px',
-                              fontFamily: 'inherit',
-                              backgroundColor: primaryHead ? '#fcfdff' : '#f8f9fa',
-                              color: primaryHead ? '#000' : '#6c757d',
-                              cursor: primaryHead ? 'pointer' : 'not-allowed',
-                              outline: 'none',
-                              textAlign: 'left',
-                              margin: '0 auto',
-                              display: 'block',
-                            }}
-                            onFocus={(e) => {
-                              e.currentTarget.style.borderColor = '#0069ab';
-                              e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                            }}
-                            onBlur={(e) => {
-                              e.currentTarget.style.borderColor = '#e0e0e0';
-                              e.currentTarget.style.boxShadow = 'none';
-                            }}
-                          />
-                        </td>
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              gap: '10px',
+                              textAlign: 'center',
+                              color: '#495057',
                             }}
                           >
-                            {(index > 0 || (index === 0 && budgetRows.length > 1)) && (
-                              <button
-                                onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                                  e.preventDefault();
-                                  handleDeleteRow(index);
-                                }}
+                            {index + 1}
+                            {isTopupRow && (
+                              <span
                                 style={{
-                                  width: '36px',
-                                  height: '36px',
-                                  borderRadius: '50%',
-                                  border: 'none',
-                                  background: '#ffe6e6',
-                                  cursor: 'pointer',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '18px',
-                                  transition: 'all 0.15s ease',
-                                  color: '#dc3545',
-                                }}
-                                title="Delete Row"
-                                onMouseEnter={(e) => {
-                                  (e.currentTarget as HTMLButtonElement).style.background =
-                                    '#ffcccc';
-                                }}
-                                onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLButtonElement).style.background =
-                                    '#ffe6e6';
+                                  display: 'inline-block',
+                                  marginTop: '6px',
+                                  fontSize: '10px',
+                                  fontWeight: 600,
+                                  color: '#059669',
+                                  backgroundColor: '#d1fae5',
+                                  border: '1px solid #10b981',
+                                  borderRadius: '12px',
+                                  padding: '2px 6px',
+                                  letterSpacing: '0.03em',
+                                  whiteSpace: 'nowrap',
                                 }}
                               >
-                                ×
-                              </button>
+                                Top-up
+                              </span>
                             )}
-                            {index === budgetRows.length - 1 && (
-                              <button
-                                type="button"
-                                onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                                  e.preventDefault();
-                                  handleAddRow();
-                                }}
-                                disabled={!isBudgetRowReadyForAdd(index)}
-                                style={{
-                                  width: '36px',
-                                  height: '36px',
-                                  borderRadius: '50%',
-                                  border: 'none',
-                                  background: '#f5f6f8',
-                                  cursor: isBudgetRowReadyForAdd(index) ? 'pointer' : 'not-allowed',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '18px',
-                                  transition: 'all 0.15s ease',
-                                  opacity: isBudgetRowReadyForAdd(index) ? 1 : 0.5,
-                                  color: '#0069ab',
-                                }}
-                                title={getBudgetAddTooltip(index)}
-                                onMouseEnter={(e) => {
-                                  if (isBudgetRowReadyForAdd(index)) {
+                          </td>
+                          <td
+                            style={{
+                              padding: '12px',
+                              border: '1px solid #e0e0e0',
+                              backgroundColor: isTopupRow ? '#f0fdf4' : undefined,
+                            }}
+                          >
+                            <CustomDropdown
+                              name={`budgetHead-${index}`}
+                              options={getBudgetHeadSearchOptions()}
+                              value={
+                                row.category
+                                  ? {
+                                      value: `head::${row.category}`,
+                                      label: row.category,
+                                      budgetHead: row.category,
+                                      subHead: row.head || '',
+                                      optionType: 'budget-head',
+                                    }
+                                  : null
+                              }
+                              onChange={(option) => {
+                                if (!isBudgetRowEditable(index)) return;
+                                handleBudgetHeadSelection(index, option as OptionType | null);
+                              }}
+                              filterOption={(candidate: any, input: string) => {
+                                const option = (candidate?.data || {}) as BudgetHeadSearchOption;
+                                const query = normalizeText(input).toLowerCase();
+                                const budgetHead = normalizeText(option.budgetHead).toLowerCase();
+                                const subHead = normalizeText(option.subHead).toLowerCase();
+
+                                if (!query) {
+                                  return option.optionType === 'budget-head';
+                                }
+
+                                if (option.optionType === 'head-sub-head') {
+                                  return subHead.includes(query) || budgetHead.includes(query);
+                                }
+
+                                return budgetHead.includes(query);
+                              }}
+                              placeholder="Select"
+                              isDisabled={!primaryHead || !isBudgetRowEditable(index)}
+                            />
+                          </td>
+                          <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                            <CustomDropdown
+                              // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
+                              name={`subHead-${index}`}
+                              options={getBudgetSubHeadDropdownOptions(row.category)}
+                              value={
+                                getSelectedOption(
+                                  row.head,
+                                  getBudgetSubHeadDropdownOptions(row.category),
+                                ) ||
+                                (row.head
+                                  ? { value: row.head, label: getSubHeadDisplayText(row.head) }
+                                  : null)
+                              }
+                              onChange={(option) => {
+                                if (!isBudgetRowEditable(index)) return;
+                                const selected = option as OptionType | null;
+                                handleBudgetChange(
+                                  index,
+                                  'head',
+                                  selected?.value ? String(selected.value) : '',
+                                );
+                              }}
+                              placeholder="Select"
+                              isDisabled={
+                                !row.category || !primaryHead || !isBudgetRowEditable(index)
+                              }
+                            />
+                          </td>
+                          <td
+                            style={{
+                              padding: '12px',
+                              border: '1px solid #e0e0e0',
+                              backgroundColor: isTopupRow ? '#f0fdf4' : undefined,
+                            }}
+                          >
+                            <input
+                              type="text"
+                              value={row.amount}
+                              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                                !isBudgetRowEditable(index)
+                                  ? undefined
+                                  : handleBudgetChange(index, 'amount', e.target.value)
+                              }
+                              disabled={!primaryHead || !isBudgetRowEditable(index)}
+                              placeholder={`₹  ${getRemainingAvailableForRow(index)}`}
+                              style={{
+                                border: '1px solid #e0e0e0',
+                                borderRadius: '8px',
+                                padding: '8px 12px',
+                                fontSize: '0.9rem',
+                                width: '120px',
+                                fontFamily: 'inherit',
+                                backgroundColor: primaryHead ? '#fcfdff' : '#f8f9fa',
+                                color: primaryHead ? '#000' : '#6c757d',
+                                cursor:
+                                  primaryHead && isBudgetRowEditable(index)
+                                    ? 'pointer'
+                                    : 'not-allowed',
+                                outline: 'none',
+                                textAlign: 'left',
+                                margin: '0 auto',
+                                display: 'block',
+                              }}
+                              onFocus={(e) => {
+                                e.currentTarget.style.borderColor = '#0069ab';
+                                e.currentTarget.style.boxShadow =
+                                  '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                              }}
+                              onBlur={(e) => {
+                                e.currentTarget.style.borderColor = '#e0e0e0';
+                                e.currentTarget.style.boxShadow = 'none';
+                              }}
+                            />
+                          </td>
+                          <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                gap: '10px',
+                              }}
+                            >
+                              {(index > 0 || (index === 0 && budgetRows.length > 1)) &&
+                                !isLockedBudgetRow(index) &&
+                                isBudgetRowEditable(index) && (
+                                  <button
+                                    onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                      e.preventDefault();
+                                      handleDeleteRow(index);
+                                    }}
+                                    style={{
+                                      width: '36px',
+                                      height: '36px',
+                                      borderRadius: '50%',
+                                      border: 'none',
+                                      background: '#ffe6e6',
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: '18px',
+                                      transition: 'all 0.15s ease',
+                                      color: '#dc3545',
+                                    }}
+                                    title="Delete Row"
+                                    onMouseEnter={(e) => {
+                                      (e.currentTarget as HTMLButtonElement).style.background =
+                                        '#ffcccc';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      (e.currentTarget as HTMLButtonElement).style.background =
+                                        '#ffe6e6';
+                                    }}
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              {index === budgetRows.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                    e.preventDefault();
+                                    handleAddRow();
+                                  }}
+                                  disabled={!canAddBudgetRowFromIndex(index)}
+                                  style={{
+                                    width: '36px',
+                                    height: '36px',
+                                    borderRadius: '50%',
+                                    border: 'none',
+                                    background: '#f5f6f8',
+                                    cursor: canAddBudgetRowFromIndex(index)
+                                      ? 'pointer'
+                                      : 'not-allowed',
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '18px',
+                                    transition: 'all 0.15s ease',
+                                    opacity: canAddBudgetRowFromIndex(index) ? 1 : 0.5,
+                                    color: '#0069ab',
+                                  }}
+                                  title={getBudgetAddTooltip(index)}
+                                  onMouseEnter={(e) => {
+                                    if (canAddBudgetRowFromIndex(index)) {
+                                      (e.currentTarget as HTMLButtonElement).style.background =
+                                        '#e8f5e9';
+                                    }
+                                  }}
+                                  onMouseLeave={(e) => {
                                     (e.currentTarget as HTMLButtonElement).style.background =
-                                      '#e8f5e9';
-                                  }
-                                }}
-                                onMouseLeave={(e) => {
-                                  (e.currentTarget as HTMLButtonElement).style.background =
-                                    '#f5f6f8';
-                                }}
-                              >
-                                +
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                                      '#f5f6f8';
+                                  }}
+                                >
+                                  +
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                     {hasUnplannedBudgetPreview && (
                       <tr style={{ borderBottom: '1px solid #e0e0e0' }}>
                         <td
@@ -4553,9 +4703,12 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={unplannedBudgetDescription}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              setUnplannedBudgetDescription(e.target.value)
-                            }
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (proposalFieldsReadOnly) return;
+                              setUnplannedBudgetDescription(e.target.value);
+                            }}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             placeholder="Enter unplanned expenditure description"
                             style={{
                               border: '1px solid #e0e0e0',
@@ -4564,7 +4717,7 @@ const FinanceApproval: React.FC = () => {
                               fontSize: '0.9rem',
                               width: '100%',
                               fontFamily: 'inherit',
-                              backgroundColor: '#fcfdff',
+                              backgroundColor: proposalFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
                               color: '#000',
                               outline: 'none',
                             }}
@@ -4588,9 +4741,12 @@ const FinanceApproval: React.FC = () => {
                           <input
                             type="text"
                             value={unplannedBudgetAmount}
-                            onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                              setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ''))
-                            }
+                            onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                              if (proposalFieldsReadOnly) return;
+                              setUnplannedBudgetAmount(e.target.value.replace(/\D/g, ''));
+                            }}
+                            disabled={proposalFieldsReadOnly}
+                            readOnly={proposalFieldsReadOnly}
                             placeholder="₹  0"
                             style={{
                               border: '1px solid #e0e0e0',
@@ -4599,9 +4755,9 @@ const FinanceApproval: React.FC = () => {
                               fontSize: '0.9rem',
                               width: '120px',
                               fontFamily: 'inherit',
-                              backgroundColor: '#fcfdff',
+                              backgroundColor: proposalFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
                               color: '#000',
-                              cursor: 'pointer',
+                              cursor: proposalFieldsReadOnly ? 'not-allowed' : 'pointer',
                               outline: 'none',
                               textAlign: 'left',
                               margin: '0 auto',
@@ -4683,552 +4839,594 @@ const FinanceApproval: React.FC = () => {
             <div
               style={{
                 backgroundColor: '#fff',
-                padding: '30px',
+                padding: '18px 30px',
                 borderRadius: '20px',
                 marginBottom: '20px',
                 boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
               }}
             >
-              <div className="row mt-3">
-                <div className="col-md-12">
-                  <div className="form-group">
-                    <div>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          marginBottom: '20px',
-                        }}
-                      >
-                        <span style={{ fontSize: '16px', color: '#495057', fontWeight: 600 }}>
-                          Income
-                        </span>
-                        <CustomToggle
-                          name="incomeToggle"
-                          checked={showIncomeSection}
-                          onChange={(checked) => setShowIncomeSection(checked)}
-                        />
-                      </div>
-                      <div
-                        style={{
-                          height: '2px',
-                          backgroundColor: '#e0e0e0',
-                          marginBottom: '20px',
-                        }}
-                      />
-                    </div>
-                    {showIncomeSection && (
-                      <>
-                        <table
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: showIncomeSection ? '20px' : '0',
+                }}
+              >
+                <span style={{ fontSize: '16px', color: '#495057', fontWeight: 600 }}>Income</span>
+                <CustomToggle
+                  name="incomeToggle"
+                  className="finance-income-toggle"
+                  checked={showIncomeSection}
+                  onChange={(checked) => {
+                    if (incomeFieldsReadOnly) return;
+                    setShowIncomeSection(checked);
+                  }}
+                  disabled={incomeFieldsReadOnly}
+                />
+              </div>
+              {showIncomeSection && (
+                <div
+                  style={{
+                    height: '2px',
+                    backgroundColor: '#e0e0e0',
+                    marginBottom: '20px',
+                  }}
+                />
+              )}
+
+              {showIncomeSection && (
+                <>
+                  <table
+                    style={{
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      fontSize: '14px',
+                      tableLayout: 'fixed',
+                    }}
+                  >
+                    <colgroup>
+                      <col style={{ width: '6%' }} />
+                      <col style={{ width: '26%' }} />
+                      <col style={{ width: '10%' }} />
+                      <col style={{ width: '20%' }} />
+                      <col style={{ width: '23%' }} />
+                      <col style={{ width: '15%' }} />
+                    </colgroup>
+                    <thead>
+                      <tr style={{ backgroundColor: '#f0f6ff' }}>
+                        <th
                           style={{
-                            width: '100%',
-                            borderCollapse: 'collapse',
-                            fontSize: '14px',
-                            tableLayout: 'fixed',
+                            width: '6%',
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            color: '#0069ab',
+                            fontWeight: '600',
+                            textAlign: 'center',
                           }}
                         >
-                          <colgroup>
-                            <col style={{ width: '6%' }} />
-                            <col style={{ width: '26%' }} />
-                            <col style={{ width: '10%' }} />
-                            <col style={{ width: '20%' }} />
-                            <col style={{ width: '23%' }} />
-                            <col style={{ width: '15%' }} />
-                          </colgroup>
-                          <thead>
-                            <tr style={{ backgroundColor: '#f0f6ff' }}>
-                              <th
-                                style={{
-                                  width: '6%',
-                                  padding: '12px',
-                                  border: '1px solid #e0e0e0',
-                                  color: '#0069ab',
-                                  fontWeight: '600',
-                                  textAlign: 'center',
-                                }}
-                              >
-                                S.No
-                              </th>
-                              <th
-                                style={{
-                                  width: '26%',
-                                  padding: '12px',
-                                  border: '1px solid #e0e0e0',
-                                  color: '#0069ab',
-                                  fontWeight: '600',
-                                  textAlign: 'center',
-                                }}
-                              >
-                                Income Source
-                              </th>
-                              <th
-                                style={{
-                                  width: '12%',
-                                  padding: '12px',
-                                  border: '1px solid #e0e0e0',
-                                  color: '#0069ab',
-                                  fontWeight: '600',
-                                  textAlign: 'center',
-                                }}
-                              >
-                                Amount
-                              </th>
-                              <th
-                                style={{
-                                  width: '20%',
-                                  padding: '12px',
-                                  border: '1px solid #e0e0e0',
-                                  color: '#0069ab',
-                                  fontWeight: '600',
-                                  textAlign: 'center',
-                                }}
-                              >
-                                Status
-                              </th>
-                              <th
-                                style={{
-                                  width: '25%',
-                                  padding: '12px',
-                                  border: '1px solid #e0e0e0',
-                                  color: '#0069ab',
-                                  fontWeight: '600',
-                                  textAlign: 'center',
-                                }}
-                              >
-                                Remarks
-                              </th>
-                              <th
-                                style={{
-                                  width: '10%',
-                                  padding: '12px',
-                                  border: '1px solid #e0e0e0',
-                                  color: '#0069ab',
-                                  fontWeight: '600',
-                                  textAlign: 'center',
-                                }}
-                              >
-                                Actions
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {incomeRows.map((row, index) => {
-                              const isLastRow = index === incomeRows.length - 1;
+                          S.No
+                        </th>
+                        <th
+                          style={{
+                            width: '26%',
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            color: '#0069ab',
+                            fontWeight: '600',
+                            textAlign: 'center',
+                          }}
+                        >
+                          Income Source
+                        </th>
+                        <th
+                          style={{
+                            width: '12%',
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            color: '#0069ab',
+                            fontWeight: '600',
+                            textAlign: 'center',
+                          }}
+                        >
+                          Amount
+                        </th>
+                        <th
+                          style={{
+                            width: '20%',
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            color: '#0069ab',
+                            fontWeight: '600',
+                            textAlign: 'center',
+                          }}
+                        >
+                          Status
+                        </th>
+                        <th
+                          style={{
+                            width: '25%',
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            color: '#0069ab',
+                            fontWeight: '600',
+                            textAlign: 'center',
+                          }}
+                        >
+                          Remarks
+                        </th>
+                        <th
+                          style={{
+                            width: '10%',
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            color: '#0069ab',
+                            fontWeight: '600',
+                            textAlign: 'center',
+                          }}
+                        >
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {incomeRows.map((row, index) => {
+                        const isLastRow = index === incomeRows.length - 1;
 
-                              return (
-                                <React.Fragment key={row.id}>
-                                  {/* First Row - Income Details */}
-                                  <tr>
-                                    <td
-                                      rowSpan={2}
-                                      style={{
-                                        ...incomeCellStyle,
-                                        textAlign: 'center',
-                                        verticalAlign: 'middle',
-                                      }}
-                                    >
-                                      {index + 1}
-                                    </td>
-
-                                    <td style={incomeCellStyle}>
-                                      <CustomDropdown
-                                        name={`incomeSource-${row.id}`}
-                                        options={toOptions(INCOME_SOURCE_OPTIONS)}
-                                        className="mb-0"
-                                        value={getSelectedOption(
-                                          row.incomeSource,
-                                          toOptions(INCOME_SOURCE_OPTIONS),
-                                        )}
-                                        onChange={(option) => {
-                                          const selected = option as OptionType | null;
-                                          handleIncomeRowChange(
-                                            row.id,
-                                            'incomeSource',
-                                            selected?.value ? String(selected.value) : '',
-                                          );
-                                        }}
-                                        placeholder="Select"
-                                      />
-                                    </td>
-                                    <td style={incomeCellStyle}>
-                                      <input
-                                        type="text"
-                                        value={row.amount}
-                                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                                          handleIncomeRowChange(
-                                            row.id,
-                                            'amount',
-                                            e.target.value.replace(/\D/g, ''),
-                                          )
-                                        }
-                                        placeholder="₹  0"
-                                        min="0"
-                                        step="0"
-                                        style={{
-                                          border: '1px solid #e0e0e0',
-                                          borderRadius: '8px',
-                                          padding: '6px 8px',
-                                          fontSize: '0.9rem',
-                                          width: '100%',
-                                          fontFamily: 'inherit',
-                                          backgroundColor: '#fcfdff',
-                                          color: '#000',
-                                          cursor: 'pointer',
-                                          outline: 'none',
-                                          marginTop: '2px',
-                                        }}
-                                        onFocus={(e) => {
-                                          e.currentTarget.style.borderColor = '#0069ab';
-                                          e.currentTarget.style.boxShadow =
-                                            '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                                        }}
-                                        onBlur={(e) => {
-                                          e.currentTarget.style.borderColor = '#e0e0e0';
-                                          e.currentTarget.style.boxShadow = 'none';
-                                        }}
-                                      />
-                                    </td>
-                                    <td style={incomeCellStyle}>
-                                      <CustomDropdown
-                                        name={`status-${row.id}`}
-                                        options={toOptions(STATUS_OPTIONS)}
-                                        className="mb-0"
-                                        value={getSelectedOption(
-                                          row.status,
-                                          toOptions(STATUS_OPTIONS),
-                                        )}
-                                        onChange={(option) => {
-                                          const selected = option as OptionType | null;
-                                          handleIncomeRowChange(
-                                            row.id,
-                                            'status',
-                                            selected?.value ? String(selected.value) : '',
-                                          );
-                                        }}
-                                        placeholder="Select"
-                                      />
-                                    </td>
-                                    <td style={incomeCellStyle}>
-                                      <input
-                                        type="text"
-                                        value={row.remarks}
-                                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                                          handleIncomeRowChange(row.id, 'remarks', e.target.value)
-                                        }
-                                        placeholder="Enter remarks"
-                                        style={{
-                                          border: '1px solid #e0e0e0',
-                                          borderRadius: '8px',
-                                          padding: '6px 8px',
-                                          fontSize: '0.9rem',
-                                          width: '100%',
-                                          fontFamily: 'inherit',
-                                          backgroundColor: '#fcfdff',
-                                          color: '#000',
-                                          cursor: 'text',
-                                          outline: 'none',
-                                          marginTop: '2px',
-                                        }}
-                                        onFocus={(e) => {
-                                          e.currentTarget.style.borderColor = '#0069ab';
-                                          e.currentTarget.style.boxShadow =
-                                            '0 0 0 3px rgba(0, 105, 171, 0.15)';
-                                        }}
-                                        onBlur={(e) => {
-                                          e.currentTarget.style.borderColor = '#e0e0e0';
-                                          e.currentTarget.style.boxShadow = 'none';
-                                        }}
-                                      />
-                                    </td>
-                                    {/* Action cell with vertical centering spanning both rows */}
-                                    <td
-                                      rowSpan={2}
-                                      style={{
-                                        padding: '8px',
-                                        border: '1px solid #e0e0e0',
-                                        textAlign: 'center',
-                                        verticalAlign: 'middle',
-                                        backgroundColor: '#fff',
-                                      }}
-                                    >
-                                      <div style={actionCell}>
-                                        {(index > 0 || (index === 0 && incomeRows.length > 1)) && (
-                                          <button
-                                            type="button"
-                                            onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                                              e.preventDefault();
-                                              handleDeleteIncomeRow(row.id);
-                                            }}
-                                            style={deleteIconBtn}
-                                            title="Delete Row"
-                                            className="btn-sm"
-                                            onMouseEnter={(e) => {
-                                              (
-                                                e.currentTarget as HTMLButtonElement
-                                              ).style.background = '#ffcccc';
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              (
-                                                e.currentTarget as HTMLButtonElement
-                                              ).style.background = '#ffe6e6';
-                                            }}
-                                          >
-                                            ×
-                                          </button>
-                                        )}
-                                        {isLastRow && (
-                                          <button
-                                            type="button"
-                                            onClick={(e: MouseEvent<HTMLButtonElement>) => {
-                                              e.preventDefault();
-                                              handleAddIncomeRow();
-                                            }}
-                                            disabled={!isIncomeRowReadyForAdd(row)}
-                                            style={{
-                                              width: '36px',
-                                              height: '36px',
-                                              borderRadius: '50%',
-                                              border: 'none',
-                                              background: '#f5f6f8',
-                                              cursor: isIncomeRowReadyForAdd(row)
-                                                ? 'pointer'
-                                                : 'not-allowed',
-                                              display: 'inline-flex',
-                                              alignItems: 'center',
-                                              justifyContent: 'center',
-                                              fontSize: '18px',
-                                              transition: 'all 0.15s ease',
-                                              color: '#0069ab',
-                                              opacity: isIncomeRowReadyForAdd(row) ? 1 : 0.5,
-                                            }}
-                                            title={getIncomeAddTooltip(row, index)}
-                                            className="btn-sm"
-                                            onMouseEnter={(e) => {
-                                              if (isIncomeRowReadyForAdd(row)) {
-                                                (
-                                                  e.currentTarget as HTMLButtonElement
-                                                ).style.background = '#e8f5e9';
-                                              }
-                                            }}
-                                            onMouseLeave={(e) => {
-                                              (
-                                                e.currentTarget as HTMLButtonElement
-                                              ).style.background = '#f5f6f8';
-                                            }}
-                                          >
-                                            +
-                                          </button>
-                                        )}
-                                      </div>
-                                    </td>
-                                  </tr>
-                                  {/* Second Row - Credit Account (Reduced width) */}
-                                  <tr>
-                                    <td
-                                      colSpan={1}
-                                      style={{
-                                        padding: '8px 12px',
-                                        border: '1px solid #e0e0e0',
-                                        backgroundColor: '#ffffff',
-                                        verticalAlign: 'middle',
-                                      }}
-                                    >
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center',
-                                          gap: '16px',
-                                          flexWrap: 'nowrap',
-                                          whiteSpace: 'nowrap',
-                                        }}
-                                      >
-                                        <span style={{ fontWeight: 600, color: '#0069ab' }}>
-                                          Contribution
-                                        </span>
-                                        {CONTRIBUTION_OPTIONS.map((option) => (
-                                          <label
-                                            key={option}
-                                            style={{
-                                              display: 'inline-flex',
-                                              alignItems: 'center',
-                                              gap: '6px',
-                                              fontSize: '0.9rem',
-                                              color: '#495057',
-                                              fontWeight: 500,
-                                              cursor: 'pointer',
-                                              marginBottom: 0,
-                                              whiteSpace: 'nowrap',
-                                            }}
-                                          >
-                                            <input
-                                              type="radio"
-                                              name={`contribution-${row.id}`}
-                                              value={option}
-                                              checked={row.contribution === option}
-                                              onChange={() =>
-                                                handleIncomeRowChange(
-                                                  row.id,
-                                                  'contribution',
-                                                  option,
-                                                )
-                                              }
-                                              style={{ accentColor: '#0069ab' }}
-                                            />
-                                            <span>{option}</span>
-                                          </label>
-                                        ))}
-                                      </div>
-                                    </td>
-                                    <td
-                                      colSpan={3}
-                                      style={{
-                                        padding: '8px 12px',
-                                        border: '1px solid #e0e0e0',
-                                        backgroundColor: '#ffffff',
-                                        verticalAlign: 'middle',
-                                      }}
-                                    >
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '12px',
-                                        }}
-                                      >
-                                        <span
-                                          style={{
-                                            fontWeight: 600,
-                                            color: '#0069ab',
-                                            minWidth: '120px',
-                                            whiteSpace: 'nowrap',
-                                          }}
-                                        >
-                                          Credit Account
-                                        </span>
-
-                                        <div style={{ flex: 1 }}>
-                                          <CustomDropdown
-                                            name={`creditAccount-${row.id}`}
-                                            options={accountDropdownOptions}
-                                            className="mb-0"
-                                            value={getSelectedOption(
-                                              row.creditAccount,
-                                              accountDropdownOptions,
-                                            )}
-                                            onChange={(option) => {
-                                              const selected = option as OptionType | null;
-                                              handleIncomeRowChange(
-                                                row.id,
-                                                'creditAccount',
-                                                selected?.value ? String(selected.value) : '',
-                                              );
-                                            }}
-                                            placeholder="Select"
-                                          />
-                                          {accountOptionsError && (
-                                            <div className="text-danger small mt-1">
-                                              {accountOptionsError}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                </React.Fragment>
-                              );
-                            })}
-                          </tbody>
-                          <tfoot>
-                            <tr style={{ backgroundColor: '#f0f6ff' }}>
+                        return (
+                          <React.Fragment key={row.id}>
+                            {/* First Row - Income Details */}
+                            <tr>
                               <td
-                                colSpan={2}
+                                rowSpan={2}
                                 style={{
-                                  padding: '12px',
-                                  border: '1px solid #e0e0e0',
-                                  textAlign: 'right',
-                                  paddingRight: '15px',
-                                  fontWeight: '600',
-                                  color: '#0069ab',
+                                  ...incomeCellStyle,
+                                  textAlign: 'center',
+                                  verticalAlign: 'middle',
                                 }}
                               >
-                                Total Income
+                                {index + 1}
                               </td>
+
+                              <td style={incomeCellStyle}>
+                                <CustomDropdown
+                                  name={`incomeSource-${row.id}`}
+                                  options={toOptions(INCOME_SOURCE_OPTIONS)}
+                                  className="mb-0"
+                                  value={getSelectedOption(
+                                    row.incomeSource,
+                                    toOptions(INCOME_SOURCE_OPTIONS),
+                                  )}
+                                  onChange={(option) => {
+                                    if (incomeFieldsReadOnly) return;
+                                    const selected = option as OptionType | null;
+                                    handleIncomeRowChange(
+                                      row.id,
+                                      'incomeSource',
+                                      selected?.value ? String(selected.value) : '',
+                                    );
+                                  }}
+                                  isDisabled={incomeFieldsReadOnly}
+                                  placeholder="Select"
+                                />
+                              </td>
+                              <td style={incomeCellStyle}>
+                                <input
+                                  type="text"
+                                  value={row.amount}
+                                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                                    if (incomeFieldsReadOnly) return;
+                                    handleIncomeRowChange(
+                                      row.id,
+                                      'amount',
+                                      e.target.value.replace(/\D/g, ''),
+                                    );
+                                  }}
+                                  disabled={incomeFieldsReadOnly}
+                                  readOnly={incomeFieldsReadOnly}
+                                  placeholder="₹  0"
+                                  min="0"
+                                  step="0"
+                                  style={{
+                                    border: '1px solid #e0e0e0',
+                                    borderRadius: '8px',
+                                    padding: '6px 8px',
+                                    fontSize: '0.9rem',
+                                    width: '100%',
+                                    fontFamily: 'inherit',
+                                    backgroundColor: incomeFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
+                                    color: '#000',
+                                    cursor: incomeFieldsReadOnly ? 'not-allowed' : 'pointer',
+                                    outline: 'none',
+                                    marginTop: '2px',
+                                  }}
+                                  onFocus={(e) => {
+                                    e.currentTarget.style.borderColor = '#0069ab';
+                                    e.currentTarget.style.boxShadow =
+                                      '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                                  }}
+                                  onBlur={(e) => {
+                                    e.currentTarget.style.borderColor = '#e0e0e0';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                  }}
+                                />
+                              </td>
+                              <td style={incomeCellStyle}>
+                                <CustomDropdown
+                                  name={`status-${row.id}`}
+                                  options={toOptions(STATUS_OPTIONS)}
+                                  className="mb-0"
+                                  value={getSelectedOption(row.status, toOptions(STATUS_OPTIONS))}
+                                  onChange={(option) => {
+                                    if (incomeFieldsReadOnly) return;
+                                    const selected = option as OptionType | null;
+                                    handleIncomeRowChange(
+                                      row.id,
+                                      'status',
+                                      selected?.value ? String(selected.value) : '',
+                                    );
+                                  }}
+                                  isDisabled={incomeFieldsReadOnly}
+                                  placeholder="Select"
+                                />
+                              </td>
+                              <td style={incomeCellStyle}>
+                                <input
+                                  type="text"
+                                  value={row.remarks}
+                                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                                    if (incomeFieldsReadOnly) return;
+                                    handleIncomeRowChange(row.id, 'remarks', e.target.value);
+                                  }}
+                                  disabled={incomeFieldsReadOnly}
+                                  readOnly={incomeFieldsReadOnly}
+                                  placeholder="Enter remarks"
+                                  style={{
+                                    border: '1px solid #e0e0e0',
+                                    borderRadius: '8px',
+                                    padding: '6px 8px',
+                                    fontSize: '0.9rem',
+                                    width: '100%',
+                                    fontFamily: 'inherit',
+                                    backgroundColor: incomeFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
+                                    color: '#000',
+                                    cursor: incomeFieldsReadOnly ? 'not-allowed' : 'text',
+                                    outline: 'none',
+                                    marginTop: '2px',
+                                  }}
+                                  onFocus={(e) => {
+                                    e.currentTarget.style.borderColor = '#0069ab';
+                                    e.currentTarget.style.boxShadow =
+                                      '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                                  }}
+                                  onBlur={(e) => {
+                                    e.currentTarget.style.borderColor = '#e0e0e0';
+                                    e.currentTarget.style.boxShadow = 'none';
+                                  }}
+                                />
+                              </td>
+                              {/* Action cell with vertical centering spanning both rows */}
                               <td
+                                rowSpan={2}
                                 style={{
-                                  padding: '12px',
+                                  padding: '8px',
                                   border: '1px solid #e0e0e0',
-                                  fontWeight: '600',
-                                  color: '#0069ab',
                                   textAlign: 'center',
+                                  verticalAlign: 'middle',
+                                  backgroundColor: '#fff',
                                 }}
                               >
-                                ₹ {totalIncome}
+                                <div style={actionCell}>
+                                  {!incomeFieldsReadOnly &&
+                                    (index > 0 || (index === 0 && incomeRows.length > 1)) && (
+                                      <button
+                                        type="button"
+                                        onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                          e.preventDefault();
+                                          handleDeleteIncomeRow(row.id);
+                                        }}
+                                        style={deleteIconBtn}
+                                        title="Delete Row"
+                                        className="btn-sm"
+                                        onMouseEnter={(e) => {
+                                          (e.currentTarget as HTMLButtonElement).style.background =
+                                            '#ffcccc';
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          (e.currentTarget as HTMLButtonElement).style.background =
+                                            '#ffe6e6';
+                                        }}
+                                      >
+                                        ×
+                                      </button>
+                                    )}
+                                  {isLastRow && !incomeFieldsReadOnly && (
+                                    <button
+                                      type="button"
+                                      onClick={(e: MouseEvent<HTMLButtonElement>) => {
+                                        e.preventDefault();
+                                        handleAddIncomeRow();
+                                      }}
+                                      disabled={!isIncomeRowReadyForAdd(row)}
+                                      style={{
+                                        width: '36px',
+                                        height: '36px',
+                                        borderRadius: '50%',
+                                        border: 'none',
+                                        background: '#f5f6f8',
+                                        cursor: isIncomeRowReadyForAdd(row)
+                                          ? 'pointer'
+                                          : 'not-allowed',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        fontSize: '18px',
+                                        transition: 'all 0.15s ease',
+                                        color: '#0069ab',
+                                        opacity: isIncomeRowReadyForAdd(row) ? 1 : 0.5,
+                                      }}
+                                      title={getIncomeAddTooltip(row, index)}
+                                      className="btn-sm"
+                                      onMouseEnter={(e) => {
+                                        if (isIncomeRowReadyForAdd(row)) {
+                                          (e.currentTarget as HTMLButtonElement).style.background =
+                                            '#e8f5e9';
+                                        }
+                                      }}
+                                      onMouseLeave={(e) => {
+                                        (e.currentTarget as HTMLButtonElement).style.background =
+                                          '#f5f6f8';
+                                      }}
+                                    >
+                                      +
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                            {/* Second Row - Credit Account (Reduced width) */}
+                            <tr>
+                              <td
+                                colSpan={1}
+                                style={{
+                                  padding: '8px 12px',
+                                  border: '1px solid #e0e0e0',
+                                  backgroundColor: '#ffffff',
+                                  verticalAlign: 'middle',
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    gap: '16px',
+                                    flexWrap: 'nowrap',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                >
+                                  <span style={{ fontWeight: 600, color: '#0069ab' }}>
+                                    Contribution
+                                  </span>
+                                  {CONTRIBUTION_OPTIONS.map((option) => (
+                                    <label
+                                      key={option}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        fontSize: '0.9rem',
+                                        color: '#495057',
+                                        fontWeight: 500,
+                                        cursor: 'pointer',
+                                        marginBottom: 0,
+                                        whiteSpace: 'nowrap',
+                                      }}
+                                    >
+                                      <input
+                                        type="radio"
+                                        name={`contribution-${row.id}`}
+                                        value={option}
+                                        checked={row.contribution === option}
+                                        onChange={() => {
+                                          if (incomeFieldsReadOnly) return;
+                                          handleIncomeRowChange(row.id, 'contribution', option);
+                                        }}
+                                        disabled={incomeFieldsReadOnly}
+                                        style={{ accentColor: '#0069ab' }}
+                                      />
+                                      <span>{option}</span>
+                                    </label>
+                                  ))}
+                                </div>
                               </td>
                               <td
                                 colSpan={3}
                                 style={{
-                                  padding: '12px 16px',
+                                  padding: '8px 12px',
                                   border: '1px solid #e0e0e0',
-                                  color: '#0b3d75',
-                                  fontWeight: 600,
-                                  textAlign: 'center',
+                                  backgroundColor: '#ffffff',
+                                  verticalAlign: 'middle',
                                 }}
                               >
-                                <span>Rupees (in words): </span>
-                                <span>
-                                  {numberToIndianWords(totalIncome)
-                                    .replace(/\b\w/g, (l) => l.toUpperCase())
-                                    .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
-                                </span>
+                                <div
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '12px',
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      fontWeight: 600,
+                                      color: '#0069ab',
+                                      minWidth: '120px',
+                                      whiteSpace: 'nowrap',
+                                    }}
+                                  >
+                                    Credit Account
+                                  </span>
+
+                                  <div style={{ flex: 1 }}>
+                                    <CustomDropdown
+                                      name={`creditAccount-${row.id}`}
+                                      options={accountDropdownOptions}
+                                      className="mb-0"
+                                      value={getSelectedOption(
+                                        row.creditAccount,
+                                        accountDropdownOptions,
+                                      )}
+                                      onChange={(option) => {
+                                        if (incomeFieldsReadOnly) return;
+                                        const selected = option as OptionType | null;
+                                        handleIncomeRowChange(
+                                          row.id,
+                                          'creditAccount',
+                                          selected?.value ? String(selected.value) : '',
+                                        );
+                                      }}
+                                      isDisabled={incomeFieldsReadOnly}
+                                      placeholder="Select"
+                                    />
+                                    {accountOptionsError && (
+                                      <div className="text-danger small mt-1">
+                                        {accountOptionsError}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </td>
                             </tr>
-                          </tfoot>
-                        </table>
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ backgroundColor: '#f0f6ff' }}>
+                        <td
+                          colSpan={2}
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            textAlign: 'right',
+                            paddingRight: '15px',
+                            fontWeight: '600',
+                            color: '#0069ab',
+                          }}
+                        >
+                          Total Income
+                        </td>
+                        <td
+                          style={{
+                            padding: '12px',
+                            border: '1px solid #e0e0e0',
+                            fontWeight: '600',
+                            color: '#0069ab',
+                            textAlign: 'center',
+                          }}
+                        >
+                          ₹ {totalIncome}
+                        </td>
+                        <td
+                          colSpan={3}
+                          style={{
+                            padding: '12px 16px',
+                            border: '1px solid #e0e0e0',
+                            color: '#0b3d75',
+                            fontWeight: 600,
+                            textAlign: 'center',
+                          }}
+                        >
+                          <span>Rupees (in words): </span>
+                          <span>
+                            {numberToIndianWords(totalIncome)
+                              .replace(/\b\w/g, (l) => l.toUpperCase())
+                              .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                          </span>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
 
-                        {shouldShowManagementRequestAmount && (
-                          <div
-                            style={{
-                              marginTop: '10px',
-                              padding: '12px 16px',
-                              borderRadius: '10px',
-                              backgroundColor: '#fff8e1',
-                              border: '1px solid #f2d38b',
-                              display: 'flex',
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                              gap: '12px',
-                              flexWrap: 'wrap',
-                              fontSize: '0.95rem',
-                              color: '#7a4b00',
-                              textAlign: 'center',
-                              width: '100%',
-                              fontWeight: 700,
-                            }}
-                          >
-                            <span>Amount requested from Management:</span>
-                            <span>₹ {amountRequestedFromManagement}</span>
-                            <span
-                              aria-hidden="true"
-                              style={{
-                                width: '1px',
-                                height: '20px',
-                                backgroundColor: '#d8a84a',
-                              }}
-                            />
-                            <span>
-                              Rupees (in words):{' '}
-                              {numberToIndianWords(amountRequestedFromManagement)
-                                .replace(/\b\w/g, (l) => l.toUpperCase())
-                                .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
-                            </span>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
+                  {shouldShowManagementRequestAmount && (
+                    <div
+                      style={{
+                        marginTop: '10px',
+                        padding: '12px 16px',
+                        borderRadius: '10px',
+                        backgroundColor: '#fff8e1',
+                        border: '1px solid #f2d38b',
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: '12px',
+                        flexWrap: 'wrap',
+                        fontSize: '0.95rem',
+                        color: '#7a4b00',
+                        textAlign: 'center',
+                        width: '100%',
+                        fontWeight: 700,
+                      }}
+                    >
+                      <span>Amount requested from Management:</span>
+                      <span>₹ {amountRequestedFromManagement}</span>
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: '1px',
+                          height: '20px',
+                          backgroundColor: '#d8a84a',
+                        }}
+                      />
+                      <span>
+                        Rupees (in words):{' '}
+                        {numberToIndianWords(amountRequestedFromManagement)
+                          .replace(/\b\w/g, (l) => l.toUpperCase())
+                          .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Debit Account Section */}
+            <div className="finance-debit-card">
+              <div className="finance-debit-control">
+                <div className="finance-debit-fields">
+                  <span className="finance-debit-label">Debit Account</span>
+                  {showDebitAccountDropdown && (
+                    <div className="finance-debit-dropdown">
+                      <CustomDropdown
+                        name="debitAccount"
+                        options={accountDropdownOptions}
+                        value={getSelectedOption(debitAccount, accountDropdownOptions)}
+                        onChange={(option) =>
+                          setDebitAccount(String((option as OptionType)?.value || ''))
+                        }
+                        placeholder="Select debit account"
+                        isDisabled={proposalFieldsReadOnly}
+                        className="mb-0"
+                      />
+                      {accountOptionsError && (
+                        <div style={{ marginTop: '6px', fontSize: '0.8rem', color: '#d92d20' }}>
+                          {accountOptionsError}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+                <CustomToggle
+                  name="debitAccountToggle"
+                  className="finance-debit-toggle"
+                  checked={showDebitAccountDropdown}
+                  onChange={(checked) => {
+                    if (proposalFieldsReadOnly) return;
+                    setShowDebitAccountDropdown(checked);
+                    if (!checked) setDebitAccount('');
+                  }}
+                  disabled={proposalFieldsReadOnly}
+                />
               </div>
             </div>
           </div>
@@ -5266,8 +5464,9 @@ const FinanceApproval: React.FC = () => {
                           name="annexureType"
                           options={toOptions(ANNEXURE_TYPE_OPTIONS)}
                           value={getSelectedOption(annexureType, toOptions(ANNEXURE_TYPE_OPTIONS))}
-                          isDisabled={isViewMode}
+                          isDisabled={proposalFieldsReadOnly}
                           onChange={(option) => {
+                            if (proposalFieldsReadOnly) return;
                             const selected = option as OptionType | null;
                             setAnnexureType(selected?.value ? String(selected.value) : '');
                           }}
@@ -5294,7 +5493,8 @@ const FinanceApproval: React.FC = () => {
                             multiple
                             style={{ display: 'none' }}
                             disabled={
-                              isViewMode || String(annexureType || '').trim() === 'Not Applicable'
+                              proposalFieldsReadOnly ||
+                              String(annexureType || '').trim() === 'Not Applicable'
                             }
                             onChange={handleAnnexureFileChange}
                           />
@@ -5302,7 +5502,7 @@ const FinanceApproval: React.FC = () => {
                             type="button"
                             onClick={() => {
                               if (
-                                !isViewMode &&
+                                !proposalFieldsReadOnly &&
                                 String(annexureType || '').trim() !== 'Not Applicable' &&
                                 hasFilledText(annexureType)
                               ) {
@@ -5312,26 +5512,28 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               ...annexureUploadButtonStyle,
                               opacity:
-                                !isViewMode &&
+                                !proposalFieldsReadOnly &&
                                 hasFilledText(annexureType) &&
                                 String(annexureType || '').trim() !== 'Not Applicable'
                                   ? 1
                                   : 0.55,
                               cursor:
-                                !isViewMode &&
+                                !proposalFieldsReadOnly &&
                                 hasFilledText(annexureType) &&
                                 String(annexureType || '').trim() !== 'Not Applicable'
                                   ? 'pointer'
                                   : 'not-allowed',
                             }}
                             disabled={
-                              isViewMode ||
+                              proposalFieldsReadOnly ||
                               !hasFilledText(annexureType) ||
                               String(annexureType || '').trim() === 'Not Applicable'
                             }
                             title={
-                              isViewMode
-                                ? 'View mode'
+                              proposalFieldsReadOnly
+                                ? isTopupWorkflow
+                                  ? 'Topup mode'
+                                  : 'View mode'
                                 : String(annexureType || '').trim() === 'Not Applicable'
                                   ? 'Upload disabled for Not Applicable'
                                   : hasFilledText(annexureType)
@@ -5340,7 +5542,7 @@ const FinanceApproval: React.FC = () => {
                             }
                             onMouseEnter={(e) => {
                               if (
-                                !isViewMode &&
+                                !proposalFieldsReadOnly &&
                                 hasFilledText(annexureType) &&
                                 String(annexureType || '').trim() !== 'Not Applicable'
                               ) {
@@ -5392,7 +5594,7 @@ const FinanceApproval: React.FC = () => {
                                   >
                                     <Eye size={18} />
                                   </button>
-                                  {!isViewMode && (
+                                  {!proposalFieldsReadOnly && (
                                     <button
                                       type="button"
                                       onClick={() => deleteAnnexureFile(fileRow.id)}
@@ -5550,11 +5752,13 @@ const FinanceApproval: React.FC = () => {
               >
                 {isLoading
                   ? 'Submitting...'
-                  : isReturnedFinanceResubmit
-                    ? 'Resubmit Form'
-                    : isEditMode || canSuperAdminEditTerminalFinance
-                      ? 'Update Form'
-                      : 'Submit Form'}
+                  : isTopupWorkflow
+                    ? 'Submit Topup'
+                    : isReturnedFinanceResubmit
+                      ? 'Resubmit Form'
+                      : isEditMode || canSuperAdminEditTerminalFinance
+                        ? 'Update Form'
+                        : 'Submit Form'}
               </button>
             )}
 
@@ -5785,75 +5989,77 @@ const FinanceApproval: React.FC = () => {
                   borderCollapse: 'collapse',
                 }}
               >
-                <tr>
-                  <td
-                    style={{
-                      width: '16%',
-                      border: '1px solid #000',
-                      textAlign: 'center',
-                      verticalAlign: 'middle',
-                      padding: '10px 6px',
-                    }}
-                  >
-                    <img
-                      src={KSRCTLogo}
-                      alt="Logo"
-                      style={{ width: '75px', height: '75px', objectFit: 'contain' }}
-                    />
-                  </td>
-                  <td
-                    style={{
-                      width: '68%',
-                      border: '1px solid #000',
-                      textAlign: 'center',
-                      verticalAlign: 'middle',
-                      padding: '8px 10px',
-                    }}
-                  >
-                    <div
+                <tbody>
+                  <tr>
+                    <td
                       style={{
-                        fontSize: '19px',
-                        fontWeight: 'bold',
-                        color: '#000',
-                        lineHeight: '1.05',
-                        marginBottom: '4px',
+                        width: '16%',
+                        border: '1px solid #000',
+                        textAlign: 'center',
+                        verticalAlign: 'middle',
+                        padding: '10px 6px',
                       }}
                     >
-                      K.S.RANGASAMY COLLEGE OF TECHNOLOGY
-                    </div>
-                    <div style={{ fontSize: '14px', color: '#000', marginBottom: '4px' }}>
-                      (Autonomous)
-                    </div>
-                    <div style={{ fontSize: '16px', color: '#000', lineHeight: '1.2' }}>
-                      Tiruchengode – 637 215, Namakkal Dt. Tamil Nadu
-                    </div>
-                  </td>
-                  <td
-                    style={{
-                      width: '16%',
-                      border: '1px solid #000',
-                      textAlign: 'center',
-                      verticalAlign: 'middle',
-                      padding: '10px 6px',
-                    }}
-                  >
-                    <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#000' }}>
-                      FINANCE
-                    </div>
-                    {proposalRef && (
+                      <img
+                        src={KSRCTLogo}
+                        alt="Logo"
+                        style={{ width: '75px', height: '75px', objectFit: 'contain' }}
+                      />
+                    </td>
+                    <td
+                      style={{
+                        width: '68%',
+                        border: '1px solid #000',
+                        textAlign: 'center',
+                        verticalAlign: 'middle',
+                        padding: '8px 10px',
+                      }}
+                    >
                       <div
                         style={{
-                          fontSize: '13px',
-                          fontWeight: '600',
+                          fontSize: '19px',
+                          fontWeight: 'bold',
                           color: '#000',
-                          marginTop: '4px',
+                          lineHeight: '1.05',
+                          marginBottom: '4px',
                         }}
                       >
-                        {proposalRef}
+                        K.S.RANGASAMY COLLEGE OF TECHNOLOGY
                       </div>
-                    )}
-                  </td>
-                </tr>
+                      <div style={{ fontSize: '14px', color: '#000', marginBottom: '4px' }}>
+                        (Autonomous)
+                      </div>
+                      <div style={{ fontSize: '16px', color: '#000', lineHeight: '1.2' }}>
+                        Tiruchengode – 637 215, Namakkal Dt. Tamil Nadu
+                      </div>
+                    </td>
+                    <td
+                      style={{
+                        width: '16%',
+                        border: '1px solid #000',
+                        textAlign: 'center',
+                        verticalAlign: 'middle',
+                        padding: '10px 6px',
+                      }}
+                    >
+                      <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#000' }}>
+                        FINANCE
+                      </div>
+                      {proposalRef && (
+                        <div
+                          style={{
+                            fontSize: '13px',
+                            fontWeight: '600',
+                            color: '#000',
+                            marginTop: '4px',
+                          }}
+                        >
+                          {proposalRef}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                </tbody>
               </table>
 
               <h2
@@ -5879,347 +6085,193 @@ const FinanceApproval: React.FC = () => {
                   margin: '0 auto 14px auto',
                 }}
               >
-                <tr>
-                  <td
-                    style={{
-                      padding: '4.5px 5.5px',
-                      border: '1px solid #000',
-                      width: '18%',
-                      fontSize: '14px',
-                    }}
-                  >
-                    <strong>Name</strong>
-                  </td>
-                  <td
-                    style={{
-                      padding: '4.5px 5.5px',
-                      border: '1px solid #000',
-                      width: '32%',
-                      fontSize: '14px',
-                    }}
-                  >
-                    {applicantName || '\u00A0'}
-                  </td>
-                  <td
-                    style={{
-                      padding: '4.5px 5.5px',
-                      border: '1px solid #000',
-                      width: '20%',
-                      fontSize: '14px',
-                    }}
-                  >
-                    <strong>Date</strong>
-                  </td>
-                  <td
-                    style={{
-                      padding: '4.5px 5.5px',
-                      border: '1px solid #000',
-                      width: '30%',
-                      fontSize: '14px',
-                    }}
-                  >
-                    {date ? formatDMY(date) : '\u00A0'}
-                  </td>
-                </tr>
-                <tr>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                  >
-                    <strong>Department</strong>
-                  </td>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                  >
-                    {department || '\u00A0'}
-                  </td>
-                  <td
-                    style={{
-                      padding: '4.5px 5.5px',
-                      border: '1px solid #000',
-                      width: '15%',
-                      fontSize: '14px',
-                    }}
-                  >
-                    <strong>Designation</strong>
-                  </td>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                  >
-                    {designation || '\u00A0'}
-                  </td>
-                </tr>
-                <tr>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                  >
-                    <strong>Email</strong>
-                  </td>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                  >
-                    {email || '\u00A0'}
-                  </td>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                  >
-                    <strong>Mobile</strong>
-                  </td>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                  >
-                    {mobile || '\u00A0'}
-                  </td>
-                </tr>
-                <tr>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                    colSpan={1}
-                  >
-                    <strong>Beneficiary</strong>
-                  </td>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                    colSpan={3}
-                  >
-                    {getBeneficiaryDisplayText()}
-                  </td>
-                </tr>
-                <tr>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                    colSpan={1}
-                  >
-                    <strong>Description</strong>
-                  </td>
-                  <td
-                    style={{
-                      padding: '4.5px 5.5px',
-                      border: '1px solid #000',
-                      fontSize: '14px',
-                      wordWrap: 'break-word',
-                      overflowWrap: 'break-word',
-                      wordBreak: 'break-word',
-                    }}
-                    colSpan={3}
-                  >
-                    {description || '\u00A0'}
-                  </td>
-                </tr>
-                <tr>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                    colSpan={1}
-                  >
-                    <strong>Head of Accounts</strong>
-                  </td>
-                  <td
-                    style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
-                    colSpan={1}
-                  >
-                    {primaryHead || '\u00A0'}
-                    {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: '8px 5.5px',
-                      border: '1px solid #000',
-                      fontSize: '14px',
-                      verticalAlign: 'middle',
-                      height: '42px',
-                    }}
-                  >
-                    <strong>Annexure</strong>
-                  </td>
-                  <td
-                    style={{
-                      padding: '8px 5.5px',
-                      border: '1px solid #000',
-                      fontSize: '14px',
-                      verticalAlign: 'middle',
-                      height: '42px',
-                      wordBreak: 'break-word',
-                      overflowWrap: 'break-word',
-                    }}
-                  >
-                    {getAnnexureSummary()}
-                  </td>
-                </tr>
-
-                <tr>
-                  <td
-                    colSpan={4}
-                    style={{ padding: '8px 6px', border: '1px solid #000', verticalAlign: 'top' }}
-                  >
-                    <table
+                <tbody>
+                  <tr>
+                    <td
                       style={{
-                        width: '100%',
-                        borderCollapse: 'collapse',
+                        padding: '4.5px 5.5px',
+                        border: '1px solid #000',
+                        width: '18%',
                         fontSize: '14px',
-                        marginTop: '4px',
-                        tableLayout: 'fixed',
                       }}
                     >
-                      <colgroup>
-                        <col style={{ width: '8%' }} />
-                        <col style={{ width: '40%' }} />
-                        <col style={{ width: '36%' }} />
-                        <col style={{ width: '16%' }} />
-                      </colgroup>
-                      <thead>
-                        <tr style={{ backgroundColor: '#f8f8f8' }}>
-                          <th
-                            style={{
-                              padding: '3px 4px',
-                              border: '1px solid #000',
-                              textAlign: 'center',
-                            }}
-                          >
-                            S.No
-                          </th>
-                          <th
-                            style={{
-                              padding: '3px 4px',
-                              border: '1px solid #000',
-                              textAlign: 'center',
-                            }}
-                          >
-                            Budget Head
-                          </th>
-                          <th
-                            style={{
-                              padding: '3px 4px',
-                              border: '1px solid #000',
-                              textAlign: 'center',
-                            }}
-                          >
-                            Sub Head
-                          </th>
-                          <th
-                            style={{
-                              padding: '3px 4px',
-                              border: '1px solid #000',
-                              textAlign: 'center',
-                            }}
-                          >
-                            Amount
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {budgetRows.map((row, index) => (
-                          <tr key={index}>
-                            <td
-                              style={{
-                                padding: '2.5px 4px',
-                                border: '1px solid #000',
-                                textAlign: 'center',
-                              }}
-                            >
-                              {index + 1}
-                            </td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
-                              {row.category || '\u00A0'}
-                            </td>
-                            <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
-                              {getSubHeadDisplayText(row.head) || '\u00A0'}
-                            </td>
-                            <td
-                              style={{
-                                padding: '2.5px 4px',
-                                border: '1px solid #000',
-                                textAlign: 'right',
-                              }}
-                            >
-                              ₹ {Number(row.amount || 0)}
-                            </td>
-                          </tr>
-                        ))}
-                        {hasUnplannedBudgetPreview && (
-                          <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                            <td
-                              colSpan={3}
-                              style={{
-                                padding: '3px 4px',
-                                border: '1px solid #000',
-                                textAlign: 'left',
-                                fontWeight: 'bold',
-                              }}
-                            >
-                              Unplanned Expenditure:{unplannedBudgetDescription || '\u00A0'}
-                            </td>
-                            <td
-                              style={{
-                                padding: '3px 4px',
-                                border: '1px solid #000',
-                                textAlign: 'right',
-                              }}
-                            >
-                              ₹ {Number(unplannedBudgetAmount || 0)}
-                            </td>
-                          </tr>
-                        )}
-                        <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
-                          <td
-                            colSpan={3}
-                            style={{
-                              padding: '3px 4px',
-                              border: '1px solid #000',
-                              textAlign: 'right',
-                              fontWeight: 'bold',
-                            }}
-                          >
-                            Total Budget:
-                          </td>
-                          <td
-                            style={{
-                              padding: '3px 4px',
-                              border: '1px solid #000',
-                              textAlign: 'right',
-                            }}
-                          >
-                            ₹ {totalBudget}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </td>
-                </tr>
-                <tr>
-                  <td
-                    colSpan={4}
-                    style={{
-                      padding: '6px 16px',
-                      border: '1px solid #000',
-                      textAlign: 'center',
-                      fontSize: '15px',
-                      backgroundColor: '#f8f9fa',
-                    }}
-                  >
-                    Rupees in Words:{' '}
-                    {numberToIndianWords(totalBudget)
-                      .replace(/\b\w/g, (l) => l.toUpperCase())
-                      .replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ')
-                      .replace(/[A-Z]{2,}/g, (m) => m.charAt(0) + m.slice(1).toLowerCase())}
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000' }}>
-                    {showIncomeSection ? (
+                      <strong>Name</strong>
+                    </td>
+                    <td
+                      style={{
+                        padding: '4.5px 5.5px',
+                        border: '1px solid #000',
+                        width: '32%',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {applicantName || '\u00A0'}
+                    </td>
+                    <td
+                      style={{
+                        padding: '4.5px 5.5px',
+                        border: '1px solid #000',
+                        width: '20%',
+                        fontSize: '14px',
+                      }}
+                    >
+                      <strong>Date</strong>
+                    </td>
+                    <td
+                      style={{
+                        padding: '4.5px 5.5px',
+                        border: '1px solid #000',
+                        width: '30%',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {date ? formatDMY(date) : '\u00A0'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    >
+                      <strong>Department</strong>
+                    </td>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    >
+                      {department || '\u00A0'}
+                    </td>
+                    <td
+                      style={{
+                        padding: '4.5px 5.5px',
+                        border: '1px solid #000',
+                        width: '15%',
+                        fontSize: '14px',
+                      }}
+                    >
+                      <strong>Designation</strong>
+                    </td>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    >
+                      {designation || '\u00A0'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    >
+                      <strong>Email</strong>
+                    </td>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    >
+                      {email || '\u00A0'}
+                    </td>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    >
+                      <strong>Mobile</strong>
+                    </td>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                    >
+                      {mobile || '\u00A0'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                      colSpan={1}
+                    >
+                      <strong>Beneficiary</strong>
+                    </td>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                      colSpan={3}
+                    >
+                      {getBeneficiaryDisplayText()}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                      colSpan={1}
+                    >
+                      <strong>Description</strong>
+                    </td>
+                    <td
+                      style={{
+                        padding: '4.5px 5.5px',
+                        border: '1px solid #000',
+                        fontSize: '14px',
+                        wordWrap: 'break-word',
+                        overflowWrap: 'break-word',
+                        wordBreak: 'break-word',
+                      }}
+                      colSpan={3}
+                    >
+                      {description || '\u00A0'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                      colSpan={1}
+                    >
+                      <strong>Head of Accounts</strong>
+                    </td>
+                    <td
+                      style={{ padding: '4.5px 5.5px', border: '1px solid #000', fontSize: '14px' }}
+                      colSpan={1}
+                    >
+                      {primaryHead || '\u00A0'}
+                      {extraDropdownVisible && eventSubHead && ` - ${eventSubHead}`}
+                    </td>
+
+                    <td
+                      style={{
+                        padding: '8px 5.5px',
+                        border: '1px solid #000',
+                        fontSize: '14px',
+                        verticalAlign: 'middle',
+                        height: '42px',
+                      }}
+                    >
+                      <strong>Annexure</strong>
+                    </td>
+                    <td
+                      style={{
+                        padding: '8px 5.5px',
+                        border: '1px solid #000',
+                        fontSize: '14px',
+                        verticalAlign: 'middle',
+                        height: '42px',
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                      }}
+                    >
+                      {getAnnexureSummary()}
+                    </td>
+                  </tr>
+
+                  <tr>
+                    <td
+                      colSpan={4}
+                      style={{ padding: '8px 6px', border: '1px solid #000', verticalAlign: 'top' }}
+                    >
                       <table
                         style={{
                           width: '100%',
                           borderCollapse: 'collapse',
                           fontSize: '14px',
+                          marginTop: '4px',
                           tableLayout: 'fixed',
                         }}
                       >
                         <colgroup>
                           <col style={{ width: '8%' }} />
-                          <col style={{ width: '25%' }} />
-                          <col style={{ width: '20%' }} />
-                          <col style={{ width: '15%' }} />
-                          <col style={{ width: '27%' }} />
+                          <col style={{ width: '40%' }} />
+                          <col style={{ width: '36%' }} />
+                          <col style={{ width: '16%' }} />
                         </colgroup>
                         <thead>
                           <tr style={{ backgroundColor: '#f8f8f8' }}>
@@ -6232,7 +6284,6 @@ const FinanceApproval: React.FC = () => {
                             >
                               S.No
                             </th>
-
                             <th
                               style={{
                                 padding: '3px 4px',
@@ -6240,7 +6291,7 @@ const FinanceApproval: React.FC = () => {
                                 textAlign: 'center',
                               }}
                             >
-                              Income Source
+                              Budget Head
                             </th>
                             <th
                               style={{
@@ -6249,7 +6300,7 @@ const FinanceApproval: React.FC = () => {
                                 textAlign: 'center',
                               }}
                             >
-                              Status
+                              Sub Head
                             </th>
                             <th
                               style={{
@@ -6260,272 +6311,446 @@ const FinanceApproval: React.FC = () => {
                             >
                               Amount
                             </th>
-                            <th
-                              style={{
-                                padding: '3px 4px',
-                                border: '1px solid #000',
-                                textAlign: 'center',
-                              }}
-                            >
-                              Remarks
-                            </th>
                           </tr>
                         </thead>
                         <tbody>
-                          {incomeRows.map((row, index) => (
-                            <React.Fragment key={row.id}>
-                              <tr>
-                                <td
-                                  rowSpan={2}
-                                  style={{
-                                    padding: '2.5px 4px',
-                                    border: '1px solid #000',
-                                    textAlign: 'center',
-                                  }}
-                                >
-                                  {index + 1}
-                                </td>
-
-                                <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
-                                  {row.incomeSource || ''}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: '2.5px 4px',
-                                    border: '1px solid #000',
-                                    textAlign: 'center',
-                                  }}
-                                >
-                                  {row.status || ''}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: '2.5px 4px',
-                                    border: '1px solid #000',
-                                    textAlign: 'right',
-                                  }}
-                                >
-                                  ₹ {row.amount ? ` ${row.amount}` : ''}
-                                </td>
-                                <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
-                                  {row.remarks || ''}
-                                </td>
-                              </tr>
-                              <tr>
-                                <td
-                                  colSpan={1}
-                                  style={{
-                                    padding: '2.5px 4px',
-                                    border: '1px solid #000',
-                                    fontWeight: 'bold',
-                                    backgroundColor: '#f8f8f8',
-                                  }}
-                                >
-                                  <strong>Contribution</strong>
-                                  {row.contribution ? ` - ${row.contribution}` : ''}
-                                </td>
-                                <td
-                                  colSpan={3}
-                                  style={{
-                                    padding: '2.5px 4px',
-                                    border: '1px solid #000',
-                                    wordBreak: 'break-word',
-                                    overflowWrap: 'break-word',
-                                  }}
-                                >
-                                  <b>Credit Account:</b>
-                                  {row.creditAccount || '\u00A0'}
-                                </td>
-                              </tr>
-                            </React.Fragment>
+                          {budgetRows.map((row, index) => (
+                            <tr
+                              key={index}
+                              style={row.isTopup ? { backgroundColor: '#fffbea' } : undefined}
+                            >
+                              <td
+                                style={{
+                                  padding: '2.5px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                {index + 1}
+                                {row.isTopup && (
+                                  <span
+                                    style={{
+                                      display: 'block',
+                                      fontSize: '0.55rem',
+                                      fontWeight: 700,
+                                      color: '#b45309',
+                                    }}
+                                  >
+                                    TOPUP
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
+                                {row.category || '\u00A0'}
+                              </td>
+                              <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
+                                {getSubHeadDisplayText(row.head) || '\u00A0'}
+                              </td>
+                              <td
+                                style={{
+                                  padding: '2.5px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'right',
+                                }}
+                              >
+                                ₹ {Number(row.amount || 0)}
+                              </td>
+                            </tr>
                           ))}
-                        </tbody>
-                        <tfoot>
-                          <tr style={{ backgroundColor: '#f0f6ff', fontWeight: 'bold' }}>
+                          {hasUnplannedBudgetPreview && (
+                            <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
+                              <td
+                                colSpan={3}
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'left',
+                                  fontWeight: 'bold',
+                                }}
+                              >
+                                Unplanned Expenditure:{unplannedBudgetDescription || '\u00A0'}
+                              </td>
+                              <td
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'right',
+                                }}
+                              >
+                                ₹ {Number(unplannedBudgetAmount || 0)}
+                              </td>
+                            </tr>
+                          )}
+                          <tr style={{ backgroundColor: 'white', fontWeight: 'bold' }}>
                             <td
                               colSpan={3}
                               style={{
                                 padding: '3px 4px',
                                 border: '1px solid #000',
                                 textAlign: 'right',
-                                color: '#0b3d75',
+                                fontWeight: 'bold',
                               }}
                             >
-                              Total Income
+                              Total Budget:
                             </td>
                             <td
                               style={{
                                 padding: '3px 4px',
                                 border: '1px solid #000',
                                 textAlign: 'right',
-                                color: '#0b3d75',
                               }}
                             >
-                              ₹ {totalIncome}
-                            </td>
-                            <td
-                              style={{
-                                padding: '3px 4px',
-                                border: '1px solid #000',
-                                color: '#0b3d75',
-                              }}
-                            >
-                              Rupees (in words):{' '}
-                              {numberToIndianWords(totalIncome)
-                                .replace(/\b\w/g, (l) => l.toUpperCase())
-                                .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                              ₹ {totalBudget}
                             </td>
                           </tr>
-                          {shouldShowManagementRequestAmount && (
-                            <tr style={{ backgroundColor: '#fff8e1', fontWeight: 'bold' }}>
+                        </tbody>
+                      </table>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td
+                      colSpan={4}
+                      style={{
+                        padding: '6px 16px',
+                        border: '1px solid #000',
+                        textAlign: 'center',
+                        fontSize: '15px',
+                        backgroundColor: '#f8f9fa',
+                      }}
+                    >
+                      Rupees in Words:{' '}
+                      {numberToIndianWords(totalBudget)
+                        .replace(/\b\w/g, (l) => l.toUpperCase())
+                        .replace(/([A-Z])(?=[A-Z][a-z])/, '$1 ')
+                        .replace(/[A-Z]{2,}/g, (m) => m.charAt(0) + m.slice(1).toLowerCase())}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={4} style={{ padding: '6px 8px', border: '1px solid #000' }}>
+                      {showIncomeSection ? (
+                        <table
+                          style={{
+                            width: '100%',
+                            borderCollapse: 'collapse',
+                            fontSize: '14px',
+                            tableLayout: 'fixed',
+                          }}
+                        >
+                          <colgroup>
+                            <col style={{ width: '8%' }} />
+                            <col style={{ width: '25%' }} />
+                            <col style={{ width: '20%' }} />
+                            <col style={{ width: '15%' }} />
+                            <col style={{ width: '27%' }} />
+                          </colgroup>
+                          <thead>
+                            <tr style={{ backgroundColor: '#f8f8f8' }}>
+                              <th
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                S.No
+                              </th>
+
+                              <th
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                Income Source
+                              </th>
+                              <th
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                Status
+                              </th>
+                              <th
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                Amount
+                              </th>
+                              <th
+                                style={{
+                                  padding: '3px 4px',
+                                  border: '1px solid #000',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                Remarks
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {incomeRows.map((row, index) => (
+                              <React.Fragment key={row.id}>
+                                <tr>
+                                  <td
+                                    rowSpan={2}
+                                    style={{
+                                      padding: '2.5px 4px',
+                                      border: '1px solid #000',
+                                      textAlign: 'center',
+                                    }}
+                                  >
+                                    {index + 1}
+                                  </td>
+
+                                  <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
+                                    {row.incomeSource || ''}
+                                  </td>
+                                  <td
+                                    style={{
+                                      padding: '2.5px 4px',
+                                      border: '1px solid #000',
+                                      textAlign: 'center',
+                                    }}
+                                  >
+                                    {row.status || ''}
+                                  </td>
+                                  <td
+                                    style={{
+                                      padding: '2.5px 4px',
+                                      border: '1px solid #000',
+                                      textAlign: 'right',
+                                    }}
+                                  >
+                                    ₹ {row.amount ? ` ${row.amount}` : ''}
+                                  </td>
+                                  <td style={{ padding: '2.5px 4px', border: '1px solid #000' }}>
+                                    {row.remarks || ''}
+                                  </td>
+                                </tr>
+                                <tr>
+                                  <td
+                                    colSpan={1}
+                                    style={{
+                                      padding: '2.5px 4px',
+                                      border: '1px solid #000',
+                                      fontWeight: 'bold',
+                                      backgroundColor: '#f8f8f8',
+                                    }}
+                                  >
+                                    <strong>Contribution</strong>
+                                    {row.contribution ? ` - ${row.contribution}` : ''}
+                                  </td>
+                                  <td
+                                    colSpan={3}
+                                    style={{
+                                      padding: '2.5px 4px',
+                                      border: '1px solid #000',
+                                      wordBreak: 'break-word',
+                                      overflowWrap: 'break-word',
+                                    }}
+                                  >
+                                    <b>Credit Account:</b>
+                                    {row.creditAccount || '\u00A0'}
+                                  </td>
+                                </tr>
+                              </React.Fragment>
+                            ))}
+                          </tbody>
+                          <tfoot>
+                            <tr style={{ backgroundColor: '#f0f6ff', fontWeight: 'bold' }}>
                               <td
                                 colSpan={3}
                                 style={{
                                   padding: '3px 4px',
                                   border: '1px solid #000',
                                   textAlign: 'right',
-                                  color: '#7a4b00',
+                                  color: '#0b3d75',
                                 }}
                               >
-                                Amount requested from Management
+                                Total Income
                               </td>
                               <td
                                 style={{
                                   padding: '3px 4px',
                                   border: '1px solid #000',
                                   textAlign: 'right',
-                                  color: '#7a4b00',
+                                  color: '#0b3d75',
                                 }}
                               >
-                                ₹ {amountRequestedFromManagement}
+                                ₹ {totalIncome}
                               </td>
                               <td
                                 style={{
                                   padding: '3px 4px',
                                   border: '1px solid #000',
-                                  color: '#7a4b00',
+                                  color: '#0b3d75',
                                 }}
                               >
                                 Rupees (in words):{' '}
-                                {numberToIndianWords(amountRequestedFromManagement)
+                                {numberToIndianWords(totalIncome)
                                   .replace(/\b\w/g, (l) => l.toUpperCase())
                                   .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
                               </td>
                             </tr>
+                            {shouldShowManagementRequestAmount && (
+                              <tr style={{ backgroundColor: '#fff8e1', fontWeight: 'bold' }}>
+                                <td
+                                  colSpan={3}
+                                  style={{
+                                    padding: '3px 4px',
+                                    border: '1px solid #000',
+                                    textAlign: 'right',
+                                    color: '#7a4b00',
+                                  }}
+                                >
+                                  Amount requested from Management
+                                </td>
+                                <td
+                                  style={{
+                                    padding: '3px 4px',
+                                    border: '1px solid #000',
+                                    textAlign: 'right',
+                                    color: '#7a4b00',
+                                  }}
+                                >
+                                  ₹ {amountRequestedFromManagement}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: '3px 4px',
+                                    border: '1px solid #000',
+                                    color: '#7a4b00',
+                                  }}
+                                >
+                                  Rupees (in words):{' '}
+                                  {numberToIndianWords(amountRequestedFromManagement)
+                                    .replace(/\b\w/g, (l) => l.toUpperCase())
+                                    .replace(/[^\s][A-Z]/g, (l) => l.toLowerCase())}
+                                </td>
+                              </tr>
+                            )}
+                          </tfoot>
+                        </table>
+                      ) : (
+                        <div style={{ textAlign: 'center', fontSize: '14px' }}>
+                          Income: Not Applicable
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
+                      <div
+                        style={{
+                          ...previewTimelineRowStyle,
+                          borderBottom:
+                            approvalSteps.length > 0 || showSeniorApprovalRow
+                              ? '1px solid #000'
+                              : 'none',
+                        }}
+                      >
+                        <span style={previewTimelineLabelStyle}>Submitted by</span>
+                        <span style={previewTimelineValueStyle}>
+                          {renderPersonLine(
+                            submittedByUi.name,
+                            submittedByUi.email,
+                            submittedByUi.date,
                           )}
-                        </tfoot>
-                      </table>
-                    ) : (
-                      <div style={{ textAlign: 'center', fontSize: '14px' }}>
-                        Income: Not Applicable
+                        </span>
                       </div>
-                    )}
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan={4} style={{ padding: '0', border: '1px solid #000' }}>
-                    <div
-                      style={{
-                        ...previewTimelineRowStyle,
-                        borderBottom:
-                          approvalSteps.length > 0 || showSeniorApprovalRow
-                            ? '1px solid #000'
-                            : 'none',
-                      }}
-                    >
-                      <span style={previewTimelineLabelStyle}>Submitted by</span>
-                      <span style={previewTimelineValueStyle}>
-                        {renderPersonLine(
-                          submittedByUi.name,
-                          submittedByUi.email,
-                          submittedByUi.date,
-                        )}
-                      </span>
-                    </div>
 
-                    {approvalSteps.map((entry, index) => {
-                      const entryKey = String(entry.key || `${entry.label}-${index}`);
-                      const hasExpandedDetails =
-                        Boolean(entry.fullSubtitle) && entry.fullSubtitle !== entry.subtitle;
-                      const detailText =
-                        hasExpandedDetails && expandedTimelineDetails[entryKey]
-                          ? entry.fullSubtitle
-                          : entry.subtitle;
+                      {approvalSteps.map((entry, index) => {
+                        const entryKey = String(entry.key || `${entry.label}-${index}`);
+                        const hasExpandedDetails =
+                          Boolean(entry.fullSubtitle) && entry.fullSubtitle !== entry.subtitle;
+                        const detailText =
+                          hasExpandedDetails && expandedTimelineDetails[entryKey]
+                            ? entry.fullSubtitle
+                            : entry.subtitle;
 
-                      return (
-                        <div
-                          key={entryKey}
-                          style={{
-                            ...previewTimelineRowStyle,
-                            borderBottom:
-                              index === approvalSteps.length - 1 && !showSeniorApprovalRow
-                                ? 'none'
-                                : '1px solid #000',
-                          }}
-                        >
-                          <span style={previewTimelineLabelStyle}>
-                            {getPreviewDecisionLabel(entry)}
-                          </span>
-                          <span
+                        return (
+                          <div
+                            key={entryKey}
                             style={{
-                              ...previewTimelineValueStyle,
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'flex-start',
-                              gap: '4px',
+                              ...previewTimelineRowStyle,
+                              borderBottom:
+                                index === approvalSteps.length - 1 && !showSeniorApprovalRow
+                                  ? 'none'
+                                  : '1px solid #000',
                             }}
                           >
-                            <span>
-                              {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
+                            <span style={previewTimelineLabelStyle}>
+                              {getPreviewDecisionLabel(entry)}
                             </span>
-                            {detailText ? (
-                              <span style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}>
-                                {detailText}
+                            <span
+                              style={{
+                                ...previewTimelineValueStyle,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'flex-start',
+                                gap: '4px',
+                              }}
+                            >
+                              <span>
+                                {renderPersonLine(entry.actor, entry.email, entry.timestamp)}
                               </span>
-                            ) : null}
-                            {hasExpandedDetails ? (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setExpandedTimelineDetails((prev) => ({
-                                    ...prev,
-                                    [entryKey]: !prev[entryKey],
-                                  }));
-                                }}
-                                style={{
-                                  border: 'none',
-                                  background: 'transparent',
-                                  color: '#0d6efd',
-                                  padding: 0,
-                                  cursor: 'pointer',
-                                  fontSize: '12px',
-                                  fontWeight: 600,
-                                }}
-                              >
-                                {expandedTimelineDetails[entryKey]
-                                  ? 'Show less'
-                                  : 'Show full changes'}
-                              </button>
-                            ) : null}
-                          </span>
-                        </div>
-                      );
-                    })}
-                    {approvalHistory.length === 0 ? (
-                      <div style={previewTimelineRowStyle}>No approval history available</div>
-                    ) : null}
-                    {showSeniorApprovalRow ? (
-                      <>
-                        {renderSeniorApprovalLine('Recommended by', {
-                          name: principalApprovalUi.name,
-                          email: principalApprovalUi.email,
-                          date: principalApprovalUi.date,
-                        })}
-                        {renderSeniorApprovalLine('Approved by', chairmanApprovalUi)}
-                      </>
-                    ) : null}
-                  </td>
-                </tr>
+                              {detailText ? (
+                                <span
+                                  style={{ fontSize: '12px', color: '#495057', lineHeight: 1.4 }}
+                                >
+                                  {detailText}
+                                </span>
+                              ) : null}
+                              {hasExpandedDetails ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setExpandedTimelineDetails((prev) => ({
+                                      ...prev,
+                                      [entryKey]: !prev[entryKey],
+                                    }));
+                                  }}
+                                  style={{
+                                    border: 'none',
+                                    background: 'transparent',
+                                    color: '#0d6efd',
+                                    padding: 0,
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  {expandedTimelineDetails[entryKey]
+                                    ? 'Show less'
+                                    : 'Show full changes'}
+                                </button>
+                              ) : null}
+                            </span>
+                          </div>
+                        );
+                      })}
+                      {approvalHistory.length === 0 ? (
+                        <div style={previewTimelineRowStyle}>No approval history available</div>
+                      ) : null}
+                      {showSeniorApprovalRow ? (
+                        <>
+                          {renderSeniorApprovalLine('Recommended by', {
+                            name: principalApprovalUi.name,
+                            email: principalApprovalUi.email,
+                            date: principalApprovalUi.date,
+                          })}
+                          {renderSeniorApprovalLine('Approved by', chairmanApprovalUi)}
+                        </>
+                      ) : null}
+                    </td>
+                  </tr>
+                </tbody>
               </table>
 
               {(isApprovalMode || canActOnCurrentStage) && !hideWorkflowActionsForFinalStatus ? (

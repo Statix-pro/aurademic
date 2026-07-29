@@ -559,6 +559,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
 // ---------------- Sponsoring Agency Section ----------------
 const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToTab, eventId }) => {
   const [enabled, setEnabled] = useState<boolean>(true);
+  const [isSubmittingFinance, setIsSubmittingFinance] = useState<boolean>(false);
 
   const initialDocStates: DocState[] = [
     { name: 'Sanction Order', enabled: false, file: null },
@@ -662,6 +663,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
 
   const handleSubmitToBackend = async (): Promise<void> => {
     // console.log("🔴 Finance Submit button clicked!");
+    if (isSubmittingFinance) return;
 
     // Prepare finance data
     const financeData = {
@@ -708,6 +710,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
 
     // console.log("🔴 Prepared finance data:", financeData);
 
+    setIsSubmittingFinance(true);
     try {
       const response = await authenticityUtility.post('/finance', financeData);
       // console.log("🟢 Finance backend response:", response);
@@ -717,6 +720,8 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
       console.error('🔴 Finance frontend error:', error);
       console.error('🔴 Error response:', error.response?.data);
       alert(`❌ Failed to submit finance data: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setIsSubmittingFinance(false);
     }
   };
 
@@ -928,8 +933,13 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
         <button type="button" className="event-prev-btn" onClick={() => goToTab('pre-event')}>
           ← Previous
         </button>
-        <button type="button" className="event-save-next-btn" onClick={handleSubmitToBackend}>
-          Save & Next →
+        <button
+          type="button"
+          className="event-save-next-btn"
+          onClick={handleSubmitToBackend}
+          disabled={isSubmittingFinance}
+        >
+          {isSubmittingFinance ? 'Saving...' : 'Save & Next →'}
         </button>
       </div>
     </div>
