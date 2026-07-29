@@ -886,6 +886,7 @@ const emptyTravelDetails: TravelDetails = {
 };
 
 const GuestHouseBooking: React.FC = () => {
+  const isRoomAllotmentVisible = false;
   const { user } = useAuth();
   const canManageGuesthouse = Boolean(
     user && (isSuperAdmin(user) || user.is_admin || hasPermission(user, 'guesthouse.manage')),
@@ -2784,7 +2785,7 @@ const GuestHouseBooking: React.FC = () => {
           </section>
 
           {/* Room Allotment Cards */}
-          {false && <div className="guesthousebooking-allotment-list" aria-label="Room Allotment">
+          {isRoomAllotmentVisible && <div className="guesthousebooking-allotment-list" aria-label="Room Allotment">
             {guests.map((guest, index) => {
               const guestId = String(guest.id);
               const allotment =
