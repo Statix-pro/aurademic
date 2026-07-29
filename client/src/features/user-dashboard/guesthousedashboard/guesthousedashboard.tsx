@@ -1208,6 +1208,8 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                             <span className="card-category-tag">
                               Stay: {formatBookingDate(item.check_in_date)}
                               {item.check_out_date ? ` – ${formatBookingDate(item.check_out_date)}` : ''}
+                              Booking Dates: {formatBookingDate(item.check_in_date)}
+                              {item.check_out_date ? ` - ${formatBookingDate(item.check_out_date)}` : ''}
                             </span>
                           </div>
 
@@ -1245,6 +1247,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                         <div className="card-row-bottom">
                           <div className="card-row-middle">
                             <span className="beneficiary-label">Guest:</span>
+                            <span className="beneficiary-label">Guest Details :</span>
                             <span className="beneficiary-value">
                               {item.guest_details || item.beneficiary_name || item.beneficiary_value || '-'}
                             </span>
