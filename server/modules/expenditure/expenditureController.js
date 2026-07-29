@@ -590,6 +590,7 @@ const expenditureController = {
       const userEmail = normalizeText(req.user?.email);
       const financeRequestId = toPositiveInt(req.query.finance_request_id);
       const fiscalYear = toPositiveInt(req.query.fiscal_year || req.query.fiscalYear);
+      const excludeExpenditureId = toPositiveInt(req.query.expenditure_request_id);
       if (!financeRequestId) return sendError(res, 400, 'finance_request_id is required');
 
       let budgets = await expenditureModel.getApprovedBudgets({
@@ -602,6 +603,9 @@ const expenditureController = {
         // only the original finance creator, otherwise Head of Accounts is empty
         // for valid applicant/admin flows.
         allowAnyApprovedFinance: true,
+        // When editing an existing expenditure request, exclude its own already-saved
+        // usage from "used" so the remaining balance isn't computed against itself.
+        excludeExpenditureId,
       });
 
       const head = normalizeText(req.query.head).toLowerCase();
@@ -675,7 +679,13 @@ const expenditureController = {
       const context = await expenditureModel.getFinanceRequestContext(financeId);
       if (!context) return sendError(res, 404, 'Finance request not found');
 
-      if (!isSuperAdmin && toPositiveInt(context.created_by) !== userId) {
+      const isOwner = userId && toPositiveInt(context.created_by) === userId;
+      if (
+        !isSuperAdmin &&
+        !isOwner &&
+        !hasAnyExpenditureWorkflowPermission(req) &&
+        !canAccessExpenditureByRole(req)
+      ) {
         return sendError(res, 403, 'Access denied');
       }
 

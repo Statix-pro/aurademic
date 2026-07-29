@@ -10,7 +10,16 @@ import '../../shared/styles/forms.css';
 import '../../shared/components/ui/common.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
-import { Trash2, Plus, GripVertical, ChevronDown } from 'lucide-react';
+import {
+  Trash2,
+  Plus,
+  GripVertical,
+  ChevronDown,
+  Upload,
+  FileText,
+  CheckCircle,
+  ExternalLink,
+} from 'lucide-react';
 
 // Type definitions
 interface Author {
@@ -278,7 +287,6 @@ const JournalForm: React.FC = () => {
     Others: false,
   });
 
-  const [annaUniversityListed, setAnnaUniversityListed] = useState<boolean>(false);
   const [othersSelected, setOthersSelected] = useState<boolean>(false);
   const [otherAcknowledgement, setOtherAcknowledgement] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -300,6 +308,10 @@ const JournalForm: React.FC = () => {
   const [doi, setDoi] = useState<string>('');
   const [scopusId, setScopusId] = useState<string>('');
   const [scieId, setScieId] = useState<string>('');
+  const [wosId, setWosId] = useState<string>('');
+  const [pubmedPmid, setPubmedPmid] = useState<string>('');
+  const [openAccess, setOpenAccess] = useState<'Yes' | 'No'>('No');
+  const [year, setYear] = useState<string>('');
 
   // Add new state for page/article number choice
   const [pageOrArticleChoice, setPageOrArticleChoice] = useState<PageOrArticleChoice>('pages');
@@ -340,6 +352,7 @@ const JournalForm: React.FC = () => {
     category: '',
   });
   const [conferenceRequestLoading, setConferenceRequestLoading] = useState<boolean>(false);
+  const [isFormSubmitting, setIsFormSubmitting] = useState<boolean>(false);
   const [conferenceRequestError, setConferenceRequestError] = useState<string>('');
 
   // Add state for Abstract and Keywords
@@ -584,21 +597,6 @@ const JournalForm: React.FC = () => {
 
     return () => clearTimeout(timer);
   }, [editRequestStatus]);
-
-  useEffect(() => {
-    if (!metrics.dateOfSubmission) {
-      setMetrics((prevMetrics) => ({
-        ...prevMetrics,
-        volume: false,
-        issue: false,
-        pages: false,
-        doi: false,
-        acceptedForPublication: false,
-        availableOnline: false,
-      }));
-      setUploadedFileName('');
-    }
-  }, [metrics.dateOfSubmission]);
 
   // Fetch status updates when switching to status tab
   useEffect(() => {
@@ -914,18 +912,6 @@ const JournalForm: React.FC = () => {
           if (input) input.value = journalData.cite_score;
         }
 
-        // Handle Anna University listing
-        const annaUnivRadio = document.querySelector(
-          `input[name="listedInAnnaUniversity"][value="${journalData.anna_university_listed ? 'yes' : 'no'}"]`,
-        ) as HTMLInputElement;
-        if (annaUnivRadio) annaUnivRadio.checked = true;
-
-        if (journalData.anna_university_listed) {
-          const annexureInput = document.querySelector(
-            'input[name="annexureNo"]',
-          ) as HTMLInputElement;
-          if (annexureInput) annexureInput.value = journalData.anna_university_annexure_no || '';
-        }
         // Set date of submission and status
         if (journalData.date_of_submission) {
           const dateInput = document.getElementById('dateOfSubmissionInput') as HTMLInputElement;
@@ -1095,9 +1081,6 @@ const JournalForm: React.FC = () => {
       setIsInternational(journalData.category === 'International');
       setStatus(journalData.status || 'waiting');
       setDrivenBy(journalData.driven_by || 'faculty');
-      setAnnaUniversityListed(
-        journalData.anna_university_listed === 1 || journalData.anna_university_listed === true,
-      );
 
       // Set Abstract and Keywords
       setAbstract(journalData.abstract || '');
@@ -1725,11 +1708,7 @@ const JournalForm: React.FC = () => {
     setSearchQueries((prevQueries) => {
       const prevArray = Array.isArray(prevQueries) ? prevQueries : Array(MAX_AUTHORS).fill('');
       const newQueries = [...prevArray];
-      const normalizedDesignation = computeDesignation(selectedAuthor);
-      newQueries[index] =
-        normalizedDesignation === 'student'
-          ? selectedAuthor.student_id || ''
-          : selectedAuthor.author_id || '';
+      newQueries[index] = selectedAuthor.name || '';
       return newQueries;
     });
 
@@ -1753,17 +1732,6 @@ const JournalForm: React.FC = () => {
       return (
         <>
           <div className="author-input-group">
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Register No."
-              name="register_no"
-              value={author.register_no || ''}
-              onChange={(e) =>
-                handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
-              }
-              disabled={!editMode && isViewMode}
-            />
             <input
               type="text"
               className="form-control"
@@ -1820,17 +1788,6 @@ const JournalForm: React.FC = () => {
             <input
               type="text"
               className="form-control"
-              placeholder="Department"
-              name="department"
-              value={author.department || ''}
-              onChange={(e) =>
-                handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
-              }
-              disabled={!editMode && isViewMode}
-            />
-            <input
-              type="text"
-              className="form-control"
               placeholder="Organization"
               name="organization"
               value={author.organization || ''}
@@ -1861,15 +1818,8 @@ const JournalForm: React.FC = () => {
             <input
               type="text"
               className="form-control"
-              placeholder="Search or enter Author ID"
-              value={
-                isViewMode
-                  ? (authorDesignations[index] || author.designation || 'faculty').toLowerCase() ===
-                    'student'
-                    ? author.register_no || ''
-                    : author.author_id || ''
-                  : searchQueries[index] || ''
-              }
+              placeholder="Name (Searchable)"
+              value={author.name || searchQueries[index] || ''}
               onChange={(e) => handleSearchInputChange(e, index)}
               onFocus={() => {
                 // Skip if author was just added to prevent auto-dropdown
@@ -1944,13 +1894,6 @@ const JournalForm: React.FC = () => {
           <input
             type="text"
             className="form-control"
-            placeholder="Name"
-            value={author.name || ''}
-            readOnly
-          />
-          <input
-            type="text"
-            className="form-control"
             placeholder="Department"
             value={author.department || ''}
             readOnly
@@ -2008,6 +1951,16 @@ const JournalForm: React.FC = () => {
 
     if (metric === 'doi' && !value) {
       setDoi('');
+    }
+
+    // When the Issue toggle is turned off, clear the Regular/Special issue selection
+    if (metric === 'issue') {
+      const nextIssue = value !== null ? value : !metrics.issue;
+      if (!nextIssue) {
+        document
+          .querySelectorAll('input[name="issueType"]')
+          .forEach((radio) => ((radio as HTMLInputElement).checked = false));
+      }
     }
 
     if (metric === 'dateOfSubmission' && !value) {
@@ -2295,6 +2248,7 @@ const JournalForm: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isFormSubmitting) return;
 
     // Collect all validation errors
     const errors: string[] = [];
@@ -2502,6 +2456,10 @@ const JournalForm: React.FC = () => {
       reference_number: referenceNumber,
       accepted_date: getFormValue('acceptedDateInput'),
       available_online_date: getFormValue('availableDateInput'),
+      open_access: openAccess || null,
+      year: year || null,
+      wos_id: wosId || null,
+      pubmed_pmid: pubmedPmid || null,
     };
 
     // Add publication_details for Conference, Book Chapter, and Book
@@ -2536,7 +2494,6 @@ const JournalForm: React.FC = () => {
     // Add Journal-specific fields only for Journal types
     if (isJournalType) {
       const quartileValue = getFormValue('quartile');
-      const annexureValue = getFormValue('annexureNo');
       const impactFactorValue = getFormValue('impactFactorInput');
       const citeScoreValue = getFormValue('citeScoreInput');
 
@@ -2547,12 +2504,9 @@ const JournalForm: React.FC = () => {
         impactFactorValue && impactFactorValue !== '' ? parseFloat(impactFactorValue) : null;
       journalData.cite_score =
         citeScoreValue && citeScoreValue !== '' ? parseFloat(citeScoreValue) : null;
-
-      journalData.anna_university_listed = annaUniversityListed;
-      journalData.anna_university_annexure_no =
-        annaUniversityListed && annexureValue ? annexureValue.trim() : null;
     }
 
+    setIsFormSubmitting(true);
     try {
       let currentJournalId: string;
       const isEditFlow = Boolean(journalId);
@@ -2692,6 +2646,8 @@ const JournalForm: React.FC = () => {
       console.error('Error submitting journal:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
       alert(`Error submitting journal: ${errorMessage}`);
+    } finally {
+      setIsFormSubmitting(false);
     }
   };
 
@@ -2926,6 +2882,9 @@ const JournalForm: React.FC = () => {
                 <div className="col-lg-6">
                   {/* Left Column Card */}
                   <div className="form-card h-100" style={{ padding: '24px' }}>
+                    <h6 className="form-section-title section-title-divider mb-3">
+                      Article Details
+                    </h6>
                     <div className="mb-3">
                       <label className="form-label">
                         {effectiveIsBook
@@ -2990,7 +2949,7 @@ const JournalForm: React.FC = () => {
 
                     {effectiveIsJournal && (
                       <div className="mb-3">
-                        <label className="form-label">Quartile</label>
+                        <label className="form-label">Scopus Quartile</label>
                         <div className="radio-group">
                           {['Q1', 'Q2', 'Q3', 'Q4', 'Nil'].map((q) => (
                             <div className="radio-item" key={q}>
@@ -3079,58 +3038,9 @@ const JournalForm: React.FC = () => {
                       </div> */}
                     </div>
 
-                    {effectiveIsJournal && (
-                      <div className="mb-3">
-                        <div className="d-flex align-items-center flex-nowrap">
-                          <label
-                            className="form-label mb-0 me-2"
-                            style={{ minWidth: 'fit-content', whiteSpace: 'nowrap' }}
-                          >
-                            Listed in Anna university CFR Annexure
-                          </label>
-                          <div className="radio-group me-2 mt-2">
-                            <div className="radio-item">
-                              <input
-                                type="radio"
-                                id="yes"
-                                name="listedInAnnaUniversity"
-                                value="yes"
-                                checked={annaUniversityListed === true}
-                                onChange={() => setAnnaUniversityListed(true)}
-                                disabled={!editMode && isViewMode}
-                              />
-                              <label htmlFor="yes">Yes</label>
-                            </div>
-                            <div className="radio-item">
-                              <input
-                                type="radio"
-                                id="no"
-                                name="listedInAnnaUniversity"
-                                value="no"
-                                checked={annaUniversityListed === false}
-                                onChange={() => setAnnaUniversityListed(false)}
-                                disabled={!editMode && isViewMode}
-                              />
-                              <label htmlFor="no">No</label>
-                            </div>
-                          </div>
-                          {annaUniversityListed && (
-                            <input
-                              type="text"
-                              name="annexureNo"
-                              className="form-control"
-                              placeholder="Annexure No."
-                              style={{ maxWidth: '110px', minWidth: '100px' }}
-                              disabled={!editMode && isViewMode}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    )}
-
                     {/* Acknowledgement Section - SDG-style multi-select - Hidden for Book category */}
                     {!effectiveIsBook && (
-                      <div className="mb-3">
+                      <div className="mb-3 mt-3">
                         <label className="form-label">Acknowledgement</label>
                         <CustomTagInput
                           name="acknowledgement"
@@ -3165,76 +3075,8 @@ const JournalForm: React.FC = () => {
                           }
                           disabled={!editMode && isViewMode}
                         />
-
-                        {/* "Others" checkbox and input */}
-                        {/* <div className="mt-2">
-                          <div className="form-check">
-                            <input
-                              className="form-check-input"
-                              type="checkbox"
-                              id="others-acknowledgement"
-                              checked={acknowledgements.Others}
-                              onChange={(e) => {
-                                setAcknowledgements((prev) => ({
-                                  ...prev,
-                                  Others: e.target.checked
-                                }));
-                                if (!e.target.checked) {
-                                  setOtherAcknowledgement('');
-                                } else {
-                                  // Remove Nil if Others is selected
-                                  setSelectedAcknowledgements((prev) => prev.filter(item => item !== 'Nil'));
-                                }
-                              }}
-                              disabled={!editMode && isViewMode}
-                            />
-                            <label className="form-check-label" htmlFor="others-acknowledgement">
-                              Others
-                            </label>
-                          </div>
-                          {acknowledgements.Others && (
-                            <input
-                              type="text"
-                              className="form-control mt-2"
-                              placeholder="Please specify"
-                              value={otherAcknowledgement}
-                              onChange={handleOtherAcknowledgementChange}
-                              disabled={!editMode && isViewMode}
-                            />
-                          )}
-                        </div> */}
                       </div>
                     )}
-
-                    {/* <div>
-                                <label className="form-label">Acknowledgement</label>
-                                <div className="radio-group">
-                                    {['Nil', 'DST-FIST', 'MODROBS', 'Others'].map(ack => (
-                                        <div className="radio-item" key={ack}>
-                                            <input
-                                                type="radio"
-                                                id={ack.toLowerCase()}
-                                                name="acknowledgements"
-                                                value={ack}
-                                                checked={acknowledgements === ack}
-                                                onChange={() => setAcknowledgements(ack)}
-                                                disabled={!editMode && isViewMode}
-                                            />
-                                            <label htmlFor={ack.toLowerCase()}>{ack}</label>
-                                        </div>
-                                    ))}
-                                </div>
-                                {acknowledgements === 'Others' && (
-                                    <input
-                                        type="text"
-                                        className="form-control mt-2"
-                                        placeholder="Please specify"
-                                        value={otherAcknowledgement}
-                                        onChange={e => setOtherAcknowledgement(e.target.value)}
-                                        disabled={!editMode && isViewMode}
-                                    />
-                                )}
-                            </div> */}
 
                     {/* Sustainable Development Goals Section */}
                     <div className="mb-3">
@@ -3264,23 +3106,26 @@ const JournalForm: React.FC = () => {
                 <div className="col-lg-6">
                   {/* Right Column Card */}
                   <div className="form-card h-100" style={{ padding: '24px' }}>
+                    <div className="d-flex justify-content-between align-items-center mb-3 section-title-divider">
+                      <h6 className="form-section-title mb-0">Journal Details</h6>
+                      {effectiveIsJournal && (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-add-journal"
+                          onClick={() => setShowJournalRequestModal(true)}
+                          disabled={!editMode && isViewMode}
+                        >
+                          Add Journal
+                        </button>
+                      )}
+                    </div>
                     {/* Only show journal search for Journal */}
                     {effectiveIsJournal && (
                       <div className="mb-3 position-relative">
-                        <div className="d-flex justify-content-between align-items-center mb-2">
+                        <div className="mb-2">
                           <label htmlFor="journalSearch" className="form-label mb-0">
                             Journal Name
                           </label>
-                          <div>
-                            <button
-                              type="button"
-                              className="btn btn-sm btn-outline-secondary me-2"
-                              onClick={() => setShowJournalRequestModal(true)}
-                              disabled={!editMode && isViewMode}
-                            >
-                              Request Journal
-                            </button>
-                          </div>
                         </div>
                         <input
                           type="text"
@@ -3876,15 +3721,9 @@ const JournalForm: React.FC = () => {
                         </div>
                       </div>
                     )}
-
-                    {/* Modal backdrop */}
-                    {showConferenceRequestModal && <div className="modal-backdrop fade show"></div>}
-
-                    {/* Modal backdrop */}
-                    {showJournalRequestModal && <div className="modal-backdrop fade show"></div>}
-
+                    {/* Metrics & Status Section */}
                     {effectiveIsJournal && (
-                      <div className="mb-3">
+                      <div className="mb-3 mt-4">
                         <div className="row g-3">
                           <div className="col-6">
                             <label
@@ -3933,126 +3772,198 @@ const JournalForm: React.FC = () => {
                         </div>
                       </div>
                     )}
-                    <div className="mb-3">
-                      <div className="d-flex align-items-center gap-3 mb-2">
-                        <label className="form-label mb-0">Submitted on</label>
-                        <label className="toggle-switch mb-0">
-                          <input
-                            type="checkbox"
-                            checked={metrics.dateOfSubmission}
-                            onChange={() => handleMetricToggle('dateOfSubmission')}
-                            disabled={!editMode && isViewMode}
-                          />
-                          <span className="slider"></span>
+                    <div className="row g-3 mb-2">
+                      <div className="col-6">
+                        <label
+                          className="form-label"
+                          style={{ fontSize: '14px', marginBottom: '0.5rem' }}
+                        >
+                          Submitted on
                         </label>
-                        <input
-                          type="date"
-                          id="dateOfSubmissionInput"
-                          name="dateOfSubmissionInput"
-                          className="form-control"
-                          style={{ maxWidth: '150px' }}
-                          disabled={!metrics.dateOfSubmission || (!editMode && isViewMode)}
-                        />
-                      </div>
-                      <div className="d-flex align-items-center gap-3 mt-4">
-                        <label className="form-label mb-0">Status</label>
-                        <div className="position-relative">
-                          <select
-                            id="statusDropdown"
+                        <div className="d-flex align-items-center gap-2">
+                          <input
+                            type="date"
+                            id="dateOfSubmissionInput"
+                            name="dateOfSubmissionInput"
                             className="form-control"
-                            style={{ width: '200px' }}
-                            value={status}
-                            onChange={handleStatusChange}
                             disabled={!editMode && isViewMode}
-                          >
-                            <option value="submitted">Submitted</option>
-                            <option value="underReview">Under Review</option>
-                            <option value="revisionSubmitted">Revision Submitted</option>
-                            <option value="accepted">Accepted</option>
-                            <option value="published">Published</option>
-                          </select>
-                          <ChevronDown
-                            size={12}
-                            style={{
-                              position: 'absolute',
-                              right: '10px',
-                              top: '50%',
-                              transform: 'translateY(-50%)',
-                              pointerEvents: 'none',
-                              color: '#6c757d',
-                            }}
                           />
                         </div>
                       </div>
+                      <div className="col-6">
+                        <label
+                          className="form-label"
+                          style={{ fontSize: '14px', marginBottom: '0.5rem' }}
+                        >
+                          Status
+                        </label>
+                        <div className="d-flex align-items-center gap-2">
+                          <div className="position-relative flex-grow-1">
+                            <select
+                              id="statusDropdown"
+                              className="form-control"
+                              value={status}
+                              onChange={handleStatusChange}
+                              disabled={!editMode && isViewMode}
+                            >
+                              <option value="submitted">Submitted</option>
+                              <option value="underReview">Under Review</option>
+                              <option value="revisionSubmitted">Revision Submitted</option>
+                              <option value="accepted">Accepted</option>
+                              <option value="published">Published</option>
+                            </select>
+                            <ChevronDown
+                              size={12}
+                              style={{
+                                position: 'absolute',
+                                right: '10px',
+                                top: '50%',
+                                transform: 'translateY(-50%)',
+                                pointerEvents: 'none',
+                                color: '#6c757d',
+                              }}
+                            />
+                          </div>
+                          {status === 'published' && (
+                            <CheckCircle size={22} className="status-check-icon" />
+                          )}
+                        </div>
+                      </div>
                     </div>
+
+                    {/* Modal backdrop */}
+                    {showConferenceRequestModal && <div className="modal-backdrop fade show"></div>}
+
+                    {/* Modal backdrop */}
+                    {showJournalRequestModal && <div className="modal-backdrop fade show"></div>}
                   </div>
                 </div>
               </div>
 
-              {/* Conditional Bottom Card */}
+              {/* Conditional Bottom Cards (Published only) */}
               {status === 'published' && (
-                <div className="form-card-dashed container-gap" style={{ padding: '24px' }}>
-                  {/* Abstract and Keywords */}
-                  {!effectiveIsBook && !effectiveIsBookChapter && (
+                <>
+                  {/* Abstract / Keywords / Reference Nos Card */}
+                  <div className="form-card-dashed container-gap" style={{ padding: '24px' }}>
+                    {/* Abstract and Keywords */}
+                    {!effectiveIsBook && !effectiveIsBookChapter && (
+                      <div className="mb-3">
+                        <label className="form-label">Abstract</label>
+                        <textarea
+                          id="abstract"
+                          name="abstract"
+                          className="form-control"
+                          rows={4}
+                          placeholder="Enter abstract"
+                          value={abstract}
+                          onChange={(e) => setAbstract(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                          style={{ resize: 'vertical', minHeight: '120px' }}
+                        />
+                        <small className="text-muted">Character count: {abstract.length}</small>
+                      </div>
+                    )}
                     <div className="mb-3">
-                      <label className="form-label">Abstract</label>
-                      <textarea
-                        id="abstract"
-                        name="abstract"
+                      <label className="form-label">Keywords</label>
+                      <input
+                        type="text"
+                        id="keywords"
+                        name="keywords"
                         className="form-control"
-                        rows={4}
-                        placeholder="Enter abstract"
-                        value={abstract}
-                        onChange={(e) => setAbstract(e.target.value)}
+                        placeholder="Enter keywords separated by semicolons "
+                        value={keywords}
+                        onChange={(e) => setKeywords(e.target.value)}
                         disabled={!editMode && isViewMode}
-                        style={{ resize: 'vertical', minHeight: '120px' }}
                       />
-                      <small className="text-muted">Character count: {abstract.length}</small>
                     </div>
-                  )}
-                  <div className="mb-3">
-                    <label className="form-label">Keywords</label>
-                    <input
-                      type="text"
-                      id="keywords"
-                      name="keywords"
-                      className="form-control"
-                      placeholder="Enter keywords separated by semicolons "
-                      value={keywords}
-                      onChange={(e) => setKeywords(e.target.value)}
-                      disabled={!editMode && isViewMode}
-                    />
+
+                    {/* Reference Number Field - Hidden for Book category */}
+                    {!effectiveIsBook && (
+                      <div className="mb-3">
+                        <label className="form-label">
+                          Reference Nos. (Citations of KSRCT Publications)
+                        </label>
+                        <div className="d-flex align-items-center gap-3">
+                          <input
+                            type="text"
+                            id="referenceNumberInput"
+                            className="form-control"
+                            value={referenceNumber}
+                            onChange={(e) => setReferenceNumber(e.target.value)}
+                            placeholder="Enter S.No. of KSRCT Publications in References separated by comma"
+                            disabled={!editMode && isViewMode}
+                          />
+                          <span className="reference-citation-count">
+                            Citation Count:{' '}
+                            {referenceNumber.split(',').filter((num) => num.trim() !== '').length}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  <div className="row g-4">
-                    <div className="col-lg-6">
-                      {/* Left Column - Volume, Issue, Issue Type, Pages, DOI */}
-                      <div className="metric-item-vertical mb-3">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <label className="form-label mb-0">Volume</label>
-                          <label className="toggle-switch">
-                            <input
-                              type="checkbox"
-                              id="volumeToggle"
-                              checked={metrics.volume}
-                              onChange={() => handleMetricToggle('volume')}
-                              disabled={!editMode && isViewMode}
-                            />
-                            <span className="slider"></span>
-                          </label>
+                  {/* Publication Details Card */}
+                  <div className="form-card mb-4" style={{ padding: '24px' }}>
+                    <h6 className="form-section-title section-title-divider mb-4">
+                      Publication Details
+                    </h6>
+                    <div className="row g-4">
+                      {/* Left Column */}
+                      <div className="col-lg-7">
+                        <div className="pub-field-horizontal">
+                          <label className="form-label">Volume</label>
                           <input
                             type="text"
                             id="volumeInput"
                             className="form-control"
-                            disabled={!metrics.volume || (!editMode && isViewMode)}
+                            style={{ maxWidth: '120px' }}
+                            placeholder="Number"
+                            disabled={!editMode && isViewMode}
                           />
-                        </div>
-                      </div>
 
-                      <div className="metric-item-vertical mb-3">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <label className="form-label mb-0">Issue</label>
-                          <label className="toggle-switch">
+                          <div className="d-flex align-items-center ms-4 gap-3">
+                            <label className="form-label mb-0 text-primary">Open Access</label>
+                            <div
+                              className="bg-light-blue py-1 px-3 d-flex gap-3"
+                              style={{ borderRadius: '8px' }}
+                            >
+                              <div className="form-check mb-0">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="openAccess"
+                                  id="oaYes"
+                                  value="Yes"
+                                  checked={openAccess === 'Yes'}
+                                  onChange={(e) => setOpenAccess(e.target.value as 'Yes' | 'No')}
+                                  disabled={!editMode && isViewMode}
+                                />
+                                <label className="form-check-label" htmlFor="oaYes">
+                                  Yes
+                                </label>
+                              </div>
+                              <div className="form-check mb-0">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="openAccess"
+                                  id="oaNo"
+                                  value="No"
+                                  checked={openAccess === 'No'}
+                                  onChange={(e) => setOpenAccess(e.target.value as 'Yes' | 'No')}
+                                  disabled={!editMode && isViewMode}
+                                />
+                                <label className="form-check-label" htmlFor="oaNo">
+                                  No
+                                </label>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="pub-field-horizontal">
+                          <label className="form-label">Issue</label>
+                          <label className="toggle-switch mb-0">
                             <input
                               type="checkbox"
                               id="issueToggle"
@@ -4066,413 +3977,376 @@ const JournalForm: React.FC = () => {
                             type="text"
                             id="issueInput"
                             className="form-control"
+                            style={{ maxWidth: '120px' }}
+                            placeholder="Number"
                             disabled={!metrics.issue || (!editMode && isViewMode)}
                           />
-                        </div>
-                      </div>
 
-                      {!effectiveIsBook && !effectiveIsBookChapter && (
-                        <div className="mb-3">
-                          <div className="radio-group">
-                            <div className="radio-item">
-                              <input
-                                type="radio"
-                                id="regularIssue"
-                                name="issueType"
-                                value="Regular Issue"
-                                disabled={!editMode && isViewMode}
-                              />
-                              <label htmlFor="regularIssue">Regular Issue</label>
+                          {!effectiveIsBook && !effectiveIsBookChapter && (
+                            <div className="d-flex gap-3 ms-3">
+                              <div className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="issueType"
+                                  id="regularIssue"
+                                  value="Regular Issue"
+                                  disabled={!metrics.issue || (!editMode && isViewMode)}
+                                />
+                                <label className="form-check-label" htmlFor="regularIssue">
+                                  Regular Issue
+                                </label>
+                              </div>
+                              <div className="form-check">
+                                <input
+                                  className="form-check-input"
+                                  type="radio"
+                                  name="issueType"
+                                  id="specialIssue"
+                                  value="Special Issue"
+                                  disabled={!metrics.issue || (!editMode && isViewMode)}
+                                />
+                                <label className="form-check-label" htmlFor="specialIssue">
+                                  Special Issue
+                                </label>
+                              </div>
                             </div>
-                            <div className="radio-item">
-                              <input
-                                type="radio"
-                                id="specialIssue"
-                                name="issueType"
-                                value="Special Issue"
-                                disabled={!editMode && isViewMode}
-                              />
-                              <label htmlFor="specialIssue">Special Issue</label>
-                            </div>
-                            <div className="radio-item">
-                              <input
-                                type="radio"
-                                id="proceedings"
-                                name="issueType"
-                                value="Proceedings"
-                                disabled={!editMode && isViewMode}
-                              />
-                              <label htmlFor="proceedings">Proceedings</label>
-                            </div>
-                          </div>
+                          )}
                         </div>
-                      )}
 
-                      <div className="metric-item-vertical mb-3">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <label className="form-label mb-0">
-                            {pageOrArticleChoice === 'article' ? 'Article Number' : 'Page Number'}
+                        <div className="pub-field-horizontal align-items-center">
+                          <label className="form-label">Page No.</label>
+                          <label className="toggle-switch mb-0">
+                            <input
+                              type="checkbox"
+                              id="pageOrArticleToggle"
+                              checked={pageOrArticleChoice === 'pages'}
+                              onChange={(e) =>
+                                handlePageOrArticleChoice(e.target.checked ? 'pages' : 'article')
+                              }
+                              disabled={!editMode && isViewMode}
+                            />
+                            <span className="slider"></span>
                           </label>
-                          <div className="custom-tooltip">
-                            <label className="toggle-switch mb-0">
+                          {pageOrArticleChoice === 'pages' ? (
+                            <div className="d-flex gap-2">
                               <input
-                                type="checkbox"
-                                id="pageOrArticleToggle"
-                                checked={pageOrArticleChoice === 'pages'}
-                                onChange={(e) =>
-                                  handlePageOrArticleChoice(e.target.checked ? 'pages' : 'article')
-                                }
+                                type="number"
+                                id="pagesFromInput"
+                                className="form-control"
+                                style={{ maxWidth: '100px' }}
+                                placeholder="From"
                                 disabled={!editMode && isViewMode}
                               />
-                              <span className="slider"></span>
-                            </label>
-                            <span className="tooltip-text">
-                              Toggle to switch between Page Number and Article Number
-                            </span>
-                          </div>
-                        </div>
-                        {pageOrArticleChoice === 'pages' && (
-                          <div className="d-flex gap-2 mt-2">
-                            <input
-                              type="number"
-                              id="pagesFromInput"
-                              className="form-control"
-                              placeholder="From"
-                              disabled={!editMode && isViewMode}
-                            />
-                            <input
-                              type="number"
-                              id="pagesToInput"
-                              className="form-control"
-                              placeholder="To"
-                              disabled={!editMode && isViewMode}
-                            />
-                          </div>
-                        )}
-                        {pageOrArticleChoice === 'article' && (
-                          <div className="mt-2">
+                              <input
+                                type="number"
+                                id="pagesToInput"
+                                className="form-control"
+                                style={{ maxWidth: '100px' }}
+                                placeholder="To"
+                                disabled={!editMode && isViewMode}
+                              />
+                            </div>
+                          ) : (
                             <input
                               type="text"
                               id="articleNumberInput"
                               className="form-control"
+                              style={{ maxWidth: '208px' }}
                               placeholder="Enter article number"
                               disabled={!editMode && isViewMode}
                             />
-                          </div>
-                        )}
-                      </div>
+                          )}
 
-                      <div className="metric-item-vertical mb-3">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <label className="form-label mb-0">DOI</label>
-                          <label className="toggle-switch">
+                          <div
+                            className="bg-light-blue ms-3 py-1 px-3 d-flex align-items-center gap-2"
+                            style={{ borderRadius: '8px' }}
+                          >
+                            <label className="form-label mb-0 text-primary">Year</label>
                             <input
-                              type="checkbox"
-                              id="doiToggle"
-                              checked={metrics.doi}
-                              onChange={() => handleMetricToggle('doi')}
+                              type="text"
+                              className="form-control"
+                              style={{ maxWidth: '100px' }}
+                              value={year}
+                              onChange={(e) => setYear(e.target.value)}
                               disabled={!editMode && isViewMode}
                             />
-                            <span className="slider"></span>
-                          </label>
-                          {isViewMode && !editMode ? (
-                            // View mode - display as clickable link
-                            metrics.doi ? (
-                              <div className="form-control-plaintext">
-                                {(() => {
-                                  // Use the DOI value from state
-                                  const doiValue = doi;
-                                  if (!doiValue) return 'N/A';
+                          </div>
+                        </div>
 
-                                  // Create the full DOI URL
-                                  const fullDoiUrl = doiValue.startsWith('http')
-                                    ? doiValue
-                                    : `https://www.doi.org/${doiValue}`;
-                                  return (
-                                    <a
-                                      href={fullDoiUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-primary text-decoration-none"
-                                    >
-                                      {doiValue}
-                                    </a>
-                                  );
-                                })()}
-                              </div>
-                            ) : (
-                              <div className="form-control-plaintext text-muted">
-                                DOI not provided
-                              </div>
-                            )
-                          ) : (
-                            // Edit mode - display with prefix input and preview button
-                            <div className="d-flex align-items-center flex-grow-1">
-                              <span className="text-muted me-2" style={{ fontSize: '0.875rem' }}>
-                                https://www.doi.org/
-                              </span>
-                              <input
-                                type="text"
-                                id="doiInput"
-                                className="form-control"
-                                placeholder="10.1109/ICACCS60874.2024.10717004"
-                                value={doi}
-                                onChange={(e) => setDoi(e.target.value)}
-                                disabled={!metrics.doi}
-                              />
-                              {metrics.doi && (
-                                <button
-                                  type="button"
-                                  className="btn btn-outline-secondary btn-sm ms-2"
-                                  onClick={() => {
-                                    const doiInput = document.getElementById(
-                                      'doiInput',
-                                    ) as HTMLInputElement;
-                                    const doiValue = doiInput ? doiInput.value.trim() : '';
-                                    if (doiValue) {
-                                      const fullDoiUrl = doiValue.startsWith('http')
-                                        ? doiValue
-                                        : `https://www.doi.org/${doiValue}`;
-                                      window.open(fullDoiUrl, '_blank', 'noopener,noreferrer');
-                                    } else {
-                                      alert('Please enter a DOI first');
-                                    }
-                                  }}
-                                  title="Preview DOI URL"
+                        <div
+                          className="bg-light-blue mt-4 d-flex align-items-center gap-3"
+                          style={{ borderRadius: '8px' }}
+                        >
+                          <label
+                            className="form-label mb-0 text-primary"
+                            style={{ whiteSpace: 'nowrap' }}
+                          >
+                            Credits to
+                          </label>
+                          <select
+                            className="form-control"
+                            value={selectedCreditTo[0] || ''}
+                            onChange={(e) => {
+                              const newSelected = [...selectedCreditTo];
+                              newSelected[0] = e.target.value;
+                              setSelectedCreditTo(newSelected.filter((v) => v));
+                            }}
+                            disabled={!editMode && isViewMode}
+                          >
+                            <option value="">Select Author</option>
+                            {authors
+                              .filter(
+                                (author) =>
+                                  author.name &&
+                                  author.name.trim() &&
+                                  author.designation === 'faculty',
+                              )
+                              .map((author) => (
+                                <option
+                                  key={author.id}
+                                  value={author.author_id || author.register_no}
                                 >
-                                  Preview
-                                </button>
+                                  {author.name} ({author.author_id || author.register_no})
+                                </option>
+                              ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      {/* Right Column */}
+                      <div className="col-lg-5">
+                        {/* Important Dates Box */}
+                        <div className="bg-light-blue mb-4">
+                          <div
+                            className="text-center text-primary font-weight-bold mb-3"
+                            style={{ fontWeight: 600 }}
+                          >
+                            Important Dates
+                          </div>
+                          <div className="d-flex align-items-center justify-content-between mb-3">
+                            <label
+                              className="form-label mb-0 text-secondary"
+                              style={{ fontSize: '13px' }}
+                            >
+                              Accepted for Publication on
+                            </label>
+                            <input
+                              type="date"
+                              id="acceptedDateInput"
+                              className="form-control"
+                              style={{ maxWidth: '160px' }}
+                              disabled={!editMode && isViewMode}
+                            />
+                          </div>
+                          <div className="d-flex align-items-center justify-content-between">
+                            <label
+                              className="form-label mb-0 text-secondary"
+                              style={{ fontSize: '13px' }}
+                            >
+                              Article Published online on
+                            </label>
+                            <input
+                              type="date"
+                              id="availableDateInput"
+                              className="form-control"
+                              style={{ maxWidth: '160px' }}
+                              disabled={!editMode && isViewMode}
+                            />
+                          </div>
+                        </div>
+
+                        {/* File Upload Box */}
+                        <div className="pub-upload-box-modern">
+                          <div className="pub-upload-info-modern">
+                            <FileText size={32} className="pub-upload-icon-modern" />
+                            <div>
+                              <div className="pub-upload-title-modern">Published Article</div>
+                              <div className="pub-upload-subtitle-modern">PDF (Maximum 5 MB)</div>
+                              {(selectedFile || uploadedFile) && !(isViewMode && !editMode) && (
+                                <div className="mt-1" style={{ fontSize: '12px' }}>
+                                  <a
+                                    href={
+                                      selectedFile
+                                        ? URL.createObjectURL(selectedFile)
+                                        : getFileUrl(uploadedFile!.path)
+                                    }
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    {selectedFile ? selectedFile.name : uploadedFile!.name}
+                                  </a>
+                                  {editMode && (
+                                    <button
+                                      type="button"
+                                      className="btn btn-link text-danger p-0 ms-2"
+                                      onClick={handleFileDelete}
+                                      title="Delete file"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="col-lg-6">
-                      {/* Right Column - Date(s), Accepted for Publications, Available Online, Upload */}
-                      {/* <label className="form-section-title mb-3">Date(s)</label> */}
-
-                      {/* Scopus ID Field */}
-                      {selectedIndexes.includes('Scopus') && (
-                        <div className="metric-item-vertical mb-3">
-                          <label className="form-label mb-2">Scopus ID</label>
-                          <input
-                            type="text"
-                            id="scopusIdInput"
-                            className="form-control reference-number-input"
-                            value={scopusId}
-                            onChange={(e) => setScopusId(e.target.value)}
-                            placeholder="Enter Scopus ID"
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                      )}
-
-                      {/* SCIE ID Field */}
-                      {selectedIndexes.includes('SCIE') && (
-                        <div className="metric-item-vertical mb-3">
-                          <label className="form-label mb-2">SCIE ID</label>
-                          <input
-                            type="text"
-                            id="scieIdInput"
-                            className="form-control reference-number-input"
-                            value={scieId}
-                            onChange={(e) => setScieId(e.target.value)}
-                            placeholder="Enter SCIE ID"
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                      )}
-
-                      {/* Credit To Field */}
-                      {(selectedIndexes.includes('SCIE') ||
-                        selectedIndexes.includes('Scopus') ||
-                        selectedIndexes.includes('PubMed') ||
-                        selectedIndexes.includes('Google Scholar')) &&
-                        authors.length > 0 && (
-                          <div className="metric-item-vertical mb-3">
-                            <label className="form-label mb-2">Credit to</label>
-                            <select
-                              className="form-control reference-number-input"
-                              value={selectedCreditTo[0] || ''}
-                              onChange={(e) => {
-                                const newSelected = [...selectedCreditTo];
-                                newSelected[0] = e.target.value;
-                                setSelectedCreditTo(newSelected.filter((v) => v));
-                              }}
-                              disabled={!editMode && isViewMode}
-                            >
-                              <option value="">Select Author</option>
-                              {authors
-                                .filter(
-                                  (author) =>
-                                    author.name &&
-                                    author.name.trim() &&
-                                    author.designation === 'faculty',
-                                )
-                                .map((author) => (
-                                  <option
-                                    key={author.id}
-                                    value={author.author_id || author.register_no}
-                                  >
-                                    {author.name} ({author.author_id || author.register_no})
-                                  </option>
-                                ))}
-                            </select>
                           </div>
-                        )}
 
-                      {/* Reference Number Field - Hidden for Book category */}
-                      {!effectiveIsBook && (
-                        <div className="metric-item-vertical mb-3">
-                          <label className="form-label mb-2">Reference Nos.</label>
-                          <input
-                            type="text"
-                            id="referenceNumberInput"
-                            className="form-control reference-number-input"
-                            value={referenceNumber}
-                            onChange={(e) => setReferenceNumber(e.target.value)}
-                            placeholder="Enter KSRCT References"
-                            disabled={!editMode && isViewMode}
-                          />
-                          <div className="mt-1">
-                            <small className="text-muted">
-                              Count:{' '}
-                              {referenceNumber.split(',').filter((num) => num.trim() !== '').length}
-                            </small>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="metric-item-vertical mb-3">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <label className="form-label mb-0">Accepted on</label>
-                          <label className="toggle-switch">
-                            <input
-                              type="checkbox"
-                              id="acceptedToggle"
-                              checked={metrics.acceptedForPublication}
-                              onChange={() => handleMetricToggle('acceptedForPublication')}
-                              disabled={!editMode && isViewMode}
-                            />
-                            <span className="slider"></span>
-                          </label>
-                          <input
-                            type="date"
-                            id="acceptedDateInput"
-                            className="form-control"
-                            placeholder="dd-mm-yyyy"
-                            disabled={!metrics.acceptedForPublication || (!editMode && isViewMode)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="metric-item-vertical mb-3">
-                        <div className="d-flex justify-content-between align-items-center">
-                          <label className="form-label mb-0">Published on</label>
-                          <label className="toggle-switch">
-                            <input
-                              type="checkbox"
-                              id="availableToggle"
-                              checked={metrics.availableOnline}
-                              onChange={() => handleMetricToggle('availableOnline')}
-                              disabled={!editMode && isViewMode}
-                            />
-                            <span className="slider"></span>
-                          </label>
-                          <input
-                            type="date"
-                            id="availableDateInput"
-                            className="form-control"
-                            placeholder="dd-mm-yyyy"
-                            disabled={!metrics.availableOnline || (!editMode && isViewMode)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="form-card" style={{ padding: '10px' }}>
-                        {/* File Upload Section */}
-                        {isViewMode && !editMode && uploadedFile ? (
-                          // VIEW MODE ONLY - Displaying the saved file link
-                          <div className="upload-section">
-                            <label className="form-label d-block mb-1">
-                              Uploaded Journal Article
-                            </label>
-                            <span className="file-name-display">
+                          {isViewMode && !editMode ? (
+                            uploadedFile ? (
                               <a
                                 href={getFileUrl(uploadedFile.path)}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                className="btn-upload-modern"
                               >
-                                {uploadedFile.name}
+                                <Upload size={16} /> View
                               </a>
-                            </span>
-                          </div>
-                        ) : (
-                          // EDIT or CREATE MODE
-                          <div className="upload-section">
-                            <label htmlFor="file-upload" className="upload-button">
-                              {/* Dynamically change button text based on whether a file is already present */}
-                              {uploadedFile || selectedFile ? 'Change File' : '+ Upload Article'}
+                            ) : (
+                              <span className="text-muted" style={{ fontSize: '13px' }}>
+                                No file
+                              </span>
+                            )
+                          ) : (
+                            <label htmlFor="file-upload" className="btn-upload-modern mb-0">
+                              <Upload size={16} />
+                              {uploadedFile || selectedFile ? 'Change File' : 'Choose File'}
                               <input
                                 id="file-upload"
                                 type="file"
                                 onChange={handleFileSelect}
-                                // The input is disabled if not in edit mode. You can add other conditions here.
                                 disabled={!editMode}
-                                style={{ display: 'none' }} // Keep the actual input hidden
+                                style={{ display: 'none' }}
                               />
                             </label>
-
-                            {/* Display the name of the selected/uploaded file, or a placeholder */}
-                            <span className="file-name-display">
-                              {selectedFile || uploadedFile ? (
-                                // If a file is selected or already uploaded, show its name as a preview link
-                                <a
-                                  href={
-                                    selectedFile
-                                      ? URL.createObjectURL(selectedFile)
-                                      : getFileUrl(uploadedFile!.path)
-                                  }
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                >
-                                  {selectedFile ? selectedFile.name : uploadedFile!.name}
-                                </a>
-                              ) : (
-                                // Placeholder text when no file is chosen
-                                'No file selected'
-                              )}
-                            </span>
-
-                            {/* Delete button - only show when a file is selected/uploaded */}
-                            {(selectedFile || uploadedFile) && editMode && (
-                              <button
-                                type="button"
-                                className="btn-delete-file"
-                                onClick={handleFileDelete}
-                                title="Delete file"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        <div className="mt-1"></div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )}
 
+                  {/* Reference Numbers Box */}
+                  <div className="border-dashed-blue mb-4">
+                    <div className="row g-4">
+                      {/* DOI */}
+                      <div className="col-lg-6 d-flex align-items-center">
+                        <label
+                          className="form-label mb-0 me-3 font-weight-bold"
+                          style={{ minWidth: '40px', fontWeight: 600 }}
+                        >
+                          DOI
+                        </label>
+                        <a href="#" className="pub-id-prefix-link me-2 text-decoration-none">
+                          https://www.doi.org/
+                        </a>
+                        <input
+                          type="text"
+                          id="doiInput"
+                          className="form-control flex-grow-1"
+                          placeholder="10.1109/IC..."
+                          value={doi}
+                          onChange={(e) => setDoi(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                        />
+                        <a
+                          href="#"
+                          className="pub-id-icon-link ms-1"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (doi) {
+                              const fullDoiUrl = doi.startsWith('http')
+                                ? doi
+                                : `https://www.doi.org/${doi}`;
+                              window.open(fullDoiUrl, '_blank', 'noopener,noreferrer');
+                            }
+                          }}
+                        >
+                          <ExternalLink size={20} />
+                        </a>
+                      </div>
+
+                      {/* Scopus EID */}
+                      <div className="col-lg-6 d-flex align-items-center">
+                        <label
+                          className="form-label mb-0 me-3 font-weight-bold"
+                          style={{ minWidth: '80px', fontWeight: 600 }}
+                        >
+                          Scopus EID
+                        </label>
+                        <span
+                          className="pub-id-prefix-link me-2 text-decoration-none"
+                          style={{ minWidth: '50px' }}
+                        >
+                          2-s2.0-
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control flex-grow-1"
+                          value={scopusId}
+                          onChange={(e) => setScopusId(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                        />
+                        <a href="#" className="pub-id-icon-link ms-1">
+                          <ExternalLink size={20} />
+                        </a>
+                      </div>
+
+                      {/* WoS ID */}
+                      <div className="col-lg-6 d-flex align-items-center">
+                        <label
+                          className="form-label mb-0 me-3 font-weight-bold"
+                          style={{ minWidth: '40px', fontWeight: 600 }}
+                        >
+                          WoS ID
+                        </label>
+                        <span
+                          className="pub-id-prefix-link me-2 text-decoration-none"
+                          style={{ minWidth: '50px' }}
+                        >
+                          WOS:
+                        </span>
+                        <input
+                          type="text"
+                          className="form-control flex-grow-1"
+                          value={wosId}
+                          onChange={(e) => setWosId(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                        />
+                        <a href="#" className="pub-id-icon-link ms-1">
+                          <ExternalLink size={20} />
+                        </a>
+                      </div>
+
+                      {/* PubMed PMID */}
+                      <div className="col-lg-6 d-flex align-items-center">
+                        <label
+                          className="form-label mb-0 me-3 font-weight-bold"
+                          style={{ minWidth: '80px', fontWeight: 600 }}
+                        >
+                          PubMed PMID
+                        </label>
+                        <input
+                          type="text"
+                          className="form-control flex-grow-1"
+                          value={pubmedPmid}
+                          onChange={(e) => setPubmedPmid(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                        />
+                        <a href="#" className="pub-id-icon-link ms-1">
+                          <ExternalLink size={20} />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
               {/* Submit Button */}
               <div className="text-center mt-4 mb-5">
                 <button
                   type="submit"
                   className="btn-submit-approval"
-                  disabled={!editMode && isViewMode}
+                  disabled={(!editMode && isViewMode) || isFormSubmitting}
                 >
-                  Submit for approval
+                  {isFormSubmitting ? 'Submitting...' : 'Submit for approval'}
                 </button>
               </div>
             </form>

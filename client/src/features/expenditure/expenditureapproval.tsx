@@ -38,6 +38,7 @@ import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDro
 import CustomModal from '../../shared/components/ui/CustomModal';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 import CustomToggle from '../../shared/components/ui/CustomToggle';
+import RecordHeaderBanner from '../../shared/components/ui/RecordHeaderBanner';
 import {
   BUDGET_HEAD_GROUPS,
   SUB_HEAD_BY_BUDGET_HEAD,
@@ -194,6 +195,20 @@ interface FinanceRequestContext {
   event_sub_head?: string;
   budget_tag?: string;
   approved_amount?: number;
+  payment_debit_account?: string | null;
+  unplanned_budget_enabled?: boolean;
+  unplanned_budget_amount?: number | null;
+  unplanned_budget_description?: string | null;
+  finance_annexures?: FinanceAnnexureRecord[];
+}
+interface FinanceAnnexureRecord {
+  id: number;
+  annexure_type?: string | null;
+  original_name?: string | null;
+  file_url?: string | null;
+  file_path?: string | null;
+  mime_type?: string | null;
+  file_size?: number | null;
 }
 interface WorkflowStateSnapshot {
   status?: string;
@@ -215,6 +230,7 @@ interface BillFileRecord {
   file_path?: string | null;
   stored_name?: string | null;
   mime_type?: string | null;
+  source_finance_annexure_id?: number | null;
 }
 interface ApprovedBudgetOption {
   budgetLineId: number | null;
@@ -934,6 +950,8 @@ const ExpenditureApproval: React.FC = () => {
     setFinanceApprovedAmount(financeApprovedAmountFromState);
   }, [financeApprovedAmountFromState]);
   const [applicantName, setApplicantName] = useState<string>('');
+  const [requestRef, setRequestRef] = useState<string>('');
+  const [createdByEmail, setCreatedByEmail] = useState<string>('');
   const [date, setDate] = useState<string>(getLocalTodayYmd());
   const [designation, setDesignation] = useState<string>('');
   const [mobile, setMobile] = useState<string>('');
@@ -947,6 +965,7 @@ const ExpenditureApproval: React.FC = () => {
   const [email, setEmail] = useState<string>('');
   const [budgetRows, setBudgetRows] = useState([{ category: '', head: '', amount: '' }]);
   const [showUnplannedBudget, setShowUnplannedBudget] = useState<boolean>(false);
+  const [financeUnplannedAllowed, setFinanceUnplannedAllowed] = useState<boolean>(false);
   const [unplannedRows, setUnplannedRows] = useState<UnplannedBudgetRow[]>([
     createUnplannedBudgetRow(),
   ]);
@@ -971,10 +990,12 @@ const ExpenditureApproval: React.FC = () => {
   });
   const bulkNeftInputRef = useRef<HTMLInputElement>(null);
   const [bulkNeftFile, setBulkNeftFile] = useState<File | null>(null);
+  const [existingBulkNeftFile, setExistingBulkNeftFile] = useState<BillFileRecord | null>(null);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
   const [uploadedPaymentProofs, setUploadedPaymentProofs] = useState<File[]>([]);
   const [existingPaymentProofs, setExistingPaymentProofs] = useState<BillFileRecord[]>([]);
   const [existingPayeeBills, setExistingPayeeBills] = useState<BillFileRecord[]>([]);
+  const [financeAnnexures, setFinanceAnnexures] = useState<FinanceAnnexureRecord[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [employeeId, setEmployeeId] = useState<number | null>(null);
   const [isExternalApplicant, setIsExternalApplicant] = useState<boolean>(false);
@@ -992,10 +1013,13 @@ const ExpenditureApproval: React.FC = () => {
   >([]);
   const [showApplicantDropdown, setShowApplicantDropdown] = useState<boolean>(false);
   const isFinalApprovedWorkflow = ['approved', 'completed'].includes(loadedWorkflowStatus);
+  const isDofUser =
+    Array.isArray(user?.roles) &&
+    user.roles.some((role) => String(role || '').toLowerCase() === 'dof');
   const canEditPaymentStatus = Boolean(
     submittedRequestIdFromState &&
     isReadOnlyView &&
-    !isAdminWorkflowContext &&
+    (!isAdminWorkflowContext || isDofUser) &&
     isFinalApprovedWorkflow,
   );
   const componentRef = useRef<HTMLDivElement>(null);
@@ -1122,6 +1146,9 @@ const ExpenditureApproval: React.FC = () => {
         }
 
         const financeContext = response.data;
+        setFinanceAnnexures(
+          Array.isArray(financeContext.finance_annexures) ? financeContext.finance_annexures : [],
+        );
         const nextCategoryType = mapFinanceBeneficiaryTypeToExpenditureCategory(
           financeContext.beneficiary_type || '',
         );
@@ -1141,6 +1168,14 @@ const ExpenditureApproval: React.FC = () => {
         setEventSubHead((prev) => prev || financeContext.event_sub_head || '');
         setCategoryType((prev) => prev || nextCategoryType);
         setCategoryItem((prev) => prev || financeContext.beneficiary_value || '');
+        setFinanceUnplannedAllowed(Boolean(financeContext.unplanned_budget_enabled));
+        if (financeContext.payment_debit_account) {
+          setPaymentDetails((prev) => ({
+            ...prev,
+            debitAccount: prev.debitAccount || financeContext.payment_debit_account || '',
+          }));
+          setShowDebitAccountDropdown(true);
+        }
         const financeContextTagRaw = extractTagCandidate(
           financeContext as FinanceRequestContext & Record<string, unknown>,
         );
@@ -1197,6 +1232,7 @@ const ExpenditureApproval: React.FC = () => {
   useEffect(() => {
     if (!submittedRequestIdFromState) {
       setExistingPayeeBills([]);
+      setExistingBulkNeftFile(null);
       setIsReturnedWorkflowRequest(false);
       setLoadedWorkflowStatus('');
       setLoadedCurrentStage('');
@@ -1254,6 +1290,8 @@ const ExpenditureApproval: React.FC = () => {
         }
 
         const record = response.data;
+        setRequestRef(String(record.request_ref || ''));
+        setCreatedByEmail(String(record.created_by_email || ''));
         setResolvedFinanceRequestId(parsePositiveIntLike(record.finance_request_id) ?? null);
         const workflowState = (() => {
           const rawState = record.workflow_state;
@@ -1526,8 +1564,14 @@ const ExpenditureApproval: React.FC = () => {
           debitAccount: String(record.payment_debit_account || ''),
         });
         setShowBulkNEFT(Boolean(record.bulk_neft_file));
+        setExistingBulkNeftFile(record.bulk_neft_file || null);
+        setBulkNeftFile(null);
         setShowDebitAccountDropdown(Boolean(record.payment_debit_account));
-        setExistingPayeeBills(Array.isArray(record.bill_files) ? record.bill_files : []);
+        setExistingPayeeBills(
+          Array.isArray(record.bill_files)
+            ? record.bill_files.filter((file: BillFileRecord) => !file.source_finance_annexure_id)
+            : [],
+        );
         setExistingPaymentProofs(
           Array.isArray(record.payment_proof_files) ? record.payment_proof_files : [],
         );
@@ -1568,6 +1612,9 @@ const ExpenditureApproval: React.FC = () => {
         if (budgetFiscalYearFromState) {
           query.set('fiscal_year', String(budgetFiscalYearFromState));
         }
+        if (submittedRequestIdFromState) {
+          query.set('expenditure_request_id', String(submittedRequestIdFromState));
+        }
         const budgetUrl = `/expenditure/budget/approved?${query.toString()}`;
         const response = (await authenticityUtility.get(budgetUrl)) as {
           status?: string;
@@ -1598,7 +1645,7 @@ const ExpenditureApproval: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [budgetFiscalYearFromState, resolvedFinanceRequestId]);
+  }, [budgetFiscalYearFromState, resolvedFinanceRequestId, submittedRequestIdFromState]);
   const rowReferenceIdFromState = (() => {
     const state = location.state as { rowReferenceId?: unknown } | null;
     const value = String(state?.rowReferenceId ?? '').trim();
@@ -2137,17 +2184,50 @@ const ExpenditureApproval: React.FC = () => {
     }));
   };
 
+  // Rows are reserved based on table position, not identity: a row only sees
+  // amounts already claimed by rows ABOVE it. Later rows must never affect an
+  // earlier row's displayed balance, so amounts are summed for index < currentRowIndex only.
   const getSettlementReservedAmountForSubHead = (
     budgetHead: string | number,
     subHead: string | number,
-    excludeRowId?: string,
+    currentRowIndex?: number,
   ): number => {
     const normalizedHead = normalizeBudgetToken(budgetHead);
     const normalizedSubHead = normalizeBudgetToken(subHead);
-    if (activeTab !== 'Settlement' || !normalizedHead || !normalizedSubHead) return 0;
+    if (!normalizedHead || !normalizedSubHead) return 0;
 
-    return settlementRows.reduce((sum, row) => {
-      if (excludeRowId && row.id === excludeRowId) return sum;
+    if (activeTab === 'Expenditure') {
+      return expenditureSubRows.reduce((sum, row, index) => {
+        if (currentRowIndex !== undefined && index >= currentRowIndex) return sum;
+        if (
+          normalizeBudgetToken(row.budgetHead) !== normalizedHead ||
+          normalizeBudgetToken(row.subHead) !== normalizedSubHead
+        ) {
+          return sum;
+        }
+
+        return sum + getWorkflowRowEnteredAmount(row, 'Expenditure');
+      }, 0);
+    }
+
+    if (activeTab === 'Advance') {
+      return advanceRows.reduce((sum, row, index) => {
+        if (currentRowIndex !== undefined && index >= currentRowIndex) return sum;
+        if (
+          normalizeBudgetToken(row.budgetHead) !== normalizedHead ||
+          normalizeBudgetToken(row.subHead) !== normalizedSubHead
+        ) {
+          return sum;
+        }
+
+        return sum + getWorkflowRowEnteredAmount(row, 'Advance');
+      }, 0);
+    }
+
+    if (activeTab !== 'Settlement') return 0;
+
+    return settlementRows.reduce((sum, row, index) => {
+      if (currentRowIndex !== undefined && index >= currentRowIndex) return sum;
       if (
         normalizeBudgetToken(row.budgetHead) !== normalizedHead ||
         normalizeBudgetToken(row.subHead) !== normalizedSubHead
@@ -2183,18 +2263,19 @@ const ExpenditureApproval: React.FC = () => {
 
   const getBudgetListDisplayRemaining = (
     list: ApprovedBudgetOption[],
-    excludeSettlementRowId?: string,
+    currentRowIndex?: number,
   ): number => {
     const first = list[0];
     const totalRemaining = list.reduce((sum, item) => sum + item.remainingAmount, 0);
     const localReserved =
-      first && activeTab === 'Settlement'
-        ? getSettlementReservedAmountForSubHead(first.head, first.subHead, excludeSettlementRowId)
+      first &&
+      (activeTab === 'Settlement' || activeTab === 'Expenditure' || activeTab === 'Advance')
+        ? getSettlementReservedAmountForSubHead(first.head, first.subHead, currentRowIndex)
         : 0;
     return Math.max(0, totalRemaining - localReserved);
   };
 
-  const getApprovedBudgetHeadSearchOptions = (excludeSettlementRowId?: string): OptionType[] => {
+  const getApprovedBudgetHeadSearchOptions = (currentRowIndex?: number): OptionType[] => {
     const options: OptionType[] = [];
     const seen = new Set<string>();
 
@@ -2229,7 +2310,7 @@ const ExpenditureApproval: React.FC = () => {
 
     groupedSubHeads.forEach((list, key) => {
       const first = list[0];
-      const totalRemaining = getBudgetListDisplayRemaining(list, excludeSettlementRowId);
+      const totalRemaining = getBudgetListDisplayRemaining(list, currentRowIndex);
       options.push({
         value: `sub::grouped::${list.map((item) => item.budgetLineId).join(',')}::${first.head}::${first.subHead}`,
         label: `${first.subHead} (${first.head}) (Bal: ₹ ${totalRemaining.toLocaleString('en-IN')})`,
@@ -2248,9 +2329,9 @@ const ExpenditureApproval: React.FC = () => {
     budgetHead: string | number,
     _subHead: string | number,
     budgetLineId?: number | string | null,
-    excludeSettlementRowId?: string,
+    currentRowIndex?: number,
   ): OptionType | null => {
-    const options = getApprovedBudgetHeadSearchOptions(excludeSettlementRowId);
+    const options = getApprovedBudgetHeadSearchOptions(currentRowIndex);
     const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
     const normalizedHead = normalizeBudgetToken(budgetHead);
     let selectedHead = normalizedHead;
@@ -2307,7 +2388,7 @@ const ExpenditureApproval: React.FC = () => {
 
   const getApprovedSubHeadOptionsForAdvance = (
     budgetHead: string | number,
-    excludeSettlementRowId?: string,
+    currentRowIndex?: number,
   ): OptionType[] => {
     const normalizedHead = normalizeBudgetToken(budgetHead);
     if (!normalizedHead) return [];
@@ -2326,7 +2407,7 @@ const ExpenditureApproval: React.FC = () => {
     return Array.from(grouped.entries())
       .map(([subKey, list]) => {
         const first = list[0];
-        const totalRemaining = getBudgetListDisplayRemaining(list, excludeSettlementRowId);
+        const totalRemaining = getBudgetListDisplayRemaining(list, currentRowIndex);
 
         return {
           value: `sub::grouped::${list.map((item) => item.budgetLineId).join(',')}::${first.subHead}`,
@@ -2345,9 +2426,9 @@ const ExpenditureApproval: React.FC = () => {
     budgetHead: string | number,
     subHead: string | number,
     budgetLineId?: number | string | null,
-    excludeSettlementRowId?: string,
+    currentRowIndex?: number,
   ): OptionType | null => {
-    const options = getApprovedSubHeadOptionsForAdvance(budgetHead, excludeSettlementRowId);
+    const options = getApprovedSubHeadOptionsForAdvance(budgetHead, currentRowIndex);
     const parsedBudgetLineId = parsePositiveIntLike(budgetLineId);
     const normalizedSubHead = normalizeBudgetToken(subHead);
 
@@ -3425,6 +3506,7 @@ const ExpenditureApproval: React.FC = () => {
 
   const removeBulkNeftFile = () => {
     setBulkNeftFile(null);
+    setExistingBulkNeftFile(null);
     if (bulkNeftInputRef.current) {
       bulkNeftInputRef.current.value = '';
     }
@@ -3843,7 +3925,11 @@ const ExpenditureApproval: React.FC = () => {
 
           <div className="bulk-neft-panel">
             <div className="bulk-neft-file-name">
-              <p>{bulkNeftFile?.name || 'No Bulk NEFT file uploaded yet.'}</p>
+              <p>
+                {bulkNeftFile?.name ||
+                  existingBulkNeftFile?.original_name ||
+                  'No Bulk NEFT file uploaded yet.'}
+              </p>
             </div>
             <div className="bulk-neft-actions">
               <input
@@ -3854,43 +3940,54 @@ const ExpenditureApproval: React.FC = () => {
                 onChange={handleBulkNeftUpload}
               />
               <div style={{ display: 'flex', gap: '12px' }}>
-                <button
-                  className="payee-row-btn"
-                  style={{ backgroundColor: '#0069ab', color: 'white' }}
-                  title="Upload"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    bulkNeftInputRef.current?.click();
-                  }}
-                >
-                  <Upload size={20} />
-                </button>
+                {!isReadOnlyView && (
+                  <button
+                    className="payee-row-btn"
+                    style={{ backgroundColor: '#0069ab', color: 'white' }}
+                    title="Upload"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      bulkNeftInputRef.current?.click();
+                    }}
+                  >
+                    <Upload size={20} />
+                  </button>
+                )}
                 <button
                   className="payee-row-btn"
                   style={{ backgroundColor: '#629ac4', color: 'white' }}
                   title="View"
-                  disabled={!bulkNeftFile}
+                  disabled={!bulkNeftFile && !existingBulkNeftFile}
                   onClick={(e) => {
                     e.preventDefault();
                     if (bulkNeftFile) {
                       window.open(URL.createObjectURL(bulkNeftFile), '_blank');
+                      return;
+                    }
+                    const fileUrl = existingBulkNeftFile
+                      ? resolveBillFileUrl(existingBulkNeftFile)
+                      : '';
+                    if (fileUrl) {
+                      window.open(fileUrl, '_blank');
                     }
                   }}
                 >
                   <Eye size={20} />
                 </button>
-                <button
-                  className="payee-row-btn"
-                  style={{ backgroundColor: '#fff5f5', color: '#ff4d4f' }}
-                  title="Delete"
-                  disabled={!bulkNeftFile}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    removeBulkNeftFile();
-                  }}
-                >
-                  <Trash2 size={20} />
-                </button>
+                {!isReadOnlyView && (
+                  <button
+                    className="payee-row-btn"
+                    style={{ backgroundColor: '#fff5f5', color: '#ff4d4f' }}
+                    title="Delete"
+                    disabled={!bulkNeftFile && !existingBulkNeftFile}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      removeBulkNeftFile();
+                    }}
+                  >
+                    <Trash2 size={20} />
+                  </button>
+                )}
               </div>
               <button
                 className="payee-toolbar-btn payee-toolbar-btn-secondary"
@@ -4128,11 +4225,11 @@ const ExpenditureApproval: React.FC = () => {
                               type="radio"
                               name={`tds-${row.id}`}
                               value="Yes"
-                              checked={row.tdsSection === 'Yes'}
+                              checked={row.tdsDetails === 'Yes'}
                               onChange={() =>
                                 updatePayeeRow(row.id, (r) => ({
                                   ...r,
-                                  tdsSection: 'Yes',
+                                  tdsDetails: 'Yes',
                                 }))
                               }
                             />{' '}
@@ -4143,11 +4240,11 @@ const ExpenditureApproval: React.FC = () => {
                               type="radio"
                               name={`tds-${row.id}`}
                               value="No"
-                              checked={row.tdsSection === 'No'}
+                              checked={row.tdsDetails === 'No'}
                               onChange={() =>
                                 updatePayeeRow(row.id, (r) => ({
                                   ...r,
-                                  tdsSection: 'No',
+                                  tdsDetails: 'No',
                                 }))
                               }
                             />{' '}
@@ -4260,16 +4357,53 @@ const ExpenditureApproval: React.FC = () => {
             )}
         </div>
 
-        {(existingPayeeBills.length > 0 || uploadedPayeeBills.length > 0) && (
+        {(financeAnnexures.length > 0 ||
+          existingPayeeBills.length > 0 ||
+          uploadedPayeeBills.length > 0) && (
           <div
             className="payee-uploaded-files"
             style={{ marginTop: '14px', pointerEvents: 'auto' }}
           >
-            <div className="payee-uploaded-files-header">
+            <div className="payee-uploaded-files-header payee-uploaded-files-header--with-category">
               <span>S.No</span>
-              <span>Bills File</span>
+              <span>Category</span>
+              <span>Document Name</span>
               <span>Action</span>
             </div>
+            {financeAnnexures.map((annexure, i) => {
+              const fileUrl = resolveBillFileUrl(annexure);
+              const displayName = normalizeText(
+                annexure.original_name || annexure.file_path || `File ${i + 1}`,
+              );
+              const category = normalizeText(annexure.annexure_type) || 'Bills';
+
+              return (
+                <div
+                  key={`finance-annexure-${annexure.id}`}
+                  className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
+                >
+                  <span className="payee-uploaded-file-index">{i + 1}</span>
+                  <span className="payee-uploaded-file-category" title={category}>
+                    {category}
+                  </span>
+                  <span className="payee-uploaded-file-name" title={displayName}>
+                    {displayName}
+                  </span>
+                  <div className="payee-upload-actions">
+                    <button
+                      className="payee-upload-view-btn"
+                      disabled={!fileUrl}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (fileUrl) window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                      }}
+                    >
+                      <Eye size={16} />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
             {existingPayeeBills.map((file, i) => {
               const fileUrl = resolveBillFileUrl(file);
               const displayName = normalizeText(
@@ -4277,8 +4411,16 @@ const ExpenditureApproval: React.FC = () => {
               );
 
               return (
-                <div key={`existing-${file.id ?? i}`} className="payee-uploaded-file-row">
-                  <span className="payee-uploaded-file-index">{i + 1}</span>
+                <div
+                  key={`existing-${file.id ?? i}`}
+                  className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
+                >
+                  <span className="payee-uploaded-file-index">
+                    {financeAnnexures.length + i + 1}
+                  </span>
+                  <span className="payee-uploaded-file-category" title="Bills">
+                    Bills
+                  </span>
                   <span className="payee-uploaded-file-name" title={displayName}>
                     {displayName}
                   </span>
@@ -4309,9 +4451,15 @@ const ExpenditureApproval: React.FC = () => {
               );
             })}
             {uploadedPayeeBills.map((file, i) => (
-              <div key={`uploaded-${i}`} className="payee-uploaded-file-row">
+              <div
+                key={`uploaded-${i}`}
+                className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
+              >
                 <span className="payee-uploaded-file-index">
-                  {existingPayeeBills.length + i + 1}
+                  {financeAnnexures.length + existingPayeeBills.length + i + 1}
+                </span>
+                <span className="payee-uploaded-file-category" title="Bills">
+                  Bills
                 </span>
                 <span className="payee-uploaded-file-name" title={file.name}>
                   {file.name}
@@ -4681,8 +4829,49 @@ const ExpenditureApproval: React.FC = () => {
         }
       }
 
+      if (activeTab === 'Expenditure' || activeTab === 'Advance') {
+        const rowsForTab = activeTab === 'Expenditure' ? expenditureSubRows : advanceRows;
+        const totalsBySubHead = new Map<
+          string,
+          { amount: number; balance: number; subHead: string }
+        >();
+
+        for (const row of rowsForTab) {
+          const head = String(row.budgetHead || '').trim();
+          const subHead = String(row.subHead || '').trim();
+          if (!head || !subHead) continue;
+
+          const rowAmount = getWorkflowRowEnteredAmount(row, activeTab);
+          if (!(rowAmount > 0)) continue;
+
+          const key = `${normalizeBudgetToken(head)}::${normalizeBudgetToken(subHead)}`;
+          const balance = approvedBudgetOptions
+            .filter(
+              (budget) =>
+                normalizeBudgetToken(budget.head) === normalizeBudgetToken(head) &&
+                normalizeBudgetToken(budget.subHead) === normalizeBudgetToken(subHead),
+            )
+            .reduce((sum, budget) => sum + budget.remainingAmount, 0);
+
+          const current = totalsBySubHead.get(key) || { amount: 0, balance, subHead };
+          current.amount += rowAmount;
+          totalsBySubHead.set(key, current);
+        }
+
+        for (const { amount, balance, subHead } of totalsBySubHead.values()) {
+          if (amount > balance) {
+            showAlert(
+              `${activeTab} amount for "${subHead}" cannot exceed the available balance of ₹ ${balance.toLocaleString('en-IN')}.`,
+              'warning',
+            );
+            return;
+          }
+        }
+      }
+
       const hasExistingBills = isEditingExistingRequest && existingPayeeBills.length > 0;
-      if (uploadedPayeeBills.length === 0 && !hasExistingBills) {
+      const hasFinanceAnnexureBills = financeAnnexures.length > 0;
+      if (uploadedPayeeBills.length === 0 && !hasExistingBills && !hasFinanceAnnexureBills) {
         showAlert('Please upload bills before submitting the form.', 'warning');
         return;
       }
@@ -5268,6 +5457,7 @@ const ExpenditureApproval: React.FC = () => {
       setPayeeRows([createPayeeRow()]);
       setShowBulkNEFT(false);
       setBulkNeftFile(null);
+      setExistingBulkNeftFile(null);
       setUploadedPayeeBills([]);
       setExistingPayeeBills([]);
       setUploadedPaymentProofs([]);
@@ -5495,101 +5685,109 @@ const ExpenditureApproval: React.FC = () => {
       activeTab === 'Advance' ? '₹ 0' : getUnplannedBudgetAmountPlaceholder(row);
 
     return (
-      <div
-        style={{
-          backgroundColor: '#fff',
-          padding: '30px',
-          borderRadius: '20px',
-          marginBottom: '20px',
-          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
-        }}
-      >
-        <h6
+      <div style={{ overflowX: 'visible' }}>
+        <table
           style={{
-            fontWeight: 600,
-            color: '#0a2540',
-            marginBottom: '24px',
+            width: '100%',
+            borderCollapse: 'collapse',
+            backgroundColor: '#fff',
+            border: '1px solid #e0e0e0',
+            tableLayout: 'fixed',
           }}
         >
-          Unplanned Expenditure
-        </h6>
-        <div style={{ overflowX: 'visible' }}>
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              backgroundColor: '#fff',
-              border: '1px solid #e0e0e0',
-              tableLayout: 'fixed',
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: '#f0f6ff' }}>
-                {headerColumns.map(([width, label]) => (
-                  <th
-                    key={label}
-                    style={{
-                      width,
-                      padding: '12px',
-                      border: '1px solid #e0e0e0',
-                      color: '#0069ab',
-                      fontWeight: 600,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {unplannedRows.map((row, idx) => {
-                const isFilled = isUnplannedRowFilled(row);
-                return (
-                  <Fragment key={row.id}>
-                    <tr>
-                      <td
-                        rowSpan={activeTab === 'Advance' || activeTab === 'Expenditure' ? 2 : 1}
+          <thead>
+            <tr style={{ backgroundColor: '#f0f6ff' }}>
+              {headerColumns.map(([width, label]) => (
+                <th
+                  key={label}
+                  style={{
+                    width,
+                    padding: '12px',
+                    border: '1px solid #e0e0e0',
+                    color: '#0069ab',
+                    fontWeight: 600,
+                    textAlign: 'center',
+                  }}
+                >
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {unplannedRows.map((row, idx) => {
+              const isFilled = isUnplannedRowFilled(row);
+              return (
+                <Fragment key={row.id}>
+                  <tr>
+                    <td
+                      rowSpan={activeTab === 'Advance' || activeTab === 'Expenditure' ? 2 : 1}
+                      style={{
+                        padding: '12px',
+                        border: '1px solid #e0e0e0',
+                        textAlign: 'center',
+                        verticalAlign: 'middle',
+                        color: '#495057',
+                      }}
+                    >
+                      {idx + 1}
+                    </td>
+                    <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                      <CustomDropdown
+                        className="mb-0"
+                        options={getUnplannedBudgetHeadOptions()}
+                        value={getUnplannedBudgetHeadSelectedOption(row.budgetHead)}
+                        onChange={(option) =>
+                          handleUnplannedBudgetHeadChange(row.id, option as OptionType | null)
+                        }
+                        filterOption={filterApprovedBudgetHeadOption}
+                        placeholder="Select Head"
+                        isDisabled={isReadOnlyView}
+                      />
+                    </td>
+                    <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                      <CustomDropdown
+                        className="mb-0"
+                        options={getCatalogSubHeadOptions(row.budgetHead)}
+                        value={getCatalogSubHeadSelectedOption(row.budgetHead, row.subHead)}
+                        onChange={(option) =>
+                          handleUnplannedBudgetSubHeadChange(row.id, option as OptionType | null)
+                        }
+                        placeholder="Select Sub Head"
+                        isDisabled={isReadOnlyView || !row.budgetHead}
+                      />
+                    </td>
+                    <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                      <input
+                        type="text"
+                        value={getUnplannedBudgetAmountPlaceholder(firstUnplannedRow)}
+                        readOnly
                         style={{
-                          padding: '12px',
-                          border: '1px solid #e0e0e0',
+                          border: '1px solid #d7dee7',
+                          borderRadius: '12px',
+                          padding: '10px 14px',
+                          fontSize: '0.95rem',
+                          width: '100%',
+                          height: '45px',
+                          backgroundColor: '#f5f7fb',
+                          color: '#5f6f86',
                           textAlign: 'center',
-                          verticalAlign: 'middle',
-                          color: '#495057',
+                          outline: 'none',
                         }}
-                      >
-                        {idx + 1}
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                        <CustomDropdown
-                          className="mb-0"
-                          options={getUnplannedBudgetHeadOptions()}
-                          value={getUnplannedBudgetHeadSelectedOption(row.budgetHead)}
-                          onChange={(option) =>
-                            handleUnplannedBudgetHeadChange(row.id, option as OptionType | null)
-                          }
-                          filterOption={filterApprovedBudgetHeadOption}
-                          placeholder="Select Head"
-                          isDisabled={isReadOnlyView}
-                        />
-                      </td>
-                      <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
-                        <CustomDropdown
-                          className="mb-0"
-                          options={getCatalogSubHeadOptions(row.budgetHead)}
-                          value={getCatalogSubHeadSelectedOption(row.budgetHead, row.subHead)}
-                          onChange={(option) =>
-                            handleUnplannedBudgetSubHeadChange(row.id, option as OptionType | null)
-                          }
-                          placeholder="Select Sub Head"
-                          isDisabled={isReadOnlyView || !row.budgetHead}
-                        />
-                      </td>
+                      />
+                    </td>
+                    {activeTab === 'Settlement' && (
                       <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                         <input
                           type="text"
-                          value={getUnplannedBudgetAmountPlaceholder(firstUnplannedRow)}
-                          readOnly
+                          value={row.amount}
+                          readOnly={isReadOnlyView}
+                          onChange={(e) =>
+                            updateUnplannedRow(row.id, {
+                              amount: e.target.value.replace(/[^\d.]/g, ''),
+                            })
+                          }
+                          placeholder={amountInputPlaceholder(row)}
                           style={{
                             border: '1px solid #d7dee7',
                             borderRadius: '12px',
@@ -5597,15 +5795,122 @@ const ExpenditureApproval: React.FC = () => {
                             fontSize: '0.95rem',
                             width: '100%',
                             height: '45px',
-                            backgroundColor: '#f5f7fb',
-                            color: '#5f6f86',
+                            backgroundColor: isReadOnlyView ? '#e9ecef' : '#fcfdff',
+                            color: '#2a3f5e',
                             textAlign: 'center',
                             outline: 'none',
                           }}
                         />
                       </td>
-                      {activeTab === 'Settlement' && (
-                        <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                    )}
+                    <td
+                      rowSpan={activeTab === 'Advance' || activeTab === 'Expenditure' ? 2 : 1}
+                      style={{
+                        padding: '12px',
+                        border: '1px solid #e0e0e0',
+                        textAlign: 'center',
+                        verticalAlign: 'middle',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                        {unplannedRows.length > 1 && !isReadOnlyView && (
+                          <button
+                            type="button"
+                            onClick={() => removeUnplannedRow(row.id)}
+                            style={deleteIconBtn}
+                            title="Remove Row"
+                          >
+                            <X size={14} strokeWidth={2.5} />
+                          </button>
+                        )}
+                        {idx === unplannedRows.length - 1 && !isReadOnlyView && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (isFilled) addUnplannedRow();
+                            }}
+                            disabled={!isFilled}
+                            style={{
+                              ...iconBtn,
+                              opacity: isFilled ? 1 : 0.45,
+                              cursor: isFilled ? 'pointer' : 'not-allowed',
+                            }}
+                            title="Add Row"
+                          >
+                            <Plus size={14} strokeWidth={2.5} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {activeTab === 'Advance' && (
+                    <tr>
+                      <td
+                        style={{
+                          padding: '12px 16px',
+                          border: '1px solid #e0e0e0',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                          }}
+                        >
+                          <span
+                            style={{
+                              minWidth: '110px',
+                              color: '#364152',
+                              fontSize: '1rem',
+                              fontWeight: 500,
+                            }}
+                          >
+                            Pre Advance
+                          </span>
+                          <input
+                            type="text"
+                            value="₹ 0"
+                            readOnly
+                            style={{
+                              border: '1px solid #d7dee7',
+                              borderRadius: '12px',
+                              padding: '10px 14px',
+                              fontSize: '0.95rem',
+                              width: '100%',
+                              height: '45px',
+                              backgroundColor: '#f5f7fb',
+                              color: '#5f6f86',
+                              textAlign: 'center',
+                              outline: 'none',
+                            }}
+                          />
+                        </div>
+                      </td>
+                      <td
+                        colSpan={2}
+                        style={{
+                          padding: '12px 16px',
+                          border: '1px solid #e0e0e0',
+                        }}
+                      >
+                        <div
+                          style={{
+                            display: 'grid',
+                            gridTemplateColumns: 'minmax(90px, auto) minmax(160px, 1fr)',
+                            alignItems: 'center',
+                            gap: '8px',
+                          }}
+                        >
+                          <span
+                            style={{
+                              color: '#364152',
+                              fontSize: '1rem',
+                              fontWeight: 500,
+                            }}
+                          >
+                            Advance
+                          </span>
                           <input
                             type="text"
                             value={row.amount}
@@ -5615,7 +5920,7 @@ const ExpenditureApproval: React.FC = () => {
                                 amount: e.target.value.replace(/[^\d.]/g, ''),
                               })
                             }
-                            placeholder={amountInputPlaceholder(row)}
+                            placeholder="₹ 0"
                             style={{
                               border: '1px solid #d7dee7',
                               borderRadius: '12px',
@@ -5625,252 +5930,118 @@ const ExpenditureApproval: React.FC = () => {
                               height: '45px',
                               backgroundColor: isReadOnlyView ? '#e9ecef' : '#fcfdff',
                               color: '#2a3f5e',
-                              textAlign: 'center',
                               outline: 'none',
                             }}
                           />
-                        </td>
-                      )}
-                      <td
-                        rowSpan={activeTab === 'Advance' || activeTab === 'Expenditure' ? 2 : 1}
-                        style={{
-                          padding: '12px',
-                          border: '1px solid #e0e0e0',
-                          textAlign: 'center',
-                          verticalAlign: 'middle',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                          {unplannedRows.length > 1 && !isReadOnlyView && (
-                            <button
-                              type="button"
-                              onClick={() => removeUnplannedRow(row.id)}
-                              style={deleteIconBtn}
-                              title="Remove Row"
-                            >
-                              <X size={14} strokeWidth={2.5} />
-                            </button>
-                          )}
-                          {idx === unplannedRows.length - 1 && !isReadOnlyView && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (isFilled) addUnplannedRow();
-                              }}
-                              disabled={!isFilled}
-                              style={{
-                                ...iconBtn,
-                                opacity: isFilled ? 1 : 0.45,
-                                cursor: isFilled ? 'pointer' : 'not-allowed',
-                              }}
-                              title="Add Row"
-                            >
-                              <Plus size={14} strokeWidth={2.5} />
-                            </button>
-                          )}
                         </div>
                       </td>
                     </tr>
-                    {activeTab === 'Advance' && (
-                      <tr>
-                        <td
+                  )}
+                  {activeTab === 'Expenditure' && (
+                    <tr>
+                      <td
+                        colSpan={3}
+                        style={{
+                          padding: '12px',
+                          border: '1px solid #e0e0e0',
+                          borderTop: 'none',
+                          backgroundColor: '#fff',
+                        }}
+                      >
+                        <div
                           style={{
-                            padding: '12px 16px',
-                            border: '1px solid #e0e0e0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '12px',
                           }}
                         >
-                          <div
+                          <span
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px',
+                              fontWeight: 500,
+                              color: '#495057',
+                              minWidth: '95px',
                             }}
                           >
-                            <span
-                              style={{
-                                minWidth: '110px',
-                                color: '#364152',
-                                fontSize: '1rem',
-                                fontWeight: 500,
-                              }}
-                            >
-                              Pre Advance
-                            </span>
-                            <input
-                              type="text"
-                              value="₹ 0"
-                              readOnly
-                              style={{
-                                border: '1px solid #d7dee7',
-                                borderRadius: '12px',
-                                padding: '10px 14px',
-                                fontSize: '0.95rem',
-                                width: '100%',
-                                height: '45px',
-                                backgroundColor: '#f5f7fb',
-                                color: '#5f6f86',
-                                textAlign: 'center',
-                                outline: 'none',
-                              }}
-                            />
-                          </div>
-                        </td>
-                        <td
-                          colSpan={2}
-                          style={{
-                            padding: '12px 16px',
-                            border: '1px solid #e0e0e0',
-                          }}
-                        >
-                          <div
+                            Expenditure
+                          </span>
+                          <input
+                            type="text"
+                            placeholder="Eg: 455+345+780"
+                            value={row.amount}
+                            readOnly={isReadOnlyView}
+                            onChange={(e) =>
+                              updateUnplannedRow(row.id, {
+                                amount: e.target.value.replace(/[^\d.+\-*/() ]/g, ''),
+                              })
+                            }
                             style={{
-                              display: 'grid',
-                              gridTemplateColumns: 'minmax(90px, auto) minmax(160px, 1fr)',
-                              alignItems: 'center',
-                              gap: '8px',
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '12px',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              flex: 1,
+                              height: '45px',
+                              boxSizing: 'border-box',
+                              fontFamily: 'inherit',
+                              backgroundColor: isReadOnlyView ? '#e9ecef' : '#fcfdff',
+                              color: '#000',
+                              outline: 'none',
                             }}
-                          >
-                            <span
-                              style={{
-                                color: '#364152',
-                                fontSize: '1rem',
-                                fontWeight: 500,
-                              }}
-                            >
-                              Advance
-                            </span>
-                            <input
-                              type="text"
-                              value={row.amount}
-                              readOnly={isReadOnlyView}
-                              onChange={(e) =>
-                                updateUnplannedRow(row.id, {
-                                  amount: e.target.value.replace(/[^\d.]/g, ''),
-                                })
-                              }
-                              placeholder="₹ 0"
-                              style={{
-                                border: '1px solid #d7dee7',
-                                borderRadius: '12px',
-                                padding: '10px 14px',
-                                fontSize: '0.95rem',
-                                width: '100%',
-                                height: '45px',
-                                backgroundColor: isReadOnlyView ? '#e9ecef' : '#fcfdff',
-                                color: '#2a3f5e',
-                                outline: 'none',
-                              }}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                    {activeTab === 'Expenditure' && (
-                      <tr>
-                        <td
-                          colSpan={3}
-                          style={{
-                            padding: '12px',
-                            border: '1px solid #e0e0e0',
-                            borderTop: 'none',
-                            backgroundColor: '#fff',
-                          }}
-                        >
-                          <div
+                          />
+                          <input
+                            type="text"
+                            readOnly
+                            value={
+                              getUnplannedRowAmountValue(row)
+                                ? `₹ ${getUnplannedRowAmountValue(row)}`
+                                : ''
+                            }
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '12px',
+                              border: '1px solid #e0e0e0',
+                              borderRadius: '12px',
+                              padding: '10px 15px',
+                              fontSize: '0.95rem',
+                              width: '145px',
+                              height: '45px',
+                              boxSizing: 'border-box',
+                              fontFamily: 'inherit',
+                              backgroundColor: '#fff',
+                              color: '#6c757d',
+                              textAlign: 'center',
+                              outline: 'none',
+                              cursor: 'not-allowed',
                             }}
-                          >
-                            <span
-                              style={{
-                                fontWeight: 500,
-                                color: '#495057',
-                                minWidth: '95px',
-                              }}
-                            >
-                              Expenditure
-                            </span>
-                            <input
-                              type="text"
-                              placeholder="Eg: 455+345+780"
-                              value={row.amount}
-                              readOnly={isReadOnlyView}
-                              onChange={(e) =>
-                                updateUnplannedRow(row.id, {
-                                  amount: e.target.value.replace(/[^\d.+\-*/() ]/g, ''),
-                                })
-                              }
-                              style={{
-                                border: '1px solid #e0e0e0',
-                                borderRadius: '12px',
-                                padding: '10px 15px',
-                                fontSize: '0.95rem',
-                                flex: 1,
-                                height: '45px',
-                                boxSizing: 'border-box',
-                                fontFamily: 'inherit',
-                                backgroundColor: isReadOnlyView ? '#e9ecef' : '#fcfdff',
-                                color: '#000',
-                                outline: 'none',
-                              }}
-                            />
-                            <input
-                              type="text"
-                              readOnly
-                              value={
-                                getUnplannedRowAmountValue(row)
-                                  ? `₹ ${getUnplannedRowAmountValue(row)}`
-                                  : ''
-                              }
-                              style={{
-                                border: '1px solid #e0e0e0',
-                                borderRadius: '12px',
-                                padding: '10px 15px',
-                                fontSize: '0.95rem',
-                                width: '145px',
-                                height: '45px',
-                                boxSizing: 'border-box',
-                                fontFamily: 'inherit',
-                                backgroundColor: '#fff',
-                                color: '#6c757d',
-                                textAlign: 'center',
-                                outline: 'none',
-                                cursor: 'not-allowed',
-                              }}
-                            />
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr style={{ backgroundColor: '#f0f6ff' }}>
-                <td
-                  colSpan={activeTab === 'Settlement' ? 6 : 5}
-                  style={{
-                    padding: '16px 20px',
-                    border: '1px solid #e0e0e0',
-                    textAlign: 'right',
-                    fontWeight: 700,
-                    color: '#0069ab',
-                    fontSize: '1.05rem',
-                  }}
-                >
-                  Total Unplanned Expenditure: ₹{' '}
-                  {unplannedBudgetTotal.toLocaleString('en-IN', {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
+          </tbody>
+          <tfoot>
+            <tr style={{ backgroundColor: '#f0f6ff' }}>
+              <td
+                colSpan={activeTab === 'Settlement' ? 6 : 5}
+                style={{
+                  padding: '16px 20px',
+                  border: '1px solid #e0e0e0',
+                  textAlign: 'right',
+                  fontWeight: 700,
+                  color: '#0069ab',
+                  fontSize: '1.05rem',
+                }}
+              >
+                Total Unplanned Expenditure: ₹{' '}
+                {unplannedBudgetTotal.toLocaleString('en-IN', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </td>
+            </tr>
+          </tfoot>
+        </table>
       </div>
     );
   };
@@ -5888,6 +6059,12 @@ const ExpenditureApproval: React.FC = () => {
       }}
     >
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 20px 30px' }}>
+        <RecordHeaderBanner
+          referenceLabel="Expenditure ID"
+          referenceValue={requestRef}
+          createdByEmail={createdByEmail}
+        />
+
         <div
           className="ea-applicantCard"
           data-readonly-applicant-card="true"
@@ -6715,73 +6892,6 @@ const ExpenditureApproval: React.FC = () => {
           </div>
         </div>
 
-        <div
-          style={{
-            backgroundColor: '#fff',
-            padding: '18px 24px',
-            borderRadius: '16px',
-            marginBottom: '20px',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '16px',
-              flexWrap: 'wrap',
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: '14px',
-                  color: '#495057',
-                  fontWeight: 600,
-                }}
-              >
-                Unplanned Expenditure
-              </span>
-              <CustomToggle
-                name="unplannedBudgetToggle"
-                label=""
-                checked={showUnplannedBudget}
-                onChange={(checked) => {
-                  setShowUnplannedBudget(checked);
-                  if (!checked) {
-                    setUnplannedRows([createUnplannedBudgetRow()]);
-                  }
-                }}
-              />
-            </div>
-            {hasUnplannedBudgetPreview && (
-              <div style={{ flex: '1 1 360px', maxWidth: '520px' }}>
-                <CustomDropdown
-                  className="mb-0"
-                  options={getUnplannedHeadOfAccountOptions()}
-                  value={getUnplannedHeadOfAccountSelectedOption(firstUnplannedRow)}
-                  onChange={(option) =>
-                    handleUnplannedHeadOfAccountForFormChange(option as OptionType | null)
-                  }
-                  filterOption={filterUnplannedHeadOfAccountOption}
-                  placeholder={isApprovedBudgetLoading ? 'Loading...' : 'Select Head of Accounts'}
-                  isDisabled={isReadOnlyView}
-                />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {renderUnplannedExpenditureTable()}
-
         {activeTab === 'Advance' && (
           <div
             style={{
@@ -6899,11 +7009,12 @@ const ExpenditureApproval: React.FC = () => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedBudgetHeadSearchOptions()}
+                            options={getApprovedBudgetHeadSearchOptions(idx)}
                             value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
                               row.budgetLineId,
+                              idx,
                             )}
                             onChange={(option) =>
                               void handleAdvanceBudgetHeadSearchChange(
@@ -6923,11 +7034,12 @@ const ExpenditureApproval: React.FC = () => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
+                            options={getApprovedSubHeadOptionsForAdvance(row.budgetHead, idx)}
                             value={getApprovedSubHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
                               row.budgetLineId,
+                              idx,
                             )}
                             onChange={async (option) => {
                               const selected = option as OptionType | null;
@@ -7310,12 +7422,12 @@ const ExpenditureApproval: React.FC = () => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedBudgetHeadSearchOptions(row.id)}
+                            options={getApprovedBudgetHeadSearchOptions(idx)}
                             value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
                               row.budgetLineId,
-                              row.id,
+                              idx,
                             )}
                             onChange={(option) =>
                               void handleSettlementBudgetHeadSearchChange(
@@ -7335,12 +7447,12 @@ const ExpenditureApproval: React.FC = () => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedSubHeadOptionsForAdvance(row.budgetHead, row.id)}
+                            options={getApprovedSubHeadOptionsForAdvance(row.budgetHead, idx)}
                             value={getApprovedSubHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
                               row.budgetLineId,
-                              row.id,
+                              idx,
                             )}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
@@ -7750,11 +7862,12 @@ const ExpenditureApproval: React.FC = () => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedBudgetHeadSearchOptions()}
+                            options={getApprovedBudgetHeadSearchOptions(idx)}
                             value={getApprovedBudgetHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
                               row.budgetLineId,
+                              idx,
                             )}
                             onChange={(option) =>
                               handleExpenditureBudgetHeadSearchChange(
@@ -7777,11 +7890,12 @@ const ExpenditureApproval: React.FC = () => {
                         >
                           <CustomDropdown
                             className="mb-0"
-                            options={getApprovedSubHeadOptionsForAdvance(row.budgetHead)}
+                            options={getApprovedSubHeadOptionsForAdvance(row.budgetHead, idx)}
                             value={getApprovedSubHeadSelectedOption(
                               row.budgetHead,
                               row.subHead,
                               row.budgetLineId,
+                              idx,
                             )}
                             onChange={(option) => {
                               const selected = option as OptionType | null;
@@ -8047,6 +8161,62 @@ const ExpenditureApproval: React.FC = () => {
                 </tfoot>
               </table>
             </div>
+
+            {(financeUnplannedAllowed || showUnplannedBudget) && (
+              <div
+                style={{
+                  backgroundColor: '#fff',
+                  padding: '18px 24px',
+                  borderRadius: '16px',
+                  marginTop: '20px',
+                  marginBottom: '20px',
+                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.05)',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '16px',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '14px',
+                      color: '#495057',
+                      fontWeight: 600,
+                    }}
+                  >
+                    Unplanned Expenditure
+                  </span>
+                  <CustomToggle
+                    name="unplannedBudgetToggle"
+                    label=""
+                    checked={showUnplannedBudget}
+                    onChange={(checked) => {
+                      setShowUnplannedBudget(checked);
+                      if (!checked) {
+                        setUnplannedRows([createUnplannedBudgetRow()]);
+                      }
+                    }}
+                  />
+                </div>
+
+                {showUnplannedBudget && (
+                  <div
+                    style={{
+                      height: '2px',
+                      backgroundColor: '#e0e0e0',
+                      marginTop: '18px',
+                      marginBottom: '20px',
+                    }}
+                  />
+                )}
+
+                {renderUnplannedExpenditureTable()}
+              </div>
+            )}
           </div>
         )}
 
