@@ -1,13 +1,20 @@
+import fs from 'fs';
+import path from 'path';
+
 import financeModel from './financeModel.js';
-import './financeWorkflowAdapter.js';
+import financeWorkflowAdapter from './financeWorkflowAdapter.js';
 import db from '../../config/connection.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
-import fs from 'fs';
-import path from 'path';
-
 const normalizeText = (value) => String(value || '').trim();
+
+const parseBooleanLike = (value) => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value === 1;
+  const normalized = normalizeText(value).toLowerCase();
+  return ['1', 'true', 'yes', 'on'].includes(normalized);
+};
 
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -100,7 +107,12 @@ const parseDateMs = (value) => {
 
 const resolveCurrentCycleStartMs = (financeRecord, entries = []) => {
   const workflowState = financeRecord?.workflow_state || {};
+  const topupAtMs = parseDateMs(workflowState.topupAt);
   const resubmittedAtMs = parseDateMs(workflowState.resubmittedAt);
+
+  if (topupAtMs) {
+    return topupAtMs;
+  }
 
   if (resubmittedAtMs) {
     // Include the latest return action that led to resubmission so edit/resubmit logs are visible.
@@ -264,6 +276,22 @@ const hasFinanceStagePermission = (req, stage) => {
 const hasFinanceWorkflowEditorAccess = (req) =>
   isSuperAdminRequest(req) || hasAnyFinanceWorkflowPermission(req);
 
+const isFinanceApplicantOwner = (userId, financeRecord) => {
+  const normalizedUserId = toPositiveInt(userId);
+  if (!normalizedUserId || !financeRecord) {
+    return false;
+  }
+
+  const applicantUserId = toPositiveInt(financeRecord.applicant_user_id);
+  if (applicantUserId && applicantUserId === normalizedUserId) {
+    return true;
+  }
+
+  // LEGACY: fallback to created_by when master_employees.user_id is not populated.
+  // Remove after all master_employees rows have correct user_id values.
+  return toPositiveInt(financeRecord.created_by) === normalizedUserId;
+};
+
 const canAccessFinanceRecord = (req, financeRecord) => {
   const actorUserId = toPositiveInt(req.user?.id);
 
@@ -275,7 +303,7 @@ const canAccessFinanceRecord = (req, financeRecord) => {
     return true;
   }
 
-  if (actorUserId && actorUserId === toPositiveInt(financeRecord.created_by)) {
+  if (isFinanceApplicantOwner(actorUserId, financeRecord)) {
     return true;
   }
 
@@ -496,14 +524,16 @@ const financeController = {
         });
       }
 
-      const isCreator = Boolean(userId && toPositiveInt(finance.created_by) === userId);
+      const isApplicantOwner = isFinanceApplicantOwner(userId, finance);
       const isWorkflowEditor = hasFinanceWorkflowEditorAccess(req);
       const workflowStatus = normalizeText(finance.workflow_state?.status).toLowerCase();
+      const isTopupMode = parseBooleanLike(req.body?.topup_mode || req.body?.topupMode);
+      const isTopupEditable = isTopupMode && ['approved', 'completed'].includes(workflowStatus);
       const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(
         workflowStatus,
       );
 
-      if (!isCreator && !isWorkflowEditor) {
+      if (!isApplicantOwner && !isWorkflowEditor) {
         return res.status(403).json({
           success: false,
           message: 'You are not allowed to update this request',
@@ -517,27 +547,205 @@ const financeController = {
         workflowStatus === 'submitted' ||
         currentStage === 'level1';
 
-      if (isCreator && !isWorkflowEditor && !isApplicantEditable) {
+      if (isApplicantOwner && !isWorkflowEditor && !isApplicantEditable && !isTopupEditable) {
         return res.status(403).json({
           success: false,
           message: 'This request is not editable in current workflow state',
         });
       }
 
-      if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req)) {
+      if (isWorkflowEditor && isTerminalWorkflow && !isSuperAdminRequest(req) && !isTopupEditable) {
         return res.status(403).json({
           success: false,
           message: 'This request is not editable in current workflow state',
         });
       }
 
-      const result = await financeModel.updateFinanceRequest(
-        financeId,
-        req.body || {},
-        normalizeActor(req),
-      );
+      const topupStartedAt = isTopupEditable ? new Date().toISOString() : null;
+      const actor = normalizeActor(req);
+
+      if (isTopupEditable) {
+        const connection = await db.getConnection();
+
+        try {
+          await connection.beginTransaction();
+          const lockedFinanceContext = await financeModel.getFinanceRecordContext(financeId, {
+            tx: connection,
+            forUpdate: true,
+          });
+
+          if (!lockedFinanceContext) {
+            await connection.rollback();
+            return res.status(404).json({
+              success: false,
+              message: 'Finance request not found',
+              error: 'Finance request not found',
+            });
+          }
+
+          const lockedWorkflowStatus = normalizeText(
+            lockedFinanceContext.workflowStatus,
+          ).toLowerCase();
+          if (!['approved', 'completed'].includes(lockedWorkflowStatus)) {
+            await connection.rollback();
+            return res.status(409).json({
+              success: false,
+              message: 'This request is no longer eligible for topup submission',
+            });
+          }
+
+          const existingBudgetRows = await financeModel.getBudgetBreakup(financeId, {
+            tx: connection,
+          });
+          const submittedBudgetRows = Array.isArray(req.body?.budget_rows)
+            ? req.body.budget_rows
+            : [];
+          const appendedBudgetRows = submittedBudgetRows
+            .slice(existingBudgetRows.length)
+            .map((row) => {
+              const sanitizedRow = { ...(row || {}) };
+              delete sanitizedRow.approved_amount;
+              delete sanitizedRow.remaining_amount_snapshot;
+              sanitizedRow.is_topup = 1;
+              return sanitizedRow;
+            });
+
+          if (!appendedBudgetRows.length) {
+            await connection.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'At least one new topup budget row is required',
+            });
+          }
+
+          const updatePayload = {
+            budget_rows: [...existingBudgetRows, ...appendedBudgetRows],
+            topup_mode: true,
+          };
+
+          const result = await financeModel.updateFinanceRequest(financeId, updatePayload, actor, {
+            tx: connection,
+          });
+
+          if (result.affectedRows <= 0) {
+            await connection.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'No changes applied',
+            });
+          }
+
+          const updatedFinanceContext = await financeModel.getFinanceRecordContext(financeId, {
+            tx: connection,
+            forUpdate: true,
+          });
+          const financeMeta = {
+            unplannedBudgetEnabled: Boolean(finance.unplanned_budget_enabled),
+            unplannedBudgetAmount:
+              finance.unplanned_budget_amount !== undefined &&
+              finance.unplanned_budget_amount !== null
+                ? Number(finance.unplanned_budget_amount)
+                : null,
+            unplannedBudgetDescription: normalizeText(finance.unplanned_budget_description) || null,
+            topupMode: true,
+          };
+
+          const restartResult = await workflowService.startWorkflow({
+            moduleKey: 'finance',
+            recordId: financeId,
+            metadata: {
+              origin: 'topup',
+              requestId: null,
+              moduleMetaVersion: 1,
+              moduleMeta: {
+                trigger: 'finance_topup',
+                amountBand:
+                  Number(updatedFinanceContext?.totalBudget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+                beneficiaryType: normalizeText(finance.beneficiary_type) || null,
+                financeMeta,
+              },
+            },
+            tx: connection,
+          });
+
+          await financeModel.updateFinanceWorkflowSnapshot(
+            financeId,
+            {
+              ...(restartResult.state || {}),
+              topupAt: topupStartedAt,
+              updatedAt: topupStartedAt,
+              lastDecision: 'topup_submitted',
+              lastFeedback: null,
+            },
+            { tx: connection },
+          );
+
+          await connection.commit();
+
+          return res.status(200).json({
+            success: true,
+            message: 'Finance topup submitted successfully',
+            data: {
+              id: financeId,
+              requestRef: finance.proposal_ref || null,
+              proposal_ref: finance.proposal_ref || null,
+            },
+          });
+        } catch (error) {
+          await connection.rollback();
+          throw error;
+        } finally {
+          connection.release();
+        }
+      }
+
+      const result = await financeModel.updateFinanceRequest(financeId, req.body || {}, actor);
 
       if (result.affectedRows > 0) {
+        try {
+          const updatedFinanceContext = await financeModel.getFinanceRecordContext(financeId);
+          if (updatedFinanceContext && updatedFinanceContext.workflowState) {
+            const currentState = updatedFinanceContext.workflowState;
+            if (currentState.status === 'in_progress' || currentState.status === 'returned') {
+              const currentTotal = Number(updatedFinanceContext.totalBudget || 0);
+              const newAmountBand = currentTotal > 10000 ? 'gt_10k' : 'lte_10k';
+
+              const newFlow = financeWorkflowAdapter.resolveStartFlow({
+                metadata: {
+                  moduleMeta: {
+                    amountBand: newAmountBand,
+                    beneficiaryType: normalizeText(updatedFinanceContext.beneficiary_type) || null,
+                  },
+                },
+              });
+
+              const currentFlowStr = JSON.stringify(currentState.flow || []);
+              const newFlowStr = JSON.stringify(newFlow);
+
+              if (currentFlowStr !== newFlowStr) {
+                const updatedState = {
+                  ...currentState,
+                  flow: newFlow,
+                  submittedTotalBudget: currentTotal,
+                  updatedAt: new Date().toISOString(),
+                };
+
+                // If current stage is no longer in the new flow, auto-complete
+                if (currentState.currentStage && !newFlow.includes(currentState.currentStage)) {
+                  updatedState.status = 'completed';
+                  updatedState.currentStage = null;
+                  updatedState.lastDecision = 'approved';
+                  updatedState.resolvedAt = updatedState.updatedAt;
+                }
+
+                await financeModel.updateFinanceWorkflowSnapshot(financeId, updatedState);
+              }
+            }
+          }
+        } catch (workflowRecalcError) {
+          console.error('Workflow recalculation failed:', workflowRecalcError);
+        }
+
         return res.status(200).json({
           success: true,
           message: 'Finance request updated successfully',
@@ -578,7 +786,7 @@ const financeController = {
         });
       }
 
-      if (!userId || toPositiveInt(finance.created_by) !== userId) {
+      if (!isFinanceApplicantOwner(userId, finance)) {
         return res.status(403).json({
           success: false,
           message: 'Only applicant can resubmit this request',
@@ -688,7 +896,7 @@ const financeController = {
         });
       }
 
-      if (!isSuperAdmin && (!userId || toPositiveInt(finance.created_by) !== userId)) {
+      if (!isSuperAdmin && !isFinanceApplicantOwner(userId, finance)) {
         return res.status(403).json({
           success: false,
           message: 'Only applicant can delete this request',
@@ -698,8 +906,16 @@ const financeController = {
       const workflowState = finance.workflow_state || null;
       const workflowStatus = normalizeText(workflowState?.status).toLowerCase();
       const currentStage = normalizeText(workflowState?.currentStage).toLowerCase();
+      const isTopupRequest = Boolean(normalizeText(workflowState?.topupAt));
       const hasStartedApproval =
         Boolean(workflowState) && currentStage && currentStage !== 'level1';
+
+      if (!isSuperAdmin && isTopupRequest) {
+        return res.status(409).json({
+          success: false,
+          message: 'Top-up requests cannot be deleted after submission',
+        });
+      }
 
       if (
         !isSuperAdmin &&
@@ -727,6 +943,66 @@ const financeController = {
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in deleteFinanceRequest');
+    }
+  },
+
+  async closeFinanceRequest(req, res) {
+    try {
+      const financeId = toPositiveInt(req.params.id);
+      const userId = toPositiveInt(req.user?.id);
+      const isSuperAdmin = isSuperAdminRequest(req);
+
+      if (!financeId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid finance request ID',
+        });
+      }
+
+      const finance = await financeModel.getFinanceRequestById(financeId);
+      if (!finance) {
+        return res.status(404).json({
+          success: false,
+          message: 'Finance request not found',
+        });
+      }
+
+      if (!isSuperAdmin && !isFinanceApplicantOwner(userId, finance)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the applicant can finalize and close this finance card',
+        });
+      }
+
+      const closed = await financeModel.closeFinanceRequest(financeId, userId);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Finance card finalized and closed',
+        data: closed,
+      });
+    } catch (error) {
+      const code = error?.code;
+      const statusByCode = {
+        INVALID_FINANCE_ID: 400,
+        NOT_FOUND: 404,
+        ALREADY_CLOSED: 409,
+        NOT_ELIGIBLE: 409,
+        NOT_SETTLED: 409,
+        MIGRATION_REQUIRED: 503,
+      };
+      const statusCode = statusByCode[code] || 500;
+
+      if (statusCode === 500) {
+        console.error('Error in closeFinanceRequest', error);
+      }
+
+      return res.status(statusCode).json({
+        success: false,
+        message: error.message || 'Unable to close this finance card',
+        error: error.message || 'Unable to close this finance card',
+        code,
+      });
     }
   },
 

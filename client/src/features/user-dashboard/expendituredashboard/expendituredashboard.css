@@ -407,6 +407,55 @@
     0 6px 14px rgba(15, 23, 42, 0.05);
 }
 
+.expenditure-demo-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 14px 10px;
+  border-top: 1px solid #e5edf7;
+}
+
+.expenditure-demo-card-footer__close-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid #0b5fb1;
+  background: #ffffff;
+  color: #0b5fb1;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.expenditure-demo-card-footer__close-btn:hover:not(:disabled) {
+  background: #0b5fb1;
+  color: #fff;
+}
+
+.expenditure-demo-card-footer__close-btn:disabled {
+  border-color: #cbd5e1;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+.expenditure-demo-card-footer__closed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: not-allowed;
+}
+
 .expenditure-demo-trigger {
   width: 100%;
   display: grid;
@@ -1578,6 +1627,266 @@
   background: #fdeaea !important;
   color: #b42318 !important;
   border-color: #f0c2c2 !important;
+}
+
+.expenditure-status-pill--returned {
+  background: #fff7ed !important;
+  color: #c2410c !important;
+  border-color: #fed7aa !important;
+}
+
+/* ─── Individual Cards Layout ─── */
+.expenditure-individual-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.expenditure-individual-cards__empty {
+  text-align: center;
+  padding: 60px 0;
+  font-size: 0.92rem;
+  color: #6b7280;
+}
+
+.expenditure-individual-card {
+  position: relative;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: all 0.22s ease;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.03);
+}
+
+.expenditure-individual-card:hover {
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  border-color: #cbd5e1;
+  transform: translateY(-1px);
+}
+
+.expenditure-individual-card:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+}
+
+/* Card Row 1 */
+.expenditure-individual-card__row1 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.expenditure-individual-card__row1-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+.expenditure-individual-card__name {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+
+/* Type Circle Badge */
+.expenditure-individual-card__type-circle-badge {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.expenditure-individual-card__type-circle-badge--advance {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.expenditure-individual-card__type-circle-badge--expenditure {
+  background: #fef9c3;
+  color: #a16207;
+}
+
+.expenditure-individual-card__type-circle-badge--settlement {
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+/* Solid Blue Full Reference Pill */
+.expenditure-individual-card__full-ref {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #0069ab;
+  border-radius: 9999px;
+  padding: 4px 12px;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+/* Row 1 Right */
+.expenditure-individual-card__row1-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-shrink: 0;
+}
+
+.expenditure-individual-card__amount-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.expenditure-individual-card__amount-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.expenditure-individual-card__amount-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.expenditure-individual-card__actions-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Circular Buttons */
+.expenditure-individual-card__action-circle-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: #f1f5f9;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.expenditure-individual-card__action-circle-btn:hover:not(:disabled) {
+  background: #cbd5e1;
+  color: #0f172a;
+  transform: translateY(-1px);
+}
+
+.expenditure-individual-card__action-circle-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Divider Line */
+.expenditure-individual-card__divider {
+  border-top: 1px solid #f1f5f9;
+  margin: 14px 0;
+}
+
+/* Card Row 2 */
+.expenditure-individual-card__row2 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.expenditure-individual-card__meta-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.expenditure-individual-card__meta-row {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.expenditure-individual-card__meta-row strong {
+  color: #0f172a;
+  font-weight: 700;
+  margin-left: 2px;
+}
+
+.expenditure-individual-card__row2-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+/* Custom Bottom Row Button Styles */
+.expenditure-individual-card__action-circle-btn--doc {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.expenditure-individual-card__action-circle-btn--doc:hover:not(:disabled) {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.expenditure-individual-card__action-circle-btn--rotate {
+  background: #fff7ed;
+  color: #ea580c;
+}
+
+.expenditure-individual-card__action-circle-btn--rotate:hover:not(:disabled) {
+  background: #ffedd5;
+  color: #ea580c;
+}
+
+.expenditure-individual-card__action-circle-btn--trash {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.expenditure-individual-card__action-circle-btn--trash:hover:not(:disabled) {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.expenditure-individual-card__action-circle-btn--box {
+  background: #faf5ff;
+  color: #7c3aed;
+}
+
+.expenditure-individual-card__action-circle-btn--box:hover:not(:disabled) {
+  background: #f3e8ff;
+  color: #7c3aed;
 }
 
 /* Global actions */

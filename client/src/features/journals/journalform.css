@@ -166,10 +166,9 @@
   flex-wrap: nowrap;
 }
 
-.author-input-group .form-control {
-  flex: 1;
+.author-input-group > * {
+  flex: 1 1 0px;
   min-width: 100px;
-  max-width: 200px;
 }
 
 .author-input-group .form-control[readOnly] {
@@ -186,9 +185,7 @@
 
 .author-search-container {
   position: relative;
-  flex: 1;
-  min-width: 150px;
-  max-width: 200px;
+  width: 100%;
 }
 
 .author-suggestions-list {
@@ -337,6 +334,167 @@
   /* Maintain text color on hover */
 }
 
+/* "Add Journal" pill button (Journal Details header) */
+.btn-add-journal {
+  background-color: #0069ab;
+  color: #fff;
+  border: none;
+  border-radius: 8px !important;
+  padding: 6px 16px !important;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.btn-add-journal:hover {
+  background-color: #005286 !important;
+  color: #fff !important;
+}
+
+.btn-add-journal:disabled {
+  background-color: #b3d9ff !important;
+  cursor: not-allowed;
+}
+
+/* Card section title with hairline divider (matches mockup card headers) */
+.section-title-divider {
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid #e6eef8;
+}
+
+/* Citation count next to Reference Nos input */
+.reference-citation-count {
+  color: #0069ab;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+/* Inline Publication Details layout (matches mockup horizontal rows) */
+.pub-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.25rem;
+}
+
+.pub-row + .pub-row {
+  margin-top: 1.5rem;
+}
+
+.pub-field {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.pub-field > .form-label {
+  white-space: nowrap;
+}
+
+.pub-input {
+  width: 140px !important;
+  flex: 0 0 auto;
+}
+
+.pub-input-sm {
+  width: 90px !important;
+  flex: 0 0 auto;
+}
+
+.pub-date {
+  width: 160px !important;
+  flex: 0 0 auto;
+}
+
+/* Published Article upload box (Card C) */
+.publish-upload-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 16px 20px;
+  background-color: #fff;
+}
+
+.publish-upload-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.publish-upload-icon {
+  color: #0069ab;
+  flex-shrink: 0;
+}
+
+.publish-upload-title {
+  font-weight: 600;
+  color: #333;
+  line-height: 1.2;
+}
+
+.publish-upload-subtitle {
+  font-size: 12px;
+  color: #8a94a6;
+}
+
+.publish-choose-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background-color: #0069ab;
+  color: #fff !important;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 18px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.publish-choose-file:hover {
+  background-color: #005286;
+  color: #fff !important;
+}
+
+.publish-file-name {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+/* Scopus / SCIE / Credit ID fields (label left, input right) */
+.publish-id-field {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.publish-id-field > .form-label {
+  width: 90px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.publish-id-field > .form-control {
+  flex: 1;
+}
+
+/* Green check beside the Status dropdown (published) */
+.status-check-icon {
+  color: #2e9e5b;
+  flex-shrink: 0;
+}
+
 /* Custom Radio Buttons */
 .radio-group {
   display: flex;
@@ -387,14 +545,14 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background-color: #0069ab;
-  /* Primary blue */
+  background-color: #2e9e5b;
+  /* Success green (matches mockup selected state) */
   transition: transform 0.2s ease-in-out;
 }
 
 .radio-item input[type='radio']:checked + label::before {
-  border-color: #0069ab;
-  /* Primary blue */
+  border-color: #2e9e5b;
+  /* Success green */
 }
 
 .radio-item input[type='radio']:checked + label::after {
@@ -884,14 +1042,15 @@ button[type='submit']:disabled {
 /* Force theme on custom radios */
 .radio-item label::before {
   background-color: #fff !important;
+  border-color: #c3d3e8 !important;
 }
 
 .radio-item input[type='radio']:checked + label::before {
-  border-color: #0069ab !important;
+  border-color: #2e9e5b !important;
 }
 
 .radio-item label::after {
-  background-color: #0069ab !important;
+  background-color: #2e9e5b !important;
 }
 
 /* Force theme on custom checkboxes */
@@ -1298,10 +1457,9 @@ input[type='checkbox'],
     gap: 0.5rem;
   }
 
-  .author-input-group .form-control {
+  .author-input-group > * {
     flex: 1 1 100%;
     min-width: 100% !important;
-    max-width: 100% !important;
   }
 
   .author-search-container {
@@ -1346,4 +1504,100 @@ input[type='checkbox'],
     width: 36px;
     height: 36px;
   }
+}
+
+/* Redesigned Publication Details Styles */
+.bg-light-blue {
+  background-color: #f0f6ff;
+  border-radius: 8px;
+  padding: 16px;
+  border: 1px solid #dce4f0;
+}
+
+.border-dashed-blue {
+  background-color: #ffffff;
+  border: 1px dashed #0d6efd;
+  border-radius: 8px;
+  padding: 24px;
+}
+
+.pub-upload-box-modern {
+  background-color: #ffffff;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pub-upload-info-modern {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pub-upload-icon-modern {
+  color: #6c757d;
+}
+
+.pub-upload-title-modern {
+  font-weight: 600;
+  color: #343a40;
+  font-size: 14px;
+}
+
+.pub-upload-subtitle-modern {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.btn-upload-modern {
+  background-color: #0d6efd;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.btn-upload-modern:hover {
+  background-color: #0b5ed7;
+  color: #fff;
+}
+
+.pub-field-horizontal {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.pub-field-horizontal .form-label {
+  min-width: 80px;
+  font-weight: 600;
+  color: #495057;
+  font-size: 14px;
+  margin-bottom: 0;
+}
+
+.pub-id-prefix-link {
+  font-size: 14px;
+  color: #0d6efd;
+  text-decoration: underline;
+  font-weight: 500;
+  min-width: 140px;
+}
+
+.pub-id-icon-link {
+  color: #0d6efd;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
 }

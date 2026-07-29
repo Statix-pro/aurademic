@@ -3,6 +3,8 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import Select from 'react-select';
 
 import { useAuth } from '../../contexts/AuthContext';
+import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import RecordHeaderBanner from '../../shared/components/ui/RecordHeaderBanner';
 import {
   BUDGET_HEAD_GROUPS,
   SUB_HEAD_BY_BUDGET_HEAD,
@@ -13,7 +15,6 @@ import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
 
 import './budget.css';
-import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 
 import {
   Eye,
@@ -595,6 +596,8 @@ const Budget: React.FC = () => {
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(!id);
   const [proposalStatus, setProposalStatus] = useState<string>('');
   const [proposalStage, setProposalStage] = useState<string>('');
+  const [proposalRef, setProposalRef] = useState<string>('');
+  const [createdByEmail, setCreatedByEmail] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
   const [actionType, setActionType] = useState<'return' | 'reject' | null>(null);
@@ -1295,6 +1298,8 @@ const Budget: React.FC = () => {
 
         setProposalStatus((p.status || '').toString());
         setProposalStage((p.current_stage || p.currentStage || '').toString());
+        setProposalRef(String(p.proposal_ref || ''));
+        setCreatedByEmail(String(p.user_email || ''));
 
         setApplicantName(p.applicant_name || p.user_name || p.name || '');
         setApplicantSearchQuery(p.applicant_name || p.user_name || p.name || '');
@@ -1685,6 +1690,12 @@ const Budget: React.FC = () => {
           <Bell size={20} />
         </button>
       </div>
+
+      <RecordHeaderBanner
+        referenceLabel="Proposal ID"
+        referenceValue={proposalRef}
+        createdByEmail={createdByEmail}
+      />
 
       <fieldset disabled={isViewMode} style={{ border: 0, padding: 0, margin: 0 }}>
         <div className="budgetCard">

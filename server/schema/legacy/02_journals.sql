@@ -99,8 +99,6 @@ CREATE TABLE journals (
   quartile VARCHAR(2) DEFAULT NULL COMMENT 'Journal Scimago Quartile (Q1, Q2, Q3, Q4)',
   impact_factor DECIMAL(10,3) DEFAULT NULL COMMENT 'Snapshot of impact factor at publication time',
   cite_score DECIMAL(10,3) DEFAULT NULL COMMENT 'Snapshot of cite score at publication time',
-  anna_university_listed TINYINT(1) DEFAULT NULL COMMENT 'Boolean flag indicating Anna University Annexure listing',
-  anna_university_annexure_no VARCHAR(50) DEFAULT NULL COMMENT 'Specific Annexure list number reference',
   acknowledgement JSON DEFAULT NULL COMMENT 'Funding or college name acknowledgement details',
   date_of_submission DATE DEFAULT NULL COMMENT 'Initial submission date',
   status VARCHAR(50) DEFAULT 'waiting' COMMENT 'Workflow state (waiting, approved, published)',

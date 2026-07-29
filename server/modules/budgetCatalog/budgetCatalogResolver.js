@@ -14,6 +14,10 @@ const memoCache = new Map();
 const MEMO_TTL_MS = 60_000;
 const HOAC_GROUPS = new Set(['Events & Competitions', 'Meetings & Audits']);
 
+// Heads that aren't in an HOAC group by default but should still use
+// the HOAC shared sub-heads pattern. Maps head name → HOAC event_type.
+const HEAD_HOAC_OVERRIDE = { 'Student Capacity Building': 'Events & Competitions' };
+
 function memoKey(headName, subHeadName, scope) {
   return `${String(headName || '')
     .trim()
@@ -44,6 +48,8 @@ async function resolveHoacEventType(connection, primaryHead) {
   const trimmedHead = normalizeText(primaryHead);
   if (!trimmedHead) return '';
   if (HOAC_GROUPS.has(trimmedHead)) return trimmedHead;
+  // Direct override for specific heads outside HOAC groups
+  if (HEAD_HOAC_OVERRIDE[trimmedHead]) return HEAD_HOAC_OVERRIDE[trimmedHead];
 
   const cacheKey = `hoac-event-type::${trimmedHead.toLowerCase()}`;
   const cached = readCache(cacheKey);
@@ -146,14 +152,24 @@ export async function resolvePrimaryHeadIds(connection, primaryHead, eventSubHea
   const head = await resolveCatalogIds(connection, primaryHead, null, { scope: 'head-specific' });
   let event_sub_head_id = null;
   if (eventSubHead) {
-    // HOAC sub-heads are scoped by event_type. If primaryHead is a child
-    // head (for example Academic Events), resolve its parent HOAC group.
-    const eventType = await resolveHoacEventType(connection, primaryHead);
-    if (eventType) {
-      const hoac = await resolveCatalogIds(connection, eventType, eventSubHead, {
-        scope: 'hoac-shared',
-      });
-      event_sub_head_id = hoac.budget_sub_head_id;
+    // NEW STRUCTURE: The extra dropdown is a head-specific sub-head of the selected head.
+    // e.g. primaryHead="Academic Events", eventSubHead="FDP"
+    const headSpecific = await resolveCatalogIds(connection, primaryHead, eventSubHead, {
+      scope: 'head-specific',
+    });
+
+    if (headSpecific.budget_sub_head_id) {
+      event_sub_head_id = headSpecific.budget_sub_head_id;
+    } else {
+      // LEGACY STRUCTURE: The extra dropdown was a hoac-shared sub-head of the event type.
+      // e.g. primaryHead="Events & Competitions", eventSubHead="Academic Events"
+      const eventType = await resolveHoacEventType(connection, primaryHead);
+      if (eventType) {
+        const hoac = await resolveCatalogIds(connection, eventType, eventSubHead, {
+          scope: 'hoac-shared',
+        });
+        event_sub_head_id = hoac.budget_sub_head_id;
+      }
     }
   }
   return {
