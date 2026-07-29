@@ -1257,7 +1257,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   const isResubmittedRecord = useCallback(
     (record: Record<string, any>) => {
-      return getRecordWorkflowDecision(record) === 'resubmitted';
+      const resubAt = record.workflow_state?.resubmittedAt || record.resubmittedAt;
+      const hasResubmittedTime =
+        resubAt &&
+        String(resubAt).trim() !== '' &&
+        !isNaN(new Date(resubAt).getTime()) &&
+        new Date(resubAt).getTime() > 0;
+      return getRecordWorkflowDecision(record) === 'resubmitted' || Boolean(hasResubmittedTime);
     },
     [getRecordWorkflowDecision],
   );
@@ -1536,16 +1542,34 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
         const mapped = mapQueueResponse(response);
 
-        let items = Array.isArray(mapped.items) ? mapped.items : [];
+        const fetchedItems = Array.isArray(mapped.items) ? mapped.items : [];
+        let items = fetchedItems;
         if (!isAllProposalsTab) {
-          items = items.filter((item) => isVisibleInWorkflowList(item, stage));
+          items = fetchedItems.filter((item) => isVisibleInWorkflowList(item, stage));
         }
+        // Records hidden by isVisibleInWorkflowList are ones the server counted (in `total`
+        // and `statusCounts`) but that don't belong on this stage's list — without this
+        // adjustment the stat tiles/pagination text would show a count higher than the
+        // number of rows actually rendered on this page.
+        const hiddenCount = fetchedItems.length - items.length;
 
         setRows(items);
-        setQueueStatusCounts(mapped.statusCounts);
         const nextLimit = Number(mapped.limit || limit || config.queueDefaultLimit || 20);
         const normalizedMappedPage = Math.max(Number(mapped.page || requestedPage || 1), 1);
-        const normalizedMappedTotal = Math.max(Number(mapped.total || 0), 0);
+        const normalizedMappedTotal = Math.max(Number(mapped.total || 0) - hiddenCount, 0);
+
+        if (mapped.statusCounts && hiddenCount > 0) {
+          // isVisibleInWorkflowList only stage-checks records that resolve to the
+          // 'pending' category (all other categories are always visible), so every
+          // hidden record was counted as 'pending' server-side.
+          setQueueStatusCounts({
+            ...mapped.statusCounts,
+            total: normalizedMappedTotal,
+            pending: Math.max(Number(mapped.statusCounts.pending || 0) - hiddenCount, 0),
+          });
+        } else {
+          setQueueStatusCounts(mapped.statusCounts);
+        }
 
         setTotalRows(normalizedMappedTotal);
         setPage(normalizedMappedPage);
@@ -2328,32 +2352,17 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
   }, [secondaryFilter, secondaryFilterOptions]);
 
-  const searchScopedRows = useMemo(() => {
-    let filtered = amountScopedRows;
-
-    if (searchTerm.trim()) {
-      const query = searchTerm.trim().toLowerCase();
-      filtered = filtered.filter((record) => {
-        const tag = getWorkflowRecordTag(record);
-        const searchable = [
-          record.applicant_name,
-          record.beneficiary_type || record.beneficiaryType,
-          record.proposal_ref || formatProposalRef(record),
-          tag,
-        ]
-          .map((value) => String(value || '').toLowerCase())
-          .join(' ');
-        return searchable.includes(query);
-      });
-    }
-
-    return filtered;
-  }, [amountScopedRows, searchTerm]);
+  // The backend queue endpoint already filters `rows` by the search term (see
+  // financeModel.listFinanceQueueRecords / expenditureModel's equivalent) across a
+  // much broader field set than we could cheaply replicate here. Re-filtering
+  // client-side on a narrower field set made the visible list narrower than the
+  // (search-aware) server-computed statusCounts, producing a mismatch. Trust the
+  // server's filtering and don't re-filter by searchTerm on the client.
+  const searchScopedRows = amountScopedRows;
 
   const statusStats = useMemo(() => {
     if (
       queueStatusCounts &&
-      !searchTerm.trim() &&
       !amountFilter &&
       (!enableSecondaryFilter || beneficiaryFilter === 'All Beneficiary') &&
       !secondaryFilter
@@ -2388,7 +2397,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     enableSecondaryFilter,
     queueStatusCounts,
     searchScopedRows,
-    searchTerm,
     secondaryFilter,
     resolveStatusCategory,
   ]);
@@ -3305,6 +3313,25 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                           <span className={badge.className}>{badge.label}</span>
                                         ) : null;
                                       })()}
+                                      {Boolean(
+                                        record.has_topup || record.workflow_state?.topupAt,
+                                      ) && (
+                                        <span
+                                          style={{
+                                            fontSize: '11px',
+                                            fontWeight: 600,
+                                            color: '#059669',
+                                            backgroundColor: '#d1fae5',
+                                            border: '1px solid #10b981',
+                                            borderRadius: '12px',
+                                            padding: '2px 8px',
+                                            letterSpacing: '0.03em',
+                                            marginLeft: '8px',
+                                          }}
+                                        >
+                                          Top-up
+                                        </span>
+                                      )}
                                       <span className="fw-id">{proposalRef}</span>
                                     </>
                                   ) : (
@@ -3318,6 +3345,25 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                       </h5>
                                       {tag && tag.trim() !== '' && (
                                         <span className="fw-tag-pill">{tag}</span>
+                                      )}
+                                      {Boolean(
+                                        record.has_topup || record.workflow_state?.topupAt,
+                                      ) && (
+                                        <span
+                                          style={{
+                                            fontSize: '11px',
+                                            fontWeight: 600,
+                                            color: '#059669',
+                                            backgroundColor: '#d1fae5',
+                                            border: '1px solid #10b981',
+                                            borderRadius: '12px',
+                                            padding: '2px 8px',
+                                            letterSpacing: '0.03em',
+                                            marginLeft: '8px',
+                                          }}
+                                        >
+                                          Top-up
+                                        </span>
                                       )}
                                     </>
                                   )}
