@@ -110,8 +110,12 @@ const resolveCurrentCycleStartMs = (financeRecord, entries = []) => {
   const topupAtMs = parseDateMs(workflowState.topupAt);
   const resubmittedAtMs = parseDateMs(workflowState.resubmittedAt);
 
+  // A top-up restarts the workflow on an already-approved request, but the submission
+  // log must stay a complete audit trail across every cycle (initial submission and
+  // approvals, each top-up submission, and each top-up decision). Returning null means
+  // "no cycle boundary", so nothing is filtered out.
   if (topupAtMs) {
-    return topupAtMs;
+    return null;
   }
 
   if (resubmittedAtMs) {
@@ -679,6 +683,23 @@ const financeController = {
             },
             { tx: connection },
           );
+
+          // Record the top-up submission so the submission log keeps a complete audit
+          // trail. workflow_actions.decision is an ENUM without a 'topup_submitted'
+          // member, so the row is stored as 'resubmitted' and tagged via meta.origin =
+          // 'topup'; getStatusUpdates translates it back on read.
+          await workflowService.logWorkflowResubmission({
+            moduleKey: 'finance',
+            recordId: financeId,
+            stage: normalizeText(restartResult.state?.currentStage) || 'level1',
+            feedback: 'Top-up request submitted',
+            actor,
+            metadata: {
+              origin: 'topup',
+              moduleMeta: { trigger: 'finance_topup' },
+            },
+            tx: connection,
+          });
 
           await connection.commit();
 

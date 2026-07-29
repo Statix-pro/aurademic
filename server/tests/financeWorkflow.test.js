@@ -37,6 +37,7 @@ vi.mock('../modules/shared/workflow/workflowService.js', () => {
     default: {
       startWorkflow: vi.fn(),
       actOnWorkflow: vi.fn(),
+      logWorkflowResubmission: vi.fn(),
     },
   };
 });
@@ -297,6 +298,20 @@ describe('Finance Workflow Integration Tests', () => {
             moduleMeta: expect.objectContaining({
               amountBand: 'gt_10k',
             }),
+          }),
+        }),
+      );
+      // The top-up submission must be logged so the submission log stays a full
+      // audit trail across cycles.
+      expect(workflowService.logWorkflowResubmission).toHaveBeenCalledWith(
+        expect.objectContaining({
+          moduleKey: 'finance',
+          recordId: 201,
+          feedback: 'Top-up request submitted',
+          tx: expect.any(Object),
+          metadata: expect.objectContaining({
+            origin: 'topup',
+            moduleMeta: expect.objectContaining({ trigger: 'finance_topup' }),
           }),
         }),
       );

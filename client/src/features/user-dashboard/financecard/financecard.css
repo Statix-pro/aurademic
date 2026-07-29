@@ -705,6 +705,11 @@
   color: #991b1b;
 }
 
+.financecard-log-badge--top-up {
+  background: #d1fae5;
+  color: #047857;
+}
+
 .financecard-log-title-text {
   color: #475569;
   font-size: 0.75rem;

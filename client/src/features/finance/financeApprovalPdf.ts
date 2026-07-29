@@ -22,6 +22,7 @@ export interface FinancePdfBudgetRow {
   category: string;
   head: string;
   amount: string;
+  isTopup?: boolean;
 }
 
 export interface FinancePdfIncomeRow {
@@ -777,16 +778,38 @@ export const generateAndDownloadFinancePdf = async (
 
   yPos = (pdf as any).lastAutoTable.finalY;
 
-  const budgetTableBody = budgetRows.flatMap((row, index) => {
+  // Top-up rows are numbered T1, T2, T3… and tinted green. The serial prefix is what
+  // makes them identifiable on a printed or grayscale page, where the fill is not.
+  const TOPUP_FILL_COLOR: [number, number, number] = [220, 252, 231];
+  let originalRowCount = 0;
+  let topupRowCount = 0;
+  const budgetRowSerials = budgetRows.map((row) => {
+    if (row.isTopup) {
+      topupRowCount += 1;
+      return `T${topupRowCount}`;
+    }
+    originalRowCount += 1;
+    return String(originalRowCount);
+  });
+  const topupCellStyles = (extra: Record<string, any> = {}) => ({
+    fillColor: TOPUP_FILL_COLOR,
+    fontStyle: 'bold' as const,
+    ...extra,
+  });
+
+  const budgetTableBody: any[][] = budgetRows.flatMap((row, index): any[][] => {
     const isLastRow = index === budgetRows.length - 1;
+    const serial = budgetRowSerials[index];
 
     if (showUnplannedBudget && isLastRow) {
       return [
         [
           {
-            content: String(index + 1),
+            content: serial,
             rowSpan: 2,
-            styles: { halign: 'center', valign: 'middle' },
+            styles: row.isTopup
+              ? topupCellStyles({ halign: 'center', valign: 'middle' })
+              : { halign: 'center', valign: 'middle' },
           },
           row.category || '',
           row.head || '',
@@ -803,9 +826,21 @@ export const generateAndDownloadFinancePdf = async (
       ];
     }
 
-    return [
-      [String(index + 1), row.category || '', row.head || '', 'Rs. ' + Number(row.amount || 0)],
-    ];
+    if (row.isTopup) {
+      return [
+        [
+          { content: serial, styles: topupCellStyles({ halign: 'center' }) },
+          { content: row.category || '', styles: topupCellStyles() },
+          { content: row.head || '', styles: topupCellStyles() },
+          {
+            content: 'Rs. ' + Number(row.amount || 0) + ' (Top-up)',
+            styles: topupCellStyles(),
+          },
+        ],
+      ];
+    }
+
+    return [[serial, row.category || '', row.head || '', 'Rs. ' + Number(row.amount || 0)]];
   });
 
   budgetTableBody.push([
