@@ -339,6 +339,7 @@ const DocumentsCard: React.FC<DocumentsCardProps> = ({ docState, setDocState }) 
 
   const handleToggle = (doc: string): void => {
     setDocState((prev) => ({
+      
       ...prev,
       [doc]: {
         ...prev[doc],
