@@ -530,8 +530,15 @@ const hasFinanceWorkflowStagePermission = (permissions: string[], stage: string)
   });
 };
 
-const normalizeBudgetGroupKey = (budgetHead: unknown, subHead: unknown): string =>
-  `${normalizeText(String(budgetHead || '')).toLowerCase()}|${normalizeText(String(subHead || '')).toLowerCase()}`;
+// Top-up rows are keyed separately from original rows so a top-up against an
+// existing budget head stays a distinct row instead of being summed into the
+// original one — otherwise the top-up is invisible in view/admin mode and PDFs.
+const normalizeBudgetGroupKey = (
+  budgetHead: unknown,
+  subHead: unknown,
+  isTopup: unknown = false,
+): string =>
+  `${normalizeText(String(budgetHead || '')).toLowerCase()}|${normalizeText(String(subHead || '')).toLowerCase()}|${isTopup ? 'topup' : 'original'}`;
 
 const groupFinanceBudgetRowsForForm = (
   rows: any[],
@@ -545,7 +552,8 @@ const groupFinanceBudgetRowsForForm = (
   rows.forEach((row: any) => {
     const category = normalizeText(String(row?.budget_head || ''));
     const head = normalizeText(String(row?.sub_head || ''));
-    const key = normalizeBudgetGroupKey(category, head);
+    const isTopupRowFromApi = Boolean(row?.is_topup);
+    const key = normalizeBudgetGroupKey(category, head, isTopupRowFromApi);
     const amount = Number(row?.amount || 0);
     const availableAmount = Number(row?.available_amount_snapshot ?? 0);
     let groupIndex = indexByKey.get(key);
@@ -557,7 +565,7 @@ const groupFinanceBudgetRowsForForm = (
         category,
         head,
         amount: Number.isFinite(amount) ? String(amount) : '',
-        isTopup: Boolean(row?.is_topup),
+        isTopup: isTopupRowFromApi,
       });
       groupedMeta[groupIndex] = {
         budgetLineId: null,
@@ -574,7 +582,6 @@ const groupFinanceBudgetRowsForForm = (
       groupedMeta[groupIndex].availableAmount += Number.isFinite(availableAmount)
         ? availableAmount
         : 0;
-      if (row?.is_topup) groupedRows[groupIndex].isTopup = true;
     }
 
     const lineId = Number(row?.budget_line_id || 0);
@@ -2120,7 +2127,7 @@ const FinanceApproval: React.FC = () => {
               : budgetLineMetaByRow[index]?.budgetProposalId || null,
             fiscal_year: budgetAvailabilityFiscalYear || null,
             available_amount_snapshot: budgetLineMetaByRow[index]?.availableAmount ?? null,
-            is_topup: row.isTopup || (isTopupWorkflow && index >= initialBudgetRowCount) ? 1 : 0,
+            is_topup: isTopupBudgetRow(row, index) ? 1 : 0,
           };
         }),
         ...(isTopupWorkflow ? {} : { income_rows: showIncomeSection ? incomeRows : [] }),
@@ -2566,6 +2573,21 @@ const FinanceApproval: React.FC = () => {
   const incomeFieldsReadOnly = proposalFieldsReadOnly || isTopupWorkflow;
   const isLockedBudgetRow = (index: number) => isTopupWorkflow && index < initialBudgetRowCount;
   const isBudgetRowEditable = (index: number) => !isViewMode && !isLockedBudgetRow(index);
+  // A row is a top-up either because it was persisted as one (view/admin mode) or
+  // because it is being appended right now in top-up mode (create/edit mode).
+  const isTopupBudgetRow = (row: BudgetRow, index: number) =>
+    Boolean(row?.isTopup) || (isTopupWorkflow && index >= initialBudgetRowCount);
+  // Top-up rows are numbered T1, T2, T3… so they stay identifiable where the green
+  // highlight cannot be relied on (printed page, PDF, grayscale).
+  const getBudgetRowSerialLabel = (index: number) => {
+    let originalCount = 0;
+    let topupCount = 0;
+    for (let i = 0; i <= index && i < budgetRows.length; i += 1) {
+      if (isTopupBudgetRow(budgetRows[i], i)) topupCount += 1;
+      else originalCount += 1;
+    }
+    return isTopupBudgetRow(budgetRows[index], index) ? `T${topupCount}` : String(originalCount);
+  };
   const isReturnedFinanceResubmit =
     isEditMode &&
     !isAdminWorkflowContext &&
@@ -4428,15 +4450,22 @@ const FinanceApproval: React.FC = () => {
                   </thead>
                   <tbody>
                     {budgetRows.map((row, index) => {
-                      const isTopupRow =
-                        row.isTopup || (isTopupWorkflow && index >= initialBudgetRowCount);
+                      const isTopupRow = isTopupBudgetRow(row, index);
+                      const topupCellStyle = isTopupRow
+                        ? { backgroundColor: '#dcfce7' }
+                        : undefined;
                       return (
                         <tr
                           key={index}
                           style={{
                             borderBottom: '1px solid #e0e0e0',
                             opacity: primaryHead ? 1 : 0.6,
-                            backgroundColor: isTopupRow ? '#f0fdf4' : undefined,
+                            ...(isTopupRow
+                              ? {
+                                  backgroundColor: '#dcfce7',
+                                  boxShadow: 'inset 4px 0 0 0 #10b981',
+                                }
+                              : {}),
                           }}
                         >
                           <td
@@ -4444,10 +4473,12 @@ const FinanceApproval: React.FC = () => {
                               padding: '12px',
                               border: '1px solid #e0e0e0',
                               textAlign: 'center',
-                              color: '#495057',
+                              color: isTopupRow ? '#047857' : '#495057',
+                              fontWeight: isTopupRow ? 700 : undefined,
+                              ...(topupCellStyle || {}),
                             }}
                           >
-                            {index + 1}
+                            {getBudgetRowSerialLabel(index)}
                             {isTopupRow && (
                               <span
                                 style={{
@@ -4472,7 +4503,7 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               padding: '12px',
                               border: '1px solid #e0e0e0',
-                              backgroundColor: isTopupRow ? '#f0fdf4' : undefined,
+                              backgroundColor: isTopupRow ? '#dcfce7' : undefined,
                             }}
                           >
                             <CustomDropdown
@@ -4513,7 +4544,13 @@ const FinanceApproval: React.FC = () => {
                               isDisabled={!primaryHead || !isBudgetRowEditable(index)}
                             />
                           </td>
-                          <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                          <td
+                            style={{
+                              padding: '12px',
+                              border: '1px solid #e0e0e0',
+                              ...(topupCellStyle || {}),
+                            }}
+                          >
                             <CustomDropdown
                               // ROW-LEVEL BUDGET SUB-HEAD DROPDOWN
                               name={`subHead-${index}`}
@@ -4546,7 +4583,7 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               padding: '12px',
                               border: '1px solid #e0e0e0',
-                              backgroundColor: isTopupRow ? '#f0fdf4' : undefined,
+                              backgroundColor: isTopupRow ? '#dcfce7' : undefined,
                             }}
                           >
                             <input
@@ -4588,7 +4625,13 @@ const FinanceApproval: React.FC = () => {
                               }}
                             />
                           </td>
-                          <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
+                          <td
+                            style={{
+                              padding: '12px',
+                              border: '1px solid #e0e0e0',
+                              ...(topupCellStyle || {}),
+                            }}
+                          >
                             <div
                               style={{
                                 display: 'flex',
@@ -6317,26 +6360,31 @@ const FinanceApproval: React.FC = () => {
                           {budgetRows.map((row, index) => (
                             <tr
                               key={index}
-                              style={row.isTopup ? { backgroundColor: '#fffbea' } : undefined}
+                              style={
+                                isTopupBudgetRow(row, index)
+                                  ? { backgroundColor: '#dcfce7' }
+                                  : undefined
+                              }
                             >
                               <td
                                 style={{
                                   padding: '2.5px 4px',
                                   border: '1px solid #000',
                                   textAlign: 'center',
+                                  fontWeight: isTopupBudgetRow(row, index) ? 700 : undefined,
                                 }}
                               >
-                                {index + 1}
-                                {row.isTopup && (
+                                {getBudgetRowSerialLabel(index)}
+                                {isTopupBudgetRow(row, index) && (
                                   <span
                                     style={{
                                       display: 'block',
                                       fontSize: '0.55rem',
                                       fontWeight: 700,
-                                      color: '#b45309',
+                                      color: '#047857',
                                     }}
                                   >
-                                    TOPUP
+                                    TOP-UP
                                   </span>
                                 )}
                               </td>

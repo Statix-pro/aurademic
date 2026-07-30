@@ -798,6 +798,7 @@ export async function logWorkflowResubmission({
   actor = {},
   snapshotBefore = null,
   metadata = {},
+  tx = null,
 }) {
   const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
   const normalizedRecordId = toPositiveInt(recordId);
@@ -811,7 +812,8 @@ export async function logWorkflowResubmission({
   const actorEmail = normalizeText(actor?.email).toLowerCase() || null;
   const actorRole = normalizeText(actor?.role).toLowerCase() || null;
 
-  await db.query(
+  const executor = tx || db;
+  await executor.query(
     `INSERT INTO workflow_actions (
         module_key,
         record_id,

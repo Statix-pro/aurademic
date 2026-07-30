@@ -331,6 +331,10 @@ const normalizeBudgetRows = (rows = []) => {
           ? toMoney(row.remaining_amount_snapshot)
           : null,
       sort_order: index,
+      // Carry the top-up flag through normalization; without it replaceBudgetRows
+      // writes 0 for every row and top-up rows become indistinguishable in the
+      // detail/admin views, the PDF, and the topup_amount total.
+      is_topup: parseBooleanLike(row?.is_topup) ? 1 : 0,
     });
   });
 
@@ -2366,17 +2370,31 @@ const resolveFinanceWorkflowContext = async (conn, financeData = {}) => {
 };
 
 const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = null) => {
-  const [alreadyConsumedRows] = await conn.query(
-    `SELECT COUNT(*) AS count
+  // Rows committed by an earlier approval must not be consumed twice, but a top-up
+  // appends new rows to an already-approved request. The previous guard was
+  // per-request ("any consume row exists -> return"), which skipped the whole
+  // function on the second approval: top-up rows were never consumed from their
+  // budget line and approved_total_amount/balance_amount stayed frozen at their
+  // pre-top-up values.
+  //
+  // The ledger's net consumed total is the authority on what has already been paid
+  // for. Per-row identifiers are not usable here: replaceBudgetRows deletes and
+  // re-inserts every row on each update (rewriting ids), legacy ledger rows carry a
+  // NULL finance_budget_breakup_id, and some historical rows were consumed without
+  // approved_amount ever being written. Rows are ordered originals-first because the
+  // top-up path appends, so we walk them in order and skip the prefix the ledger
+  // already covers. A partially covered row is skipped rather than split —
+  // under-consuming is the safe direction.
+  const [ledgerTotalRows] = await conn.query(
+    `SELECT
+       COALESCE(SUM(CASE WHEN operation = 'consume' THEN amount ELSE 0 END), 0)
+       - COALESCE(SUM(CASE WHEN operation = 'release' THEN amount ELSE 0 END), 0)
+         AS net_consumed
      FROM finance_budget_usage_ledger
-     WHERE finance_id = ?
-       AND operation = 'consume'`,
+     WHERE finance_id = ?`,
     [financeId],
   );
-
-  if (Number(alreadyConsumedRows?.[0]?.count || 0) > 0) {
-    return;
-  }
+  let ledgerCoverageRemaining = toMoney(ledgerTotalRows?.[0]?.net_consumed);
 
   const [financeRows] = await conn.query(
     'SELECT unplanned_budget_enabled, unplanned_budget_amount FROM finance_requests WHERE id = ? FOR UPDATE',
@@ -2414,7 +2432,9 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
        fbb.budget_line_id,
        fbb.budget_head,
        fbb.sub_head,
-       fbb.amount
+       fbb.amount,
+       fbb.approved_amount,
+       fbb.remaining_amount_snapshot
      FROM finance_budget_breakup fbb
      WHERE fbb.finance_id = ?
      ORDER BY fbb.sort_order ASC, fbb.id ASC
@@ -2433,6 +2453,15 @@ const consumeBudgetForApprovedFinance = async (conn, financeId, actorUserId = nu
       throw new Error(
         `Requested amount must be greater than 0 for "${normalizeText(row.budget_head)}" / "${normalizeText(row.sub_head)}"`,
       );
+    }
+
+    // Already paid for by an earlier approval cycle (see the note above): keep this
+    // row's contribution to the request totals, but don't consume budget again.
+    if (ledgerCoverageRemaining > 0) {
+      ledgerCoverageRemaining = Math.max(0, toMoney(ledgerCoverageRemaining - requestedAmount));
+      approvedTotalAmount += toMoney(row.approved_amount ?? requestedAmount);
+      totalRemainingAmount += toMoney(row.remaining_amount_snapshot);
+      continue;
     }
 
     if (!budgetLineId) {
@@ -3773,12 +3802,24 @@ const financeModel = {
         return (Number(left.id) || 0) - (Number(right.id) || 0);
       });
 
-      return merged.map((row) => ({
-        ...row,
-        snapshot_before: safeParseJSON(row.snapshot_before, null),
-        meta: safeParseJSON(row.meta, null),
-        details: safeParseJSON(row.details, null),
-      }));
+      return merged.map((row) => {
+        const parsedMeta = safeParseJSON(row.meta, null);
+        // Top-up submissions are stored as 'resubmitted' (the workflow_actions.decision
+        // ENUM has no 'topup_submitted' member) and tagged with meta.origin = 'topup'.
+        // Surface them as a distinct decision so the submission log can label them.
+        const isTopupSubmission =
+          String(parsedMeta?.origin || '').toLowerCase() === 'topup' &&
+          String(row.decision || '').toLowerCase() === 'resubmitted';
+
+        return {
+          ...row,
+          decision: isTopupSubmission ? 'topup_submitted' : row.decision,
+          status: isTopupSubmission ? 'topup_submitted' : row.status,
+          snapshot_before: safeParseJSON(row.snapshot_before, null),
+          meta: parsedMeta,
+          details: safeParseJSON(row.details, null),
+        };
+      });
     } catch (error) {
       throw new Error(`Error fetching status updates: ${error.message}`);
     }
