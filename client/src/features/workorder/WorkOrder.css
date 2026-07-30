@@ -1,0 +1,843 @@
+/* ── Page shell ── */
+.workorderPage {
+  padding: 0;
+  min-height: 100vh;
+}
+
+.workorderContainer {
+  margin: 0 auto;
+  padding: 24px 20px 30px;
+}
+
+/* ── Card ── */
+.workorderCard.form-card {
+  padding: 0;
+  margin: 1px auto;
+  width: 100%;
+  max-width: 1150px;
+  overflow: visible;
+}
+
+@media (max-width: 1200px) {
+  .workorderCard.form-card {
+    max-width: 95%;
+  }
+}
+
+@media (max-width: 768px) {
+  .workorderCard.form-card {
+    margin: 10px auto;
+  }
+
+  .workorderCard .cardContent {
+    padding: 20px 16px;
+  }
+}
+
+/* ── Card Header — plain white matching budget page ── */
+.workorderCard .cardHeader {
+  background-color: var(--bg-surface);
+  border: 0;
+  padding: 15px 20px;
+  border-top-left-radius: var(--border-radius-lg);
+  border-top-right-radius: var(--border-radius-lg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  width: 100%;
+}
+
+.workorderCard .cardHeader:last-child {
+  border-bottom-left-radius: var(--border-radius-lg);
+  border-bottom-right-radius: var(--border-radius-lg);
+  border-bottom: none;
+}
+
+.workorderCard .cardHeader .workorderCardTitle {
+  font-size: 16px;
+  margin: 0;
+}
+
+.workorderCard .cardHeader .workorderCardTitle.primary {
+  color: var(--primary-color);
+}
+
+.workorderCard .cardHeader .card-toggle-arrow {
+  color: var(--primary-color);
+}
+
+/* ── Card body ── */
+.workorderCard .cardContent {
+  padding: 28px 32px 32px;
+}
+
+/* Table card: no extra padding around the table itself */
+.workorderCard .cardContent .workorderTableWrap {
+  margin: 0;
+}
+
+/* ── Grid helpers (mirrors budget.css) ── */
+.workorderPage .col-md-4,
+.workorderPage .col-md-5,
+.workorderPage .col-md-6,
+.workorderPage .col-md-7,
+.workorderPage .col-md-8 {
+  padding: 0 15px;
+  flex: 1;
+}
+
+.workorderPage .col-md-4 {
+  max-width: 33.333%;
+  flex: 0 0 33.333%;
+}
+
+.workorderPage .col-md-5 {
+  max-width: 41.666%;
+  flex: 0 0 41.666%;
+}
+
+.workorderPage .col-md-6 {
+  max-width: 50%;
+  flex: 0 0 50%;
+}
+
+.workorderPage .col-md-7 {
+  max-width: 58.333%;
+  flex: 0 0 58.333%;
+}
+
+.workorderPage .col-md-8 {
+  max-width: 66.666%;
+  flex: 0 0 66.666%;
+}
+
+@media (max-width: 768px) {
+  .workorderPage .col-md-4,
+  .workorderPage .col-md-5,
+  .workorderPage .col-md-6,
+  .workorderPage .col-md-7,
+  .workorderPage .col-md-8 {
+    max-width: 100%;
+    flex: 0 0 100%;
+    margin-bottom: 15px;
+  }
+}
+
+/* ── Form groups — match budget.css ── */
+.workorderPage .workorderFormGroup {
+  margin-bottom: 22px;
+}
+
+.workorderPage .workorderFormGroup .form-control[readonly] {
+  background-color: var(--bg-surface);
+  color: var(--text-main);
+  cursor: default;
+}
+
+.workorderPage .workorderFormGroup .form-control[readonly]:focus {
+  border-color: var(--border-color);
+  box-shadow: none;
+}
+
+/* ── Category chips — match budgetTabButton ── */
+.workorderCategoryContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.workorderCategoryChips {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 12px;
+}
+
+.workorderChip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 42px;
+  background: var(--bg-light);
+  color: var(--primary-color);
+  padding: 8px 14px;
+  border-radius: var(--border-radius-md);
+  border: 1px solid #d6e4f3;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  outline: none;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.workorderChip svg {
+  flex: 0 0 auto;
+}
+
+.workorderChip span {
+  white-space: nowrap;
+}
+
+.workorderChip:hover {
+  border-color: var(--primary-color);
+  background-color: #e0eef8;
+}
+
+.workorderChip.active {
+  background: linear-gradient(135deg, var(--primary-color), #1f6ea5);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: 0px 0px 12px rgba(8, 20, 44, 0.3);
+  transform: translateY(-2px);
+}
+
+.workorderBeneficiaryCardBody {
+  min-height: 126px;
+  padding: 10px 0 24px;
+}
+
+.workorderBeneficiaryGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 34px;
+  align-items: end;
+}
+
+.workorderBeneficiaryGrid.has-selection {
+  grid-template-columns: 1fr 2.05fr 1fr;
+}
+
+.workorderBeneficiaryField {
+  min-width: 0;
+}
+
+.workorderBeneficiaryField .custom-label {
+  color: #2f3f52;
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.workorderBeneficiaryGrid:not(.has-selection) .workorderBeneficiaryField {
+  max-width: 25%;
+}
+
+.workorderBeneficiaryInput,
+.workorderBeneficiaryDropdown.custom-input-group {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.workorderBeneficiaryInput {
+  min-height: 42px;
+  height: 45px;
+  border-radius: 12px;
+  background-color: #fcfdff;
+  border-color: #d8dde4;
+  font-size: 15px;
+  padding: 10px 15px;
+}
+
+.workorderBeneficiarySearchWrap {
+  position: relative;
+}
+
+.workorderBeneficiarySearchResults {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 5000;
+  max-height: 250px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.workorderBeneficiarySearchResult {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 15px;
+  border: 0;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  text-align: left;
+}
+
+.workorderBeneficiarySearchResult:hover {
+  background: #f8f9fa;
+}
+
+.workorderBeneficiarySearchResult strong {
+  font-size: 16px;
+}
+
+.workorderBeneficiarySearchResult span {
+  color: #6c757d;
+  font-size: 12px;
+}
+
+.workorderBeneficiaryDropdown .react-select__control {
+  min-height: 45px !important;
+  height: 45px !important;
+  border-radius: 12px !important;
+  background-color: #fcfdff !important;
+  border-color: #d8dde4 !important;
+}
+
+.workorderBeneficiaryDropdown .react-select__control:hover,
+.workorderBeneficiaryInput:focus {
+  border-color: #0069ab !important;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
+.workorderBeneficiaryDropdown .react-select__value-container,
+.workorderBeneficiaryDropdown .react-select__indicators {
+  min-height: 43px !important;
+  height: 43px !important;
+}
+
+.workorderBeneficiaryDropdown .react-select__value-container {
+  padding: 0 14px !important;
+}
+
+.workorderBeneficiaryDropdown .react-select__single-value,
+.workorderBeneficiaryDropdown .react-select__placeholder {
+  color: #1f2937 !important;
+  font-size: 15px !important;
+  font-weight: 500 !important;
+}
+
+/* ── Table wrapper ── */
+.workorderTableWrap {
+  overflow-x: auto;
+  border-top: none;
+  border-radius: 0;
+}
+
+/* ── Tables — match budgetEntryTable ── */
+.workorderEntryTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  overflow: visible;
+}
+
+.workorderEntryTable thead tr {
+  background: var(--bg-light);
+}
+
+.workorderEntryTable th,
+.workorderEntryTable td {
+  border: 1px solid var(--border-color);
+  padding: 12px;
+  vertical-align: middle;
+}
+
+.workorderEntryTable th {
+  color: var(--primary-color);
+  font-weight: 700;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
+.workorderItemsTable {
+  table-layout: fixed;
+  min-width: 980px;
+}
+
+.workorderItemsTable th:nth-child(2),
+.workorderItemsTable th:nth-child(3) {
+  text-align: center;
+  padding-left: 12px;
+}
+
+.workorderItemsTable td {
+  background: var(--bg-surface);
+}
+
+.workorderItemsTable .centerTd {
+  text-align: center;
+  color: var(--text-main);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.workorderMainItemRow td {
+  height: 56px;
+  padding: 10px 12px;
+}
+
+/* ── Table inputs — match budget tableInput/tableSelect ── */
+.workorderPage .tableInput,
+.workorderItemsTable .tableInput {
+  width: 100%;
+  height: 38px;
+  box-sizing: border-box;
+  text-align: center;
+}
+
+.workorderDropdown.custom-input-group {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.workorderItemsTable .react-select__control {
+  min-height: 38px !important;
+  height: 38px !important;
+}
+
+.workorderItemsTable .react-select__value-container,
+.workorderItemsTable .react-select__indicators {
+  min-height: 36px !important;
+  height: 36px !important;
+}
+
+.workorderItemsTable .react-select__value-container {
+  padding: 0 10px !important;
+}
+
+.workorderPriorityDropdown .react-select__value-container {
+  justify-content: flex-start;
+  padding: 0 8px 0 12px !important;
+}
+
+.workorderDropdown .react-select__single-value,
+.workorderPriorityDropdown .react-select__single-value {
+  max-width: none !important;
+}
+
+.workorderPriorityDropdown .react-select__indicator-separator {
+  margin-left: 2px !important;
+  margin-right: 2px !important;
+}
+
+.workorderPriorityDropdown .react-select__dropdown-indicator {
+  padding: 8px 10px !important;
+}
+
+/* ── Icon buttons — match budget tableIconBtn ── */
+.workorderPage .tableIconBtn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: var(--primary-color);
+  cursor: pointer;
+  margin: 0 2px;
+  font-size: 18px;
+  line-height: 1;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  font-weight: 700;
+}
+
+.workorderPage .tableIconBtn:hover {
+  background: #005492;
+}
+
+.workorderPage .tableIconBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: #edf4fb;
+  color: var(--primary-color);
+}
+
+.workorderPage .tableIconBtn:disabled:hover {
+  background: #edf4fb;
+}
+
+.workorderPage .tableIconBtnDanger {
+  color: var(--error-color);
+  background: transparent;
+}
+
+.workorderPage .tableIconBtnDanger:hover {
+  background: #ffe6e6;
+}
+
+.workorderPage .tableIconBtnDanger:disabled {
+  color: #a7aab2;
+  background: transparent;
+  opacity: 1;
+}
+
+/* ── Action cell ── */
+.workorderActionCell {
+  vertical-align: middle;
+}
+
+.workorderActionCell .actionButtons,
+.actionButtons {
+  display: flex;
+  min-height: 44px;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Details panel (location + description sub-row) ── */
+.workorderDetailsRow td {
+  padding: 0;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+}
+
+.workorderItemsTable td.workorderDetailsCell {
+  padding: 0 !important;
+}
+
+.workorderDetailsGrid {
+  display: grid;
+  grid-template-columns: 95px minmax(500px, 1fr) 220px;
+  gap: 14px;
+  align-items: stretch;
+  min-height: 132px;
+  padding: 12px 16px;
+}
+
+.workorderDetailsToggles {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.workorderToggleLine {
+  display: flex;
+  align-items: center;
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.workorderDetailsFields {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.workorderLocationFields {
+  display: grid;
+  grid-template-columns: 1.4fr 1.2fr 1.4fr;
+  gap: 12px;
+  min-width: 0;
+}
+
+.workorderLocationFields .form-control,
+.workorderDescriptionInput {
+  min-height: 38px;
+  height: 38px;
+}
+
+.workorderDescriptionRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+}
+
+.workorderDescriptionRowTargetOnly {
+  justify-content: flex-start;
+}
+
+.workorderDescriptionInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.workorderTargetDateLabel {
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.workorderTargetDateInput {
+  width: 150px;
+  flex: 0 0 150px;
+  min-height: 38px;
+  height: 38px;
+}
+
+.workorderHiddenFileInput {
+  display: none;
+}
+
+.workorderUploadPanel {
+  border: 1px solid #d2d7de;
+  border-radius: 9px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+  padding: 14px 12px;
+  min-width: 0;
+}
+
+.workorderUploadTitle {
+  color: var(--primary-color);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.workorderChooseFileBtn {
+  min-height: 38px;
+  border: 0;
+  border-radius: 8px;
+  background: #e7f2fd;
+  color: var(--primary-color);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+  margin: 0;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.workorderChooseFileBtn:hover {
+  background: #d8ebfc;
+  color: #005492;
+}
+
+.workorderUploadedFile {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #777982;
+  font-size: 13px;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.workorderUploadedFile span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 1;
+}
+
+.workorderUploadedFile small {
+  color: var(--primary-color);
+  flex: 0 0 auto;
+}
+
+.workorderPhotoViewBtn,
+.workorderPhotoDeleteBtn {
+  width: 26px;
+  height: 26px;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 0 0 auto;
+}
+
+.workorderPhotoViewBtn {
+  color: #a7aab2;
+}
+
+.workorderPhotoViewBtn:hover {
+  color: var(--primary-color);
+}
+
+.workorderPhotoDeleteBtn {
+  color: var(--error-color);
+}
+
+.workorderPhotoDeleteBtn:hover {
+  background: #fff1f2;
+}
+
+/* ── Photo upload zone — matching budget card aesthetic ── */
+/* Photo card content area: roomier than the cramped inline-style version */
+/* ── Submit button — matches budget submitBudgetBtn ── */
+.workorderFooter {
+  display: flex;
+  justify-content: center;
+  margin-top: 35px;
+  margin-bottom: 50px;
+}
+
+/* ── Chevron arrows ── */
+.card-toggle-arrow {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+}
+
+.card-toggle-arrow.open {
+  transform: rotate(180deg) !important;
+}
+
+/* ── Row utility ── */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  margin-right: -15px;
+  margin-left: -15px;
+}
+
+.workorderCard .cardContent .row {
+  margin-bottom: 0;
+}
+
+/* ── Responsive table ── */
+@media (max-width: 768px) {
+  .workorderCategoryChips {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .workorderChip {
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .workorderEntryTable th,
+  .workorderEntryTable td {
+    padding: 10px 8px;
+    font-size: 0.8rem;
+    min-width: 80px;
+  }
+
+  .workorderEntryTable th:nth-child(1),
+  .workorderEntryTable td:nth-child(1) {
+    min-width: 40px;
+    width: 40px;
+  }
+
+  .workorderCard .cardContent .workorderTableWrap {
+    margin: 0;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1180px) {
+  .workorderCategoryChips {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .workorderCategoryChips {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .workorderBtnSubmit {
+    width: 100%;
+    padding: 12px 20px;
+  }
+
+  .workorderPage .tableIconBtn {
+    width: 28px;
+    height: 28px;
+    font-size: 14px;
+    margin: 0 2px;
+  }
+}
+
+/* ── Priority toggle buttons (Routine & High) ── */
+.workorderPriorityToggle {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.priorityToggleBtn {
+  flex: 1;
+  height: 38px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  outline: none;
+}
+
+/* Active option style */
+.priorityToggleBtn.active {
+  background-color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 96, 169, 0.2);
+}
+
+/* Inactive option style */
+.priorityToggleBtn:not(.active) {
+  background-color: #f8f9fa;
+  border: 1px solid #d2d7de;
+  color: var(--primary-color);
+}
+
+.priorityToggleBtn:hover {
+  background-color: #e2f0fd;
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.priorityToggleBtn.active:hover {
+  background-color: #005492;
+  border-color: #005492;
+  color: #ffffff;
+}
+
+/* ── Hide number spinners (matches budget.css) ── */
+.workorderPage input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.workorderPage input[type='number']::-webkit-outer-spin-button,
+.workorderPage input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
