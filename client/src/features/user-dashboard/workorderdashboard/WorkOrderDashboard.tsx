@@ -14,7 +14,7 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
-import './workorderdashboard.css';
+import './WorkOrderDashboard.css';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
