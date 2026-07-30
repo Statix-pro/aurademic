@@ -278,10 +278,11 @@ const FinanceCard: React.FC = () => {
     return Number.isFinite(balanceAmount) && balanceAmount <= 0;
   };
 
+  // A top-up restarts the approval workflow, so the status must keep tracking the
+  // workflow itself (Proposed while pending, Approved once approved). The top-up is
+  // surfaced through the "Top-up" badge and amount boxes instead of the status label.
   const getFinanceStatusLabel = (item: FinanceCardItem) => {
     const normalizedStatus = getNormalizedStatus(item);
-    const isTopupInProgress = hasTopup(item) && normalizedStatus !== 'approved';
-    if (isTopupInProgress) return 'Top-up';
     if (normalizedStatus === 'submitted') return 'Proposed';
     if (normalizedStatus === 'pending') return 'Proposed';
     if (normalizedStatus === 'approved') return isFullyClaimed(item) ? 'Claimed' : 'Approved';
@@ -315,6 +316,64 @@ const FinanceCard: React.FC = () => {
           0);
     const parsedAmount = Number(rawAmount);
     return Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  };
+
+  const isTopupInProgress = (item: FinanceCardItem) =>
+    hasTopup(item) && getNormalizedStatus(item) !== 'approved';
+
+  const getProposedAmount = (item: FinanceCardItem) => {
+    const rawAmount =
+      item.total_budget ??
+      item.proposed_amount ??
+      item.amount ??
+      item.workflow_state?.submittedTotalBudget ??
+      0;
+    const parsedAmount = Number(rawAmount);
+    return Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  };
+
+  const getApprovedAmount = (item: FinanceCardItem) => {
+    const parsedAmount = Number(item.approved_total_amount ?? 0);
+    return Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  };
+
+  // Claims are tracked by draining balance_amount from the approved total. A missing
+  // balance means claims were never tracked, so there is nothing meaningful to show.
+  const getClaimedAmount = (item: FinanceCardItem) => {
+    if (item.balance_amount === null || item.balance_amount === undefined) return null;
+    const balanceAmount = Number(item.balance_amount);
+    if (!Number.isFinite(balanceAmount)) return null;
+    const approvedAmount = getApprovedAmount(item);
+    if (!(approvedAmount > 0)) return null;
+    return Math.max(0, approvedAmount - balanceAmount);
+  };
+
+  // The two amount boxes are stage-aware:
+  //   Initial proposal          -> Proposed | Approved
+  //   After expenditure claims  -> Approved | Claimed
+  //   During a top-up request   -> Top-up   | Approved (Previous)
+  const getCardAmountBoxes = (
+    item: FinanceCardItem,
+  ): Array<{ key: string; label: string; value: number; highlight?: boolean }> => {
+    if (isTopupInProgress(item) && getTopupAmount(item) > 0) {
+      return [
+        { key: 'topup', label: 'Top-up', value: getTopupAmount(item), highlight: true },
+        { key: 'approved-previous', label: 'Approved (Previous)', value: getApprovedAmount(item) },
+      ];
+    }
+
+    const claimedAmount = getClaimedAmount(item);
+    if (getNormalizedStatus(item) === 'approved' && claimedAmount !== null && claimedAmount > 0) {
+      return [
+        { key: 'approved', label: 'Approved', value: getApprovedAmount(item) },
+        { key: 'claimed', label: 'Claimed', value: claimedAmount },
+      ];
+    }
+
+    return [
+      { key: 'proposed', label: 'Proposed', value: getProposedAmount(item) },
+      { key: 'approved', label: 'Approved', value: getApprovedAmount(item) },
+    ];
   };
 
   const getPrincipalDocument = (item: FinanceCardItem) => item.principal_document || null;
@@ -721,7 +780,9 @@ const FinanceCard: React.FC = () => {
       const eventSummary = update.summary ?? update.feedback ?? update.comment;
       const eventCreatedAt = update.createdAt ?? update.decidedAt ?? null;
       const actorValue = formatActorIdentity(actorName, actorEmail, actorRole || 'Workflow');
-      const isSubmitted = decision.includes('submitted');
+      // Checked before isSubmitted, since 'topup_submitted' also contains 'submitted'.
+      const isTopupSubmitted = decision === 'topup_submitted';
+      const isSubmitted = !isTopupSubmitted && decision.includes('submitted');
       const isReturned = decision.includes('returned');
       const isRejected = decision.includes('rejected');
       const isApproved = decision.includes('approved') || decision.includes('completed');
@@ -736,7 +797,12 @@ const FinanceCard: React.FC = () => {
       let subtitle = String(eventSummary || '').trim();
       let actorBadgeLabel = '';
 
-      if (isSubmitted) {
+      if (isTopupSubmitted) {
+        badge = 'TOP-UP';
+        title = 'Top-up request submitted';
+        actorLabel = 'Submitted By';
+        if (!subtitle) subtitle = 'Additional budget requested via top-up';
+      } else if (isSubmitted) {
         badge = 'SUBMITTED';
         title = 'Proposal created';
         actorLabel = 'Submitted By';
@@ -1157,22 +1223,20 @@ const FinanceCard: React.FC = () => {
                           </div>
 
                           <div className="card-header-right">
-                            {hasTopup(item) && getTopupAmount(item) > 0 && (
-                              <div className="card-amount-box">
-                                <span className="amount-label">Top-up</span>
-                                <span className="amount-value">
-                                  ₹{getTopupAmount(item).toLocaleString()}
-                                </span>
+                            {getCardAmountBoxes(item).map((box) => (
+                              <div
+                                key={box.key}
+                                className="card-amount-box"
+                                style={
+                                  box.highlight
+                                    ? { backgroundColor: '#d1fae5', borderColor: '#10b981' }
+                                    : undefined
+                                }
+                              >
+                                <span className="amount-label">{box.label}</span>
+                                <span className="amount-value">₹{box.value.toLocaleString()}</span>
                               </div>
-                            )}
-                            <div className="card-amount-box">
-                              <span className="amount-label">
-                                {status === 'approved' ? 'Approved' : 'Proposed'}
-                              </span>
-                              <span className="amount-value">
-                                ₹{getDisplayAmount(item).toLocaleString()}
-                              </span>
-                            </div>
+                            ))}
                             <div className="card-actions-main">
                               <button
                                 type="button"
