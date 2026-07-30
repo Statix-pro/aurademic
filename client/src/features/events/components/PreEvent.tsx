@@ -132,7 +132,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
     };
 
     try {
-      if (eventId) {
+      if (eventId && eventId !== "new") {
         await authenticityUtility.put(`/events/${eventId}`, eventSubmitData);
       } else {
         await authenticityUtility.post("/pre-events", eventSubmitData);

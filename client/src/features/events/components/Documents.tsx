@@ -446,14 +446,13 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
       try {
         const formData = new FormData();
         formData.append("file", file);
-        const response = await authenticityUtility.postFile(
+        await authenticityUtility.postFile(
           `/documents/${eventId}/doc/${encodeURIComponent(doc)}/upload`,
           formData,
         );
-        // console.log("File uploaded:", response);
       } catch (error) {
         console.error("Error uploading file:", error);
-        alert("Failed to upload file: " + file.name);
+        setPopupMessage(`Failed to upload file: ${file.name}`);
       }
     }
   };
