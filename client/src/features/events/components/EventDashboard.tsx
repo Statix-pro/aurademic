@@ -19,6 +19,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
+import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
+import DeleteConfirmationModal from "../../../shared/components/ui/DeleteConfirmationModal";
+import CustomModal from "../../../shared/components/ui/CustomModal";
 import "../styles/Dashboard.css";
 import { EVENT_DASHBOARD_MONTHS } from "../constants";
 
@@ -101,7 +104,7 @@ const Dashboard: React.FC = () => {
   const [yearFilter, setYearFilter] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState<DashboardStatusKey>("all");
   const [showBellPreview, setShowBellPreview] = useState(false);
-  const [activePendingIndex, setActivePendingIndex] = useState<number | null>(null);
+  const [activePendingId, setActivePendingId] = useState<number | null>(null);
   const [bellViewYear, setBellViewYear] = useState(new Date().getFullYear());
   const [bellViewMonth, setBellViewMonth] = useState(new Date().getMonth());
   const [bellSelectedDate, setBellSelectedDate] = useState(new Date());
@@ -111,25 +114,47 @@ const Dashboard: React.FC = () => {
   const [eventToDelete, setEventToDelete] = useState<EventData | null>(null);
   const [deleteCountdown, setDeleteCountdown] = useState(5);
 
+  const [subEventToDelete, setSubEventToDelete] = useState<EventData | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{ show: boolean; message: string; type: AlertType }>({
+    show: false,
+    message: "",
+    type: "info",
+  });
+
   React.useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (deleteModalVisible && deleteCountdown > 0) {
       timer = setTimeout(() => {
         setDeleteCountdown((prev) => prev - 1);
       }, 1000);
-    } else if (deleteModalVisible && deleteCountdown === 0) {
-      executeDelete();
     }
     return () => clearTimeout(timer);
   }, [deleteModalVisible, deleteCountdown]);
 
+  interface APISubEvent {
+    id: number;
+    title?: string;
+    status?: string;
+    proposedBy?: string;
+    category?: string;
+    department?: string;
+    date?: string;
+    createdAt?: string;
+    venue?: string;
+  }
+
+  interface APIMainEvent extends APISubEvent {
+    sub_events?: APISubEvent[];
+  }
+
   React.useEffect(() => {
-    authenticityUtility.get("/events")
-      .then((res: any) => {
-        const data = Array.isArray(res) ? res : res.data || [];
+    authenticityUtility.get<APIMainEvent[] | { data: APIMainEvent[] }>("/events")
+      .then((res) => {
+        const data: APIMainEvent[] = Array.isArray(res) ? res : (res as any).data || [];
         // Flatten main and sub events
         const flattenedEvents: EventData[] = [];
-        data.forEach((main: any) => {
+        data.forEach((main: APIMainEvent) => {
           flattenedEvents.push({
             id: main.id,
             name: main.title || "Untitled Event",
@@ -139,13 +164,13 @@ const Dashboard: React.FC = () => {
             department: main.department || "N/A",
             time: main.date ? new Date(main.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "TBD",
             venue: main.venue || "TBD",
-            date: main.date || main.createdAt,
+            date: main.date || main.createdAt || new Date().toISOString(),
             parent_id: null,
             isSubEvent: false
           });
           
           if (main.sub_events && main.sub_events.length > 0) {
-            main.sub_events.forEach((sub: any) => {
+            main.sub_events.forEach((sub: APISubEvent) => {
               flattenedEvents.push({
                 id: sub.id,
                 name: sub.title || "Untitled Sub Event",
@@ -155,7 +180,7 @@ const Dashboard: React.FC = () => {
                 department: sub.department || "N/A",
                 time: sub.date ? new Date(sub.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "TBD",
                 venue: sub.venue || "TBD",
-                date: sub.date || sub.createdAt,
+                date: sub.date || sub.createdAt || new Date().toISOString(),
                 parent_id: main.id,
                 isSubEvent: true
               });
@@ -246,35 +271,39 @@ const Dashboard: React.FC = () => {
     return `${day}.${month}.${year} (${weekday})`;
   })();
 
-  const openEventTab = (eventIndex: number, tab: string): void => {
-    const event = events[eventIndex];
-    if (!event?.id) return;
-    navigate(`/event/${event.id}?tab=${tab}`);
+  const openEventTab = (eventId: number, tab: string): void => {
+    if (!eventId) return;
+    navigate(`/event/${eventId}?tab=${tab}`);
   };
 
-  const handleDelete = (eventIndex: number): void => {
-    const event = filteredEvents[eventIndex];
+  const handleDelete = (event: EventData): void => {
     if (!event || !event.id) return;
     
     if (event.isSubEvent) {
-      const eventLabel = event.name || `Event ${eventIndex + 1}`;
-      const shouldDelete = window.confirm(`Delete "${eventLabel}" from the dashboard?`);
-      if (!shouldDelete) return;
-
-      authenticityUtility.delete(`/events/${event.id}`)
-        .then(() => {
-          setEvents((prev) => prev.filter((e) => e.id !== event.id));
-        })
-        .catch(err => {
-          console.error("Error deleting event:", err);
-          alert("Failed to delete event.");
-        });
+      setSubEventToDelete(event);
     } else {
       setEventToDelete(event);
       setDeleteCountdown(5);
       setDeleteModalVisible(true);
     }
   };
+
+  const confirmSubEventDelete = () => {
+    if (!subEventToDelete) return;
+    setIsDeleting(true);
+    authenticityUtility.delete(`/events/${subEventToDelete.id}`)
+      .then(() => {
+        setEvents((prev) => prev.filter((e) => e.id !== subEventToDelete.id));
+        setSubEventToDelete(null);
+      })
+      .catch(err => {
+        console.error("Error deleting event:", err);
+        setAlertConfig({ show: true, message: "Failed to delete event.", type: "error" });
+        setSubEventToDelete(null);
+      })
+      .finally(() => setIsDeleting(false));
+  };
+
 
   const executeDelete = () => {
     if (!eventToDelete) return;
@@ -285,7 +314,7 @@ const Dashboard: React.FC = () => {
       })
       .catch(err => {
         console.error("Error deleting event:", err);
-        alert("Failed to delete event.");
+        setAlertConfig({ show: true, message: "Failed to delete event.", type: "error" });
       });
   };
 
@@ -296,7 +325,7 @@ const Dashboard: React.FC = () => {
 
   const handleKpiClick = (statusKey: DashboardStatusKey): void => {
     setSelectedStatus((current) => (current === statusKey ? "all" : statusKey));
-    setActivePendingIndex(null);
+    setActivePendingId(null);
   };
 
   const openBellPreview = (): void => {
@@ -421,17 +450,16 @@ const Dashboard: React.FC = () => {
 
         <section className="event-dashboard-list">
           {filteredEvents.map((event) => {
-            const originalIndex = events.indexOf(event);
             return (
               <article
-                key={`${event.date}-${event.name}-${originalIndex}`}
+                key={event.id}
                 className="event-request-card"
-                onClick={() => openEventTab(originalIndex, "pre-event")}
+                onClick={() => openEventTab(event.id, "pre-event")}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
-                    openEventTab(originalIndex, "pre-event");
+                    openEventTab(event.id, "pre-event");
                   }
                 }}
               >
@@ -482,7 +510,7 @@ const Dashboard: React.FC = () => {
                             className="event-request-mini-btn"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openEventTab(originalIndex, "updates");
+                              openEventTab(event.id, "updates");
                             }}
                             aria-label="Info"
                             title="Info"
@@ -494,7 +522,7 @@ const Dashboard: React.FC = () => {
                             className="event-request-mini-btn"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openEventTab(originalIndex, "updates");
+                              openEventTab(event.id, "updates");
                             }}
                             aria-label="View"
                             title="View"
@@ -507,7 +535,7 @@ const Dashboard: React.FC = () => {
                               className="event-request-mini-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openEventTab(originalIndex, "pre-event");
+                                openEventTab(event.id, "pre-event");
                               }}
                               aria-label="Edit"
                               title="Edit"
@@ -521,7 +549,7 @@ const Dashboard: React.FC = () => {
                               className="event-request-mini-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDelete(originalIndex);
+                                handleDelete(event);
                               }}
                               aria-label="Delete"
                               title="Delete"
@@ -559,7 +587,7 @@ const Dashboard: React.FC = () => {
                         normalizedStatus === "pending" ||
                         normalizedStatus === "approved" ||
                         normalizedStatus === "reject";
-                      const showSteps = isClickableStatus && activePendingIndex === originalIndex;
+                      const showSteps = isClickableStatus && activePendingId === event.id;
 
                       return (
                         <>
@@ -568,7 +596,7 @@ const Dashboard: React.FC = () => {
                             className="event-request-doc-btn"
                             onClick={(e) => {
                               e.stopPropagation();
-                              openEventTab(originalIndex, "updates");
+                              openEventTab(event.id, "updates");
                             }}
                             aria-label="Open documents"
                             title="Open documents"
@@ -584,7 +612,7 @@ const Dashboard: React.FC = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!isClickableStatus) return;
-                              setActivePendingIndex((current) => (current === originalIndex ? null : originalIndex));
+                              setActivePendingId((current) => (current === event.id ? null : event.id));
                             }}
                             aria-pressed={showSteps}
                             disabled={!isClickableStatus}
@@ -726,31 +754,52 @@ const Dashboard: React.FC = () => {
         </div>
       )}
 
-      {deleteModalVisible && (
-        <div className="event-bell-overlay" onClick={cancelDelete} style={{ zIndex: 1000 }}>
-          <div className="event-delete-modal" onClick={(e) => e.stopPropagation()}>
-            <h2 style={{ fontSize: '16px', fontWeight: 700, marginBottom: '10px', color: '#0f172a' }}>Delete Event</h2>
-            <p style={{ color: '#475569', marginBottom: '18px', lineHeight: '1.45', fontSize: '14px' }}>
-              This Main Event has associated Sub Events. Deleting this Main Event will permanently delete all related Sub Events. This action will continue in <strong style={{ color: '#ef4444' }}>{deleteCountdown}</strong> seconds unless cancelled.
-            </p>
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <button 
-                onClick={cancelDelete}
-                style={{ padding: '8px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', backgroundColor: '#fff', color: '#475569', cursor: 'pointer', fontWeight: 600, minWidth: '96px' }}
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={executeDelete}
-                style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: 'linear-gradient(180deg, #ff5a5f 0%, #ef4444 100%)', color: '#fff', cursor: 'pointer', fontWeight: 600, minWidth: '96px', boxShadow: '0 8px 18px rgba(239, 68, 68, 0.18)' }}
-              >
-                Delete Now
-              </button>
-            </div>
+      <CustomModal
+        show={deleteModalVisible}
+        onHide={cancelDelete}
+        title="Delete Event"
+        size="sm"
+        footer={
+          <div className="d-flex justify-content-end gap-2 w-100">
+            <button className="btn btn-secondary btn-sm" onClick={cancelDelete}>
+              Cancel
+            </button>
+            <button 
+              className="btn btn-danger btn-sm" 
+              onClick={executeDelete}
+              disabled={deleteCountdown > 0}
+            >
+              Delete Now
+            </button>
           </div>
-        </div>
-      )}
+        }
+      >
+        <p className="mb-0 fw-medium" style={{ fontSize: '0.95rem' }}>
+          This Main Event has associated Sub Events. Deleting this Main Event will permanently delete all related Sub Events.
+          <span aria-live="polite" className="d-block mt-2">
+            {deleteCountdown > 0 ? (
+              <>You can confirm this action in <strong className="text-danger">{deleteCountdown}</strong> seconds.</>
+            ) : (
+              <>Please confirm if you wish to proceed.</>
+            )}
+          </span>
+        </p>
+      </CustomModal>
 
+      <DeleteConfirmationModal
+        show={!!subEventToDelete}
+        onHide={() => setSubEventToDelete(null)}
+        onConfirm={confirmSubEventDelete}
+        itemName={subEventToDelete?.name || `Event ${subEventToDelete?.id}`}
+        isDeleting={isDeleting}
+      />
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={() => setAlertConfig(prev => ({ ...prev, show: false }))}
+        message={alertConfig.message}
+        type={alertConfig.type}
+      />
     </div>
   );
 };

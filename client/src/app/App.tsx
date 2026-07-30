@@ -14,7 +14,6 @@ import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
 import EventDashboard from '../features/events/components/EventDashboard';
-import EventEntry from '../features/events/components/EventEntry';
 import EventPage from '../features/events/components/EventPage';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';
@@ -396,14 +395,6 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <EventDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/event-entry"
-                    element={
-                      <ProtectedRoute>
-                        <EventEntry />
                       </ProtectedRoute>
                     }
                   />

@@ -358,7 +358,6 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [popupMessage, setPopupMessage] = useState("");
-  const [popupMessage, setPopupMessage] = useState('');
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
 
   useEffect(() => {
@@ -605,8 +604,6 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
           type="button"
           className="event-btn event-submit"
           onClick={handleSubmitApproval}
-        >
-          Submit for Approval
           disabled={isSubmittingApproval}
         >
           {isSubmittingApproval ? 'Submitting...' : 'Submit for Approval'}

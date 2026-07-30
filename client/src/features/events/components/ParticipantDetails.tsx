@@ -228,7 +228,7 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
   }, [participants]);
 
   return (
-    <div className="event-finance-wrapper">
+    <div className="participant-details-wrapper">
       <div className="event-finance-card">
         {/* Stats Cards Section */}
         <div className="stats-cards-grid">

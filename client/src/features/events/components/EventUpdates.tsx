@@ -21,6 +21,7 @@ import {
   EVENT_COPY,
   EVENT_MAIL_TEMPLATES,
 } from "../constants";
+import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
 
 // --- Letters Section ---
 
@@ -41,6 +42,7 @@ interface LettersPageProps {
 }
 
 interface ResourcePersonRow {
+  dbId?: number;
   id: number;
   name: string;
   designation: string;
@@ -69,6 +71,7 @@ interface ModalProps {
 interface ResourcePersonProps {
   rows: ResourcePersonRow[];
   setRows: React.Dispatch<React.SetStateAction<ResourcePersonRow[]>>;
+  showAlert: (message: string, type?: AlertType, title?: string) => void;
 }
 
 interface InitialForm {
@@ -153,10 +156,14 @@ const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
   );
 };
 
-const ParticipantsCard: React.FC = () => {
+interface ParticipantsCardProps {
+  participants: ParticipantRow[];
+  setParticipants: React.Dispatch<React.SetStateAction<ParticipantRow[]>>;
+}
+
+const ParticipantsCard: React.FC<ParticipantsCardProps> = ({ participants, setParticipants }) => {
   const [selectedType, setSelectedType] = useState("");
   const [count, setCount] = useState("");
-  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
 
   const canAdd = selectedType !== "" && count !== "" && !isNaN(Number(count));
   const total = participants.reduce((sum, participant) => sum + participant.count, 0);
@@ -267,6 +274,8 @@ const ParticipantsCard: React.FC = () => {
                         padding: 0,
                         fontSize: "16px",
                       }}
+                      aria-label="Delete participant"
+                      title="Delete participant"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -282,16 +291,12 @@ const ParticipantsCard: React.FC = () => {
   );
 };
 
-const DocumentsCard: React.FC = () => {
-  const [docState, setDocState] = useState<Record<string, DocumentRowState>>(
-    documentNames.reduce((acc, doc) => {
-      acc[doc] = {
-        active: false,
-        file: doc === "Photos" ? ([null, null, null, null] as (File | null)[]) : null,
-      };
-      return acc;
-    }, {} as Record<string, DocumentRowState>),
-  );
+interface DocumentsCardProps {
+  docState: Record<string, DocumentRowState>;
+  setDocState: React.Dispatch<React.SetStateAction<Record<string, DocumentRowState>>>;
+}
+
+const DocumentsCard: React.FC<DocumentsCardProps> = ({ docState, setDocState }) => {
 
   const handleFileUpload = (
     doc: string,
@@ -391,12 +396,17 @@ const DocumentsCard: React.FC = () => {
               style={{ display: "none" }}
             />
           </label>
-          <span
+          <button
+            type="button"
             className={`event-eye-icon ${!docState[doc].file ? "disabled" : ""}`}
             onClick={() => docState[doc].file && handleViewFile(doc)}
+            aria-label={docState[doc].file ? "View document" : "No document uploaded"}
+            title={docState[doc].file ? "View document" : "No document uploaded"}
+            disabled={!docState[doc].file}
+            style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <Eye size={16} />
-          </span>
+          </button>
         </div>
       </div>
     );
@@ -468,7 +478,7 @@ const initialForm: InitialForm = {
 };
 
 // --- Resource Person Section ---
-const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
+const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows, showAlert }) => {
   const handleAdd = (): void => {
     setRows([
       ...rows,
@@ -681,10 +691,10 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
               <div className="resource-person-email-btns">
                 <button
                   type="button"
-                  className="resource-person-email-btn-preview"
-                  onClick={() => alert(`Previewing Invitation for ${row.name || EVENT_COPY.resourcePersonLabel}`)}
+                  className="resource-person-btn resource-person-btn-preview"
+                  onClick={() => showAlert(`Previewing Invitation for ${row.name || EVENT_COPY.resourcePersonLabel}`, 'info', 'Preview')}
                 >
-                  {EVENT_COPY.preview}
+                  <Eye size={16} /> Preview
                 </button>
                 <button
                   type="button"
@@ -713,10 +723,10 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
               <div className="resource-person-email-btns">
                 <button
                   type="button"
-                  className="resource-person-email-btn-preview"
-                  onClick={() => alert(`Previewing Thank You letter for ${row.name || EVENT_COPY.resourcePersonLabel}`)}
+                  className="resource-person-btn resource-person-btn-preview"
+                  onClick={() => showAlert(`Previewing Thank You letter for ${row.name || EVENT_COPY.resourcePersonLabel}`, 'info', 'Preview')}
                 >
-                  {EVENT_COPY.preview}
+                  <Eye size={16} /> Preview
                 </button>
                 <button
                   type="button"
@@ -791,6 +801,17 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
 
   const eventId = 1;
 
+  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [docState, setDocState] = useState<Record<string, DocumentRowState>>(
+    documentNames.reduce((acc, doc) => {
+      acc[doc] = {
+        active: false,
+        file: doc === "Photos" ? ([null, null, null, null] as (File | null)[]) : null,
+      };
+      return acc;
+    }, {} as Record<string, DocumentRowState>),
+  );
+
   const [isSubmittingUpdates, setIsSubmittingUpdates] = useState(false);
   const [websiteEnabled, setWebsiteEnabled] = useState(false);
   const [websiteDate, setWebsiteDate] = useState("");
@@ -799,10 +820,20 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
   const [newspaperEnabled, setNewspaperEnabled] = useState(false);
   const [newspaperDate, setNewspaperDate] = useState("");
   const [newspaperFile, setNewspaperFile] = useState<File | null>(null);
-
+  
   const [pressEnabled, setPressEnabled] = useState(false);
   const [pressDate, setPressDate] = useState("");
   const [pressFile, setPressFile] = useState<File | null>(null);
+
+  const [alertConfig, setAlertConfig] = useState<{ show: boolean; message: string; type: AlertType; title?: string }>({
+    show: false,
+    message: "",
+    type: "info",
+  });
+
+  const showAlert = (message: string, type: AlertType = "info", title?: string) => {
+    setAlertConfig({ show: true, message, type, title });
+  };
 
   const [links, setLinks] = useState<SocialLinks>({
     facebook: "",
@@ -833,78 +864,95 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
       return response.upload.id;
     } catch (err) {
       console.error("File upload failed", err);
-      alert("Failed to upload file: " + file.name);
+      showAlert("Failed to upload file: " + file.name, "error");
       return null;
     }
   };
 
   const handleSubmit = async (): Promise<void> => {
-    console.log("handleSubmit called");
-    console.log('handleSubmit called');
     if (isSubmittingUpdates) return;
     setIsSubmittingUpdates(true);
     try {
-      let websiteUploadId: number | null = null;
-      if (websiteEnabled && websiteFile) {
-        websiteUploadId = await uploadFile(websiteFile);
-      }
-      let newspaperUploadId: number | null = null;
-      if (newspaperEnabled && newspaperFile) {
-        newspaperUploadId = await uploadFile(newspaperFile);
-      }
-      let pressUploadId: number | null = null;
-      if (pressEnabled && pressFile) {
-        pressUploadId = await uploadFile(pressFile);
-      }
+      const uploadPromises = [
+        websiteEnabled && websiteFile ? uploadFile(websiteFile) : Promise.resolve(null),
+        newspaperEnabled && newspaperFile ? uploadFile(newspaperFile) : Promise.resolve(null),
+        pressEnabled && pressFile ? uploadFile(pressFile) : Promise.resolve(null)
+      ];
+
+      const [websiteRes, newspaperRes, pressRes] = await Promise.allSettled(uploadPromises);
+
+      const getUploadId = (res: PromiseSettledResult<number | null>) => res.status === 'fulfilled' ? res.value : null;
 
       const publicityData = {
         website_enabled: websiteEnabled,
         website_date: websiteDate,
-        website_upload_id: websiteUploadId,
+        website_upload_id: getUploadId(websiteRes),
         newspaper_enabled: newspaperEnabled,
         newspaper_date: newspaperDate,
-        newspaper_upload_id: newspaperUploadId,
+        newspaper_upload_id: getUploadId(newspaperRes),
         press_enabled: pressEnabled,
         press_date: pressDate,
-        press_upload_id: pressUploadId,
+        press_upload_id: getUploadId(pressRes),
         facebook_link: links.facebook,
         x_link: links.x,
         instagram_link: links.instagram,
         linkedin_link: links.linkedin,
       };
-      // console.log("Sending publicityData:", publicityData);
-      const res1 = await authenticityUtility.put(
-        `/updates/events/${eventId}/publicity`,
-        publicityData,
-      );
-      // console.log("Publicity response:", res1);
 
-      for (const rp of rows) {
-        // console.log("Sending resource person:", rp);
-        const resRp = await authenticityUtility.post(
-          `/updates/events/${eventId}/resource_persons`,
-          rp,
-        );
-        // console.log("Resource person response:", resRp);
-      }
+      const wrapPromise = (promise: Promise<any>, sectionName: string) => 
+        promise.catch(err => {
+          console.error(`Error saving ${sectionName}:`, err);
+          return Promise.reject(sectionName);
+        });
 
-      for (const [section, data] of Object.entries(formData)) {
-        // console.log(`Sending letter data for ${section}:`, data);
-        await authenticityUtility.put(`/updates/events/${eventId}/letters`, {
+      const updatePromises = [
+        wrapPromise(authenticityUtility.put(`/updates/events/${eventId}/publicity`, publicityData), 'Publicity'),
+        ...rows.map((rp, i) => {
+          if (rp.dbId) {
+            return wrapPromise(authenticityUtility.put(`/updates/events/${eventId}/resource_persons/${rp.dbId}`, rp), `Resource Person ${i + 1}`);
+          } else {
+            const promise = authenticityUtility.post(`/updates/events/${eventId}/resource_persons`, rp).then((res: any) => {
+              const newDbId = res.resourcePerson?.id || res.data?.resourcePerson?.id;
+              if (newDbId) {
+                setRows((prev) => prev.map((r) => (r.id === rp.id ? { ...r, dbId: newDbId } : r)));
+              }
+              return res;
+            });
+            return wrapPromise(promise, `Resource Person ${i + 1}`);
+          }
+        }),
+        ...Object.entries(formData).map(([section, data]) => wrapPromise(authenticityUtility.put(`/updates/events/${eventId}/letters`, {
           section_name: section,
           active: data.active,
           mode: data.mode,
           letter_date: data.date,
-        });
-        // console.log("Letter updated");
+        }), `Letter (${section})`)),
+        ...participants.map((participant, i) => wrapPromise(authenticityUtility.post(`/updates/events/${eventId}/participants`, {
+          type: participant.type,
+          count: participant.count,
+        }), `Participant ${i + 1}`)),
+        ...Object.entries(docState).map(([docName, docData]) => wrapPromise(authenticityUtility.put(`/updates/events/${eventId}/documents`, {
+          docname: docName,
+          active: docData.active,
+        }), `Document (${docName})`))
+      ];
+
+      const results = await Promise.allSettled(updatePromises);
+      
+      const failedSections = results
+        .filter(res => res.status === 'rejected')
+        .map(res => (res as PromiseRejectedResult).reason);
+
+      if (failedSections.length > 0) {
+        showAlert(`Partial save occurred. The following sections failed to save:\n- ${failedSections.join('\n- ')}`, "warning", "Partial Save");
+        return; // Prevent navigating away on partial save
       }
 
-      alert("✅ Event updates saved successfully!");
+      showAlert("✅ Event updates saved successfully!", "success");
+      goToTab("post-event");
     } catch (error) {
       console.error("Error in handleSubmit:", error);
-      alert("Error occurred, please check console.");
-      console.error('Error in handleSubmit:', error);
-      alert('Error occurred, please check console.');
+      showAlert("Error occurred, please check console.", "error");
     } finally {
       setIsSubmittingUpdates(false);
     }
@@ -998,11 +1046,11 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
         </div>
       </div>
 
-      <ResourcePerson rows={rows} setRows={setRows} />
+      <ResourcePerson rows={rows} setRows={setRows} showAlert={showAlert} />
 
-      <ParticipantsCard />
+      <ParticipantsCard participants={participants} setParticipants={setParticipants} />
 
-      <DocumentsCard />
+      <DocumentsCard docState={docState} setDocState={setDocState} />
 
       <div className="event-section-navigation">
         <button
@@ -1021,6 +1069,14 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
           {isSubmittingUpdates ? 'Saving...' : 'Save & Next →'}
         </button>
       </div>
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={() => setAlertConfig(prev => ({ ...prev, show: false }))}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+      />
     </div>
   );
 };

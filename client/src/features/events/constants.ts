@@ -226,7 +226,6 @@ export const EVENT_COPY = {
   linkedinLink: "Linkedin link",
   eventFlyer: "Event Flyer",
   eventName: "Event Name",
-  chooseFile: "Choose File",
   noOfDaysLabel: "No. of Days",
   scheduleVenueLabel: "Schedule & Venue",
   registrationSettingsLabel: "Registration Settings",
