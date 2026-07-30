@@ -1056,7 +1056,6 @@
 
 .event-approval-table.budget-table .participant-category-column {
   width: 20%;
-
 }
 
 .event-approval-table.budget-table .fee-column {
@@ -1069,8 +1068,6 @@
 
 .event-approval-table.budget-table .additional-member-column {
   width: 18%;
-
-
 }
 
 .event-approval-table.budget-table .action-column {
@@ -1888,7 +1885,6 @@
 .event-approval-page input.event-approval-radio-dot {
   appearance: radio !important;
   -webkit-appearance: radio !important;
-  display: inline-block !important;
   width: 16px !important;
   min-width: 16px !important;
   height: 16px !important;

@@ -14,15 +14,21 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
   const [mainEvents, setMainEvents] = useState<{ id: string; title: string }[]>([]);
 
   useEffect(() => {
-    if (isSubEvent) {
-      authenticityUtility.get("/events")
-        .then((res: any) => {
-          const events = Array.isArray(res) ? res : res.data || [];
-          setMainEvents(events.filter((e: any) => !e.parent_id && Boolean(e.is_multi_event)));
-        })
-        .catch(err => console.error("Error fetching main events:", err));
+    if (!isSubEvent) {
+      setMainEvents([]);
+      return;
     }
-  }, [isSubEvent]);
+
+    authenticityUtility
+      .get("/pre-events")
+      .then((res: any) => {
+        const events = Array.isArray(res) ? res : res.data || [];
+        setMainEvents(
+          events.filter((e: any) => !e.parent_id && Boolean(e.is_multi_event)),
+        );
+      })
+      .catch((err) => console.error("Error fetching main events:", err));
+  }, [isSubEvent, eventId]);
   const handleSubmit = async (data: EventApprovalFormData) => {
     // Validate base required fields
     if (!data.name || !data.dateFrom || !data.dateTo || !data.category || !data.eventType || data.eventType.length === 0 || !data.level) {
