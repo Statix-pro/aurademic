@@ -536,10 +536,7 @@ const initialManagedRooms: ManagedRoomRow[] = [
   },
 ];
 
-const initialCareTakers: CareTakerRow[] = [
-  { id: 1, name: 'Velavan C', mobile: '9876543210', status: 'Active' },
-  { id: 2, name: 'Senthil Kumar R', mobile: '9876543210', status: 'Leave' },
-];
+const initialCareTakers: CareTakerRow[] = [];
 
 const createManagedRoomRow = (): ManagedRoomRow => ({
   id: Date.now() + Math.random(),
@@ -891,6 +888,7 @@ const GuestHouseBooking: React.FC = () => {
   const canManageGuesthouse = Boolean(
     user && (isSuperAdmin(user) || user.is_admin || hasPermission(user, 'guesthouse.manage')),
   );
+  const canOverrideApplicant = canManageGuesthouse;
   const navigate = useNavigate();
   const { id: bookingIdParam } = useParams<{ id?: string }>();
   const bookingId = Number.parseInt(bookingIdParam || '', 10);
@@ -1585,15 +1583,15 @@ const GuestHouseBooking: React.FC = () => {
       return;
     }
 
+    // Backend must independently derive and validate applicant identity from the auth token.
     const payload = {
       applicant: applicantUiDetails,
       beneficiary: beneficiaryDetails,
-      guests: guests.map((guest) => ({ ...guest, travel: travelDetails })),
+      guests,
       travelDetails,
       numberOfDays: stayDates.length,
       duration: travelDuration,
       foodRequirements: foodRows,
-      roomAllotments: guests.map((guest) => roomAllotments[String(guest.id)] || createRoomAllotmentData(String(guest.id), guest)),
     };
 
     try {
@@ -2119,6 +2117,7 @@ const GuestHouseBooking: React.FC = () => {
     <div className="guesthousebooking-page">
       <div className="guesthousebooking-shell">
         <form onSubmit={handleSubmit}>
+          <fieldset disabled={isViewingBooking} style={{ border: 0, padding: 0, margin: 0 }}>
           <section className="guesthousebooking-card">
             <button
               className="guesthousebooking-card-header"
@@ -2138,9 +2137,10 @@ const GuestHouseBooking: React.FC = () => {
                       className="guesthousebooking-input"
                       value={applicantSearch || applicantUiDetails.name}
                       onChange={(event) => setApplicantSearch(event.target.value)}
+                      readOnly={!canOverrideApplicant || isViewingBooking}
                       placeholder="Search employee by name or ERP ID"
                     />
-                    {applicantResults.length > 0 && (
+                    {canOverrideApplicant && applicantResults.length > 0 && (
                       <div className="guesthousebooking-employee-dropdown">
                         {applicantResults.map((employee, index) => (
                           <button
@@ -3076,13 +3076,18 @@ const GuestHouseBooking: React.FC = () => {
             })}
           </div>}
           <div className="guesthousebooking-actions">
-            {submitMessage && <span className="guesthousebooking-success">{submitMessage}</span>}
+            {submitMessage && (
+              <span className={submitMessage.includes('successfully') ? 'guesthousebooking-success' : 'guesthousebooking-error'}>
+                {submitMessage}
+              </span>
+            )}
 
             <button className="guesthousebooking-submit-button" type="submit" disabled={isViewingBooking}>
               {isViewingBooking ? 'Viewing Booking' : 'Submit Booking'}
             </button>
           </div>
           {canManageGuesthouse && renderGuesthouseAdminManagement()}
+          </fieldset>
         </form>
       </div>
     </div>

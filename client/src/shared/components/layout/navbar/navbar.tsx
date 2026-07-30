@@ -9,6 +9,7 @@ import {
   canAccessBudgetApproval,
   canAccessExpenditureWorkflow,
   canAccessFinanceWorkflow,
+  canAccessGuesthouseWorkflow,
   canManageAccessControl,
   hasPermission,
   isSuperAdmin,
@@ -213,17 +214,6 @@ interface SidebarProps {
   setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-const getNameInitial = (name?: string): string => {
-  if (!name) return 'U';
-  const salutations = ['dr.', 'mr.', 'mrs.', 'ms.', 'prof.', 'er.'];
-  const parts = name.trim().split(/\s+/);
-  const firstWord = parts[0].toLowerCase();
-  if (salutations.includes(firstWord) && parts.length > 1) {
-    return parts[1].charAt(0).toUpperCase();
-  }
-  return parts[0].charAt(0).toUpperCase();
-};
-
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const { logout, user } = useAuth();
   const location = useLocation();
@@ -238,7 +228,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showBudgetApproval = canAccessBudgetApproval(user);
   const showFinanceWorkflow = canAccessFinanceWorkflow(user);
   const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
-  const showGuesthouseApproval = showAdminDashboard || isSuperAdmin(user) || hasPermission(user, 'guesthouse.workflow.*') || ['hod', 'principal', 'guesthouse_admin'].some((stage) => hasPermission(user, `guesthouse.workflow.${stage}`));
+  const showGuesthouseApproval = canAccessGuesthouseWorkflow(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu =

@@ -502,6 +502,14 @@ function App() {
                     }
                   />
                   <Route
+                    path="/guesthouse/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/fellowship"
                     element={
                       <ProtectedRoute>
