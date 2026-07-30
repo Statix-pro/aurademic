@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Smartphone, Mail, Linkedin, ChevronDown, Image, FileText, PlusCircle, Trash2, Upload
+  Smartphone, Mail, Linkedin, Image, FileText, PlusCircle, Trash2, Upload
 } from 'lucide-react';
 import './ResourcePersonDirectory.css';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
@@ -125,7 +125,6 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   const [linkedIn, setLinkedIn] = useState('');
   const [professions, setProfessions] = useState<ProfessionDetail[]>([emptyProfession()]);
   const [photoName, setPhotoName] = useState('');
-  const [photoPreview, setPhotoPreview] = useState<string>('');
   const [resumeName, setResumeName] = useState('');
 
   /* Initialize form values */
@@ -163,7 +162,6 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
     const f = e.target.files?.[0];
     if (f && f.size <= 2 * 1024 * 1024) {
       setPhotoName(f.name);
-      setPhotoPreview(URL.createObjectURL(f));
     } else if (f) {
       alert('Photo must be less than 2 MB');
     }

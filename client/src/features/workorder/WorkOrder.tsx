@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
@@ -38,14 +38,13 @@ interface WorkItem {
   description: string;
   targetDate: string;
   locationPhotos: PhotoAttachment[];
-  descriptionPhotos: PhotoAttachment[];
   qty: number;
   priority: string;
 }
 
 interface PhotoAttachment {
   id: string;
-  file: File;
+  file?: File;
   preview: string;
 }
 
@@ -788,10 +787,9 @@ const toDropdownOptions = (values: string[]): OptionType[] =>
 const getSelectedOption = (value: string, options: OptionType[]): OptionType | null =>
   options.find((option) => option.value === value) || null;
 
-const PRIORITY_DROPDOWN_OPTIONS = toDropdownOptions(PRIORITY_OPTIONS);
 const BLOCK_DROPDOWN_OPTIONS = toDropdownOptions(BLOCKS);
 const FLOOR_DROPDOWN_OPTIONS = toDropdownOptions(FLOORS);
-type PhotoField = 'locationPhotos' | 'descriptionPhotos';
+type PhotoField = 'locationPhotos';
 
 const createWorkItem = (): WorkItem => ({
   id: Math.random().toString(36).slice(2, 11),
@@ -803,7 +801,6 @@ const createWorkItem = (): WorkItem => ({
   description: '',
   targetDate: '',
   locationPhotos: [],
-  descriptionPhotos: [],
   qty: 1,
   priority: 'Routine',
 });
@@ -930,56 +927,81 @@ const WorkOrder: React.FC = () => {
   const [showBeneficiarySearch, setShowBeneficiarySearch] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
 
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Flipped to true once loadRecord has applied all hydrated state.
+  // Used to clear isHydrating.current after the hydration commit.
+  const [recordLoaded, setRecordLoaded] = useState(false);
+
+  const fetchRecord = async () => {
+    if (!id) return;
+    setIsLoading(true);
+    setError(null);
+    // Reset recordLoaded so setRecordLoaded(true) at the end of hydration always
+    // triggers a state change, even when navigating from one record to another.
+    setRecordLoaded(false);
+    try {
+      const response = (await authenticityUtility.get(`/workorders/${id}`)) as any;
+      if (!response?.success || !response?.data) {
+        setError(response?.message || 'Failed to load work order data.');
+        return;
+      }
+      const wo = response.data;
+      if (wo.applicant_name) setApplicantName(wo.applicant_name);
+      if (wo.department) setDepartment(wo.department);
+      if (wo.designation) setDesignation(wo.designation);
+      if (wo.email) setEmail(wo.email);
+      if (wo.mobile) setMobile(wo.mobile);
+      if (wo.beneficiary_type) setBeneficiaryType(wo.beneficiary_type);
+      if (wo.beneficiary_value) setBeneficiaryValue(wo.beneficiary_value);
+      if (wo.budget_tag) setSelectedTag(wo.budget_tag);
+      if (Array.isArray(wo.items) && wo.items.length > 0) {
+        const loadedItems = wo.items.map((item: any) => ({
+          id: String(item.id || Math.random().toString(36).slice(2, 11)),
+          type: item.type_name || item.type || '',
+          subType: item.sub_type_name || item.subType || '',
+          block: item.block || 'Select',
+          floor: item.floor || 'Select',
+          roomLabNo: item.room_lab_no || item.roomLabNo || '',
+          description: item.description || '',
+          targetDate: item.target_date
+            ? String(item.target_date).slice(0, 10)
+            : item.targetDate || '',
+          locationPhotos: Array.isArray(item.locationPhotos)
+            ? item.locationPhotos.map((url: string, i: number) => ({
+                id: `loc-photo-${i}`,
+                preview: url,
+              }))
+            : [],
+          qty: Number(item.qty) || 1,
+          priority: item.priority || 'Routine',
+        }));
+        // Set hydrating flag BEFORE setting category so the guard
+        // useEffect (which fires post-commit) sees it as true and skips the reset.
+        // The flag is cleared in a separate useEffect[recordLoaded] below,
+        // which is guaranteed to run after all effects for this same commit.
+        isHydrating.current = true;
+        if (wo.category_name) setSelectedCategory(wo.category_name);
+        setWorkItems(loadedItems);
+      } else {
+        isHydrating.current = true;
+        if (wo.category_name) setSelectedCategory(wo.category_name);
+      }
+      // Signal hydration is complete; the cleanup effect will clear the flag
+      // after this render commits (see useEffect[recordLoaded] below).
+      setRecordLoaded(true);
+    } catch (err) {
+      console.error('Error loading work order:', err);
+      setError('Failed to load work order. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Fetch existing record when editing / viewing
   useEffect(() => {
     if (!id) return;
-    let cancelled = false;
-    const loadRecord = async () => {
-      try {
-        const response = (await authenticityUtility.get(`/workorders/${id}`)) as any;
-        if (cancelled || !response?.success || !response?.data) return;
-        const wo = response.data;
-        if (wo.applicant_name) setApplicantName(wo.applicant_name);
-        if (wo.department) setDepartment(wo.department);
-        if (wo.designation) setDesignation(wo.designation);
-        if (wo.email) setEmail(wo.email);
-        if (wo.mobile) setMobile(wo.mobile);
-        if (wo.beneficiary_type) setBeneficiaryType(wo.beneficiary_type);
-        if (wo.beneficiary_value) setBeneficiaryValue(wo.beneficiary_value);
-        if (wo.budget_tag) setSelectedTag(wo.budget_tag);
-        if (Array.isArray(wo.items) && wo.items.length > 0) {
-          const loadedItems = wo.items.map((item: any) => ({
-            id: String(item.id || Math.random().toString(36).slice(2, 11)),
-            type: item.type_name || item.type || '',
-            subType: item.sub_type_name || item.subType || '',
-            block: item.block || 'Select',
-            floor: item.floor || 'Select',
-            roomLabNo: item.room_lab_no || item.roomLabNo || '',
-            description: item.description || '',
-            targetDate: item.target_date
-              ? String(item.target_date).slice(0, 10)
-              : item.targetDate || '',
-            locationPhotos: [],
-            descriptionPhotos: [],
-            qty: Number(item.qty) || 1,
-            priority: item.priority || 'Routine',
-          }));
-          // Set hydrating flag BEFORE setting category to prevent
-          // the category useEffect from wiping loaded type/subType
-          isHydrating.current = true;
-          if (wo.category_name) setSelectedCategory(wo.category_name);
-          setWorkItems(loadedItems);
-          // Reset flag after state updates are queued
-          setTimeout(() => { isHydrating.current = false; }, 0);
-        } else {
-          if (wo.category_name) setSelectedCategory(wo.category_name);
-        }
-      } catch (err) {
-        console.error('Error loading work order:', err);
-      }
-    };
-    void loadRecord();
-    return () => { cancelled = true; };
+    fetchRecord();
   }, [id]);
 
   // Fetch applicant details on mount (only for new records)
@@ -1122,18 +1144,39 @@ const WorkOrder: React.FC = () => {
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
 
-  // Auto-populate types when category changes
-  // Guard: skip reset when hydrating from a loaded record
+  // Auto-populate types when category changes.
+  // Guard: if isHydrating.current is true this render was triggered by loadRecord
+  // setting the category from the server response — skip the reset entirely.
   useEffect(() => {
     if (isHydrating.current) return;
-    setWorkItems((prev) =>
-      prev.map((item) => ({
-        ...item,
-        type: '',
-        subType: '',
-      })),
-    );
+    setWorkItems((prev) => {
+      const categoryData = WORK_CATALOG[selectedCategory] || {};
+      const validTypes = Object.keys(categoryData);
+
+      return prev.map((item) => {
+        const isTypeValid = validTypes.includes(item.type);
+        const validSubTypes = isTypeValid ? (categoryData[item.type] || []) : [];
+        const isSubTypeValid = validSubTypes.includes(item.subType);
+
+        return {
+          ...item,
+          type: isTypeValid ? item.type : '',
+          subType: isSubTypeValid ? item.subType : '',
+        };
+      });
+    });
   }, [selectedCategory]);
+
+  // Clear the hydration guard flag AFTER the hydration commit's effects have run.
+  // React runs all effects for a given commit in declaration order (top to bottom).
+  // Because this effect is declared AFTER the [selectedCategory] guard above,
+  // it is guaranteed to execute after the guard has already seen isHydrating.current
+  // as true and skipped the reset. Only then do we flip it to false, so any
+  // subsequent user-driven category change correctly falls through the guard.
+  useEffect(() => {
+    if (!recordLoaded) return;
+    isHydrating.current = false;
+  }, [recordLoaded]);
 
   const triggerAlert = (type: AlertType, title: string, message: string) => {
     setAlertType(type);
@@ -1266,6 +1309,30 @@ const WorkOrder: React.FC = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    // 1. Upload any newly added photos first
+    try {
+      for (const item of workItems) {
+        for (let i = 0; i < item.locationPhotos.length; i++) {
+          const photo = item.locationPhotos[i];
+          if (photo.file) {
+            const formData = new FormData();
+            formData.append('file', photo.file);
+            
+            // BACKEND CONTRACT: expecting /workorders/upload to return { success: true, data: { url: "..." } }
+            const uploadRes = (await authenticityUtility.postFile('/workorders/upload', formData)) as any;
+            
+            if (uploadRes.success && uploadRes.data?.url) {
+              photo.preview = uploadRes.data.url;
+            }
+          }
+        }
+      }
+    } catch (uploadError) {
+      console.error('Photo upload failed:', uploadError);
+      triggerAlert('error', 'Upload Failed', 'Failed to upload photos. Please try again.');
+      return; // Stop form submission if uploads fail
+    }
+
     const payload = {
       applicantName,
       ...(isEditMode ? {} : { date }),
@@ -1286,12 +1353,11 @@ const WorkOrder: React.FC = () => {
   block: item.block,
   floor: item.floor,
   roomLabNo: item.roomLabNo,
-  description: '',
+  description: item.description,
   targetDate: item.targetDate,
   qty: item.qty,
   priority: item.priority,
-  locationPhotos: item.locationPhotos,
-  descriptionPhotos: item.descriptionPhotos,
+  locationPhotos: item.locationPhotos.map((p) => p.preview),
 })),
     };
 
@@ -1326,6 +1392,29 @@ const WorkOrder: React.FC = () => {
       );
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="workorderPage journal-form-body d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+        <div className="spinner-border text-primary" role="status">
+          <span className="visually-hidden">Loading...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="workorderPage journal-form-body d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+        <div className="alert alert-danger d-flex flex-column align-items-center" role="alert">
+          <div style={{ marginBottom: '15px' }}>{error}</div>
+          <button type="button" className="btn btn-outline-danger btn-sm" onClick={fetchRecord}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="workorderPage journal-form-body">
@@ -1651,8 +1740,18 @@ const WorkOrder: React.FC = () => {
                                     disabled={isViewMode}
                                   />
                                 </div>
-
-                                <div className="workorderDescriptionRow workorderDescriptionRowTargetOnly">
+                                <div className="workorderDescriptionFields">
+                                  <input
+                                    type="text"
+                                    className="form-control custom-input workorderDescriptionInput"
+                                    value={item.description}
+                                    onChange={(e) =>
+                                      handleItemChange(idx, 'description', e.target.value)
+                                    }
+                                    placeholder="Enter work item description..."
+                                    disabled={isViewMode}
+                                    style={{ flex: 1, marginRight: '15px' }}
+                                  />
                                   <span className="workorderTargetDateLabel">Target Date</span>
                                   <input
                                     type="date"

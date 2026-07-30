@@ -1,27 +1,128 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, X, Edit3 } from 'lucide-react';
 import './OrganizationDirectoryDashboard.css';
 import OrganizationDirectory, { Organization } from '../../organizationdirectory/OrganizationDirectory';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
+/* ─── API Contract (backend must implement) ────────────────────────────────
+ * GET    /organizations          → { success: true, data: Organization[] }
+ * POST   /organizations          → { success: true, data: Organization }   (body: Omit<Organization, 'id'|'date'>)
+ * PUT    /organizations/:id      → { success: true, data: Organization }   (body: Omit<Organization, 'id'|'date'>)
+ * DELETE /organizations/:id      → { success: true }
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* ─── TEMPORARY localStorage fallback ──────────────────────────────────────
+ * LEGACY: _v1 key ('organizationDirectoryRecords_v1') is orphaned.
+ * It will be discarded once the backend is live — no migration needed.
+ * TEMPORARY: The _v2 key below is used as a fallback while the backend is absent.
+ * Remove the entire FALLBACK block (and STORAGE_KEY) once the API is live.
+ * ──────────────────────────────────────────────────────────────────────────── */
 const STORAGE_KEY = 'organizationDirectoryRecords_v2';
+
+const fallbackGetAll = (): Organization[] => {
+  // TEMPORARY: remove once backend is live
+  console.warn('[Organization] API unavailable — reading from localStorage fallback');
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? (JSON.parse(stored) as Organization[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const fallbackSave = (records: Organization[]) => {
+  // TEMPORARY: remove once backend is live
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  } catch {
+    // ignore
+  }
+};
+
+/* ─── API functions (call real backend; fall back to localStorage on failure) */
+
+const apiGetAll = async (): Promise<Organization[]> => {
+  try {
+    const res = (await authenticityUtility.get('/organizations')) as any;
+    if (res?.success && Array.isArray(res.data)) return res.data;
+    throw new Error(res?.message || 'Invalid response');
+  } catch {
+    return fallbackGetAll();
+  }
+};
+
+const apiCreate = async (orgData: Omit<Organization, 'id' | 'date'>): Promise<Organization> => {
+  try {
+    const res = (await authenticityUtility.post('/organizations', orgData)) as any;
+    if (res?.success && res.data) return res.data;
+    throw new Error(res?.message || 'Invalid response');
+  } catch {
+    // TEMPORARY: remove once backend is live
+    console.warn('[Organization] API unavailable — writing to localStorage fallback');
+    const existing = fallbackGetAll();
+    const newRecord: Organization = {
+      id: Math.max(0, ...existing.map((r) => r.id)) + 1,
+      date: new Date().toISOString().slice(0, 10),
+      ...orgData,
+    };
+    fallbackSave([newRecord, ...existing]);
+    return newRecord;
+  }
+};
+
+const apiUpdate = async (id: number, orgData: Omit<Organization, 'id' | 'date'>): Promise<Organization> => {
+  try {
+    const res = (await authenticityUtility.put(`/organizations/${id}`, orgData)) as any;
+    if (res?.success && res.data) return res.data;
+    throw new Error(res?.message || 'Invalid response');
+  } catch {
+    // TEMPORARY: remove once backend is live
+    console.warn('[Organization] API unavailable — writing to localStorage fallback');
+    const existing = fallbackGetAll();
+    const updated = existing.map((r) => (r.id === id ? { ...r, ...orgData } : r));
+    fallbackSave(updated);
+    const found = updated.find((r) => r.id === id);
+    if (!found) throw new Error('Record not found');
+    return found;
+  }
+};
+
+/* ─── Constants ─────────────────────────────────────────────────────────── */
 
 const CATEGORY_OPTIONS = [
   'Academic', 'Industry', 'National Labs', 'Incubation', 'Start-up', 'Government'
 ];
 
+/* ═══════════════════════════════════════════════════════════
+   Dashboard Component
+   ═══════════════════════════════════════════════════════════ */
+
 const OrganizationDirectoryDashboard: React.FC = () => {
-  const [records, setRecords] = useState<Organization[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? (JSON.parse(stored) as Organization[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [records, setRecords] = useState<Organization[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [showForm, setShowForm] = useState(false);
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
   const [searchName, setSearchName] = useState('');
   const [searchCategory, setSearchCategory] = useState('');
+
+  const fetchRecords = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await apiGetAll();
+      setRecords(data);
+    } catch {
+      setError('Failed to load organizations. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecords();
+  }, []);
 
   const filtered = useMemo(() => {
     const nameFilter = searchName.trim().toLowerCase();
@@ -49,36 +150,48 @@ const OrganizationDirectoryDashboard: React.FC = () => {
     setShowForm(false);
   };
 
-  const handleSave = (orgData: Omit<Organization, 'id' | 'date'>) => {
-    setRecords((prev) => {
-      let updatedRecords: Organization[];
+  const handleSave = async (orgData: Omit<Organization, 'id' | 'date'>) => {
+    try {
       if (editingOrg) {
-        // Edit Mode: update existing record
-        updatedRecords = prev.map((r) =>
-          r.id === editingOrg.id ? { ...r, ...orgData } : r
-        );
+        const updated = await apiUpdate(editingOrg.id, orgData);
+        setRecords((prev) => prev.map((r) => (r.id === editingOrg.id ? updated : r)));
       } else {
-        // Add Mode: insert new record
-        const newRecord = {
-          id: Math.max(0, ...prev.map((record) => record.id)) + 1,
-          date: new Date().toISOString().slice(0, 10),
-          ...orgData,
-        } as Organization;
-        updatedRecords = [newRecord, ...prev];
+        const created = await apiCreate(orgData);
+        setRecords((prev) => [created, ...prev]);
       }
-
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRecords));
-      } catch {
-        // ignore localStorage errors
-      }
-
-      return updatedRecords;
-    });
-
+    } catch {
+      setError('Failed to save record. Please try again.');
+    }
     setEditingOrg(null);
     setShowForm(false);
   };
+
+  /* ── Render ── */
+
+  if (isLoading) {
+    return (
+      <section className="budgetdashboard-page d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+        <div className="text-center">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (error && !showForm) {
+    return (
+      <section className="budgetdashboard-page d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+        <div className="alert alert-danger" role="alert">
+          {error}{' '}
+          <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={fetchRecords}>
+            Retry
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="budgetdashboard-page">

@@ -1,36 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Building2,
   ChevronLeft,
   ChevronRight,
   Eye,
   Image as ImageIcon,
-  Plus,
   Search,
-  Info,
-  Bell,
   ClipboardList,
-  Droplets,
-  Factory,
   UserCheck,
-  Hammer,
   Hourglass,
   CheckSquare,
-  Leaf,
-  LayoutGrid,
-  Paintbrush,
   FolderClosed,
-  Snowflake,
-  Users,
-  Wifi,
-  Wrench,
-  Zap,
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
 import './workorderdashboard.css';
-import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
@@ -38,12 +22,6 @@ type WorkOrderPriority = 'High' | 'Medium' | 'Low' | 'Routine';
 type WorkOrderStatus = 'Pending' | 'Completed' | 'Procurement' | 'On Hold' | 'Assigned';
 
 
-
-interface StoredWorkOrderPhoto {
-  id: string;
-  name: string;
-  preview: string;
-}
 
 interface StoredWorkOrderItem {
   id: string | number;
@@ -57,8 +35,7 @@ interface StoredWorkOrderItem {
   reminderDate?: string;
   qty: number;
   priority: string;
-  locationPhotos: StoredWorkOrderPhoto[];
-  descriptionPhotos: StoredWorkOrderPhoto[];
+  locationPhotos: string[];
   assignedTo?: string;
   assignedToRole?: string;
   status?: string;
@@ -283,8 +260,11 @@ const mapSubmissionsToRows = (submissions: StoredWorkOrderSubmission[]): WorkOrd
       (Array.isArray(submission.workItems) ? submission.workItems : []).map((item) => {
         const photos = [
           ...(Array.isArray(item.locationPhotos) ? item.locationPhotos : []),
-          ...(Array.isArray(item.descriptionPhotos) ? item.descriptionPhotos : []),
-        ];
+        ].map((url: string, index: number) => ({
+          id: `${item.id}-${index}`,
+          name: `Photo ${index + 1}`,
+          preview: url,
+        }));
         const normalizedCategory = normalizeCategoryName(submission.category);
 
         return {
@@ -376,7 +356,6 @@ const WorkOrderDashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(10);
 
-  const [employeeOptions, setEmployeeOptions] = useState<OptionType[]>([]);
 
   // Modals state
   const [showInfoModal, setShowInfoModal] = useState(false);
@@ -387,41 +366,34 @@ const WorkOrderDashboard: React.FC = () => {
   const [selectedItemForPhotos, setSelectedItemForPhotos] = useState<WorkOrderItem | null>(null);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
-  useEffect(() => {
-    const fetchWorkOrders = async () => {
-      try {
-        const json = (await authenticityUtility.get('/workorders')) as any;
-        if (json.success && Array.isArray(json.data)) {
-          setWorkOrders(mapSubmissionsToRows(json.data));
-        } else {
-          setWorkOrders([]);
-        }
-      } catch (err) {
-        console.error('Failed to fetch work orders:', err);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchWorkOrders = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const json = (await authenticityUtility.get('/workorders')) as any;
+      if (json.success && Array.isArray(json.data)) {
+        setWorkOrders(mapSubmissionsToRows(json.data));
+      } else {
         setWorkOrders([]);
+        setError(json.message || 'Invalid or malformed data received from server.');
       }
-    };
+    } catch (err) {
+      console.error('Failed to fetch work orders:', err);
+      setError('Failed to load work orders. Please try again later.');
+      setWorkOrders([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchWorkOrders();
   }, []);
 
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      try {
-        const json = (await authenticityUtility.get('/master-data/employees?limit=1000&status=Active')) as any;
-        if (json.success && json.data && Array.isArray(json.data.rows)) {
-          const opts = json.data.rows.map((emp: any) => ({
-            value: emp.full_name,
-            label: emp.full_name,
-            role: emp.department_name || emp.designation || 'Staff',
-          }));
-          setEmployeeOptions(opts);
-        }
-      } catch (err) {
-        console.error('Failed to fetch employees list:', err);
-      }
-    };
-    fetchEmployees();
-  }, []);
+
 
   const persistWorkOrderItemDashboard = async (
     itemId: string,
@@ -435,59 +407,7 @@ const WorkOrderDashboard: React.FC = () => {
     await authenticityUtility.patch(`/workorders/items/${itemId}/dashboard`, payload);
   };
 
-  const handleStatusChange = async (submissionId: string, itemId: string, newStatus: WorkOrderStatus) => {
-    const prevWorkOrders = [...workOrders];
-    try {
-      await persistWorkOrderItemDashboard(itemId, { status: newStatus });
-      setWorkOrders((prev) =>
-        prev.map((item) =>
-          item.submissionId === submissionId &&
-          item.id.split('-').pop() === itemId
-            ? { ...item, status: newStatus }
-            : item,
-        ),
-      );
-    } catch (err) {
-      console.error('Failed to update work order status:', err);
-      setWorkOrders(prevWorkOrders);
-    }
-  };
 
-  const handleAssigneeChange = async (
-    submissionId: string,
-    itemId: string,
-    assigneeName: string,
-    assigneeRole: string,
-  ) => {
-    const prevWorkOrders = [...workOrders];
-    setWorkOrders((prev) =>
-      prev.map((item) =>
-        item.submissionId === submissionId &&
-        item.id.split('-').pop() === itemId
-          ? {
-              ...item,
-              assignee: {
-                name: assigneeName,
-                role: assigneeName ? assigneeRole || 'Staff' : 'Not Assigned',
-                initials: getInitials(assigneeName || 'NA'),
-              },
-              status: assigneeName ? 'Assigned' : 'Pending',
-            }
-          : item,
-      ),
-    );
-
-    try {
-      await persistWorkOrderItemDashboard(itemId, {
-        assignedTo: assigneeName,
-        assignedToRole: assigneeName ? assigneeRole : '',
-        status: assigneeName ? 'Assigned' : 'Pending',
-      });
-    } catch (err) {
-      console.error('Failed to update work order assignee:', err);
-      setWorkOrders(prevWorkOrders);
-    }
-  };
 
   const handleSaveReminderDate = async (
     submissionId: string,
@@ -759,7 +679,20 @@ const WorkOrderDashboard: React.FC = () => {
 
           {/* CONTENT */}
           <div className="workorderdashboard-body">
-            {filteredWorkOrders.length === 0 ? (
+            {isLoading ? (
+              <div className="workorderdashboard-state" style={{ padding: '60px 20px', fontSize: '15px' }}>
+                <div className="spinner-border text-primary" role="status">
+                  <span className="visually-hidden">Loading...</span>
+                </div>
+              </div>
+            ) : error ? (
+              <div className="workorderdashboard-state text-danger d-flex flex-column align-items-center" style={{ padding: '60px 20px', fontSize: '15px' }}>
+                <div style={{ marginBottom: '15px' }}>{error}</div>
+                <button type="button" className="btn btn-outline-primary btn-sm" onClick={fetchWorkOrders}>
+                  Retry
+                </button>
+              </div>
+            ) : filteredWorkOrders.length === 0 ? (
               <div className="workorderdashboard-state" style={{ padding: '60px 20px', fontSize: '15px' }}>
                 No work items found
               </div>

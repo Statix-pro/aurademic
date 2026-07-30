@@ -557,16 +557,12 @@
   height: 38px;
 }
 
-.workorderDescriptionRow {
+.workorderDescriptionFields {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
+  gap: 10px;
   width: 100%;
-}
-
-.workorderDescriptionRowTargetOnly {
-  justify-content: flex-start;
+  margin-top: 10px;
 }
 
 .workorderDescriptionInput {
@@ -575,10 +571,10 @@
 }
 
 .workorderTargetDateLabel {
+  white-space: nowrap;
+  font-weight: 500;
   color: var(--primary-color);
   font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 
 .workorderTargetDateInput {

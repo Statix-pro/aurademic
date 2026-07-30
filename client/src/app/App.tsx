@@ -27,9 +27,13 @@ import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetda
 import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
+import OrganizationDirectoryDashboard from '../features/user-dashboard/organizationdirectorydashboard/OrganizationDirectoryDashboard';
 import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
 import PublicationsPage from '../features/user-dashboard/publicationspage/PublicationsPage';
+import ResourcePersonDirectoryDashboard from '../features/user-dashboard/resourcepersondirectorydashboard/ResourcePersonDirectoryDashboard';
 import UserDashboard from '../features/user-dashboard/userdashboard';
+import WorkOrderDashboard from '../features/user-dashboard/workorderdashboard/WorkOrderDashboard';
+import WorkOrder from '../features/workorder/WorkOrder';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
 import { MsalProvider } from '../shared/components/MsalProvider';
@@ -404,6 +408,46 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <EventEntry />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorderdashboard"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrderDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder/new"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder/:id"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/resourcepersondirectorydashboard"
+                    element={
+                      <ProtectedRoute>
+                        <ResourcePersonDirectoryDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/organizationdirectorydashboard"
+                    element={
+                      <ProtectedRoute>
+                        <OrganizationDirectoryDashboard />
                       </ProtectedRoute>
                     }
                   />

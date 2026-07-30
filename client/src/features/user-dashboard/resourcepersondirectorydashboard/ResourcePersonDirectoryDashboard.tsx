@@ -1,8 +1,77 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, X } from 'lucide-react';
 import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
 import ResourcePersonDirectory, { ResourcePerson } from '../../resourcepersondirectory/ResourcePersonDirectory';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+
+/* ─── API Contract (backend must implement) ────────────────────────────────
+ * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
+ * POST   /resource-persons          → { success: true, data: ResourcePerson }   (body: Omit<ResourcePerson, 'id'|'date'>)
+ * PUT    /resource-persons/:id      → { success: true, data: ResourcePerson }   (body: Omit<ResourcePerson, 'id'|'date'>)
+ * DELETE /resource-persons/:id      → { success: true }
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+/* ─── TEMPORARY localStorage fallback ──────────────────────────────────────
+ * LEGACY: _v1 key ('resourcePersonDirectoryRecords_v1') is orphaned.
+ * It will be discarded once the backend is live — no migration needed.
+ * TEMPORARY: The _v2 key below is used as a fallback while the backend is absent.
+ * Remove the entire FALLBACK block (and STORAGE_KEY) once the API is live.
+ * ──────────────────────────────────────────────────────────────────────────── */
+const STORAGE_KEY = 'resourcePersonDirectoryRecords';
+
+const fallbackGetAll = (): ResourcePerson[] => {
+  // TEMPORARY: remove once backend is live
+  console.warn('[ResourcePerson] API unavailable — reading from localStorage fallback');
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? (JSON.parse(stored) as ResourcePerson[]) : [];
+  } catch {
+    return [];
+  }
+};
+
+const fallbackSave = (records: ResourcePerson[]) => {
+  // TEMPORARY: remove once backend is live
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  } catch {
+    // ignore
+  }
+};
+
+/* ─── API functions (call real backend; fall back to localStorage on failure) */
+
+const apiGetAll = async (): Promise<ResourcePerson[]> => {
+  try {
+    const res = (await authenticityUtility.get('/resource-persons')) as any;
+    if (res?.success && Array.isArray(res.data)) return res.data;
+    throw new Error(res?.message || 'Invalid response');
+  } catch {
+    return fallbackGetAll();
+  }
+};
+
+const apiCreate = async (personData: Omit<ResourcePerson, 'id' | 'date'>): Promise<ResourcePerson> => {
+  try {
+    const res = (await authenticityUtility.post('/resource-persons', personData)) as any;
+    if (res?.success && res.data) return res.data;
+    throw new Error(res?.message || 'Invalid response');
+  } catch {
+    // TEMPORARY: remove once backend is live
+    console.warn('[ResourcePerson] API unavailable — writing to localStorage fallback');
+    const existing = fallbackGetAll();
+    const newRecord: ResourcePerson = {
+      id: Math.max(0, ...existing.map((r) => r.id)) + 1,
+      date: new Date().toISOString().slice(0, 10),
+      ...personData,
+    };
+    fallbackSave([newRecord, ...existing]);
+    return newRecord;
+  }
+};
+
+/* ─── Constants ─────────────────────────────────────────────────────────── */
 
 const CATEGORY_OPTIONS = [
   'Academic',
@@ -28,21 +97,36 @@ const getPrimary = (p: ResourcePerson) => {
   );
 };
 
-const STORAGE_KEY = 'resourcePersonDirectoryRecords';
+/* ═══════════════════════════════════════════════════════════
+   Dashboard Component
+   ═══════════════════════════════════════════════════════════ */
 
 const ResourcePersonDirectoryDashboard: React.FC = () => {
-  const [records, setRecords] = useState<ResourcePerson[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      return stored ? (JSON.parse(stored) as ResourcePerson[]) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [records, setRecords] = useState<ResourcePerson[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [showForm, setShowForm] = useState(false);
   const [editingPerson, setEditingPerson] = useState<ResourcePerson | null>(null);
   const [searchName, setSearchName] = useState('');
   const [searchCategory, setSearchCategory] = useState('');
+
+  const fetchRecords = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const data = await apiGetAll();
+      setRecords(data);
+    } catch {
+      setError('Failed to load resource persons. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRecords();
+  }, []);
 
   const filtered = useMemo(() => {
     const nameFilter = searchName.trim().toLowerCase();
@@ -60,36 +144,48 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
     setShowForm(true);
   };
 
-  // Editing is disabled for Add-only mode; keep function removed intentionally.
-
   const handleCancel = () => {
     setEditingPerson(null);
     setShowForm(false);
   };
 
-  const handleSave = (personData: Omit<ResourcePerson, 'id' | 'date'>) => {
-    setRecords((prev) => {
-      const newRecord = {
-        id: Math.max(0, ...prev.map((record) => record.id)) + 1,
-        date: new Date().toISOString().slice(0, 10),
-        ...personData,
-      } as ResourcePerson;
-
-      const updatedRecords = [newRecord, ...prev];
-
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedRecords));
-      } catch {
-        // ignore localStorage errors
-      }
-
-      return updatedRecords;
-    });
-
-    // Ensure form closes after adding
+  const handleSave = async (personData: Omit<ResourcePerson, 'id' | 'date'>) => {
+    try {
+      const created = await apiCreate(personData);
+      setRecords((prev) => [created, ...prev]);
+    } catch {
+      setError('Failed to save record. Please try again.');
+    }
     setEditingPerson(null);
     setShowForm(false);
   };
+
+  /* ── Render ── */
+
+  if (isLoading) {
+    return (
+      <div className="financecard-page d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+        <div className="text-center">
+          <div className="spinner-border text-primary" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !showForm) {
+    return (
+      <div className="financecard-page d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+        <div className="alert alert-danger" role="alert">
+          {error}{' '}
+          <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={fetchRecords}>
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="financecard-page">
