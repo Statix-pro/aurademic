@@ -178,8 +178,8 @@ const logisticsVehicleRequirements: VehicleRequirement[] = ['Mini Truck', 'Eiche
 
 const logisticsBookingForOptions: BookingFor[] = ['Logistics Transport', 'Others'];
 
-const vehicleNumberOptions = ['TN 37 AB 1234', 'TN 38 CD 4567', 'TN 39 EF 7890'];
-const driverOptions = ['Ravi Kumar', 'Suresh Mani', 'Arun Prakash'];
+const vehicleNumberOptions: string[] = [];
+const driverOptions: string[] = [];
 
 const formatDateInput = (date: Date) => {
   const year = date.getFullYear();
@@ -362,62 +362,9 @@ const createVehicleAllotmentRow = (): VehicleAllotmentRow => ({
   mobile: '',
 });
 
-const initialManagedVehicles: ManagedVehicleRow[] = [
-  {
-    id: 1,
-    vehicleType: 'Car',
-    number: 'TN 34 AM 1213',
-    make: 'Toyota Innova',
-    seating: '6+1',
-    status: 'Active',
-    fuelType: 'Petrol',
-    model: 'Innova Crysta',
-    transmission: 'Manual',
-    yearOfRegistration: '2019',
-    yearOfPurchase: '2019',
-    features: {
-      ...DEFAULT_VEHICLE_FEATURES,
-      'Air Conditioner': true,
-      'GPS Tracking': true,
-      'Audio System': true,
-      'Push Back Seats': true,
-      'Bluetooth Audio': true,
-      'USB Charging Ports': true,
-      'First Aid Kit': true,
-      'Water Bottle': true,
-    },
-  },
-  {
-    id: 2,
-    vehicleType: 'Shuttle Vehicle',
-    number: '-',
-    make: 'ABCD',
-    seating: '12+1',
-    status: 'Service',
-    fuelType: 'Diesel',
-    model: 'Traveller',
-    transmission: 'Manual',
-    yearOfRegistration: '2021',
-    yearOfPurchase: '2021',
-    features: {
-      ...DEFAULT_VEHICLE_FEATURES,
-      'Air Conditioner': true,
-      'GPS Tracking': true,
-      'CCTV Camera': true,
-      'Audio System': true,
-      'USB Charging Ports': true,
-      'Tissue Box': true,
-      'Video System': true,
-      'First Aid Kit': true,
-      'Water Bottle': true,
-    },
-  },
-];
+const initialManagedVehicles: ManagedVehicleRow[] = [];
 
-const initialDrivers: DriverManagementRow[] = [
-  { id: 1, name: 'Velavan C', mobile: '9876543210', category: 'Car Driver', status: 'Active' },
-  { id: 2, name: 'Senthil Kumar R', mobile: '9876543210', category: 'Bus Driver', status: 'Leave' },
-];
+const initialDrivers: DriverManagementRow[] = [];
 
 const createManagedVehicleRow = (): ManagedVehicleRow => ({
   id: Date.now() + Math.random(),
@@ -819,7 +766,7 @@ const VehicleBooking: React.FC = () => {
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitMessage('Vehicle booking details saved locally.');
+    setSubmitMessage('Preview only — submission will be enabled once backend integration is complete.');
   };
 
   const renderReadOnlyInput = (

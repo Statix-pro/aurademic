@@ -144,12 +144,16 @@ export const canAccessGuesthouseWorkflow = (user?: User | null) => {
     return true;
   }
 
-  if (canAccessModuleWorkflow(user, 'guesthouse')) {
-    return true;
-  }
+  return getGuesthouseWorkflowStage(user) !== null;
+};
 
-  const normalizedRoles = normalizeRoleCodes(user).map((role) => role.toLowerCase());
-  return ['hod', 'principal', 'guesthouse_admin'].some((role) => normalizedRoles.includes(role));
+export type GuesthouseWorkflowStage = 'hod' | 'principal' | 'guesthouse_admin';
+
+export const getGuesthouseWorkflowStage = (user?: User | null): GuesthouseWorkflowStage | null => {
+  if (!user || isSuperAdmin(user) || canAccessAdminArea(user)) return null;
+  const stages: GuesthouseWorkflowStage[] = ['hod', 'principal', 'guesthouse_admin'];
+  const permissions = new Set(normalizePermissionKeys(user));
+  return stages.find((stage) => permissions.has(`guesthouse.workflow.${stage}`)) || null;
 };
 
 const isAdminOrWorkflowRole = (user?: User | null) => {
