@@ -1,0 +1,359 @@
+@reference "../index.css";
+@reference "tailwindcss";
+.registrations-page-1 {
+  @apply grid grid-cols-[180px_minmax(0,1fr)_110px_200px] items-center rounded-2xl border border-slate-300 bg-white shadow-[0_3px_8px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)];
+}
+
+.registrations-page-2 {
+  @apply flex items-center gap-3 border-r border-slate-300 px-4 py-4;
+}
+
+.registrations-page-3 {
+  @apply flex flex-col gap-2;
+}
+
+.registrations-page-4 {
+  @apply grid min-h-[80px] grid-cols-[minmax(0,1fr)_120px] items-center gap-4 border-r border-slate-300 px-5 py-4;
+}
+
+.registrations-page-5 {
+  @apply min-w-0;
+}
+
+.registrations-page-6 {
+  @apply flex items-center gap-2;
+}
+
+.registrations-page-7 {
+  @apply text-lg font-semibold leading-tight text-slate-800;
+}
+
+.registrations-page-8 {
+  @apply inline-flex items-center rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-blue-700 shadow-sm;
+}
+
+.registrations-page-9 {
+  @apply mt-3 flex items-center gap-4 whitespace-nowrap text-sm text-slate-500;
+}
+
+.registrations-page-10 {
+  @apply flex items-center gap-2 whitespace-nowrap;
+}
+
+.registrations-page-11 {
+  @apply flex items-center gap-2 whitespace-nowrap;
+}
+
+.registrations-page-12 {
+  @apply flex items-center gap-2 whitespace-nowrap;
+}
+
+.registrations-page-13 {
+  @apply flex translate-x-2 items-center justify-center;
+}
+
+.registrations-page-14 {
+  @apply inline-flex whitespace-nowrap rounded-md px-3 py-1 text-center text-[11px] font-bold leading-none border border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm;
+}
+
+.registrations-page-15 {
+  @apply flex min-h-[80px] flex-col justify-center border-r border-slate-300 px-5 py-4 text-center;
+}
+
+.registrations-page-16 {
+  @apply text-[11px] font-semibold text-slate-400;
+}
+
+.registrations-page-17 {
+  @apply mt-1 text-xl font-extrabold text-[#064675];
+}
+
+.registrations-page-18 {
+  @apply flex gap-2 px-4 py-4 items-center justify-center w-[200px];
+}
+
+.registrations-page-19 {
+  @apply inline-flex h-8 items-center justify-center rounded-md bg-emerald-600 px-2.5 text-xs font-semibold text-white cursor-default whitespace-nowrap;
+}
+
+.registrations-page-20 {
+  @apply mr-1 h-3.5 w-3.5;
+}
+
+.registrations-page-21 {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition-colors;
+}
+
+.registrations-page-22 {
+  @apply h-4 w-4;
+}
+
+.registrations-page-23 {
+  @apply inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 transition-colors;
+}
+
+.registrations-page-24 {
+  @apply h-4 w-4;
+}
+
+.registrations-page-25 {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 p-4 backdrop-blur-sm;
+}
+
+.registrations-page-26 {
+  @apply w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-[0_24px_70px_rgba(15,23,42,0.28)];
+}
+
+.registrations-page-27 {
+  @apply flex items-center justify-between border-b border-slate-100 px-5 py-4;
+}
+
+.registrations-page-28 {
+  @apply text-lg font-bold text-slate-800;
+}
+
+.registrations-page-29 {
+  @apply text-sm text-slate-500;
+}
+
+.registrations-page-30 {
+  @apply rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600;
+}
+
+.registrations-page-31 {
+  @apply h-5 w-5;
+}
+
+.registrations-page-32 {
+  @apply grid gap-4 p-5 md:grid-cols-[220px_minmax(0,1fr)];
+}
+
+.registrations-page-33 {
+  @apply flex items-center justify-center rounded-2xl border border-slate-100 bg-slate-50 p-3;
+}
+
+.registrations-page-34 {
+  @apply max-h-[260px] w-full object-contain;
+}
+
+.registrations-page-35 {
+  @apply space-y-3;
+}
+
+.registrations-page-36 {
+  @apply rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3;
+}
+
+.registrations-page-37 {
+  @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
+}
+
+.registrations-page-38 {
+  @apply mt-1 text-sm font-bold text-slate-800;
+}
+
+.registrations-page-39 {
+  @apply rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3;
+}
+
+.registrations-page-40 {
+  @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
+}
+
+.registrations-page-41 {
+  @apply mt-1 truncate text-sm font-bold text-slate-800;
+}
+
+.registrations-page-42 {
+  @apply rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3;
+}
+
+.registrations-page-43 {
+  @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
+}
+
+.registrations-page-44 {
+  @apply mt-1 text-sm font-bold text-slate-800;
+}
+
+.registrations-page-45 {
+  @apply rounded-xl border border-slate-100 bg-slate-50 px-4 py-3;
+}
+
+.registrations-page-46 {
+  @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
+}
+
+.registrations-page-47 {
+  @apply mt-1 text-sm font-bold text-slate-800;
+}
+
+.registrations-page-48 {
+  @apply rounded-2xl border border-slate-200 bg-white p-5 shadow-sm;
+}
+
+.registrations-page-49 {
+  @apply mb-4 border-b border-slate-200 pb-2.5 text-[15px] font-bold text-[#00558f];
+}
+
+.registrations-page-50 {
+  @apply text-sm font-semibold text-slate-700;
+}
+
+.registrations-page-51 {
+  @apply cursor-default rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm font-normal text-slate-800 outline-none shadow-sm transition-all duration-200;
+}
+
+.registrations-page-52 {
+  @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-900/35 p-3 backdrop-blur-sm;
+}
+
+.registrations-page-53 {
+  @apply w-full max-w-[860px] overflow-hidden rounded-[24px] bg-gradient-to-br from-white via-[#f3f7fc] to-[#e6effa] shadow-[0_22px_60px_rgba(15,23,42,0.26)] flex flex-col max-h-[86vh];
+}
+
+.registrations-page-54 {
+  @apply flex items-start justify-between border-b border-slate-200 bg-transparent px-5 py-4;
+}
+
+.registrations-page-55 {
+  @apply flex items-start gap-3;
+}
+
+.registrations-page-56 {
+  @apply text-xl font-bold text-[#00558f];
+}
+
+.registrations-page-57 {
+  @apply rounded-lg p-2 text-slate-400 hover:bg-slate-100/50 hover:text-slate-600;
+}
+
+.registrations-page-58 {
+  @apply h-5 w-5;
+}
+
+.registrations-page-59 {
+  @apply overflow-y-auto px-6 py-6 space-y-6;
+}
+
+.registrations-page-60 {
+  @apply grid grid-cols-1 gap-4 sm:grid-cols-3;
+}
+
+.registrations-page-61 {
+  @apply grid grid-cols-1 gap-4 sm:grid-cols-3;
+}
+
+.registrations-page-62 {
+  @apply sm:col-span-2;
+}
+
+.registrations-page-63 {
+  @apply overflow-x-auto rounded-xl border border-slate-200 bg-white;
+}
+
+.registrations-page-64 {
+  @apply w-full min-w-[600px] text-left text-sm;
+}
+
+.registrations-page-65 {
+  @apply bg-[#00558f] text-white;
+}
+
+.registrations-page-66 {
+  @apply px-4 py-2.5 font-semibold text-xs;
+}
+
+.registrations-page-67 {
+  @apply px-4 py-2.5 font-semibold text-xs;
+}
+
+.registrations-page-68 {
+  @apply px-4 py-2.5 font-semibold text-xs;
+}
+
+.registrations-page-69 {
+  @apply px-4 py-2.5 font-semibold text-xs;
+}
+
+.registrations-page-70 {
+  @apply divide-y divide-slate-100 bg-white;
+}
+
+.registrations-page-71 {
+  @apply px-4 py-2.5 font-semibold text-slate-800 text-xs;
+}
+
+.registrations-page-72 {
+  @apply px-4 py-2.5 text-slate-600 text-xs;
+}
+
+.registrations-page-73 {
+  @apply px-4 py-2.5 text-slate-600 text-xs;
+}
+
+.registrations-page-74 {
+  @apply px-4 py-2.5 text-slate-600 text-xs;
+}
+
+.registrations-page-75 {
+  @apply rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-500;
+}
+
+.registrations-page-76 {
+  @apply grid gap-4 sm:grid-cols-3;
+}
+
+.registrations-page-77 {
+  @apply rounded-xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-500;
+}
+
+.registrations-page-78 {
+  @apply min-h-[calc(100vh-48px)] flex-1 overflow-auto bg-[#eaf2fb] px-4 py-8 sm:px-6 md:py-10;
+}
+
+.registrations-page-79 {
+  @apply mx-auto w-full max-w-[1200px] space-y-8;
+}
+
+.registrations-page-80 {
+  @apply mb-6 flex items-center gap-3;
+}
+
+.registrations-page-81 {
+  @apply flex h-11 w-11 items-center justify-center rounded-xl bg-white shadow-sm;
+}
+
+.registrations-page-82 {
+  @apply h-5 w-5 text-blue-700;
+}
+
+.registrations-page-83 {
+  @apply text-2xl font-bold text-blue-700;
+}
+
+.registrations-page-84 {
+  @apply mx-auto h-full w-full space-y-4 overflow-auto;
+}
+
+.registrations-page-85 {
+  @apply text-center py-12;
+}
+
+.registrations-page-86 {
+  @apply mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#eaf2fb] dark:bg-slate-700/50;
+}
+
+.registrations-page-87 {
+  @apply h-7 w-7 text-slate-400;
+}
+
+.registrations-page-88 {
+  @apply text-xl font-bold text-slate-700 dark:text-slate-300;
+}
+
+.registrations-page-89 {
+  @apply mt-2 text-sm text-slate-400 max-w-sm mx-auto;
+}
+
+
