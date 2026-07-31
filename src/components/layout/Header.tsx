@@ -92,6 +92,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
                       className="header-19"
                       value={tempUrl}
                       onChange={(e) => setTempUrl(e.target.value)}
+                      onFocus={(e) => e.target.select()}
                       placeholder="e.g. 10.40.242.123:5000"
                     />
                   </div>

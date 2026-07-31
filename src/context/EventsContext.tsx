@@ -118,7 +118,16 @@ export function EventsProvider({
   const storageKey = user ? `ep_registrations_${user.email}` : "ep_registrations_guest";
 
   const [apiUrl, setApiUrl] = useState(() => {
-    return localStorage.getItem("ep_api_url") || import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const stored = localStorage.getItem("ep_api_url");
+    if (stored) {
+      try {
+        new URL(stored);
+        return stored;
+      } catch {
+        localStorage.removeItem("ep_api_url");
+      }
+    }
+    return import.meta.env.VITE_API_URL || "http://localhost:5000";
   });
   const [isApiOnline, setIsApiOnline] = useState(true);
 

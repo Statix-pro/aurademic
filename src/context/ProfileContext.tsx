@@ -46,14 +46,19 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const storageKey = user ? `ep_profile_${user.email}` : 'ep_profile_guest'
 
   const [personal, setPersonal] = useState<PersonalDetails>(() => {
+    const initialPersonal = {
+      ...defaultPersonal,
+      firstName: user ? user.name : '',
+      email: user ? user.email : '',
+    }
     try {
       const stored = localStorage.getItem(storageKey)
       if (stored) {
         const parsed: ProfileData = JSON.parse(stored)
-        return { ...defaultPersonal, ...parsed.personal }
+        return { ...initialPersonal, ...parsed.personal }
       }
     } catch { }
-    return defaultPersonal
+    return initialPersonal
   })
 
   const [profession, setProfession] = useState<ProfessionDetails>(() => {
