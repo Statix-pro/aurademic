@@ -1379,7 +1379,7 @@ const WorkOrder: React.FC = () => {
       }
       setTimeout(() => {
         resetWorkOrderForm();
-        navigate('/workorder');
+        navigate("/workorderdashboard");
       }, 900);
     } catch (error) {
       console.error('Failed to submit work order:', error);
