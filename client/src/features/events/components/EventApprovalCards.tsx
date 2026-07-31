@@ -54,6 +54,7 @@ export interface EventApprovalFormData {
   feeRows: FeeRow[];
   collaborators: CollaboratorRow[];
   sponsoringAgencies: CollaboratorRow[];
+  multiEventsList?: { id: string; name: string; type: string }[];
   coordinators: CoordinatorRow[];
   accommodationEnabled: boolean;
   accommodationType: "Free" | "Paid";
@@ -86,6 +87,7 @@ interface CollaboratorRow {
   id: string;
   type: string;
   name: string;
+  sponsorAgency?: string;
 }
 
 interface CoordinatorRow {
@@ -95,6 +97,42 @@ interface CoordinatorRow {
   email: string;
   institution: string;
 }
+
+type EventApprovalTextField = keyof Pick<
+  EventApprovalFormData,
+  | "name"
+  | "category"
+  | "eventType"
+  | "level"
+  | "expectedParticipants"
+  | "dateFrom"
+  | "dateTo"
+  | "numberOfDays"
+  | "mode"
+  | "session"
+  | "venue"
+  | "meetingLink"
+  | "eligibleParticipants"
+  | "openTo"
+  | "genderRestriction"
+  | "minAge"
+  | "maxAge"
+  | "eventFlyerName"
+  | "lastDate"
+  | "extendedDate"
+  | "selectionIntimation"
+  | "minTeamSize"
+  | "maxTeamSize"
+  | "documentName"
+  | "documentType"
+  | "documentSize"
+  | "inauguralDate"
+  | "inauguralTime"
+  | "inauguralVenue"
+  | "valedictoryDate"
+  | "valedictoryTime"
+  | "valedictoryVenue"
+>;
 
 interface EventApprovalCardsProps {
   title?: string;
@@ -257,6 +295,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
     value ? "event-approval-select has-value" : "event-approval-select is-placeholder";
 
   const resetForm = () => {
+    if (!window.confirm("Reset this event form?")) return;
     const nextFormData = createInitialFormData();
     setFormData(nextFormData);
     setSelectedCollaboratorId("");
@@ -268,7 +307,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   };
 
   const select = (
-    field: keyof EventApprovalFormData,
+    field: EventApprovalTextField,
     selectOptions: string[],
     placeholder = "",
     disabled = false
@@ -276,7 +315,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
     <select
       className={getSelectClassName(String(formData[field] || ""))}
       value={String(formData[field] || "")}
-      onChange={(event) => setField(field as any, event.target.value as any)}
+      onChange={(event) => setField(field, event.target.value)}
       disabled={disabled}
     >
       <option value="">{placeholder || "Select"}</option>
@@ -308,30 +347,39 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
     const newRow = factory();
     setFormData((current) => ({
       ...current,
-      [collection]: [...(current[collection] as any[]), newRow],
+      [collection]: [...current[collection], newRow],
     }));
   };
 
   const deleteRow = (collection: "feeRows" | "collaborators" | "sponsoringAgencies" | "coordinators", id: string) => {
-    setFormData((current) => {
-      const rows = current[collection] as any[];
-      if (rows.length === 1) return current;
-      const nextRows = rows.filter((row) => row.id !== id);
-      if (collection === "collaborators" && selectedCollaboratorId === id) {
-        setSelectedCollaboratorId(nextRows[0]?.id || "");
-      }
-      if (collection === "coordinators" && selectedCoordinatorId === id) {
-        setSelectedCoordinatorId(nextRows[0]?.id || "");
-      }
-      return { ...current, [collection]: nextRows };
-    });
+    if (!window.confirm("Delete this row?")) return;
+    const rows = formData[collection];
+    if (rows.length === 1) return;
+
+    const nextRows = rows.filter((row) => row.id !== id);
+    const nextSelectedCollaboratorId =
+      collection === "collaborators" && selectedCollaboratorId === id ? nextRows[0]?.id || "" : selectedCollaboratorId;
+    const nextSelectedCoordinatorId =
+      collection === "coordinators" && selectedCoordinatorId === id ? nextRows[0]?.id || "" : selectedCoordinatorId;
+
+    setFormData((current) => ({
+      ...current,
+      [collection]: nextRows,
+    }));
+
+    if (collection === "collaborators") {
+      setSelectedCollaboratorId(nextSelectedCollaboratorId);
+    }
+    if (collection === "coordinators") {
+      setSelectedCoordinatorId(nextSelectedCoordinatorId);
+    }
   };
 
   const handleSubmit = async () => {
     if (!onSubmit) return;
     setSubmitting(true);
     try {
-      await onSubmit({ ...formData, numberOfDays, isMultiEventEnabled: isMultiEvent });
+      await onSubmit({ ...formData, numberOfDays, isMultiEventEnabled: isMultiEvent, multiEventsList });
     } finally {
       setSubmitting(false);
     }
@@ -478,6 +526,12 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
             </label>
           )}
         </div>
+        <div className="event-approval-grid schedule-bottom">
+          <div className="schedule-days">
+            <span className="schedule-field-title">No. of Days</span>
+            <input placeholder="No. of Days" value={numberOfDays} readOnly />
+          </div>
+        </div>
           </>
         )}
       </section>
@@ -513,9 +567,18 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
               </button>
               <div
                 className={`event-approval-age-option ${ageRestrictionType === "Range" ? "active" : ""}`}
+                role="button"
+                tabIndex={0}
                 onClick={() => {
                   setAgeRestrictionType("Range");
                   minAgeInputRef.current?.focus();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setAgeRestrictionType("Range");
+                    minAgeInputRef.current?.focus();
+                  }
                 }}
               >
                 <span>Minimum</span>
@@ -676,12 +739,6 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
         </div>
         {formData.sponsoringAgencyEnabled && formData.sponsoringAgencies.map((row, index) => (
           <div className="event-approval-row-line" key={row.id}>
-            <input
-              type="radio"
-              className="event-approval-radio-dot"
-              name={`event-${eventNumber}-sponsor`}
-              aria-label="Select sponsoring agency row"
-            />
             <select className={getSelectClassName(row.type)} value={row.type} onChange={(event) => updateRow<CollaboratorRow>("sponsoringAgencies", row.id, "type", event.target.value)}>
               <option value="">Select</option>
               {options.collaboratorType.map((option) => <option key={option}>{option}</option>)}
@@ -787,20 +844,20 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
             />
           </div>
           {isMultiEvent && (
-            <div className="event-approval-table-wrap" style={{ marginTop: "16px" }}>
-              <table className="budgetEntryTable" style={{ width: "100%" }}>
+            <div className="event-approval-table-wrap event-approval-multi-event-table-wrap">
+              <table className="budgetEntryTable event-approval-multi-event-table">
                 <thead>
                   <tr>
-                    <th style={{ width: "60px", textAlign: "center" }}>S.No</th>
+                    <th className="event-approval-multi-event-index">S.No</th>
                     <th>Event Name</th>
                     <th>Event Type</th>
-                    <th style={{ width: "100px", textAlign: "center" }}>Create</th>
+                    <th className="event-approval-multi-event-action">Create</th>
                   </tr>
                 </thead>
                 <tbody>
                   {multiEventsList.map((row, index) => (
                     <tr key={row.id}>
-                      <td style={{ textAlign: "center" }}>{index + 1}</td>
+                      <td className="event-approval-multi-event-index">{index + 1}</td>
                       <td>
                         <input 
                           className="tableInput" 
@@ -819,19 +876,20 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                           {options.types.map((t) => <option key={t}>{t}</option>)}
                         </select>
                       </td>
-                      <td style={{ textAlign: "center" }}>
-                        <button 
-                          type="button" 
-                          className="event-dashboard-add-btn" 
-                          style={{ padding: "4px 12px", fontSize: "12px" }}
-                          onClick={() => {
-                             if (index === multiEventsList.length - 1) {
-                               setMultiEventsList(curr => [...curr, { id: makeId(), name: "", type: "" }]);
-                             }
-                          }}
-                        >
-                          {index === multiEventsList.length - 1 ? "Add +" : "Save"}
-                        </button>
+                      <td className="event-approval-multi-event-action">
+                        {index === multiEventsList.length - 1 ? (
+                          <button 
+                            type="button" 
+                            className="event-dashboard-add-btn" 
+                            onClick={() => {
+                              setMultiEventsList((curr) => [...curr, { id: makeId(), name: "", type: "" }]);
+                            }}
+                          >
+                            Add +
+                          </button>
+                        ) : (
+                          <span className="event-approval-multi-event-saved">Saved</span>
+                        )}
                       </td>
                     </tr>
                   ))}

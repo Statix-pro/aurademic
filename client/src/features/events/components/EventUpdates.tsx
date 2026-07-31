@@ -950,7 +950,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
       }
 
       showAlert("✅ Event updates saved successfully!", "success");
-      goToTab("post-event");
+      goToTab("participants");
     } catch (error) {
       console.error("Error in handleSubmit:", error);
       showAlert("Error occurred, please check console.", "error");

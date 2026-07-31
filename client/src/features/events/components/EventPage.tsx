@@ -10,6 +10,7 @@ import ParticipantDetails from "./ParticipantDetails";
 import Feedback from "./Feedback";
 import { EVENT_PAGE_TABS } from "../constants";
 
+const SUB_EVENT_TAB_IDS = ["pre-event", "participants", "feedback"] as const;
 
 interface EventSummary {
   title: string;
@@ -17,12 +18,22 @@ interface EventSummary {
   createdAt: string;
   updatedAt: string;
   feedbackEnabled?: boolean;
+  teamEnabled?: boolean;
+  documentEnabled?: boolean;
+  accommodationEnabled?: boolean;
+  registrationFeeEnabled?: boolean;
+  certificateEnabled?: boolean;
 }
 
 interface TabConfig {
   id: string;
   label: string;
-  component: React.ComponentType<{ goToTab: (tab: string) => void; eventId?: string; isSubEvent?: boolean }>;
+  component: React.ComponentType<{
+    goToTab: (tab: string) => void;
+    eventId?: string;
+    isSubEvent?: boolean;
+    summary?: EventSummary | null;
+  }>;
 }
 
 const EventPage: React.FC = () => {
@@ -47,11 +58,7 @@ const EventPage: React.FC = () => {
     ]);
 
     if (isSubEvent) {
-      allowedTabs = new Set([
-        "pre-event",
-        "participants",
-        "feedback",
-      ]);
+      allowedTabs = new Set(SUB_EVENT_TAB_IDS);
     }
 
     if (requestedTabParam && allowedTabs.has(requestedTabParam)) {
@@ -88,7 +95,14 @@ const EventPage: React.FC = () => {
     const active = tabs.find((tab) => tab.id === activeTab);
     if (!active) return null;
     const Component = active.component;
-    const content = <Component goToTab={setActiveTab} eventId={eventId} isSubEvent={isSubEvent} />;
+    const content = (
+      <Component
+        goToTab={setActiveTab}
+        eventId={eventId}
+        isSubEvent={isSubEvent}
+        summary={summary}
+      />
+    );
 
     return content;
   };
@@ -101,7 +115,7 @@ const EventPage: React.FC = () => {
 
         <div className="event-form-navigation">
           {tabs
-            .filter(tab => !isSubEvent || ["pre-event", "participants", "feedback"].includes(tab.id))
+            .filter((tab) => !isSubEvent || SUB_EVENT_TAB_IDS.includes(tab.id as (typeof SUB_EVENT_TAB_IDS)[number]))
             .map((tab) => (
             <button
               key={tab.id}

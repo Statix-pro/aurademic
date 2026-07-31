@@ -23,10 +23,18 @@ import {
 import '../styles/ParticipantDetails.css';
 import { EVENT_COPY } from "../constants";
 
+interface EventSummary {
+  teamEnabled?: boolean;
+  documentEnabled?: boolean;
+  accommodationEnabled?: boolean;
+  registrationFeeEnabled?: boolean;
+  certificateEnabled?: boolean;
+}
+
 interface ParticipantDetailsProps {
   goToTab?: (tab: string) => void;
   eventId?: string;
-  summary?: any; // To receive the EventSummary from EventPage
+  summary?: EventSummary | null;
 }
 
 // Helper component for mathematically rendering a tiny 5-point star in SVG

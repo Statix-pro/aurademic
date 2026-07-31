@@ -91,6 +91,7 @@
   appearance: none;
   -webkit-appearance: none;
   flex: 0 0 auto;
+  position: relative;
 }
 
 .event-dashboard-select select {
@@ -103,6 +104,19 @@
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
+}
+
+.event-dashboard-select::after {
+  content: "";
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-right: 2px solid #94a3b8;
+  border-bottom: 2px solid #94a3b8;
+  transform: translateY(-65%) rotate(45deg);
+  pointer-events: none;
 }
 
 .event-dashboard-add-btn {
@@ -119,6 +133,12 @@
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+}
+
+.event-dashboard-add-btn--secondary {
+  background-color: #f8fafc;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
 }
 
 .event-dashboard-add-btn:hover {
@@ -823,6 +843,10 @@
   .event-dashboard-search {
     max-width: none;
     flex: 1 1 320px;
+  }
+
+  .event-dashboard-select {
+    min-width: 0;
   }
 
   .event-request-row {

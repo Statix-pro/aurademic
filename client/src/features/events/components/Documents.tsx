@@ -487,8 +487,6 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
     } catch (error) {
       console.error("Error submitting for approval:", error);
       setPopupMessage("Failed to submit for approval. Please try again.");
-      console.error('Error submitting for approval:', error);
-      setPopupMessage('Failed to submit for approval. Please try again.');
     } finally {
       setIsSubmittingApproval(false);
     }

@@ -66,6 +66,13 @@ const STATUS_LABELS: Record<Exclude<DashboardStatusKey, "all">, string> = {
   archive: "Archive",
 };
 
+const getStatusDisplayLabel = (status: string): string => {
+  const value = status.trim().toLowerCase();
+  if (value === "draft") return "Draft";
+  if (value === "unknown" || value.length === 0) return "Unknown";
+  return STATUS_LABELS[normalizeStatus(status)];
+};
+
 const normalizeStatus = (status: string): Exclude<DashboardStatusKey, "all"> => {
   const value = status.trim().toLowerCase();
   if (value === "pending") return "pending";
@@ -126,7 +133,7 @@ const Dashboard: React.FC = () => {
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (deleteModalVisible && deleteCountdown > 0) {
       timer = setTimeout(() => {
-        setDeleteCountdown((prev) => prev - 1);
+        setDeleteCountdown(deleteCountdown - 1);
       }, 1000);
     }
     return () => clearTimeout(timer);
@@ -151,7 +158,7 @@ const Dashboard: React.FC = () => {
   React.useEffect(() => {
     authenticityUtility.get<APIMainEvent[] | { data: APIMainEvent[] }>("/events")
       .then((res) => {
-        const data: APIMainEvent[] = Array.isArray(res) ? res : (res as any).data || [];
+        const data: APIMainEvent[] = Array.isArray(res) ? res : ((res as { data?: APIMainEvent[] }).data || []);
         // Flatten main and sub events
         const flattenedEvents: EventData[] = [];
         data.forEach((main: APIMainEvent) => {
@@ -238,25 +245,29 @@ const Dashboard: React.FC = () => {
     ] satisfies DashboardStat[];
   }, [events, yearFilter, searchTerm]);
 
-  const filteredEvents = useMemo(() => {
+  const filteredEventsByYearAndSearch = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return events.filter((event) => {
-      const normalizedStatus = normalizeStatus(event.status);
       const eventYear = `FY ${new Date(event.date).getFullYear()}-${String(
         new Date(event.date).getFullYear() + 1,
       ).slice(-2)}`;
       const matchesYear = yearFilter === "all" || eventYear === yearFilter;
-      const matchesStatus = selectedStatus === "all" || normalizedStatus === selectedStatus;
       const matchesSearch =
         term.length === 0 ||
         [event.proposedBy, event.category, event.department, event.name, event.venue, event.time]
           .join(" ")
           .toLowerCase()
           .includes(term);
-
-      return matchesYear && matchesStatus && matchesSearch;
+      return matchesYear && matchesSearch;
     });
-  }, [events, searchTerm, selectedStatus, yearFilter]);
+  }, [events, searchTerm, yearFilter]);
+
+  const filteredEvents = useMemo(() => {
+    return filteredEventsByYearAndSearch.filter((event) => {
+      const normalizedStatus = normalizeStatus(event.status);
+      return selectedStatus === "all" || normalizedStatus === selectedStatus;
+    });
+  }, [filteredEventsByYearAndSearch, selectedStatus]);
 
   const bellCalendar = useMemo(
     () => buildBellCalendar(bellViewYear, bellViewMonth, bellSelectedDate),
@@ -311,6 +322,8 @@ const Dashboard: React.FC = () => {
     authenticityUtility.delete(`/events/${eventToDelete.id}`)
       .then(() => {
         setEvents((prev) => prev.filter((e) => e.id !== eventToDelete.id && e.parent_id !== eventToDelete.id));
+        setEventToDelete(null);
+        setDeleteCountdown(5);
       })
       .catch(err => {
         console.error("Error deleting event:", err);
@@ -344,35 +357,33 @@ const Dashboard: React.FC = () => {
   };
 
   const goToBellPrevMonth = (): void => {
-    setBellViewMonth((currentMonth) => {
-      const nextMonth = currentMonth === 0 ? 11 : currentMonth - 1;
-      setBellViewYear((currentYear) => (currentMonth === 0 ? currentYear - 1 : currentYear));
-      setBellSelectedDate((current) => new Date(current.getFullYear(), nextMonth, 1));
-      return nextMonth;
-    });
+    const nextMonth = bellViewMonth === 0 ? 11 : bellViewMonth - 1;
+    const nextYear = bellViewMonth === 0 ? bellViewYear - 1 : bellViewYear;
+    setBellViewMonth(nextMonth);
+    setBellViewYear(nextYear);
+    setBellSelectedDate(new Date(nextYear, nextMonth, 1));
   };
 
   const goToBellNextMonth = (): void => {
-    setBellViewMonth((currentMonth) => {
-      const nextMonth = currentMonth === 11 ? 0 : currentMonth + 1;
-      setBellViewYear((currentYear) => (currentMonth === 11 ? currentYear + 1 : currentYear));
-      setBellSelectedDate((current) => new Date(current.getFullYear(), nextMonth, 1));
-      return nextMonth;
-    });
+    const nextMonth = bellViewMonth === 11 ? 0 : bellViewMonth + 1;
+    const nextYear = bellViewMonth === 11 ? bellViewYear + 1 : bellViewYear;
+    setBellViewMonth(nextMonth);
+    setBellViewYear(nextYear);
+    setBellSelectedDate(new Date(nextYear, nextMonth, 1));
   };
 
   const handleBellMonthChange = (monthName: string): void => {
     const nextMonthIndex = EVENT_DASHBOARD_MONTHS.indexOf(monthName);
     if (nextMonthIndex < 0) return;
     setBellViewMonth(nextMonthIndex);
-    setBellSelectedDate((current) => new Date(current.getFullYear(), nextMonthIndex, 1));
+    setBellSelectedDate(new Date(bellViewYear, nextMonthIndex, 1));
   };
 
   const handleBellYearChange = (yearValue: string): void => {
     const nextYear = Number(yearValue);
     if (!Number.isFinite(nextYear)) return;
     setBellViewYear(nextYear);
-    setBellSelectedDate((current) => new Date(nextYear, current.getMonth(), 1));
+    setBellSelectedDate(new Date(nextYear, bellViewMonth, 1));
   };
 
   const currentBellMonthLabel = EVENT_DASHBOARD_MONTHS[bellViewMonth];
@@ -385,8 +396,8 @@ const Dashboard: React.FC = () => {
             <h1 className="event-dashboard-title">Event Requests</h1>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            <label className="event-dashboard-search" style={{ height: "42px", padding: "0 12px", margin: 0, flex: "0 1 300px", width: "300px" }}>
+          <div className="event-dashboard-toolbar">
+            <label className="event-dashboard-search">
               <Search size={20} className="event-dashboard-search-icon" />
               <input
                 type="search"
@@ -394,6 +405,16 @@ const Dashboard: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
+            </label>
+            <label className="event-dashboard-select">
+              <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
+                <option value="all">All Years</option>
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
             </label>
 
             <button
@@ -416,8 +437,7 @@ const Dashboard: React.FC = () => {
 
             <button
               type="button"
-              className="event-dashboard-add-btn"
-              style={{ backgroundColor: "#f8fafc", color: "#0f172a", border: "1px solid #cbd5e1" }}
+              className="event-dashboard-add-btn event-dashboard-add-btn--secondary"
               onClick={() => navigate("/event/new?isSubEvent=true&tab=pre-event")}
             >
               Sub +
@@ -449,7 +469,12 @@ const Dashboard: React.FC = () => {
         </section>
 
         <section className="event-dashboard-list">
-          {filteredEvents.map((event) => {
+          {filteredEvents.length === 0 ? (
+            <div className="event-dashboard-empty-state">
+              <h2>No events found</h2>
+              <p>Try adjusting your search or filters.</p>
+            </div>
+          ) : filteredEvents.map((event) => {
             return (
               <article
                 key={event.id}
@@ -505,30 +530,8 @@ const Dashboard: React.FC = () => {
                         </div>
 
                         <div className="event-request-mini-actions">
-                          <button
-                            type="button"
-                            className="event-request-mini-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEventTab(event.id, "updates");
-                            }}
-                            aria-label="Info"
-                            title="Info"
-                          >
-                            <Info size={16} />
-                          </button>
-                          <button
-                            type="button"
-                            className="event-request-mini-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEventTab(event.id, "updates");
-                            }}
-                            aria-label="View"
-                            title="View"
-                          >
-                            <Eye size={16} />
-                          </button>
+                          <button type="button" className="event-request-mini-btn" onClick={(e) => { e.stopPropagation(); openEventTab(event.id, "updates"); }} aria-label="Info" title="Info"><Info size={16} /></button>
+                          <button type="button" className="event-request-mini-btn" onClick={(e) => { e.stopPropagation(); openEventTab(event.id, "pre-event"); }} aria-label="View" title="View"><Eye size={16} /></button>
                           {!hideEdit && (
                             <button
                               type="button"
@@ -612,7 +615,7 @@ const Dashboard: React.FC = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!isClickableStatus) return;
-                              setActivePendingId((current) => (current === event.id ? null : event.id));
+                              setActivePendingId(activePendingId === event.id ? null : event.id);
                             }}
                             aria-pressed={showSteps}
                             disabled={!isClickableStatus}
@@ -626,7 +629,7 @@ const Dashboard: React.FC = () => {
                               <span className="event-request-progress-line" aria-hidden="true" />
                               <span
                                 className={`event-request-progress-step ${
-                                  normalizedStatus === "approved" ? "is-active" : ""
+                                  normalizedStatus === "approved" || normalizedStatus === "pending" ? "is-active" : ""
                                 }`}
                                 aria-hidden="true"
                               />
@@ -651,17 +654,8 @@ const Dashboard: React.FC = () => {
       </section>
 
       {showBellPreview && (
-        <div className="event-bell-overlay" onClick={() => setShowBellPreview(false)}>
-          <div className="event-bell-modal" onClick={(e) => e.stopPropagation()}>
-            <button
-              type="button"
-              className="event-bell-close-btn"
-              onClick={() => setShowBellPreview(false)}
-              aria-label="Close preview"
-            >
-              x
-            </button>
-
+        <CustomModal show={showBellPreview} onHide={() => setShowBellPreview(false)} title="Event Calendar" size="lg">
+          <div className="event-bell-modal">
             <div className="event-bell-panel">
               <div className="event-bell-left">
                 <h2 className="event-bell-left-title">Events scheduled on {bellTitle}</h2>
@@ -727,7 +721,7 @@ const Dashboard: React.FC = () => {
                   ))}
 
                   {bellCalendar.map((day, index) => (
-                    <div
+                    <button
                       key={`${day.date.toISOString()}-${index}`}
                       className={[
                         "event-bell-day-cell",
@@ -737,21 +731,32 @@ const Dashboard: React.FC = () => {
                       ]
                         .filter(Boolean)
                         .join(" ")}
+                      type="button"
+                      tabIndex={0}
                       onClick={() => {
                         if (day.muted) return;
                         setBellSelectedDate(day.date);
                         setBellViewYear(day.date.getFullYear());
                         setBellViewMonth(day.date.getMonth());
                       }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          if (day.muted) return;
+                          setBellSelectedDate(day.date);
+                          setBellViewYear(day.date.getFullYear());
+                          setBellViewMonth(day.date.getMonth());
+                        }
+                      }}
                     >
                       <span>{day.label}</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </CustomModal>
       )}
 
       <CustomModal
@@ -767,7 +772,7 @@ const Dashboard: React.FC = () => {
             <button 
               className="btn btn-danger btn-sm" 
               onClick={executeDelete}
-              disabled={deleteCountdown > 0}
+              disabled={eventToDelete?.parent_id == null && deleteCountdown > 0}
             >
               Delete Now
             </button>
@@ -777,7 +782,7 @@ const Dashboard: React.FC = () => {
         <p className="mb-0 fw-medium" style={{ fontSize: '0.95rem' }}>
           This Main Event has associated Sub Events. Deleting this Main Event will permanently delete all related Sub Events.
           <span aria-live="polite" className="d-block mt-2">
-            {deleteCountdown > 0 ? (
+            {eventToDelete && eventToDelete.parent_id == null && events.some((event) => event.parent_id === eventToDelete.id) && deleteCountdown > 0 ? (
               <>You can confirm this action in <strong className="text-danger">{deleteCountdown}</strong> seconds.</>
             ) : (
               <>Please confirm if you wish to proceed.</>
