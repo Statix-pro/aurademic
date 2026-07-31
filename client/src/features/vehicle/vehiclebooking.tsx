@@ -1146,7 +1146,7 @@ const VehicleBooking: React.FC = () => {
                 {Object.keys(DEFAULT_VEHICLE_FEATURES).map((featureName) => {
                   const isChecked = !!vehicleFeatures[featureName];
                   return (
-                    <div
+                    <label
                       key={featureName}
                       className={`vehicle-feature-card ${isChecked ? 'checked' : ''} ${!isEditing ? 'disabled-view' : ''}`}
                       onClick={() => handleFeatureToggle(featureName)}
@@ -1156,7 +1156,7 @@ const VehicleBooking: React.FC = () => {
                           type="checkbox"
                           className="vehicle-feature-checkbox"
                           checked={isChecked}
-                          onChange={() => {}} // handled by click on the card
+                          onChange={() => handleFeatureToggle(featureName)}
                           disabled={!isEditing}
                         />
                         <span className="vehicle-feature-icon-span">
@@ -1167,7 +1167,7 @@ const VehicleBooking: React.FC = () => {
                       <span className="vehicle-feature-info-icon-span">
                         <Info size={16} />
                       </span>
-                    </div>
+                    </label>
                   );
                 })}
               </div>
@@ -1196,7 +1196,13 @@ const VehicleBooking: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {managedVehicles.map((vehicle, index) => {
+              {managedVehicles.length === 0 ? (
+                <tr>
+                  <td colSpan={7}>
+                    <button type="button" onClick={addManagedVehicle}>Add vehicle</button>
+                  </td>
+                </tr>
+              ) : managedVehicles.map((vehicle, index) => {
                 const isEditing = editingManagedVehicleId === vehicle.id;
                 const isViewing = viewingManagedVehicleId === vehicle.id;
 
@@ -1311,7 +1317,13 @@ const VehicleBooking: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {drivers.map((driver, index) => {
+              {drivers.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>
+                    <button type="button" onClick={addDriver}>Add driver</button>
+                  </td>
+                </tr>
+              ) : drivers.map((driver, index) => {
                 const isEditing = editingDriverId === driver.id;
                 const isViewing = viewingDriverId === driver.id;
 
@@ -1869,7 +1881,7 @@ const VehicleBooking: React.FC = () => {
                 )}
               </div>
 
-              <div className="vehiclebooking-table-wrap vehiclebooking-shuttle-table-wrap">
+              {shuttleBookingMode === 'Trip Booking' && <div className="vehiclebooking-table-wrap vehiclebooking-shuttle-table-wrap">
                 <table className="vehiclebooking-table vehiclebooking-shuttle-table">
                   <thead>
                     <tr>
@@ -1981,9 +1993,9 @@ const VehicleBooking: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </div>}
 
-              <div className="vehiclebooking-table-wrap vehiclebooking-shuttle-table-wrap">
+              {shuttleBookingMode === 'Day Booking' && <div className="vehiclebooking-table-wrap vehiclebooking-shuttle-table-wrap">
                 <table className="vehiclebooking-table vehiclebooking-day-table">
                   <thead>
                     <tr>
@@ -2050,7 +2062,7 @@ const VehicleBooking: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
-              </div>
+              </div>}
             </div>
           </section>
 

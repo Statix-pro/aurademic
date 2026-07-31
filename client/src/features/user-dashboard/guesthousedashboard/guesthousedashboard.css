@@ -1,3 +1,5 @@
+@scope (.guesthousedashboard-page) {
+
 /* ================= GUESTHOUSE CARD PAGE ================= */
 
 /* Page */
@@ -1210,4 +1212,6 @@
   .guesthousedashboard-pagination-right {
     justify-content: space-between;
   }
+}
+
 }

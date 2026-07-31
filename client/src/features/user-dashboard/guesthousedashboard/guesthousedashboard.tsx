@@ -23,6 +23,7 @@ import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import {
   canAccessAdminArea,
+  getGuesthouseWorkflowStage,
   hasPermission,
   isSuperAdmin,
 } from '../../../shared/utils/permissionUtils';
@@ -105,16 +106,9 @@ interface GuesthouseDashboardProps {
 
 const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode = false }) => {
   const { user } = useAuth();
-  const normalizedRole = String((user as any)?.role || (Array.isArray(user?.roles) ? user.roles[0] : '') || '').toLowerCase().replace(/[-\s]/g, '_');
   const approvalStage = isSuperAdmin(user) || canAccessAdminArea(user)
     ? 'hod'
-    : hasPermission(user, 'guesthouse.workflow.guesthouse_admin') || normalizedRole.includes('guesthouse')
-      ? 'guesthouse_admin'
-      : hasPermission(user, 'guesthouse.workflow.principal') || normalizedRole.includes('principal')
-        ? 'principal'
-        : hasPermission(user, 'guesthouse.workflow.hod') || normalizedRole.includes('hod')
-          ? 'hod'
-          : null;
+    : getGuesthouseWorkflowStage(user);
   const formatFiscalYearValue = (startYear: number) =>
     `${startYear}-${String(startYear + 1).slice(-2)}`;
   const getCurrentFiscalYear = () => {
@@ -158,13 +152,6 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   const principalDocInputRef = useRef<HTMLInputElement | null>(null);
   const [principalDocTargetId, setPrincipalDocTargetId] = useState<number | null>(null);
   const [principalDocBusyId, setPrincipalDocBusyId] = useState<number | null>(null);
-  const isSuperAdminUser =
-    Boolean((user as any)?.is_super_admin || (user as any)?.isSuperAdmin) ||
-    (Array.isArray((user as any)?.roles) &&
-      (user as any).roles.some(
-        (role: unknown) => String(role || '').toLowerCase() === 'super_admin',
-      ));
-
   useEffect(() => {
     fetchDashboard();
   }, [approvalMode, approvalStage]);
@@ -536,39 +523,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     const actorRoleToken = String(actorRole || '')
       .trim()
       .toLowerCase();
-    const level1RouteType = String(item?.level1_route_type || '')
-      .trim()
-      .toLowerCase();
-    const beneficiaryTypeToken = String(item?.beneficiary_type || '')
-      .trim()
-      .toLowerCase();
-    const beneficiaryEntityId = Number(item?.beneficiary_entity_id || 0);
-
-    if (stageToken === 'level1') {
-      if (actorRoleToken === 'coordinator' || actorRoleToken === 'entity_approver') {
-        return 'Coordinator';
-      }
-      if (actorRoleToken === 'hod') {
-        return 'HOD';
-      }
-      if (level1RouteType === 'entity_contact') {
-        return 'Coordinator';
-      }
-      if (
-        ['centre', 'cell', 'club', 'section', 'professional body', 'professional bodies'].includes(
-          beneficiaryTypeToken,
-        ) ||
-        (['faculty', 'staff'].includes(beneficiaryTypeToken) && beneficiaryEntityId > 0)
-      ) {
-        return 'Coordinator';
-      }
-      return 'HOD';
-    }
-
-    if (stageToken === 'dof') return 'DoF';
-    if (stageToken === 'ithead') return 'IT Head';
+    if (stageToken === 'hod') return 'HOD';
     if (stageToken === 'principal') return 'Principal';
-    if (stageToken === 'chairman') return 'Chairman';
+    if (stageToken === 'guesthouse_admin') return 'Guesthouse Admin';
     if (stageToken === 'archived') return 'Archive';
     return formatLabel(stage);
   };
@@ -631,24 +588,8 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   };
 
   const buildRowUpdateSummary = (details: any) => {
-    const parts: string[] = [];
-    const budgetRowsCount = Number(details?.budgetRowsCount || 0);
-    const incomeRowsCount = Number(details?.incomeRowsCount || 0);
-    const budgetRowsChanged = Boolean(details?.budgetRowsChanged);
-    const incomeRowsChanged = Boolean(details?.incomeRowsChanged);
-
-    if (budgetRowsCount > 0) {
-      parts.push(
-        `Budget rows ${budgetRowsChanged ? 'updated' : 'reviewed'} (${budgetRowsCount} row(s))`,
-      );
-    }
-    if (incomeRowsCount > 0) {
-      parts.push(
-        `Income rows ${incomeRowsChanged ? 'updated' : 'reviewed'} (${incomeRowsCount} row(s))`,
-      );
-    }
-
-    return parts.join(' | ');
+    void details;
+    return '';
   };
 
   const formatDateTime = (value?: string | null) => {
@@ -907,7 +848,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   };
 
   const canEditRequest = (item: GuesthouseCardItem) => {
-    if (isSuperAdminUser) return true;
+    if (isSuperAdmin(user)) return true;
     const normalizedStatus = getNormalizedStatus(item);
     const currentStage = getCurrentStage(item);
 
@@ -1208,8 +1149,6 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                             <span className="card-category-tag">
                               Stay: {formatBookingDate(item.check_in_date)}
                               {item.check_out_date ? ` – ${formatBookingDate(item.check_out_date)}` : ''}
-                              Booking Dates: {formatBookingDate(item.check_in_date)}
-                              {item.check_out_date ? ` - ${formatBookingDate(item.check_out_date)}` : ''}
                             </span>
                           </div>
 

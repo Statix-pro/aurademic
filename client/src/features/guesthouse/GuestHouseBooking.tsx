@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   AirVent,
   Armchair,
@@ -483,7 +483,9 @@ const buildStayDates = (checkInDate: string, checkOutDate: string) => {
   return dates;
 };
 
-const createGuest = (id = Date.now()): GuestDetails => ({
+const createGuest = (
+  id = Number.parseInt(crypto.randomUUID().replace(/\D/g, '').slice(0, 12) || '0', 10),
+): GuestDetails => ({
   id,
   name: '',
   gender: '',
@@ -517,24 +519,8 @@ const createFoodRow = (date = ''): FoodRequirementRow => ({
   dinnerNonVeg: '',
 });
 
-const initialManagedRooms: ManagedRoomRow[] = [
-  {
-    id: 1,
-    roomType: 'Single',
-    block: 'Tangore',
-    floor: 'Ground',
-    roomNumber: 'T006',
-    status: 'Active',
-  },
-  {
-    id: 2,
-    roomType: 'Double',
-    block: 'Tangore',
-    floor: 'Ground',
-    roomNumber: 'T007',
-    status: 'Maintenance',
-  },
-];
+// Room management is preview-only until persisted room-options APIs are available.
+const initialManagedRooms: ManagedRoomRow[] = [];
 
 const initialCareTakers: CareTakerRow[] = [];
 
@@ -883,16 +869,19 @@ const emptyTravelDetails: TravelDetails = {
 };
 
 const GuestHouseBooking: React.FC = () => {
-  const isRoomAllotmentVisible = false;
+  const isRoomAllotmentVisible = import.meta.env.VITE_GUESTHOUSE_ROOM_ALLOTMENT === 'true';
   const { user } = useAuth();
   const canManageGuesthouse = Boolean(
     user && (isSuperAdmin(user) || user.is_admin || hasPermission(user, 'guesthouse.manage')),
   );
   const canOverrideApplicant = canManageGuesthouse;
+  const location = useLocation();
   const navigate = useNavigate();
   const { id: bookingIdParam } = useParams<{ id?: string }>();
   const bookingId = Number.parseInt(bookingIdParam || '', 10);
-  const isViewingBooking = Number.isInteger(bookingId) && bookingId > 0;
+  const hasBookingId = Number.isInteger(bookingId) && bookingId > 0;
+  const isEditMode = hasBookingId && location.pathname.endsWith('/edit');
+  const isViewingBooking = hasBookingId && !isEditMode;
   const [applicantProfile, setApplicantProfile] = useState<ApiRecord | null>(null);
   const [applicantSearch, setApplicantSearch] = useState('');
   const [applicantResults, setApplicantResults] = useState<ApiRecord[]>([]);
@@ -939,19 +928,26 @@ const GuestHouseBooking: React.FC = () => {
       return;
     }
 
+    let cancelled = false;
     const searchApplicants = async () => {
       try {
         const response = (await authenticityUtility.get(
           `/budget/search-applicant?q=${encodeURIComponent(query)}`,
         )) as any;
-        setApplicantResults(Array.isArray(response?.data) ? response.data : []);
+        if (!cancelled) setApplicantResults(Array.isArray(response?.data) ? response.data : []);
       } catch (error) {
-        console.error('Failed to search guesthouse applicant:', error);
-        setApplicantResults([]);
+        if (!cancelled) {
+          console.error('Failed to search guesthouse applicant:', error);
+          setApplicantResults([]);
+        }
       }
     };
 
-    void searchApplicants();
+    const timeoutId = window.setTimeout(() => void searchApplicants(), 300);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
   }, [applicantSearch, applicantUiDetails.name]);
 
   useEffect(() => {
@@ -1095,6 +1091,7 @@ const GuestHouseBooking: React.FC = () => {
 
 
   useEffect(() => {
+    if (!isRoomAllotmentVisible) return;
     let isMounted = true;
 
     const loadRoomOptions = async () => {
@@ -1117,9 +1114,10 @@ const GuestHouseBooking: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isRoomAllotmentVisible]);
 
   useEffect(() => {
+    if (!isRoomAllotmentVisible) return;
     let isMounted = true;
 
     const loadSpocOptions = async () => {
@@ -1149,9 +1147,10 @@ const GuestHouseBooking: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [isRoomAllotmentVisible]);
 
   useEffect(() => {
+    if (!isRoomAllotmentVisible) return;
     setRoomAllotments((prevAllotments) =>
       guests.reduce<RoomAllotmentsByGuest>((nextAllotments, guest) => {
         const guestId = String(guest.id);
@@ -1163,7 +1162,7 @@ const GuestHouseBooking: React.FC = () => {
         return nextAllotments;
       }, {}),
     );
-  }, [guests]);
+  }, [guests, isRoomAllotmentVisible]);
   useEffect(() => {
     setFoodDateInputs((prevInputs) =>
       foodRows.reduce<Record<number, string>>((nextInputs, row) => {
@@ -1558,6 +1557,11 @@ const GuestHouseBooking: React.FC = () => {
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    if (isEditMode) {
+      setSubmitMessage('Editing is preview-only until the guesthouse update API is available.');
+      return;
+    }
 
     // Validate checkout is after checkin
     const start = buildTravelDateTime(travelDetails.checkInDate, travelDetails.checkInTime);
@@ -3083,7 +3087,7 @@ const GuestHouseBooking: React.FC = () => {
             )}
 
             <button className="guesthousebooking-submit-button" type="submit" disabled={isViewingBooking}>
-              {isViewingBooking ? 'Viewing Booking' : 'Submit Booking'}
+              {isViewingBooking ? 'Viewing Booking' : isEditMode ? 'Preview Edit' : 'Submit Booking'}
             </button>
           </div>
           {canManageGuesthouse && renderGuesthouseAdminManagement()}

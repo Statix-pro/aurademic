@@ -6,7 +6,7 @@
  * nothing changes visually.
  */
 
-:root {
+.vehiclebooking-page {
   --primary-color: #0069ab;
   --primary-hover: #005492;
   --booking-primary-dark: #0056b3;
