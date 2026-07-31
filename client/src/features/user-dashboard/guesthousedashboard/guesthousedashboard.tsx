@@ -150,6 +150,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   const principalDocInputRef = useRef<HTMLInputElement | null>(null);
   const [principalDocTargetId, setPrincipalDocTargetId] = useState<number | null>(null);
   const [principalDocBusyId, setPrincipalDocBusyId] = useState<number | null>(null);
+  const [approvalBusyId, setApprovalBusyId] = useState<number | null>(null);
   useEffect(() => {
     fetchDashboard();
   }, [approvalMode, approvalStage]);
@@ -627,8 +628,12 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   };
 
   const handleApprovalDecision = async (id: number, decision: 'approve' | 'return' | 'reject') => {
+    if (approvalBusyId !== null) return;
+    const comment = decision === 'approve' ? '' : window.prompt(`Reason for ${decision}:`, '')?.trim() || '';
+    if (decision !== 'approve' && !comment) return;
+    setApprovalBusyId(id);
     try {
-      const response = (await authenticityUtility.patch(`/guesthouse/${id}/approval`, { decision })) as any;
+      const response = (await authenticityUtility.patch(`/guesthouse/${id}/approval`, { decision, comment })) as any;
       if (!response?.success) {
         throw new Error(response?.message || 'Guesthouse approval could not be completed');
       }
@@ -637,6 +642,8 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     } catch (error) {
       console.error('Guesthouse approval action failed', error);
       window.alert((error as any)?.response?.data?.message || (error as Error).message || 'Guesthouse approval could not be completed');
+    } finally {
+      setApprovalBusyId(null);
     }
   };
 
@@ -1272,6 +1279,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                                     type="button"
                                     className="guesthousedashboard-action-btn guesthousedashboard-action-btn--approve"
                                     title="Approve"
+                                    disabled={approvalBusyId !== null}
                                     onClick={() => void handleApprovalDecision(item.id, 'approve')}
                                   >
                                     <CheckCircle size={18} />
@@ -1280,6 +1288,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                                     type="button"
                                     className="guesthousedashboard-action-btn guesthousedashboard-action-btn--return"
                                     title="Return"
+                                    disabled={approvalBusyId !== null}
                                     onClick={() => void handleApprovalDecision(item.id, 'return')}
                                   >
                                     <RotateCcw size={18} />
@@ -1288,6 +1297,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                                     type="button"
                                     className="guesthousedashboard-action-btn guesthousedashboard-action-btn--reject"
                                     title="Reject"
+                                    disabled={approvalBusyId !== null}
                                     onClick={() => void handleApprovalDecision(item.id, 'reject')}
                                   >
                                     <XCircle size={18} />
