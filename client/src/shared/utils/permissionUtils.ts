@@ -140,17 +140,14 @@ export const canAccessGuesthouseWorkflow = (user?: User | null) => {
     return false;
   }
 
-  if (isSuperAdmin(user) || canAccessAdminArea(user)) {
-    return true;
-  }
-
   return getGuesthouseWorkflowStage(user) !== null;
 };
 
-export type GuesthouseWorkflowStage = 'hod' | 'principal' | 'guesthouse_admin';
+export type GuesthouseWorkflowStage = 'admin' | 'hod' | 'principal' | 'guesthouse_admin';
 
 export const getGuesthouseWorkflowStage = (user?: User | null): GuesthouseWorkflowStage | null => {
-  if (!user || isSuperAdmin(user) || canAccessAdminArea(user)) return null;
+  if (!user) return null;
+  if (isSuperAdmin(user) || canAccessAdminArea(user)) return 'admin';
   const stages: GuesthouseWorkflowStage[] = ['hod', 'principal', 'guesthouse_admin'];
   const permissions = new Set(normalizePermissionKeys(user));
   return stages.find((stage) => permissions.has(`guesthouse.workflow.${stage}`)) || null;

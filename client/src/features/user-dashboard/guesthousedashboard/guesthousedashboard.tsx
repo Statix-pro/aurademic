@@ -106,9 +106,7 @@ interface GuesthouseDashboardProps {
 
 const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode = false }) => {
   const { user } = useAuth();
-  const approvalStage = isSuperAdmin(user) || canAccessAdminArea(user)
-    ? 'hod'
-    : getGuesthouseWorkflowStage(user);
+  const approvalStage = getGuesthouseWorkflowStage(user);
   const formatFiscalYearValue = (startYear: number) =>
     `${startYear}-${String(startYear + 1).slice(-2)}`;
   const getCurrentFiscalYear = () => {
