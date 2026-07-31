@@ -25,7 +25,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
-import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
+import { useAbility } from '../../shared/casl/AbilityContext';
 import './vehiclebooking.css';
 
 type Priority = 'Routine' | 'High';
@@ -70,6 +70,9 @@ interface BeneficiaryDetails {
 
 const BENEFICIARY_TYPE_OPTIONS = ['Staff', 'Faculty', 'Institution'];
 const BENEFICIARY_TAG_OPTIONS = ['Booking Dates', 'Research', 'Office', 'Events', 'Academics'];
+
+let nextVehicleRowIdValue = 0;
+const nextVehicleRowId = () => ++nextVehicleRowIdValue;
 
 interface TransportBookingDetails {
   purpose: string;
@@ -178,8 +181,6 @@ const logisticsVehicleRequirements: VehicleRequirement[] = ['Mini Truck', 'Eiche
 
 const logisticsBookingForOptions: BookingFor[] = ['Logistics Transport', 'Others'];
 
-const vehicleNumberOptions: string[] = [];
-const driverOptions: string[] = [];
 
 const formatDateInput = (date: Date) => {
   const year = date.getFullYear();
@@ -330,7 +331,7 @@ const formatTimeAsYouType = (rawValue: string, previousDisplayValue: string) => 
 };
 
 const createTravelPlanRow = (): TravelPlanRow => ({
-  id: Date.now() + Math.random(),
+  id: nextVehicleRowId(),
   boardingDate: '',
   boardingTime: '',
   boardingPoint: '',
@@ -340,7 +341,7 @@ const createTravelPlanRow = (): TravelPlanRow => ({
 });
 
 const createShuttleTripRow = (): ShuttleTripRow => ({
-  id: Date.now() + Math.random(),
+  id: nextVehicleRowId(),
   date: '',
   time: '',
   purpose: '',
@@ -348,13 +349,13 @@ const createShuttleTripRow = (): ShuttleTripRow => ({
 });
 
 const createShuttleDayRow = (): ShuttleDayRow => ({
-  id: Date.now() + Math.random(),
+  id: nextVehicleRowId(),
   date: '',
   requirement: 'Full Day',
 });
 
 const createVehicleAllotmentRow = (): VehicleAllotmentRow => ({
-  id: Date.now() + Math.random(),
+  id: nextVehicleRowId(),
   type: '',
   vehicleNo: '',
   make: '',
@@ -367,7 +368,7 @@ const initialManagedVehicles: ManagedVehicleRow[] = [];
 const initialDrivers: DriverManagementRow[] = [];
 
 const createManagedVehicleRow = (): ManagedVehicleRow => ({
-  id: Date.now() + Math.random(),
+  id: nextVehicleRowId(),
   vehicleType: 'Car',
   number: '',
   make: '',
@@ -382,7 +383,7 @@ const createManagedVehicleRow = (): ManagedVehicleRow => ({
 });
 
 const createDriverManagementRow = (): DriverManagementRow => ({
-  id: Date.now() + Math.random(),
+  id: nextVehicleRowId(),
   name: '',
   mobile: '',
   category: 'Car Driver',
@@ -416,9 +417,8 @@ const MapPinWithBase = ({ size = 22, className = '' }: { size?: number; classNam
 
 const VehicleBooking: React.FC = () => {
   const { user } = useAuth();
-  const canManageVehicles = Boolean(
-    user && (isSuperAdmin(user) || user.is_admin || hasPermission(user, 'vehicle.manage')),
-  );
+  const ability = useAbility();
+  const canManageVehicles = ability.can('manage', 'Vehicle');
   const [submitMessage, setSubmitMessage] = useState('');
 
   const applicantUiDetails: ApplicantDetails = useMemo(() => {
@@ -467,21 +467,18 @@ const VehicleBooking: React.FC = () => {
   >([createVehicleAllotmentRow()]);
   const [managedVehicles, setManagedVehicles] = useState<ManagedVehicleRow[]>(initialManagedVehicles);
   const [drivers, setDrivers] = useState<DriverManagementRow[]>(initialDrivers);
+  const vehicleNumberOptions = useMemo(
+    () => managedVehicles.map((vehicle) => vehicle.number).filter(Boolean),
+    [managedVehicles],
+  );
+  const driverOptions = useMemo(
+    () => drivers.map((driver) => driver.name).filter(Boolean),
+    [drivers],
+  );
   const [editingManagedVehicleId, setEditingManagedVehicleId] = useState<number | null>(null);
   const [viewingManagedVehicleId, setViewingManagedVehicleId] = useState<number | null>(null);
   const [editingDriverId, setEditingDriverId] = useState<number | null>(null);
   const [viewingDriverId, setViewingDriverId] = useState<number | null>(null);
-
-  const [standaloneVehicleDetails, setStandaloneVehicleDetails] = useState<ManagedVehicleRow>(
-    createManagedVehicleRow()
-  );
-
-  const updateStandaloneVehicleDetails = (
-    field: keyof Omit<ManagedVehicleRow, 'id'>,
-    value: any
-  ) => {
-    setStandaloneVehicleDetails((prevVehicle) => ({ ...prevVehicle, [field]: value }));
-  };
 
   const [travelPlanBoardingDateInputs, setTravelPlanBoardingDateInputs] = useState<Record<number, string>>({});
   const [travelPlanDroppingDateInputs, setTravelPlanDroppingDateInputs] = useState<Record<number, string>>({});
@@ -705,9 +702,7 @@ const VehicleBooking: React.FC = () => {
 
   const removeManagedVehicle = (id: number) => {
     setManagedVehicles((prevVehicles) =>
-      prevVehicles.length === 1
-        ? prevVehicles
-        : prevVehicles.filter((vehicle) => vehicle.id !== id)
+      prevVehicles.filter((vehicle) => vehicle.id !== id)
     );
     setEditingManagedVehicleId((currentId) => (currentId === id ? null : currentId));
     setViewingManagedVehicleId((currentId) => (currentId === id ? null : currentId));
@@ -734,7 +729,7 @@ const VehicleBooking: React.FC = () => {
 
   const removeDriver = (id: number) => {
     setDrivers((prevDrivers) =>
-      prevDrivers.length === 1 ? prevDrivers : prevDrivers.filter((driver) => driver.id !== id)
+      prevDrivers.filter((driver) => driver.id !== id)
     );
     setEditingDriverId((currentId) => (currentId === id ? null : currentId));
     setViewingDriverId((currentId) => (currentId === id ? null : currentId));
@@ -2388,13 +2383,16 @@ const VehicleBooking: React.FC = () => {
 
           {canManageVehicles && (
             <>
-              <section className="vehiclebooking-card vehiclebooking-vehicle-details-standalone">
-                {renderVehicleDetailsCard(
-                  standaloneVehicleDetails,
-                  true,
-                  updateStandaloneVehicleDetails
-                )}
-              </section>
+              {viewingManagedVehicleId !== null &&
+                managedVehicles.find((vehicle) => vehicle.id === viewingManagedVehicleId) && (
+                <section className="vehiclebooking-card vehiclebooking-vehicle-details-standalone">
+                  {renderVehicleDetailsCard(
+                    managedVehicles.find((vehicle) => vehicle.id === viewingManagedVehicleId)!,
+                    editingManagedVehicleId === viewingManagedVehicleId,
+                    (field, value) => updateManagedVehicle(viewingManagedVehicleId, field, value),
+                  )}
+                </section>
+              )}
               {renderVehicleAdminManagement()}
             </>
           )}

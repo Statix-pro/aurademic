@@ -205,9 +205,7 @@ function App() {
                   <Route
                     path="/guesthouse-booking"
                     element={
-                      <ProtectedRoute>
-                        <GuestHouseBooking />
-                      </ProtectedRoute>
+                      <Navigate to="/guesthouse/new" replace />
                     }
                   />
                   <Route

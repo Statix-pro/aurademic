@@ -870,6 +870,7 @@ const emptyTravelDetails: TravelDetails = {
 
 const GuestHouseBooking: React.FC = () => {
   const isRoomAllotmentVisible = import.meta.env.VITE_GUESTHOUSE_ROOM_ALLOTMENT === 'true';
+  const isGuesthouseManagementVisible = import.meta.env.VITE_GUESTHOUSE_MANAGEMENT === 'true';
   const { user } = useAuth();
   const canManageGuesthouse = Boolean(
     user && (isSuperAdmin(user) || user.is_admin || hasPermission(user, 'guesthouse.manage')),
@@ -884,6 +885,7 @@ const GuestHouseBooking: React.FC = () => {
   const isViewingBooking = hasBookingId && !isEditMode;
   const [applicantProfile, setApplicantProfile] = useState<ApiRecord | null>(null);
   const [applicantSearch, setApplicantSearch] = useState('');
+  const [applicantSearchInitialized, setApplicantSearchInitialized] = useState(false);
   const [applicantResults, setApplicantResults] = useState<ApiRecord[]>([]);
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(true);
   const [submitMessage, setSubmitMessage] = useState('');
@@ -2139,8 +2141,11 @@ const GuestHouseBooking: React.FC = () => {
                     <label className="guesthousebooking-label">Applicant Name</label>
                     <input
                       className="guesthousebooking-input"
-                      value={applicantSearch || applicantUiDetails.name}
-                      onChange={(event) => setApplicantSearch(event.target.value)}
+                      value={applicantSearchInitialized ? applicantSearch : applicantUiDetails.name}
+                      onChange={(event) => {
+                        setApplicantSearchInitialized(true);
+                        setApplicantSearch(event.target.value);
+                      }}
                       readOnly={!canOverrideApplicant || isViewingBooking}
                       placeholder="Search employee by name or ERP ID"
                     />
@@ -3090,7 +3095,9 @@ const GuestHouseBooking: React.FC = () => {
               {isViewingBooking ? 'Viewing Booking' : isEditMode ? 'Preview Edit' : 'Submit Booking'}
             </button>
           </div>
-          {canManageGuesthouse && renderGuesthouseAdminManagement()}
+          {canManageGuesthouse &&
+            isGuesthouseManagementVisible &&
+            renderGuesthouseAdminManagement()}
           </fieldset>
         </form>
       </div>

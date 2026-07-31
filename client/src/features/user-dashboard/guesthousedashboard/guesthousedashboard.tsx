@@ -511,15 +511,8 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     return normalized.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
-  const getStageBadgeLabel = (
-    item: GuesthouseCardItem,
-    stage?: string | null,
-    actorRole?: string | null,
-  ) => {
+  const getStageBadgeLabel = (stage?: string | null) => {
     const stageToken = String(stage || '')
-      .trim()
-      .toLowerCase();
-    const actorRoleToken = String(actorRole || '')
       .trim()
       .toLowerCase();
     if (stageToken === 'hod') return 'HOD';
@@ -728,7 +721,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
 
     sortedUpdates.forEach((update, index) => {
       const decision = String(update.decision || update.status || '').toLowerCase();
-      const stage = getStageBadgeLabel(item, update.stage || update.role, update.actorRole);
+      const stage = getStageBadgeLabel(update.stage || update.role);
       const actorName = update.userName;
       const actorEmail = update.actorEmail;
       const actorRole = update.actorRole;
@@ -828,7 +821,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
           response.success === true || response.status === 'success' ? response.data || [] : [],
       }));
     } catch (error) {
-      console.error( );
+      console.error('Failed to load guesthouse status updates', error);
       setStatusUpdatesById((prev) => ({
         ...prev,
         [requestId]: [],
@@ -984,6 +977,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     ? buildGuesthouseLogEvents(activeInfoItem, activeStatusUpdates)
     : [];
   const fiscalYearOptions = [
+    { value: 'all', label: 'All' },
     ...fiscalYears.map((fy) => ({
       value: fy,
       label: formatFiscalYearLabel(fy),

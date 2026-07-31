@@ -20,5 +20,11 @@ build/
 *.log
 
 .claude
-server/.env.development
-.env*
+.env
+.env.*
+!.env.example
+!.env.template
+server/.env
+server/.env.*
+!server/.env.example
+!server/.env.template

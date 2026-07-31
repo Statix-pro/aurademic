@@ -7,8 +7,8 @@
  */
 
 .vehiclebooking-page {
-  --primary-color: #0069ab;
-  --primary-hover: #005492;
+  --vehicle-booking-primary-color: #0069ab;
+  --vehicle-booking-primary-hover: #005492;
   --booking-primary-dark: #0056b3;
 
   --booking-white: #ffffff;
@@ -1365,7 +1365,7 @@
   width: 62px;
   height: 62px;
   display: block;
-  fill: currentColor;
+  fill: currentcolor;
 }
 
 .vehiclebooking-allotment-person-icon-detail {
@@ -1938,7 +1938,7 @@
 .vehicle-feature-info-icon-span svg {
   width: 14px;
   height: 14px;
-  fill: currentColor;
+  fill: currentcolor;
   stroke: var(--booking-white, #ffffff);
   stroke-width: 2.7;
 }
