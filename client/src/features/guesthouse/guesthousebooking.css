@@ -4101,98 +4101,71 @@
   }
 }
 
-/* Budget-style guesthouse room allotment overrides */
 .guesthousebooking-allotment-card {
-  min-height: 0 !important;
-  overflow: hidden !important;
+  min-height: auto;
+  margin-bottom: 0;
+  overflow: hidden;
 }
 
 .guesthousebooking-room-allotment-header {
-  margin: 22px 28px 20px !important;
-  padding: 0 0 10px !important;
-  border-bottom: 2px solid var(--booking-border-muted, #dee2e6) !important;
-  font-weight: 700 !important;
-  color: var(--booking-heading, #2c3e50) !important;
+  margin: 22px 28px 6px;
+  padding: 0 0 10px;
+  border-bottom: 2px solid var(--booking-border-muted, #dee2e6);
+  font-weight: 700;
+  color: var(--booking-heading, #2c3e50);
 }
 
 .guesthousebooking-allotment-body {
-  padding: 18px 28px 16px !important;
+  padding: 4px 28px 8px;
 }
 
 .guesthousebooking-allotment-entry-card {
-  padding: 16px 10px 16px !important;
-  border-radius: 16px !important;
-  background: var(--booking-white, #ffffff) !important;
-  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08) !important;
+  padding: 16px 10px 14px;
+  border-radius: 16px;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08);
 }
 
 .guesthousebooking-allotment-table-wrap {
-  overflow: hidden !important;
-  border: 1px solid var(--booking-border-light, #e0e0e0) !important;
+  overflow: hidden;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
 }
 
 .guesthousebooking-allotment-table {
-  min-width: 0 !important;
-  table-layout: fixed !important;
-  background: var(--booking-white, #ffffff) !important;
+  min-width: 0;
+  table-layout: fixed;
+  background: var(--booking-white, #ffffff);
 }
 
 .guesthousebooking-allotment-table th {
-  height: 44px !important;
-  border: 1px solid var(--booking-border-light, #e0e0e0) !important;
-  background: var(--booking-bg-tint, #f0f6ff) !important;
-  color: var(--primary-color, #0069ab) !important;
-  font-size: 16px !important;
-  font-weight: 700 !important;
+  height: 44px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  background: var(--booking-bg-tint, #f0f6ff);
+  color: var(--primary-color, #0069ab);
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .guesthousebooking-allotment-table td {
-  height: 56px !important;
-  padding: 12px 10px !important;
-  border: 1px solid var(--booking-border-light, #e0e0e0) !important;
-  color: var(--booking-text-muted, #565656) !important;
-  font-size: 16px !important;
+  height: auto;
+  padding: 10px 8px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  color: var(--booking-text-muted, #565656);
+  font-size: 16px;
 }
 
 .guesthousebooking-allotment-empty {
-  height: auto !important;
-  padding: 18px 10px !important;
-}
-
-/* Tighten guesthouse room allotment bottom spacing */
-.guesthousebooking-allotment-card {
-  min-height: auto !important;
-  margin-bottom: 0 !important;
-}
-
-.guesthousebooking-allotment-body {
-  padding: 4px 28px 8px !important;
-}
-
-.guesthousebooking-room-allotment-header {
-  margin-bottom: 6px !important;
-}
-
-.guesthousebooking-allotment-entry-card {
-  padding: 16px 10px 14px !important;
+  height: auto;
+  padding: 14px 10px;
 }
 
 .guesthousebooking-allotment-amenities-row {
-  margin: 10px 0 0 !important;
-  padding: 10px 0 8px 18px !important;
+  margin: 10px 0 0;
+  padding: 10px 0 8px 18px;
 }
 
 .guesthousebooking-allotment-caretaker-bar {
-  margin-top: 12px !important;
-}
-
-.guesthousebooking-allotment-table td {
-  height: auto !important;
-  padding: 10px 8px !important;
-}
-
-.guesthousebooking-allotment-empty {
-  padding: 14px 10px !important;
+  margin-top: 12px;
 }
 .guesthousebooking-employee-dropdown {
   position: absolute;

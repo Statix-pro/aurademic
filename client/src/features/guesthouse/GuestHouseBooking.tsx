@@ -35,7 +35,7 @@ import {
 } from 'lucide-react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useAuth } from '../../contexts/AuthContext';
-import { hasPermission, isSuperAdmin } from '../../shared/utils/permissionUtils';
+import { useAbility } from '../../shared/casl/AbilityContext';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import './guesthousebooking.css';
 
@@ -872,9 +872,8 @@ const GuestHouseBooking: React.FC = () => {
   const isRoomAllotmentVisible = import.meta.env.VITE_GUESTHOUSE_ROOM_ALLOTMENT === 'true';
   const isGuesthouseManagementVisible = import.meta.env.VITE_GUESTHOUSE_MANAGEMENT === 'true';
   const { user } = useAuth();
-  const canManageGuesthouse = Boolean(
-    user && (isSuperAdmin(user) || user.is_admin || hasPermission(user, 'guesthouse.manage')),
-  );
+  const ability = useAbility();
+  const canManageGuesthouse = Boolean(user && ability.can('manage', 'GuestHouse'));
   const canOverrideApplicant = canManageGuesthouse;
   const location = useLocation();
   const navigate = useNavigate();
@@ -2159,6 +2158,7 @@ const GuestHouseBooking: React.FC = () => {
                             onClick={() => {
                               setApplicantProfile(employee);
                               setApplicantSearch('');
+                              setApplicantSearchInitialized(false);
                               setApplicantResults([]);
                             }}
                           >

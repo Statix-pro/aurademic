@@ -70,6 +70,7 @@ const PERMISSION_MAP: Record<string, { action: Actions; subject: Subjects }> = {
 
   // Vehicle booking
   'vehicle.manage': { action: 'manage', subject: 'Vehicle' },
+  'guesthouse.manage': { action: 'manage', subject: 'GuestHouse' },
 };
 
 const parseDynamicPermission = (permissionKey: string) => {
