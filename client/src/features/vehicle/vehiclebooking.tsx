@@ -1144,7 +1144,6 @@ const VehicleBooking: React.FC = () => {
                     <label
                       key={featureName}
                       className={`vehicle-feature-card ${isChecked ? 'checked' : ''} ${!isEditing ? 'disabled-view' : ''}`}
-                      onClick={() => handleFeatureToggle(featureName)}
                     >
                       <div className="vehicle-feature-left-wrap">
                         <input
@@ -1283,7 +1282,7 @@ const VehicleBooking: React.FC = () => {
                             currentId === vehicle.id ? null : vehicle.id,
                           ),
                         () => removeManagedVehicle(vehicle.id),
-                        managedVehicles.length === 1,
+                        false,
                         isEditing,
                         isViewing,
                         'vehicle'
@@ -1377,7 +1376,7 @@ const VehicleBooking: React.FC = () => {
                             currentId === driver.id ? null : driver.id,
                           ),
                         () => removeDriver(driver.id),
-                        drivers.length === 1,
+                        false,
                         isEditing,
                         'driver'
                       )}

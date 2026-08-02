@@ -484,7 +484,7 @@ const buildStayDates = (checkInDate: string, checkOutDate: string) => {
 };
 
 const createGuest = (
-  id = Number.parseInt(crypto.randomUUID().replace(/\D/g, '').slice(0, 12) || '0', 10),
+  id = Date.now() + Math.floor(Math.random() * 1000),
 ): GuestDetails => ({
   id,
   name: '',
@@ -888,6 +888,7 @@ const GuestHouseBooking: React.FC = () => {
   const [applicantResults, setApplicantResults] = useState<ApiRecord[]>([]);
   const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(true);
   const [submitMessage, setSubmitMessage] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [guests, setGuests] = useState<GuestDetails[]>([createGuest(1)]);
   const [travelDetails, setTravelDetails] = useState<TravelDetails>(emptyTravelDetails);
   const [travelDateInputs, setTravelDateInputs] = useState<Record<TravelDateField, string>>({
@@ -959,7 +960,7 @@ const GuestHouseBooking: React.FC = () => {
   }, [travelDetails.checkInDate, travelDetails.checkOutDate]);
 
   useEffect(() => {
-    if (isViewingBooking) {
+    if (hasBookingId) {
       return;
     }
 
@@ -985,10 +986,10 @@ const GuestHouseBooking: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [isViewingBooking]);
+  }, [hasBookingId]);
 
   useEffect(() => {
-    if (!isViewingBooking) {
+    if (!hasBookingId) {
       return;
     }
 
@@ -1088,7 +1089,7 @@ const GuestHouseBooking: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [bookingId, isViewingBooking]);
+  }, [bookingId, hasBookingId]);
 
 
   useEffect(() => {
@@ -1283,20 +1284,31 @@ const GuestHouseBooking: React.FC = () => {
       return;
     }
 
+    let cancelled = false;
+    const controller = new AbortController();
     const loadEmployees = async () => {
       try {
         const type = beneficiaryDetails.beneficiaryType === 'Faculty' ? 'Teaching' : 'Non-Teaching';
         const response = (await authenticityUtility.get(
           `/budget/search-applicant?q=${encodeURIComponent(query || 'a')}&type=${type}`,
+          { signal: controller.signal },
         )) as any;
-        setBeneficiaryEmployeeOptions(Array.isArray(response?.data) ? response.data : []);
+        if (!cancelled) {
+          setBeneficiaryEmployeeOptions(Array.isArray(response?.data) ? response.data : []);
+        }
       } catch (error) {
+        if (controller.signal.aborted) return;
         console.error('Failed to load beneficiary employees:', error);
-        setBeneficiaryEmployeeOptions([]);
+        if (!cancelled) setBeneficiaryEmployeeOptions([]);
       }
     };
 
-    void loadEmployees();
+    const timeoutId = window.setTimeout(() => void loadEmployees(), 300);
+    return () => {
+      cancelled = true;
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
   }, [beneficiaryDetails.beneficiaryType, beneficiaryDetails.staffName, beneficiarySearchOpen]);
 
   const addGuest = () => {
@@ -1559,6 +1571,8 @@ const GuestHouseBooking: React.FC = () => {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (isSubmitting) return;
+
     if (isEditMode) {
       setSubmitMessage('Editing is preview-only until the guesthouse update API is available.');
       return;
@@ -1600,6 +1614,7 @@ const GuestHouseBooking: React.FC = () => {
     };
 
     try {
+      setIsSubmitting(true);
       const response = (await authenticityUtility.post('/guesthouse', payload)) as any;
       if (!response?.success) {
         throw new Error(response?.message || 'Guesthouse booking submission failed');
@@ -1613,6 +1628,8 @@ const GuestHouseBooking: React.FC = () => {
           error?.message ||
           'Unable to submit guesthouse booking.',
       );
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -3091,7 +3108,11 @@ const GuestHouseBooking: React.FC = () => {
               </span>
             )}
 
-            <button className="guesthousebooking-submit-button" type="submit" disabled={isViewingBooking}>
+            <button
+              className="guesthousebooking-submit-button"
+              type="submit"
+              disabled={isViewingBooking || isSubmitting}
+            >
               {isViewingBooking ? 'Viewing Booking' : isEditMode ? 'Preview Edit' : 'Submit Booking'}
             </button>
           </div>

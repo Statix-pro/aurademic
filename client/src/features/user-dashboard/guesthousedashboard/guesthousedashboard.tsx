@@ -14,6 +14,7 @@ import {
   Trash2,
   FileText,
   Download,
+  Upload,
   RotateCcw,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -242,7 +243,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     if (status === 'rejected') return 'rejected';
     if (status === 'completed' || status === 'approved') return 'approved';
     if (lastDecision === 'resubmitted') return 'resubmitted';
-    if (currentStage === 'level1' && status === 'submitted') {
+    if (currentStage === 'hod' && status === 'submitted') {
       return 'submitted';
     }
     if (status === 'submitted' || status === 'in_progress' || status === 'pending' || !status)
@@ -306,7 +307,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       normalizedStatus === 'pending' ||
       normalizedStatus === 'submitted' ||
       normalizedStatus === 'resubmitted' ||
-      currentStage === 'level1'
+      currentStage === 'hod'
     );
   };
 
@@ -836,7 +837,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       Boolean(item.workflow_state?.isEditableByApplicant) ||
       normalizedStatus === 'returned' ||
       normalizedStatus === 'submitted' ||
-      currentStage === 'level1'
+      currentStage === 'hod'
     );
   };
 
@@ -850,7 +851,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     const currentStage = getCurrentStage(item);
 
     return (
-      currentStage === 'level1' &&
+      currentStage === 'hod' &&
       !['approved', 'rejected', 'returned', 'archived'].includes(normalizedStatus)
     );
   };
@@ -1119,7 +1120,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                         principalDocument?.stored_name ||
                         'Principal Document',
                     ).trim();
-                    const showPrincipalDocumentAction = canShowPrincipalDocumentAction(item);
+                    const showPrincipalDocumentAction =
+                      canShowPrincipalDocumentAction(item) ||
+                      (isPrincipalUser && isPrincipalDocumentEligible(item));
                     const principalActionLoading = principalDocBusyId === item.id;
                     return (
                       <div key={item.id} className="guesthousedashboard-item-card">
@@ -1173,6 +1176,17 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                             </span>
                           </div>
                           <div className="card-footer-right">
+                            {isPrincipalUser && isPrincipalDocumentEligible(item) && !principalDocumentUrl && (
+                              <button
+                                type="button"
+                                className="icon-btn-subtle guesthousedashboard-principal-mini-btn"
+                                title="Upload Principal Document"
+                                onClick={() => openPrincipalDocumentPicker(item)}
+                                disabled={principalActionLoading}
+                              >
+                                <Upload size={16} />
+                              </button>
+                            )}
                             {showPrincipalDocumentAction && (
                               <>
                                 <button
