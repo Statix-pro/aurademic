@@ -362,9 +362,6 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     );
   };
 
-  const isPrincipalDocumentFeatureVisible = (item: GuesthouseCardItem) =>
-    getDisplayAmount(item) > 10000;
-
   const canShowPrincipalDocumentAction = (item: GuesthouseCardItem) => {
     return Boolean(getPrincipalDocumentUrl(item));
   };
@@ -373,19 +370,6 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     if (!isPrincipalUser || !isPrincipalDocumentEligible(item)) return;
     setPrincipalDocTargetId(item.id);
     window.setTimeout(() => principalDocInputRef.current?.click(), 0);
-  };
-
-  const handlePrincipalDocumentUploadClick = (item: GuesthouseCardItem) => {
-    if (!isPrincipalDocumentFeatureVisible(item)) {
-      return;
-    }
-
-    if (!isPrincipalDocumentEligible(item)) {
-      window.alert('Once approved, you can upload the principal document.');
-      return;
-    }
-
-    openPrincipalDocumentPicker(item);
   };
 
   const uploadPrincipalDocument = async (item: GuesthouseCardItem, file: File) => {
