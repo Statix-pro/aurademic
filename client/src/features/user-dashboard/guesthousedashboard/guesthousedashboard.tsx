@@ -21,10 +21,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import {
-  canAccessAdminArea,
-  getGuesthouseWorkflowStage,
-  hasPermission,
+import {  
+  getGuesthouseWorkflowStage,  
   isSuperAdmin,
 } from '../../../shared/utils/permissionUtils';
 

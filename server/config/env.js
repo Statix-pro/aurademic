@@ -8,7 +8,11 @@ const envPath = path.join(serverRoot, envFile);
 const result = dotenv.config({ path: envPath });
 
 if (result.error) {
-  console.warn(`Environment file not found: ${envPath}`);
+  if (result.error.code === 'ENOENT') {
+    console.warn(`Environment file not found: ${envPath}`);
+  } else {
+    console.error(`Failed to load environment variables from ${envPath}`, result.error);
+  }
 } else {
   console.log(`Loaded environment variables from ${envPath}`);
 }
