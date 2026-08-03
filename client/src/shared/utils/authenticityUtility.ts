@@ -111,7 +111,12 @@ authenticityUtility.getBaseURL = (): string => {
 };
 
 export const isFallbackEligible = (error: any): boolean => {
-  return !error.response || error.response.status === 404;
+  return !!(
+    error &&
+    typeof error === 'object' &&
+    !error.response &&
+    (error.request || error.isAxiosError === true || error.code === 'ERR_NETWORK')
+  );
 };
 
 export default authenticityUtility;

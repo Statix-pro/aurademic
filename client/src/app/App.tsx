@@ -436,13 +436,13 @@ function App() {
                     }
                   />
                   <Route
-  path="/workorder/:id/edit"
-  element={
-    <ProtectedRoute>
-      <WorkOrder />
-    </ProtectedRoute>
-  }
-/>
+                    path="/workorder/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route
                     path="/resourcepersondirectorydashboard"
                     element={
