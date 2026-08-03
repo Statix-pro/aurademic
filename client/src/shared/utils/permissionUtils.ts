@@ -139,7 +139,12 @@ export type GuesthouseWorkflowStage = 'admin' | 'hod' | 'principal' | 'guesthous
 
 export const getGuesthouseWorkflowStage = (user?: User | null): GuesthouseWorkflowStage | null => {
   if (!user) return null;
-  if (isSuperAdmin(user) || canAccessAdminArea(user)) return 'admin';
+  if (
+    isSuperAdmin(user) ||
+    hasAnyPermission(user, ['guesthouse.workflow.admin', 'guesthouse.manage'])
+  ) {
+    return 'admin';
+  }
   const stages: GuesthouseWorkflowStage[] = ['hod', 'principal', 'guesthouse_admin'];
   const permissions = new Set(normalizePermissionKeys(user));
   return stages.find((stage) => permissions.has(`guesthouse.workflow.${stage}`)) || null;

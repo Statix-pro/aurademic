@@ -23,7 +23,6 @@ import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import Journalform from '../features/journals/journalform';
 import ProfilePage from '../features/profile/ProfilePage';
 import Projectform from '../features/projects/projectform';
-import VehicleBooking from '../features/vehicle/vehiclebooking';
 import Storybook from '../features/storybook/Storybook';
 import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetdashboard';
 import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
@@ -225,7 +224,7 @@ function App() {
                     }
                   />
                   <Route
-                    path="/guestHouse-dashboard"
+                    path="/guesthouse-dashboard"
                     element={
                       <ProtectedRoute>
                         <GuestHouseDashboard />
@@ -431,7 +430,7 @@ function App() {
                     path="/vehicle-booking"
                     element={
                       <ProtectedRoute>
-                        <VehicleBooking />
+                        <UnderConstruction pageName="Vehicle Booking" />
                       </ProtectedRoute>
                     }
                   />

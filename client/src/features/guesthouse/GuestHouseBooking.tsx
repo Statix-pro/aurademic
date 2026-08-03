@@ -1620,7 +1620,7 @@ const GuestHouseBooking: React.FC = () => {
         throw new Error(response?.message || 'Guesthouse booking submission failed');
       }
       setSubmitMessage('Guesthouse booking submitted successfully.');
-      navigate('/guestHouse-dashboard', { replace: true });
+      navigate('/guesthouse-dashboard', { replace: true });
     } catch (error: any) {
       console.error('Guesthouse booking submission failed:', error);
       setSubmitMessage(

@@ -1,5 +1,5 @@
 // client/src/features/user-dashboard/guesthousedashboard/guesthousedashboard.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import './guesthousedashboard.css';
 import {
   Eye,
@@ -116,7 +116,6 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   };
   const getCurrentFiscalYearStart = () => Number.parseInt(getCurrentFiscalYear().split('-')[0], 10);
   const [data, setData] = useState<GuesthouseCardItem[]>([]);
-  const [filteredData, setFilteredData] = useState<GuesthouseCardItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [kpiStats, setKpiStats] = useState({
     total: 0,
@@ -161,10 +160,6 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   useEffect(() => {
     fetchKpiStats();
   }, [approvalMode, approvalStage]);
-
-  useEffect(() => {
-    applyFilters();
-  }, [data, selectedStatus, selectedFiscalYear, selectedBeneficiary, searchTerm]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -884,7 +879,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     }
   };
 
-  const applyFilters = () => {
+  const filteredData = useMemo(() => {
     let result = [...data];
 
     if (selectedStatus === 'pending') {
@@ -910,8 +905,8 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       );
     }
 
-    setFilteredData(result);
-  };
+    return result;
+  }, [data, selectedStatus, selectedFiscalYear, selectedBeneficiary, searchTerm]);
 
   const localStats = {
     total: data.length,

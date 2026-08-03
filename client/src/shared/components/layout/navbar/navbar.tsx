@@ -420,7 +420,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <button
             className={`sb-link ${
               isGroupActive([
-                '/guestHouse-dashboard',
+                '/guesthouse-dashboard',
                 '/vehicle-booking',
                 '/hall-booking',
                 '/eventdashboard',
@@ -439,8 +439,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           {isExpanded && activeMenu === 'Bookings' && (
             <div className="sb-submenu">
               <Link
-                to="/guestHouse-dashboard"
-                className={`sb-sublink ${isActive('/guestHouse-dashboard') ? 'active' : ''}`}
+                to="/guesthouse-dashboard"
+                className={`sb-sublink ${isActive('/guesthouse-dashboard') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Guest House

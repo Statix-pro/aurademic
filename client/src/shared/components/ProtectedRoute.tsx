@@ -94,7 +94,7 @@ export const GuesthouseWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
   }
 
   if (!user || !canAccessGuesthouseWorkflow(user)) {
-    return <Navigate to="/guestHouse-dashboard" />;
+    return <Navigate to="/guesthouse-dashboard" />;
   }
 
   return <>{children}</>;
