@@ -11,13 +11,14 @@ import authenticityUtility, { isFallbackEligible } from '../../../shared/utils/a
  * DELETE /organizations/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/* ─── TEMPORARY localStorage fallback ──────────────────────────────────────
+/* ─── FALLBACK localStorage fallback ──────────────────────────────────────
  * LEGACY: _v1 key ('organizationDirectoryRecords_v1') is orphaned.
  * It will be discarded once the backend is live — no migration needed.
- * TEMPORARY: The _v2 key below is used as a fallback while the backend is absent.
+ * FALLBACK: The _v2 key below is used as a fallback while the backend is absent.
  * Remove the entire FALLBACK block (and STORAGE_KEY) once the API is live.
  * ──────────────────────────────────────────────────────────────────────────── */
 const STORAGE_KEY = 'organizationDirectoryRecords_v2';
+
 
 const fallbackGetAll = (): Organization[] => {
   // FALLBACK: remove once backend is live
@@ -39,15 +40,18 @@ const fallbackSave = (records: Organization[]) => {
   }
 };
 
-/* ─── API functions (call real backend; fall back to localStorage on failure) */
+let isApiAvailable = false;
 
 const apiGetAll = async (): Promise<Organization[]> => {
   try {
     const res = (await authenticityUtility.get('/organizations')) as any;
-    if (res?.success && Array.isArray(res.data)) return res.data;
+    if (res?.success && Array.isArray(res.data)) {
+      isApiAvailable = true;
+      return res.data;
+    }
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
-    if (isFallbackEligible(err)) return fallbackGetAll();
+    if (isFallbackEligible(err) || err.response?.status === 404) return fallbackGetAll();
     throw err;
   }
 };
@@ -58,7 +62,8 @@ const apiCreate = async (orgData: Omit<Organization, 'id' | 'date'>): Promise<Or
     if (res?.success && res.data) return res.data;
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
-    if (!isFallbackEligible(err)) throw err;
+    const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
+    if (!fallbackAllowed) throw err;
     // FALLBACK: remove once backend is live
     console.warn('[Organization] API unavailable — writing to localStorage fallback');
     const existing = fallbackGetAll();
@@ -78,7 +83,8 @@ const apiUpdate = async (id: number, orgData: Omit<Organization, 'id' | 'date'>)
     if (res?.success && res.data) return res.data;
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
-    if (!isFallbackEligible(err)) throw err;
+    const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
+    if (!fallbackAllowed) throw err;
     // FALLBACK: remove once backend is live
     console.warn('[Organization] API unavailable — writing to localStorage fallback');
     const existing = fallbackGetAll();
@@ -133,9 +139,10 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
     return records.filter(
       (record) =>
-        (!nameFilter || record.name.toLowerCase().includes(nameFilter) || record.abbreviation.toLowerCase().includes(nameFilter) || (record.city && record.city.toLowerCase().includes(nameFilter))) &&
+        (!nameFilter || (record.name ?? '').toLowerCase().includes(nameFilter) || (record.abbreviation ?? '').toLowerCase().includes(nameFilter) || (record.city && record.city.toLowerCase().includes(nameFilter))) &&
         (!categoryFilter || record.category.toLowerCase() === categoryFilter),
     );
+
   }, [records, searchName, searchCategory]);
 
   const handleAdd = () => {

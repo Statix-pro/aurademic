@@ -779,7 +779,6 @@ const FLOORS = [
   'Fourth Floor',
 ];
 
-const PRIORITY_OPTIONS = ['Routine', 'High'];
 
 const toDropdownOptions = (values: string[]): OptionType[] =>
   values.filter((value) => value !== 'Select').map((value) => ({ value, label: value }));
@@ -1254,6 +1253,10 @@ const WorkOrder: React.FC = () => {
     if (selectedFiles.length === 0) return;
 
     const validFiles = selectedFiles.filter((file) => {
+      if (!file.type.startsWith('image/')) {
+        triggerAlert('warning', 'Invalid File Type', `${file.name} is not an image file.`);
+        return false;
+      }
       if (file.size > 5 * 1024 * 1024) {
         triggerAlert('warning', 'File Too Large', `${file.name} is larger than 5MB.`);
         return false;

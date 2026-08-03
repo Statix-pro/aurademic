@@ -192,7 +192,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                   value={website}
                   onChange={(e) => setWebsite(e.target.value)}
                   placeholder="Website"
+                  aria-label="Website"
                 />
+
               </div>
             </div>
 
@@ -204,7 +206,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                   value={linkedIn}
                   onChange={(e) => setLinkedIn(e.target.value)}
                   placeholder="LinkedIn Profile"
+                  aria-label="LinkedIn Profile"
                 />
+
               </div>
             </div>
           </div>

@@ -120,7 +120,7 @@ const formatDisplayDate = (value: string) => {
   });
 };
 
-const formatShortDate = (value: string) => {
+const formatShortDate = (value: string | undefined) => {
   if (!value) return '-';
   const date = new Date(value);
   if (isNaN(date.getTime())) return value;
@@ -346,6 +346,21 @@ const getItemFiscalYear = (item: WorkOrderItem) => {
 
 const formatFiscalYearLabel = (fiscalYear: string) => `FY ${fiscalYear}`;
 
+const CATEGORIES_TABS = [
+  'Electrical',
+  'IT Infrastructure',
+  'Plumbing',
+  'HVAC',
+  'Carpentry',
+  'Gardening',
+  'Civil',
+  'Metal Works',
+  'Interior',
+  'Labour',
+  'Painting',
+  'UPS',
+];
+
 const WorkOrderDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [workOrders, setWorkOrders] = useState<WorkOrderItem[]>([]);
@@ -454,47 +469,45 @@ const WorkOrderDashboard: React.FC = () => {
     setShowPhotoModal(true);
   };
 
-  const CATEGORIES_TABS = [
-    'Electrical',
-    'IT Infrastructure',
-    'Plumbing',
-    'HVAC',
-    'Carpentry',
-    'Gardening',
-    'Civil',
-    'Metal Works',
-    'Interior',
-    'Labour',
-    'Painting',
-    'UPS',
-  ];
 
   // Derived options and variables
   const currentFiscalYear = getCurrentFiscalYear();
   const currentFiscalYearStart = getCurrentFiscalYearStart();
-  const fiscalYears = Array.from(
-    new Set([
-      ...workOrders.map((item) => getItemFiscalYear(item)).filter(Boolean),
-      currentFiscalYear,
-      formatFiscalYearValue(currentFiscalYearStart - 1),
-    ]),
-  ).sort((a, b) => Number.parseInt(b.split('-')[0], 10) - Number.parseInt(a.split('-')[0], 10));
 
-  const fiscalYearOptions = [
-    { value: 'all', label: 'All FY' },
-    ...fiscalYears.map((fy) => ({
-      value: fy,
-      label: formatFiscalYearLabel(fy),
-    })),
-  ];
+  const fiscalYears = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...workOrders.map((item) => getItemFiscalYear(item)).filter(Boolean),
+          currentFiscalYear,
+          formatFiscalYearValue(currentFiscalYearStart - 1),
+        ]),
+      ).sort((a, b) => Number.parseInt(b.split('-')[0], 10) - Number.parseInt(a.split('-')[0], 10)),
+    [workOrders, currentFiscalYear, currentFiscalYearStart],
+  );
 
-  const categoryOptions = [
-    { value: 'all', label: 'All Categories' },
-    ...CATEGORIES_TABS.map((cat) => ({
-      value: cat,
-      label: cat,
-    })),
-  ];
+  const fiscalYearOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All FY' },
+      ...fiscalYears.map((fy) => ({
+        value: fy,
+        label: formatFiscalYearLabel(fy),
+      })),
+    ],
+    [fiscalYears],
+  );
+
+  const categoryOptions = useMemo(
+    () => [
+      { value: 'all', label: 'All Categories' },
+      ...CATEGORIES_TABS.map((cat) => ({
+        value: cat,
+        label: cat,
+      })),
+    ],
+    [],
+  );
+
 
   // Filters setup: FY & Category filter applied to derive stats counts
   const filteredByFYAndCategory = useMemo(() => {
@@ -958,11 +971,22 @@ const WorkOrderDashboard: React.FC = () => {
                   <ChevronLeft size={24} />
                 </button>
               )}
-              <img
-                src={selectedItemForPhotos.photos[activePhotoIndex].preview}
-                alt={selectedItemForPhotos.photos[activePhotoIndex].name}
-                className="img-fluid main-photo"
-              />
+              {(() => {
+                const safeIndex = Math.min(
+                  Math.max(0, activePhotoIndex),
+                  selectedItemForPhotos.photos.length - 1,
+                );
+                const currentPhoto = selectedItemForPhotos.photos[safeIndex];
+                return (
+                  <>
+                    <img
+                      src={currentPhoto.preview}
+                      alt={currentPhoto.name}
+                      className="img-fluid main-photo"
+                    />
+                  </>
+                );
+              })()}
               {selectedItemForPhotos.photos.length > 1 && (
                 <button
                   type="button"
@@ -978,7 +1002,7 @@ const WorkOrderDashboard: React.FC = () => {
               )}
             </div>
             <div className="photo-caption">
-              {selectedItemForPhotos.photos[activePhotoIndex].name} ({activePhotoIndex + 1} of {selectedItemForPhotos.photos.length})
+              {selectedItemForPhotos.photos[Math.min(Math.max(0, activePhotoIndex), selectedItemForPhotos.photos.length - 1)].name} ({Math.min(Math.max(0, activePhotoIndex), selectedItemForPhotos.photos.length - 1) + 1} of {selectedItemForPhotos.photos.length})
             </div>
             {selectedItemForPhotos.photos.length > 1 && (
               <div className="photo-thumbnails">

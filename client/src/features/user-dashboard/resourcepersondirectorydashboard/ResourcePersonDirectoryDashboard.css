@@ -45,14 +45,7 @@
   padding: 0;
 }
 
-.rpd-table-header {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 18px 22px 16px;
-  border-bottom: 1px solid #eef2f6;
-  flex-wrap: wrap;
-}
+
 
 .rpd-search-row {
   display: flex;
@@ -289,8 +282,7 @@ button.rpd-card-header {
 .rpd-icon-btn:hover {
   background: #dbeafe; border-color: #3b82f6; color: #2563eb; transform: translateY(-1px);
 }
-.rpd-icon-profile { }
-.rpd-icon-edit    { }
+
 
 /* Empty state */
 .rpd-empty {

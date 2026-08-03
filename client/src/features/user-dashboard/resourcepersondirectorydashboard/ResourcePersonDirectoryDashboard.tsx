@@ -4,6 +4,7 @@ import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
 import ResourcePersonDirectory, { ResourcePerson } from '../../resourcepersondirectory/ResourcePersonDirectory';
 import authenticityUtility, { isFallbackEligible } from '../../../shared/utils/authenticityUtility';
+import { useAbility } from '../../../shared/casl/AbilityContext';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
@@ -12,13 +13,12 @@ import authenticityUtility, { isFallbackEligible } from '../../../shared/utils/a
  * DELETE /resource-persons/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/* ─── TEMPORARY localStorage fallback ──────────────────────────────────────
- * LEGACY: _v1 key ('resourcePersonDirectoryRecords_v1') is orphaned.
- * It will be discarded once the backend is live — no migration needed.
- * TEMPORARY: The _v2 key below is used as a fallback while the backend is absent.
- * Remove the entire FALLBACK block (and STORAGE_KEY) once the API is live.
+/* ─── FALLBACK localStorage fallback ──────────────────────────────────────
+ * FALLBACK: The key 'resourcePersonDirectoryRecords' is used while the backend
+ * is absent. Remove the entire FALLBACK block (and STORAGE_KEY) once the API is live.
  * ──────────────────────────────────────────────────────────────────────────── */
 const STORAGE_KEY = 'resourcePersonDirectoryRecords';
+
 
 const fallbackGetAll = (): ResourcePerson[] => {
   // FALLBACK: remove once backend is live
@@ -40,15 +40,18 @@ const fallbackSave = (records: ResourcePerson[]) => {
   }
 };
 
-/* ─── API functions (call real backend; fall back to localStorage on failure) */
+let isApiAvailable = false;
 
 const apiGetAll = async (): Promise<ResourcePerson[]> => {
   try {
     const res = (await authenticityUtility.get('/resource-persons')) as any;
-    if (res?.success && Array.isArray(res.data)) return res.data;
+    if (res?.success && Array.isArray(res.data)) {
+      isApiAvailable = true;
+      return res.data;
+    }
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
-    if (isFallbackEligible(err)) return fallbackGetAll();
+    if (isFallbackEligible(err) || err.response?.status === 404) return fallbackGetAll();
     throw err;
   }
 };
@@ -59,7 +62,8 @@ const apiCreate = async (personData: Omit<ResourcePerson, 'id' | 'date'>): Promi
     if (res?.success && res.data) return res.data;
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
-    if (!isFallbackEligible(err)) throw err;
+    const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
+    if (!fallbackAllowed) throw err;
     // FALLBACK: remove once backend is live
     console.warn('[ResourcePerson] API unavailable — writing to localStorage fallback');
     const existing = fallbackGetAll();
@@ -79,7 +83,8 @@ const apiUpdate = async (id: number, personData: Omit<ResourcePerson, 'id' | 'da
     if (res?.success && res.data) return res.data;
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
-    if (!isFallbackEligible(err)) throw err;
+    const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
+    if (!fallbackAllowed) throw err;
     // FALLBACK: remove once backend is live
     console.warn('[ResourcePerson] API unavailable — writing to localStorage fallback');
     const existing = fallbackGetAll();
@@ -91,19 +96,7 @@ const apiUpdate = async (id: number, personData: Omit<ResourcePerson, 'id' | 'da
   }
 };
 
-/* ─── Constants ─────────────────────────────────────────────────────────── */
 
-const CATEGORY_OPTIONS = [
-  'Academic',
-  'Industry',
-  'Scientist',
-  'Administration',
-  'Incubation',
-  'Government',
-  'Entrepreneur',
-  'Alumni',
-  'Social Activist',
-];
 
 const getPrimary = (p: ResourcePerson) => {
   if (!p.professions?.length) return null;
@@ -122,6 +115,7 @@ const getPrimary = (p: ResourcePerson) => {
    ═══════════════════════════════════════════════════════════ */
 
 const ResourcePersonDirectoryDashboard: React.FC = () => {
+  const ability = useAbility();
   const [records, setRecords] = useState<ResourcePerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +161,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
   const handleCancel = () => {
     setEditingPerson(null);
     setShowForm(false);
+    setError(null);
   };
 
   const handleEdit = (person: ResourcePerson) => {
@@ -175,6 +170,14 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
   };
 
   const handleSave = async (personData: Omit<ResourcePerson, 'id' | 'date'>) => {
+    setError(null);
+    const canSave = editingPerson
+      ? ability.can('edit', 'MasterData')
+      : ability.can('create', 'MasterData');
+    if (!canSave) {
+      setError('You do not have permission to perform this action.');
+      return;
+    }
     try {
       if (editingPerson) {
         const updated = await apiUpdate(editingPerson.id, personData);
@@ -183,11 +186,11 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
         const created = await apiCreate(personData);
         setRecords((prev) => [created, ...prev]);
       }
+      setEditingPerson(null);
+      setShowForm(false);
     } catch {
       setError('Failed to save record. Please try again.');
     }
-    setEditingPerson(null);
-    setShowForm(false);
   };
 
   /* ── Render ── */
@@ -222,6 +225,11 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
       <div className="financecard-container">
         {showForm ? (
           <div className="rpd-form-wrapper">
+            {error && (
+              <div className="alert alert-danger mb-3" role="alert">
+                {error}
+              </div>
+            )}
             <ResourcePersonDirectory
               editingPerson={editingPerson}
               onSave={handleSave}
@@ -262,13 +270,15 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  className="financecard-add-btn"
-                  onClick={handleAdd}
-                >
-                  <Plus size={15} /> Add
-                </button>
+                {ability.can('create', 'MasterData') && (
+                  <button
+                    type="button"
+                    className="financecard-add-btn"
+                    onClick={handleAdd}
+                  >
+                    <Plus size={15} /> Add
+                  </button>
+                )}
               </div>
             </div>
 
@@ -323,14 +333,18 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                           
                           <td className="rpd-center">-</td>
                           <td className="rpd-center">
-                            <button
-                              type="button"
-                              className="rpd-icon-btn"
-                              onClick={() => handleEdit(person)}
-                              title="Edit Resource Person"
-                            >
-                              <Edit3 size={15} />
-                            </button>
+                            {ability.can('edit', 'MasterData') ? (
+                              <button
+                                type="button"
+                                className="rpd-icon-btn"
+                                onClick={() => handleEdit(person)}
+                                title="Edit Resource Person"
+                              >
+                                <Edit3 size={15} />
+                              </button>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                         </tr>
                       );
@@ -339,7 +353,8 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                     <tr>
                       <td colSpan={7} className="rpd-empty">
                         {records.length === 0
-                          ? 'No records yet. Click "Add +" to add a resource person.'
+                          ? 'No records yet. Click "Add" to add a resource person.'
+
                           : 'No records match the filter criteria.'}
                       </td>
                     </tr>

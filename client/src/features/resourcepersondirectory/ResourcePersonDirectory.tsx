@@ -4,10 +4,12 @@ import {
 } from 'lucide-react';
 import './ResourcePersonDirectory.css';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
+import { useAbility } from '../../shared/casl/AbilityContext';
 
 /* ─── Types ─────────────────────────────────────────────── */
 
 export interface ProfessionDetail {
+  id?: string;
   designation: string;
   department: string;
   organization: string;
@@ -37,6 +39,8 @@ export interface ResourcePerson {
   professions: ProfessionDetail[];
   photoName?: string;
   resumeName?: string;
+  photoFile?: File;
+  resumeFile?: File;
   date: string;
 }
 
@@ -52,9 +56,11 @@ const CATEGORY_OPTIONS = [
 ];
 
 const emptyProfession = (): ProfessionDetail => ({
+  id: Math.random().toString(36).slice(2, 11),
   designation: '', department: '', organization: '',
   city: '', state: '', country: '', orgLinkedIn: '', status: 'Working',
 });
+
 
 const customDropdownStyles = {
   control: (provided: any, state: any) => ({
@@ -107,6 +113,7 @@ interface UploadBoxProps {
   accept: string;
   filename: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  disabled?: boolean;
 }
 
 const UploadBox: React.FC<UploadBoxProps> = ({
@@ -116,9 +123,10 @@ const UploadBox: React.FC<UploadBoxProps> = ({
   accept,
   filename,
   onChange,
+  disabled,
 }) => {
   return (
-    <div className="rpd-upload-box">
+    <div className="rpd-upload-box" style={disabled ? { opacity: 0.6 } : undefined}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         <div style={{ color: '#0069ab', flexShrink: 0 }}>
           {icon}
@@ -133,10 +141,17 @@ const UploadBox: React.FC<UploadBoxProps> = ({
           )}
         </div>
       </div>
-      <label className="rpd-choose-btn">
+      <label className="rpd-choose-btn" style={disabled ? { cursor: 'not-allowed', opacity: 0.5, pointerEvents: 'none' } : undefined}>
         <Upload size={16} />
         Choose File
-        <input type="file" accept={accept} onChange={onChange} style={{ display: 'none' }} />
+        <input
+          type="file"
+          accept={accept}
+          onChange={onChange}
+          style={{ display: 'none' }}
+          disabled={disabled}
+          aria-label={`Upload ${title}`}
+        />
       </label>
     </div>
   );
@@ -151,6 +166,11 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   onSave,
   onCancel,
 }) => {
+  const ability = useAbility();
+  const isReadOnly = editingPerson !== null
+    ? !ability.can('edit', 'MasterData')
+    : !ability.can('create', 'MasterData');
+
   /* form fields */
   const [category, setCategory] = useState('Academic');
   const [title, setTitle] = useState('Dr.');
@@ -168,6 +188,9 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   const [professions, setProfessions] = useState<ProfessionDetail[]>([emptyProfession()]);
   const [photoName, setPhotoName] = useState('');
   const [resumeName, setResumeName] = useState('');
+  const [photoFile, setPhotoFile] = useState<File | undefined>(undefined);
+  const [resumeFile, setResumeFile] = useState<File | undefined>(undefined);
+
 
   /* Initialize form values */
   useEffect(() => {
@@ -204,15 +227,27 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
     const f = e.target.files?.[0];
     if (f && f.size <= 2 * 1024 * 1024) {
       setPhotoName(f.name);
+      setPhotoFile(f);
     } else if (f) {
       alert('Photo must be less than 2 MB');
+      setPhotoName('');
+      setPhotoFile(undefined);
+      e.target.value = '';
     }
   };
   const handleResume = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f && f.size <= 5 * 1024 * 1024) setResumeName(f.name);
-    else if (f) alert('Resume must be less than 5 MB');
+    if (f && f.size <= 5 * 1024 * 1024) {
+      setResumeName(f.name);
+      setResumeFile(f);
+    } else if (f) {
+      alert('Resume must be less than 5 MB');
+      setResumeName('');
+      setResumeFile(undefined);
+      e.target.value = '';
+    }
   };
+
 
   const handleSubmit = () => {
     if (!firstName.trim() || !lastName.trim()) {
@@ -238,7 +273,10 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       professions: professions.map((p) => ({ ...p })),
       photoName,
       resumeName,
+      photoFile,
+      resumeFile,
     });
+
   };
 
   return (
@@ -254,7 +292,8 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               <button
                 key={cat} type="button"
                 className={`category-chip-btn${category === cat ? ' active' : ''}`}
-                onClick={() => setCategory(cat)}
+                onClick={() => !isReadOnly && setCategory(cat)}
+                style={isReadOnly ? { pointerEvents: 'none', opacity: 0.8 } : undefined}
               >{cat}</button>
             ))}
           </div>
@@ -280,15 +319,16 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     options={['Dr.', 'Mr.', 'Ms.', 'Mrs.', 'Prof.'].map((t) => ({ value: t, label: t }))}
                     placeholder=""
                     styles={titleDropdownStyles}
+                    isDisabled={isReadOnly}
                   />
                 </div>
                 <div className="rpd-field">
                   <label>First Name <span className="rpd-req">*</span></label>
-                  <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" />
+                  <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="First name" disabled={isReadOnly} />
                 </div>
                 <div className="rpd-field">
                   <label>Last Name <span className="rpd-req">*</span></label>
-                  <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" />
+                  <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="Last name" disabled={isReadOnly} />
                 </div>
               </div>
               <div className="rpd-grid-3">
@@ -298,13 +338,14 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     {['Male', 'Female', 'Others'].map((g) => (
                       <button key={g} type="button"
                         className={`rpd-toggle-btn${gender === g ? ' active' : ''}`}
-                        onClick={() => setGender(g)}>{g}</button>
+                        onClick={() => !isReadOnly && setGender(g)}
+                        style={isReadOnly ? { pointerEvents: 'none' } : undefined}>{g}</button>
                     ))}
                   </div>
                 </div>
                 <div className="rpd-field">
                   <label>Date of Birth</label>
-                  <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+                  <input type="date" value={dob} onChange={(e) => setDob(e.target.value)} disabled={isReadOnly} />
                 </div>
                 <div className="rpd-field">
                   <label>Status</label>
@@ -312,7 +353,8 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     {['In Service', 'Retired', 'Inactive'].map((s) => (
                       <button key={s} type="button"
                         className={`rpd-toggle-btn${serviceStatus === s ? ' active' : ''}`}
-                        onClick={() => setServiceStatus(s)}>{s}</button>
+                        onClick={() => !isReadOnly && setServiceStatus(s)}
+                        style={isReadOnly ? { pointerEvents: 'none' } : undefined}>{s}</button>
                     ))}
                   </div>
                 </div>
@@ -320,11 +362,11 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               <div className="rpd-grid-2">
                 <div className="rpd-field">
                   <label>Tag</label>
-                  <input type="text" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. Skilling, Accreditation" />
+                  <input type="text" value={tag} onChange={(e) => setTag(e.target.value)} placeholder="e.g. Skilling, Accreditation" disabled={isReadOnly} />
                 </div>
                 <div className="rpd-field">
                   <label>Specialization</label>
-                  <input type="text" value={specialization} onChange={(e) => setSpecialization(e.target.value)} placeholder="e.g. Machine Learning" />
+                  <input type="text" value={specialization} onChange={(e) => setSpecialization(e.target.value)} placeholder="e.g. Machine Learning" disabled={isReadOnly} />
                 </div>
               </div>
             </div>
@@ -336,34 +378,36 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               <div className="rpd-field">
                 <div className="rpd-input-icon">
                   <Smartphone size={15} />
-                  <input type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="Mobile number" />
+                  <input type="tel" value={mobile} onChange={(e) => setMobile(e.target.value)} placeholder="Mobile number" aria-label="Mobile number" disabled={isReadOnly} />
                 </div>
               </div>
 
               <div className="rpd-field">
                 <div className="rpd-input-icon">
                   <Mail size={15} />
-                  <input type="email" value={personalEmail} onChange={(e) => setPersonalEmail(e.target.value)} placeholder="Personal email" />
+                  <input type="email" value={personalEmail} onChange={(e) => setPersonalEmail(e.target.value)} placeholder="Personal email" aria-label="Personal email" disabled={isReadOnly} />
                 </div>
               </div>
 
               <div className="rpd-field">
                 <div className="rpd-input-icon">
                   <Mail size={15} />
-                  <input type="email" value={officialEmail} onChange={(e) => setOfficialEmail(e.target.value)} placeholder="Official email" />
+                  <input type="email" value={officialEmail} onChange={(e) => setOfficialEmail(e.target.value)} placeholder="Official email" aria-label="Official email" disabled={isReadOnly} />
                 </div>
               </div>
 
               <div className="rpd-field">
                 <div className="rpd-input-icon">
                   <Linkedin size={15} />
-                  <input type="url" value={linkedIn} onChange={(e) => setLinkedIn(e.target.value)} placeholder="LinkedIn URL" />
+                  <input type="url" value={linkedIn} onChange={(e) => setLinkedIn(e.target.value)} placeholder="LinkedIn URL" aria-label="LinkedIn Profile" disabled={isReadOnly} />
                 </div>
               </div>
             </div>
-          </div>
+
+          </div>{/* end rpd-split-row */}
 
           <hr className="rpd-divider rpd-divider--dark" style={{ margin: '24px 0' }} />
+
 
           {/* Profession Details */}
           <div style={{ marginBottom: '8px' }}>
@@ -376,28 +420,30 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               }}
             >
               <h5 style={{ fontSize: '15px', fontWeight: '700', color: '#0069ab', margin: 0 }}>Profession Details</h5>
-              <button
-                type="button"
-                onClick={addProfession}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: '#0069ab',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  padding: '4px',
-                }}
-                title="Add Record"
-              >
-                <PlusCircle size={22} />
-              </button>
+              {!isReadOnly && (
+                <button
+                  type="button"
+                  onClick={addProfession}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#0069ab',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    padding: '4px',
+                  }}
+                  title="Add Record"
+                >
+                  <PlusCircle size={22} />
+                </button>
+              )}
             </div>
 
             <div className="rpd-profession-container">
               {professions.map((prof, idx) => (
-                <div key={idx} className="rpd-profession-block" style={{ padding: '16px 14px' }}>
+                <div key={prof.id ?? idx} className="rpd-profession-block" style={{ padding: '16px 14px' }}>
                   {idx > 0 && <hr className="rpd-divider" style={{ margin: '10px 0' }} />}
                   <div className="rpd-grid-3 rpd-mb-s">
                     {[
@@ -408,7 +454,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       <div key={field} className="rpd-field" style={{ marginBottom: 0 }}>
                         <label>{label}</label>
                         <input type="text" value={(prof as any)[field]}
-                          onChange={(e) => changeProfession(idx, field as keyof ProfessionDetail, e.target.value)} placeholder={ph} />
+                          onChange={(e) => changeProfession(idx, field as keyof ProfessionDetail, e.target.value)} placeholder={ph} disabled={isReadOnly} />
                       </div>
                     ))}
                   </div>
@@ -422,7 +468,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       <div key={field} className="rpd-field" style={{ flex: '1', minWidth: '120px', marginBottom: 0 }}>
                         <label>{label}</label>
                         <input type="text" value={(prof as any)[field]}
-                          onChange={(e) => changeProfession(idx, field as keyof ProfessionDetail, e.target.value)} placeholder={ph} />
+                          onChange={(e) => changeProfession(idx, field as keyof ProfessionDetail, e.target.value)} placeholder={ph} disabled={isReadOnly} />
                       </div>
                     ))}
                     <div className="rpd-field" style={{ flex: '1', minWidth: '120px', marginBottom: 0 }}>
@@ -437,10 +483,11 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                         ]}
                         placeholder="Select Status"
                         styles={customDropdownStyles}
+                        isDisabled={isReadOnly}
                       />
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '43px', width: '38px', paddingBottom: '2px' }}>
-                      {professions.length > 1 ? (
+                      {!isReadOnly && professions.length > 1 ? (
                         <button
                           type="button"
                           onClick={() => removeProfession(idx)}
@@ -472,13 +519,14 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
 
           {/* Documents */}
           <div className="rpd-docs-row" style={{ marginTop: '16px' }}>
-            <UploadBox
+           <UploadBox
               icon={<Image size={36} strokeWidth={1.5} />}
               title="Photo"
               hint="JPG, JPEG, PNG (Maximum 2 MB)"
               accept="image/*"
               filename={photoName}
               onChange={handlePhoto}
+              disabled={isReadOnly}
             />
             <UploadBox
               icon={<FileText size={36} strokeWidth={1.5} />}
@@ -487,6 +535,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               accept=".pdf,.doc,.docx"
               filename={resumeName}
               onChange={handleResume}
+              disabled={isReadOnly}
             />
           </div>
         </div>
@@ -502,26 +551,28 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
           gap: '10px',
         }}
       >
-        <button
-          type="button"
-          className="rpd-btn-save"
-          onClick={handleSubmit}
-          style={{
-            padding: '12px 40px',
-            fontSize: '16px',
-            fontWeight: '700',
-            backgroundColor: '#0069ab',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer',
-            minWidth: '150px',
-            boxShadow: '0 6px 20px rgba(0, 105, 171, 0.3)',
-            transition: 'all 0.3s ease',
-          }}
-        >
-          {editingPerson !== null ? 'Update Record' : 'Save Record'}
-        </button>
+        {!isReadOnly && (
+          <button
+            type="button"
+            className="rpd-btn-save"
+            onClick={handleSubmit}
+            style={{
+              padding: '12px 40px',
+              fontSize: '16px',
+              fontWeight: '700',
+              backgroundColor: '#0069ab',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: 'pointer',
+              minWidth: '150px',
+              boxShadow: '0 6px 20px rgba(0, 105, 171, 0.3)',
+              transition: 'all 0.3s ease',
+            }}
+          >
+            {editingPerson !== null ? 'Update Record' : 'Save Record'}
+          </button>
+        )}
         <button
           type="button"
           className="rpd-btn-cancel"

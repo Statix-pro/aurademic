@@ -420,6 +420,14 @@ function App() {
                     }
                   />
                   <Route
+                    path="/workorder"
+                    element={
+                      <ProtectedRoute>
+                        <Navigate to="/workorderdashboard" replace />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/workorder/new"
                     element={
                       <ProtectedRoute>
