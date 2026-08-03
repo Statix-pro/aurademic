@@ -6606,7 +6606,7 @@ input:checked + .slider:before {
 .event-page .finance-approval-body .btn-delete svg {
   display: block !important;
   flex: 0 0 auto !important;
-  stroke: currentColor !important;
+  stroke: currentcolor !important;
 }
 
 @media (max-width: 768px) {
@@ -8269,35 +8269,6 @@ input:checked + .slider:before {
   background: #f0f6ff;
 }
 
-.event-page .event-card-section,
-.event-page .event-participant-card {
-  background-color: #fff !important;
-  border: 1px solid #e0e0e0 !important;
-  border-radius: 20px !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06) !important;
-}
-
-.event-page .event-card-section {
-  max-width: 1150px !important;
-  margin: 20px auto !important;
-  padding: 24px !important;
-}
-
-.event-page .event-section-title {
-  color: #0069ab !important;
-  font-size: 18px !important;
-  font-weight: 700 !important;
-  margin-bottom: 18px !important;
-  padding-bottom: 12px !important;
-  border-bottom: 2px solid #eef5ff !important;
-}
-
-.event-page .event-participant-card {
-  padding: 18px !important;
-  gap: 12px !important;
-  margin-bottom: 16px !important;
-}
-
 .event-page .event-participant-select,
 .event-page .event-participant-input,
 .event-page .event-full-width-input,
@@ -8322,10 +8293,6 @@ input:checked + .slider:before {
   border-color: #0069ab !important;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15) !important;
   outline: none !important;
-}
-
-.event-page .event-docs-grid {
-  gap: 18px !important;
 }
 
 .event-page .event-docs-column {
@@ -8606,9 +8573,9 @@ input:checked + .slider:before {
   gap: 23px !important;
   min-height: auto !important;
   grid-column: 1 / -1 !important;
-  width: 70% !important;
+  width: 100% !important;
+  max-width: 100% !important;
   overflow: visible !important;
-
 }
 
 .event-page .event-documents-card .event-doc-row-photos .event-doc-actions {

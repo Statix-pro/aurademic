@@ -2,6 +2,7 @@ import React, { useState, useEffect, ChangeEvent } from "react";
 import "../styles/EventForm.css";
 import { CloudUpload, Eye, Plus, Trash2 } from "lucide-react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
+import { useAbility } from "../../../shared/casl/AbilityContext";
 import { DOCUMENT_PARTICIPANT_TYPES, EVENT_DOCUMENTS, EVENT_COPY } from "../constants";
 
 interface ParticipantType {
@@ -346,6 +347,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
 const documents = EVENT_DOCUMENTS;
 
 const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
+  const ability = useAbility();
   const [docState, setDocState] = useState<Record<string, DocState>>(
     documents.reduce((acc, doc) => {
       acc[doc] = {
@@ -425,7 +427,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
 
   const handleFileUpload = async (doc: string, event: ChangeEvent<HTMLInputElement>, index: number | null = null) => {
     const file = event.target.files?.[0];
-    if (file) {
+    if (file && ability.can("edit", "Event")) {
       setDocState((prev) => {
         if (doc === "Photos" && index !== null) {
           const currentFiles = prev[doc].file as (File | null)[];
@@ -452,6 +454,29 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
         );
       } catch (error) {
         console.error("Error uploading file:", error);
+        setDocState((prev) => {
+          if (doc === "Photos" && index !== null) {
+            const currentFiles = prev[doc].file as (File | null)[];
+            if (currentFiles[index] !== file) {
+              return prev;
+            }
+            const newFiles = [...currentFiles];
+            newFiles[index] = null;
+            return {
+              ...prev,
+              [doc]: { ...prev[doc], file: newFiles },
+            };
+          }
+
+          if (prev[doc].file !== file) {
+            return prev;
+          }
+
+          return {
+            ...prev,
+            [doc]: { ...prev[doc], file: null },
+          };
+        });
         setPopupMessage(`Failed to upload file: ${file.name}`);
       }
     }

@@ -22,6 +22,7 @@ import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
 import DeleteConfirmationModal from "../../../shared/components/ui/DeleteConfirmationModal";
 import CustomModal from "../../../shared/components/ui/CustomModal";
+import { useAbility } from "../../../shared/casl/AbilityContext";
 import "../styles/Dashboard.css";
 import { EVENT_DASHBOARD_MONTHS } from "../constants";
 
@@ -37,6 +38,22 @@ interface EventData {
   date: string;
   parent_id?: number | null;
   isSubEvent?: boolean;
+}
+
+interface APISubEvent {
+  id: number;
+  title?: string;
+  status?: string;
+  proposedBy?: string;
+  category?: string;
+  department?: string;
+  date?: string;
+  createdAt?: string;
+  venue?: string;
+}
+
+interface APIMainEvent extends APISubEvent {
+  sub_events?: APISubEvent[];
 }
 
 interface CalendarCell {
@@ -57,6 +74,8 @@ interface DashboardStat {
   tone: string;
 }
 
+const getEventIdentity = (event: Pick<EventData, "id" | "isSubEvent">): string =>
+  `${event.isSubEvent ? "sub" : "main"}-${event.id}`;
 
 const STATUS_LABELS: Record<Exclude<DashboardStatusKey, "all">, string> = {
   pending: "Pending",
@@ -107,6 +126,7 @@ const buildBellCalendar = (year: number, monthIndex: number, selectedDate: Date)
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const ability = useAbility();
   const [searchTerm, setSearchTerm] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState<DashboardStatusKey>("all");
@@ -139,64 +159,90 @@ const Dashboard: React.FC = () => {
     return () => clearTimeout(timer);
   }, [deleteModalVisible, deleteCountdown]);
 
-  interface APISubEvent {
-    id: number;
-    title?: string;
-    status?: string;
-    proposedBy?: string;
-    category?: string;
-    department?: string;
-    date?: string;
-    createdAt?: string;
-    venue?: string;
-  }
-
-  interface APIMainEvent extends APISubEvent {
-    sub_events?: APISubEvent[];
-  }
-
   React.useEffect(() => {
-    authenticityUtility.get<APIMainEvent[] | { data: APIMainEvent[] }>("/events")
-      .then((res) => {
-        const data: APIMainEvent[] = Array.isArray(res) ? res : ((res as { data?: APIMainEvent[] }).data || []);
-        // Flatten main and sub events
-        const flattenedEvents: EventData[] = [];
-        data.forEach((main: APIMainEvent) => {
-          flattenedEvents.push({
-            id: main.id,
-            name: main.title || "Untitled Event",
-            status: main.status || "Draft",
-            proposedBy: main.proposedBy || "N/A",
-            category: main.category || "N/A",
-            department: main.department || "N/A",
-            time: main.date ? new Date(main.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "TBD",
-            venue: main.venue || "TBD",
-            date: main.date || main.createdAt || new Date().toISOString(),
-            parent_id: null,
-            isSubEvent: false
-          });
-          
-          if (main.sub_events && main.sub_events.length > 0) {
-            main.sub_events.forEach((sub: APISubEvent) => {
-              flattenedEvents.push({
-                id: sub.id,
-                name: sub.title || "Untitled Sub Event",
-                status: sub.status || "Draft",
-                proposedBy: sub.proposedBy || "N/A",
-                category: sub.category || "N/A",
-                department: sub.department || "N/A",
-                time: sub.date ? new Date(sub.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "TBD",
-                venue: sub.venue || "TBD",
-                date: sub.date || sub.createdAt || new Date().toISOString(),
-                parent_id: main.id,
-                isSubEvent: true
-              });
-            });
-          }
+    let isMounted = true;
+
+    const isAPISubEvent = (value: unknown): value is APISubEvent => {
+      if (!value || typeof value !== "object") return false;
+      const candidate = value as Partial<APISubEvent>;
+      return typeof candidate.id === "number";
+    };
+
+    const isAPIMainEvent = (value: unknown): value is APIMainEvent =>
+      isAPISubEvent(value) &&
+      (!("sub_events" in value) ||
+        value.sub_events === undefined ||
+        (Array.isArray(value.sub_events) && value.sub_events.every(isAPISubEvent)));
+
+    const isAPIMainEventArrayResponse = (value: unknown): value is { data: APIMainEvent[] } =>
+      !!value &&
+      typeof value === "object" &&
+      "data" in value &&
+      Array.isArray((value as { data?: unknown }).data) &&
+      (value as { data: unknown[] }).data.every(isAPIMainEvent);
+
+    const handleResponse = (res: unknown) => {
+      const data: APIMainEvent[] = Array.isArray(res)
+        ? res.filter(isAPIMainEvent)
+        : isAPIMainEventArrayResponse(res)
+          ? res.data
+          : [];
+
+      if (!isMounted) return;
+
+      // Flatten main and sub events
+      const flattenedEvents: EventData[] = [];
+      data.forEach((main: APIMainEvent) => {
+        flattenedEvents.push({
+          id: main.id,
+          name: main.title || "Untitled Event",
+          status: main.status || "Draft",
+          proposedBy: main.proposedBy || "N/A",
+          category: main.category || "N/A",
+          department: main.department || "N/A",
+          time: main.date ? new Date(main.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "TBD",
+          venue: main.venue || "TBD",
+          date: main.date || main.createdAt || new Date().toISOString(),
+          parent_id: null,
+          isSubEvent: false
         });
-        setEvents(flattenedEvents);
-      })
-      .catch((err) => console.error("Error fetching events:", err));
+        
+        if (main.sub_events && main.sub_events.length > 0) {
+          main.sub_events.forEach((sub: APISubEvent) => {
+            flattenedEvents.push({
+              id: sub.id,
+              name: sub.title || "Untitled Sub Event",
+              status: sub.status || "Draft",
+              proposedBy: sub.proposedBy || "N/A",
+              category: sub.category || "N/A",
+              department: sub.department || "N/A",
+              time: sub.date ? new Date(sub.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "TBD",
+              venue: sub.venue || "TBD",
+              date: sub.date || sub.createdAt || new Date().toISOString(),
+              parent_id: main.id,
+              isSubEvent: true
+            });
+          });
+          }
+      });
+      setEvents(flattenedEvents);
+    };
+
+    authenticityUtility.get<APIMainEvent[] | { data: APIMainEvent[] }>("/events")
+      .then(handleResponse)
+      .catch((err) => {
+        if (!isMounted) return;
+        console.error("Error fetching events:", err);
+        setAlertConfig({
+          show: true,
+          message: "Failed to fetch events. Please try again.",
+          type: "error",
+        });
+      });
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
   const years = useMemo(() => {
     const eventYears = Array.from(
@@ -302,9 +348,10 @@ const Dashboard: React.FC = () => {
   const confirmSubEventDelete = () => {
     if (!subEventToDelete) return;
     setIsDeleting(true);
+    const subEventIdentity = getEventIdentity(subEventToDelete);
     authenticityUtility.delete(`/events/${subEventToDelete.id}`)
       .then(() => {
-        setEvents((prev) => prev.filter((e) => e.id !== subEventToDelete.id));
+        setEvents((prev) => prev.filter((e) => getEventIdentity(e) !== subEventIdentity));
         setSubEventToDelete(null);
       })
       .catch(err => {
@@ -318,16 +365,24 @@ const Dashboard: React.FC = () => {
 
   const executeDelete = () => {
     if (!eventToDelete) return;
+    if (isDeleting) return;
+    setIsDeleting(true);
     setDeleteModalVisible(false);
-    authenticityUtility.delete(`/events/${eventToDelete.id}`)
+    const eventIdentity = getEventIdentity(eventToDelete);
+    const eventId = eventToDelete.id;
+    setEventToDelete(null);
+    authenticityUtility.delete(`/events/${eventId}`)
       .then(() => {
-        setEvents((prev) => prev.filter((e) => e.id !== eventToDelete.id && e.parent_id !== eventToDelete.id));
-        setEventToDelete(null);
+        setEvents((prev) => prev.filter((e) => getEventIdentity(e) !== eventIdentity && e.parent_id !== eventId));
         setDeleteCountdown(5);
       })
       .catch(err => {
         console.error("Error deleting event:", err);
         setAlertConfig({ show: true, message: "Failed to delete event.", type: "error" });
+      })
+      .finally(() => {
+        setEventToDelete(null);
+        setIsDeleting(false);
       });
   };
 
@@ -427,21 +482,25 @@ const Dashboard: React.FC = () => {
               <Bell size={18} />
             </button>
 
-            <button
-              type="button"
-              className="event-dashboard-add-btn"
-              onClick={() => navigate("/event/new?tab=pre-event")}
-            >
-              Add +
-            </button>
+            {ability.can("create", "Event") && (
+              <>
+                <button
+                  type="button"
+                  className="event-dashboard-add-btn"
+                  onClick={() => navigate("/event/new?tab=pre-event")}
+                >
+                  Add +
+                </button>
 
-            <button
-              type="button"
-              className="event-dashboard-add-btn event-dashboard-add-btn--secondary"
-              onClick={() => navigate("/event/new?isSubEvent=true&tab=pre-event")}
-            >
-              Sub +
-            </button>
+                <button
+                  type="button"
+                  className="event-dashboard-add-btn event-dashboard-add-btn--secondary"
+                  onClick={() => navigate("/event/new?isSubEvent=true&tab=pre-event")}
+                >
+                  Sub +
+                </button>
+              </>
+            )}
           </div>
         </header>
 
@@ -477,7 +536,7 @@ const Dashboard: React.FC = () => {
           ) : filteredEvents.map((event) => {
             return (
               <article
-                key={event.id}
+                key={getEventIdentity(event)}
                 className="event-request-card"
                 onClick={() => openEventTab(event.id, "pre-event")}
                 role="button"
