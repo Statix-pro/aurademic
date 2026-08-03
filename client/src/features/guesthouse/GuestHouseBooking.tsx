@@ -42,6 +42,17 @@ import './guesthousebooking.css';
 type Gender = 'Male' | 'Female' | 'Others' | '';
 type GuestPriority = 'Routine' | 'High' | '';
 type RoomType = 'Single' | 'Double' | 'Deluxe';
+
+const createNumericId = () => {
+  if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
+    const values = new Uint32Array(1);
+    crypto.getRandomValues(values);
+    return values[0];
+  }
+
+  return Date.now();
+};
+
 type GuestAmenityKey =
   | 'roomCleaning'
   | 'welcomeKit'
@@ -484,7 +495,7 @@ const buildStayDates = (checkInDate: string, checkOutDate: string) => {
 };
 
 const createGuest = (
-  id = Date.now() + Math.floor(Math.random() * 1000),
+  id = createNumericId(),
 ): GuestDetails => ({
   id,
   name: '',
@@ -507,7 +518,7 @@ const createGuest = (
 });
 
 const createFoodRow = (date = ''): FoodRequirementRow => ({
-  id: Date.now() + Math.random(),
+  id: createNumericId(),
   date,
   morningRefreshment: '',
   breakfastVeg: '',
@@ -525,7 +536,7 @@ const initialManagedRooms: ManagedRoomRow[] = [];
 const initialCareTakers: CareTakerRow[] = [];
 
 const createManagedRoomRow = (): ManagedRoomRow => ({
-  id: Date.now() + Math.random(),
+  id: createNumericId(),
   roomType: 'Single',
   block: '',
   floor: '',
@@ -534,7 +545,7 @@ const createManagedRoomRow = (): ManagedRoomRow => ({
 });
 
 const createCareTakerRow = (): CareTakerRow => ({
-  id: Date.now() + Math.random(),
+  id: createNumericId(),
   name: '',
   mobile: '',
   status: 'Active',
@@ -625,7 +636,7 @@ const createGuestAmenities = (
   );
 
 const createRoomAllotmentRow = (roomType: RoomType, occupants = '1'): RoomAllotmentRow => ({
-  id: `${roomType}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+  id: `${roomType}-${createNumericId()}`,
   roomType,
   block: '',
   roomNumber: '',
@@ -1682,17 +1693,11 @@ const GuestHouseBooking: React.FC = () => {
       <span>{label}</span>
       <input
         className="guesthousebooking-time-input"
-        type="text"
-        placeholder="HH:MM AM/PM"
+        type="time"
+        step={60}
         value={travelDetails[field]}
-        onChange={(event) =>
-          updateTravelDetails(field, formatTimeAsYouType(event.target.value, travelDetails[field]))
-        }
-        onBlur={() => updateTravelDetails(field, normalizeTravelTimeEntry(travelDetails[field]))}
-        inputMode="text"
-        maxLength={9}
-        pattern="(0?[1-9]|1[0-2]):[0-5][0-9]\s?(AM|PM|am|pm)"
-        title="Enter time as HH:MM AM or HH:MM PM"
+        onChange={(event) => updateTravelDetails(field, event.target.value)}
+        title="Select time"
         aria-label={`${label} time`}
         required
       />

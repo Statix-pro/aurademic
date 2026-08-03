@@ -71,7 +71,15 @@ interface BeneficiaryDetails {
 const BENEFICIARY_TYPE_OPTIONS = ['Staff', 'Faculty', 'Institution'];
 const BENEFICIARY_TAG_OPTIONS = ['Booking Dates', 'Research', 'Office', 'Events', 'Academics'];
 
-const nextVehicleRowId = () => Date.now() + Math.floor(Math.random() * 1000);
+const nextVehicleRowId = () => {
+  if (typeof crypto !== 'undefined' && 'getRandomValues' in crypto) {
+    const values = new Uint32Array(1);
+    crypto.getRandomValues(values);
+    return values[0];
+  }
+
+  return Date.now();
+};
 
 interface TransportBookingDetails {
   purpose: string;

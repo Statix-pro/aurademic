@@ -149,6 +149,12 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   const [principalDocTargetId, setPrincipalDocTargetId] = useState<number | null>(null);
   const [principalDocBusyId, setPrincipalDocBusyId] = useState<number | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<number | null>(null);
+  const [dialogMessage, setDialogMessage] = useState('');
+  const [approvalComment, setApprovalComment] = useState('');
+  const [pendingApproval, setPendingApproval] = useState<{
+    id: number;
+    decision: 'return' | 'reject';
+  } | null>(null);
   useEffect(() => {
     fetchDashboard();
   }, [approvalMode, approvalStage]);
@@ -391,11 +397,11 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       const isUploadSuccess = response?.success === true || response?.status === 'success';
 
       if (!isUploadSuccess) {
-        window.alert(response?.message || 'Failed to upload principal document');
+        setDialogMessage(response?.message || 'Failed to upload principal document');
         return;
       }
 
-      window.alert(`${file.name} uploaded successfully`);
+      setDialogMessage(`${file.name} uploaded successfully`);
       setData((prev) =>
         prev.map((row) => {
           if (row.id !== item.id) {
@@ -418,9 +424,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         }),
       );
     } catch (error: any) {
-      window.alert(
-        error?.response?.data?.message || error?.message || 'Failed to upload principal document',
-      );
+      setDialogMessage(error?.response?.data?.message || error?.message || 'Failed to upload principal document');
     } finally {
       setPrincipalDocBusyId(null);
     }
@@ -443,7 +447,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       };
 
       if (response?.success !== true && response?.status !== 'success') {
-        window.alert(response?.message || 'Failed to delete principal document');
+        setDialogMessage(response?.message || 'Failed to delete principal document');
         return;
       }
 
@@ -451,9 +455,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         prev.map((row) => (row.id === item.id ? { ...row, principal_document: null } : row)),
       );
     } catch (error: any) {
-      window.alert(
-        error?.response?.data?.message || error?.message || 'Failed to delete principal document',
-      );
+      setDialogMessage(error?.response?.data?.message || error?.message || 'Failed to delete principal document');
     } finally {
       setPrincipalDocBusyId(null);
     }
@@ -472,7 +474,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) ||
       file.size >= 2 * 1024 * 1024
     ) {
-      window.alert('Only PDF files with a size less than 2MB are allowed.');
+      setDialogMessage('Only PDF files with a size less than 2MB are allowed.');
       return;
     }
 
@@ -600,8 +602,19 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
 
   const handleApprovalDecision = async (id: number, decision: 'approve' | 'return' | 'reject') => {
     if (approvalBusyId !== null) return;
-    const comment = decision === 'approve' ? '' : window.prompt(`Reason for ${decision}:`, '')?.trim() || '';
-    if (decision !== 'approve' && !comment) return;
+    if (decision !== 'approve') {
+      setApprovalComment('');
+      setPendingApproval({ id, decision });
+      return;
+    }
+    await submitApprovalDecision(id, decision, '');
+  };
+
+  const submitApprovalDecision = async (
+    id: number,
+    decision: 'approve' | 'return' | 'reject',
+    comment: string,
+  ) => {
     setApprovalBusyId(id);
     try {
       const response = (await authenticityUtility.patch(`/guesthouse/${id}/approval`, { decision, comment })) as any;
@@ -612,7 +625,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       await fetchKpiStats();
     } catch (error) {
       console.error('Guesthouse approval action failed', error);
-      window.alert((error as any)?.response?.data?.message || (error as Error).message || 'Guesthouse approval could not be completed');
+      setDialogMessage((error as any)?.response?.data?.message || (error as Error).message || 'Guesthouse approval could not be completed');
     } finally {
       setApprovalBusyId(null);
     }
@@ -628,7 +641,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
 
   const getProposalRef = (item: GuesthouseCardItem) =>
     String(item.proposal_ref || '').trim() ||
-    `#F-${new Date(item.created_at).getFullYear()}-${String(item.id).padStart(4, '0')}`;
+    `#GH-${new Date(item.created_at).getFullYear()}-${String(item.id).padStart(4, '0')}`;
 
   const buildGuesthouseLogEvents = (
     item: GuesthouseCardItem,
@@ -864,7 +877,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         message?: string;
       };
       if (response.success !== true && response.status !== 'success') {
-        window.alert(response.message || 'Failed to delete guesthouse request');
+        setDialogMessage(response.message || 'Failed to delete guesthouse request');
         return;
       }
 
@@ -875,7 +888,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       await fetchDashboard();
     } catch (error) {
       console.error('Failed to delete guesthouse request', error);
-      window.alert((error as any)?.response?.data?.message || 'Failed to delete guesthouse request');
+      setDialogMessage((error as any)?.response?.data?.message || 'Failed to delete guesthouse request');
     }
   };
 
@@ -1453,6 +1466,54 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
           </div>
         </div>
       )}
+      <CustomModal
+        show={pendingApproval !== null}
+        onHide={() => setPendingApproval(null)}
+        title={`${pendingApproval?.decision === 'reject' ? 'Reject' : 'Return'} request`}
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn btn-secondary" onClick={() => setPendingApproval(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={!approvalComment.trim()}
+              onClick={() => {
+                if (!pendingApproval) return;
+                void submitApprovalDecision(pendingApproval.id, pendingApproval.decision, approvalComment.trim());
+                setPendingApproval(null);
+              }}
+            >
+              Submit
+            </button>
+          </>
+        }
+      >
+        <label htmlFor="guesthouse-approval-comment">Reason</label>
+        <textarea
+          id="guesthouse-approval-comment"
+          className="form-control"
+          value={approvalComment}
+          onChange={(event) => setApprovalComment(event.target.value)}
+          rows={4}
+          autoFocus
+        />
+      </CustomModal>
+      <CustomModal
+        show={Boolean(dialogMessage)}
+        onHide={() => setDialogMessage('')}
+        title="Guesthouse"
+        size="sm"
+        footer={
+          <button type="button" className="btn btn-primary" onClick={() => setDialogMessage('')}>
+            OK
+          </button>
+        }
+      >
+        <p>{dialogMessage}</p>
+      </CustomModal>
       <CustomModal
         show={previewRecordId !== null}
         onHide={() => setPreviewRecordId(null)}
