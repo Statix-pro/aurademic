@@ -323,6 +323,23 @@
   min-width: 0;
   font-size: 0.95rem;
   border-radius: 12px;
+  border: 1.5px solid #dde3ec;
+  background: #fff;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.18s;
+}
+
+.rpd-toggle-btn.active {
+  background: #0069ab;
+  border-color: #0069ab;
+  color: #fff;
+}
+
+.rpd-toggle-btn:hover:not(.active) {
+  border-color: #0069ab;
+  color: #0069ab;
 }
 
 /* Collapsible Arrow Toggle */
@@ -358,14 +375,16 @@
 }
 
 .rpd-upload-box {
-  background: #fcfdff;
-  border: 1px solid #e5edf6;
+  background: #ffffff;
+  border: 1.5px solid #e5edf6;
   border-radius: 16px;
-  padding: 18px;
-  min-height: 150px;
+  padding: 16px 20px;
+  min-height: auto;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
   justify-content: space-between;
+  flex: 1;
 }
 
 .rpd-upload-info {
@@ -400,13 +419,16 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 16px;
-  border-radius: 12px;
+  padding: 10px 20px;
+  border-radius: 10px;
   background-color: #0069ab;
   color: #ffffff;
   font-weight: 700;
   cursor: pointer;
   border: none;
+  gap: 6px;
+  margin: 0;
+  white-space: nowrap;
 }
 
 .rpd-btn-save,
@@ -1106,3 +1128,19 @@
     flex-direction: column;
   }
 }
+
+.rpd-form-wrapper {
+  display: flex;
+  flex-direction: column;
+}
+
+.rpd-docs-row {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.rpd-req {
+  color: #ef4444;
+}
+

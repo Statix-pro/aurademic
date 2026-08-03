@@ -926,7 +926,8 @@ const WorkOrder: React.FC = () => {
   const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<BeneficiaryEmployee[]>([]);
   const [showBeneficiarySearch, setShowBeneficiarySearch] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
-
+  const [selectedCategory, setSelectedCategory] = useState('Carpentry');
+  const [workItems, setWorkItems] = useState<WorkItem[]>([createWorkItem()]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Flipped to true once loadRecord has applied all hydrated state.
@@ -1024,10 +1025,10 @@ const WorkOrder: React.FC = () => {
     fetchUserDetails();
   }, [id]);
 
-  const [selectedCategory, setSelectedCategory] = useState('Carpentry');
-  const [workItems, setWorkItems] = useState<WorkItem[]>([createWorkItem()]);
+
 
   useEffect(() => {
+    if (isHydrating.current) return;
     setSelectedTag((prev) => {
       if (prev) return prev;
       if (beneficiaryType === 'Faculty' || beneficiaryType === 'Staff') return 'Skilling';
@@ -1310,22 +1311,25 @@ const WorkOrder: React.FC = () => {
     if (!validateForm()) return;
 
     // 1. Upload any newly added photos first
+    const uploadedUrlsByItem = new Map<string, string[]>();
     try {
       for (const item of workItems) {
-        for (let i = 0; i < item.locationPhotos.length; i++) {
-          const photo = item.locationPhotos[i];
-          if (photo.file) {
-            const formData = new FormData();
-            formData.append('file', photo.file);
-            
-            // BACKEND CONTRACT: expecting /workorders/upload to return { success: true, data: { url: "..." } }
-            const uploadRes = (await authenticityUtility.postFile('/workorders/upload', formData)) as any;
-            
-            if (uploadRes.success && uploadRes.data?.url) {
-              photo.preview = uploadRes.data.url;
-            }
+        const urls: string[] = [];
+        for (const photo of item.locationPhotos) {
+          if (!photo.file) {
+            urls.push(photo.preview);
+            continue;
           }
+          const formData = new FormData();
+          formData.append('file', photo.file);
+          // BACKEND CONTRACT: expecting /workorders/upload to return { success: true, data: { url: "..." } }
+          const uploadRes = (await authenticityUtility.postFile('/workorders/upload', formData)) as any;
+          if (!uploadRes?.success || !uploadRes.data?.url) {
+            throw new Error(uploadRes?.message || 'Upload response missing url');
+          }
+          urls.push(uploadRes.data.url);
         }
+        uploadedUrlsByItem.set(item.id, urls);
       }
     } catch (uploadError) {
       console.error('Photo upload failed:', uploadError);
@@ -1348,17 +1352,17 @@ const WorkOrder: React.FC = () => {
       budget_tag: selectedTag,
       category: selectedCategory,
       workItems: workItems.map((item) => ({
-  type: item.type,
-  subType: item.subType,
-  block: item.block,
-  floor: item.floor,
-  roomLabNo: item.roomLabNo,
-  description: item.description,
-  targetDate: item.targetDate,
-  qty: item.qty,
-  priority: item.priority,
-  locationPhotos: item.locationPhotos.map((p) => p.preview),
-})),
+        type: item.type,
+        subType: item.subType,
+        block: item.block,
+        floor: item.floor,
+        roomLabNo: item.roomLabNo,
+        description: item.description,
+        targetDate: item.targetDate,
+        qty: item.qty,
+        priority: item.priority,
+        locationPhotos: uploadedUrlsByItem.get(item.id) ?? [],
+      })),
     };
 
     try {
@@ -1599,7 +1603,7 @@ const WorkOrder: React.FC = () => {
                   {workItems.map((item, idx) => {
                     const typeOptions = toDropdownOptions(WORK_TYPES);
                     const subTypeOptions = item.type
-                      ? toDropdownOptions(WORK_CATALOG[selectedCategory][item.type] || [])
+                      ? toDropdownOptions(WORK_CATALOG[selectedCategory]?.[item.type] || [])
                       : [];
                     const locationPhotoInputId = `workorder-location-photo-${item.id}`;
                     const firstLocationPhoto = item.locationPhotos[0];
@@ -1788,7 +1792,7 @@ const WorkOrder: React.FC = () => {
                                     >
                                       <Eye size={18} />
                                     </a>
-                                    <span>{firstLocationPhoto.file.name}</span>
+                                    <span>{firstLocationPhoto.file?.name ?? 'Uploaded photo'}</span>
                                     {item.locationPhotos.length > 1 && (
                                       <small>+{item.locationPhotos.length - 1}</small>
                                     )}

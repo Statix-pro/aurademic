@@ -76,6 +76,7 @@ interface WorkOrderPhoto {
 interface WorkOrderItem {
   id: string;
   submissionId: string;
+  itemId: string;
   workOrderId: string;
   date: string;
   nature: string;
@@ -270,6 +271,7 @@ const mapSubmissionsToRows = (submissions: StoredWorkOrderSubmission[]): WorkOrd
         return {
           id: `${submission.id}-${item.id}`,
           submissionId: String(submission.id),
+          itemId: String(item.id),
           workOrderId: submission.wo_number || formatLegacyWorkOrderId(submission.id, normalizedCategory),
           date: submission.date || submission.submittedAt?.slice(0, 10) || '',
           nature: normalizedCategory || item.type || '-',
@@ -287,7 +289,7 @@ const mapSubmissionsToRows = (submissions: StoredWorkOrderSubmission[]): WorkOrd
           },
           status: normalizeStatus(item.status || submission.status || 'Pending'),
           approvalStatus: normalizeApprovalStatus(submission),
-          description: '',
+          description: item.description || '',
           targetDate: item.targetDate || '',
           reminderDate: item.reminderDate || '',
           details: [item.type, item.subType].filter(Boolean),
@@ -414,20 +416,17 @@ const WorkOrderDashboard: React.FC = () => {
     itemId: string,
     reminderDate: string,
   ) => {
-    const prevWorkOrders = [...workOrders];
     try {
       await persistWorkOrderItemDashboard(itemId, { reminderDate });
       setWorkOrders((prev) =>
         prev.map((item) =>
-          item.submissionId === submissionId &&
-          item.id.split('-').pop() === itemId
+          item.submissionId === submissionId && item.itemId === itemId
             ? { ...item, reminderDate }
             : item,
         ),
       );
     } catch (err) {
       console.error('Failed to update reminder date:', err);
-      setWorkOrders(prevWorkOrders);
       throw err;
     }
   };
@@ -440,10 +439,8 @@ const WorkOrderDashboard: React.FC = () => {
 
   const handleSaveReminder = async () => {
     if (selectedItemForInfo) {
-      const parts = selectedItemForInfo.id.split('-');
-      const itemId = parts[parts.length - 1];
       try {
-        await handleSaveReminderDate(selectedItemForInfo.submissionId, itemId, reminderDateInput);
+        await handleSaveReminderDate(selectedItemForInfo.submissionId, selectedItemForInfo.itemId, reminderDateInput);
         setShowInfoModal(false);
       } catch (err) {
         console.error('Failed to update work order reminder date:', err);
@@ -604,7 +601,14 @@ const WorkOrderDashboard: React.FC = () => {
                   }}
                 />
                 {searchTerm && (
-                  <XCircle size={16} className="clear-icon" onClick={() => setSearchTerm('')} />
+                  <button
+                    type="button"
+                    className="clear-icon-btn"
+                    onClick={() => setSearchTerm('')}
+                    aria-label="Clear search"
+                  >
+                    <XCircle size={16} className="clear-icon" />
+                  </button>
                 )}
               </div>
 

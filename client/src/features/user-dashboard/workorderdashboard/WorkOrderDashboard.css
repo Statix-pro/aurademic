@@ -1714,13 +1714,22 @@
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
 }
 
-.clear-icon {
+.clear-icon-btn {
   position: absolute;
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
+  background: none;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
+}
+
+.clear-icon {
+  color: #94a3b8;
 }
 
 /* Stats Row - Inside Card */

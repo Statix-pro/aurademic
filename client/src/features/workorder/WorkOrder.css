@@ -698,24 +698,24 @@
 }
 
 /* ── Chevron arrows ── */
-.card-toggle-arrow {
+.workorderPage .card-toggle-arrow {
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
 }
 
-.card-toggle-arrow.open {
+.workorderPage .card-toggle-arrow.open {
   transform: rotate(180deg) !important;
 }
 
 /* ── Row utility ── */
-.row {
+.workorderPage .row {
   display: flex;
   flex-wrap: wrap;
   margin-right: -15px;
   margin-left: -15px;
 }
 
-.workorderCard .cardContent .row {
+.workorderPage .workorderCard .cardContent .row {
   margin-bottom: 0;
 }
 
@@ -824,6 +824,12 @@
   background-color: #005492;
   border-color: #005492;
   color: #ffffff;
+}
+
+.priorityToggleBtn:focus-visible,
+.workorderChip:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
 }
 
 /* ── Hide number spinners (matches budget.css) ── */

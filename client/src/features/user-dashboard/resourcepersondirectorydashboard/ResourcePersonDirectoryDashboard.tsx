@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X } from 'lucide-react';
+import { Search, Plus, X, Edit3 } from 'lucide-react';
 import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
 import ResourcePersonDirectory, { ResourcePerson } from '../../resourcepersondirectory/ResourcePersonDirectory';
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import authenticityUtility, { isFallbackEligible } from '../../../shared/utils/authenticityUtility';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
@@ -21,7 +21,7 @@ import authenticityUtility from '../../../shared/utils/authenticityUtility';
 const STORAGE_KEY = 'resourcePersonDirectoryRecords';
 
 const fallbackGetAll = (): ResourcePerson[] => {
-  // TEMPORARY: remove once backend is live
+  // FALLBACK: remove once backend is live
   console.warn('[ResourcePerson] API unavailable — reading from localStorage fallback');
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -32,7 +32,7 @@ const fallbackGetAll = (): ResourcePerson[] => {
 };
 
 const fallbackSave = (records: ResourcePerson[]) => {
-  // TEMPORARY: remove once backend is live
+  // FALLBACK: remove once backend is live
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   } catch {
@@ -47,8 +47,9 @@ const apiGetAll = async (): Promise<ResourcePerson[]> => {
     const res = (await authenticityUtility.get('/resource-persons')) as any;
     if (res?.success && Array.isArray(res.data)) return res.data;
     throw new Error(res?.message || 'Invalid response');
-  } catch {
-    return fallbackGetAll();
+  } catch (err: any) {
+    if (isFallbackEligible(err)) return fallbackGetAll();
+    throw err;
   }
 };
 
@@ -57,8 +58,9 @@ const apiCreate = async (personData: Omit<ResourcePerson, 'id' | 'date'>): Promi
     const res = (await authenticityUtility.post('/resource-persons', personData)) as any;
     if (res?.success && res.data) return res.data;
     throw new Error(res?.message || 'Invalid response');
-  } catch {
-    // TEMPORARY: remove once backend is live
+  } catch (err: any) {
+    if (!isFallbackEligible(err)) throw err;
+    // FALLBACK: remove once backend is live
     console.warn('[ResourcePerson] API unavailable — writing to localStorage fallback');
     const existing = fallbackGetAll();
     const newRecord: ResourcePerson = {
@@ -68,6 +70,24 @@ const apiCreate = async (personData: Omit<ResourcePerson, 'id' | 'date'>): Promi
     };
     fallbackSave([newRecord, ...existing]);
     return newRecord;
+  }
+};
+
+const apiUpdate = async (id: number, personData: Omit<ResourcePerson, 'id' | 'date'>): Promise<ResourcePerson> => {
+  try {
+    const res = (await authenticityUtility.put(`/resource-persons/${id}`, personData)) as any;
+    if (res?.success && res.data) return res.data;
+    throw new Error(res?.message || 'Invalid response');
+  } catch (err: any) {
+    if (!isFallbackEligible(err)) throw err;
+    // FALLBACK: remove once backend is live
+    console.warn('[ResourcePerson] API unavailable — writing to localStorage fallback');
+    const existing = fallbackGetAll();
+    const updated = existing.map((r) => (r.id === id ? { ...r, ...personData } : r));
+    fallbackSave(updated);
+    const found = updated.find((r) => r.id === id);
+    if (!found) throw new Error('Record not found');
+    return found;
   }
 };
 
@@ -149,10 +169,20 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
     setShowForm(false);
   };
 
+  const handleEdit = (person: ResourcePerson) => {
+    setEditingPerson(person);
+    setShowForm(true);
+  };
+
   const handleSave = async (personData: Omit<ResourcePerson, 'id' | 'date'>) => {
     try {
-      const created = await apiCreate(personData);
-      setRecords((prev) => [created, ...prev]);
+      if (editingPerson) {
+        const updated = await apiUpdate(editingPerson.id, personData);
+        setRecords((prev) => prev.map((r) => (r.id === editingPerson.id ? updated : r)));
+      } else {
+        const created = await apiCreate(personData);
+        setRecords((prev) => [created, ...prev]);
+      }
     } catch {
       setError('Failed to save record. Please try again.');
     }
@@ -292,7 +322,16 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                           </td>
                           
                           <td className="rpd-center">-</td>
-                          <td className="rpd-center">-</td>
+                          <td className="rpd-center">
+                            <button
+                              type="button"
+                              className="rpd-icon-btn"
+                              onClick={() => handleEdit(person)}
+                              title="Edit Resource Person"
+                            >
+                              <Edit3 size={15} />
+                            </button>
+                          </td>
                         </tr>
                       );
                     })

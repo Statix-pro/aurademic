@@ -100,6 +100,48 @@ const titleDropdownStyles = {
   }),
 };
 
+interface UploadBoxProps {
+  icon: React.ReactNode;
+  title: string;
+  hint: string;
+  accept: string;
+  filename: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}
+
+const UploadBox: React.FC<UploadBoxProps> = ({
+  icon,
+  title,
+  hint,
+  accept,
+  filename,
+  onChange,
+}) => {
+  return (
+    <div className="rpd-upload-box">
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        <div style={{ color: '#0069ab', flexShrink: 0 }}>
+          {icon}
+        </div>
+        <div>
+          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>{title}</div>
+          <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>{hint}</div>
+          {filename && (
+            <div style={{ marginTop: '4px', fontSize: '0.8rem', color: '#0069ab', fontWeight: '600' }}>
+              {filename}
+            </div>
+          )}
+        </div>
+      </div>
+      <label className="rpd-choose-btn">
+        <Upload size={16} />
+        Choose File
+        <input type="file" accept={accept} onChange={onChange} style={{ display: 'none' }} />
+      </label>
+    </div>
+  );
+};
+
 /* ═══════════════════════════════════════════════════════════
    Form Component
    ═══════════════════════════════════════════════════════════ */
@@ -225,7 +267,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
           <h5>Personal Details</h5>
         </div>
         <div className="budget-card-content">
-          <div className="rpd-split-row" style={{ alignItems: 'stretch' }}>
+          <div className="rpd-split-row">
             {/* Left panel - Personal fields */}
             <div className="rpd-split-main" style={{ borderRight: '1px solid #eef2f6', paddingRight: '20px' }}>
               <div className="personal-name-grid">
@@ -429,108 +471,23 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
           <hr className="rpd-divider rpd-divider--dark" style={{ margin: '24px 0' }} />
 
           {/* Documents */}
-          <div className="rpd-docs-row" style={{ display: 'flex', gap: '16px', marginTop: '16px' }}>
-            <div 
-              className="rpd-upload-box" 
-              style={{ 
-                display: 'flex', 
-                flexDirection: 'row', 
-                alignItems: 'center', 
-                justifyContent: 'space-between', 
-                padding: '16px 20px', 
-                minHeight: 'auto', 
-                background: '#ffffff', 
-                borderRadius: '16px', 
-                border: '1.5px solid #e5edf6', 
-                flex: 1 
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <Image size={36} strokeWidth={1.5} style={{ color: '#0069ab', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>Photo</div>
-                  <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>JPG, JPEG, PNG (Maximum 2 MB)</div>
-                  {photoName && (
-                    <div style={{ marginTop: '4px', fontSize: '0.8rem', color: '#0069ab', fontWeight: '600' }}>
-                      {photoName}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <label 
-                className="rpd-choose-btn"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '10px 20px',
-                  borderRadius: '10px',
-                  backgroundColor: '#0069ab',
-                  color: '#ffffff',
-                  fontWeight: '700',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  border: 'none',
-                  margin: 0,
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <Upload size={16} />
-                Choose File
-                <input type="file" accept="image/*" onChange={handlePhoto} style={{ display: 'none' }} />
-              </label>
-            </div>
-            
-            <div 
-              className="rpd-upload-box" 
-              style={{ 
-                display: 'flex', 
-                flexDirection: 'row', 
-                alignItems: 'center', 
-                justifyContent: 'space-between', 
-                padding: '16px 20px', 
-                minHeight: 'auto', 
-                background: '#ffffff', 
-                borderRadius: '16px', 
-                border: '1.5px solid #e5edf6', 
-                flex: 1 
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <FileText size={36} strokeWidth={1.5} style={{ color: '#0069ab', flexShrink: 0 }} />
-                <div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0f172a' }}>Resume</div>
-                  <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '2px' }}>PDF, DOC, DOCX (Maximum 5 MB)</div>
-                  {resumeName && (
-                    <div style={{ marginTop: '4px', fontSize: '0.8rem', color: '#0069ab', fontWeight: '600' }}>
-                      {resumeName}
-                    </div>
-                  )}
-                </div>
-              </div>
-              <label 
-                className="rpd-choose-btn"
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '10px 20px',
-                  borderRadius: '10px',
-                  backgroundColor: '#0069ab',
-                  color: '#ffffff',
-                  fontWeight: '700',
-                  fontSize: '0.9rem',
-                  cursor: 'pointer',
-                  border: 'none',
-                  margin: 0,
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                <Upload size={16} />
-                Choose File
-                <input type="file" accept=".pdf,.doc,.docx" onChange={handleResume} style={{ display: 'none' }} />
-              </label>
-            </div>
+          <div className="rpd-docs-row" style={{ marginTop: '16px' }}>
+            <UploadBox
+              icon={<Image size={36} strokeWidth={1.5} />}
+              title="Photo"
+              hint="JPG, JPEG, PNG (Maximum 2 MB)"
+              accept="image/*"
+              filename={photoName}
+              onChange={handlePhoto}
+            />
+            <UploadBox
+              icon={<FileText size={36} strokeWidth={1.5} />}
+              title="Resume"
+              hint="PDF, DOC, DOCX (Maximum 5 MB)"
+              accept=".pdf,.doc,.docx"
+              filename={resumeName}
+              onChange={handleResume}
+            />
           </div>
         </div>
       </div>

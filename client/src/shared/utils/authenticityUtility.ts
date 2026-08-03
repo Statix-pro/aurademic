@@ -110,4 +110,8 @@ authenticityUtility.getBaseURL = (): string => {
   return baseURL.replace(/\/api\/?$/, '');
 };
 
+export const isFallbackEligible = (error: any): boolean => {
+  return !error.response || error.response.status === 404;
+};
+
 export default authenticityUtility;

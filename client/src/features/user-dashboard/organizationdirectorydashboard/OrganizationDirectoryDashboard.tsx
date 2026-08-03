@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Search, Plus, X, Edit3 } from 'lucide-react';
+import { Search, X, Edit3 } from 'lucide-react';
 import './OrganizationDirectoryDashboard.css';
 import OrganizationDirectory, { Organization } from '../../organizationdirectory/OrganizationDirectory';
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import authenticityUtility, { isFallbackEligible } from '../../../shared/utils/authenticityUtility';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /organizations          → { success: true, data: Organization[] }
@@ -20,7 +20,7 @@ import authenticityUtility from '../../../shared/utils/authenticityUtility';
 const STORAGE_KEY = 'organizationDirectoryRecords_v2';
 
 const fallbackGetAll = (): Organization[] => {
-  // TEMPORARY: remove once backend is live
+  // FALLBACK: remove once backend is live
   console.warn('[Organization] API unavailable — reading from localStorage fallback');
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
@@ -31,7 +31,7 @@ const fallbackGetAll = (): Organization[] => {
 };
 
 const fallbackSave = (records: Organization[]) => {
-  // TEMPORARY: remove once backend is live
+  // FALLBACK: remove once backend is live
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   } catch {
@@ -46,8 +46,9 @@ const apiGetAll = async (): Promise<Organization[]> => {
     const res = (await authenticityUtility.get('/organizations')) as any;
     if (res?.success && Array.isArray(res.data)) return res.data;
     throw new Error(res?.message || 'Invalid response');
-  } catch {
-    return fallbackGetAll();
+  } catch (err: any) {
+    if (isFallbackEligible(err)) return fallbackGetAll();
+    throw err;
   }
 };
 
@@ -56,8 +57,9 @@ const apiCreate = async (orgData: Omit<Organization, 'id' | 'date'>): Promise<Or
     const res = (await authenticityUtility.post('/organizations', orgData)) as any;
     if (res?.success && res.data) return res.data;
     throw new Error(res?.message || 'Invalid response');
-  } catch {
-    // TEMPORARY: remove once backend is live
+  } catch (err: any) {
+    if (!isFallbackEligible(err)) throw err;
+    // FALLBACK: remove once backend is live
     console.warn('[Organization] API unavailable — writing to localStorage fallback');
     const existing = fallbackGetAll();
     const newRecord: Organization = {
@@ -75,8 +77,9 @@ const apiUpdate = async (id: number, orgData: Omit<Organization, 'id' | 'date'>)
     const res = (await authenticityUtility.put(`/organizations/${id}`, orgData)) as any;
     if (res?.success && res.data) return res.data;
     throw new Error(res?.message || 'Invalid response');
-  } catch {
-    // TEMPORARY: remove once backend is live
+  } catch (err: any) {
+    if (!isFallbackEligible(err)) throw err;
+    // FALLBACK: remove once backend is live
     console.warn('[Organization] API unavailable — writing to localStorage fallback');
     const existing = fallbackGetAll();
     const updated = existing.map((r) => (r.id === id ? { ...r, ...orgData } : r));
