@@ -401,6 +401,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
   }, [eventId]);
 
   const handleToggle = (doc: string) => {
+    if (!canEditDocuments) return;
     setDocState((prev) => ({
       ...prev,
       [doc]: {
@@ -546,20 +547,22 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
                     className={`event-photo-slot ${!docState[doc].active ? "disabled" : ""}`}
                   >
                     <CloudUpload size={16} />
-          <input
-            type="file"
-            onChange={(e) => handleFileUpload(doc, e, i)}
-            style={{ display: "none" }}
-            disabled={!docState[doc].active || !canEditDocuments}
-          />
+                    <input
+                      type="file"
+                      onChange={(e) => handleFileUpload(doc, e, i)}
+                      style={{ display: "none" }}
+                      disabled={!docState[doc].active || !canEditDocuments}
+                    />
                   </label>
 
-                  <span
+                  <button
+                    type="button"
                     className={`event-photo-slot ${!photoFiles[i] ? "disabled" : ""}`}
-                    onClick={() => photoFiles[i] && handleViewFile(doc, i)}
+                    onClick={() => handleViewFile(doc, i)}
+                    disabled={!photoFiles[i]}
                   >
                     <Eye size={16} />
-                  </span>
+                  </button>
                 </div>
               ))}
             </div>
@@ -590,12 +593,14 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
             disabled={!docState[doc].active || !canEditDocuments}
           />
         </label>
-        <span
+        <button
+          type="button"
           className={`event-eye-icon ${!docState[doc].file ? "disabled" : ""}`}
           onClick={() => docState[doc].file && handleViewFile(doc)}
+          disabled={!docState[doc].file}
         >
           <Eye size={16} />
-        </span>
+        </button>
       </div>
     );
   };

@@ -142,11 +142,13 @@ const buildBellCalendar = (year: number, monthIndex: number, selectedDate: Date)
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const ability = useAbility();
+  const canEditEvents = ability.can("edit", "Event");
+  const canDeleteEvents = ability.can("delete", "Event");
   const [searchTerm, setSearchTerm] = useState("");
   const [yearFilter, setYearFilter] = useState("all");
   const [selectedStatus, setSelectedStatus] = useState<DashboardStatusKey>("all");
   const [showBellPreview, setShowBellPreview] = useState(false);
-  const [activePendingId, setActivePendingId] = useState<number | null>(null);
+  const [activePendingId, setActivePendingId] = useState<string | null>(null);
   const [bellViewYear, setBellViewYear] = useState(new Date().getFullYear());
   const [bellViewMonth, setBellViewMonth] = useState(new Date().getMonth());
   const [bellSelectedDate, setBellSelectedDate] = useState(new Date());
@@ -338,6 +340,7 @@ const Dashboard: React.FC = () => {
 
   const handleDelete = (event: EventData): void => {
     if (!event || !event.id) return;
+    if (!canDeleteEvents) return;
     
     if (event.isSubEvent) {
       setSubEventToDelete(event);
@@ -445,6 +448,14 @@ const Dashboard: React.FC = () => {
   };
 
   const currentBellMonthLabel = EVENT_DASHBOARD_MONTHS[bellViewMonth];
+  const selectedBellEvents = events.filter((event) => {
+    const eventDate = new Date(event.date);
+    return (
+      eventDate.getFullYear() === bellSelectedDate.getFullYear() &&
+      eventDate.getMonth() === bellSelectedDate.getMonth() &&
+      eventDate.getDate() === bellSelectedDate.getDate()
+    );
+  });
 
   return (
     <div className="event-dashboard-shell">
@@ -587,7 +598,7 @@ const Dashboard: React.FC = () => {
                         <div className="event-request-mini-actions">
                           <button type="button" className="event-request-mini-btn" onClick={(e) => { e.stopPropagation(); openEventTab(event.id, "updates"); }} aria-label="Info" title="Info"><Info size={16} /></button>
                           <button type="button" className="event-request-mini-btn" onClick={(e) => { e.stopPropagation(); openEventTab(event.id, "pre-event"); }} aria-label="View" title="View"><Eye size={16} /></button>
-                          {!hideEdit && (
+                          {canEditEvents && !hideEdit && (
                             <button
                               type="button"
                               className="event-request-mini-btn"
@@ -601,7 +612,7 @@ const Dashboard: React.FC = () => {
                               <Edit2 size={16} />
                             </button>
                           )}
-                          {!hideDelete && (
+                          {canDeleteEvents && !hideDelete && (
                             <button
                               type="button"
                               className="event-request-mini-btn"
@@ -645,7 +656,8 @@ const Dashboard: React.FC = () => {
                         normalizedStatus === "pending" ||
                         normalizedStatus === "approved" ||
                         normalizedStatus === "reject";
-                      const showSteps = isClickableStatus && activePendingId === event.id;
+                      const eventIdentity = getEventIdentity(event);
+                      const showSteps = isClickableStatus && activePendingId === eventIdentity;
 
                       return (
                         <>
@@ -670,7 +682,7 @@ const Dashboard: React.FC = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                               if (!isClickableStatus) return;
-                              setActivePendingId(activePendingId === event.id ? null : event.id);
+                              setActivePendingId(activePendingId === eventIdentity ? null : eventIdentity);
                             }}
                             aria-pressed={showSteps}
                             disabled={!isClickableStatus}
@@ -714,7 +726,23 @@ const Dashboard: React.FC = () => {
             <div className="event-bell-panel">
               <div className="event-bell-left">
                 <h2 className="event-bell-left-title">Events scheduled on {bellTitle}</h2>
-                <p className="event-bell-left-empty">No events scheduled for this day.</p>
+                {selectedBellEvents.length === 0 ? (
+                  <p className="event-bell-left-empty">No events scheduled for this day.</p>
+                ) : (
+                  <ul className="event-bell-event-list">
+                    {selectedBellEvents.map((event) => (
+                      <li key={getEventIdentity(event)}>
+                        <button
+                          type="button"
+                          className="event-bell-event-link"
+                          onClick={() => openEventTab(event.id, "pre-event")}
+                        >
+                          {event.name}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
 
               <div className="event-bell-right">
@@ -851,9 +879,7 @@ const Dashboard: React.FC = () => {
           <span aria-live="polite" className="d-block mt-2">
             {eventToDelete && eventToDelete.parent_id == null && events.some((event) => event.parent_id === eventToDelete.id) && deleteCountdown > 0 ? (
               <>You can confirm this action in <strong className="text-danger">{deleteCountdown}</strong> seconds.</>
-            ) : (
-              <>Please confirm if you wish to proceed.</>
-            )}
+            ) : null}
           </span>
         </p>
       </CustomModal>
