@@ -9,7 +9,9 @@ import {
   canAccessBudgetApproval,
   canAccessExpenditureWorkflow,
   canAccessFinanceWorkflow,
+  canAccessGuesthouseWorkflow,
   canManageAccessControl,
+  hasPermission,
   isSuperAdmin,
 } from '../../../utils/permissionUtils';
 
@@ -212,17 +214,6 @@ interface SidebarProps {
   setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
-const getNameInitial = (name?: string): string => {
-  if (!name) return 'U';
-  const salutations = ['dr.', 'mr.', 'mrs.', 'ms.', 'prof.', 'er.'];
-  const parts = name.trim().split(/\s+/);
-  const firstWord = parts[0].toLowerCase();
-  if (salutations.includes(firstWord) && parts.length > 1) {
-    return parts[1].charAt(0).toUpperCase();
-  }
-  return parts[0].charAt(0).toUpperCase();
-};
-
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const { logout, user } = useAuth();
   const location = useLocation();
@@ -237,10 +228,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showBudgetApproval = canAccessBudgetApproval(user);
   const showFinanceWorkflow = canAccessFinanceWorkflow(user);
   const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
+  const showGuesthouseApproval = canAccessGuesthouseWorkflow(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu =
-    showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow;
+    showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow || showGuesthouseApproval;
   const showSuperAdminMenu = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
@@ -428,7 +420,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <button
             className={`sb-link ${
               isGroupActive([
-                '/guestHouse-dashboard',
+                '/guesthouse-dashboard',
                 '/vehicle-booking',
                 '/hall-booking',
                 '/eventdashboard',
@@ -447,8 +439,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           {isExpanded && activeMenu === 'Bookings' && (
             <div className="sb-submenu">
               <Link
-                to="/guestHouse-dashboard"
-                className={`sb-sublink ${isActive('/guestHouse-dashboard') ? 'active' : ''}`}
+                to="/guesthouse-dashboard"
+                className={`sb-sublink ${isActive('/guesthouse-dashboard') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Guest House
@@ -499,6 +491,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                   '/project-dashboard',
                   '/admin-dashboard',
                   '/admin/budget',
+                  '/admin/guesthouse',
                   '/workflow/finance',
                   '/workflow/expenditure',
                 ])
@@ -564,6 +557,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     onClick={handleLinkClick}
                   >
                     Expenditure Approval
+                  </Link>
+                )}
+                {showGuesthouseApproval && (
+                  <Link
+                    to="/admin/guesthouse"
+                    className={`sb-sublink ${isActive('/admin/guesthouse') ? 'active' : ''}`}
+                    onClick={handleLinkClick}
+                  >
+                    Guesthouse Approval
                   </Link>
                 )}
               </div>
