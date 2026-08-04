@@ -18,6 +18,7 @@ export type Subjects =
   | 'MasterData'
   | 'WorkOrder'
   | 'GuestHouse'
+  | 'Vehicle'
   | 'Profile'
   | 'all'; // CASL's wildcard for "everything"
 
@@ -79,6 +80,9 @@ const PERMISSION_MAP: Record<string, { action: Actions; subject: Subjects }> = {
   'work_order.edit': { action: 'edit', subject: 'WorkOrder' },
   'work_order.create': { action: 'create', subject: 'WorkOrder' },
   'work_order.manage': { action: 'manage', subject: 'WorkOrder' },
+  // Vehicle booking
+  'vehicle.manage': { action: 'manage', subject: 'Vehicle' },
+  'guesthouse.manage': { action: 'manage', subject: 'GuestHouse' },
 };
 
 const parseDynamicPermission = (permissionKey: string) => {

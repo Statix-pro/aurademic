@@ -1,0 +1,4208 @@
+
+.guesthousebooking-page {
+  --primary-color: #0069ab;
+  --primary-hover: #005492;
+  --booking-primary-dark: #0056b3;
+
+  --booking-white: #ffffff;
+
+  --booking-text-dark: #101828;
+  --booking-text-darker: #111827;
+  --booking-text-strong: #212529;
+  --booking-heading: #2c3e50;
+  --booking-text-secondary: #495057;
+  --booking-text-muted: #565656;
+  --booking-placeholder: #6c757d;
+
+  --booking-border: #d0d0d0;
+  --booking-border-light: #e0e0e0;
+  --booking-border-alt: #d4d4d4;
+  --booking-border-muted: #dee2e6;
+  --booking-border-soft: #c8d1dc;
+  --booking-border-cool: #d9dee8;
+  --booking-disabled: #b8c0cc;
+
+  --booking-accent-light: #d6e4f3;
+  --booking-bg-tint: #f0f6ff;
+  --booking-bg-tint-2: #f1f7ff;
+  --booking-bg-hover: #e7f3ff;
+
+  --booking-success: #16a34a;
+  --booking-success-dark: #15803d;
+
+  --booking-danger: #dc2626;
+  --booking-danger-bg: #fff1f1;
+}
+
+.guesthousebooking-card-header {
+  cursor: pointer;
+}
+
+.guesthousebooking-section-header h2 {
+  margin: 0;
+  color: var(--primary-color, #0069ab);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.guesthousebooking-card-body {
+  padding: 24px 28px;
+}
+
+.guesthousebooking-guest-list {
+  display: grid;
+  gap: 22px;
+  margin-bottom: 22px;
+}
+
+.guesthousebooking-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px 30px;
+}
+
+.guesthousebooking-field {
+  min-width: 0;
+}
+
+.guesthousebooking-field--wide {
+  grid-column: span 2;
+}
+
+.guesthousebooking-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--booking-text-secondary, #495057);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.guesthousebooking-input::placeholder,
+.guesthousebooking-small-input::placeholder,
+.guesthousebooking-food-input::placeholder,
+.guesthousebooking-food-date::placeholder,
+.guesthousebooking-time-input::placeholder {
+  color: var(--booking-placeholder, #6c757d);
+  opacity: 1;
+}
+
+.guesthousebooking-input {
+  padding: 9px 14px;
+}
+
+.guesthousebooking-input:focus,
+.guesthousebooking-small-input:focus,
+.guesthousebooking-food-input:focus,
+.guesthousebooking-food-date:focus,
+.guesthousebooking-time-input:focus {
+  border-color: var(--primary-color, #0069ab);
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+  background: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-input[readonly] {
+  color: var(--booking-text-secondary, #495057);
+}
+
+.guesthousebooking-inline-alert {
+  margin-top: 16px;
+  color: #8a5c00;
+  background: #fff8e1;
+  border: 1px solid #ffe1a3;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.guesthousebooking-icon-button {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 26px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--primary-color, #0069ab);
+  cursor: pointer;
+  transition: background 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.guesthousebooking-icon-button:hover:not(:disabled) {
+  background: #e8f2fb;
+}
+
+.guesthousebooking-icon-button--danger {
+  color: var(--booking-danger, #dc2626);
+}
+
+.guesthousebooking-icon-button--danger:hover:not(:disabled) {
+  background: var(--booking-danger-bg, #fff1f1);
+}
+
+.guesthousebooking-icon-button:disabled {
+  color: var(--booking-disabled, #b8c0cc);
+  cursor: not-allowed;
+  opacity: 0.75;
+}
+
+.guesthousebooking-guest-block {
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.guesthousebooking-guest-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.guesthousebooking-guest-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.guesthousebooking-left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.guesthousebooking-right-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.guesthousebooking-radio-group,
+.guesthousebooking-number-choice-group,
+.guesthousebooking-count-row,
+.guesthousebooking-food-legend,
+.guesthousebooking-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.guesthousebooking-field--guest-name,
+.guesthousebooking-field--designation,
+.guesthousebooking-field--city {
+  grid-column: 1;
+}
+
+.guesthousebooking-field--gender,
+.guesthousebooking-field--priority,
+.guesthousebooking-field--state {
+  grid-column: 2;
+}
+
+.guesthousebooking-field--organization {
+  grid-column: 1 / -1;
+}
+
+.guesthousebooking-field--state {
+  max-width: none;
+}
+
+.guesthousebooking-field--gender .guesthousebooking-radio-group,
+.guesthousebooking-field--priority .guesthousebooking-radio-group {
+  min-height: 48px;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+.guesthousebooking-guest-card .guesthousebooking-label {
+  margin-bottom: 7px;
+  color: var(--booking-text-secondary, #495057);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.guesthousebooking-guest-card .guesthousebooking-small-input {
+  width: 50px;
+  min-height: 36px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.guesthousebooking-radio,
+.guesthousebooking-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 78px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--booking-accent-light, #d6e4f3);
+  border-radius: 8px;
+  background: var(--booking-bg-tint-2, #f1f7ff);
+  margin: 0;
+  color: var(--primary-color, #0069ab);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease;
+}
+
+.guesthousebooking-field--gender .guesthousebooking-radio {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.guesthousebooking-field--priority .guesthousebooking-radio {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 8px;
+}
+
+.guesthousebooking-radio--active {
+  border-color: var(--primary-color, #0069ab);
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+  box-shadow: 0 6px 14px rgba(0, 105, 171, 0.22);
+}
+
+.guesthousebooking-radio:focus-within {
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.16);
+}
+
+.guesthousebooking-radio input,
+.guesthousebooking-choice input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.guesthousebooking-choice--veg {
+  color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-choice--nonveg {
+  color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-number-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  margin: 0;
+  color: var(--primary-color, #0069ab);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.guesthousebooking-number-choice--veg {
+  color: var(--booking-success-dark, #15803d);
+}
+
+.guesthousebooking-number-choice--nonveg {
+  color: var(--booking-danger, #dc2626);
+}
+
+.guesthousebooking-field--room .guesthousebooking-number-choice {
+  color: var(--booking-text-darker, #111827);
+}
+
+.guesthousebooking-count-row label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  color: #293241;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.guesthousebooking-field--accompanied,
+.guesthousebooking-field--room,
+.guesthousebooking-field--remarks {
+  grid-template-columns: 180px minmax(0, 1fr);
+}
+
+.guesthousebooking-field--food,
+.guesthousebooking-field--priority-sidebar {
+  grid-template-columns: 150px minmax(0, 1fr);
+}
+
+.guesthousebooking-field--guest-total,
+.guesthousebooking-field--room-total {
+  grid-template-columns: minmax(0, 1fr) 68px;
+}
+
+.guesthousebooking-field--accompanied .guesthousebooking-option-heading,
+.guesthousebooking-field--room .guesthousebooking-option-heading,
+.guesthousebooking-field--remarks .guesthousebooking-option-heading {
+  min-width: 180px;
+}
+
+.guesthousebooking-field--food .guesthousebooking-option-heading,
+.guesthousebooking-field--priority-sidebar .guesthousebooking-option-heading {
+  min-width: 150px;
+}
+
+.guesthousebooking-field--accompanied .guesthousebooking-count-row,
+.guesthousebooking-field--room .guesthousebooking-number-choice-group,
+.guesthousebooking-field--food .guesthousebooking-number-choice-group {
+  justify-content: stretch;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.guesthousebooking-field--accompanied .guesthousebooking-count-row label,
+.guesthousebooking-field--room .guesthousebooking-number-choice,
+.guesthousebooking-field--food .guesthousebooking-number-choice {
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.guesthousebooking-small-input {
+  width: 50px;
+  min-height: 36px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.guesthousebooking-small-input--veg {
+  border-color: #74d99f;
+  background: #fbfffd;
+  color: #14532d;
+  font-weight: 700;
+}
+
+.guesthousebooking-small-input--veg:focus {
+  border-color: var(--booking-success-dark, #15803d);
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.2);
+}
+
+.guesthousebooking-small-input--nonveg {
+  border-color: #ff9b9b;
+  background: #fffafa;
+  color: #7f1d1d;
+  font-weight: 700;
+}
+
+.guesthousebooking-small-input--nonveg:focus {
+  border-color: #b91c1c;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.2);
+}
+
+.guesthousebooking-travel-row+.guesthousebooking-travel-row {
+  padding-top: 12px;
+}
+
+.guesthousebooking-travel-row label {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  justify-content: start;
+  gap: 10px;
+  margin: 0;
+  color: #4f4f4f;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.guesthousebooking-travel-row label svg {
+  display: none;
+}
+
+.guesthousebooking-travel-row .guesthousebooking-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 10px;
+}
+
+.guesthousebooking-date-input-wrap .guesthousebooking-input {
+  padding-right: 32px;
+}
+
+.guesthousebooking-time-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.guesthousebooking-travel-clock {
+  display: none;
+}
+
+.guesthousebooking-date-input-wrap,
+.guesthousebooking-time-input-wrap {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+.guesthousebooking-time-input-wrap .guesthousebooking-travel-clock {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: block;
+  color: var(--booking-text-dark, #101828);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.guesthousebooking-native-date-picker {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+  outline: none;
+  transform: translateY(-50%);
+}
+
+.guesthousebooking-native-date-picker::-webkit-datetime-edit,
+.guesthousebooking-native-date-picker::-webkit-datetime-edit-fields-wrapper,
+.guesthousebooking-native-date-picker::-webkit-datetime-edit-text,
+.guesthousebooking-native-date-picker::-webkit-datetime-edit-month-field,
+.guesthousebooking-native-date-picker::-webkit-datetime-edit-day-field,
+.guesthousebooking-native-date-picker::-webkit-datetime-edit-year-field {
+  display: none;
+}
+
+.guesthousebooking-native-date-picker::-webkit-calendar-picker-indicator {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  opacity: 1;
+}
+
+.guesthousebooking-days-row strong {
+  margin-left: auto;
+  font-size: 15px;
+}
+
+.guesthousebooking-food-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.guesthousebooking-legend-box {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  border-radius: 4px;
+  border: 1px solid currentcolor;
+  background: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-legend-box--veg {
+  color: var(--booking-success, #16a34a);
+}
+
+.guesthousebooking-legend-box--nonveg {
+  color: #ef4444;
+}
+
+.guesthousebooking-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #e3e8f0;
+  border-radius: 8px;
+}
+
+.guesthousebooking-food-table {
+  width: 100%;
+  min-width: 980px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-food-table th {
+  height: 44px;
+  padding: 8px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  background: var(--booking-bg-tint, #f0f6ff);
+  color: var(--primary-color, #0069ab);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.guesthousebooking-food-table th:last-child {
+  border-right: 1px solid var(--booking-border-light, #e0e0e0);
+}
+
+.guesthousebooking-food-table td {
+  height: 52px;
+  padding: 8px;
+  border-top: 1px solid #e3e8f0;
+  border-right: 1px solid #e3e8f0;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.guesthousebooking-food-table td:last-child {
+  border-right: 0;
+}
+
+.guesthousebooking-food-date {
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.guesthousebooking-food-input {
+  max-width: 86px;
+  min-height: 40px;
+  padding: 8px 10px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.guesthousebooking-food-pair {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.guesthousebooking-food-input--veg {
+  border-color: #9ae6b4;
+  background: #fbfffd;
+}
+
+.guesthousebooking-food-input--veg:focus {
+  border-color: var(--booking-success, #16a34a);
+  box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.15);
+}
+
+.guesthousebooking-food-input--nonveg {
+  border-color: #fca5a5;
+  background: #fffafa;
+}
+
+.guesthousebooking-food-input--nonveg:focus {
+  border-color: var(--booking-danger, #dc2626);
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14);
+}
+
+.guesthousebooking-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.guesthousebooking-secondary-button,
+.guesthousebooking-submit-button {
+  min-height: 42px;
+  border-radius: 12px;
+  padding: 0 18px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.guesthousebooking-secondary-button {
+  border: 1px solid var(--primary-color, #0069ab);
+  background: transparent;
+  color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-submit-button {
+  border: 1px solid var(--primary-color, #0069ab);
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 18px rgba(0, 105, 171, 0.22);
+}
+
+.guesthousebooking-secondary-button:hover,
+.guesthousebooking-submit-button:hover {
+  transform: translateY(-2px);
+}
+
+.guesthousebooking-secondary-button:hover {
+  background: var(--booking-bg-hover, #e7f3ff);
+}
+
+.guesthousebooking-submit-button:hover {
+  background: var(--booking-primary-dark, #0056b3);
+  box-shadow: 0 8px 25px rgba(0, 105, 171, 0.4);
+}
+
+.guesthousebooking-success {
+  margin-right: auto;
+  color: var(--booking-success-dark, #15803d);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.guesthousebooking-error {
+  margin-right: auto;
+  color: #dc2626;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.guesthousebooking-submit-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.guesthousebooking-allotment-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed #d8d8d8;
+  flex-wrap: wrap;
+}
+
+.guesthousebooking-allotment-guest-select-container {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 1 1 300px;
+  min-width: 0;
+}
+
+.guesthousebooking-allotment-guest-icon-wrap {
+  width: 44px;
+  height: 44px;
+  background: #e7f2fd;
+  color: var(--primary-color, #0069ab);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.guesthousebooking-allotment-guest-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.guesthousebooking-allotment-select {
+  border: 0;
+  border-bottom: 2px solid var(--booking-border-light, #e0e0e0);
+  background: transparent;
+  color: var(--booking-text-secondary, #495057);
+  font-weight: 700;
+  font-size: 16px;
+  padding: 2px 0px;
+  outline: none;
+  cursor: pointer;
+  width: max-content;
+  max-width: 100%;
+}
+
+.guesthousebooking-allotment-select:focus {
+  border-bottom-color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-allotment-guest-subtitle {
+  font-size: 13px;
+  color: #777982;
+  font-weight: 600;
+}
+
+.guesthousebooking-allotment-occupants-wrap {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 0 1 auto;
+}
+
+.guesthousebooking-allotment-occupant-input-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.guesthousebooking-gender-svg {
+  width: 32px;
+  height: 32px;
+  fill: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-allotment-count-input {
+  width: 46px;
+  height: 40px;
+  text-align: center;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  border-radius: 8px;
+  outline: none;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--booking-text-secondary, #495057);
+}
+
+.guesthousebooking-allotment-count-input:focus {
+  border-color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-allotment-date-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.guesthousebooking-allotment-date-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.guesthousebooking-allotment-date-label {
+  font-weight: 700;
+  color: var(--primary-color, #0069ab);
+  font-size: 14px;
+  width: 75px;
+  text-align: left;
+}
+
+.guesthousebooking-allotment-date-input {
+  width: 144px;
+  height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  border-radius: 8px;
+  outline: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--booking-text-secondary, #495057);
+}
+
+.guesthousebooking-allotment-date-input:focus {
+  border-color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-spoc-field>span {
+  font-weight: 700;
+  color: var(--booking-text-secondary, #495057);
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.guesthousebooking-card-header,
+.guesthousebooking-section-header {
+  width: 100%;
+  min-height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 20px;
+  border: 0;
+  border-bottom: 1px solid var(--booking-border-light, #e0e0e0);
+  background: var(--booking-white, #ffffff);
+  color: var(--primary-color, #0069ab);
+  font-size: 18px;
+  font-weight: 700;
+  text-align: left;
+  border-bottom-color: #d9e8f5;
+}
+
+.guesthousebooking-details-panel,
+.guesthousebooking-travel-panel,
+.guesthousebooking-field--accompanied,
+.guesthousebooking-field--guest-total,
+.guesthousebooking-field--room-total,
+.guesthousebooking-field--room,
+.guesthousebooking-field--food,
+.guesthousebooking-field--priority-sidebar,
+.guesthousebooking-field--remarks {
+  min-width: 0;
+  border: 1px solid #d8d8d8;
+  border-radius: 8px;
+  background: var(--booking-white, #ffffff);
+  overflow: hidden;
+  border-color: var(--booking-border-cool, #d9dee8);
+}
+
+.guesthousebooking-guest-card .guesthousebooking-small-input,
+.guesthousebooking-small-input {
+  width: 64px;
+  min-height: 38px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.guesthousebooking-total-input {
+  width: 68px;
+  margin-left: auto;
+  background: #fcfdff;
+}
+
+.guesthousebooking-number-choice span,
+.guesthousebooking-count-row label span {
+  flex: initial;
+  display: inline-flex;
+  justify-content: flex-start;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.guesthousebooking-field--food .guesthousebooking-number-choice span {
+  font-size: 14px;
+}
+
+.guesthousebooking-number-choice--veg,
+.guesthousebooking-food-legend span:first-child,
+.guesthousebooking-food-summary span:nth-child(3) {
+  color: var(--booking-success-dark, #15803d);
+}
+
+.guesthousebooking-number-choice--nonveg,
+.guesthousebooking-food-legend span:last-child,
+.guesthousebooking-food-summary span:nth-child(4) {
+  color: var(--booking-danger, #dc2626);
+}
+
+.guesthousebooking-travel-row label,
+.guesthousebooking-time-field {
+  color: #2f3f56;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.guesthousebooking-days-icon {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  border-radius: 50%;
+  background: #d7ecff;
+}
+
+.guesthousebooking-food-legend {
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 14px;
+}
+
+.guesthousebooking-food-card .guesthousebooking-table-wrap {
+  border-color: var(--booking-border-cool, #d9dee8);
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-table {
+  min-width: 1080px;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-table th {
+  height: 44px;
+  background: var(--booking-bg-tint, #f0f6ff);
+  color: var(--primary-color, #0069ab);
+  font-size: 13px;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-table th:nth-child(1) {
+  width: 15%;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-table th:nth-child(2),
+.guesthousebooking-food-card .guesthousebooking-food-table th:nth-child(5) {
+  width: 14%;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-table th:nth-child(3),
+.guesthousebooking-food-card .guesthousebooking-food-table th:nth-child(4),
+.guesthousebooking-food-card .guesthousebooking-food-table th:nth-child(6) {
+  width: 15%;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-table th:nth-child(7) {
+  width: 12%;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-table td {
+  height: 56px;
+  padding: 8px 10px;
+  border-color: var(--booking-border-cool, #d9dee8);
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-date {
+  width: 154px;
+  max-width: 100%;
+  min-height: 38px;
+  margin: 0 auto;
+  padding: 7px 10px;
+  border-color: #b8c6d9;
+  background: #f8fbff;
+  color: var(--booking-text-dark, #101828);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-date::-webkit-calendar-picker-indicator {
+  opacity: 0.9;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-input {
+  width: 86px;
+  max-width: 100%;
+  min-height: 38px;
+  padding: 7px 10px;
+  color: var(--booking-text-dark, #101828);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-pair {
+  gap: 8px;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-input--veg {
+  border-color: #79d79d;
+  background: #fbfffd;
+  color: #14532d;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-input--nonveg {
+  border-color: #f5a3a3;
+  background: #fffafa;
+  color: #7f1d1d;
+}
+
+.guesthousebooking-row-actions {
+  justify-content: center;
+  gap: 6px;
+}
+
+.guesthousebooking-field--food .guesthousebooking-number-choice-group {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: nowrap;
+}
+
+.guesthousebooking-field--food .guesthousebooking-number-choice {
+  gap: 10px;
+  display: grid;
+  grid-template-columns: max-content 48px;
+  column-gap: 7px;
+  justify-content: end;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.guesthousebooking-field--food .guesthousebooking-small-input {
+  width: 48px;
+  min-height: 36px;
+}
+
+.guesthousebooking-food-card .guesthousebooking-card-body {
+  min-height: 0;
+  padding-bottom: 20px;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-date,
+.guesthousebooking-food-card .guesthousebooking-food-input,
+.guesthousebooking-food-card .guesthousebooking-food-input--veg,
+.guesthousebooking-food-card .guesthousebooking-food-input--nonveg {
+  color: var(--booking-text-secondary, #495057);
+  font-weight: 500;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-date::placeholder,
+.guesthousebooking-food-card .guesthousebooking-food-input::placeholder {
+  color: var(--booking-placeholder, #6c757d);
+}
+
+.guesthousebooking-food-summary {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  margin-bottom: 0;
+}
+
+.guesthousebooking-food-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #dbe7f3;
+  border-radius: 8px;
+  background: #f7fbff;
+  color: #2f3f56;
+  font-size: 13px;
+  font-weight: 600;
+  border-color: #d9e8f5;
+}
+
+.guesthousebooking-food-summary span strong {
+  color: inherit;
+}
+
+.guesthousebooking-food-summary span:nth-child(3) {
+  color: var(--booking-success-dark, #15803d);
+}
+
+.guesthousebooking-food-summary span:nth-child(4) {
+  color: var(--booking-danger, #dc2626);
+}
+
+.guesthousebooking-field--food .guesthousebooking-option-heading {
+  min-width: 0;
+}
+
+.guesthousebooking-food-checkboxes {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: flex-end;
+}
+
+.guesthousebooking-food-checkbox-label--veg {
+  color: var(--booking-success-dark, #15803d);
+}
+
+.guesthousebooking-food-checkbox-label--nonveg {
+  color: var(--booking-danger, #dc2626);
+}
+
+.guesthousebooking-checkbox--veg {
+  border: 1px solid #74d99f;
+}
+
+.guesthousebooking-checkbox--nonveg {
+  border: 1px solid #ff9b9b;
+}
+
+.guesthousebooking-checkbox--veg:checked {
+  background-color: var(--booking-success-dark, #15803d);
+  border-color: var(--booking-success-dark, #15803d);
+}
+
+.guesthousebooking-checkbox--nonveg:checked {
+  background-color: var(--booking-danger, #dc2626);
+  border-color: var(--booking-danger, #dc2626);
+}
+
+.guesthousebooking-checkbox:checked::after {
+  content: '';
+  width: 7px;
+  height: 12px;
+  border: solid var(--booking-white, #ffffff);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.guesthousebooking-checkbox:focus-visible {
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 4px var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-small-input,
+.guesthousebooking-total-input,
+.guesthousebooking-food-input,
+.guesthousebooking-food-input--veg,
+.guesthousebooking-food-input--nonveg,
+.guesthousebooking-allotment-count-input,
+.guesthousebooking-food-summary span strong,
+.guesthousebooking-days-row strong,
+.centerTd {
+  color: var(--booking-text-strong, #212529) !important;
+  font-weight: 400 !important;
+}
+
+.guesthousebooking-field--priority-sidebar,
+.guesthousebooking-field--guest-total,
+.guesthousebooking-field--room-total {
+  background: var(--booking-bg-tint-2, #f1f7ff) !important;
+  border: 1px solid var(--booking-accent-light, #d6e4f3) !important;
+  border-radius: 12px !important;
+}
+
+.guesthousebooking-field--priority-sidebar .guesthousebooking-radio-group {
+  justify-content: flex-end !important;
+}
+
+.guesthousebooking-page {
+  min-height: 100vh;
+  background: var(--booking-bg-tint, #f0f6ff);
+  color: var(--text-main, #4f4f6e);
+  padding: 32px 0 48px;
+  font-family: Roboto, Arial, sans-serif;
+}
+
+.guesthousebooking-shell {
+  width: min(1204px, calc(100% - 40px));
+  margin: 0 auto;
+}
+
+.guesthousebooking-card {
+  background: var(--booking-white, #ffffff);
+  border: none;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  margin-bottom: 22px;
+  overflow: hidden;
+}
+
+.guesthousebooking-beneficiary-card {
+  width: 100%;
+  max-width: none;
+  margin: 18px 0 22px;
+  padding: 24px 24px 48px;
+  border: 0;
+  border-radius: 20px;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  overflow: visible;
+}
+
+.guesthousebooking-beneficiary-grid {
+  display: grid;
+  grid-template-columns: 3fr 6fr 3fr;
+  gap: 30px;
+  padding: 0;
+  align-items: end;
+}
+
+.guesthousebooking-beneficiary-field {
+  min-width: 0;
+  position: relative;
+}
+
+.guesthousebooking-beneficiary-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--booking-text-secondary, #495057);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.guesthousebooking-beneficiary-control {
+  width: 100%;
+  min-height: 45px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  border-radius: 12px;
+  background-color: #fcfdff;
+  color: #333333;
+  font: inherit;
+  font-size: 0.95rem;
+  padding: 10px 15px;
+  outline: none;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+}
+
+.guesthousebooking-beneficiary-control::placeholder {
+  color: var(--booking-placeholder, #6c757d);
+  opacity: 1;
+}
+
+.guesthousebooking-beneficiary-control:focus {
+  border-color: var(--primary-color, #0069ab);
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+  background-color: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-beneficiary-select {
+  appearance: auto;
+  cursor: pointer;
+}
+
+.guesthousebooking-guest-card {
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.guesthousebooking-guest-title-row {
+  min-height: 48px;
+  font-size: 16px;
+  padding: 0 32px;
+  border-bottom: 1px solid #d5d5d5;
+  background: var(--booking-white, #ffffff);
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+}
+
+.guesthousebooking-guest-card .guesthousebooking-card-body {
+  padding: 18px 32px 28px;
+}
+
+.guesthousebooking-guest-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 436px;
+  gap: 16px 18px;
+  align-items: start;
+}
+
+.guesthousebooking-left-column,
+.guesthousebooking-right-column {
+  gap: 12px;
+}
+
+.guesthousebooking-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 24px;
+  padding: 0;
+}
+
+.guesthousebooking-label,
+.guesthousebooking-guest-card .guesthousebooking-label {
+  color: var(--booking-text-muted, #565656);
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.guesthousebooking-input,
+.guesthousebooking-small-input,
+.guesthousebooking-food-input,
+.guesthousebooking-food-date,
+.guesthousebooking-time-input {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  border-radius: 10px;
+  background: var(--booking-white, #ffffff);
+  color: var(--booking-text-dark, #101828);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
+  border-color: var(--booking-border-alt, #d4d4d4);
+}
+
+.guesthousebooking-guest-card .guesthousebooking-input {
+  min-height: 44px;
+  padding: 9px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.guesthousebooking-field--gender .guesthousebooking-radio-group {
+  min-height: 44px;
+  align-items: center;
+}
+
+.guesthousebooking-guest-card .guesthousebooking-radio {
+  min-height: 32px;
+  border-radius: 7px;
+  font-size: 16px;
+  border-color: var(--booking-border-alt, #d4d4d4);
+  background: #f6f6f6;
+  color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-guest-card .guesthousebooking-radio--active {
+  border-color: var(--primary-color, #0069ab);
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.2);
+}
+
+.guesthousebooking-details-panel {
+  grid-area: details;
+  border: 0;
+  border-radius: 0;
+  overflow: visible;
+  padding: 0;
+}
+
+.guesthousebooking-travel-panel {
+  background: #ececec;
+  align-self: stretch;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  box-shadow: none;
+  border: 1px solid var(--booking-border-alt, #d4d4d4);
+  border-radius: 8px;
+}
+
+.guesthousebooking-panel-title {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-bottom: 0;
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 7px 7px 0 0;
+}
+
+.guesthousebooking-travel-grid {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 0;
+  background: #ececec;
+}
+
+.guesthousebooking-travel-row {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  align-content: center;
+  align-items: center;
+  padding: 8px 14px 10px;
+  border-bottom: 1px solid #d1d1d1;
+  border-bottom-color: #d9e8f5;
+  min-height: 92px;
+}
+
+.guesthousebooking-travel-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  grid-column: 1 / -1;
+  min-height: 22px;
+  padding: 0;
+  color: var(--primary-color, #0069ab);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.guesthousebooking-travel-row label,
+.guesthousebooking-travel-row .guesthousebooking-time-field {
+  grid-template-columns: 46px minmax(0, 1fr);
+  gap: 10px;
+  color: var(--booking-text-muted, #565656);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.guesthousebooking-travel-row .guesthousebooking-input,
+.guesthousebooking-time-input {
+  min-height: 46px;
+  border-radius: 10px;
+  background: var(--booking-white, #ffffff);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 12px;
+}
+
+.guesthousebooking-days-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  margin: 0;
+  padding: 6px 14px;
+  border: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0 0 7px 7px;
+  background: #e5f4ff;
+  color: var(--primary-color, #0069ab);
+  font-size: 16px;
+  font-weight: 700;
+  border-color: #cce3f5;
+}
+
+.guesthousebooking-option-row {
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  border-color: var(--booking-border-alt, #d4d4d4);
+  border-radius: 9px;
+  background: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-option-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: var(--primary-color, #0069ab);
+  font-size: 17px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.guesthousebooking-option-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 38px;
+  border-radius: 50%;
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+  flex-basis: 42px;
+}
+
+.guesthousebooking-field--accompanied,
+.guesthousebooking-field--room,
+.guesthousebooking-field--remarks,
+.guesthousebooking-field--priority-sidebar,
+.guesthousebooking-field--guest-total,
+.guesthousebooking-field--room-total,
+.guesthousebooking-field--food {
+  border-color: var(--booking-border-alt, #d4d4d4) !important;
+  border-radius: 9px !important;
+}
+
+.guesthousebooking-field--priority-sidebar,
+.guesthousebooking-field--guest-total,
+.guesthousebooking-field--room-total,
+.guesthousebooking-field--food,
+.guesthousebooking-field--remarks {
+  background: #eaf5ff !important;
+}
+
+.guesthousebooking-field--accompanied .guesthousebooking-count-row,
+.guesthousebooking-field--room .guesthousebooking-number-choice-group {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(128px, 1fr));
+  gap: 14px;
+  align-items: center;
+}
+
+.guesthousebooking-field--accompanied .guesthousebooking-count-row label,
+.guesthousebooking-field--room .guesthousebooking-number-choice {
+  display: grid;
+  grid-template-columns: max-content 62px;
+  column-gap: 12px;
+  align-items: center;
+  justify-content: center;
+  color: var(--booking-text-muted, #565656);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.guesthousebooking-field--food {
+  grid-template-columns: minmax(150px, 1fr) max-content;
+  padding: 8px 14px 8px 16px;
+  column-gap: 18px;
+  background: var(--booking-bg-tint-2, #f1f7ff);
+  border: 1px solid var(--booking-accent-light, #d6e4f3);
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 64px;
+}
+
+.guesthousebooking-food-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.guesthousebooking-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--booking-white, #ffffff);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease-in-out;
+  outline: none;
+  margin: 0;
+  position: relative;
+}
+
+.guesthousebooking-allotment-list {
+  display: grid;
+  gap: 12px;
+}
+
+.guesthousebooking-allotment-card {
+  overflow: hidden;
+}
+
+.guesthousebooking-room-allotment-header {
+  background: transparent;
+  color: var(--booking-heading, #2c3e50);
+  border-radius: 0;
+  padding: 0 0 10px;
+  font-size: 18px;
+  font-weight: 700;
+  border-bottom: 2px solid var(--booking-border-muted, #dee2e6);
+  min-height: auto;
+  display: flex;
+  align-items: center;
+  margin: 12px 28px 10px;
+  border: none;
+}
+
+.guesthousebooking-allotment-body {
+  padding: 10px 28px 14px;
+}
+
+.guesthousebooking-allotment-entry-card {
+  padding: 16px 8px 18px;
+  border-radius: 16px;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08);
+}
+
+.guesthousebooking-allotment-guest-overview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+}
+
+.guesthousebooking-allotment-main-icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 42px;
+  border-radius: 50%;
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-allotment-guest-copy {
+  min-width: 0;
+}
+
+.guesthousebooking-allotment-guest-copy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--primary-color, #0069ab);
+  font-size: 17px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guesthousebooking-allotment-guest-copy span {
+  display: block;
+  overflow: hidden;
+  margin-top: 6px;
+  color: var(--booking-text-muted, #565656);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guesthousebooking-allotment-occupancy-item input,
+.guesthousebooking-allotment-date-stack input {
+  width: 100%;
+  height: 42px;
+  border: 1px solid var(--booking-border-alt, #d4d4d4);
+  border-radius: 10px;
+  background: var(--booking-white, #ffffff);
+  color: var(--booking-text-strong, #212529);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: center;
+  outline: none;
+}
+
+.guesthousebooking-allotment-table-wrap {
+  overflow: hidden;
+  border: 1px solid var(--booking-border-soft, #c8d1dc);
+  border-radius: 0;
+}
+
+.guesthousebooking-allotment-table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.guesthousebooking-allotment-table th {
+  height: 44px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  background: var(--booking-bg-tint, #f0f6ff);
+  color: var(--primary-color, #0069ab);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.guesthousebooking-allotment-compact-control,
+.guesthousebooking-allotment-occupants-input,
+.guesthousebooking-allotment-remarks-input {
+  width: 100%;
+  max-width: none;
+  min-height: 38px;
+  height: 38px;
+  margin: 0 auto;
+  border: 1px solid var(--booking-border-alt, #d4d4d4);
+  border-radius: 10px;
+  background-color: var(--booking-white, #ffffff);
+  color: var(--booking-text-muted, #565656);
+  font-size: 14px;
+  font-weight: 400;
+  text-align: center;
+}
+
+.guesthousebooking-allotment-empty {
+  height: 58px;
+  color: #4f4f6e;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.guesthousebooking-allotment-amenities-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 170px;
+  align-items: center;
+  gap: 16px;
+  margin: 16px 10px 0;
+  padding: 10px 0 10px 18px;
+  border: 1px solid var(--booking-border-soft, #c8d1dc);
+  border-radius: 9px;
+  background: #eef7ff;
+  overflow: hidden;
+}
+
+.guesthousebooking-allotment-amenities-list {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  min-width: 0;
+}
+
+.guesthousebooking-allotment-amenity {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--primary-color, #0069ab);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+}
+
+.guesthousebooking-amenity-checkbox {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 1px solid #b8c6d4;
+  border-radius: 3px;
+}
+
+.guesthousebooking-amenity-checkbox:checked {
+  background-color: var(--primary-color, #0069ab);
+  border-color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-amenity-checkbox:checked::after {
+  width: 4px;
+  height: 8px;
+  border-width: 0 1.5px 1.5px 0;
+}
+
+.guesthousebooking-allotment-amenities-title {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  padding: 0 16px;
+  border-radius: 8px 0 0 8px;
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.guesthousebooking-allotment-caretaker-bar {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  align-items: center;
+  gap: 24px;
+  min-height: 50px;
+  margin-top: 28px;
+  padding: 0 24px 0 0;
+  border: 1px solid var(--booking-border-soft, #c8d1dc);
+  border-radius: 9px;
+  background: var(--booking-bg-hover, #e7f3ff);
+  overflow: hidden;
+}
+
+.guesthousebooking-caretaker-title {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  padding: 0 16px;
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+  font-size: 16px;
+  font-weight: 800;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.guesthousebooking-caretaker-field {
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.guesthousebooking-allotment-spoc-bar {
+  display: grid;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  background: var(--booking-bg-hover, #e7f3ff);
+  border: 1px solid var(--booking-border-soft, #c8d1dc);
+  border-radius: 9px;
+  padding: 10px 24px;
+  margin-top: 20px;
+  margin-bottom: 0;
+  flex-wrap: wrap;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.8fr);
+  min-height: 58px;
+}
+
+.guesthousebooking-spoc-field {
+  display: grid;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 280px;
+  min-width: 0;
+  grid-template-columns: max-content minmax(0, 1fr);
+}
+
+.guesthousebooking-spoc-field>span {
+  color: var(--primary-color, #0069ab);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.guesthousebooking-spoc-control {
+  min-height: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--booking-white, #ffffff);
+  font-size: 14px;
+}
+
+.guesthousebooking-travel-row .guesthousebooking-time-field {
+  grid-template-columns: 46px minmax(136px, 1fr);
+  gap: 10px;
+}
+
+.guesthousebooking-time-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: #fcfdff;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--booking-text-secondary, #495057);
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.guesthousebooking-time-input::placeholder {
+  color: var(--booking-placeholder, #6c757d);
+  text-transform: uppercase;
+  opacity: 1;
+}
+
+.guesthousebooking-field--room {
+  grid-template-columns: 224px minmax(0, 1fr);
+}
+
+.guesthousebooking-field--room .guesthousebooking-option-heading {
+  min-width: 0;
+}
+
+.guesthousebooking-field--room .guesthousebooking-number-choice-group {
+  min-width: 0;
+  column-gap: 14px;
+}
+
+.guesthousebooking-field--remarks {
+  background: var(--booking-bg-tint-2, #f1f7ff) !important;
+  border: 1px solid var(--booking-accent-light, #d6e4f3) !important;
+  border-radius: 12px !important;
+  overflow: hidden;
+  min-height: 62px !important;
+  height: 64px !important;
+  padding: 10px 16px !important;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 1.8fr) !important;
+  display: grid !important;
+  align-items: center !important;
+  gap: 14px !important;
+}
+
+.guesthousebooking-field--remarks .guesthousebooking-option-heading {
+  min-width: 0 !important;
+}
+
+.guesthousebooking-field--remarks .guesthousebooking-remarks-input {
+  height: 44px !important;
+  min-height: 44px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 10px 14px !important;
+  border-radius: 12px !important;
+}
+
+.guesthousebooking-allotment-summary-row {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) max-content max-content;
+  align-items: center;
+  gap: 26px;
+  padding: 0 12px 24px;
+}
+
+.guesthousebooking-allotment-occupancy-group {
+  display: grid;
+  grid-template-columns: repeat(3, max-content);
+  align-items: center;
+  gap: 24px;
+  justify-content: center;
+}
+
+.guesthousebooking-allotment-occupancy-item {
+  display: grid;
+  grid-template-columns: 62px 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 0;
+  color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-allotment-person-icon {
+  width: 62px;
+  height: 62px;
+  display: block;
+  fill: currentcolor;
+}
+
+.guesthousebooking-allotment-person-icon-detail {
+  fill: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-allotment-occupancy-item input {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+
+.guesthousebooking-allotment-date-stack span {
+  color: var(--primary-color, #0069ab);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.guesthousebooking-allotment-col-sno {
+  width: 7%;
+}
+
+.guesthousebooking-allotment-col-room-type {
+  width: 15%;
+}
+
+.guesthousebooking-allotment-col-block {
+  width: 19%;
+}
+
+.guesthousebooking-allotment-col-room-number {
+  width: 13%;
+}
+
+.guesthousebooking-allotment-col-occupants {
+  width: 10%;
+}
+
+.guesthousebooking-allotment-col-remarks {
+  width: 36%;
+}
+
+.guesthousebooking-allotment-table td {
+  height: 58px;
+  padding: 9px 8px;
+  border-color: var(--booking-border-soft, #c8d1dc);
+  color: var(--booking-text-muted, #565656);
+  font-size: 16px;
+}
+
+.guesthousebooking-allotment-compact-control {
+  appearance: none;
+  padding: 6px 34px 6px 12px;
+  -webkit-appearance: none;
+  line-height: 1.2;
+  text-align-last: center;
+}
+
+.guesthousebooking-allotment-compact-control::-ms-expand {
+  display: none;
+}
+
+.guesthousebooking-allotment-occupants-input {
+  max-width: 84px;
+}
+
+.guesthousebooking-allotment-remarks-input {
+  text-align: left;
+  width: 100%;
+}
+
+.guesthousebooking-option-row.guesthousebooking-field--remarks {
+  display: grid !important;
+  grid-template-columns: 84px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 14px !important;
+  min-height: 64px !important;
+  padding: 10px 16px !important;
+  background: #eaf5ff !important;
+  border: 1px solid #cfe1f3 !important;
+  border-radius: 10px !important;
+}
+
+.guesthousebooking-option-row.guesthousebooking-field--remarks .guesthousebooking-option-heading {
+  min-width: 0 !important;
+  justify-content: flex-start !important;
+  font-size: 16px !important;
+}
+
+.guesthousebooking-option-row.guesthousebooking-field--remarks .guesthousebooking-remarks-input {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 44px !important;
+  height: 44px !important;
+  padding: 9px 14px !important;
+  border-radius: 10px !important;
+}
+
+.guesthousebooking-food-date-wrap {
+  width: 154px;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.guesthousebooking-food-date-wrap .guesthousebooking-food-date {
+  width: 100%;
+  padding-right: 34px;
+  text-align: center;
+}
+
+.guesthousebooking-food-native-date-picker {
+  right: 10px;
+}
+
+.guesthousebooking-food-count-label--veg {
+  color: var(--booking-success-dark, #15803d);
+}
+
+.guesthousebooking-food-count-label--nonveg {
+  color: var(--booking-danger, #dc2626);
+}
+
+.guesthousebooking-allotment-guest-name-row strong {
+  min-width: 0;
+}
+
+.guesthousebooking-allotment-date-stack input {
+  height: 34px;
+  text-align: left;
+  width: 210px;
+  padding: 5px 10px;
+  font-size: 13px;
+}
+
+.guesthousebooking-option-row.guesthousebooking-field--food {
+  grid-template-columns: minmax(126px, 1fr) max-content !important;
+  min-height: 70px !important;
+  padding: 9px 14px !important;
+  column-gap: 8px !important;
+}
+
+.guesthousebooking-food-counts {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.guesthousebooking-food-count-label {
+  display: inline-grid;
+  grid-template-columns: max-content 58px;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.guesthousebooking-food-count-input {
+  width: 58px !important;
+  min-height: 40px !important;
+  height: 40px !important;
+  padding: 7px 8px !important;
+  border-radius: 9px !important;
+  font-size: 15px !important;
+  text-align: center;
+}
+
+.guesthousebooking-food-card .guesthousebooking-food-pair .guesthousebooking-food-input {
+  width: 70px;
+  max-width: 70px;
+  min-height: 42px;
+}
+
+.guesthousebooking-allotment-datetime-row {
+  display: grid;
+  grid-template-columns: 78px max-content;
+  align-items: center;
+  gap: 8px;
+}
+
+.guesthousebooking-allotment-datetime-title {
+  color: var(--primary-color, #0069ab);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-fields {
+  display: grid;
+  grid-template-columns: 132px 94px;
+  gap: 8px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-field {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 3px;
+  margin: 0;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-field span {
+  color: #5d7188;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-field input {
+  width: 100%;
+  height: 32px;
+  padding: 5px 9px;
+  font-size: 13px;
+  text-align: left;
+}
+
+.guesthousebooking-priority-badge-mark {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: currentcolor;
+  display: none;
+}
+
+.guesthousebooking-priority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--booking-white, #ffffff);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  justify-content: center;
+  max-width: 240px;
+  box-shadow: 0 2px 7px rgba(17, 24, 39, 0.1);
+  min-width: 104px;
+}
+
+.guesthousebooking-allotment-guest-copy .guesthousebooking-priority-badge strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 16px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guesthousebooking-priority-badge--routine {
+  color: var(--booking-success-dark, #15803d);
+  background: #e9fff0;
+  border: 1px solid #4ade80;
+  box-shadow: 0 2px 7px rgba(21, 128, 61, 0.12);
+}
+
+.guesthousebooking-priority-badge--high {
+  color: var(--booking-danger, #dc2626);
+  background: var(--booking-danger-bg, #fff1f1);
+  border: 1px solid #f87171;
+  box-shadow: 0 2px 7px rgba(220, 38, 38, 0.12);
+}
+
+.guesthousebooking-allotment-datetime-row+.guesthousebooking-allotment-datetime-row .guesthousebooking-allotment-datetime-field>span {
+  display: none;
+}
+
+.guesthousebooking-allotment-datetime-row+.guesthousebooking-allotment-datetime-row .guesthousebooking-allotment-datetime-field {
+  gap: 0;
+}
+
+.guesthousebooking-allotment-guest-name-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.guesthousebooking-priority-indicator {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  border: 2px solid var(--booking-white, #ffffff);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(17, 24, 39, 0.16);
+  display: inline-block !important;
+}
+
+.guesthousebooking-priority-indicator--routine {
+  background: var(--booking-success, #16a34a);
+}
+
+.guesthousebooking-priority-indicator--high {
+  background: var(--booking-danger, #dc2626);
+}
+
+.guesthousebooking-allotment-guest-name-row>strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--primary-color, #0069ab);
+  font-size: 17px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guesthousebooking-allotment-date-stack {
+  display: grid;
+  gap: 8px;
+  justify-self: end;
+  width: max-content;
+}
+
+.guesthousebooking-allotment-date-stack label {
+  display: grid;
+  grid-template-columns: 72px 160px;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.guesthousebooking-allotment-date-stack label>span {
+  color: var(--primary-color, #0069ab);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.guesthousebooking-allotment-date-stack label>input {
+  width: 160px;
+  height: 34px;
+  padding: 5px 10px;
+  border: 1px solid var(--booking-border-alt, #d4d4d4);
+  border-radius: 10px;
+  background: var(--booking-white, #ffffff);
+  color: var(--booking-text-strong, #212529);
+  font-size: 13px;
+  text-align: left;
+}
+
+.guesthousebooking-allotment-card {
+  min-height: 0;
+}
+
+.guesthousebooking-allotment-entry-card {
+  padding: 18px 10px 20px;
+  border-radius: 14px;
+}
+
+.guesthousebooking-allotment-summary-row {
+  grid-template-columns: minmax(260px, 0.9fr) max-content max-content;
+  gap: 22px;
+  min-height: 82px;
+  padding: 0 18px 14px;
+}
+
+.guesthousebooking-allotment-guest-overview {
+  gap: 14px;
+}
+
+.guesthousebooking-allotment-main-icon {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+}
+
+.guesthousebooking-allotment-occupancy-group {
+  grid-template-columns: repeat(4, max-content);
+  gap: 18px;
+}
+
+.guesthousebooking-allotment-occupancy-item {
+  grid-template-columns: 52px 42px;
+  gap: 9px;
+}
+
+.guesthousebooking-allotment-person-icon {
+  width: 52px;
+  height: 52px;
+}
+
+.guesthousebooking-allotment-occupancy-item input {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+}
+
+.guesthousebooking-allotment-date-stack {
+  gap: 8px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+  display: grid;
+  grid-template-columns: 78px 18px 118px 18px 86px 18px;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-title {
+  color: var(--primary-color, #0069ab);
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.guesthousebooking-allotment-meta-icon {
+  color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-allotment-check-icon {
+  color: var(--booking-white, #ffffff);
+  fill: #22c55e;
+  stroke-width: 3;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row input {
+  width: 100%;
+  height: 34px;
+  padding: 5px 10px;
+  text-align: left;
+}
+
+.guesthousebooking-allotment-amenities-row {
+  min-height: 49px;
+  margin: 16px 0 0;
+  padding: 0 0 0 18px;
+  gap: 14px;
+}
+
+.guesthousebooking-allotment-amenities-title {
+  min-height: 48px;
+  border-radius: 8px 0 0 8px;
+}
+
+.guesthousebooking-allotment-caretaker-bar {
+  grid-template-columns: 168px minmax(0, 1fr) minmax(260px, 0.88fr);
+  gap: 24px;
+  margin-top: 28px;
+}
+
+.guesthousebooking-spoc-control {
+  height: 36px;
+  min-height: 36px;
+}
+
+@media (max-width: 1040px) {
+  .guesthousebooking-guest-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-travel-panel {
+    min-width: 0;
+    min-height: 220px;
+  }
+
+  .guesthousebooking-option-row {
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 8px;
+  }
+
+  .guesthousebooking-field--accompanied,
+  .guesthousebooking-field--room,
+  .guesthousebooking-field--food,
+  .guesthousebooking-field--priority-sidebar,
+  .guesthousebooking-field--remarks {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-field--guest-total,
+  .guesthousebooking-field--room-total {
+    grid-template-columns: minmax(0, 1fr) 68px;
+  }
+
+  .guesthousebooking-field--accompanied .guesthousebooking-option-heading,
+  .guesthousebooking-field--room .guesthousebooking-option-heading,
+  .guesthousebooking-field--food .guesthousebooking-option-heading,
+  .guesthousebooking-field--priority-sidebar .guesthousebooking-option-heading,
+  .guesthousebooking-field--remarks .guesthousebooking-option-heading {
+    min-width: 0;
+  }
+
+  .guesthousebooking-field--accompanied .guesthousebooking-count-row,
+  .guesthousebooking-field--room .guesthousebooking-number-choice-group {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .guesthousebooking-field--food .guesthousebooking-number-choice-group {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 900px) {
+  .guesthousebooking-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-field--wide {
+    grid-column: span 1;
+  }
+}
+
+@media (max-width: 920px) {
+  .guesthousebooking-allotment-amenities-row {
+    grid-template-columns: 1fr;
+    padding: 12px;
+  }
+
+  .guesthousebooking-allotment-amenities-title {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 8px;
+  }
+
+  .guesthousebooking-allotment-caretaker-bar {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .guesthousebooking-caretaker-title {
+    width: 100%;
+    min-height: 42px;
+    border-radius: 8px;
+  }
+}
+
+@media (max-width: 768px) {
+  .guesthousebooking-allotment-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+
+  .guesthousebooking-allotment-occupants-wrap {
+    justify-content: space-between;
+  }
+
+  .guesthousebooking-allotment-date-fields {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .guesthousebooking-allotment-spoc-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .guesthousebooking-shell {
+    width: min(100% - 20px, 1150px);
+  }
+
+  .guesthousebooking-card-body {
+    padding: 18px;
+  }
+
+  .guesthousebooking-guest-grid {
+    padding: 14px;
+  }
+
+  .guesthousebooking-guest-title-row {
+    min-height: auto;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px;
+  }
+
+  .guesthousebooking-guest-actions {
+    align-self: flex-end;
+  }
+
+  .guesthousebooking-panel-title,
+  .guesthousebooking-option-heading {
+    font-size: 15px;
+  }
+
+  .guesthousebooking-details-grid,
+  .guesthousebooking-travel-grid {
+    padding: 14px;
+  }
+
+  .guesthousebooking-field--gender .guesthousebooking-radio-group,
+  .guesthousebooking-field--priority-sidebar .guesthousebooking-radio-group,
+  .guesthousebooking-field--accompanied .guesthousebooking-count-row,
+  .guesthousebooking-field--room .guesthousebooking-number-choice-group,
+  .guesthousebooking-field--food .guesthousebooking-number-choice-group {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .guesthousebooking-field--gender .guesthousebooking-radio,
+  .guesthousebooking-field--priority-sidebar .guesthousebooking-radio,
+  .guesthousebooking-count-row label,
+  .guesthousebooking-number-choice {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+  }
+
+  .guesthousebooking-field--accompanied .guesthousebooking-count-row,
+  .guesthousebooking-field--room .guesthousebooking-number-choice-group {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-field--gender .guesthousebooking-radio,
+  .guesthousebooking-field--priority .guesthousebooking-radio,
+  .guesthousebooking-count-row label,
+  .guesthousebooking-number-choice {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-between;
+  }
+
+  .guesthousebooking-card-header,
+  .guesthousebooking-section-header {
+    padding: 0 16px;
+    font-size: 16px;
+  }
+
+  .guesthousebooking-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px 16px;
+  }
+
+  .guesthousebooking-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .guesthousebooking-success {
+    margin-right: 0;
+  }
+
+  .guesthousebooking-field--accompanied .guesthousebooking-count-row,
+  .guesthousebooking-field--room .guesthousebooking-number-choice-group,
+  .guesthousebooking-field--food .guesthousebooking-number-choice-group {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .guesthousebooking-field--food .guesthousebooking-number-choice-group {
+    flex-direction: column;
+  }
+
+  .guesthousebooking-field--accompanied .guesthousebooking-count-row label,
+  .guesthousebooking-field--room .guesthousebooking-number-choice {
+    width: 100%;
+    grid-template-columns: 1fr 64px;
+    justify-content: stretch;
+  }
+
+  .guesthousebooking-field--food .guesthousebooking-number-choice {
+    width: 100%;
+    grid-template-columns: 1fr 54px;
+    justify-content: stretch;
+  }
+}
+
+@media (max-width: 1180px) {
+
+  .guesthousebooking-guest-grid,
+  .guesthousebooking-allotment-summary-row,
+  .guesthousebooking-allotment-spoc-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-allotment-occupancy-group {
+    justify-content: start;
+  }
+
+  .guesthousebooking-allotment-summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-allotment-occupancy-group,
+  .guesthousebooking-allotment-date-stack {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-guest-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas: 'details'
+      'travel'
+      'accompanied'
+      'total'
+      'room'
+      'food';
+  }
+
+  .guesthousebooking-details-grid {
+    grid-template-columns: 1fr;
+    padding-left: 0;
+  }
+
+  .guesthousebooking-field--guest-name,
+  .guesthousebooking-field--gender,
+  .guesthousebooking-field--designation,
+  .guesthousebooking-field--email,
+  .guesthousebooking-field--organization,
+  .guesthousebooking-field--city,
+  .guesthousebooking-field--state {
+    grid-column: auto;
+    max-width: none;
+  }
+
+  .guesthousebooking-travel-row {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-travel-label {
+    width: fit-content;
+  }
+
+  .guesthousebooking-field--food {
+    grid-template-columns: 1fr;
+    row-gap: 12px;
+  }
+
+  .guesthousebooking-field--food .guesthousebooking-number-choice-group {
+    justify-content: flex-start;
+  }
+
+  .guesthousebooking-shell {
+    width: min(100% - 20px, 1204px);
+  }
+
+  .guesthousebooking-guest-title-row,
+  .guesthousebooking-guest-card .guesthousebooking-card-body,
+  .guesthousebooking-allotment-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .guesthousebooking-room-allotment-header {
+    margin-left: 16px;
+    margin-right: 16px;
+  }
+
+  .guesthousebooking-travel-row,
+  .guesthousebooking-field--remarks,
+  .guesthousebooking-spoc-field,
+  .guesthousebooking-allotment-date-stack label {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-allotment-occupancy-item {
+    justify-content: start;
+  }
+
+  .guesthousebooking-field--room,
+  .guesthousebooking-field--remarks {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-travel-row .guesthousebooking-time-field {
+    grid-template-columns: 46px minmax(0, 1fr);
+  }
+
+  .guesthousebooking-allotment-table-wrap {
+    overflow-x: auto;
+  }
+
+  .guesthousebooking-allotment-table {
+    min-width: 920px;
+  }
+
+  .guesthousebooking-allotment-occupancy-group {
+    grid-template-columns: repeat(3, max-content);
+    gap: 16px;
+  }
+
+  .guesthousebooking-option-row.guesthousebooking-field--remarks {
+    grid-template-columns: 1fr !important;
+  }
+
+  .guesthousebooking-food-count-label {
+    grid-template-columns: max-content 72px;
+  }
+
+  .guesthousebooking-allotment-date-stack input {
+    width: min(210px, 100%);
+  }
+
+  .guesthousebooking-option-row.guesthousebooking-field--food {
+    grid-template-columns: 1fr !important;
+    row-gap: 10px;
+  }
+
+  .guesthousebooking-food-counts {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .guesthousebooking-allotment-datetime-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-fields {
+    grid-template-columns: minmax(0, 1fr) 94px;
+    width: 100%;
+  }
+
+  .guesthousebooking-allotment-date-stack {
+    width: 100%;
+    justify-self: start;
+  }
+
+  .guesthousebooking-allotment-date-stack label {
+    grid-template-columns: 72px minmax(0, 160px);
+  }
+
+  .guesthousebooking-allotment-date-stack label>input {
+    width: 100%;
+  }
+}
+
+.guesthousebooking-room-number-cell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.guesthousebooking-room-number-cell .guesthousebooking-allotment-compact-control {
+  min-width: 0;
+  padding-right: 22px;
+}
+
+.guesthousebooking-room-detail-trigger {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  background: #7fb5dd;
+  color: var(--booking-white, #ffffff);
+  cursor: pointer;
+  flex: 0 0 18px;
+  padding: 0;
+  transition: background-color 0.16s ease, transform 0.16s ease;
+}
+
+.guesthousebooking-room-detail-trigger:hover,
+.guesthousebooking-room-detail-trigger--active {
+  background: var(--primary-color, #0069ab);
+  transform: translateY(-1px);
+}
+
+.guesthousebooking-room-details-card {
+  margin-top: 24px;
+  padding: 0 22px 24px;
+  border-radius: 20px;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.guesthousebooking-room-details-header {
+  min-height: auto;
+  display: flex;
+  align-items: center;
+  margin: 18px 0 20px;
+  padding: 0 0 10px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--booking-heading, #2c3e50);
+  font-size: 18px;
+  font-weight: 700;
+  border-bottom: 2px solid var(--booking-border-muted, #dee2e6);
+}
+
+.guesthousebooking-room-details-content {
+  display: grid;
+  gap: 18px;
+}
+
+.guesthousebooking-room-details-meta-row {
+  display: grid;
+  grid-template-columns: minmax(88px, 0.62fr) minmax(128px, 1fr) minmax(128px, 1fr) minmax(150px, 1.15fr) minmax(128px, 1fr) 18px;
+  align-items: center;
+  gap: 18px;
+  padding: 4px 4px 10px;
+}
+
+.guesthousebooking-room-detail-meta-field {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  color: var(--primary-color, #0069ab);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.guesthousebooking-room-detail-meta-field input,
+.guesthousebooking-room-detail-meta-field select {
+  width: 100%;
+  height: 34px;
+  min-width: 0;
+  border: 1px solid #d4dce5;
+  border-radius: 8px;
+  background: var(--booking-white, #ffffff);
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 5px 10px;
+}
+
+.guesthousebooking-room-detail-meta-field select:disabled,
+.guesthousebooking-room-detail-meta-field input[readonly] {
+  opacity: 1;
+}
+
+.guesthousebooking-room-detail-ready-icon {
+  color: var(--booking-white, #ffffff);
+  fill: #22c55e;
+  stroke-width: 3;
+  justify-self: center;
+}
+
+.guesthousebooking-room-detail-section {
+  display: grid;
+  gap: 16px;
+}
+
+.guesthousebooking-room-detail-section-title {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  color: var(--primary-color, #0069ab);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.guesthousebooking-room-detail-section-title::after {
+  content: '';
+  height: 1px;
+  background: #d7e0ea;
+}
+
+.guesthousebooking-room-detail-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.guesthousebooking-room-detail-group {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-height: 260px;
+  padding: 18px 22px;
+  border-radius: 12px;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08);
+}
+
+.guesthousebooking-room-detail-group h3 {
+  margin: 0;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #d7e0ea;
+  color: var(--primary-color, #0069ab);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.guesthousebooking-room-detail-group-items,
+.guesthousebooking-room-detail-flat-list {
+  display: grid;
+  gap: 10px;
+}
+
+.guesthousebooking-room-detail-flat-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 48px;
+}
+
+.guesthousebooking-room-detail-services-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-width: 680px;
+}
+
+.guesthousebooking-room-detail-item {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 16px 28px minmax(0, 1fr) 14px;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid #b9d3eb;
+  border-radius: 7px;
+  background: var(--booking-bg-hover, #e7f3ff);
+  color: var(--primary-color, #0069ab);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.1;
+  user-select: none;
+}
+
+.guesthousebooking-room-detail-item span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guesthousebooking-room-detail-checkbox {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #aebdcc;
+  border-radius: 3px;
+  background: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-room-detail-checkbox:checked {
+  border-color: var(--primary-color, #0069ab);
+  background: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-room-detail-checkbox:checked::after {
+  width: 4px;
+  height: 8px;
+  border-width: 0 1.5px 1.5px 0;
+}
+
+.guesthousebooking-room-detail-item-icon {
+  color: var(--primary-color, #0069ab);
+  stroke-width: 1.8;
+}
+
+.guesthousebooking-room-detail-info-icon {
+  color: #7fb5dd;
+  fill: currentcolor;
+  stroke-width: 2.4;
+}
+
+.guesthousebooking-allotment-col-room-number {
+  width: 15%;
+}
+
+.guesthousebooking-allotment-col-block {
+  width: 18%;
+}
+
+.guesthousebooking-allotment-col-remarks {
+  width: 34%;
+}
+
+@media (max-width: 1180px) {
+  .guesthousebooking-room-details-meta-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .guesthousebooking-room-detail-ready-icon {
+    justify-self: start;
+  }
+
+  .guesthousebooking-room-detail-groups,
+  .guesthousebooking-room-detail-flat-list,
+  .guesthousebooking-room-detail-services-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-room-details-card {
+    padding: 0 14px 18px;
+  }
+
+  .guesthousebooking-room-details-meta-row,
+  .guesthousebooking-room-detail-groups,
+  .guesthousebooking-room-detail-flat-list,
+  .guesthousebooking-room-detail-services-list {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-room-detail-meta-field {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+}
+
+.guesthousebooking-management-card {
+  padding: 18px 20px 22px;
+}
+
+.guesthousebooking-management-panel {
+  display: grid;
+  gap: 14px;
+  min-height: 620px;
+}
+
+.guesthousebooking-management-title {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-radius: 7px;
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.guesthousebooking-management-title--spaced {
+  margin-top: 98px;
+}
+
+.guesthousebooking-management-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.guesthousebooking-room-management-table {
+  min-width: 1000px;
+}
+
+.guesthousebooking-caretaker-management-wrap {
+  width: min(820px, 100%);
+  margin: 0 auto;
+}
+
+.guesthousebooking-caretaker-management-table {
+  min-width: 720px;
+}
+
+.guesthousebooking-management-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  background: var(--booking-white, #ffffff);
+  border: 1px solid #cbdcea;
+}
+
+.guesthousebooking-management-table th {
+  height: 35px;
+  padding: 7px 8px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  background: var(--booking-bg-tint, #f0f6ff);
+  color: var(--primary-color, #0069ab);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.guesthousebooking-management-table td {
+  height: 42px;
+  padding: 5px 8px;
+  border-right: 1px solid #d9e2eb;
+  border-bottom: 1px solid #e7edf3;
+  color: var(--booking-text-darker, #111827);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.guesthousebooking-management-table th:last-child,
+.guesthousebooking-management-table td:last-child {
+  border-right: 0;
+}
+
+.guesthousebooking-management-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.guesthousebooking-management-table tr.is-viewing td {
+  background: #f4faff;
+}
+
+.guesthousebooking-management-control,
+.guesthousebooking-management-status {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  outline: none;
+}
+
+.guesthousebooking-management-control:not([readonly]):not(:disabled),
+.guesthousebooking-management-status:not(:disabled) {
+  border-color: #cbdcea;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.08);
+}
+
+.guesthousebooking-management-control[readonly],
+.guesthousebooking-management-status:disabled {
+  opacity: 1;
+  cursor: default;
+  appearance: none;
+}
+
+.guesthousebooking-management-status {
+  font-weight: 800;
+}
+
+.guesthousebooking-management-status--active {
+  color: var(--booking-success, #16a34a);
+}
+
+.guesthousebooking-management-status--maintenance,
+.guesthousebooking-management-status--leave {
+  color: #f97316;
+}
+
+.guesthousebooking-management-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-width: 124px;
+}
+
+.guesthousebooking-management-actions--compact {
+  min-width: 92px;
+}
+
+.guesthousebooking-management-icon-button {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--primary-color, #0069ab);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.guesthousebooking-management-icon-button:hover:not(:disabled),
+.guesthousebooking-management-icon-button.is-active {
+  background: #e3f1ff;
+  transform: translateY(-1px);
+}
+
+.guesthousebooking-management-icon-button--add {
+  background: var(--primary-color, #0069ab);
+  color: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-management-icon-button--add:hover:not(:disabled) {
+  background: var(--primary-hover, #005492);
+}
+
+.guesthousebooking-management-icon-button--view {
+  color: var(--primary-color, #0069ab);
+}
+
+.guesthousebooking-management-icon-button--delete {
+  color: #ef4444;
+}
+
+.guesthousebooking-management-icon-button--delete:hover:not(:disabled) {
+  background: var(--booking-danger-bg, #fff1f1);
+}
+
+.guesthousebooking-management-icon-button:disabled {
+  color: var(--booking-disabled, #b8c0cc);
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-management-card {
+    padding: 14px;
+  }
+
+  .guesthousebooking-management-panel {
+    min-height: 0;
+  }
+
+  .guesthousebooking-management-title--spaced {
+    margin-top: 28px;
+  }
+}
+
+/* Room allotment reference layout */
+.guesthousebooking-allotment-card {
+  min-height: 486px;
+  border-radius: 20px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.guesthousebooking-room-allotment-header {
+  min-height: auto;
+  height: auto;
+  margin: 22px 28px 20px;
+  padding: 0 0 10px;
+  border-radius: 0;
+  background: transparent;
+  color: var(--booking-heading, #2c3e50);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.5;
+  border-bottom: 2px solid var(--booking-border-muted, #dee2e6);
+}
+
+.guesthousebooking-allotment-body {
+  padding: 20px 28px 24px;
+}
+
+.guesthousebooking-allotment-entry-card {
+  padding: 18px 10px 20px;
+  border-radius: 16px;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08);
+}
+
+.guesthousebooking-allotment-summary-row {
+  grid-template-columns: minmax(260px, 0.9fr) max-content max-content;
+  align-items: center;
+  gap: 22px;
+  min-height: 82px;
+  padding: 0 18px 14px;
+}
+
+.guesthousebooking-allotment-guest-overview {
+  gap: 14px;
+}
+
+.guesthousebooking-allotment-main-icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+}
+
+.guesthousebooking-allotment-guest-name-row>strong {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.guesthousebooking-allotment-guest-copy span {
+  margin-top: 7px;
+  color: var(--booking-text-strong, #212529);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.guesthousebooking-allotment-occupancy-group {
+  grid-template-columns: repeat(4, max-content);
+  gap: 18px;
+}
+
+.guesthousebooking-allotment-occupancy-item {
+  grid-template-columns: 52px 42px;
+  gap: 9px;
+}
+
+.guesthousebooking-allotment-person-icon {
+  width: 52px;
+  height: 52px;
+}
+
+.guesthousebooking-allotment-occupancy-item input {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.guesthousebooking-allotment-date-stack {
+  gap: 8px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+  grid-template-columns: 78px 18px 118px 18px 86px 18px;
+  gap: 7px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-title {
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row input {
+  height: 34px;
+  padding: 5px 10px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
+.guesthousebooking-allotment-amenities-row {
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 14px;
+  min-height: 49px;
+  margin: 16px 0 0;
+  padding: 0 0 0 18px;
+  border-radius: 9px;
+}
+
+.guesthousebooking-allotment-amenities-list {
+  gap: 12px 20px;
+}
+
+.guesthousebooking-allotment-amenity {
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.guesthousebooking-allotment-amenities-title {
+  width: 170px;
+  min-height: 48px;
+  padding: 0 16px;
+  border-radius: 8px 0 0 8px;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.guesthousebooking-allotment-caretaker-bar {
+  grid-template-columns: 168px minmax(0, 1fr) minmax(260px, 0.88fr);
+  gap: 24px;
+  min-height: 50px;
+  margin-top: 28px;
+  padding: 0 24px 0 0;
+  border-radius: 8px;
+}
+
+.guesthousebooking-caretaker-title {
+  min-height: 48px;
+  padding: 0 16px;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.guesthousebooking-caretaker-field {
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 24px;
+}
+
+.guesthousebooking-caretaker-field>span {
+  color: var(--primary-color, #0069ab);
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.guesthousebooking-caretaker-field .guesthousebooking-spoc-control {
+  height: 36px;
+  min-height: 36px;
+  border-radius: 9px;
+  font-size: 14px;
+}
+
+@media (max-width: 1180px) {
+  .guesthousebooking-allotment-summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-allotment-occupancy-group,
+  .guesthousebooking-allotment-date-stack {
+    justify-self: start;
+  }
+}
+
+@media (max-width: 920px) {
+  .guesthousebooking-allotment-caretaker-bar {
+    grid-template-columns: 1fr;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .guesthousebooking-caretaker-title {
+    width: 100%;
+    border-radius: 8px;
+  }
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-room-allotment-header {
+    margin: 16px 16px 0;
+  }
+
+  .guesthousebooking-allotment-body {
+    padding: 16px;
+  }
+
+  .guesthousebooking-allotment-entry-card {
+    padding: 14px 10px 16px;
+  }
+
+  .guesthousebooking-allotment-summary-row {
+    padding: 0 8px 14px;
+  }
+
+  .guesthousebooking-allotment-date-stack {
+    width: 100%;
+  }
+
+  .guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+    grid-template-columns: 76px 18px minmax(0, 118px) 18px minmax(0, 86px) 18px;
+  }
+}
+
+/* Room allotment screenshot sizing pass */
+.guesthousebooking-allotment-card {
+  min-height: 486px;
+}
+
+.guesthousebooking-allotment-summary-row {
+  grid-template-columns: minmax(230px, 0.9fr) max-content max-content;
+  gap: 22px;
+  min-height: 70px;
+  padding: 0 18px 14px;
+}
+
+.guesthousebooking-allotment-guest-overview {
+  gap: 14px;
+}
+
+.guesthousebooking-priority-indicator {
+  width: 13px;
+  height: 13px;
+  flex-basis: 13px;
+}
+
+.guesthousebooking-allotment-main-icon {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+}
+
+.guesthousebooking-allotment-main-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.guesthousebooking-allotment-occupancy-group {
+  grid-template-columns: repeat(4, max-content);
+  gap: 14px;
+}
+
+.guesthousebooking-allotment-occupancy-item {
+  grid-template-columns: 44px 42px;
+  gap: 8px;
+}
+
+.guesthousebooking-allotment-person-icon {
+  width: 44px;
+  height: 44px;
+}
+
+.guesthousebooking-allotment-occupancy-item input {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+  grid-template-columns: 78px 18px 118px 18px 86px 18px;
+  gap: 7px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row input {
+  height: 34px;
+  border-radius: 9px;
+  font-size: 13px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-meta-icon,
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-check-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.guesthousebooking-allotment-amenities-row,
+.guesthousebooking-allotment-caretaker-bar {
+  border-color: var(--booking-border-soft, #c8d1dc);
+  background: #eaf5ff;
+}
+
+.guesthousebooking-allotment-amenities-row {
+  min-height: 49px;
+  margin-top: 16px;
+}
+
+.guesthousebooking-allotment-amenity {
+  color: var(--primary-color, #0069ab);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.guesthousebooking-caretaker-field>span {
+  white-space: nowrap;
+}
+
+@media (max-width: 1280px) {
+  .guesthousebooking-allotment-summary-row {
+    grid-template-columns: minmax(220px, 0.8fr) max-content max-content;
+    gap: 18px;
+  }
+
+  .guesthousebooking-allotment-occupancy-group {
+    gap: 12px;
+  }
+
+  .guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+    grid-template-columns: 74px 18px 108px 18px 80px 18px;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-room-allotment-header {
+    margin: 16px 16px 0;
+  }
+
+  .guesthousebooking-allotment-body {
+    padding: 16px;
+  }
+
+  .guesthousebooking-allotment-entry-card {
+    padding: 14px 10px 16px;
+  }
+
+  .guesthousebooking-allotment-summary-row {
+    grid-template-columns: 1fr;
+    padding: 0 8px 14px;
+  }
+
+  .guesthousebooking-allotment-date-stack {
+    width: 100%;
+  }
+
+  .guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+    grid-template-columns: 76px 18px minmax(0, 118px) 18px minmax(0, 86px) 18px;
+  }
+}
+
+/* Room allotment screenshot adjustment: no table changes */
+.guesthousebooking-allotment-summary-row {
+  grid-template-columns: minmax(220px, 0.82fr) max-content max-content;
+  gap: 18px;
+  min-height: 68px;
+  padding: 0 18px 14px;
+}
+
+.guesthousebooking-allotment-guest-copy span {
+  max-width: 190px;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--booking-text-strong, #212529);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guesthousebooking-allotment-occupancy-group {
+  grid-template-columns: repeat(4, max-content);
+  gap: 12px;
+}
+
+.guesthousebooking-allotment-occupancy-item {
+  grid-template-columns: 36px 42px;
+  gap: 8px;
+}
+
+.guesthousebooking-allotment-person-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.guesthousebooking-allotment-occupancy-item input {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+  grid-template-columns: 76px 18px 118px 86px 18px;
+  gap: 7px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row input {
+  height: 34px;
+  border-radius: 9px;
+}
+
+.guesthousebooking-allotment-amenities-row {
+  grid-template-columns: minmax(0, 1fr) 170px;
+  gap: 18px;
+  min-height: 49px;
+  margin: 16px 0 0;
+  padding: 0 0 0 18px;
+}
+
+.guesthousebooking-allotment-amenities-list {
+  gap: 12px 24px;
+  justify-content: flex-start;
+}
+
+.guesthousebooking-allotment-amenity {
+  gap: 9px;
+}
+
+.guesthousebooking-allotment-amenities-title {
+  justify-self: end;
+  width: 170px;
+  min-height: 48px;
+}
+
+.guesthousebooking-allotment-caretaker-bar {
+  grid-template-columns: 168px minmax(0, 1fr) minmax(260px, 0.88fr);
+  gap: 24px;
+  min-height: 48px;
+  margin-top: 28px;
+  padding: 0 24px 0 0;
+}
+
+.guesthousebooking-caretaker-title {
+  min-height: 48px;
+  padding: 0 14px;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.guesthousebooking-caretaker-field {
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 20px;
+}
+
+.guesthousebooking-caretaker-field>span {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.guesthousebooking-caretaker-field .guesthousebooking-spoc-control {
+  height: 36px;
+  min-height: 36px;
+}
+
+@media (max-width: 1280px) {
+  .guesthousebooking-allotment-summary-row {
+    grid-template-columns: minmax(210px, 0.78fr) max-content max-content;
+    gap: 16px;
+  }
+
+  .guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+    grid-template-columns: 74px 18px 108px 80px 18px;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-allotment-summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+    grid-template-columns: 76px 18px minmax(0, 118px) minmax(0, 86px) 18px;
+  }
+}
+
+/* Room allotment and room details screenshot refinement */
+.guesthousebooking-allotment-summary-row {
+  grid-template-columns: minmax(230px, 1fr) max-content max-content;
+  gap: 18px;
+  justify-items: stretch;
+}
+
+.guesthousebooking-allotment-occupancy-group {
+  justify-self: end;
+  gap: 10px;
+}
+
+.guesthousebooking-allotment-occupancy-item {
+  grid-template-columns: 32px 38px;
+  gap: 7px;
+}
+
+.guesthousebooking-allotment-person-icon {
+  width: 32px;
+  height: 32px;
+}
+
+.guesthousebooking-allotment-person-icon svg {
+  width: 23px;
+  height: 23px;
+}
+
+.guesthousebooking-allotment-occupancy-item input {
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+}
+
+.guesthousebooking-allotment-date-stack {
+  justify-self: end;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+  grid-template-columns: 74px 96px 68px 18px;
+  gap: 8px;
+  justify-content: end;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row input {
+  width: 100%;
+  height: 32px;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.guesthousebooking-allotment-date-stack .guesthousebooking-allotment-check-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.guesthousebooking-room-details-card {
+  border-radius: 12px;
+  overflow: visible;
+}
+
+.guesthousebooking-room-details-meta-row {
+  grid-template-columns: minmax(118px, 0.7fr) minmax(172px, 1.05fr) minmax(172px, 1.05fr) minmax(190px, 1.2fr) minmax(172px, 1fr) 18px;
+  gap: 18px;
+  padding: 22px;
+  border-radius: 12px;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08);
+}
+
+.guesthousebooking-room-details-meta-row .guesthousebooking-room-detail-meta-field:first-child {
+  grid-template-columns: max-content 64px;
+}
+
+.guesthousebooking-room-detail-meta-field input,
+.guesthousebooking-room-detail-meta-field select {
+  height: 34px;
+  border-radius: 8px;
+}
+
+.guesthousebooking-room-detail-section[aria-label='Essentials'],
+.guesthousebooking-room-detail-section[aria-label='Services'] {
+  padding: 18px 22px 22px;
+  border-radius: 12px;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08);
+}
+
+.guesthousebooking-room-detail-section[aria-label='Essentials'] .guesthousebooking-room-detail-flat-list,
+.guesthousebooking-room-detail-section[aria-label='Services'] .guesthousebooking-room-detail-flat-list {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px 48px;
+}
+
+.guesthousebooking-room-detail-section[aria-label='Services'] .guesthousebooking-room-detail-services-list {
+  max-width: none;
+}
+
+@media (max-width: 1280px) {
+  .guesthousebooking-allotment-summary-row {
+    grid-template-columns: minmax(210px, 1fr) max-content max-content;
+    gap: 14px;
+  }
+
+  .guesthousebooking-allotment-occupancy-group {
+    gap: 8px;
+  }
+
+  .guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+    grid-template-columns: 72px 88px 62px 16px;
+    gap: 7px;
+  }
+
+  .guesthousebooking-room-details-meta-row {
+    grid-template-columns: minmax(108px, 0.7fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(168px, 1.12fr) minmax(150px, 1fr) 18px;
+    gap: 14px;
+  }
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-allotment-summary-row {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-allotment-occupancy-group,
+  .guesthousebooking-allotment-date-stack {
+    justify-self: stretch;
+  }
+
+  .guesthousebooking-allotment-date-stack .guesthousebooking-allotment-datetime-row {
+    grid-template-columns: 72px minmax(0, 96px) minmax(0, 68px) 16px;
+  }
+
+  .guesthousebooking-room-details-meta-row,
+  .guesthousebooking-room-detail-section[aria-label='Essentials'] .guesthousebooking-room-detail-flat-list,
+  .guesthousebooking-room-detail-section[aria-label='Services'] .guesthousebooking-room-detail-flat-list {
+    grid-template-columns: 1fr;
+  }
+
+  .guesthousebooking-room-details-meta-row .guesthousebooking-room-detail-meta-field:first-child {
+    grid-template-columns: max-content minmax(0, 1fr);
+  }
+}
+
+/* Compact admin management spacing */
+.guesthousebooking-management-card {
+  padding: 18px 20px 22px;
+}
+
+.guesthousebooking-management-panel {
+  gap: 10px;
+  min-height: 0;
+}
+
+.guesthousebooking-management-title {
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+  padding: 0 16px;
+  border-radius: 7px;
+  font-size: 13px;
+  line-height: 34px;
+}
+
+.guesthousebooking-management-title--spaced {
+  margin-top: 8px;
+}
+
+.guesthousebooking-management-table-wrap {
+  margin: 0;
+}
+
+.guesthousebooking-caretaker-management-wrap {
+  margin: 0 auto;
+}
+
+.guesthousebooking-management-table th {
+  height: 35px;
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.guesthousebooking-management-table td {
+  height: 42px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-management-title--spaced {
+    margin-top: 8px;
+  }
+}
+
+/* Compact room allotment caretaker typography */
+.guesthousebooking-allotment-caretaker-bar .guesthousebooking-caretaker-title {
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+.guesthousebooking-allotment-caretaker-bar .guesthousebooking-caretaker-field>span {
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+/* Admin management reference sizing */
+.guesthousebooking-management-card {
+  width: 100%;
+  max-width: none;
+  margin: 22px 0;
+  padding: 18px 20px 42px;
+}
+
+.guesthousebooking-management-panel {
+  gap: 10px;
+}
+
+.guesthousebooking-management-title {
+  width: 100%;
+}
+
+.guesthousebooking-management-table-wrap {
+  overflow-x: auto;
+}
+
+.guesthousebooking-room-management-table {
+  width: 100%;
+  min-width: 795px;
+}
+
+.guesthousebooking-room-management-table th:nth-child(1),
+.guesthousebooking-room-management-table td:nth-child(1) {
+  width: 6%;
+}
+
+.guesthousebooking-room-management-table th:nth-child(2),
+.guesthousebooking-room-management-table td:nth-child(2) {
+  width: 15%;
+}
+
+.guesthousebooking-room-management-table th:nth-child(3),
+.guesthousebooking-room-management-table td:nth-child(3) {
+  width: 17%;
+}
+
+.guesthousebooking-room-management-table th:nth-child(4),
+.guesthousebooking-room-management-table td:nth-child(4) {
+  width: 12%;
+}
+
+.guesthousebooking-room-management-table th:nth-child(5),
+.guesthousebooking-room-management-table td:nth-child(5) {
+  width: 14%;
+}
+
+.guesthousebooking-room-management-table th:nth-child(6),
+.guesthousebooking-room-management-table td:nth-child(6) {
+  width: 13%;
+}
+
+.guesthousebooking-room-management-table th:nth-child(7),
+.guesthousebooking-room-management-table td:nth-child(7) {
+  width: 23%;
+}
+
+.guesthousebooking-caretaker-management-wrap {
+  width: min(630px, 100%);
+  overflow-x: hidden;
+}
+
+.guesthousebooking-caretaker-management-table {
+  width: 630px;
+  min-width: 630px;
+}
+
+.guesthousebooking-caretaker-management-table th:nth-child(1),
+.guesthousebooking-caretaker-management-table td:nth-child(1) {
+  width: 50px;
+}
+
+.guesthousebooking-caretaker-management-table th:nth-child(2),
+.guesthousebooking-caretaker-management-table td:nth-child(2) {
+  width: 178px;
+}
+
+.guesthousebooking-caretaker-management-table th:nth-child(3),
+.guesthousebooking-caretaker-management-table td:nth-child(3) {
+  width: 128px;
+}
+
+.guesthousebooking-caretaker-management-table th:nth-child(4),
+.guesthousebooking-caretaker-management-table td:nth-child(4) {
+  width: 160px;
+}
+
+.guesthousebooking-caretaker-management-table th:nth-child(5),
+.guesthousebooking-caretaker-management-table td:nth-child(5) {
+  width: 114px;
+}
+
+.guesthousebooking-management-control {
+  text-align: left;
+}
+
+.guesthousebooking-management-control:disabled {
+  appearance: none;
+  opacity: 1;
+  cursor: default;
+}
+
+.guesthousebooking-management-table td:first-child,
+.guesthousebooking-management-table th:first-child,
+.guesthousebooking-management-table td:last-child,
+.guesthousebooking-management-table th:last-child,
+.guesthousebooking-management-status {
+  text-align: center;
+}
+
+.guesthousebooking-management-status:disabled {
+  width: auto;
+  min-height: 24px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  appearance: none;
+}
+
+.guesthousebooking-management-status--active:disabled {
+  background: #d7f7e5;
+}
+
+.guesthousebooking-management-status--maintenance:disabled,
+.guesthousebooking-management-status--leave:disabled {
+  background: #fff1dc;
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-management-card {
+    width: 100%;
+    margin: 18px 0;
+    padding: 14px 14px 48px;
+  }
+
+  .guesthousebooking-caretaker-management-wrap {
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+
+.guesthousebooking-allotment-card {
+  min-height: auto;
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.guesthousebooking-room-allotment-header {
+  margin: 22px 28px 6px;
+  padding: 0 0 10px;
+  border-bottom: 2px solid var(--booking-border-muted, #dee2e6);
+  font-weight: 700;
+  color: var(--booking-heading, #2c3e50);
+}
+
+.guesthousebooking-allotment-body {
+  padding: 4px 28px 8px;
+}
+
+.guesthousebooking-allotment-entry-card {
+  padding: 16px 10px 14px;
+  border-radius: 16px;
+  background: var(--booking-white, #ffffff);
+  box-shadow: 0 8px 24px rgba(31, 41, 55, 0.08);
+}
+
+.guesthousebooking-allotment-table-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+}
+
+.guesthousebooking-allotment-table {
+  min-width: 795px;
+  table-layout: fixed;
+  background: var(--booking-white, #ffffff);
+}
+
+.guesthousebooking-allotment-table th {
+  height: 44px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  background: var(--booking-bg-tint, #f0f6ff);
+  color: var(--primary-color, #0069ab);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.guesthousebooking-allotment-table td {
+  height: auto;
+  padding: 10px 8px;
+  border: 1px solid var(--booking-border-light, #e0e0e0);
+  color: var(--booking-text-muted, #565656);
+  font-size: 16px;
+}
+
+.guesthousebooking-allotment-empty {
+  height: auto;
+  padding: 14px 10px;
+}
+
+.guesthousebooking-allotment-amenities-row {
+  margin: 10px 0 0;
+  padding: 10px 0 8px 18px;
+}
+
+.guesthousebooking-allotment-caretaker-bar {
+  margin-top: 12px;
+}
+.guesthousebooking-employee-dropdown {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+.guesthousebooking-employee-option {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid #edf1f6;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.guesthousebooking-employee-option:hover {
+  background: #eef6fc;
+}
+
+.guesthousebooking-employee-option span {
+  color: #65758b;
+  font-size: 0.85rem;
+}

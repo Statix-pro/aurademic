@@ -18,6 +18,7 @@ import EventEntry from '../features/events/components/EventEntry';
 import EventPage from '../features/events/components/EventPage';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';
+import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-approval/AdminGuesthouseApproval';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import Journalform from '../features/journals/journalform';
 import ProfilePage from '../features/profile/ProfilePage';
@@ -42,6 +43,7 @@ import {
   AdminRoute,
   BudgetApprovalRoute,
   FinanceWorkflowRoute,
+  GuesthouseWorkflowRoute,
   ModuleWorkflowRoute,
   SuperAdminRoute,
   ExpenditureApprovalRoute,
@@ -206,13 +208,27 @@ function App() {
                   <Route
                     path="/guesthouse-booking"
                     element={
+                      <Navigate to="/guesthouse/new" replace />
+                    }
+                  />
+                  <Route
+                    path="/guesthouse/new"
+                    element={
                       <ProtectedRoute>
                         <GuestHouseBooking />
                       </ProtectedRoute>
                     }
                   />
                   <Route
-                    path="/guestHouse-dashboard"
+                    path="/guesthouse/:id"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse-dashboard"
                     element={
                       <ProtectedRoute>
                         <GuestHouseDashboard />
@@ -470,7 +486,6 @@ function App() {
                   <Route path="/storybook" element={<Storybook />} />
                   <Route path="/" element={<Navigate to="/dashboard" />} />
 
-                  {/* UNDER CONSTRUCTION */}
                   <Route
                     path="/vehicle-booking"
                     element={
@@ -532,6 +547,22 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <UnderConstruction pageName="Expenditure Reports" />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/guesthouse"
+                    element={
+                      <GuesthouseWorkflowRoute>
+                        <AdminGuesthouseApproval />
+                      </GuesthouseWorkflowRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
                       </ProtectedRoute>
                     }
                   />

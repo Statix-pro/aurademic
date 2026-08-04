@@ -135,6 +135,29 @@ export const canAccessModuleWorkflow = (user: User | null | undefined, moduleKey
 export const canAccessFinanceWorkflow = (user?: User | null) =>
   canAccessModuleWorkflow(user, 'finance');
 
+export type GuesthouseWorkflowStage = 'admin' | 'hod' | 'principal' | 'guesthouse_admin';
+
+export const getGuesthouseWorkflowStage = (user?: User | null): GuesthouseWorkflowStage | null => {
+  if (!user) return null;
+  if (
+    isSuperAdmin(user) ||
+    hasAnyPermission(user, ['guesthouse.workflow.admin', 'guesthouse.manage'])
+  ) {
+    return 'admin';
+  }
+  const stages: GuesthouseWorkflowStage[] = ['hod', 'principal', 'guesthouse_admin'];
+  const permissions = new Set(normalizePermissionKeys(user));
+  return stages.find((stage) => permissions.has(`guesthouse.workflow.${stage}`)) || null;
+};
+
+export const canAccessGuesthouseWorkflow = (user?: User | null) => {
+  if (!user) {
+    return false;
+  }
+
+  return getGuesthouseWorkflowStage(user) !== null;
+};
+
 const isAdminOrWorkflowRole = (user?: User | null) => {
   if (!user) {
     return false;
