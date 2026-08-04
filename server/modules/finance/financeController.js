@@ -9,6 +9,11 @@ import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
 const normalizeText = (value) => String(value || '').trim();
 
+// Shown whenever a top-up is attempted against a finance card that was already
+// finalized and closed from the Expenditure module.
+const TOPUP_CLOSED_MESSAGE =
+  'Top-up cannot be applied. The proposal has already been finalized and closed.';
+
 const parseBooleanLike = (value) => {
   if (typeof value === 'boolean') return value;
   if (typeof value === 'number') return value === 1;
@@ -75,6 +80,37 @@ const hasFinanceWorkflowPermission = (req) => {
 
 const canManagePrincipalDocumentsRequest = (req) =>
   Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || isPrincipalRoleRequest(req);
+
+const FINANCE_CHAIRMAN_THRESHOLD = 10000;
+
+const resolveFinanceAmountBand = (amount) =>
+  Number(amount || 0) > FINANCE_CHAIRMAN_THRESHOLD ? 'gt_10k' : 'lte_10k';
+
+// A top-up cycle is routed on the top-up request amount alone, not the proposal total:
+// up to 10k Principal approval closes it, above 10k it also goes to the Chairman. The
+// cycle amount is stamped on workflow_state.topupAmount when the top-up restarts the
+// workflow so later recalculations (edit, resubmit) use the same figure.
+const resolveTopupCycleAmount = (workflowState, financeRecord, fallbackAmount = 0) => {
+  const stateAmount = Number(workflowState?.topupAmount);
+  if (Number.isFinite(stateAmount) && stateAmount > 0) {
+    return stateAmount;
+  }
+
+  // FALLBACK: top-ups submitted before workflow_state.topupAmount existed have no cycle
+  // amount, so fall back to the cumulative top-up total (which equals the cycle amount
+  // for a first top-up). Remove once no in-flight top-up predates topupAmount.
+  const legacyTopupAmount = Number(financeRecord?.topup_amount);
+  if (Number.isFinite(legacyTopupAmount) && legacyTopupAmount > 0) {
+    return legacyTopupAmount;
+  }
+
+  // With no cycle amount recoverable, route on the proposal total: an unknown top-up
+  // amount must never silently drop the Chairman from a >10k flow.
+  const resolvedFallback = Number(fallbackAmount);
+  return Number.isFinite(resolvedFallback) ? resolvedFallback : 0;
+};
+
+const isTopupWorkflowCycle = (workflowState) => Boolean(workflowState?.topupAt);
 
 const isEligibleForPrincipalDocument = (finance) => {
   const totalBudget = Number(finance?.total_budget || finance?.proposed_amount || 0);
@@ -532,6 +568,17 @@ const financeController = {
       const isWorkflowEditor = hasFinanceWorkflowEditorAccess(req);
       const workflowStatus = normalizeText(finance.workflow_state?.status).toLowerCase();
       const isTopupMode = parseBooleanLike(req.body?.topup_mode || req.body?.topupMode);
+
+      // A finance card that has been finalized and closed in the Expenditure module is
+      // settled money: no further top-up may be drawn against it.
+      if (isTopupMode && finance.closed_at) {
+        return res.status(409).json({
+          success: false,
+          message: TOPUP_CLOSED_MESSAGE,
+          error: TOPUP_CLOSED_MESSAGE,
+        });
+      }
+
       const isTopupEditable = isTopupMode && ['approved', 'completed'].includes(workflowStatus);
       const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(
         workflowStatus,
@@ -587,6 +634,17 @@ const financeController = {
             });
           }
 
+          // Re-check under the row lock so a Finalize & Close committed between the
+          // eligibility check above and this transaction still blocks the top-up.
+          if (lockedFinanceContext.closedAt) {
+            await connection.rollback();
+            return res.status(409).json({
+              success: false,
+              message: TOPUP_CLOSED_MESSAGE,
+              error: TOPUP_CLOSED_MESSAGE,
+            });
+          }
+
           const lockedWorkflowStatus = normalizeText(
             lockedFinanceContext.workflowStatus,
           ).toLowerCase();
@@ -622,6 +680,12 @@ const financeController = {
             });
           }
 
+          // The routing amount for this cycle is the top-up delta only.
+          const topupCycleAmount = appendedBudgetRows.reduce(
+            (sum, row) => sum + Number(row?.amount || 0),
+            0,
+          );
+
           const updatePayload = {
             budget_rows: [...existingBudgetRows, ...appendedBudgetRows],
             topup_mode: true,
@@ -639,10 +703,6 @@ const financeController = {
             });
           }
 
-          const updatedFinanceContext = await financeModel.getFinanceRecordContext(financeId, {
-            tx: connection,
-            forUpdate: true,
-          });
           const financeMeta = {
             unplannedBudgetEnabled: Boolean(finance.unplanned_budget_enabled),
             unplannedBudgetAmount:
@@ -663,8 +723,9 @@ const financeController = {
               moduleMetaVersion: 1,
               moduleMeta: {
                 trigger: 'finance_topup',
-                amountBand:
-                  Number(updatedFinanceContext?.totalBudget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+                // Routed on the top-up request amount, not the proposal total: <= 10k
+                // ends at Principal, above 10k also requires the Chairman.
+                amountBand: resolveFinanceAmountBand(topupCycleAmount),
                 beneficiaryType: normalizeText(finance.beneficiary_type) || null,
                 financeMeta,
               },
@@ -677,6 +738,9 @@ const financeController = {
             {
               ...(restartResult.state || {}),
               topupAt: topupStartedAt,
+              // Kept so any later flow recalculation for this cycle re-derives the same
+              // band from the top-up amount instead of the proposal total.
+              topupAmount: topupCycleAmount,
               updatedAt: topupStartedAt,
               lastDecision: 'topup_submitted',
               lastFeedback: null,
@@ -729,7 +793,12 @@ const financeController = {
             const currentState = updatedFinanceContext.workflowState;
             if (currentState.status === 'in_progress' || currentState.status === 'returned') {
               const currentTotal = Number(updatedFinanceContext.totalBudget || 0);
-              const newAmountBand = currentTotal > 10000 ? 'gt_10k' : 'lte_10k';
+              // A top-up cycle keeps routing on its top-up amount, so an edit must not
+              // pull the Chairman back in just because the proposal total exceeds 10k.
+              const routingAmount = isTopupWorkflowCycle(currentState)
+                ? resolveTopupCycleAmount(currentState, finance, currentTotal)
+                : currentTotal;
+              const newAmountBand = resolveFinanceAmountBand(routingAmount);
 
               const newFlow = financeWorkflowAdapter.resolveStartFlow({
                 metadata: {
@@ -841,13 +910,18 @@ const financeController = {
         unplannedBudgetDescription: normalizeText(finance.unplanned_budget_description) || null,
       };
 
+      // A returned top-up keeps routing on its top-up amount when resubmitted.
+      const resubmitRoutingAmount = isTopupWorkflowCycle(workflowState)
+        ? resolveTopupCycleAmount(workflowState, finance, Number(finance.total_budget || 0))
+        : Number(finance.total_budget || 0);
+
       const resubmitMetadata = {
         origin: 'resubmit',
         requestId: null,
         moduleMetaVersion: 1,
         moduleMeta: {
           trigger: 'applicant_resubmit',
-          amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+          amountBand: resolveFinanceAmountBand(resubmitRoutingAmount),
           beneficiaryType: normalizeText(finance.beneficiary_type) || null,
           financeMeta,
         },
@@ -862,6 +936,11 @@ const financeController = {
       const resubmittedAt = new Date().toISOString();
       await financeModel.updateFinanceWorkflowSnapshot(financeId, {
         ...(restartResult.state || {}),
+        // startWorkflow returns a fresh state, so carry the top-up markers over or the
+        // resubmitted cycle would lose its Top-up badge and its routing amount.
+        ...(isTopupWorkflowCycle(workflowState)
+          ? { topupAt: workflowState.topupAt, topupAmount: resubmitRoutingAmount }
+          : {}),
         status: 'in_progress',
         currentStage: restartResult.state?.currentStage || 'level1',
         isEditableByApplicant: false,
@@ -1010,6 +1089,7 @@ const financeController = {
         ALREADY_CLOSED: 409,
         NOT_ELIGIBLE: 409,
         NOT_SETTLED: 409,
+        PENDING_WORKFLOW: 409,
         MIGRATION_REQUIRED: 503,
       };
       const statusCode = statusByCode[code] || 500;

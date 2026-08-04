@@ -195,11 +195,19 @@ export const formatWorkflowTimestamp = (value: any): string => {
 
 export const getCurrentWorkflowTimestamp = (): string => formatWorkflowTimestamp(new Date());
 
+// A top-up restarts the workflow, so the submission log carries a second submission
+// entry that must stay visible between the two approval cycles.
+export const TOPUP_SUBMITTED_LABEL = 'Top-up submitted';
+
+export const isTopupSubmissionEntry = (entry: any): boolean =>
+  String(entry?.label || '').trim() === TOPUP_SUBMITTED_LABEL;
+
 const getWorkflowDecisionLabel = (update: any): string => {
   const decision = String(getWorkflowField(update, ['decision', 'status'])).toLowerCase();
   if (!decision) return '';
   const compactDecision = decision.replace(/[^a-z0-9]/g, '');
 
+  if (compactDecision.includes('topup')) return TOPUP_SUBMITTED_LABEL;
   if (compactDecision.includes('resubmit')) return 'Resubmitted';
   if (decision.includes('submit')) return 'Submitted';
   if (decision.includes('approv') || decision === 'completed') return 'Approved';
@@ -413,10 +421,19 @@ export const getSubmittedTimestamp = (
   return fallbackToCurrent ? getCurrentWorkflowTimestamp() : '';
 };
 
-const getWorkflowDecisionText = (entry: WorkflowTimelineEntry): string => {
+const getWorkflowDecisionText = (
+  entry: WorkflowTimelineEntry,
+  requiresChairmanApproval: boolean,
+): string => {
   const stageToken = String(entry.stage || '').toLowerCase();
   if (entry.label === 'Approved') {
-    return stageToken.includes('principal') ? 'Approved by' : 'Recommended by';
+    // The Chairman is always the final approver when part of the cycle; the Principal
+    // only recommends when the Chairman signs off after them.
+    if (stageToken.includes('chairman')) return 'Approved by';
+    if (stageToken.includes('principal')) {
+      return requiresChairmanApproval ? 'Recommended by' : 'Approved by';
+    }
+    return 'Recommended by';
   }
   return `${entry.label} by`;
 };
@@ -587,6 +604,10 @@ interface GenerateFinancePdfInput {
   unplannedBudgetAmount: string;
   unplannedBudgetDescription: string;
   totalBudget: number;
+  // Whether the Chairman is part of the cycle being documented. A top-up cycle routes on
+  // the top-up amount alone, so it can stop at the Principal even on a >10k proposal.
+  // Defaults to the amount rule when the caller cannot resolve the workflow flow.
+  requiresChairmanApproval?: boolean;
   showIncomeSection: boolean;
   incomeRows: FinancePdfIncomeRow[];
   annexureSummary: string;
@@ -617,6 +638,7 @@ export const generateAndDownloadFinancePdf = async (
     unplannedBudgetAmount,
     unplannedBudgetDescription,
     totalBudget,
+    requiresChairmanApproval = totalBudget > 10000,
     showIncomeSection,
     incomeRows,
     annexureSummary,
@@ -833,7 +855,7 @@ export const generateAndDownloadFinancePdf = async (
           { content: row.category || '', styles: topupCellStyles() },
           { content: row.head || '', styles: topupCellStyles() },
           {
-            content: 'Rs. ' + Number(row.amount || 0) + ' (Top-up)',
+            content: 'Rs. ' + Number(row.amount || 0),
             styles: topupCellStyles(),
           },
         ],
@@ -975,16 +997,19 @@ export const generateAndDownloadFinancePdf = async (
     yPos = (pdf as any).lastAutoTable.finalY;
   }
 
+  // Top-up submissions stay in place so the approval trail reads in cycle order:
+  // original approvals, then "Top-up submitted by …", then the post-top-up approvals.
   const approvalSteps = approvalHistory.filter(
     (entry) =>
-      entry.label === 'Approved' &&
-      !(
-        totalBudget > 10000 &&
-        (String(entry.stage).includes('principal') || String(entry.stage).includes('chairman'))
-      ),
+      isTopupSubmissionEntry(entry) ||
+      (entry.label === 'Approved' &&
+        !(
+          requiresChairmanApproval &&
+          (String(entry.stage).includes('principal') || String(entry.stage).includes('chairman'))
+        )),
   );
   const submittedByUi = approvalHistory.find((entry) => entry.label === 'Submitted') || submittedBy;
-  const showSeniorApprovalRow = totalBudget > 10000;
+  const showSeniorApprovalRow = requiresChairmanApproval;
   const principalApprovalEntry = getLatestApprovalEntry(approvalHistory, ['principal']);
   const chairmanApprovalEntry = getLatestApprovalEntry(approvalHistory, ['chairman']);
   const seniorApprovalRows = showSeniorApprovalRow
@@ -1009,7 +1034,7 @@ export const generateAndDownloadFinancePdf = async (
     ],
     ...approvalSteps.map((entry) => [
       {
-        content: `${getWorkflowDecisionText(entry)} ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}`,
+        content: `${getWorkflowDecisionText(entry, requiresChairmanApproval)} ${formatWorkflowPersonText(entry.actor, entry.email, entry.timestamp)}`,
         colSpan: 2,
       },
     ]),
