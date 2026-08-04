@@ -32,6 +32,7 @@ import {
   getSubmittedTimestamp,
   getAnnexureOpenUrl,
   generateAndDownloadFinancePdf,
+  isTopupSubmissionEntry,
 } from './financeApprovalPdf';
 import { useAuth } from '../../contexts/AuthContext';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -63,6 +64,10 @@ interface SelectOption {
 
 const FINANCE_CONFLICT_MESSAGE =
   'Finance request conflicts with approved budget allocation. Please check the budget head amounts and available balance.';
+
+// Matches the API guard in financeController.updateFinanceRequest.
+const TOPUP_CLOSED_MESSAGE =
+  'Top-up cannot be applied. The proposal has already been finalized and closed.';
 
 const normalizeErrorMessage = (value: unknown): string =>
   typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
@@ -1244,6 +1249,7 @@ const FinanceApproval: React.FC = () => {
         unplannedBudgetAmount,
         unplannedBudgetDescription,
         totalBudget,
+        requiresChairmanApproval,
         showIncomeSection,
         incomeRows,
         annexureSummary,
@@ -2499,6 +2505,11 @@ const FinanceApproval: React.FC = () => {
   const [loadedWorkflowLastDecision, setLoadedWorkflowLastDecision] = useState<string>('');
   const [loadedWorkflowEditableByApplicant, setLoadedWorkflowEditableByApplicant] = useState(false);
   const [loadedCurrentStage, setLoadedCurrentStage] = useState<string>('');
+  // Set once the card has been finalized and closed from the Expenditure module.
+  const [loadedClosedAt, setLoadedClosedAt] = useState<string>('');
+  // Approval stages of the current workflow cycle, used to decide whether the Chairman
+  // is part of this cycle's approval trail.
+  const [loadedWorkflowFlow, setLoadedWorkflowFlow] = useState<string[]>([]);
   const [workflowPermittedStages, setWorkflowPermittedStages] = useState<string[]>([]);
 
   const navigate = useNavigate();
@@ -2559,9 +2570,35 @@ const FinanceApproval: React.FC = () => {
   }, [isApprovalMode]);
 
   const normalizedWorkflowStatus = String(loadedWorkflowStatus || '').toLowerCase();
+  // A finalized & closed card is settled money — no further top-up may be drawn
+  // against it, so the top-up route must not switch the form into top-up mode.
+  const isFinanceCardClosed = Boolean(loadedClosedAt);
   const isTopupWorkflow = Boolean(
-    isEditMode && isTopupRoute && ['approved', 'completed'].includes(normalizedWorkflowStatus),
+    isEditMode &&
+    isTopupRoute &&
+    !isFinanceCardClosed &&
+    ['approved', 'completed'].includes(normalizedWorkflowStatus),
   );
+  // Reject the top-up route outright for a closed card, mirroring the API guard, so a
+  // bookmarked or hand-typed ?topup=true link cannot start a top-up request.
+  useEffect(() => {
+    if (!isEditMode || !isTopupRoute || !isFinanceCardClosed) return;
+    showAlert(TOPUP_CLOSED_MESSAGE, 'warning', 'Top-up not allowed', false, 'OK', () =>
+      navigate('/financecard'),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, isTopupRoute, isFinanceCardClosed]);
+
+  // The approval trail splits Principal/Chairman into "Recommended by"/"Approved by"
+  // rows only when the Chairman is part of the cycle being documented. A top-up cycle
+  // is routed on the top-up amount alone, so its flow can stop at the Principal even
+  // when the proposal total exceeds 10k — the persisted flow is the source of truth.
+  // FALLBACK: records saved before workflow_state.flow existed fall back to the amount
+  // rule. Remove once every finance request carries a flow.
+  const requiresChairmanApproval = loadedWorkflowFlow.length
+    ? loadedWorkflowFlow.includes('chairman')
+    : totalBudget > 10000;
+
   const isSuperAdminUser =
     Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) ||
     (Array.isArray(user?.roles) &&
@@ -2848,6 +2885,12 @@ const FinanceApproval: React.FC = () => {
         setLoadedWorkflowEditableByApplicant(Boolean(record.workflow_state?.isEditableByApplicant));
         setLoadedCurrentStage(
           String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase(),
+        );
+        setLoadedClosedAt(String(record.closed_at || ''));
+        setLoadedWorkflowFlow(
+          Array.isArray(record.workflow_state?.flow)
+            ? record.workflow_state.flow.map((stage: unknown) => String(stage || '').toLowerCase())
+            : [],
         );
         setDirectorComments(String(record.director_comment || ''));
         setDirectorStatus(String(record.director_status || '').toLowerCase());
@@ -5926,16 +5969,18 @@ const FinanceApproval: React.FC = () => {
           const dofApprovalUi = getApprovalDetailUi(['dof']);
           const principalApprovalUi = getApprovalDetailUi(['principal']);
           const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
+          // Keep the top-up submission row between the two approval cycles, matching the PDF.
           const approvalSteps = approvalHistory.filter(
             (entry) =>
-              entry.label === 'Approved' &&
-              !(
-                totalBudget > 10000 &&
-                (String(entry.stage).includes('principal') ||
-                  String(entry.stage).includes('chairman'))
-              ),
+              isTopupSubmissionEntry(entry) ||
+              (entry.label === 'Approved' &&
+                !(
+                  requiresChairmanApproval &&
+                  (String(entry.stage).includes('principal') ||
+                    String(entry.stage).includes('chairman'))
+                )),
           );
-          const showSeniorApprovalRow = totalBudget > 10000;
+          const showSeniorApprovalRow = requiresChairmanApproval;
 
           const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
             const trimmedName = String(name || '').trim();
@@ -5985,12 +6030,18 @@ const FinanceApproval: React.FC = () => {
             const stageToken = String(entry?.stage || '').toLowerCase();
             const actorToken = String(entry?.actor || '').toLowerCase();
             const emailToken = String(entry?.email || '').toLowerCase();
+            // The Chairman is always the final approver when part of the cycle.
+            if (stageToken.includes('chairman')) return 'Approved by';
+
             const isPrincipalEntry =
               stageToken.includes('principal') ||
               actorToken.includes('principal') ||
               emailToken.includes('principal@');
 
-            return isPrincipalEntry ? 'Approved by' : 'Recommended by';
+            // The Principal only recommends when the Chairman signs off after them.
+            if (isPrincipalEntry)
+              return requiresChairmanApproval ? 'Recommended by' : 'Approved by';
+            return 'Recommended by';
           };
           const previewTimelineRowStyle: CSSProperties = {
             padding: '8px 10px',

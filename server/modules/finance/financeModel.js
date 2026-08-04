@@ -641,6 +641,8 @@ const buildFinanceSelectSql = ({
   annexureFileSizeSelectSql = 'NULL AS annexure_file_size',
   paymentDebitAccountSelectSql = 'NULL AS payment_debit_account',
   topupAmountSelectSql = '0 AS topup_amount',
+  closedAtSelectSql = 'NULL AS closed_at',
+  closedBySelectSql = 'NULL AS closed_by',
 } = {}) => `
   SELECT
     fr.id,
@@ -701,6 +703,8 @@ const buildFinanceSelectSql = ({
     fr.chairman_status,
     fr.chairman_comment,
     fr.overall_status,
+    ${closedAtSelectSql},
+    ${closedBySelectSql},
     fr.workflow_state,
     ${WORKFLOW_STATUS_SQL_EXPR} AS workflow_status,
     ${WORKFLOW_STAGE_SQL_EXPR} AS workflow_stage,
@@ -785,6 +789,11 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
   const hasAnnexureMimeType = await hasFinanceRequestColumn('annexure_mime_type', { tx });
   const hasAnnexureFileSize = await hasFinanceRequestColumn('annexure_file_size', { tx });
   const hasPaymentDebitAccount = await hasFinanceRequestColumn('payment_debit_account', { tx });
+  // FALLBACK: closed_at/closed_by arrive with the
+  // 20260710_add_closed_status_to_finance_requests migration; emit NULL until then so
+  // every consumer simply sees an open card. Remove once the columns exist everywhere.
+  const hasClosedAt = await hasFinanceRequestColumn('closed_at', { tx });
+  const hasClosedBy = await hasFinanceRequestColumn('closed_by', { tx });
   // FALLBACK: finance_budget_breakup.is_topup may not exist on older deployments;
   // emit 0 so top-up totals default to zero until the column is present. Remove
   // once every environment has the is_topup column.
@@ -828,6 +837,8 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
       ? 'fr.payment_debit_account'
       : 'NULL AS payment_debit_account',
     topupAmountSelectSql,
+    closedAtSelectSql: hasClosedAt ? 'fr.closed_at' : 'NULL AS closed_at',
+    closedBySelectSql: hasClosedBy ? 'fr.closed_by' : 'NULL AS closed_by',
   });
 };
 
@@ -4134,6 +4145,11 @@ const financeModel = {
     }
 
     const lockClause = forUpdate ? ' FOR UPDATE' : '';
+    // FALLBACK: closed_at arrives with the
+    // 20260710_add_closed_status_to_finance_requests migration. Remove once every
+    // environment has the column.
+    const hasClosedAtColumn = await hasFinanceRequestColumn('closed_at', { tx });
+    const closedAtSelectSql = hasClosedAtColumn ? 'fr.closed_at' : 'NULL AS closed_at';
 
     const [rows] = await tx.query(
       `SELECT
@@ -4143,6 +4159,7 @@ const financeModel = {
          fr.beneficiary_entity_id,
          COALESCE(fr.department_id, scope_dept.id) AS department_id,
          fr.total_budget,
+         ${closedAtSelectSql},
          fr.workflow_state
        FROM finance_requests fr
        LEFT JOIN master_departments scope_dept
@@ -4166,6 +4183,7 @@ const financeModel = {
       departmentId: toPositiveInt(row.department_id),
       totalBudget: toMoney(row.total_budget),
       applicantUserId: toPositiveInt(row.created_by),
+      closedAt: row.closed_at || null,
       workflowState,
       workflowStatus: normalizeWorkflowStatus(workflowState),
     };
@@ -5070,7 +5088,7 @@ const financeModel = {
     }
 
     const [financeRows] = await db.query(
-      `SELECT id, closed_at FROM finance_requests WHERE id = ? LIMIT 1`,
+      `SELECT id, closed_at, workflow_state FROM finance_requests WHERE id = ? LIMIT 1`,
       [normalizedFinanceId],
     );
 
@@ -5083,6 +5101,23 @@ const financeModel = {
     if (financeRows[0].closed_at) {
       const error = new Error('This finance card is already closed');
       error.code = 'ALREADY_CLOSED';
+      throw error;
+    }
+
+    // Closing settles the card, so no funding decision may still be open — otherwise a
+    // top-up submitted before the close would keep approving money onto a closed card,
+    // bypassing the top-up guard in financeController.updateFinanceRequest.
+    // LEGACY: records without a workflow_state report an empty status and are not
+    // blocked here. Remove the empty-status tolerance once every row has a
+    // workflow_state.
+    const financeWorkflowStatus = normalizeWorkflowStatus(
+      normalizeWorkflowState(financeRows[0].workflow_state),
+    );
+    if (['in_progress', 'returned'].includes(financeWorkflowStatus)) {
+      const error = new Error(
+        'This finance card cannot be closed while an approval or top-up request is still pending.',
+      );
+      error.code = 'PENDING_WORKFLOW';
       throw error;
     }
 

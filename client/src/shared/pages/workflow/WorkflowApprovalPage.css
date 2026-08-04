@@ -327,7 +327,6 @@
 
 .fw-item--resubmitted {
   border-left: 6px solid #f59e0b;
-  background: linear-gradient(90deg, #fffbeb 0, #ffffff 120px);
 }
 
 .fw-item--clickable {
