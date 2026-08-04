@@ -208,7 +208,14 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       setPersonalEmail(editingPerson.personalEmail || '');
       setOfficialEmail(editingPerson.officialEmail || '');
       setLinkedIn(editingPerson.linkedIn || '');
-      setProfessions(editingPerson.professions?.length ? editingPerson.professions : [emptyProfession()]);
+      setProfessions(
+        editingPerson.professions?.length
+          ? editingPerson.professions.map((p) => ({
+              ...p,
+              id: p.id || String(Math.random().toString(36).slice(2, 11)),
+            }))
+          : [emptyProfession()]
+      );
       setPhotoName(editingPerson.photoName || '');
       setResumeName(editingPerson.resumeName || '');
     }
@@ -446,7 +453,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
 
             <div className="rpd-profession-container">
               {professions.map((prof, idx) => (
-                <div key={prof.id ?? idx} className="rpd-profession-block" style={{ padding: '16px 14px' }}>
+                <div key={prof.id} className="rpd-profession-block" style={{ padding: '16px 14px' }}>
                   {idx > 0 && <hr className="rpd-divider" style={{ margin: '10px 0' }} />}
                   <div className="rpd-grid-3 rpd-mb-s">
                     {[

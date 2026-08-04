@@ -58,7 +58,10 @@ const apiGetAll = async (): Promise<Organization[]> => {
 const apiCreate = async (orgData: Omit<Organization, 'id' | 'date'>): Promise<Organization> => {
   try {
     const res = (await authenticityUtility.post('/organizations', orgData)) as any;
-    if (res?.success && res.data) return res.data;
+    if (res?.success && res.data) {
+      isApiAvailable = true;
+      return res.data;
+    }
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
     const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
@@ -79,7 +82,10 @@ const apiCreate = async (orgData: Omit<Organization, 'id' | 'date'>): Promise<Or
 const apiUpdate = async (id: number, orgData: Omit<Organization, 'id' | 'date'>): Promise<Organization> => {
   try {
     const res = (await authenticityUtility.put(`/organizations/${id}`, orgData)) as any;
-    if (res?.success && res.data) return res.data;
+    if (res?.success && res.data) {
+      isApiAvailable = true;
+      return res.data;
+    }
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
     const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
@@ -140,7 +146,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
     return records.filter(
       (record) =>
         (!nameFilter || (record.name ?? '').toLowerCase().includes(nameFilter) || (record.abbreviation ?? '').toLowerCase().includes(nameFilter) || (record.city && record.city.toLowerCase().includes(nameFilter))) &&
-        (!categoryFilter || record.category.toLowerCase() === categoryFilter),
+        (!categoryFilter || (record.category ?? '').toLowerCase() === categoryFilter),
     );
 
   }, [records, searchName, searchCategory]);

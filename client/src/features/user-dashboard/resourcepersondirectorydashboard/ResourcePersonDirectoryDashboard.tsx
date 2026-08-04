@@ -49,7 +49,9 @@ const apiGetAll = async (): Promise<ResourcePerson[]> => {
     }
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
-    if (isFallbackEligible(err) || err.response?.status === 404) return fallbackGetAll();
+    if (isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404)) {
+      return fallbackGetAll();
+    }
     throw err;
   }
 };
@@ -70,11 +72,18 @@ const apiCreate = async (personData: Omit<ResourcePerson, 'id' | 'date'>): Promi
     });
 
     const res = (await authenticityUtility.postFile('/resource-persons', formData)) as any;
-    if (res?.success && res.data) return res.data;
+    if (res?.success && res.data) {
+      isApiAvailable = true;
+      return res.data;
+    }
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
     const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
     if (!fallbackAllowed) throw err;
+    // FALLBACK: Reject fallback saves that include selected File instances since they cannot be serialized
+    if (personData.photoFile || personData.resumeFile) {
+      throw new Error('Fallback save failed: Cannot persist files locally.');
+    }
     // FALLBACK: remove once backend is live
     console.warn('[ResourcePerson] API unavailable — writing to localStorage fallback');
     const existing = fallbackGetAll();
@@ -104,11 +113,18 @@ const apiUpdate = async (id: number, personData: Omit<ResourcePerson, 'id' | 'da
     });
 
     const res = (await authenticityUtility.postFile(`/resource-persons/${id}`, formData)) as any;
-    if (res?.success && res.data) return res.data;
+    if (res?.success && res.data) {
+      isApiAvailable = true;
+      return res.data;
+    }
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
     const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
     if (!fallbackAllowed) throw err;
+    // FALLBACK: Reject fallback saves that include selected File instances since they cannot be serialized
+    if (personData.photoFile || personData.resumeFile) {
+      throw new Error('Fallback save failed: Cannot persist files locally.');
+    }
     // FALLBACK: remove once backend is live
     console.warn('[ResourcePerson] API unavailable — writing to localStorage fallback');
     const existing = fallbackGetAll();

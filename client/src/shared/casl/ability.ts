@@ -134,14 +134,10 @@ export function defineAbilityFor(user: User | null): AppAbility {
   can('read', 'Profile');
   can('create', 'Journal');
   can('create', 'Project');
-  // All authenticated users can create and edit WorkOrders and MasterData records
-  // (Resource Person Directory, Organisation Directory). Revoke via permissions if needed.
+  // All authenticated users have read-only access to WorkOrder and MasterData.
+  // Writes (create/edit) are granted via specific permissions mapped in PERMISSION_MAP.
   can('read', 'WorkOrder');
-  can('create', 'WorkOrder');
-  can('edit', 'WorkOrder');
   can('read', 'MasterData');
-  can('create', 'MasterData');
-  can('edit', 'MasterData');
 
   // ── Map permission keys to CASL rules ──
   const permissions = Array.isArray(user.permissions) ? user.permissions : [];

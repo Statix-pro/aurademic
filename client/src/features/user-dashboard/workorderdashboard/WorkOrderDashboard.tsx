@@ -123,8 +123,11 @@ const formatDisplayDate = (value: string) => {
 
 const formatShortDate = (value: string | undefined) => {
   if (!value) return '-';
-  // LEGACY: date-only strings (YYYY-MM-DD) must be parsed as local calendar dates,
-  // not UTC midnight, to avoid off-by-one day errors in timezones east of UTC.
+  // LEGACY: Support date-only values (YYYY-MM-DD) from older work-order API responses.
+  // UTC-midnight parsing causes displayed dates to shift in time zones west of UTC.
+  // Parse these values as local calendar dates to prevent a displayed day shift.
+  // Remove after all work-order endpoints return timestamps with an explicit offset or
+  // upstream data formats no longer require this compatibility behavior.
   const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
     ? new Date(`${value}T00:00:00`)
     : new Date(value);

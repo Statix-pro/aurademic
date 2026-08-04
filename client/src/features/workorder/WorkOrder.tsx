@@ -918,7 +918,7 @@ const WorkOrder: React.FC = () => {
 
   // Auto-fetched form states
   const [applicantName, setApplicantName] = useState(user?.name || '');
-  const [date] = useState(getTodayInputDate);
+  const [date, setDate] = useState(getTodayInputDate);
   const [department, setDepartment] = useState(user?.department || '');
   const [designation, setDesignation] = useState(user?.designation || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -938,8 +938,12 @@ const WorkOrder: React.FC = () => {
   // Used to clear isHydrating.current after the hydration commit.
   const [recordLoaded, setRecordLoaded] = useState(false);
 
+  // Request ID tracking for race condition resolution during fast navigation
+  const currentRequestIdRef = useRef(0);
+
   const fetchRecord = async () => {
     if (!id) return;
+    const reqId = ++currentRequestIdRef.current;
     setIsLoading(true);
     setError(null);
     // Reset recordLoaded so setRecordLoaded(true) at the end of hydration always
@@ -952,7 +956,9 @@ const WorkOrder: React.FC = () => {
         return;
       }
       const wo = response.data;
+      if (reqId !== currentRequestIdRef.current) return;
       setApplicantName(wo.applicant_name || '');
+      setDate(wo.date ? String(wo.date).slice(0, 10) : getTodayInputDate());
       setDepartment(wo.department || '');
       setDesignation(wo.designation || '');
       setEmail(wo.email || '');
@@ -991,10 +997,13 @@ const WorkOrder: React.FC = () => {
       // after this render commits (see useEffect[recordLoaded] below).
       setRecordLoaded(true);
     } catch (err) {
+      if (reqId !== currentRequestIdRef.current) return;
       console.error('Error loading work order:', err);
       setError('Failed to load work order. Please try again later.');
     } finally {
-      setIsLoading(false);
+      if (reqId === currentRequestIdRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -1002,6 +1011,10 @@ const WorkOrder: React.FC = () => {
   useEffect(() => {
     if (!id) return;
     fetchRecord();
+    return () => {
+      // Invalidate running request on unmount/id change
+      currentRequestIdRef.current = 0;
+    };
   }, [id]);
 
   // Fetch applicant details on mount (only for new records)
