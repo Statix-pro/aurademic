@@ -13,10 +13,8 @@ import { useAbility } from '../../../shared/casl/AbilityContext';
  * DELETE /resource-persons/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/* ─── FALLBACK localStorage fallback ──────────────────────────────────────
- * FALLBACK: The key 'resourcePersonDirectoryRecords' is used while the backend
- * is absent. Remove the entire FALLBACK block (and STORAGE_KEY) once the API is live.
- * ──────────────────────────────────────────────────────────────────────────── */
+// FALLBACK: The key 'resourcePersonDirectoryRecords' is used while the backend is absent.
+// Remove the fallback storage key and associated fallback methods once the API is live.
 const STORAGE_KEY = 'resourcePersonDirectoryRecords';
 
 
@@ -58,7 +56,20 @@ const apiGetAll = async (): Promise<ResourcePerson[]> => {
 
 const apiCreate = async (personData: Omit<ResourcePerson, 'id' | 'date'>): Promise<ResourcePerson> => {
   try {
-    const res = (await authenticityUtility.post('/resource-persons', personData)) as any;
+    const formData = new FormData();
+    Object.entries(personData).forEach(([key, val]) => {
+      if (key === 'professions') {
+        formData.append(key, JSON.stringify(val));
+      } else if (key === 'photoFile' || key === 'resumeFile') {
+        if (val instanceof File) {
+          formData.append(key, val);
+        }
+      } else if (val !== undefined && val !== null) {
+        formData.append(key, String(val));
+      }
+    });
+
+    const res = (await authenticityUtility.postFile('/resource-persons', formData)) as any;
     if (res?.success && res.data) return res.data;
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
@@ -79,7 +90,20 @@ const apiCreate = async (personData: Omit<ResourcePerson, 'id' | 'date'>): Promi
 
 const apiUpdate = async (id: number, personData: Omit<ResourcePerson, 'id' | 'date'>): Promise<ResourcePerson> => {
   try {
-    const res = (await authenticityUtility.put(`/resource-persons/${id}`, personData)) as any;
+    const formData = new FormData();
+    Object.entries(personData).forEach(([key, val]) => {
+      if (key === 'professions') {
+        formData.append(key, JSON.stringify(val));
+      } else if (key === 'photoFile' || key === 'resumeFile') {
+        if (val instanceof File) {
+          formData.append(key, val);
+        }
+      } else if (val !== undefined && val !== null) {
+        formData.append(key, String(val));
+      }
+    });
+
+    const res = (await authenticityUtility.postFile(`/resource-persons/${id}`, formData)) as any;
     if (res?.success && res.data) return res.data;
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {

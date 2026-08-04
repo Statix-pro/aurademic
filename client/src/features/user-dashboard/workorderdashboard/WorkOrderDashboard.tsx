@@ -17,6 +17,7 @@ import {
 import './WorkOrderDashboard.css';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { useAbility } from '../../../shared/casl/AbilityContext';
 
 type WorkOrderPriority = 'High' | 'Medium' | 'Low' | 'Routine';
 type WorkOrderStatus = 'Pending' | 'Completed' | 'Procurement' | 'On Hold' | 'Assigned';
@@ -122,7 +123,11 @@ const formatDisplayDate = (value: string) => {
 
 const formatShortDate = (value: string | undefined) => {
   if (!value) return '-';
-  const date = new Date(value);
+  // LEGACY: date-only strings (YYYY-MM-DD) must be parsed as local calendar dates,
+  // not UTC midnight, to avoid off-by-one day errors in timezones east of UTC.
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00`)
+    : new Date(value);
   if (isNaN(date.getTime())) return value;
   return date.toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -363,11 +368,12 @@ const CATEGORIES_TABS = [
 
 const WorkOrderDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const ability = useAbility();
   const [workOrders, setWorkOrders] = useState<WorkOrderItem[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState('legacy-all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(() =>
-    getCurrentFiscalYear(),
+    `legacy-${getCurrentFiscalYear()}`,
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -488,9 +494,9 @@ const WorkOrderDashboard: React.FC = () => {
 
   const fiscalYearOptions = useMemo(
     () => [
-      { value: 'all', label: 'All FY' },
+      { value: 'legacy-all', label: 'All FY' },
       ...fiscalYears.map((fy) => ({
-        value: fy,
+        value: `legacy-${fy}`,
         label: formatFiscalYearLabel(fy),
       })),
     ],
@@ -499,9 +505,9 @@ const WorkOrderDashboard: React.FC = () => {
 
   const categoryOptions = useMemo(
     () => [
-      { value: 'all', label: 'All Categories' },
+      { value: 'legacy-all', label: 'All Categories' },
       ...CATEGORIES_TABS.map((cat) => ({
-        value: cat,
+        value: `legacy-${cat}`,
         label: cat,
       })),
     ],
@@ -513,8 +519,10 @@ const WorkOrderDashboard: React.FC = () => {
   const filteredByFYAndCategory = useMemo(() => {
     return workOrders.filter((item) => {
       const itemFY = getItemFiscalYear(item);
-      const matchesFY = selectedFiscalYear === 'all' || itemFY === selectedFiscalYear;
-      const matchesCategory = selectedCategory === 'all' || item.nature === selectedCategory;
+      const strippedFY = selectedFiscalYear.startsWith('legacy-') ? selectedFiscalYear.slice(7) : selectedFiscalYear;
+      const strippedCategory = selectedCategory.startsWith('legacy-') ? selectedCategory.slice(7) : selectedCategory;
+      const matchesFY = strippedFY === 'all' || itemFY === strippedFY;
+      const matchesCategory = strippedCategory === 'all' || item.nature === strippedCategory;
       return matchesFY && matchesCategory;
     });
   }, [workOrders, selectedFiscalYear, selectedCategory]);
@@ -663,13 +671,15 @@ const WorkOrderDashboard: React.FC = () => {
               </div>
 
               <div className="workorderdashboard-actions">
-                <button
-                  type="button"
-                  className="workorderdashboard-add-btn"
-                  onClick={() => navigate('/workorder/new')}
-                >
-                  Add +
-                </button>
+                {ability.can('create', 'WorkOrder') && (
+                  <button
+                    type="button"
+                    className="workorderdashboard-add-btn"
+                    onClick={() => navigate('/workorder/new')}
+                  >
+                    Add +
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -855,6 +865,7 @@ const WorkOrderDashboard: React.FC = () => {
             >
               Close
             </button>
+{ability.can('edit', 'WorkOrder') && (
             <button
               type="button"
               className="wo-info-btn-save"
@@ -862,6 +873,7 @@ const WorkOrderDashboard: React.FC = () => {
             >
               Save changes
             </button>
+            )}
           </div>
         }
       >

@@ -3,6 +3,7 @@ import {
   Linkedin, Globe
 } from 'lucide-react';
 import './OrganizationDirectory.css';
+import { useAbility } from '../../shared/casl/AbilityContext';
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -44,6 +45,10 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
   onSave,
   onCancel,
 }) => {
+  const ability = useAbility();
+  const isAllowed = editingOrg !== null
+    ? ability.can('edit', 'MasterData')
+    : ability.can('create', 'MasterData');
   /* form fields */
   const [category, setCategory] = useState('Academic');
   const [name, setName] = useState('');
@@ -86,6 +91,10 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
 
 
   const handleSubmit = () => {
+    if (!isAllowed) {
+      alert('You do not have permission to perform this action.');
+      return;
+    }
     if (!name.trim()) {
       alert('Please fill in the Organization Name field.');
       return;
@@ -288,6 +297,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
           type="button"
           className="orgd-btn-save"
           onClick={handleSubmit}
+          disabled={!isAllowed}
         >
           {editingOrg !== null ? 'Update Record' : 'Save Record'}
         </button>

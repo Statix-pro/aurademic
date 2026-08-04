@@ -16,6 +16,7 @@ export type Subjects =
   | 'Report'
   | 'AccessControl'
   | 'MasterData'
+  | 'WorkOrder'
   | 'GuestHouse'
   | 'Profile'
   | 'all'; // CASL's wildcard for "everything"
@@ -66,6 +67,18 @@ const PERMISSION_MAP: Record<string, { action: Actions; subject: Subjects }> = {
   // Access Control
   'access_control.read': { action: 'read', subject: 'AccessControl' },
   'access_control.manage': { action: 'manage', subject: 'AccessControl' },
+
+  // Master Data (Resource Person Directory, Organisation Directory, etc.)
+  'master_data.read': { action: 'read', subject: 'MasterData' },
+  'master_data.edit': { action: 'edit', subject: 'MasterData' },
+  'master_data.create': { action: 'create', subject: 'MasterData' },
+  'master_data.manage': { action: 'manage', subject: 'MasterData' },
+
+  // Work Order
+  'work_order.read': { action: 'read', subject: 'WorkOrder' },
+  'work_order.edit': { action: 'edit', subject: 'WorkOrder' },
+  'work_order.create': { action: 'create', subject: 'WorkOrder' },
+  'work_order.manage': { action: 'manage', subject: 'WorkOrder' },
 };
 
 const parseDynamicPermission = (permissionKey: string) => {
@@ -121,6 +134,14 @@ export function defineAbilityFor(user: User | null): AppAbility {
   can('read', 'Profile');
   can('create', 'Journal');
   can('create', 'Project');
+  // All authenticated users can create and edit WorkOrders and MasterData records
+  // (Resource Person Directory, Organisation Directory). Revoke via permissions if needed.
+  can('read', 'WorkOrder');
+  can('create', 'WorkOrder');
+  can('edit', 'WorkOrder');
+  can('read', 'MasterData');
+  can('create', 'MasterData');
+  can('edit', 'MasterData');
 
   // ── Map permission keys to CASL rules ──
   const permissions = Array.isArray(user.permissions) ? user.permissions : [];

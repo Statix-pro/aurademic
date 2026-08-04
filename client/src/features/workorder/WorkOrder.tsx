@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
+import { useAbility } from '../../shared/casl/AbilityContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDropdown';
 import {
@@ -899,11 +900,15 @@ const WorkOrderDropdown: React.FC<WorkOrderDropdownProps> = ({
 const WorkOrder: React.FC = () => {
   const isHydrating = useRef(false);
   const { user } = useAuth();
+  const ability = useAbility();
   const navigate = useNavigate();
   const location = useLocation();
   const { id } = useParams<{ id?: string }>();
   const isEditMode = Boolean(id && location.pathname.includes('/edit'));
   const isViewMode = Boolean(id && !isEditMode);
+  const canSubmit = isEditMode
+    ? ability.can('edit', 'WorkOrder')
+    : ability.can('create', 'WorkOrder');
 
   // Collapsible section states
   const [isApplicantOpen, setIsApplicantOpen] = useState(true);
@@ -947,14 +952,16 @@ const WorkOrder: React.FC = () => {
         return;
       }
       const wo = response.data;
-      if (wo.applicant_name) setApplicantName(wo.applicant_name);
-      if (wo.department) setDepartment(wo.department);
-      if (wo.designation) setDesignation(wo.designation);
-      if (wo.email) setEmail(wo.email);
-      if (wo.mobile) setMobile(wo.mobile);
-      if (wo.beneficiary_type) setBeneficiaryType(wo.beneficiary_type);
-      if (wo.beneficiary_value) setBeneficiaryValue(wo.beneficiary_value);
-      if (wo.budget_tag) setSelectedTag(wo.budget_tag);
+      setApplicantName(wo.applicant_name || '');
+      setDepartment(wo.department || '');
+      setDesignation(wo.designation || '');
+      setEmail(wo.email || '');
+      setMobile(wo.mobile || '');
+      setBeneficiaryType(wo.beneficiary_type || '');
+      setBeneficiaryValue(wo.beneficiary_value || '');
+      setSelectedTag(wo.budget_tag || '');
+      isHydrating.current = true;
+      setSelectedCategory(wo.category_name || 'Carpentry');
       if (Array.isArray(wo.items) && wo.items.length > 0) {
         const loadedItems = wo.items.map((item: any) => ({
           id: String(item.id || Math.random().toString(36).slice(2, 11)),
@@ -976,16 +983,9 @@ const WorkOrder: React.FC = () => {
           qty: Number(item.qty) || 1,
           priority: item.priority || 'Routine',
         }));
-        // Set hydrating flag BEFORE setting category so the guard
-        // useEffect (which fires post-commit) sees it as true and skips the reset.
-        // The flag is cleared in a separate useEffect[recordLoaded] below,
-        // which is guaranteed to run after all effects for this same commit.
-        isHydrating.current = true;
-        if (wo.category_name) setSelectedCategory(wo.category_name);
         setWorkItems(loadedItems);
       } else {
-        isHydrating.current = true;
-        if (wo.category_name) setSelectedCategory(wo.category_name);
+        setWorkItems([createWorkItem()]);
       }
       // Signal hydration is complete; the cleanup effect will clear the flag
       // after this render commits (see useEffect[recordLoaded] below).
@@ -1781,6 +1781,7 @@ const WorkOrder: React.FC = () => {
                                   accept="image/*"
                                   multiple
                                   className="workorderHiddenFileInput"
+                                  disabled={isViewMode}
                                 />
 
                                 {firstLocationPhoto ? (
@@ -1799,28 +1800,32 @@ const WorkOrder: React.FC = () => {
                                     {item.locationPhotos.length > 1 && (
                                       <small>+{item.locationPhotos.length - 1}</small>
                                     )}
-                                    <button
-                                      type="button"
-                                      className="workorderPhotoDeleteBtn"
-                                      onClick={(e) =>
-                                        handleClearPhotos(e, item.id, 'locationPhotos')
-                                      }
-                                      title="Remove photos"
-                                      aria-label="Remove photos"
-                                    >
-                                      <Trash2 size={19} />
-                                    </button>
+                                    {!isViewMode && (
+                                      <button
+                                        type="button"
+                                        className="workorderPhotoDeleteBtn"
+                                        onClick={(e) =>
+                                          handleClearPhotos(e, item.id, 'locationPhotos')
+                                        }
+                                        title="Remove photos"
+                                        aria-label="Remove photos"
+                                      >
+                                        <Trash2 size={19} />
+                                      </button>
+                                    )}
                                   </div>
                                 ) : (
-                                  <label
-                                    className="workorderChooseFileBtn"
-                                    htmlFor={locationPhotoInputId}
-                                    title="Upload photo"
-                                    aria-label="Upload photo"
-                                  >
-                                    <Upload size={18} />
-                                    <span>Choose File</span>
-                                  </label>
+                                  !isViewMode && (
+                                    <label
+                                      className="workorderChooseFileBtn"
+                                      htmlFor={locationPhotoInputId}
+                                      title="Upload photo"
+                                      aria-label="Upload photo"
+                                    >
+                                      <Upload size={18} />
+                                      <span>Choose File</span>
+                                    </label>
+                                  )
                                 )}
                               </div>
                             </div>
@@ -1835,7 +1840,7 @@ const WorkOrder: React.FC = () => {
           </CollapsibleCard>
 
           {/* Footer Submit Form Button (Centred and Styled using CSS class) */}
-          {!isViewMode && (
+          {!isViewMode && canSubmit && (
             <div className="workorderFooter">
               <button type="submit" className="workorderBtnSubmit btn-submit-approval custom-btn">
                 Submit Form

@@ -294,6 +294,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                 className={`category-chip-btn${category === cat ? ' active' : ''}`}
                 onClick={() => !isReadOnly && setCategory(cat)}
                 style={isReadOnly ? { pointerEvents: 'none', opacity: 0.8 } : undefined}
+                disabled={isReadOnly}
               >{cat}</button>
             ))}
           </div>
@@ -339,7 +340,8 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       <button key={g} type="button"
                         className={`rpd-toggle-btn${gender === g ? ' active' : ''}`}
                         onClick={() => !isReadOnly && setGender(g)}
-                        style={isReadOnly ? { pointerEvents: 'none' } : undefined}>{g}</button>
+                        style={isReadOnly ? { pointerEvents: 'none' } : undefined}
+                        disabled={isReadOnly}>{g}</button>
                     ))}
                   </div>
                 </div>
@@ -354,7 +356,8 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       <button key={s} type="button"
                         className={`rpd-toggle-btn${serviceStatus === s ? ' active' : ''}`}
                         onClick={() => !isReadOnly && setServiceStatus(s)}
-                        style={isReadOnly ? { pointerEvents: 'none' } : undefined}>{s}</button>
+                        style={isReadOnly ? { pointerEvents: 'none' } : undefined}
+                        disabled={isReadOnly}>{s}</button>
                     ))}
                   </div>
                 </div>

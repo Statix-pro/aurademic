@@ -120,12 +120,7 @@
   min-height: 40px;
 }
 
-.workorderdashboard-table-status-dropdown {
-  margin-bottom: 0 !important;
-  display: inline-block;
-  width: 100%;
-  min-height: 40px;
-}
+
 
 .workorderdashboard-date-filter {
   display: flex;
@@ -612,11 +607,7 @@
   font-weight: 600;
 }
 
-.workorderdashboard-pagination {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-}
+
 
 .workorderdashboard-pagination button {
   min-width: 34px;
@@ -1660,7 +1651,7 @@
   color: #334155;
   cursor: pointer;
   outline: none;
-  min-width: 145px;
+  min-width: 160px;
   flex: 0 0 auto;
   appearance: none;
   -webkit-appearance: none;
@@ -1677,10 +1668,7 @@
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
 }
 
-.workorderdashboard-financial-year,
-.workorderdashboard-beneficiary-filter {
-  min-width: 160px;
-}
+
 
 .search-box {
   position: relative;

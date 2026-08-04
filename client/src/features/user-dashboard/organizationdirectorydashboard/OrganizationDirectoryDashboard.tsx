@@ -3,6 +3,7 @@ import { Search, X, Edit3 } from 'lucide-react';
 import './OrganizationDirectoryDashboard.css';
 import OrganizationDirectory, { Organization } from '../../organizationdirectory/OrganizationDirectory';
 import authenticityUtility, { isFallbackEligible } from '../../../shared/utils/authenticityUtility';
+import { useAbility } from '../../../shared/casl/AbilityContext';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /organizations          → { success: true, data: Organization[] }
@@ -11,12 +12,8 @@ import authenticityUtility, { isFallbackEligible } from '../../../shared/utils/a
  * DELETE /organizations/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
 
-/* ─── FALLBACK localStorage fallback ──────────────────────────────────────
- * LEGACY: _v1 key ('organizationDirectoryRecords_v1') is orphaned.
- * It will be discarded once the backend is live — no migration needed.
- * FALLBACK: The _v2 key below is used as a fallback while the backend is absent.
- * Remove the entire FALLBACK block (and STORAGE_KEY) once the API is live.
- * ──────────────────────────────────────────────────────────────────────────── */
+// LEGACY: _v1 key ('organizationDirectoryRecords_v1') is orphaned. It will be discarded once the backend is live — no migration needed.
+// FALLBACK: The _v2 key below is used as a fallback while the backend is absent. Remove the entire FALLBACK block (and STORAGE_KEY) once the API is live.
 const STORAGE_KEY = 'organizationDirectoryRecords_v2';
 
 
@@ -51,7 +48,9 @@ const apiGetAll = async (): Promise<Organization[]> => {
     }
     throw new Error(res?.message || 'Invalid response');
   } catch (err: any) {
-    if (isFallbackEligible(err) || err.response?.status === 404) return fallbackGetAll();
+    if (isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404)) {
+      return fallbackGetAll();
+    }
     throw err;
   }
 };
@@ -107,6 +106,7 @@ const CATEGORY_OPTIONS = [
    ═══════════════════════════════════════════════════════════ */
 
 const OrganizationDirectoryDashboard: React.FC = () => {
+  const ability = useAbility();
   const [records, setRecords] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -135,7 +135,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
   const filtered = useMemo(() => {
     const nameFilter = searchName.trim().toLowerCase();
-    const categoryFilter = searchCategory.trim().toLowerCase();
+    const categoryFilter = searchCategory.trim().toLowerCase().replace(/^legacy-/, '');
 
     return records.filter(
       (record) =>
@@ -161,6 +161,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
   };
 
   const handleSave = async (orgData: Omit<Organization, 'id' | 'date'>) => {
+    setError(null);
     try {
       if (editingOrg) {
         const updated = await apiUpdate(editingOrg.id, orgData);
@@ -169,11 +170,11 @@ const OrganizationDirectoryDashboard: React.FC = () => {
         const created = await apiCreate(orgData);
         setRecords((prev) => [created, ...prev]);
       }
+      setEditingOrg(null);
+      setShowForm(false);
     } catch {
       setError('Failed to save record. Please try again.');
     }
-    setEditingOrg(null);
-    setShowForm(false);
   };
 
   /* ── Render ── */
@@ -208,6 +209,11 @@ const OrganizationDirectoryDashboard: React.FC = () => {
       <div className="budgetdashboard-container">
         {showForm ? (
           <div className="rpd-form-wrapper">
+            {error && (
+              <div className="alert alert-danger mb-3" role="alert">
+                {error}
+              </div>
+            )}
             <OrganizationDirectory
               editingOrg={editingOrg}
               onSave={handleSave}
@@ -265,20 +271,22 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                   >
                     <option value="">Search Category</option>
                     {CATEGORY_OPTIONS.map((cat) => (
-                      <option key={cat} value={cat.toLowerCase()}>
+                      <option key={cat} value={`legacy-${cat.toLowerCase()}`}>
                         {cat}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <button
-                  type="button"
-                  className="budgetdashboard-add-btn"
-                  onClick={handleAdd}
-                >
-                  Add +
-                </button>
+                {ability.can('create', 'MasterData') && (
+                  <button
+                    type="button"
+                    className="budgetdashboard-add-btn"
+                    onClick={handleAdd}
+                  >
+                    Add +
+                  </button>
+                )}
               </div>
             </div>
 
@@ -323,14 +331,16 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                               )}
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              <button
-                                type="button"
-                                className="org-action-edit-btn"
-                                onClick={() => handleEdit(org)}
-                                title="Edit Organization"
-                              >
-                                <Edit3 size={15} />
-                              </button>
+                              {ability.can('edit', 'MasterData') && (
+                                <button
+                                  type="button"
+                                  className="org-action-edit-btn"
+                                  onClick={() => handleEdit(org)}
+                                  title="Edit Organization"
+                                >
+                                  <Edit3 size={15} />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
