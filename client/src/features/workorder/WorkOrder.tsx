@@ -792,7 +792,7 @@ const FLOOR_DROPDOWN_OPTIONS = toDropdownOptions(FLOORS);
 type PhotoField = 'locationPhotos';
 
 const createWorkItem = (): WorkItem => ({
-  id: Math.random().toString(36).slice(2, 11),
+  id: crypto.randomUUID(),
   type: '',
   subType: '',
   block: 'Select',
@@ -909,6 +909,7 @@ const WorkOrder: React.FC = () => {
   const canSubmit = isEditMode
     ? ability.can('edit', 'WorkOrder')
     : ability.can('create', 'WorkOrder');
+  const isEditable = true;
 
   // Collapsible section states
   const [isApplicantOpen, setIsApplicantOpen] = useState(true);
@@ -970,7 +971,7 @@ const WorkOrder: React.FC = () => {
       setSelectedCategory(wo.category_name || 'Carpentry');
       if (Array.isArray(wo.items) && wo.items.length > 0) {
         const loadedItems = wo.items.map((item: any) => ({
-          id: String(item.id || Math.random().toString(36).slice(2, 11)),
+          id: String(item.id || crypto.randomUUID()),
           type: item.type_name || item.type || '',
           subType: item.sub_type_name || item.subType || '',
           block: item.block || 'Select',
@@ -1012,8 +1013,9 @@ const WorkOrder: React.FC = () => {
     if (!id) return;
     fetchRecord();
     return () => {
-      // Invalidate running request on unmount/id change
-      currentRequestIdRef.current = 0;
+      // Invalidate the running request on unmount / id change by advancing the
+      // monotonic counter, so late responses never match the current request id.
+      currentRequestIdRef.current += 1;
     };
   }, [id]);
 
@@ -1281,7 +1283,7 @@ const WorkOrder: React.FC = () => {
       const reader = new FileReader();
       reader.onloadend = () => {
         const attachment: PhotoAttachment = {
-          id: `${file.name}-${file.lastModified}-${Math.random().toString(36).slice(2, 8)}`,
+          id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
           file,
           preview: reader.result as string,
         };

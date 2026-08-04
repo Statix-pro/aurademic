@@ -55,8 +55,10 @@ const CATEGORY_OPTIONS = [
   'Incubation', 'Government', 'Entrepreneur', 'Alumni', 'Social Activist',
 ];
 
+const newProfessionId = (): string => crypto.randomUUID();
+
 const emptyProfession = (): ProfessionDetail => ({
-  id: Math.random().toString(36).slice(2, 11),
+  id: newProfessionId(),
   designation: '', department: '', organization: '',
   city: '', state: '', country: '', orgLinkedIn: '', status: 'Working',
 });
@@ -190,6 +192,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   const [resumeName, setResumeName] = useState('');
   const [photoFile, setPhotoFile] = useState<File | undefined>(undefined);
   const [resumeFile, setResumeFile] = useState<File | undefined>(undefined);
+  const [fileError, setFileError] = useState<string | null>(null);
 
 
   /* Initialize form values */
@@ -212,7 +215,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
         editingPerson.professions?.length
           ? editingPerson.professions.map((p) => ({
               ...p,
-              id: p.id || String(Math.random().toString(36).slice(2, 11)),
+              id: p.id || newProfessionId(),
             }))
           : [emptyProfession()]
       );
@@ -232,26 +235,53 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   /* ── File handlers ── */
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f && f.size <= 2 * 1024 * 1024) {
+    if (f) {
+      const extension = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+      const validExtensions = ['.jpg', '.jpeg', '.png'];
+      const validMime = f.type.startsWith('image/');
+      if (!validMime && !validExtensions.includes(extension)) {
+        setFileError('Invalid photo file type. Please select a JPG, JPEG, or PNG image.');
+        setPhotoName('');
+        setPhotoFile(undefined);
+        e.target.value = '';
+        return;
+      }
+      if (f.size > 2 * 1024 * 1024) {
+        setFileError('Photo must be less than 2 MB');
+        setPhotoName('');
+        setPhotoFile(undefined);
+        e.target.value = '';
+        return;
+      }
+      setFileError(null);
       setPhotoName(f.name);
       setPhotoFile(f);
-    } else if (f) {
-      alert('Photo must be less than 2 MB');
-      setPhotoName('');
-      setPhotoFile(undefined);
-      e.target.value = '';
     }
   };
   const handleResume = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f && f.size <= 5 * 1024 * 1024) {
+    if (f) {
+      const extension = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
+      const validExtensions = ['.pdf', '.doc', '.docx'];
+      const isDoc = f.type === 'application/msword' || f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+      const isPdf = f.type === 'application/pdf';
+      if (!isPdf && !isDoc && !validExtensions.includes(extension)) {
+        setFileError('Invalid resume file type. Please select a PDF, DOC, or DOCX document.');
+        setResumeName('');
+        setResumeFile(undefined);
+        e.target.value = '';
+        return;
+      }
+      if (f.size > 5 * 1024 * 1024) {
+        setFileError('Resume must be less than 5 MB');
+        setResumeName('');
+        setResumeFile(undefined);
+        e.target.value = '';
+        return;
+      }
+      setFileError(null);
       setResumeName(f.name);
       setResumeFile(f);
-    } else if (f) {
-      alert('Resume must be less than 5 MB');
-      setResumeName('');
-      setResumeFile(undefined);
-      e.target.value = '';
     }
   };
 
@@ -262,6 +292,16 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       return;
     }
     const fullName = `${title} ${firstName.trim()} ${lastName.trim()}`;
+    const filteredProfessions = professions.filter((p) => {
+      const d = (p.designation || '').trim();
+      const dept = (p.department || '').trim();
+      const org = (p.organization || '').trim();
+      const c = (p.city || '').trim();
+      const s = (p.state || '').trim();
+      const co = (p.country || '').trim();
+      return d !== '' || dept !== '' || org !== '' || c !== '' || s !== '' || co !== '';
+    });
+
     onSave({
       title,
       firstName: firstName.trim(),
@@ -277,13 +317,12 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       personalEmail: personalEmail.trim(),
       officialEmail: officialEmail.trim(),
       linkedIn: linkedIn.trim(),
-      professions: professions.map((p) => ({ ...p })),
+      professions: filteredProfessions.length ? filteredProfessions.map((p) => ({ ...p })) : [emptyProfession()],
       photoName,
       resumeName,
       photoFile,
       resumeFile,
     });
-
   };
 
   return (
@@ -456,29 +495,33 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                 <div key={prof.id} className="rpd-profession-block" style={{ padding: '16px 14px' }}>
                   {idx > 0 && <hr className="rpd-divider" style={{ margin: '10px 0' }} />}
                   <div className="rpd-grid-3 rpd-mb-s">
-                    {[
-                      { label: 'Designation', field: 'designation', ph: 'e.g. Professor' },
-                      { label: 'Department', field: 'department', ph: 'e.g. Computer Science' },
-                      { label: 'Organization', field: 'organization', ph: 'e.g. IIT Madras' },
-                    ].map(({ label, field, ph }) => (
+                    {(
+                      [
+                        { label: 'Designation', field: 'designation', ph: 'e.g. Professor' },
+                        { label: 'Department', field: 'department', ph: 'e.g. Computer Science' },
+                        { label: 'Organization', field: 'organization', ph: 'e.g. IIT Madras' },
+                      ] as { label: string; field: keyof ProfessionDetail; ph: string }[]
+                    ).map(({ label, field, ph }) => (
                       <div key={field} className="rpd-field" style={{ marginBottom: 0 }}>
                         <label>{label}</label>
-                        <input type="text" value={(prof as any)[field]}
-                          onChange={(e) => changeProfession(idx, field as keyof ProfessionDetail, e.target.value)} placeholder={ph} disabled={isReadOnly} />
+                        <input type="text" value={prof[field]}
+                          onChange={(e) => changeProfession(idx, field, e.target.value)} placeholder={ph} disabled={isReadOnly} />
                       </div>
                     ))}
                   </div>
                   <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-end', flexWrap: 'wrap', marginTop: '10px' }}>
-                    {[
-                      { label: 'City', field: 'city', ph: 'City' },
-                      { label: 'State', field: 'state', ph: 'State' },
-                      { label: 'Country', field: 'country', ph: 'Country' },
-                      { label: 'Website', field: 'orgLinkedIn', ph: 'Website URL' },
-                    ].map(({ label, field, ph }) => (
+                    {(
+                      [
+                        { label: 'City', field: 'city', ph: 'City' },
+                        { label: 'State', field: 'state', ph: 'State' },
+                        { label: 'Country', field: 'country', ph: 'Country' },
+                        { label: 'Website', field: 'orgLinkedIn', ph: 'Website URL' },
+                      ] as { label: string; field: keyof ProfessionDetail; ph: string }[]
+                    ).map(({ label, field, ph }) => (
                       <div key={field} className="rpd-field" style={{ flex: '1', minWidth: '120px', marginBottom: 0 }}>
                         <label>{label}</label>
-                        <input type="text" value={(prof as any)[field]}
-                          onChange={(e) => changeProfession(idx, field as keyof ProfessionDetail, e.target.value)} placeholder={ph} disabled={isReadOnly} />
+                        <input type="text" value={prof[field]}
+                          onChange={(e) => changeProfession(idx, field, e.target.value)} placeholder={ph} disabled={isReadOnly} />
                       </div>
                     ))}
                     <div className="rpd-field" style={{ flex: '1', minWidth: '120px', marginBottom: 0 }}>
@@ -548,6 +591,11 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               disabled={isReadOnly}
             />
           </div>
+          {fileError && (
+            <div role="alert" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '8px 14px', marginTop: '8px', fontSize: '0.875rem' }}>
+              {fileError}
+            </div>
+          )}
         </div>
       </div>
 

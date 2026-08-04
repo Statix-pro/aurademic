@@ -674,7 +674,6 @@ const WorkOrderDashboard: React.FC = () => {
               </div>
 
               <div className="workorderdashboard-actions">
-                {ability.can('create', 'WorkOrder') && (
                   <button
                     type="button"
                     className="workorderdashboard-add-btn"
@@ -682,7 +681,6 @@ const WorkOrderDashboard: React.FC = () => {
                   >
                     Add +
                   </button>
-                )}
               </div>
             </div>
           </div>
@@ -868,7 +866,6 @@ const WorkOrderDashboard: React.FC = () => {
             >
               Close
             </button>
-{ability.can('edit', 'WorkOrder') && (
             <button
               type="button"
               className="wo-info-btn-save"
@@ -876,7 +873,6 @@ const WorkOrderDashboard: React.FC = () => {
             >
               Save changes
             </button>
-            )}
           </div>
         }
       >

@@ -4,7 +4,7 @@
   min-height: calc(100vh - 64px);
   padding: 24px;
   overflow-x: hidden;
-  font-family: 'Roboto', sans-serif;
+  font-family: Roboto, sans-serif;
 }
 
 /* Container */
@@ -1284,7 +1284,7 @@
   flex-direction: column;
   gap: 20px;
   padding: 4px 2px 8px;
-  font-family: 'Roboto', sans-serif;
+  font-family: Roboto, sans-serif;
 }
 
 /* Section (Applicant Details / Description) */

@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Search, X, Edit3 } from 'lucide-react';
 import './OrganizationDirectoryDashboard.css';
 import OrganizationDirectory, { Organization } from '../../organizationdirectory/OrganizationDirectory';
-import authenticityUtility, { isFallbackEligible } from '../../../shared/utils/authenticityUtility';
-import { useAbility } from '../../../shared/casl/AbilityContext';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /organizations          → { success: true, data: Organization[] }
@@ -12,93 +11,23 @@ import { useAbility } from '../../../shared/casl/AbilityContext';
  * DELETE /organizations/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
 
-// LEGACY: _v1 key ('organizationDirectoryRecords_v1') is orphaned. It will be discarded once the backend is live — no migration needed.
-// FALLBACK: The _v2 key below is used as a fallback while the backend is absent. Remove the entire FALLBACK block (and STORAGE_KEY) once the API is live.
-const STORAGE_KEY = 'organizationDirectoryRecords_v2';
-
-
-const fallbackGetAll = (): Organization[] => {
-  // FALLBACK: remove once backend is live
-  console.warn('[Organization] API unavailable — reading from localStorage fallback');
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? (JSON.parse(stored) as Organization[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const fallbackSave = (records: Organization[]) => {
-  // FALLBACK: remove once backend is live
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  } catch {
-    // ignore
-  }
-};
-
-let isApiAvailable = false;
 
 const apiGetAll = async (): Promise<Organization[]> => {
-  try {
-    const res = (await authenticityUtility.get('/organizations')) as any;
-    if (res?.success && Array.isArray(res.data)) {
-      isApiAvailable = true;
-      return res.data;
-    }
-    throw new Error(res?.message || 'Invalid response');
-  } catch (err: any) {
-    if (isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404)) {
-      return fallbackGetAll();
-    }
-    throw err;
-  }
+  const res = (await authenticityUtility.get('/organizations')) as any;
+  if (res?.success && Array.isArray(res.data)) return res.data;
+  throw new Error(res?.message || 'Failed to load organizations.');
 };
 
 const apiCreate = async (orgData: Omit<Organization, 'id' | 'date'>): Promise<Organization> => {
-  try {
-    const res = (await authenticityUtility.post('/organizations', orgData)) as any;
-    if (res?.success && res.data) {
-      isApiAvailable = true;
-      return res.data;
-    }
-    throw new Error(res?.message || 'Invalid response');
-  } catch (err: any) {
-    const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
-    if (!fallbackAllowed) throw err;
-    // FALLBACK: remove once backend is live
-    console.warn('[Organization] API unavailable — writing to localStorage fallback');
-    const existing = fallbackGetAll();
-    const newRecord: Organization = {
-      id: Math.max(0, ...existing.map((r) => r.id)) + 1,
-      date: new Date().toISOString().slice(0, 10),
-      ...orgData,
-    };
-    fallbackSave([newRecord, ...existing]);
-    return newRecord;
-  }
+  const res = (await authenticityUtility.post('/organizations', orgData)) as any;
+  if (res?.success && res.data) return res.data;
+  throw new Error(res?.message || 'Failed to create organization.');
 };
 
 const apiUpdate = async (id: number, orgData: Omit<Organization, 'id' | 'date'>): Promise<Organization> => {
-  try {
-    const res = (await authenticityUtility.put(`/organizations/${id}`, orgData)) as any;
-    if (res?.success && res.data) {
-      isApiAvailable = true;
-      return res.data;
-    }
-    throw new Error(res?.message || 'Invalid response');
-  } catch (err: any) {
-    const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
-    if (!fallbackAllowed) throw err;
-    // FALLBACK: remove once backend is live
-    console.warn('[Organization] API unavailable — writing to localStorage fallback');
-    const existing = fallbackGetAll();
-    const updated = existing.map((r) => (r.id === id ? { ...r, ...orgData } : r));
-    fallbackSave(updated);
-    const found = updated.find((r) => r.id === id);
-    if (!found) throw new Error('Record not found');
-    return found;
-  }
+  const res = (await authenticityUtility.put(`/organizations/${id}`, orgData)) as any;
+  if (res?.success && res.data) return res.data;
+  throw new Error(res?.message || 'Failed to update organization.');
 };
 
 /* ─── Constants ─────────────────────────────────────────────────────────── */
@@ -112,10 +41,10 @@ const CATEGORY_OPTIONS = [
    ═══════════════════════════════════════════════════════════ */
 
 const OrganizationDirectoryDashboard: React.FC = () => {
-  const ability = useAbility();
   const [records, setRecords] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
@@ -124,12 +53,13 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
   const fetchRecords = async () => {
     setIsLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const data = await apiGetAll();
       setRecords(data);
     } catch {
-      setError('Failed to load organizations. Please try again.');
+      setRecords([]);
+      setLoadError('Could not reach the server. Showing empty list — add a record or retry later.');
     } finally {
       setIsLoading(false);
     }
@@ -197,18 +127,6 @@ const OrganizationDirectoryDashboard: React.FC = () => {
     );
   }
 
-  if (error && !showForm) {
-    return (
-      <section className="budgetdashboard-page d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
-        <div className="alert alert-danger" role="alert">
-          {error}{' '}
-          <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={fetchRecords}>
-            Retry
-          </button>
-        </div>
-      </section>
-    );
-  }
 
   return (
     <section className="budgetdashboard-page">
@@ -246,16 +164,24 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                       style={{ marginRight: '10px', paddingRight: '30px' }}
                     />
                     {searchName ? (
-                      <X
-                        size={16}
+                      <button
+                        type="button"
+                        aria-label="Clear organization search"
                         style={{
                           position: 'absolute',
                           right: '20px',
+                          background: 'none',
+                          border: 'none',
+                          padding: 0,
                           cursor: 'pointer',
-                          color: '#64748b'
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                         onClick={() => setSearchName('')}
-                      />
+                      >
+                        <X size={16} style={{ color: '#64748b' }} aria-hidden="true" />
+                      </button>
                     ) : (
                       <Search
                         size={16}
@@ -284,17 +210,27 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                   </select>
                 </div>
 
-                {ability.can('create', 'MasterData') && (
-                  <button
+                <button
                     type="button"
                     className="budgetdashboard-add-btn"
                     onClick={handleAdd}
                   >
                     Add +
                   </button>
-                )}
               </div>
             </div>
+
+            {loadError && (
+              <div className="budgetdashboard-body" style={{ paddingTop: 0 }}>
+                <div className="alert alert-warning d-flex align-items-center justify-content-between mb-0" role="alert" style={{ borderRadius: '8px', fontSize: '0.875rem' }}>
+                  <span>{loadError}</span>
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button type="button" className="btn btn-sm btn-outline-warning" onClick={fetchRecords}>Retry</button>
+                    <button type="button" className="btn-close" aria-label="Dismiss" onClick={() => setLoadError(null)} />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="budgetdashboard-body">
               <div className="budgetdashboard-table-wrapper">
@@ -337,8 +273,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                               )}
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              {ability.can('edit', 'MasterData') && (
-                                <button
+                              <button
                                   type="button"
                                   className="org-action-edit-btn"
                                   onClick={() => handleEdit(org)}
@@ -346,7 +281,6 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                                 >
                                   <Edit3 size={15} />
                                 </button>
-                              )}
                             </td>
                           </tr>
                         );

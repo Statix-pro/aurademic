@@ -3,8 +3,7 @@ import { Search, Plus, X, Edit3 } from 'lucide-react';
 import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
 import ResourcePersonDirectory, { ResourcePerson } from '../../resourcepersondirectory/ResourcePersonDirectory';
-import authenticityUtility, { isFallbackEligible } from '../../../shared/utils/authenticityUtility';
-import { useAbility } from '../../../shared/casl/AbilityContext';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
@@ -13,128 +12,44 @@ import { useAbility } from '../../../shared/casl/AbilityContext';
  * DELETE /resource-persons/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
 
-// FALLBACK: The key 'resourcePersonDirectoryRecords' is used while the backend is absent.
-// Remove the fallback storage key and associated fallback methods once the API is live.
-const STORAGE_KEY = 'resourcePersonDirectoryRecords';
-
-
-const fallbackGetAll = (): ResourcePerson[] => {
-  // FALLBACK: remove once backend is live
-  console.warn('[ResourcePerson] API unavailable — reading from localStorage fallback');
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? (JSON.parse(stored) as ResourcePerson[]) : [];
-  } catch {
-    return [];
-  }
-};
-
-const fallbackSave = (records: ResourcePerson[]) => {
-  // FALLBACK: remove once backend is live
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
-  } catch {
-    // ignore
-  }
-};
-
-let isApiAvailable = false;
 
 const apiGetAll = async (): Promise<ResourcePerson[]> => {
-  try {
-    const res = (await authenticityUtility.get('/resource-persons')) as any;
-    if (res?.success && Array.isArray(res.data)) {
-      isApiAvailable = true;
-      return res.data;
+  const res = (await authenticityUtility.get('/resource-persons')) as any;
+  if (res?.success && Array.isArray(res.data)) return res.data;
+  throw new Error(res?.message || 'Failed to load resource persons.');
+};
+
+// Helper: build multipart FormData for ResourcePerson operations
+const buildPersonFormData = (personData: Omit<ResourcePerson, 'id' | 'date'>): FormData => {
+  const formData = new FormData();
+  Object.entries(personData).forEach(([key, val]) => {
+    if (key === 'professions') {
+      formData.append(key, JSON.stringify(val));
+    } else if (key === 'photoFile' || key === 'resumeFile') {
+      if (val instanceof File) {
+        formData.append(key, val);
+      }
+    } else if (val !== undefined && val !== null) {
+      formData.append(key, String(val));
     }
-    throw new Error(res?.message || 'Invalid response');
-  } catch (err: any) {
-    if (isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404)) {
-      return fallbackGetAll();
-    }
-    throw err;
-  }
+  });
+  return formData;
 };
 
 const apiCreate = async (personData: Omit<ResourcePerson, 'id' | 'date'>): Promise<ResourcePerson> => {
-  try {
-    const formData = new FormData();
-    Object.entries(personData).forEach(([key, val]) => {
-      if (key === 'professions') {
-        formData.append(key, JSON.stringify(val));
-      } else if (key === 'photoFile' || key === 'resumeFile') {
-        if (val instanceof File) {
-          formData.append(key, val);
-        }
-      } else if (val !== undefined && val !== null) {
-        formData.append(key, String(val));
-      }
-    });
-
-    const res = (await authenticityUtility.postFile('/resource-persons', formData)) as any;
-    if (res?.success && res.data) {
-      isApiAvailable = true;
-      return res.data;
-    }
-    throw new Error(res?.message || 'Invalid response');
-  } catch (err: any) {
-    const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
-    if (!fallbackAllowed) throw err;
-    // FALLBACK: Reject fallback saves that include selected File instances since they cannot be serialized
-    if (personData.photoFile || personData.resumeFile) {
-      throw new Error('Fallback save failed: Cannot persist files locally.');
-    }
-    // FALLBACK: remove once backend is live
-    console.warn('[ResourcePerson] API unavailable — writing to localStorage fallback');
-    const existing = fallbackGetAll();
-    const newRecord: ResourcePerson = {
-      id: Math.max(0, ...existing.map((r) => r.id)) + 1,
-      date: new Date().toISOString().slice(0, 10),
-      ...personData,
-    };
-    fallbackSave([newRecord, ...existing]);
-    return newRecord;
-  }
+  const formData = buildPersonFormData(personData);
+  const res = (await authenticityUtility.postFile('/resource-persons', formData)) as any;
+  if (res?.success && res.data) return res.data;
+  throw new Error(res?.message || 'Failed to create resource person.');
 };
 
 const apiUpdate = async (id: number, personData: Omit<ResourcePerson, 'id' | 'date'>): Promise<ResourcePerson> => {
-  try {
-    const formData = new FormData();
-    Object.entries(personData).forEach(([key, val]) => {
-      if (key === 'professions') {
-        formData.append(key, JSON.stringify(val));
-      } else if (key === 'photoFile' || key === 'resumeFile') {
-        if (val instanceof File) {
-          formData.append(key, val);
-        }
-      } else if (val !== undefined && val !== null) {
-        formData.append(key, String(val));
-      }
-    });
-
-    const res = (await authenticityUtility.postFile(`/resource-persons/${id}`, formData)) as any;
-    if (res?.success && res.data) {
-      isApiAvailable = true;
-      return res.data;
-    }
-    throw new Error(res?.message || 'Invalid response');
-  } catch (err: any) {
-    const fallbackAllowed = isFallbackEligible(err) || (!isApiAvailable && err.response?.status === 404);
-    if (!fallbackAllowed) throw err;
-    // FALLBACK: Reject fallback saves that include selected File instances since they cannot be serialized
-    if (personData.photoFile || personData.resumeFile) {
-      throw new Error('Fallback save failed: Cannot persist files locally.');
-    }
-    // FALLBACK: remove once backend is live
-    console.warn('[ResourcePerson] API unavailable — writing to localStorage fallback');
-    const existing = fallbackGetAll();
-    const updated = existing.map((r) => (r.id === id ? { ...r, ...personData } : r));
-    fallbackSave(updated);
-    const found = updated.find((r) => r.id === id);
-    if (!found) throw new Error('Record not found');
-    return found;
-  }
+  const formData = buildPersonFormData(personData);
+  const res = (await authenticityUtility.putFile(`/resource-persons/${id}`, formData)) as any;
+  if (res?.success && res.data) return res.data;
+  throw new Error(res?.message || 'Failed to update resource person.');
 };
+
 
 
 
@@ -155,10 +70,10 @@ const getPrimary = (p: ResourcePerson) => {
    ═══════════════════════════════════════════════════════════ */
 
 const ResourcePersonDirectoryDashboard: React.FC = () => {
-  const ability = useAbility();
   const [records, setRecords] = useState<ResourcePerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [editingPerson, setEditingPerson] = useState<ResourcePerson | null>(null);
@@ -167,12 +82,13 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
 
   const fetchRecords = async () => {
     setIsLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const data = await apiGetAll();
       setRecords(data);
     } catch {
-      setError('Failed to load resource persons. Please try again.');
+      setRecords([]);
+      setLoadError('Could not reach the server. Showing empty list — add a record or retry later.');
     } finally {
       setIsLoading(false);
     }
@@ -188,8 +104,8 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
 
     return records.filter(
       (record) =>
-        (!nameFilter || record.name.toLowerCase().includes(nameFilter)) &&
-        (!categoryFilter || record.category.toLowerCase().includes(categoryFilter)),
+        (!nameFilter || (record.name ?? '').toLowerCase().includes(nameFilter)) &&
+        (!categoryFilter || (record.category ?? '').toLowerCase().includes(categoryFilter)),
     );
   }, [records, searchName, searchCategory]);
 
@@ -211,13 +127,6 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
 
   const handleSave = async (personData: Omit<ResourcePerson, 'id' | 'date'>) => {
     setError(null);
-    const canSave = editingPerson
-      ? ability.can('edit', 'MasterData')
-      : ability.can('create', 'MasterData');
-    if (!canSave) {
-      setError('You do not have permission to perform this action.');
-      return;
-    }
     try {
       if (editingPerson) {
         const updated = await apiUpdate(editingPerson.id, personData);
@@ -228,8 +137,8 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
       }
       setEditingPerson(null);
       setShowForm(false);
-    } catch {
-      setError('Failed to save record. Please try again.');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to save record. Please try again.');
     }
   };
 
@@ -247,18 +156,6 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
     );
   }
 
-  if (error && !showForm) {
-    return (
-      <div className="financecard-page d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
-        <div className="alert alert-danger" role="alert">
-          {error}{' '}
-          <button type="button" className="btn btn-sm btn-outline-danger ms-2" onClick={fetchRecords}>
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="financecard-page">
@@ -310,17 +207,27 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {ability.can('create', 'MasterData') && (
-                  <button
+                <button
                     type="button"
                     className="financecard-add-btn"
                     onClick={handleAdd}
                   >
                     <Plus size={15} /> Add
                   </button>
-                )}
               </div>
             </div>
+
+            {loadError && (
+              <div className="financecard-body" style={{ paddingTop: 0 }}>
+                <div className="alert alert-warning d-flex align-items-center justify-content-between mb-0" role="alert" style={{ borderRadius: '8px', fontSize: '0.875rem' }}>
+                  <span>{loadError}</span>
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                    <button type="button" className="btn btn-sm btn-outline-warning" onClick={fetchRecords}>Retry</button>
+                    <button type="button" className="btn-close" aria-label="Dismiss" onClick={() => setLoadError(null)} />
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="financecard-body">
               <div className="rpd-table-wrap">
@@ -373,7 +280,6 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                           
                           <td className="rpd-center">-</td>
                           <td className="rpd-center">
-                            {ability.can('edit', 'MasterData') ? (
                               <button
                                 type="button"
                                 className="rpd-icon-btn"
@@ -382,9 +288,6 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                               >
                                 <Edit3 size={15} />
                               </button>
-                            ) : (
-                              '—'
-                            )}
                           </td>
                         </tr>
                       );

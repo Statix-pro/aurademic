@@ -53,6 +53,11 @@
   outline: none;
 }
 
+.orgd-chip:focus-visible {
+  outline: 3px solid #0069ab;
+  outline-offset: 2px;
+}
+
 .orgd-chip:hover {
   background-color: #f0f6ff;
   border-color: #0069ab;
@@ -203,6 +208,11 @@
   cursor: pointer;
   transition: all 0.2s ease;
   outline: none;
+}
+
+.orgd-toggle-btn:focus-visible {
+  outline: 3px solid #0069ab;
+  outline-offset: 2px;
 }
 
 .orgd-toggle-btn:hover:not(.active) {

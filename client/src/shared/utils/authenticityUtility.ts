@@ -5,6 +5,7 @@ const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 interface AuthenticityUtility extends AxiosInstance {
   postFile: (endpoint: string, formData: FormData) => Promise<unknown>;
+  putFile: (endpoint: string, formData: FormData) => Promise<unknown>;
   getBaseURL: () => string;
 }
 
@@ -102,6 +103,21 @@ authenticityUtility.postFile = async (endpoint: string, formData: FormData): Pro
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
     console.error('Error in postFile request:', axiosError.response?.data || axiosError.message);
+    throw error;
+  }
+};
+
+authenticityUtility.putFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
+  try {
+    const response = await authenticityUtility.put(endpoint, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response;
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: unknown }; message?: string };
+    console.error('Error in putFile request:', axiosError.response?.data || axiosError.message);
     throw error;
   }
 };

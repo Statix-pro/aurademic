@@ -67,6 +67,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
   const [pinCode, setPinCode] = useState('');
 
   const [status, setStatus] = useState('Active');
+  const [formError, setFormError] = useState<string | null>(null);
 
   /* Initialize form values */
   useEffect(() => {
@@ -91,12 +92,13 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
 
 
   const handleSubmit = () => {
+    setFormError(null);
     if (!isAllowed) {
-      alert('You do not have permission to perform this action.');
+      setFormError('You do not have permission to perform this action.');
       return;
     }
     if (!name.trim()) {
-      alert('Please fill in the Organization Name field.');
+      setFormError('Please fill in the Organization Name field.');
       return;
     }
     onSave({
@@ -122,13 +124,14 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       <div className="orgd-card">
         {/* Category Section */}
         <h5 className="orgd-section-title">Category</h5>
-        <div className="orgd-category-chips">
+        <div className="orgd-category-chips" role="group" aria-label="Category Selector">
           {CATEGORY_OPTIONS.map((cat) => (
             <button
               key={cat}
               type="button"
               className={`orgd-chip${category === cat ? ' active' : ''}`}
               onClick={() => setCategory(cat)}
+              aria-pressed={category === cat}
             >
               {cat}
             </button>
@@ -145,8 +148,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
           <div className="orgd-left-col">
             <div style={{ display: 'flex', gap: '16px' }}>
               <div className="orgd-field" style={{ flex: '1.6' }}>
-                <label>Organization Name <span className="req">*</span></label>
+                <label htmlFor="orgd-name-input">Organization Name <span className="req">*</span></label>
                 <input
+                  id="orgd-name-input"
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
@@ -154,8 +158,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                 />
               </div>
               <div className="orgd-field" style={{ flex: '1' }}>
-                <label>Abbreviation / Short Name</label>
+                <label htmlFor="orgd-abbrev-input">Abbreviation / Short Name</label>
                 <input
+                  id="orgd-abbrev-input"
                   type="text"
                   value={abbreviation}
                   onChange={(e) => setAbbreviation(e.target.value)}
@@ -165,16 +170,17 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
             </div>
             <div style={{ display: 'flex', gap: '16px' }}>
               <div className="orgd-field" style={{ flex: '1.6' }}>
-                <label>Address</label>
+                <label htmlFor="orgd-address-input">Address</label>
                 <input
+                  id="orgd-address-input"
                   type="text"
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="Address line"
                 />
               </div>
-              <div className="orgd-field" style={{ flex: '1' }}>
-                <label>Status</label>
+              <fieldset className="orgd-field" style={{ flex: '1', border: 'none', padding: 0, margin: 0 }}>
+                <legend style={{ fontSize: '0.9rem', fontWeight: 600, color: '#344054', marginBottom: '8px' }}>Status</legend>
                 <div className="orgd-toggle-group">
                   {['Active', 'Inactive'].map((s) => (
                     <button
@@ -182,12 +188,13 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                       type="button"
                       className={`orgd-toggle-btn${status === s ? ' active' : ''}`}
                       onClick={() => setStatus(s)}
+                      aria-pressed={status === s}
                     >
                       {s}
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
             </div>
           </div>
 
@@ -228,8 +235,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
         {/* City, State, Country, PIN Row */}
         <div className="orgd-row-4" style={{ marginTop: '8px', marginBottom: '16px' }}>
           <div className="orgd-field">
-            <label>City</label>
+            <label htmlFor="orgd-city-input">City</label>
             <input
+              id="orgd-city-input"
               type="text"
               value={city}
               onChange={(e) => setCity(e.target.value)}
@@ -237,8 +245,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
             />
           </div>
           <div className="orgd-field">
-            <label>State</label>
+            <label htmlFor="orgd-state-input">State</label>
             <input
+              id="orgd-state-input"
               type="text"
               value={state}
               onChange={(e) => setState(e.target.value)}
@@ -246,8 +255,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
             />
           </div>
           <div className="orgd-field">
-            <label>Country</label>
+            <label htmlFor="orgd-country-input">Country</label>
             <input
+              id="orgd-country-input"
               type="text"
               value={country}
               onChange={(e) => setCountry(e.target.value)}
@@ -255,8 +265,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
             />
           </div>
           <div className="orgd-field">
-            <label>PIN</label>
+            <label htmlFor="orgd-pin-input">PIN</label>
             <input
+              id="orgd-pin-input"
               type="text"
               value={pinCode}
               onChange={(e) => setPinCode(e.target.value)}
@@ -268,8 +279,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
         {/* Tag and Specialization (Sector) Row */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '24px' }}>
           <div className="orgd-field" style={{ flex: '0 0 180px' }}>
-            <label>Tag</label>
+            <label htmlFor="orgd-tag-input">Tag</label>
             <input
+              id="orgd-tag-input"
               type="text"
               value={tag}
               onChange={(e) => setTag(e.target.value)}
@@ -277,8 +289,9 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
             />
           </div>
           <div className="orgd-field" style={{ flex: '1' }}>
-            <label>Specialization</label>
+            <label htmlFor="orgd-sector-input">Specialization</label>
             <input
+              id="orgd-sector-input"
               type="text"
               value={sector}
               onChange={(e) => setSector(e.target.value)}
@@ -292,6 +305,11 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       </div>
 
       {/* Form actions - outside the card */}
+      {formError && (
+        <div role="alert" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '10px 16px', marginBottom: '12px', fontSize: '0.9rem' }}>
+          {formError}
+        </div>
+      )}
       <div className="orgd-actions-row">
         <button
           type="button"

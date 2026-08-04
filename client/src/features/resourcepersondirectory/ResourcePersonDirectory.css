@@ -1,70 +1,10 @@
-.resource-directory-page {
-  background: #f0f6ff;
-  min-height: calc(100vh - 64px);
-  padding: 14px;
-}
-
 .resource-directory-container {
   max-width: 1150px;
   margin: 0 auto;
   width: 100%;
 }
 
-.resource-directory-card {
-  background: #ffffff;
-  border-radius: 20px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
-  margin-bottom: 20px;
-  overflow: visible;
-}
-
-.main-header-card {
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-.resource-directory-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
-}
-
-.resource-directory-title {
-  margin: 0;
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: #0069ab;
-}
-
-.resource-directory-subtitle {
-  margin: 6px 0 0;
-  color: #495057;
-  font-size: 0.95rem;
-}
-
-.resource-directory-add-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background-color: #0069ab;
-  color: #ffffff;
-  border: none;
-  border-radius: 10px;
-  padding: 10px 18px;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.resource-directory-add-btn:hover {
-  background-color: #005495;
-  transform: translateY(-1px);
-}
-
-/* Redesigned collapsibe card forms */
+/* Redesigned collapsible card forms */
 .resource-directory-form-container {
   display: flex;
   flex-direction: column;
@@ -467,7 +407,7 @@
 }
 
 /* Blue border + tint when input has a value */
-.rpd-field input:not(:placeholder-shown) {
+.rpd-field input:not([type="date"]):not(:placeholder-shown) {
   border-color: #0069ab;
   background: #f0f7ff;
 }
