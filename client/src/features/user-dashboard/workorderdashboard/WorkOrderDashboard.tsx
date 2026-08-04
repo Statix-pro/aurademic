@@ -17,7 +17,7 @@ import {
 import './WorkOrderDashboard.css';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import { useAbility } from '../../../shared/casl/AbilityContext';
+
 
 type WorkOrderPriority = 'High' | 'Medium' | 'Low' | 'Routine';
 type WorkOrderStatus = 'Pending' | 'Completed' | 'Procurement' | 'On Hold' | 'Assigned';
@@ -371,7 +371,6 @@ const CATEGORIES_TABS = [
 
 const WorkOrderDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const ability = useAbility();
   const [workOrders, setWorkOrders] = useState<WorkOrderItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('legacy-all');
   const [statusFilter, setStatusFilter] = useState('all');

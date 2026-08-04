@@ -94,11 +94,7 @@ authenticityUtility.interceptors.response.use(
 
 authenticityUtility.postFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
-    const response = await authenticityUtility.post(endpoint, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await authenticityUtility.post(endpoint, formData);
     return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
@@ -109,11 +105,7 @@ authenticityUtility.postFile = async (endpoint: string, formData: FormData): Pro
 
 authenticityUtility.putFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
-    const response = await authenticityUtility.put(endpoint, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await authenticityUtility.put(endpoint, formData);
     return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };

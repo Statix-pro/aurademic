@@ -3,6 +3,7 @@ import { Search, X, Edit3 } from 'lucide-react';
 import './OrganizationDirectoryDashboard.css';
 import OrganizationDirectory, { Organization } from '../../organizationdirectory/OrganizationDirectory';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { useAbility } from '../../../shared/casl/AbilityContext';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /organizations          → { success: true, data: Organization[] }
@@ -41,6 +42,7 @@ const CATEGORY_OPTIONS = [
    ═══════════════════════════════════════════════════════════ */
 
 const OrganizationDirectoryDashboard: React.FC = () => {
+  const ability = useAbility();
   const [records, setRecords] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -210,13 +212,15 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                   </select>
                 </div>
 
-                <button
+                {ability.can('create', 'MasterData') && (
+                  <button
                     type="button"
                     className="budgetdashboard-add-btn"
                     onClick={handleAdd}
                   >
                     Add +
                   </button>
+                )}
               </div>
             </div>
 
@@ -273,7 +277,8 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                               )}
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              <button
+                              {ability.can('edit', 'MasterData') && (
+                                <button
                                   type="button"
                                   className="org-action-edit-btn"
                                   onClick={() => handleEdit(org)}
@@ -281,6 +286,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                                 >
                                   <Edit3 size={15} />
                                 </button>
+                              )}
                             </td>
                           </tr>
                         );

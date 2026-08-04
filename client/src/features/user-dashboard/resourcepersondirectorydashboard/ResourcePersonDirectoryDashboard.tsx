@@ -4,6 +4,7 @@ import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
 import ResourcePersonDirectory, { ResourcePerson } from '../../resourcepersondirectory/ResourcePersonDirectory';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { useAbility } from '../../../shared/casl/AbilityContext';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
@@ -70,6 +71,7 @@ const getPrimary = (p: ResourcePerson) => {
    ═══════════════════════════════════════════════════════════ */
 
 const ResourcePersonDirectoryDashboard: React.FC = () => {
+  const ability = useAbility();
   const [records, setRecords] = useState<ResourcePerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -207,13 +209,15 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <button
+                {ability.can('create', 'MasterData') && (
+                  <button
                     type="button"
                     className="financecard-add-btn"
                     onClick={handleAdd}
                   >
                     <Plus size={15} /> Add
                   </button>
+                )}
               </div>
             </div>
 
@@ -280,14 +284,16 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                           
                           <td className="rpd-center">-</td>
                           <td className="rpd-center">
-                              <button
-                                type="button"
-                                className="rpd-icon-btn"
-                                onClick={() => handleEdit(person)}
-                                title="Edit Resource Person"
-                              >
-                                <Edit3 size={15} />
-                              </button>
+                              {ability.can('edit', 'MasterData') && (
+                                <button
+                                  type="button"
+                                  className="rpd-icon-btn"
+                                  onClick={() => handleEdit(person)}
+                                  title="Edit Resource Person"
+                                >
+                                  <Edit3 size={15} />
+                                </button>
+                              )}
                           </td>
                         </tr>
                       );

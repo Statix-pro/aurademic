@@ -909,7 +909,7 @@ const WorkOrder: React.FC = () => {
   const canSubmit = isEditMode
     ? ability.can('edit', 'WorkOrder')
     : ability.can('create', 'WorkOrder');
-  const isEditable = true;
+
 
   // Collapsible section states
   const [isApplicantOpen, setIsApplicantOpen] = useState(true);
