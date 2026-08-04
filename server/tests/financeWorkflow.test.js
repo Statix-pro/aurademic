@@ -296,10 +296,17 @@ describe('Finance Workflow Integration Tests', () => {
           tx: expect.any(Object),
           metadata: expect.objectContaining({
             moduleMeta: expect.objectContaining({
-              amountBand: 'gt_10k',
+              // Routed on the ₹5,000 top-up amount, not the ₹17,000 proposal total, so
+              // Principal approval closes this cycle without the Chairman.
+              amountBand: 'lte_10k',
             }),
           }),
         }),
+      );
+      expect(financeModel.updateFinanceWorkflowSnapshot).toHaveBeenCalledWith(
+        201,
+        expect.objectContaining({ topupAmount: 5000 }),
+        expect.objectContaining({ tx: expect.any(Object) }),
       );
       // The top-up submission must be logged so the submission log stays a full
       // audit trail across cycles.
@@ -340,6 +347,59 @@ describe('Finance Workflow Integration Tests', () => {
       expect(financeModel.updateFinanceWorkflowSnapshot).toHaveBeenCalled();
     });
 
+    it('routes a topup above 10k to the chairman even when the proposal total is small', async () => {
+      const approvedFinanceRequest = {
+        id: 201,
+        proposal_ref: '#F-2026-0001',
+        created_by: 1,
+        total_budget: 4000,
+        beneficiary_type: 'Department',
+        workflow_state: {
+          status: 'approved',
+          currentStage: null,
+        },
+      };
+
+      financeModel.getFinanceRequestById.mockResolvedValue(approvedFinanceRequest);
+      financeModel.getBudgetBreakup.mockResolvedValue([
+        {
+          budget_head: 'Research',
+          sub_head: 'Lab Equipment',
+          amount: 4000,
+          approved_amount: 4000,
+        },
+      ]);
+      financeModel.updateFinanceRequest.mockResolvedValue({ affectedRows: 1 });
+      financeModel.getFinanceRecordContext.mockResolvedValue({
+        totalBudget: 4000,
+        workflowStatus: 'approved',
+      });
+      workflowService.startWorkflow.mockResolvedValue({
+        state: { currentStage: 'level1', status: 'in_progress' },
+      });
+      financeModel.updateFinanceWorkflowSnapshot.mockResolvedValue(true);
+
+      const response = await request(app)
+        .put('/api/finance-requests/201')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          topup_mode: true,
+          budget_rows: [
+            { budget_head: 'Research', sub_head: 'Lab Equipment', amount: 4000 },
+            { budget_head: 'Research', sub_head: 'Consumables', amount: 10500 },
+          ],
+        });
+
+      expect(response.status).toBe(200);
+      expect(workflowService.startWorkflow).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            moduleMeta: expect.objectContaining({ amountBand: 'gt_10k' }),
+          }),
+        }),
+      );
+    });
+
     it('rejects topup if the locked workflow status is no longer terminal', async () => {
       const approvedFinanceRequest = {
         id: 201,
@@ -376,6 +436,70 @@ describe('Finance Workflow Integration Tests', () => {
       expect(response.status).toBe(409);
       expect(response.body.success).toBe(false);
       expect(response.body.message).toContain('no longer eligible');
+      expect(financeModel.getBudgetBreakup).not.toHaveBeenCalled();
+      expect(financeModel.updateFinanceRequest).not.toHaveBeenCalled();
+      expect(workflowService.startWorkflow).not.toHaveBeenCalled();
+    });
+
+    it('rejects topup on a finance card that is already finalized and closed', async () => {
+      financeModel.getFinanceRequestById.mockResolvedValue({
+        id: 201,
+        proposal_ref: '#F-2026-0001',
+        created_by: 1,
+        total_budget: 12000,
+        beneficiary_type: 'Department',
+        closed_at: '2026-07-15T10:00:00.000Z',
+        workflow_state: {
+          status: 'approved',
+          currentStage: null,
+        },
+      });
+
+      const response = await request(app)
+        .put('/api/finance-requests/201')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          topup_mode: true,
+          budget_rows: [{ budget_head: 'Research', sub_head: 'Lab Equipment', amount: 5000 }],
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('finalized and closed');
+      expect(financeModel.updateFinanceRequest).not.toHaveBeenCalled();
+      expect(workflowService.startWorkflow).not.toHaveBeenCalled();
+    });
+
+    it('rejects topup when the card is closed between the eligibility check and the row lock', async () => {
+      financeModel.getFinanceRequestById.mockResolvedValue({
+        id: 201,
+        proposal_ref: '#F-2026-0001',
+        created_by: 1,
+        total_budget: 12000,
+        beneficiary_type: 'Department',
+        closed_at: null,
+        workflow_state: {
+          status: 'approved',
+          currentStage: null,
+        },
+      });
+      financeModel.getFinanceRecordContext.mockResolvedValue({
+        totalBudget: 12000,
+        workflowStatus: 'approved',
+        closedAt: '2026-07-15T10:00:00.000Z',
+      });
+
+      const response = await request(app)
+        .put('/api/finance-requests/201')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          topup_mode: true,
+          budget_rows: [{ budget_head: 'Research', sub_head: 'Lab Equipment', amount: 5000 }],
+        });
+
+      expect(response.status).toBe(409);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('finalized and closed');
       expect(financeModel.getBudgetBreakup).not.toHaveBeenCalled();
       expect(financeModel.updateFinanceRequest).not.toHaveBeenCalled();
       expect(workflowService.startWorkflow).not.toHaveBeenCalled();

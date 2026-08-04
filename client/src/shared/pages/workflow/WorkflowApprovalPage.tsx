@@ -316,6 +316,65 @@ const getWorkflowProposedAmount = (record: Record<string, any>) => {
   return Number.isFinite(parsedAmount) ? parsedAmount : 0;
 };
 
+const hasWorkflowTopup = (record: Record<string, any>) =>
+  Boolean(record?.has_topup || record?.workflow_state?.topupAt);
+
+// The pending cycle's own delta, which the server stamps on workflow_state.topupAmount
+// when the top-up restarts the workflow. topup_amount is the cumulative total of every
+// top-up row ever added, so it overstates the request from the second top-up onwards.
+const getWorkflowTopupAmount = (record: Record<string, any>) => {
+  const cycleAmount = Number(record?.workflow_state?.topupAmount ?? 0);
+  if (Number.isFinite(cycleAmount) && cycleAmount > 0) return cycleAmount;
+
+  // FALLBACK: top-ups submitted before workflow_state.topupAmount existed only have the
+  // cumulative total, which equals the cycle amount for a first top-up. Remove once no
+  // in-flight top-up predates topupAmount.
+  const legacyTopupAmount = Number(record?.topup_amount ?? 0);
+  return Number.isFinite(legacyTopupAmount) ? legacyTopupAmount : 0;
+};
+
+const getWorkflowApprovedAmount = (record: Record<string, any>) => {
+  const parsedAmount = Number(record?.approved_total_amount ?? record?.approved_amount ?? 0);
+  return Number.isFinite(parsedAmount) ? parsedAmount : 0;
+};
+
+// The two amount boxes mirror the applicant's finance card:
+//   Initial proposal        -> Proposed | Approved
+//   During a top-up request -> Top-up   | Approved
+// A top-up restarts the workflow, so while it is pending the proposed total already
+// includes the previously approved rows; showing only the top-up delta keeps the
+// approver's view aligned with what is actually being decided.
+const getWorkflowAmountBoxes = (
+  record: Record<string, any>,
+  { isApproved }: { isApproved: boolean },
+): Array<{ key: string; label: string; value: number }> => {
+  const proposedAmount = getWorkflowProposedAmount(record);
+  const approvedAmount = getWorkflowApprovedAmount(record);
+  const topupAmount = getWorkflowTopupAmount(record);
+
+  if (hasWorkflowTopup(record) && !isApproved && topupAmount > 0) {
+    return [
+      { key: 'topup', label: 'Top-up', value: topupAmount },
+      { key: 'approved-previous', label: 'Approved', value: approvedAmount },
+    ];
+  }
+
+  const resolvedApprovedAmount =
+    isApproved && approvedAmount <= 0 ? proposedAmount : approvedAmount;
+  const showApprovedAmount = isApproved || resolvedApprovedAmount > 0;
+
+  return [
+    {
+      key: 'proposed',
+      label: showApprovedAmount ? 'Proposed' : 'Amount',
+      value: proposedAmount,
+    },
+    ...(showApprovedAmount
+      ? [{ key: 'approved', label: 'Approved', value: resolvedApprovedAmount }]
+      : []),
+  ];
+};
+
 const getWorkflowPrincipalDocument = (record: Record<string, any>) =>
   record?.principal_document || null;
 
@@ -3245,14 +3304,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                         const isSuperAdminReturnAllowed =
                           isSuperAdminDeleteMode &&
                           ['pending', 'approved', 'rejected', 'archived'].includes(statusCategory);
-                        const proposedAmount =
-                          record.total_amount || record.total_budget || record.amount || 0;
-                        const rawApprovedAmount = Number(
-                          record.approved_total_amount ?? record.approved_amount ?? 0,
-                        );
-                        const approvedAmount =
-                          isApproved && rawApprovedAmount <= 0 ? proposedAmount : rawApprovedAmount;
-                        const showApprovedAmount = isApproved || approvedAmount > 0;
+                        const amountBoxes = getWorkflowAmountBoxes(record, { isApproved });
                         const proposalRef = getRecordProposalRef(record);
                         const principalDocument = getWorkflowPrincipalDocument(record);
                         const principalDocumentUrl = getWorkflowPrincipalDocumentUrl(record);
@@ -3379,27 +3431,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                       marginRight: '15px',
                                     }}
                                   >
-                                    <div className="fw-amount-item">
-                                      <p
-                                        className="fw-amount-label"
-                                        style={{
-                                          margin: 0,
-                                          fontSize: '0.78rem',
-                                          fontWeight: 600,
-                                          opacity: 0.75,
-                                        }}
-                                      >
-                                        {showApprovedAmount ? 'Proposed' : 'Amount'}
-                                      </p>
-                                      <p
-                                        className="fw-amount"
-                                        style={{ margin: 0, fontSize: '1.1rem' }}
-                                      >
-                                        {formatAmount(proposedAmount)}
-                                      </p>
-                                    </div>
-                                    {showApprovedAmount && (
-                                      <div className="fw-amount-item">
+                                    {amountBoxes.map((box) => (
+                                      <div className="fw-amount-item" key={box.key}>
                                         <p
                                           className="fw-amount-label"
                                           style={{
@@ -3409,20 +3442,20 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                             opacity: 0.75,
                                           }}
                                         >
-                                          Approved
+                                          {box.label}
                                         </p>
                                         <p
                                           className="fw-amount"
                                           style={{
                                             margin: 0,
                                             fontSize: '1.1rem',
-                                            color: '#137a3a',
+                                            ...(box.key === 'proposed' ? {} : { color: '#137a3a' }),
                                           }}
                                         >
-                                          {formatAmount(approvedAmount)}
+                                          {formatAmount(box.value)}
                                         </p>
                                       </div>
-                                    )}
+                                    ))}
                                   </div>
 
                                   <button
