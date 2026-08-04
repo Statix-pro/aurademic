@@ -94,6 +94,24 @@ const IconBookings = () => (
   </svg>
 );
 
+// Directory — users/address book
+const IconDirectory = () => (
+  <svg
+    className="sb-icon"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
 // Task — clipboard with check
 const IconTask = () => (
   <svg
@@ -425,6 +443,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 '/hall-booking',
                 '/eventdashboard',
                 '/event',
+                '/workorderdashboard',
+                '/workorder'
               ])
                 ? 'active'
                 : ''
@@ -465,6 +485,51 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 onClick={handleLinkClick}
               >
                 Event
+              </Link>
+              <Link
+                to="/workorderdashboard"
+                className={`sb-sublink ${isActive('/workorderdashboard') ? 'active' : ''}`}
+                onClick={handleLinkClick}
+              >
+                Work Order
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Directory */}
+        <div className="sb-group">
+          <button
+            className={`sb-link ${
+              isGroupActive([
+                '/resourcepersondirectorydashboard',
+                '/organizationdirectorydashboard'
+              ])
+                ? 'active'
+                : ''
+            } ${activeMenu === 'Directory' ? 'open' : ''}`}
+            onClick={() => toggleDropdown('Directory')}
+            title="Directory"
+          >
+            <IconDirectory />
+            <span className="sb-text">Directory</span>
+            <ChevronDown />
+          </button>
+          {isExpanded && activeMenu === 'Directory' && (
+            <div className="sb-submenu">
+              <Link
+                to="/resourcepersondirectorydashboard"
+                className={`sb-sublink ${isActive('/resourcepersondirectorydashboard') ? 'active' : ''}`}
+                onClick={handleLinkClick}
+              >
+                Resource Person
+              </Link>
+              <Link
+                to="/organizationdirectorydashboard"
+                className={`sb-sublink ${isActive('/organizationdirectorydashboard') ? 'active' : ''}`}
+                onClick={handleLinkClick}
+              >
+                Organization
               </Link>
             </div>
           )}

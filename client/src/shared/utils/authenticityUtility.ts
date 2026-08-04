@@ -5,6 +5,7 @@ const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 interface AuthenticityUtility extends AxiosInstance {
   postFile: (endpoint: string, formData: FormData) => Promise<unknown>;
+  putFile: (endpoint: string, formData: FormData) => Promise<unknown>;
   getBaseURL: () => string;
 }
 
@@ -93,11 +94,7 @@ authenticityUtility.interceptors.response.use(
 
 authenticityUtility.postFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
-    const response = await authenticityUtility.post(endpoint, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await authenticityUtility.post(endpoint, formData);
     return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
@@ -106,8 +103,28 @@ authenticityUtility.postFile = async (endpoint: string, formData: FormData): Pro
   }
 };
 
+authenticityUtility.putFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
+  try {
+    const response = await authenticityUtility.put(endpoint, formData);
+    return response;
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: unknown }; message?: string };
+    console.error('Error in putFile request:', axiosError.response?.data || axiosError.message);
+    throw error;
+  }
+};
+
 authenticityUtility.getBaseURL = (): string => {
   return baseURL.replace(/\/api\/?$/, '');
+};
+
+export const isFallbackEligible = (error: any): boolean => {
+  return !!(
+    error &&
+    typeof error === 'object' &&
+    !error.response &&
+    (error.request || error.isAxiosError === true || error.code === 'ERR_NETWORK')
+  );
 };
 
 export default authenticityUtility;
