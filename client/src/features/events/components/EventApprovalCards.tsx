@@ -308,8 +308,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   const select = (
     field: EventApprovalTextField,
     selectOptions: string[],
-    plac
-    eholder = "",
+    placeholder = "",
     disabled = false
   ) => (
     <select

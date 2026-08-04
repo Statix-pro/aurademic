@@ -149,6 +149,7 @@ const HostelIcon: React.FC = () => (
 );
 
 const FeesIcon: React.FC = () => (
+  
   <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
     {/* Tilted banknotes */}
     <rect x="6" y="5" width="12" height="7" rx="1" transform="rotate(-15 12 8.5)" />
@@ -166,21 +167,33 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
   useEffect(() => {
     if (!eventId) return;
 
+    let isActive = true;
+
     setLoading(true);
     setError(null);
 
     authenticityUtility
       .get(`/events/${eventId}/participants`)
       .then((res: any) => {
-        setParticipants(Array.isArray(res?.participants) ? res.participants : []);
+        if (isActive) {
+          setParticipants(Array.isArray(res?.participants) ? res.participants : []);
+        }
       })
       .catch((err) => {
-        console.error('Failed to fetch participants:', err);
-        setError('Failed to load participants. Please try again later.');
+        if (isActive) {
+          console.error('Failed to fetch participants:', err);
+          setError('Failed to load participants. Please try again later.');
+        }
       })
       .finally(() => {
-        setLoading(false);
+        if (isActive) {
+          setLoading(false);
+        }
       });
+
+    return () => {
+      isActive = false;
+    };
   }, [eventId]);
 
   const handleViewDocument = (participant: any) => {

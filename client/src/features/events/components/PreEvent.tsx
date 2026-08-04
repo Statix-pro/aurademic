@@ -145,7 +145,11 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
       } else {
         await authenticityUtility.post("/pre-events", eventSubmitData);
       }
-      setAlertConfig({ show: true, message: "Event created successfully!", type: "success" });
+      setAlertConfig({
+        show: true,
+        message: eventId && eventId !== "new" ? "Event updated successfully!" : "Event created successfully!",
+        type: "success",
+      });
       goToTab("finance");
     } catch (error: any) {
       const backendError = error.response?.data?.error || error.response?.data?.details || error.response?.data?.message || error.message;
@@ -193,6 +197,12 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
             </div>
           )}
         </div>
+        <AlertModal
+          show={alertConfig.show}
+          onHide={() => setAlertConfig((current) => ({ ...current, show: false }))}
+          message={alertConfig.message}
+          type={alertConfig.type}
+        />
       </div>
     );
   }

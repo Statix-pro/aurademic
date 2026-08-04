@@ -535,6 +535,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
             <input
               type="checkbox"
               checked={docState[doc].active}
+              disabled={!canEditDocuments}
               onChange={() => handleToggle(doc)}
             />
             <span className="event-slider"></span>
@@ -578,6 +579,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
           <input
             type="checkbox"
             checked={docState[doc].active}
+            disabled={!canEditDocuments}
             onChange={() => handleToggle(doc)}
           />
           <span className="event-slider"></span>
