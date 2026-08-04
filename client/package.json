@@ -18,6 +18,7 @@
     "@types/lodash.debounce": "^4.0.9",
     "axios": "^1.7.7",
     "bootstrap": "^5.3.3",
+    "clsx": "^2.1.1",
     "jspdf": "^4.0.0",
     "jspdf-autotable": "^5.0.7",
     "jwt-decode": "^4.0.0",
@@ -31,6 +32,7 @@
     "react-router-dom": "^6.23.0",
     "react-select": "^5.10.2",
     "react-to-print": "^3.2.0",
+    "tailwind-merge": "^3.6.0",
     "uuid": "^13.0.0",
     "web-vitals": "^2.1.4"
   },
