@@ -64,7 +64,7 @@ interface CalendarCell {
   active?: boolean;
 }
 
-type DashboardStatusKey = "all" | "pending" | "return" | "reject" | "approved" | "archive";
+type DashboardStatusKey = "all" | "draft" | "pending" | "return" | "reject" | "approved" | "archive";
 
 interface DashboardStat {
   key: DashboardStatusKey;
@@ -78,6 +78,7 @@ const getEventIdentity = (event: Pick<EventData, "id" | "isSubEvent">): string =
   `${event.isSubEvent ? "sub" : "main"}-${event.id}`;
 
 const STATUS_LABELS: Record<Exclude<DashboardStatusKey, "all">, string> = {
+  draft: "Draft",
   pending: "Pending",
   return: "Return",
   reject: "Reject",
@@ -94,12 +95,26 @@ const getStatusDisplayLabel = (status: string): string => {
 
 const normalizeStatus = (status: string): Exclude<DashboardStatusKey, "all"> => {
   const value = status.trim().toLowerCase();
+  if (value === "draft") return "draft";
   if (value === "pending") return "pending";
   if (value === "return") return "return";
   if (value === "rejected") return "reject";
   if (value === "approved") return "approved";
   if (value === "archived") return "archive";
   return "pending";
+};
+
+const getFiscalYearLabel = (date: string): string => {
+  const year = new Date(date).getFullYear();
+  return `FY ${year}-${String(year + 1).slice(-2)}`;
+};
+
+const matchesSearchTerm = (event: Pick<EventData, "proposedBy" | "category" | "department" | "name" | "venue" | "time">, term: string): boolean => {
+  if (term.length === 0) return true;
+  return [event.proposedBy, event.category, event.department, event.name, event.venue, event.time]
+    .join(" ")
+    .toLowerCase()
+    .includes(term);
 };
 
 const buildBellCalendar = (year: number, monthIndex: number, selectedDate: Date): CalendarCell[] => {
@@ -254,6 +269,7 @@ const Dashboard: React.FC = () => {
   const stats = useMemo(() => {
     const counts: Record<DashboardStatusKey, number> = {
       all: 0,
+      draft: 0,
       pending: 0,
       return: 0,
       reject: 0,
@@ -264,16 +280,9 @@ const Dashboard: React.FC = () => {
     const term = searchTerm.trim().toLowerCase();
 
     events.forEach((event) => {
-      const eventYear = `FY ${new Date(event.date).getFullYear()}-${String(
-        new Date(event.date).getFullYear() + 1,
-      ).slice(-2)}`;
+      const eventYear = getFiscalYearLabel(event.date);
       const matchesYear = yearFilter === "all" || eventYear === yearFilter;
-      const matchesSearch =
-        term.length === 0 ||
-        [event.proposedBy, event.category, event.department, event.name, event.venue, event.time]
-          .join(" ")
-          .toLowerCase()
-          .includes(term);
+      const matchesSearch = matchesSearchTerm(event, term);
 
       if (matchesYear && matchesSearch) {
         counts.all += 1;
@@ -283,6 +292,7 @@ const Dashboard: React.FC = () => {
 
     return [
       { key: "all", label: "Total", value: counts.all, icon: ClipboardList, tone: "tone-total" },
+      { key: "draft", label: "Draft", value: counts.draft, icon: Info, tone: "tone-pending" },
       { key: "pending", label: "Pending", value: counts.pending, icon: Clock3, tone: "tone-pending" },
       { key: "return", label: "Return", value: counts.return, icon: RotateCcw, tone: "tone-return" },
       { key: "reject", label: "Reject", value: counts.reject, icon: ShieldX, tone: "tone-reject" },
@@ -294,16 +304,9 @@ const Dashboard: React.FC = () => {
   const filteredEventsByYearAndSearch = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     return events.filter((event) => {
-      const eventYear = `FY ${new Date(event.date).getFullYear()}-${String(
-        new Date(event.date).getFullYear() + 1,
-      ).slice(-2)}`;
+      const eventYear = getFiscalYearLabel(event.date);
       const matchesYear = yearFilter === "all" || eventYear === yearFilter;
-      const matchesSearch =
-        term.length === 0 ||
-        [event.proposedBy, event.category, event.department, event.name, event.venue, event.time]
-          .join(" ")
-          .toLowerCase()
-          .includes(term);
+      const matchesSearch = matchesSearchTerm(event, term);
       return matchesYear && matchesSearch;
     });
   }, [events, searchTerm, yearFilter]);
@@ -539,13 +542,6 @@ const Dashboard: React.FC = () => {
                 key={getEventIdentity(event)}
                 className="event-request-card"
                 onClick={() => openEventTab(event.id, "pre-event")}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    openEventTab(event.id, "pre-event");
-                  }
-                }}
               >
                 {(() => {
                   const normalizedStatus = normalizeStatus(event.status);
@@ -597,7 +593,7 @@ const Dashboard: React.FC = () => {
                               className="event-request-mini-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openEventTab(event.id, "pre-event");
+                                openEventTab(event.id, "edit");
                               }}
                               aria-label="Edit"
                               title="Edit"
@@ -765,10 +761,18 @@ const Dashboard: React.FC = () => {
                     value={String(bellViewYear)}
                     onChange={(e) => handleBellYearChange(e.target.value)}
                   >
-                    <option value="2025">2025</option>
-                    <option value="2026">2026</option>
-                    <option value="2027">2027</option>
-                    <option value="2028">2028</option>
+                    {Array.from(
+                      new Set([
+                        ...Array.from({ length: 7 }, (_, index) => new Date().getFullYear() - 3 + index),
+                        bellViewYear,
+                      ]),
+                    )
+                      .sort((a, b) => a - b)
+                      .map((year) => (
+                        <option key={year} value={String(year)}>
+                          {year}
+                        </option>
+                      ))}
                   </select>
                 </div>
 
@@ -831,7 +835,7 @@ const Dashboard: React.FC = () => {
             <button 
               className="btn btn-danger btn-sm" 
               onClick={executeDelete}
-              disabled={eventToDelete?.parent_id == null && deleteCountdown > 0}
+              disabled={Boolean(eventToDelete?.parent_id == null && eventToDelete && events.some((event) => event.parent_id === eventToDelete.id) && deleteCountdown > 0)}
             >
               Delete Now
             </button>
@@ -839,7 +843,11 @@ const Dashboard: React.FC = () => {
         }
       >
         <p className="mb-0 fw-medium" style={{ fontSize: '0.95rem' }}>
-          This Main Event has associated Sub Events. Deleting this Main Event will permanently delete all related Sub Events.
+          {eventToDelete && eventToDelete.parent_id == null && events.some((event) => event.parent_id === eventToDelete.id) ? (
+            <>This Main Event has associated Sub Events. Deleting this Main Event will permanently delete all related Sub Events.</>
+          ) : (
+            <>Please confirm if you wish to proceed.</>
+          )}
           <span aria-live="polite" className="d-block mt-2">
             {eventToDelete && eventToDelete.parent_id == null && events.some((event) => event.parent_id === eventToDelete.id) && deleteCountdown > 0 ? (
               <>You can confirm this action in <strong className="text-danger">{deleteCountdown}</strong> seconds.</>

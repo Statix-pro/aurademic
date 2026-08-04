@@ -348,6 +348,7 @@ const documents = EVENT_DOCUMENTS;
 
 const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
   const ability = useAbility();
+  const canEditDocuments = ability.can("edit", "Event");
   const [docState, setDocState] = useState<Record<string, DocState>>(
     documents.reduce((acc, doc) => {
       acc[doc] = {
@@ -426,8 +427,9 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
   };
 
   const handleFileUpload = async (doc: string, event: ChangeEvent<HTMLInputElement>, index: number | null = null) => {
+    const input = event.currentTarget;
     const file = event.target.files?.[0];
-    if (file && ability.can("edit", "Event")) {
+    if (file && canEditDocuments) {
       setDocState((prev) => {
         if (doc === "Photos" && index !== null) {
           const currentFiles = prev[doc].file as (File | null)[];
@@ -477,6 +479,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
             [doc]: { ...prev[doc], file: null },
           };
         });
+        input.value = "";
         setPopupMessage(`Failed to upload file: ${file.name}`);
       }
     }
@@ -543,12 +546,12 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
                     className={`event-photo-slot ${!docState[doc].active ? "disabled" : ""}`}
                   >
                     <CloudUpload size={16} />
-                    <input
-                      type="file"
-                      onChange={(e) => handleFileUpload(doc, e, i)}
-                      style={{ display: "none" }}
-                      disabled={!docState[doc].active}
-                    />
+          <input
+            type="file"
+            onChange={(e) => handleFileUpload(doc, e, i)}
+            style={{ display: "none" }}
+            disabled={!docState[doc].active || !canEditDocuments}
+          />
                   </label>
 
                   <span
@@ -584,7 +587,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
             type="file"
             onChange={(e) => handleFileUpload(doc, e)}
             style={{ display: "none" }}
-            disabled={!docState[doc].active}
+            disabled={!docState[doc].active || !canEditDocuments}
           />
         </label>
         <span
