@@ -292,54 +292,6 @@
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
 }
 
-.event-approval-band.registration label,
-.event-approval-band.registration .event-approval-toggle-pair>span,
-.event-approval-band.accommodation label,
-.event-approval-band.accommodation .event-approval-segmented>span {
-  color: var(--event-blue);
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 6px;
-  white-space: nowrap;
-  line-height: 1.1;
-}
-
-.event-approval-band.registration label,
-.event-approval-band.registration .event-approval-toggle-pair {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  justify-content: flex-start;
-}
-
-.event-approval-band.registration label {
-  display: grid;
-  grid-template-rows: 14px 1fr;
-  row-gap: 6px;
-}
-
-.event-approval-band.registration .event-approval-toggle-pair {
-  display: grid;
-  grid-template-rows: 14px 1fr;
-  row-gap: 6px;
-}
-
-.event-approval-band.registration input,
-.event-approval-band.registration select,
-.event-approval-band.registration .event-approval-toggle-pair button,
-.event-approval-band.accommodation input,
-.event-approval-band.accommodation .event-approval-segmented button {
-  height: 36px;
-  min-height: 36px;
-}
-
-.event-approval-band.registration input,
-.event-approval-band.registration select,
-.event-approval-band.registration .event-approval-toggle-pair button {
-  height: 36px;
-  min-height: 36px;
-}
-
 .event-approval-band.registration input,
 .event-approval-band.registration select,
 .event-approval-band.accommodation input {

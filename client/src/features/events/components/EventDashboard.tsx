@@ -548,7 +548,6 @@ const Dashboard: React.FC = () => {
               <article
                 key={getEventIdentity(event)}
                 className="event-request-card"
-                onClick={() => openEventTab(event.id, "pre-event")}
               >
                 {(() => {
                   const normalizedStatus = normalizeStatus(event.status);

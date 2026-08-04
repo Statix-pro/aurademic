@@ -351,9 +351,9 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   };
 
   const deleteRow = (collection: "feeRows" | "collaborators" | "sponsoringAgencies" | "coordinators", id: string) => {
-    if (!window.confirm("Delete this row?")) return;
     const rows = formData[collection];
     if (rows.length === 1) return;
+    if (!window.confirm("Delete this row?")) return;
 
     const nextRows = rows.filter((row) => row.id !== id);
     const nextSelectedCollaboratorId =

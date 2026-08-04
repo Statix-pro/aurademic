@@ -346,7 +346,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
 
 const documents = EVENT_DOCUMENTS;
 
-const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
+const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
   const ability = useAbility();
   const canEditDocuments = ability.can("edit", "Event");
   const [docState, setDocState] = useState<Record<string, DocState>>(
@@ -362,8 +362,11 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [popupMessage, setPopupMessage] = useState("");
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
+  const hasEventId = Boolean(eventId);
 
   useEffect(() => {
+    if (!hasEventId) return;
+
     const loadData = async () => {
       try {
         const response = await authenticityUtility.get(`/documents/${eventId}`) as {
@@ -398,10 +401,10 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
     };
 
     loadData();
-  }, [eventId]);
+  }, [eventId, hasEventId]);
 
   const handleToggle = (doc: string) => {
-    if (!canEditDocuments) return;
+    if (!hasEventId || !canEditDocuments) return;
     setDocState((prev) => ({
       ...prev,
       [doc]: {
@@ -430,7 +433,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
   const handleFileUpload = async (doc: string, event: ChangeEvent<HTMLInputElement>, index: number | null = null) => {
     const input = event.currentTarget;
     const file = event.target.files?.[0];
-    if (file && canEditDocuments) {
+    if (file && hasEventId && canEditDocuments) {
       setDocState((prev) => {
         if (doc === "Photos" && index !== null) {
           const currentFiles = prev[doc].file as (File | null)[];
@@ -498,6 +501,8 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
   };
 
   const handleEditRequest = async () => {
+    if (!hasEventId) return;
+
     try {
       await authenticityUtility.post(`/documents/${eventId}/edit-request`);
       setPopupMessage("Your edit request has been sent successfully!");
@@ -508,6 +513,8 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
   };
 
   const handleSubmitApproval = async () => {
+    if (!hasEventId) return;
+
     if (isSubmittingApproval) return;
     setIsSubmittingApproval(true);
     try {
@@ -609,6 +616,17 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
 
   return (
     <div>
+      {!hasEventId ? (
+        <div className="event-card-section">
+          <h2 className="event-section-title">Documents</h2>
+          <div className="event-message-overlay">
+            <div className="event-message-box">
+              <h3>Event ID is required to load documents.</h3>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
       <ParticipantsPage
         participants={participants}
         setParticipants={setParticipants}
@@ -649,6 +667,8 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId = "1" }) => {
             <button onClick={closePopup}>OK</button>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );
