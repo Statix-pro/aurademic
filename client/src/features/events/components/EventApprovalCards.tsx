@@ -1,6 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Plus, Save, Trash2, Upload } from "lucide-react";
-import "../../finance/financeapproval.css";
 import "../styles/EventApprovalCards.css";
 import CustomTagInput from "../../../shared/components/ui/CustomTagInput";
 import {
@@ -147,7 +146,7 @@ interface EventApprovalCardsProps {
   onSubmit?: (data: EventApprovalFormData) => void | Promise<void>;
 }
 
-const makeId = () => `${Date.now()}-${Math.random()}`;
+const makeId = () => crypto.randomUUID();
 const FEE_MONTHS = EVENT_APPROVAL_FEE_MONTHS;
 
 const createMonthAmounts = () =>
@@ -309,7 +308,8 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   const select = (
     field: EventApprovalTextField,
     selectOptions: string[],
-    placeholder = "",
+    plac
+    eholder = "",
     disabled = false
   ) => (
     <select

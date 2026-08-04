@@ -164,74 +164,106 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (eventId) {
-      setLoading(true);
-      setError(null);
-      const token = localStorage.getItem('token');
-      fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000/api'}/events/${eventId}/participants`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
+    if (!eventId) return;
+
+    setLoading(true);
+    setError(null);
+
+    authenticityUtility
+      .get(`/events/${eventId}/participants`)
+      .then((res: any) => {
+        setParticipants(Array.isArray(res?.participants) ? res.participants : []);
       })
-        .then(async (res) => {
-          if (!res.ok) throw new Error(`HTTP error! status: ${res.status}`);
-          const data = await res.json();
-          setParticipants(data);
-        })
-        .catch((err) => {
-          console.error('Failed to fetch participants:', err);
-          setError('Failed to load participants. Please try again later.');
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    }
+      .catch((err) => {
+        console.error('Failed to fetch participants:', err);
+        setError('Failed to load participants. Please try again later.');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, [eventId]);
 
-  const handleViewDocument = (type: string, participantName: string) => {
-    window.open("https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", "_blank");
+  const handleViewDocument = (participant: any) => {
+    const documentUrl =
+      participant?.document_url ||
+      participant?.documentUrl ||
+      participant?.document?.url ||
+      participant?.upload?.url ||
+      participant?.uploadUrl ||
+      "";
+
+    if (!documentUrl) {
+      setError('No document is available for this participant.');
+      return;
+    }
+
+    window.open(documentUrl, "_blank", "noopener,noreferrer");
   };
 
   const toggleHostel = (id: number) => {
-    setParticipants(prev =>
-      prev.map(p => (p.id === id ? { ...p, hostel: p.hostel === "YES" ? "NO" : "YES" } : p))
-    );
+    const p = participants.find(p => p.id === id);
+    if (!p) return;
+    const newHostel = p.hostel === "YES" ? "NO" : "YES";
+    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { hostel: newHostel }).then(() => {
+      setParticipants(prev =>
+        prev.map(p => (p.id === id ? { ...p, hostel: newHostel } : p))
+      );
+    }).catch(console.error);
   };
 
   const handleStatusChange = (id: number, status: string) => {
-    setParticipants(prev =>
-      prev.map(p => (p.id === id ? { ...p, status } : p))
-    );
+    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { status }).then(() => {
+      setParticipants(prev =>
+        prev.map(p => (p.id === id ? { ...p, status } : p))
+      );
+    }).catch(console.error);
   };
 
   const toggleAction1 = (id: number) => {
-    setParticipants(prev =>
-      prev.map(p => (p.id === id ? { ...p, action1: !p.action1 } : p))
-    );
+    const p = participants.find(p => p.id === id);
+    if (!p) return;
+    const newAction1 = !p.action1;
+    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { action1: newAction1 }).then(() => {
+      setParticipants(prev =>
+        prev.map(p => (p.id === id ? { ...p, action1: newAction1 } : p))
+      );
+    }).catch(console.error);
   };
 
   const toggleAction2 = (id: number) => {
-    setParticipants(prev =>
-      prev.map(p => (p.id === id ? { ...p, action2: !p.action2 } : p))
-    );
+    const p = participants.find(p => p.id === id);
+    if (!p) return;
+    const newAction2 = !p.action2;
+    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { action2: newAction2 }).then(() => {
+      setParticipants(prev =>
+        prev.map(p => (p.id === id ? { ...p, action2: newAction2 } : p))
+      );
+    }).catch(console.error);
   };
 
   const toggleAction3 = (id: number) => {
-    setParticipants(prev =>
-      prev.map(p => (p.id === id ? { ...p, action3: { ...p.action3, active: !p.action3.active } } : p))
-    );
+    const p = participants.find(p => p.id === id);
+    if (!p) return;
+    const newAction3 = { ...p.action3, active: !p.action3?.active };
+    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { action3: newAction3 }).then(() => {
+      setParticipants(prev =>
+        prev.map(p => (p.id === id ? { ...p, action3: newAction3 } : p))
+      );
+    }).catch(console.error);
   };
 
   const stats = useMemo(() => {
+    const feeValue =
+      participants.find((p) => p.fees != null)?.fees ??
+      participants.find((p) => p.fee != null)?.fee ??
+      0;
     return {
       registered: participants.length,
       shortlisted: participants.filter(p => p.status === "Shortlisted" || p.status === "Selected").length,
       selected: participants.filter(p => p.status === "Selected").length,
       rejected: participants.filter(p => p.status === "Rejected").length,
       hostel: participants.filter(p => p.hostel === "YES").length,
-      fees: 500
+      fees: feeValue
     };
   }, [participants]);
 
@@ -361,7 +393,7 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
                     <Paperclip 
                       size={18} 
                       className="blue-icon clickable-icon" 
-                      onClick={() => handleViewDocument("Registration Document", p.name)}
+                      onClick={() => handleViewDocument(p)}
                     />
                   ) : (
                     <span className="text-muted">-</span>
@@ -378,7 +410,7 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
                     <FileText 
                       size={16} 
                       className="blue-icon clickable-icon" 
-                      onClick={() => handleViewDocument("Payment Receipt", p.name)}
+                      onClick={() => handleViewDocument(p)}
                     />
                   </div>
                 </td>
@@ -412,7 +444,7 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
                       <button
                         className="icon-btn"
                         title="View Document"
-                        onClick={() => handleViewDocument("Uploaded Document", p.name)}
+                        onClick={() => handleViewDocument(p)}
                       >
                         <Paperclip size={18} />
                       </button>
@@ -459,7 +491,7 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
                     <button
                       className="icon-btn certificate-btn"
                       title="Certificate"
-                      onClick={() => handleViewDocument("Participation Certificate", p.name)}
+                      onClick={() => handleViewDocument(p)}
                     >
                       <Award size={18} />
                     </button>

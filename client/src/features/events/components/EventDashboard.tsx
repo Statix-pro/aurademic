@@ -3,18 +3,19 @@ import { useNavigate } from "react-router-dom";
 import {
   Archive,
   Bell,
+  Briefcase,
   CalendarClock,
-  CheckCircle2,
+  CheckCircle,
   ChevronDown,
   ClipboardList,
-  Clock3,
+  Clock,
   Edit2,
   Eye,
   Info,
   Plus,
   RotateCcw,
   Search,
-  ShieldX,
+  XCircle,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -293,12 +294,11 @@ const Dashboard: React.FC = () => {
     });
 
     return [
-      { key: "all", label: "Total", value: counts.all, icon: ClipboardList, tone: "tone-total" },
-      { key: "draft", label: "Draft", value: counts.draft, icon: Info, tone: "tone-pending" },
-      { key: "pending", label: "Pending", value: counts.pending, icon: Clock3, tone: "tone-pending" },
+      { key: "all", label: "Total", value: counts.all, icon: Briefcase, tone: "tone-total" },
+      { key: "pending", label: "Pending", value: counts.pending, icon: Clock, tone: "tone-pending" },
       { key: "return", label: "Return", value: counts.return, icon: RotateCcw, tone: "tone-return" },
-      { key: "reject", label: "Reject", value: counts.reject, icon: ShieldX, tone: "tone-reject" },
-      { key: "approved", label: "Approved", value: counts.approved, icon: CheckCircle2, tone: "tone-approved" },
+      { key: "reject", label: "Reject", value: counts.reject, icon: XCircle, tone: "tone-reject" },
+      { key: "approved", label: "Approved", value: counts.approved, icon: CheckCircle, tone: "tone-approved" },
       { key: "archive", label: "Archive", value: counts.archive, icon: Archive, tone: "tone-archive" },
     ] satisfies DashboardStat[];
   }, [events, yearFilter, searchTerm]);
@@ -496,25 +496,21 @@ const Dashboard: React.FC = () => {
               <Bell size={18} />
             </button>
 
-            {ability.can("create", "Event") && (
-              <>
-                <button
-                  type="button"
-                  className="event-dashboard-add-btn"
-                  onClick={() => navigate("/event/new?tab=pre-event")}
-                >
-                  Add +
-                </button>
+            <button
+              type="button"
+              className="event-dashboard-add-btn"
+              onClick={() => navigate("/event/new?tab=pre-event")}
+            >
+              Add +
+            </button>
 
-                <button
-                  type="button"
-                  className="event-dashboard-add-btn event-dashboard-add-btn--secondary"
-                  onClick={() => navigate("/event/new?isSubEvent=true&tab=pre-event")}
-                >
-                  Sub +
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              className="event-dashboard-add-btn event-dashboard-add-btn--secondary"
+              onClick={() => navigate("/event/new?isSubEvent=true&tab=pre-event")}
+            >
+              Sub +
+            </button>
           </div>
         </header>
 
@@ -563,7 +559,7 @@ const Dashboard: React.FC = () => {
                     <div className="event-request-row event-request-row--top">
                       <div className="event-request-head-left">
                         <span className="event-request-id" style={{ minWidth: '80px', color: event.isSubEvent ? '#64748b' : undefined }}>
-                          #F-{new Date(event.date || new Date()).getFullYear()}-{String(event.id).padStart(4, "0")}
+                          #EV-{new Date(event.date || new Date()).getFullYear()}-{String(event.id).padStart(4, "0")}
                         </span>
                         <span className="event-request-name">{event.proposedBy}</span>
                         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>

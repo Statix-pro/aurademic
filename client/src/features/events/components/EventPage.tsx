@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useParams } from "react-router-dom";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
-import "../../finance/financeapproval.css";
 import "../styles/EventPage.css";
 import PreEvent from "./PreEvent";
 import FinanceSection from "./FinanceSection";

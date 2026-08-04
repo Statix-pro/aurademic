@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import authenticityUtility from "../../../shared/utils/authenticityUtility";
+import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
 import EventApprovalCards, { EventApprovalFormData } from "./EventApprovalCards";
 import { EVENT_COPY } from "../constants";
 
@@ -12,6 +13,11 @@ interface PreEventProps {
 const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => {
   const [selectedSubEventId, setSelectedSubEventId] = useState("");
   const [mainEvents, setMainEvents] = useState<{ id: string; title: string }[]>([]);
+  const [alertConfig, setAlertConfig] = useState<{ show: boolean; message: string; type: AlertType }>({
+    show: false,
+    message: "",
+    type: "info",
+  });
 
   useEffect(() => {
     if (!isSubEvent) {
@@ -29,33 +35,35 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
       })
       .catch((err) => console.error("Error fetching main events:", err));
   }, [isSubEvent, eventId]);
-  const handleSubmit = async (data: EventApprovalFormData) => {
-    // Validate base required fields
-    if (!data.name || !data.dateFrom || !data.dateTo || !data.category || !data.eventType || data.eventType.length === 0 || !data.level) {
-      alert("Please fill in all required fields before submitting.");
-      return;
-    }
 
-    // Validate mode-specific fields
+  const showValidationAlert = (message: string) => {
+    setAlertConfig({ show: true, message, type: "warning" });
+  };
+
+  const handleSubmit = async (data: EventApprovalFormData) => {
+    const missingFields: string[] = [];
+    if (!data.name) missingFields.push("Event Name");
+    if (!data.dateFrom) missingFields.push("Start Date");
+    if (!data.dateTo) missingFields.push("End Date");
+    if (!data.category) missingFields.push("Category");
+    if (!data.eventType || data.eventType.length === 0) missingFields.push("Type");
+    if (!data.level) missingFields.push("Level");
     if ((data.mode === "Virtual" || data.mode === "Hybrid") && !data.meetingLink) {
-      alert("Please fill in all required fields before submitting.");
-      return;
+      missingFields.push("Meeting Link");
     }
     if ((data.mode === "Physical" || data.mode === "Hybrid") && !data.venue) {
-      alert("Please fill in all required fields before submitting.");
-      return;
+      missingFields.push("Venue");
+    }
+    if (data.ceremonyEnabled && data.inauguralEnabled && (!data.inauguralDate || !data.inauguralTime || !data.inauguralVenue)) {
+      missingFields.push("Inaugural Ceremony Details");
+    }
+    if (data.ceremonyEnabled && data.valedictoryEnabled && (!data.valedictoryDate || !data.valedictoryTime || !data.valedictoryVenue)) {
+      missingFields.push("Valedictory Ceremony Details");
     }
 
-    // Validate toggle-based ceremony fields
-    if (data.ceremonyEnabled) {
-      if (data.inauguralEnabled && (!data.inauguralDate || !data.inauguralTime || !data.inauguralVenue)) {
-        alert("Please fill in all required fields before submitting.");
-        return;
-      }
-      if (data.valedictoryEnabled && (!data.valedictoryDate || !data.valedictoryTime || !data.valedictoryVenue)) {
-        alert("Please fill in all required fields before submitting.");
-        return;
-      }
+    if (missingFields.length > 0) {
+      showValidationAlert(`Please fill the following required fields: ${missingFields.join(", ")}.`);
+      return;
     }
 
     const eventSubmitData = {
@@ -137,11 +145,11 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
       } else {
         await authenticityUtility.post("/pre-events", eventSubmitData);
       }
-      alert("Event created successfully!");
+      setAlertConfig({ show: true, message: "Event created successfully!", type: "success" });
       goToTab("finance");
     } catch (error: any) {
       const backendError = error.response?.data?.error || error.response?.data?.details || error.response?.data?.message || error.message;
-      alert(`Failed to submit the form. Backend Error: ${backendError}`);
+      setAlertConfig({ show: true, message: `Failed to submit the form. Backend Error: ${backendError}`, type: "error" });
     }
   };
 
@@ -190,15 +198,23 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
   }
 
   return (
-    <EventApprovalCards
-      title=""
-      submitLabel={EVENT_COPY.submitNext}
-      showHeaderActions={false}
-      showExtendedSections={!isSubEvent}
-      showMultiEventToggle={!isSubEvent}
-      isSubEvent={isSubEvent}
-      onSubmit={handleSubmit}
-    />
+    <>
+      <EventApprovalCards
+        title=""
+        submitLabel={EVENT_COPY.submitNext}
+        showHeaderActions={false}
+        showExtendedSections={!isSubEvent}
+        showMultiEventToggle={!isSubEvent}
+        isSubEvent={isSubEvent}
+        onSubmit={handleSubmit}
+      />
+      <AlertModal
+        show={alertConfig.show}
+        onHide={() => setAlertConfig((current) => ({ ...current, show: false }))}
+        message={alertConfig.message}
+        type={alertConfig.type}
+      />
+    </>
   );
 };
 

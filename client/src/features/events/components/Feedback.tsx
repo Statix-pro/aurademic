@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import {
   Award,
   ClipboardList,
@@ -51,7 +52,11 @@ interface ResourcePersonState {
   suggestion: string;
 }
 
-const Feedback: React.FC = () => {
+interface FeedbackProps {
+  eventId?: string;
+}
+
+const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
   // --- Section 1: Event Feedback State ---
   const [eventToggles, setEventToggles] = useState({
     food: false,
@@ -105,6 +110,11 @@ const Feedback: React.FC = () => {
     food: 0,
   });
   const [accommodationSuggestion, setAccommodationSuggestion] = useState("");
+
+  // --- API State ---
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
 
   // --- Helpers for Event state ---
   const toggleEventParam = (param: keyof typeof eventToggles) => {
@@ -196,8 +206,17 @@ const Feedback: React.FC = () => {
   const showCateringRow = eventToggles.food || eventToggles.refreshment;
 
   // --- Form Submission ---
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!eventId) {
+      setError("Event ID is missing");
+      return;
+    }
+    
+    setLoading(true);
+    setError("");
+    setSuccess(false);
+
     const payload = {
       eventFeedback: {
         toggles: eventToggles,
@@ -211,8 +230,15 @@ const Feedback: React.FC = () => {
         suggestion: accommodationSuggestion,
       },
     };
-    console.log("Submitted Feedback Data:", payload);
-    alert("Feedback submitted successfully!");
+
+    try {
+      await authenticityUtility.post(`/events/${eventId}/feedback`, payload);
+      setSuccess(true);
+    } catch (err: any) {
+      setError(err?.response?.data?.message || "Failed to submit feedback.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   // --- Render Star Rating Group ---
@@ -786,9 +812,12 @@ const Feedback: React.FC = () => {
         </div>
       </div>
 
+      {error && <div className="feedback-error-msg" style={{ color: "red", textAlign: "center", marginBottom: "16px" }}>{error}</div>}
+      {success && <div className="feedback-success-msg" style={{ color: "green", textAlign: "center", marginBottom: "16px" }}>Feedback submitted successfully!</div>}
+      
       {/* Submit Button */}
-      <button type="submit" className="feedback-submit-btn">
-        {EVENT_COPY.submitFeedback}
+      <button type="submit" className="feedback-submit-btn" disabled={loading}>
+        {loading ? "Submitting..." : EVENT_COPY.submitFeedback}
       </button>
     </form>
   );
