@@ -745,6 +745,104 @@ export async function listQueue({ moduleKey, stage, actor, filters = {} }) {
   }
 }
 
+// The queue models clamp `limit` to 100, so the export walks pages instead of asking
+// for one huge page. EXPORT_MAX_ROWS caps a runaway export; anything beyond it is
+// reported back as `truncated` so the UI can warn instead of silently shortening.
+const EXPORT_PAGE_SIZE = 100;
+const EXPORT_MAX_ROWS = 1000;
+
+/**
+ * Same stage/scope rules as listQueue, but returns every matching record (up to
+ * EXPORT_MAX_ROWS) rather than a single page, plus each record's line items when the
+ * module adapter exposes `listLineItemsForExport`. Backs the admin CSV export.
+ */
+export async function listQueueForExport({ moduleKey, stage, actor, filters = {} }) {
+  const moduleConfig = getWorkflowModule(moduleKey);
+  const normalizedStage = normalizeText(stage).toLowerCase();
+  const normalizedActor = normalizeActorPayload(actor);
+
+  if (!normalizedStage) {
+    throw new WorkflowError('Queue stage is required', 400, 'WORKFLOW_STAGE_REQUIRED');
+  }
+
+  assertDecisionPermission({
+    moduleKey: normalizeText(moduleKey).toLowerCase(),
+    currentStage: normalizedStage,
+    actor: normalizedActor,
+  });
+
+  const conn = await db.getConnection();
+
+  try {
+    const stagePolicy = await resolveStagePolicy(conn, {
+      moduleKey,
+      stageKey: normalizedStage,
+    });
+
+    const scopeFilters = await resolveQueueScopeFilters({
+      conn,
+      actor: normalizedActor,
+      stagePolicy,
+      filters,
+    });
+
+    const baseFilters = {
+      ...filters,
+      workflowStatus: normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress',
+      moduleKey: normalizeText(moduleKey).toLowerCase(),
+      isSuperAdmin: isSuperAdminActor(normalizedActor),
+      scopeFilters,
+    };
+
+    const items = [];
+    let total = 0;
+    let statusCounts;
+
+    for (let page = 1; ; page += 1) {
+      const result = await moduleConfig.adapter.listRecordsForQueue(
+        normalizedStage,
+        { ...baseFilters, page, limit: EXPORT_PAGE_SIZE },
+        { tx: conn },
+      );
+
+      const pageItems = Array.isArray(result?.items) ? result.items : [];
+      if (page === 1) {
+        total = Number(result?.total || 0);
+        statusCounts = result?.statusCounts;
+      }
+
+      items.push(...pageItems);
+
+      if (pageItems.length < EXPORT_PAGE_SIZE || items.length >= EXPORT_MAX_ROWS) {
+        break;
+      }
+    }
+
+    const exportedItems = items.slice(0, EXPORT_MAX_ROWS);
+
+    let lineItems = {};
+    if (typeof moduleConfig.adapter.listLineItemsForExport === 'function') {
+      const recordIds = exportedItems.map((row) => toPositiveInt(row?.id)).filter(Boolean);
+      lineItems =
+        (await moduleConfig.adapter.listLineItemsForExport(recordIds, { tx: conn })) || {};
+    }
+
+    return {
+      items: exportedItems,
+      lineItems,
+      total,
+      statusCounts,
+      // Only flag truncation when the row cap is what actually bound the result. The
+      // client narrows further (stage visibility, role tab, amount band), so `total`
+      // alone exceeding the exported count is normal and must not trigger a warning.
+      truncated: exportedItems.length >= EXPORT_MAX_ROWS && total > exportedItems.length,
+      maxRows: EXPORT_MAX_ROWS,
+    };
+  } finally {
+    conn.release();
+  }
+}
+
 export async function getTimeline({ moduleKey, recordId }) {
   const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
   const normalizedRecordId = toPositiveInt(recordId);
@@ -936,6 +1034,7 @@ export default {
   startWorkflow,
   actOnWorkflow,
   listQueue,
+  listQueueForExport,
   getTimeline,
   getWorkflow,
   logWorkflowResubmission,

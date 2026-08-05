@@ -154,6 +154,70 @@
   color: #ffffff;
 }
 
+/* Export CSV — sits at the right end of the title/tab row (above the search box),
+   pushed there by .fw-role-tabs' margin-right: auto. Outlined rather than filled so
+   it reads as an action, not a stage tab. */
+.fw-export-csv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  border: 1px dashed #94a3b8;
+  background: transparent;
+  color: #475569;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+/* Keeps the search field and its adjacent export button on the same line: the pair
+   wraps as a unit instead of the button being orphaned onto a row of its own. */
+.fw-search-export-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 auto;
+}
+
+/* Variant used when the button sits inside .fw-header-actions next to the search
+   box (expenditure), so it lines up with the 42px-tall .fw-control fields. */
+.fw-export-csv-btn--inline {
+  height: 42px;
+  border-radius: 12px;
+  padding: 0 14px;
+}
+
+/* Square icon-only footprint, so the row still fits the search box beside it. */
+.fw-export-csv-btn--icon {
+  width: 42px;
+  padding: 0;
+}
+
+.fw-export-csv-btn:hover {
+  border-color: #137a3a;
+  color: #137a3a;
+  background: #ecfdf5;
+}
+
+.fw-export-csv-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.fw-export-csv-btn:focus-visible {
+  outline: 2px solid #137a3a;
+  outline-offset: 2px;
+}
+
 /* Stats Cards */
 .fw-stats {
   display: flex;
@@ -969,12 +1033,13 @@
   background: #f7c6c6;
   transform: translateY(-1px);
 }
+/* Rendered inside .fw-header-actions, so no bottom margin — it aligns with the
+   sibling filter controls on the same row. */
 .fw-proposal-filter-bar {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 14px;
 }
 
 .fw-proposal-filter-btn {

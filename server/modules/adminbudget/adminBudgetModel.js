@@ -2877,6 +2877,60 @@ export async function listBudgets({
   };
 }
 
+/**
+ * Bulk line-item fetch for the admin CSV export: every proposal line for the given
+ * proposals in one query, grouped by proposal id.
+ */
+export async function listProposalLinesForExport(proposalIds = []) {
+  const normalizedIds = Array.from(
+    new Set(
+      (Array.isArray(proposalIds) ? proposalIds : [])
+        .map((value) => Number.parseInt(value, 10))
+        .filter((value) => Number.isInteger(value) && value > 0),
+    ),
+  );
+
+  if (!normalizedIds.length) {
+    return {};
+  }
+
+  const [rows] = await db.query(
+    `SELECT
+       budget_proposal_id,
+       budget_head,
+       sub_head,
+       line_description,
+       quantity,
+       unit_amount,
+       line_total,
+       approved_unit_amount,
+       approved_line_total
+     FROM budget_proposal_lines
+     WHERE budget_proposal_id IN (?)
+     ORDER BY budget_proposal_id ASC, id ASC`,
+    [normalizedIds],
+  );
+
+  const grouped = {};
+  for (const row of rows || []) {
+    const key = String(row.budget_proposal_id);
+    if (!grouped[key]) {
+      grouped[key] = [];
+    }
+    grouped[key].push({
+      budget_head: row.budget_head,
+      sub_head: row.sub_head,
+      line_description: row.line_description,
+      quantity: row.quantity,
+      unit_amount: row.unit_amount,
+      line_total: row.line_total,
+      approved_unit_amount: row.approved_unit_amount,
+      approved_line_total: row.approved_line_total,
+    });
+  }
+  return grouped;
+}
+
 export async function getKpiStats({
   userId,
   userEmail,

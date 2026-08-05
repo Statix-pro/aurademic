@@ -3648,6 +3648,57 @@ const financeModel = {
     }
   },
 
+  /**
+   * Bulk variant of getBudgetBreakup for the workflow CSV export: fetches the budget
+   * rows for many finance requests in one query and groups them by finance id.
+   */
+  async listBudgetBreakupRowsForExport(financeIds = [], { tx = db } = {}) {
+    const normalizedIds = Array.from(
+      new Set((financeIds || []).map(toPositiveInt).filter(Boolean)),
+    );
+    if (!normalizedIds.length) {
+      return {};
+    }
+
+    const hasApprovedAmountColumn = await hasFinanceBudgetBreakupColumn('approved_amount', { tx });
+    const hasIsTopupColumn = await hasFinanceBudgetBreakupColumn('is_topup', { tx });
+    const approvedAmountSelectSql = hasApprovedAmountColumn
+      ? 'approved_amount'
+      : 'NULL AS approved_amount';
+    const isTopupSelectSql = hasIsTopupColumn ? 'is_topup' : '0 AS is_topup';
+
+    const [rows] = await tx.query(
+      `SELECT
+         finance_id,
+         budget_head,
+         sub_head,
+         amount,
+         ${approvedAmountSelectSql},
+         ${isTopupSelectSql},
+         sort_order
+       FROM finance_budget_breakup
+       WHERE finance_id IN (?)
+       ORDER BY finance_id ASC, sort_order ASC, id ASC`,
+      [normalizedIds],
+    );
+
+    const grouped = {};
+    for (const row of rows || []) {
+      const key = String(row.finance_id);
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push({
+        budget_head: row.budget_head,
+        sub_head: row.sub_head,
+        amount: row.amount,
+        approved_amount: row.approved_amount,
+        is_topup: Number(row.is_topup || 0),
+      });
+    }
+    return grouped;
+  },
+
   async getIncomeRows(financeId) {
     try {
       const hasRemarksColumn = await hasFinanceIncomeRowsColumn('remarks');

@@ -6203,6 +6203,62 @@ export async function getLatestArchiveAction(recordId, { tx = db } = {}) {
   };
 }
 
+/**
+ * Bulk row breakdown for the workflow CSV export: every advance, expenditure and
+ * settlement row for the given requests, grouped by expenditure id. One query per
+ * row table so the export stays a fixed number of round trips.
+ */
+export async function listExpenditureRowsForExport(expenditureIds = [], { tx = db } = {}) {
+  const normalizedIds = Array.from(
+    new Set(
+      (Array.isArray(expenditureIds) ? expenditureIds : [])
+        .map((value) => toPositiveInt(value))
+        .filter(Boolean),
+    ),
+  );
+
+  if (!normalizedIds.length) {
+    return {};
+  }
+
+  const placeholders = normalizedIds.map(() => '?').join(', ');
+  const [rows] = await tx.query(
+    `SELECT expenditure_id, 'Advance' AS row_kind, budget_head, sub_head, amount_source,
+            budget_amount, advance_amount AS amount, sort_order, id
+       FROM expenditure_advance_rows
+      WHERE expenditure_id IN (${placeholders})
+     UNION ALL
+     SELECT expenditure_id, 'Expenditure' AS row_kind, budget_head, sub_head, amount_source,
+            budget_amount, auto_sum_amount AS amount, sort_order, id
+       FROM expenditure_line_rows
+      WHERE expenditure_id IN (${placeholders})
+     UNION ALL
+     SELECT expenditure_id, 'Settlement' AS row_kind, budget_head, sub_head, amount_source,
+            budget_amount, settlement_amount AS amount, sort_order, id
+       FROM expenditure_settlement_rows
+      WHERE expenditure_id IN (${placeholders})
+      ORDER BY expenditure_id ASC, row_kind ASC, sort_order ASC, id ASC`,
+    [...normalizedIds, ...normalizedIds, ...normalizedIds],
+  );
+
+  const grouped = {};
+  for (const row of rows || []) {
+    const key = String(toPositiveInt(row.expenditure_id));
+    if (!grouped[key]) {
+      grouped[key] = [];
+    }
+    grouped[key].push({
+      row_kind: row.row_kind,
+      budget_head: row.budget_head,
+      sub_head: row.sub_head,
+      amount_source: row.amount_source,
+      budget_amount: row.budget_amount,
+      amount: row.amount,
+    });
+  }
+  return grouped;
+}
+
 export async function getExpenditureBillsByExpenditureIds(expenditureIds = [], { tx = db } = {}) {
   const normalizedIds = Array.from(
     new Set(
@@ -6587,6 +6643,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        COALESCE(err.request_ref, CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) AS proposal_ref,
        er.request_type,
        er.finance_request_id,
+       COALESCE(frr.request_ref, '') AS finance_request_ref,
        (
          -- Carry-forward eligibility for the Advance card: unsettled advance for
          -- this finance request = all approved advances - all approved settlements.
@@ -6639,6 +6696,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        er.updated_at
      FROM expenditure_requests er
      LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
+     LEFT JOIN finance_request_refs frr ON frr.finance_request_id = er.finance_request_id
      LEFT JOIN master_employees emp ON emp.id = er.employee_id
      ${whereClause}
      ORDER BY

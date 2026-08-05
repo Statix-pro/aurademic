@@ -1289,6 +1289,53 @@ const expenditureController = {
     }
   },
 
+  /**
+   * Same queue, unpaginated, with every request's advance/expenditure/settlement rows —
+   * backs the admin "Export CSV" action so the file covers the whole filtered set.
+   */
+  async getExpenditureQueueExport(req, res) {
+    try {
+      const stage = normalizeText(req.params.stage).toLowerCase();
+      const { workflowStatus, statusCategory, level1Role, q, allProposals, fiscalYear } = req.query;
+      const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
+      const effectiveLevel1Role =
+        stage === 'level1'
+          ? ['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveExpenditureLevel1QueueRole(req)
+          : null;
+
+      const queue = await workflowService.listQueueForExport({
+        moduleKey: 'expenditure',
+        stage,
+        actor: resolveActor(req),
+        filters: {
+          workflowStatus,
+          statusCategory,
+          fiscalYear,
+          level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
+        },
+      });
+
+      return res.status(200).json({
+        status: 'success',
+        data: queue.items,
+        lineItems: queue.lineItems,
+        pagination: {
+          total: queue.total,
+          exported: queue.items.length,
+          truncated: queue.truncated,
+          maxRows: queue.maxRows,
+          statusCounts: queue.statusCounts,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in getExpenditureQueueExport');
+    }
+  },
+
   async approveExpenditureWorkflow(req, res) {
     try {
       const expenditureId = toPositiveInt(req.params.id);

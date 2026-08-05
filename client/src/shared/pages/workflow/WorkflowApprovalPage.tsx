@@ -19,18 +19,28 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 
 import PendingPayeeApprovals from './PendingPayeeApprovals';
-import authenticityUtility from '../../utils/authenticityUtility';
 import { useAuth } from '../../../contexts/AuthContext';
+import AlertModal, { type AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomModal from '../../../shared/components/ui/CustomModal';
+import authenticityUtility from '../../utils/authenticityUtility';
+import {
+  buildCsvFilename,
+  buildCsvSection,
+  downloadCsv,
+  formatDateForCsv,
+  formatFiscalYearLabel,
+  joinCsvSections,
+  type CsvCell,
+} from '../../utils/csvExportUtils';
 import {
   WorkflowApprovalModuleConfig,
+  WorkflowCsvExportMeta,
   WorkflowDecision,
   WorkflowMeta,
   WorkflowQueueResult,
   WorkflowTimelineItem,
 } from '../../workflow/workflowApprovalTypes';
 import './WorkflowApprovalPage.css';
-import AlertModal, { type AlertType } from '../../../shared/components/ui/AlertModal';
-import CustomModal from '../../../shared/components/ui/CustomModal';
 
 const DEFAULT_DECISIONS: WorkflowDecision[] = ['approved', 'returned', 'rejected'];
 const DEFAULT_FEEDBACK_REQUIRED: WorkflowDecision[] = ['returned', 'rejected'];
@@ -738,6 +748,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [pendingPayeesLoading, setPendingPayeesLoading] = useState<boolean>(false);
   const [pendingPayeeActingId, setPendingPayeeActingId] = useState<number | null>(null);
   const [pendingPayeeEditingId, setPendingPayeeEditingId] = useState<number | null>(null);
+  const [exportingCsv, setExportingCsv] = useState<boolean>(false);
   const [previewRecordId, setPreviewRecordId] = useState<number | string | null>(null);
   const [previewIsActionablePending, setPreviewIsActionablePending] = useState<boolean>(false);
 
@@ -2326,33 +2337,74 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     return 'hod';
   }
 
-  const stageScopedRows = useMemo(() => {
-    const activeLevel1Role = activeWorkflowTab?.level1Role || null;
+  // Each filter step is a standalone callback rather than inline memo logic so the CSV
+  // export can run the identical chain over the full (unpaginated) server export set.
+  const applyStageScope = useCallback(
+    (source: Record<string, any>[]) => {
+      const activeLevel1Role = activeWorkflowTab?.level1Role || null;
 
-    let filtered = rows;
-    if (enableLevel1RoleTabs && activeStage === 'level1' && activeLevel1Role) {
-      filtered = filtered.filter((record) => resolveFinanceLevel1Role(record) === activeLevel1Role);
-    }
+      let filtered = source;
+      if (enableLevel1RoleTabs && activeStage === 'level1' && activeLevel1Role) {
+        filtered = filtered.filter(
+          (record) => resolveFinanceLevel1Role(record) === activeLevel1Role,
+        );
+      }
 
-    if (enableSecondaryFilter && beneficiaryFilter !== 'All Beneficiary') {
-      const normalizedBeneficiaryFilter = beneficiaryFilter.toLowerCase();
-      filtered = filtered.filter((record) => {
-        const itemBeneficiaryType = String(
-          record.beneficiary_type || record.beneficiaryType || '',
-        ).toLowerCase();
-        return itemBeneficiaryType === normalizedBeneficiaryFilter;
+      if (enableSecondaryFilter && beneficiaryFilter !== 'All Beneficiary') {
+        const normalizedBeneficiaryFilter = beneficiaryFilter.toLowerCase();
+        filtered = filtered.filter((record) => {
+          const itemBeneficiaryType = String(
+            record.beneficiary_type || record.beneficiaryType || '',
+          ).toLowerCase();
+          return itemBeneficiaryType === normalizedBeneficiaryFilter;
+        });
+      }
+
+      return filtered;
+    },
+    [
+      activeStage,
+      activeWorkflowTab?.level1Role,
+      beneficiaryFilter,
+      enableLevel1RoleTabs,
+      enableSecondaryFilter,
+    ],
+  );
+
+  const applySecondaryScope = useCallback(
+    (source: Record<string, any>[]) => {
+      if (!enableSecondaryFilter || !secondaryFilter) {
+        return source;
+      }
+
+      const expected = secondaryFilter.toLowerCase();
+      return source.filter(
+        (record) => getSecondaryFilterValue(record, beneficiaryFilter).toLowerCase() === expected,
+      );
+    },
+    [beneficiaryFilter, enableSecondaryFilter, secondaryFilter],
+  );
+
+  const applyAmountScope = useCallback(
+    (source: Record<string, any>[]) => {
+      if (config.moduleKey !== 'finance' || !amountFilter) {
+        return source;
+      }
+
+      const threshold = 10000;
+      return source.filter((record) => {
+        const proposedAmount = getWorkflowProposedAmount(record);
+        if (amountFilter === 'lt_10000') {
+          return proposedAmount < threshold;
+        }
+
+        return proposedAmount >= threshold;
       });
-    }
+    },
+    [amountFilter, config.moduleKey],
+  );
 
-    return filtered;
-  }, [
-    activeStage,
-    activeWorkflowTab?.level1Role,
-    beneficiaryFilter,
-    enableLevel1RoleTabs,
-    enableSecondaryFilter,
-    rows,
-  ]);
+  const stageScopedRows = useMemo(() => applyStageScope(rows), [applyStageScope, rows]);
 
   const secondaryFilterOptions = useMemo(() => {
     if (!enableSecondaryFilter) {
@@ -2378,32 +2430,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     [beneficiaryFilter],
   );
 
-  const secondaryScopedRows = useMemo(() => {
-    if (!enableSecondaryFilter || !secondaryFilter) {
-      return stageScopedRows;
-    }
+  const secondaryScopedRows = useMemo(
+    () => applySecondaryScope(stageScopedRows),
+    [applySecondaryScope, stageScopedRows],
+  );
 
-    const expected = secondaryFilter.toLowerCase();
-    return stageScopedRows.filter((record) => {
-      return getSecondaryFilterValue(record, beneficiaryFilter).toLowerCase() === expected;
-    });
-  }, [beneficiaryFilter, enableSecondaryFilter, secondaryFilter, stageScopedRows]);
-
-  const amountScopedRows = useMemo(() => {
-    if (config.moduleKey !== 'finance' || !amountFilter) {
-      return secondaryScopedRows;
-    }
-
-    const threshold = 10000;
-    return secondaryScopedRows.filter((record) => {
-      const proposedAmount = getWorkflowProposedAmount(record);
-      if (amountFilter === 'lt_10000') {
-        return proposedAmount < threshold;
-      }
-
-      return proposedAmount >= threshold;
-    });
-  }, [amountFilter, config.moduleKey, secondaryScopedRows]);
+  const amountScopedRows = useMemo(
+    () => applyAmountScope(secondaryScopedRows),
+    [applyAmountScope, secondaryScopedRows],
+  );
 
   useEffect(() => {
     if (secondaryFilter && !secondaryFilterOptions.includes(secondaryFilter)) {
@@ -2460,46 +2495,54 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     resolveStatusCategory,
   ]);
 
-  const filteredRows = useMemo(() => {
-    const prioritizeResubmitted = (items: Record<string, any>[]) => {
-      if (statusFilter !== 'pending') return items;
-      return [...items].sort((a, b) => {
-        const aResubmitted = isResubmittedRecord(a);
-        const bResubmitted = isResubmittedRecord(b);
-        if (aResubmitted !== bResubmitted) return aResubmitted ? -1 : 1;
+  const applyStatusScope = useCallback(
+    (source: Record<string, any>[]) => {
+      const prioritizeResubmitted = (items: Record<string, any>[]) => {
+        if (statusFilter !== 'pending') return items;
+        return [...items].sort((a, b) => {
+          const aResubmitted = isResubmittedRecord(a);
+          const bResubmitted = isResubmittedRecord(b);
+          if (aResubmitted !== bResubmitted) return aResubmitted ? -1 : 1;
 
-        const aTime =
-          Date.parse(
-            String(
-              a.workflow_state?.resubmittedAt ||
-                a.resubmittedAt ||
-                a.updated_at ||
-                a.created_at ||
-                '',
-            ),
-          ) || 0;
-        const bTime =
-          Date.parse(
-            String(
-              b.workflow_state?.resubmittedAt ||
-                b.resubmittedAt ||
-                b.updated_at ||
-                b.created_at ||
-                '',
-            ),
-          ) || 0;
-        return bTime - aTime;
-      });
-    };
+          const aTime =
+            Date.parse(
+              String(
+                a.workflow_state?.resubmittedAt ||
+                  a.resubmittedAt ||
+                  a.updated_at ||
+                  a.created_at ||
+                  '',
+              ),
+            ) || 0;
+          const bTime =
+            Date.parse(
+              String(
+                b.workflow_state?.resubmittedAt ||
+                  b.resubmittedAt ||
+                  b.updated_at ||
+                  b.created_at ||
+                  '',
+              ),
+            ) || 0;
+          return bTime - aTime;
+        });
+      };
 
-    if (statusFilter === 'total') {
-      return searchScopedRows;
-    }
+      if (statusFilter === 'total') {
+        return source;
+      }
 
-    return prioritizeResubmitted(
-      searchScopedRows.filter((record) => resolveStatusCategory(record) === statusFilter),
-    );
-  }, [isResubmittedRecord, searchScopedRows, statusFilter, resolveStatusCategory]);
+      return prioritizeResubmitted(
+        source.filter((record) => resolveStatusCategory(record) === statusFilter),
+      );
+    },
+    [isResubmittedRecord, statusFilter, resolveStatusCategory],
+  );
+
+  const filteredRows = useMemo(
+    () => applyStatusScope(searchScopedRows),
+    [applyStatusScope, searchScopedRows],
+  );
 
   const totalPages = Math.max(1, Math.ceil((totalRows || 0) / (limit || 20)));
 
@@ -2852,16 +2895,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
   };
 
-  const proposalFilteredRows = useMemo(() => {
-    if (config.moduleKey !== 'expenditure') {
-      return filteredRows;
+  const applyProposalTypeScope = (source: Record<string, any>[]) => {
+    if (config.moduleKey !== 'expenditure' || proposalTypeFilter === 'all') {
+      return source;
     }
 
-    if (proposalTypeFilter === 'all') {
-      return filteredRows;
-    }
-
-    return filteredRows.filter((record) => {
+    return source.filter((record) => {
       const type = getProposalType(record);
 
       if (proposalTypeFilter === 'advance') {
@@ -2878,7 +2917,177 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
       return true;
     });
-  }, [filteredRows, config.moduleKey, proposalTypeFilter]);
+  };
+
+  const proposalFilteredRows = useMemo(
+    () => applyProposalTypeScope(filteredRows),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filteredRows, config.moduleKey, proposalTypeFilter],
+  );
+
+  // Runs the on-screen filter chain over an arbitrary row set, so the CSV export of the
+  // full server-side result matches exactly what the current filters display.
+  const applyDisplayFilters = (source: Record<string, any>[]) =>
+    applyProposalTypeScope(
+      applyStatusScope(applyAmountScope(applySecondaryScope(applyStageScope(source)))),
+    );
+
+  const getExportStageLabel = (record: Record<string, any>) => {
+    const currentStage = getRecordCurrentStage(record);
+    if (!currentStage) {
+      return activeWorkflowTab?.label || formatStageLabel(activeStage, config.stageLabels);
+    }
+    if (enableLevel1RoleTabs && currentStage === 'level1') {
+      return resolveFinanceLevel1Role(record) === 'coordinator' ? 'Coordinator' : 'HOD';
+    }
+    return formatStageLabel(currentStage, config.stageLabels);
+  };
+
+  // FALLBACK: modules that opt into the export without supplying a mapper still get a
+  // usable file built from the fields every workflow record shares.
+  const buildFallbackExportCsv = (
+    exportRows: Record<string, any>[],
+    exportMeta: WorkflowCsvExportMeta,
+  ) => {
+    const headers = [
+      'Ref',
+      'Applicant',
+      'Department',
+      'Beneficiary',
+      'Amount',
+      'Status',
+      'Stage',
+      'Date',
+    ];
+    const dataRows: CsvCell[][] = exportRows.map((record) => [
+      exportMeta.getProposalRef(record),
+      String(record.applicant_name || record.user_name || record.faculty_name || '').trim(),
+      String(record.department || '').trim(),
+      String(record.beneficiary_value || record.beneficiary_type || '').trim(),
+      getWorkflowProposedAmount(record),
+      exportMeta.getStatusLabel(record),
+      exportMeta.getCurrentStageLabel(record),
+      formatDateForCsv(record.request_date || record.created_at),
+    ]);
+
+    const content = joinCsvSections([
+      buildCsvSection(
+        `${config.title} Export - ${[formatFiscalYearLabel(exportMeta.fiscalYear), exportMeta.stageLabel].filter(Boolean).join(' - ')}`,
+        [],
+        [],
+      ),
+      buildCsvSection(`Exported on: ${formatDateForCsv(new Date())}`, [], []),
+      buildCsvSection('Request Details', headers, dataRows),
+      buildCsvSection(
+        'Totals',
+        [],
+        [
+          ['Total Proposed', exportRows.reduce((sum, r) => sum + getWorkflowProposedAmount(r), 0)],
+          ['Total Approved', exportRows.reduce((sum, r) => sum + getWorkflowApprovedAmount(r), 0)],
+          ['Total Count', exportRows.length],
+        ],
+      ),
+    ]);
+
+    return {
+      filename: buildCsvFilename([
+        config.moduleKey,
+        exportMeta.stageLabel,
+        exportMeta.statusFilter,
+        formatFiscalYearLabel(exportMeta.fiscalYear).replace(/\s+/g, ''),
+      ]),
+      content,
+    };
+  };
+
+  const handleExportCsv = async () => {
+    if (exportingCsv) {
+      return;
+    }
+
+    setExportingCsv(true);
+    try {
+      const activeTab = activeWorkflowTab;
+      const isAllProposalsTab = Boolean(activeTab?.showAllProposals);
+      const normalizedStage = String(activeStage || '').toLowerCase();
+      const level1RoleFilter =
+        enableLevel1RoleTabs && normalizedStage === 'level1' && activeTab?.level1Role
+          ? activeTab.level1Role
+          : null;
+
+      // The export endpoint returns every record matching the server-side filters (not
+      // just the page on screen); the client-side chain below narrows it exactly the way
+      // the visible list is narrowed.
+      const response = await authenticityUtility.get(`${getQueueEndpoint(activeStage)}/export`, {
+        params: {
+          workflowStatus: 'all',
+          ...(statusFilter !== 'total' ? { statusCategory: statusFilter } : {}),
+          fiscalYear,
+          ...(level1RoleFilter ? { level1Role: level1RoleFilter } : {}),
+          ...(isAllProposalsTab ? { allProposals: true } : {}),
+          ...(beneficiaryFilter !== 'All Beneficiary'
+            ? { beneficiaryType: beneficiaryFilter }
+            : {}),
+          ...(searchTerm ? { q: searchTerm } : {}),
+          ...(amountFilter ? { amountBand: amountFilter } : {}),
+        },
+      });
+
+      // authenticityUtility's response interceptor already unwraps to the response body.
+      const payload = (response as any) || {};
+      const fetchedItems: Record<string, any>[] = Array.isArray(payload.data) ? payload.data : [];
+      const lineItems: Record<string, any[]> = payload.lineItems || {};
+      const truncated = Boolean(payload.pagination?.truncated);
+
+      const stageVisibleItems = isAllProposalsTab
+        ? fetchedItems
+        : fetchedItems.filter((item) => isVisibleInWorkflowList(item, activeStage));
+      const exportRows = applyDisplayFilters(stageVisibleItems);
+
+      if (!exportRows.length) {
+        showAlert(
+          'There are no records in the current view to export.',
+          'info',
+          'Nothing to Export',
+        );
+        return;
+      }
+
+      const exportMeta: WorkflowCsvExportMeta = {
+        stage: activeStage,
+        stageLabel: activeWorkflowTab?.label || formatStageLabel(activeStage, config.stageLabels),
+        fiscalYear,
+        statusFilter,
+        beneficiaryFilter,
+        secondaryFilter,
+        searchTerm,
+        lineItems,
+        getProposalRef: (record) => getRecordProposalRef(record),
+        getStatusLabel: (record) => getDisplayStatus(record),
+        getStatusCategory: (record) => resolveStatusCategory(record),
+        getCurrentStageLabel: (record) => getExportStageLabel(record),
+      };
+
+      const result = config.csvExportMapper
+        ? config.csvExportMapper(exportRows, exportMeta)
+        : buildFallbackExportCsv(exportRows, exportMeta);
+      downloadCsv(result.filename, result.content);
+
+      if (truncated) {
+        showAlert(
+          `This export was capped at ${exportRows.length} records. Narrow the filters to export the remainder.`,
+          'warning',
+          'Partial Export',
+        );
+      }
+    } catch (exportError) {
+      console.error('Failed to export CSV', exportError);
+      showAlert('Failed to export the CSV file. Please try again.', 'error');
+    } finally {
+      setExportingCsv(false);
+    }
+  };
+
   return (
     <>
       <input
@@ -2999,57 +3208,81 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                   ))}
                 </div>
               )}
-              {config.moduleKey === 'expenditure' && (
-                <>
-                  {viewMode === 'payees' && (
-                    <div className="fw-payee-header-search">
-                      <Search size={16} className="fw-payee-header-search-icon" />
-                      <input
-                        type="text"
-                        className="fw-control fw-payee-header-search-input"
-                        placeholder="Search payee..."
-                        value={payeeSearchTerm}
-                        onChange={(e) => setPayeeSearchTerm(e.target.value)}
-                      />
-                    </div>
-                  )}
-                  <div className="fw-proposal-filter-bar">
-                    <button
-                      type="button"
-                      className={`fw-proposal-filter-btn ${proposalTypeFilter === 'all' ? 'active' : ''}`}
-                      onClick={() => setProposalTypeFilter('all')}
-                    >
-                      All
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`fw-proposal-filter-btn fw-proposal-filter-btn--advance ${proposalTypeFilter === 'advance' ? 'active' : ''}`}
-                      onClick={() => setProposalTypeFilter('advance')}
-                    >
-                      A
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`fw-proposal-filter-btn fw-proposal-filter-btn--expenditure ${proposalTypeFilter === 'expenditure' ? 'active' : ''}`}
-                      onClick={() => setProposalTypeFilter('expenditure')}
-                    >
-                      E
-                    </button>
-
-                    <button
-                      type="button"
-                      className={`fw-proposal-filter-btn fw-proposal-filter-btn--settlement ${proposalTypeFilter === 'settlement' ? 'active' : ''}`}
-                      onClick={() => setProposalTypeFilter('settlement')}
-                    >
-                      S
-                    </button>
-                  </div>
-                </>
+              {/* Finance keeps Export CSV on the title row; expenditure's title row is
+                  already full (Requests/Payees + five stage tabs), so it renders the
+                  button beside the search box further down instead. */}
+              {Boolean(config.enableCsvExport) &&
+                viewMode === 'workflow' &&
+                config.moduleKey !== 'expenditure' && (
+                  <button
+                    type="button"
+                    className="fw-export-csv-btn"
+                    onClick={handleExportCsv}
+                    disabled={exportingCsv}
+                    title="Export the currently filtered list as CSV"
+                    aria-label="Export CSV"
+                  >
+                    <Download size={15} />
+                    <span>{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
+                  </button>
+                )}
+              {config.moduleKey === 'expenditure' && viewMode === 'payees' && (
+                <div className="fw-payee-header-search">
+                  <Search size={16} className="fw-payee-header-search-icon" />
+                  <input
+                    type="text"
+                    className="fw-control fw-payee-header-search-input"
+                    placeholder="Search payee..."
+                    value={payeeSearchTerm}
+                    onChange={(e) => setPayeeSearchTerm(e.target.value)}
+                  />
+                </div>
               )}
               {viewMode === 'workflow' && (
                 <div className="fw-header-actions">
+                  {/* Proposal-type shortcuts live in the actions row (like finance's
+                      amount filters) so they share a line with the filters instead of
+                      claiming their own row once the stage tabs fill the title row. */}
+                  {config.moduleKey === 'expenditure' && (
+                    <div
+                      className="fw-proposal-filter-bar"
+                      role="group"
+                      aria-label="Proposal type filter shortcuts"
+                    >
+                      <button
+                        type="button"
+                        className={`fw-proposal-filter-btn ${proposalTypeFilter === 'all' ? 'active' : ''}`}
+                        onClick={() => setProposalTypeFilter('all')}
+                      >
+                        All
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`fw-proposal-filter-btn fw-proposal-filter-btn--advance ${proposalTypeFilter === 'advance' ? 'active' : ''}`}
+                        onClick={() => setProposalTypeFilter('advance')}
+                      >
+                        A
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`fw-proposal-filter-btn fw-proposal-filter-btn--expenditure ${proposalTypeFilter === 'expenditure' ? 'active' : ''}`}
+                        onClick={() => setProposalTypeFilter('expenditure')}
+                      >
+                        E
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`fw-proposal-filter-btn fw-proposal-filter-btn--settlement ${proposalTypeFilter === 'settlement' ? 'active' : ''}`}
+                        onClick={() => setProposalTypeFilter('settlement')}
+                      >
+                        S
+                      </button>
+                    </div>
+                  )}
+
                   {config.moduleKey === 'finance' && (
                     <div
                       className="fw-amount-filters"
@@ -3130,13 +3363,35 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     </select>
                   )}
 
-                  <input
-                    className="fw-control"
-                    type="text"
-                    placeholder="Search ID or Applicant Name"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+                  {/* Search + export stay in one group so a wrap moves them together
+                      and the export button never drifts away from the search box. */}
+                  <div className="fw-search-export-group">
+                    <input
+                      className="fw-control"
+                      type="text"
+                      placeholder="Search ID or Applicant Name"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                    />
+
+                    {/* Icon-only here: expenditure's actions row also carries the
+                        All/A/E/S shortcuts, and a labelled button pushed the search
+                        box onto a third line. */}
+                    {Boolean(config.enableCsvExport) && config.moduleKey === 'expenditure' && (
+                      <button
+                        type="button"
+                        className="fw-export-csv-btn fw-export-csv-btn--inline fw-export-csv-btn--icon"
+                        onClick={handleExportCsv}
+                        disabled={exportingCsv}
+                        title={
+                          exportingCsv ? 'Exporting…' : 'Export the currently filtered list as CSV'
+                        }
+                        aria-label="Export CSV"
+                      >
+                        <Download size={17} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

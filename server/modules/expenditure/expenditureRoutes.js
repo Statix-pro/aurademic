@@ -176,6 +176,11 @@ router.get(
   expenditureController.getWorkflowMeta,
 );
 router.get(
+  '/queue/:stage/export',
+  canAccessExpenditureWorkflowForAdmins,
+  expenditureController.getExpenditureQueueExport,
+);
+router.get(
   '/queue/:stage',
   canAccessExpenditureWorkflowForAdmins,
   expenditureController.getExpenditureQueue,
