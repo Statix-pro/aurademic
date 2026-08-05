@@ -3426,7 +3426,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                     className="fw-amounts-container"
                                     style={{
                                       display: 'flex',
-                                      gap: '20px',
+                                      gap: '12px',
                                       textAlign: 'right',
                                       marginRight: '15px',
                                     }}

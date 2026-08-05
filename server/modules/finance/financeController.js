@@ -784,7 +784,44 @@ const financeController = {
         }
       }
 
-      const result = await financeModel.updateFinanceRequest(financeId, req.body || {}, actor);
+      // A top-up cycle only puts its own top-up rows up for decision — every pre-top-up
+      // row is money already approved in an earlier cycle. This path replaces the whole
+      // breakup, so an approver (HOD, DOF, Principal, Chairman) or super admin editing
+      // the in-flight top-up could otherwise rewrite those approved amounts. Rebuild the
+      // pre-top-up rows from the database and keep only the submitted top-up rows,
+      // mirroring the topup submission path above.
+      const updateBody = { ...(req.body || {}) };
+      if (
+        isTopupWorkflowCycle(finance.workflow_state) &&
+        Object.prototype.hasOwnProperty.call(updateBody, 'budget_rows')
+      ) {
+        const existingBudgetRows = await financeModel.getBudgetBreakup(financeId);
+        const approvedBudgetRows = existingBudgetRows.filter(
+          (row) => !parseBooleanLike(row?.is_topup),
+        );
+        const submittedTopupRows = (
+          Array.isArray(updateBody.budget_rows) ? updateBody.budget_rows : []
+        )
+          .filter((row) => parseBooleanLike(row?.is_topup))
+          .map((row) => {
+            const sanitizedRow = { ...(row || {}) };
+            delete sanitizedRow.approved_amount;
+            delete sanitizedRow.remaining_amount_snapshot;
+            sanitizedRow.is_topup = 1;
+            return sanitizedRow;
+          });
+
+        if (!submittedTopupRows.length) {
+          return res.status(400).json({
+            success: false,
+            message: 'At least one topup budget row is required',
+          });
+        }
+
+        updateBody.budget_rows = [...approvedBudgetRows, ...submittedTopupRows];
+      }
+
+      const result = await financeModel.updateFinanceRequest(financeId, updateBody, actor);
 
       if (result.affectedRows > 0) {
         try {
