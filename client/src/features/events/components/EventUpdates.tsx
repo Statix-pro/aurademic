@@ -1,20 +1,33 @@
-import React, { useState } from 'react';
-import '../styles/EventForm.css';
-import { Eye, Plus, Trash2, CloudUpload } from 'lucide-react';
+import React, { useState } from "react";
+import "../styles/EventForm.css";
 
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import {
+  Eye,
+  Plus,
+  Trash2,
+  CloudUpload,
+  Mail,
+  Info,
+  Facebook,
+  Instagram,
+  Linkedin,
+  X,
+} from "lucide-react";
+import authenticityUtility from "../../../shared/utils/authenticityUtility";
+import {
+  DOCUMENT_PARTICIPANT_TYPES,
+  EVENT_DOCUMENTS,
+  EVENT_UPDATE_LETTERS_SECTIONS,
+  EVENT_COPY,
+  EVENT_MAIL_TEMPLATES,
+} from "../constants";
+import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
 
 // --- Letters Section ---
 
-const letterOptions = ['Letter', 'Email', 'Letter/ Email'];
-const sections = [
-  'Security Division',
-  'Guest House',
-  'Transport',
-  'Food/ Refreshment',
-  'Photography',
-  'Video Recording',
-];
+const sections = EVENT_UPDATE_LETTERS_SECTIONS;
+const participantTypes = DOCUMENT_PARTICIPANT_TYPES;
+const documentNames = EVENT_DOCUMENTS;
 
 interface LetterSectionData {
   active: boolean;
@@ -29,6 +42,7 @@ interface LettersPageProps {
 }
 
 interface ResourcePersonRow {
+  dbId?: number;
   id: number;
   name: string;
   designation: string;
@@ -38,6 +52,14 @@ interface ResourcePersonRow {
   location?: string;
   uploadedFile?: string;
   fileName?: string;
+  purpose?: string;
+  mode?: "Online" | "Offline";
+  date?: string;
+  time?: string;
+  hasTitle?: boolean;
+  title?: string;
+  invitationStatus?: "Not Sent" | "Sent";
+  thanksStatus?: "Not Sent" | "Sent";
 }
 
 interface ModalProps {
@@ -49,6 +71,7 @@ interface ModalProps {
 interface ResourcePersonProps {
   rows: ResourcePersonRow[];
   setRows: React.Dispatch<React.SetStateAction<ResourcePersonRow[]>>;
+  showAlert: (message: string, type?: AlertType, title?: string) => void;
 }
 
 interface InitialForm {
@@ -61,10 +84,17 @@ interface InitialForm {
   location: string;
 }
 
-const isValidEmail = (email: string): boolean => {
-  // Simple email validation regex
-  return /^\S+@\S+\.\S+$/.test(email);
-};
+interface ParticipantRow {
+  id: number;
+  type: string;
+  label: string;
+  count: number;
+}
+
+interface DocumentRowState {
+  active: boolean;
+  file: File | File[] | (File | null)[] | null;
+}
 
 const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
   const handleToggle = (section: string): void => {
@@ -81,146 +111,314 @@ const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
     }));
   };
 
-  const handleFileUpload = (section: string, event: React.ChangeEvent<HTMLInputElement>): void => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setFormData((prev) => ({
-        ...prev,
-        [section]: { ...prev[section], file },
-      }));
-    }
-  };
-
-  const handleViewFile = (file: File): void => {
-    if (file) {
-      const fileURL = URL.createObjectURL(file);
-      window.open(fileURL, '_blank');
-    }
-  };
-
   const handleSendMail = (section: string): void => {
-    const data = formData[section];
-    if (!data.active) {
-      alert('Please activate the section before sending mail.');
-      return;
-    }
-    if (!data.file) {
-      alert('Please upload a file before sending mail.');
-      return;
-    }
-
-    // Prompt user for recipient email(s)
-    const recipientInput = prompt(
-      `Enter recipient email address(es) for ${section} (comma separated):`,
-    );
-    if (!recipientInput) {
-      alert('Sending cancelled: no recipients provided.');
-      return;
-    }
-
-    // Validate emails
-    const recipients = recipientInput
-      .split(',')
-      .map((email) => email.trim())
-      .filter((email) => email.length > 0);
-
-    if (recipients.length === 0 || recipients.some((email) => !isValidEmail(email))) {
-      alert('Please enter valid email address(es).');
-      return;
-    }
-
-    // Proceed with send mail logic or backend API call here
-    alert(
-      `Send mail for ${section}\nMode: ${data.mode}\nDate: ${data.date}\nRecipients: ${recipients.join(
-        ', ',
-      )}`,
-    );
-
-    // Example: authenticityUtility.post('/send-email', {...})
+    window.location.href = `mailto:?subject=${encodeURIComponent(section)}`;
   };
 
   return (
-    <div className="event-card-section">
+    <div className="event-card-section event-form-section event-updates-panel event-letters-card">
       <h2 className="event-section-title">Letters</h2>
       {sections.map((section) => (
-        <div className="event-letters-row" key={section}>
-          <span className="event-letters-label">{section}</span>
-
-          <label className="event-letters-switch">
-            <input
-              type="checkbox"
-              checked={formData[section].active}
-              onChange={() => handleToggle(section)}
-            />
-            <span className="event-letters-slider"></span>
-          </label>
-
-          <select
-            className="event-letters-dropdown"
-            value={formData[section].mode}
-            onChange={(e) => handleInputChange(section, 'mode', e.target.value)}
-            disabled={!formData[section].active}
-          >
-            {letterOptions.map((option) => (
-              <option key={option}>{option}</option>
-            ))}
-          </select>
-
-          <button
-            type="button"
-            disabled={!formData[section].active || !formData[section].file}
-            onClick={() => handleSendMail(section)}
-            style={{
-              marginLeft: '8px',
-              padding: '4px 10px',
-              cursor:
-                formData[section].active && formData[section].file ? 'pointer' : 'not-allowed',
-              backgroundColor:
-                formData[section].active && formData[section].file ? '#0069ab' : '#ccc',
-              color: formData[section].active && formData[section].file ? '#ffffff' : '#666666',
-              border: 'none',
-              borderRadius: '4px',
-            }}
-            title={
-              !formData[section].active
-                ? 'Activate section first'
-                : !formData[section].file
-                  ? 'Upload file first'
-                  : 'Send Mail'
-            }
-          >
-            Send Mail
-          </button>
-          <label
-            className={`event-upload-icon ${
-              formData[section].active || formData[section].file ? 'active' : 'disabled'
-            }`}
-          >
-            <CloudUpload size={14} />
-            <input
-              type="file"
-              style={{ display: 'none' }}
-              onChange={(e) => handleFileUpload(section, e)}
-              disabled={!formData[section].active}
-            />
-          </label>
-
-          <span
-            className={`event-eye-icon ${formData[section].file ? 'active' : 'disabled'}`}
-            onClick={() => formData[section].file && handleViewFile(formData[section].file)}
-          >
-            <Eye size={14} />
+        <div key={section} className="event-row-section event-letter-row">
+          <span className="event-letter-label">
+            {section}
           </span>
-
+          <div className="event-letter-actions">
+            <div className="event-letter-buttons">
+              <button
+                type="button"
+                className="event-letter-preview-btn"
+                disabled
+              >
+                {EVENT_COPY.preview}
+              </button>
+              <button
+                type="button"
+                className="event-letter-send-btn"
+                onClick={() => handleSendMail(section)}
+              >
+                {EVENT_COPY.sendMail}
+              </button>
+              <span className="event-letter-status">
+                <Info size={16} /> {EVENT_COPY.notSent}
+              </span>
+            </div>
+          </div>
           <input
             type="date"
             className="event-letters-date"
             value={formData[section].date}
-            onChange={(e) => handleInputChange(section, 'date', e.target.value)}
-            disabled={!formData[section].active}
+            onChange={(e) => handleInputChange(section, "date", e.target.value)}
           />
         </div>
       ))}
+    </div>
+  );
+};
+
+interface ParticipantsCardProps {
+  participants: ParticipantRow[];
+  setParticipants: React.Dispatch<React.SetStateAction<ParticipantRow[]>>;
+}
+
+const ParticipantsCard: React.FC<ParticipantsCardProps> = ({ participants, setParticipants }) => {
+  const [selectedType, setSelectedType] = useState("");
+  const [count, setCount] = useState("");
+
+  const canAdd = selectedType !== "" && count !== "" && !isNaN(Number(count));
+  const total = participants.reduce((sum, participant) => sum + participant.count, 0);
+
+  const handleAdd = (): void => {
+    if (!canAdd) return;
+
+    const foundType = participantTypes.find((type) => type.value === selectedType);
+    setParticipants((prev) => [
+      ...prev,
+      {
+        id: Date.now(),
+        type: selectedType,
+        label: foundType?.label || selectedType,
+        count: parseInt(count, 10),
+      },
+    ]);
+    setSelectedType("");
+    setCount("");
+  };
+
+  const handleDelete = (index: number): void => {
+    setParticipants((prev) => prev.filter((_, currentIndex) => currentIndex !== index));
+  };
+
+  return (
+    <div className="event-card-section event-participants-card">
+      <div className="participants-header">
+        <div className="participants-header-copy">
+          <h2 className="event-section-title">Participants</h2>
+          <p>Choose a participant type, set the count, and keep the summary table neat below.</p>
+        </div>
+        <div className="participants-total-badge">
+          <span>Total</span>
+          <strong>{total}</strong>
+        </div>
+      </div>
+
+      <div className="event-participant-card participants-entry-card">
+        <div className="participants-entry-grid">
+          <div className="participants-field participants-type-field">
+            <select
+              className="event-participant-select"
+              value={selectedType}
+              onChange={(e) => setSelectedType(e.target.value)}
+            >
+              <option value="">-- Select Participant Type --</option>
+              {participantTypes.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="participants-field participants-count-field">
+            <input
+              type="number"
+              min="0"
+              className="event-participant-input"
+              value={count}
+              onChange={(e) => setCount(e.target.value)}
+              placeholder="0"
+            />
+          </div>
+
+          <button
+            type="button"
+            className="event-add event-participant-add"
+            onClick={handleAdd}
+            disabled={!canAdd}
+            title="Add participant"
+            aria-label="Add participant"
+          >
+            <Plus size={16} />
+          </button>
+        </div>
+      </div>
+
+      {participants.length > 0 && (
+        <div className="participants-table-card">
+          <div className="event-participants-table-wrap">
+          <table className="event-participants-table">
+            <thead>
+              <tr>
+                <th>S.No</th>
+                <th>Participant Type</th>
+                <th>Count</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {participants.map((participant, index) => (
+                <tr key={participant.id}>
+                  <td>{index + 1}</td>
+                  <td>{participant.label}</td>
+                  <td>{participant.count}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="event-cancel-btn"
+                      onClick={() => handleDelete(index)}
+                      style={{
+                        color: "black",
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        padding: 0,
+                        fontSize: "16px",
+                      }}
+                      aria-label="Delete participant"
+                      title="Delete participant"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface DocumentsCardProps {
+  docState: Record<string, DocumentRowState>;
+  setDocState: React.Dispatch<React.SetStateAction<Record<string, DocumentRowState>>>;
+}
+
+const DocumentsCard: React.FC<DocumentsCardProps> = ({ docState, setDocState }) => {
+
+  const handleFileUpload = (
+    doc: string,
+    event: React.ChangeEvent<HTMLInputElement>,
+    index: number | null = null,
+  ): void => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setDocState((prev) => {
+      if (doc === "Photos" && index !== null) {
+        const currentFiles = prev[doc].file as (File | null)[];
+        const nextFiles = [...currentFiles];
+        nextFiles[index] = file;
+        return {
+          ...prev,
+          [doc]: { ...prev[doc], file: nextFiles },
+        };
+      }
+
+      return {
+        ...prev,
+        [doc]: { ...prev[doc], file },
+      };
+    });
+  };
+
+  const handleViewFile = (doc: string, index: number | null = null): void => {
+    const docData = docState[doc];
+    const file =
+      doc === "Photos" && index !== null
+        ? (docData.file as (File | null)[])[index]
+        : (docData.file as File | null);
+
+    if (!file) return;
+
+    const fileURL = URL.createObjectURL(file);
+    window.open(fileURL, "_blank");
+  };
+
+  const handleToggle = (doc: string): void => {
+    setDocState((prev) => ({
+      
+      ...prev,
+      [doc]: {
+        ...prev[doc],
+        active: !prev[doc].active,
+      },
+    }));
+  };
+
+  const renderDocRow = (doc: string): React.ReactNode => {
+    if (doc === "Photos") {
+      const photoFiles = docState[doc].file as (File | null)[];
+      return (
+        <div className="event-doc-row event-doc-row-photos" key={doc}>
+          <span className="event-doc-label">{doc}</span>
+          <div className="event-doc-actions event-doc-actions-photos">
+            {photoFiles.map((photo, i) => (
+              <div key={i} className="event-photo-pair">
+                <label
+                  className="event-photo-slot event-photo-slot-upload"
+                  title={photo ? "Replace photo" : "Upload photo"}
+                >
+                  <CloudUpload size={20} />
+                  <input
+                    type="file"
+                    onChange={(e) => handleFileUpload(doc, e, i)}
+                    style={{ display: "none" }}
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className={`event-photo-slot event-photo-slot-view ${!photo ? "disabled" : ""}`}
+                  onClick={() => photo && handleViewFile(doc, i)}
+                  title={photo ? "View photo" : "No photo uploaded"}
+                  disabled={!photo}
+                >
+                  <Eye size={20} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="event-doc-row" key={doc}>
+        <span className="event-doc-label">{doc}</span>
+        <div className="event-doc-actions">
+          <label className="event-upload-icon">
+            <CloudUpload size={16} />
+            <input
+              type="file"
+              onChange={(e) => handleFileUpload(doc, e)}
+              style={{ display: "none" }}
+            />
+          </label>
+          <button
+            type="button"
+            className={`event-eye-icon ${!docState[doc].file ? "disabled" : ""}`}
+            onClick={() => docState[doc].file && handleViewFile(doc)}
+            aria-label={docState[doc].file ? "View document" : "No document uploaded"}
+            title={docState[doc].file ? "View document" : "No document uploaded"}
+            disabled={!docState[doc].file}
+            style={{ background: 'transparent', border: 'none', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Eye size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="event-card-section event-documents-card">
+      <h2 className="event-section-title">Documents</h2>
+      <div className="event-docs-grid">
+        {documentNames.map(renderDocRow)}
+      </div>
     </div>
   );
 };
@@ -229,37 +427,37 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, children }) =>
   open ? (
     <div
       style={{
-        position: 'fixed',
+        position: "fixed",
         top: 0,
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0,0,0,0.18)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        background: "rgba(0,0,0,0.18)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
         zIndex: 1000,
       }}
     >
       <div
         style={{
-          background: '#fff',
+          background: "#fff",
           borderRadius: 10,
           minWidth: 350,
           padding: 24,
-          position: 'relative',
+          position: "relative",
         }}
       >
         <button
           onClick={onClose}
           style={{
-            position: 'absolute',
+            position: "absolute",
             right: 14,
             top: 11,
-            border: 'none',
-            background: 'none',
+            border: "none",
+            background: "none",
             fontSize: 18,
-            cursor: 'pointer',
+            cursor: "pointer",
           }}
           aria-label="Close"
         >
@@ -271,41 +469,36 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, children }) =>
   ) : null;
 
 const initialForm: InitialForm = {
-  name: '',
-  designation: '',
-  organization: '',
-  email: '',
-  linkedin: '',
-  mobile: '',
-  location: '',
+  name: "",
+  designation: "",
+  organization: "",
+  email: "",
+  linkedin: "",
+  mobile: "",
+  location: "",
 };
 
 // --- Resource Person Section ---
-const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
-  const [modalOpen, setModalOpen] = useState(false);
-  const [form, setForm] = useState<InitialForm>(initialForm);
-
-  const [showSuccess, setShowSuccess] = useState(false);
-  const handleFormChange = (field: keyof InitialForm, value: string): void =>
-    setForm((prev) => ({ ...prev, [field]: value }));
-
-  const handleSubmit = (e: React.FormEvent): void => {
-    e.preventDefault();
-    setForm(initialForm);
-    setModalOpen(false);
-    setShowSuccess(true);
-    setTimeout(() => setShowSuccess(false), 2000); // Message disappears after 2 seconds
-  };
+const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows, showAlert }) => {
   const handleAdd = (): void => {
     setRows([
       ...rows,
       {
         id: Date.now(),
-        name: '',
-        designation: '',
-        organization: '',
-        email: '',
-        linkedin: '',
+        name: "",
+        designation: "",
+        organization: "",
+        email: "",
+        linkedin: "",
+        location: "",
+        purpose: "",
+        mode: "Offline",
+        date: "",
+        time: "",
+        hasTitle: false,
+        title: "",
+        invitationStatus: "Not Sent",
+        thanksStatus: "Not Sent",
       },
     ]);
   };
@@ -316,283 +509,248 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
     }
   };
 
-  const handleChange = (id: number, field: keyof ResourcePersonRow, value: string): void => {
-    setRows(rows.map((row) => (row.id === id ? { ...row, [field]: value } : row)));
-  };
-
-  const openLink = (url: string): void => {
-    if (url) window.open(url, '_blank');
-  };
-
-  // --- Drag & Drop handlers ---
-  const handleDragStart = (e: React.DragEvent, index: number): void => {
-    e.dataTransfer.setData('dragIndex', index.toString());
-  };
-
-  const handleDrop = (e: React.DragEvent, dropIndex: number): void => {
-    const dragIndex = parseInt(e.dataTransfer.getData('dragIndex'));
-    if (isNaN(dragIndex)) return;
-
-    const updatedRows = [...rows];
-    const [draggedRow] = updatedRows.splice(dragIndex, 1);
-    updatedRows.splice(dropIndex, 0, draggedRow);
-
-    setRows(updatedRows);
-  };
-
-  const handleDragOver = (e: React.DragEvent): void => {
-    e.preventDefault();
+  const handleChange = (id: number, field: keyof ResourcePersonRow, value: any): void => {
+    setRows(
+      rows.map((row) => (row.id === id ? { ...row, [field]: value } : row)),
+    );
   };
 
   return (
-    <div className="event-card-section">
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 16,
-        }}
-      >
-        <h3 style={{ margin: 0 }}>Resource Person</h3>
-        <button
-          type="button"
-          style={{
-            background: '#0069ab',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            padding: '7px 18px 7px 18px',
-            fontSize: 16,
-            cursor: 'pointer',
-            fontWeight: 500,
-          }}
-          onClick={() => setModalOpen(true)}
-        >
-          + Add Resource Person
-        </button>
+    <section className="event-updates-resource-shell">
+    
+
+      <div className="resource-person-list">
+        {rows.map((row, index) => (
+        <article className="resource-person-card" key={row.id}>
+          <div className="resource-person-card-header">
+            <h4 className="resource-person-card-title">
+              {EVENT_COPY.resourcePersonLabel} {index + 1}
+            </h4>
+            <div className="resource-person-card-actions">
+              <button
+                type="button"
+                className="resource-person-icon-btn resource-person-add-row"
+                onClick={handleAdd}
+                title="Add resource person"
+                aria-label="Add resource person"
+              >
+                <Plus size={20} strokeWidth={3} />
+              </button>
+              {rows.length > 1 && (
+                <button
+                  type="button"
+                  className="resource-person-icon-btn resource-person-delete"
+                  onClick={() => handleDelete(row.id)}
+                  title="Remove resource person"
+                  aria-label="Remove resource person"
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="resource-person-divider" />
+
+          <div className="resource-person-card-grid resource-person-card-grid-two">
+            <div className="resource-person-field-group">
+              <span className="resource-person-field-label">Name</span>
+              <input
+                type="text"
+                className="resource-person-field-input"
+                value={row.name || ""}
+                onChange={(e) => handleChange(row.id, "name", e.target.value)}
+              />
+            </div>
+            <div className="resource-person-field-group">
+              <span className="resource-person-field-label">Designation</span>
+              <input
+                type="text"
+                className="resource-person-field-input"
+                value={row.designation || ""}
+                onChange={(e) => handleChange(row.id, "designation", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="resource-person-card-grid resource-person-card-grid-two">
+            <div className="resource-person-field-group">
+              <span className="resource-person-field-label">Organization</span>
+              <input
+                type="text"
+                className="resource-person-field-input"
+                value={row.organization || ""}
+                onChange={(e) => handleChange(row.id, "organization", e.target.value)}
+              />
+            </div>
+            <div className="resource-person-field-group">
+              <span className="resource-person-field-label">Email</span>
+              <input
+                type="email"
+                className="resource-person-field-input"
+                value={row.email || ""}
+                onChange={(e) => handleChange(row.id, "email", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="resource-person-divider" />
+
+          <div className="resource-person-card-grid resource-person-card-grid-four">
+            <div className="resource-person-field-group">
+              <span className="resource-person-field-label">Purpose</span>
+              <select
+                className="resource-person-field-select"
+                value={row.purpose || ""}
+                onChange={(e) => handleChange(row.id, "purpose", e.target.value)}
+              >
+                <option value="">-- Select Purpose --</option>
+                <option value="Guest Lecture">Guest Lecture</option>
+                <option value="Keynote Speaker">Keynote Speaker</option>
+                <option value="Session Chair">Session Chair</option>
+                <option value="Valedictory Address">Valedictory Address</option>
+                <option value="Inaugural Address">Inaugural Address</option>
+                <option value="Panelist">Panelist</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+            
+            <div className="resource-person-field-group mode-group">
+              <span className="resource-person-field-label short-label" style={{ marginRight: "8px" }}>Mode</span>
+              <div className="resource-person-toggle-pill">
+                <button
+                  type="button"
+                  className={`resource-person-toggle-btn ${row.mode === "Online" ? "active" : "inactive"}`}
+                  onClick={() => handleChange(row.id, "mode", "Online")}
+                >
+                  Online
+                </button>
+                <button
+                  type="button"
+                  className={`resource-person-toggle-btn ${row.mode !== "Online" ? "active" : "inactive"}`}
+                  onClick={() => handleChange(row.id, "mode", "Offline")}
+                >
+                  Offline
+                </button>
+              </div>
+            </div>
+
+            <div className="resource-person-field-group resource-person-date-group">
+              <span className="resource-person-field-label short-label">Date</span>
+              <input
+                type="date"
+                className="resource-person-field-input"
+                value={row.date || ""}
+                onChange={(e) => handleChange(row.id, "date", e.target.value)}
+              />
+            </div>
+
+            <div className="resource-person-field-group resource-person-time-group">
+              <span className="resource-person-field-label short-label">Time</span>
+              <input
+                type="time"
+                className="resource-person-field-input"
+                value={row.time || ""}
+                onChange={(e) => handleChange(row.id, "time", e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="resource-person-divider" />
+
+          <div className="resource-person-title-row">
+            <div className="resource-person-title-header">
+              <span className="resource-person-field-label">Title</span>
+              <label className="resource-person-switch">
+                <input
+                  type="checkbox"
+                  checked={!!row.hasTitle}
+                  onChange={(e) => handleChange(row.id, "hasTitle", e.target.checked)}
+                />
+                <span className="resource-person-slider"></span>
+              </label>
+            </div>
+            {row.hasTitle && (
+              <input
+                type="text"
+                className="resource-person-field-input"
+                value={row.title || ""}
+                onChange={(e) => handleChange(row.id, "title", e.target.value)}
+                placeholder="Topic / Title of presentation..."
+              />
+            )}
+          </div>
+
+          <div className="resource-person-email-actions">
+            <div className="resource-person-email-box">
+              <div className="resource-person-email-left">
+                <div className="resource-person-email-icon-wrap">
+                  <Mail size={20} />
+                </div>
+                <span className="resource-person-email-label">Invitation</span>
+              </div>
+              <div className="resource-person-email-btns">
+                <button
+                  type="button"
+                  className="resource-person-btn resource-person-btn-preview"
+                  onClick={() => showAlert(`Previewing Invitation for ${row.name || EVENT_COPY.resourcePersonLabel}`, 'info', 'Preview')}
+                >
+                  <Eye size={16} /> Preview
+                </button>
+                <button
+                  type="button"
+                  className="resource-person-email-btn-send"
+                  onClick={() => {
+                    window.location.href = `mailto:${row.email || ""}?subject=${encodeURIComponent(EVENT_MAIL_TEMPLATES.invitationSubject(row.name || ""))}&body=${encodeURIComponent(EVENT_MAIL_TEMPLATES.invitationBody(row.name || ""))}`;
+                    handleChange(row.id, "invitationStatus", "Sent");
+                  }}
+                >
+                  {EVENT_COPY.sendMail}
+                </button>
+                <span className="resource-person-email-status">
+                  <Info size={14} />
+                  {row.invitationStatus || EVENT_COPY.notSent}
+                </span>
+              </div>
+            </div>
+
+            <div className="resource-person-email-box">
+              <div className="resource-person-email-left">
+                <div className="resource-person-email-icon-wrap">
+                  <Mail size={20} />
+                </div>
+                <span className="resource-person-email-label">Thanks</span>
+              </div>
+              <div className="resource-person-email-btns">
+                <button
+                  type="button"
+                  className="resource-person-btn resource-person-btn-preview"
+                  onClick={() => showAlert(`Previewing Thank You letter for ${row.name || EVENT_COPY.resourcePersonLabel}`, 'info', 'Preview')}
+                >
+                  <Eye size={16} /> Preview
+                </button>
+                <button
+                  type="button"
+                  className="resource-person-email-btn-send"
+                  onClick={() => {
+                    window.location.href = `mailto:${row.email || ""}?subject=${encodeURIComponent(EVENT_MAIL_TEMPLATES.thankYouSubject())}&body=${encodeURIComponent(EVENT_MAIL_TEMPLATES.thankYouBody(row.name || ""))}`;
+                    handleChange(row.id, "thanksStatus", "Sent");
+                  }}
+                >
+                  {EVENT_COPY.sendMail}
+                </button>
+                <span className="resource-person-email-status">
+                  <Info size={14} />
+                  {row.thanksStatus || EVENT_COPY.notSent}
+                </span>
+              </div>
+            </div>
+          </div>
+
+        </article>
+        ))}
       </div>
-
-      {showSuccess && (
-        <div
-          style={{
-            position: 'fixed',
-            right: 40,
-            top: 38,
-            zIndex: 2000,
-            background: '#36d399',
-            color: '#fff',
-            padding: '15px 24px',
-            borderRadius: '8px',
-            fontWeight: 600,
-            fontSize: 16,
-            boxShadow: '0 2px 12px rgba(0,0,0,0.11)',
-          }}
-        >
-          Resource person added successfully
-        </div>
-      )}
-
-      {/* Optional: Your existing table/fields here */}
-
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
-        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Add Resource Person</h3>
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
-          <input
-            type="text"
-            value={form.name}
-            onChange={(e) => handleFormChange('name', e.target.value)}
-            placeholder="Name"
-            required
-          />
-          <input
-            type="text"
-            value={form.designation}
-            onChange={(e) => handleFormChange('designation', e.target.value)}
-            placeholder="Designation"
-            required
-          />
-          <input
-            type="text"
-            value={form.organization}
-            onChange={(e) => handleFormChange('organization', e.target.value)}
-            placeholder="Organization"
-            required
-          />
-          <input
-            type="text"
-            value={form.location}
-            onChange={(e) => handleFormChange('location', e.target.value)}
-            placeholder="Location"
-            required
-          />
-          <input
-            type="email"
-            value={form.email}
-            onChange={(e) => handleFormChange('email', e.target.value)}
-            placeholder="Email"
-            required
-          />
-          <input
-            type="text"
-            value={form.linkedin}
-            onChange={(e) => handleFormChange('linkedin', e.target.value)}
-            placeholder="LinkedIn"
-          />
-          <input
-            type="text"
-            value={form.mobile}
-            onChange={(e) => handleFormChange('mobile', e.target.value)}
-            placeholder="Mobile Number"
-            required
-          />
-          <button
-            type="submit"
-            style={{
-              background: '#2563eb',
-              color: '#fff',
-              border: 'none',
-              borderRadius: 6,
-              padding: '9px 0',
-              marginTop: 6,
-              fontSize: 16,
-            }}
-          >
-            Submit
-          </button>
-        </form>
-      </Modal>
-
-      <table className="event-resource-person-table">
-        <tbody>
-          {rows.map((row, index) => (
-            <React.Fragment key={row.id}>
-              <tr
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, index)}
-              >
-                <td rowSpan={2} style={{ cursor: 'grab', textAlign: 'center' }}>
-                  {index + 1}
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={row.name}
-                    onChange={(e) => handleChange(row.id, 'name', e.target.value)}
-                    placeholder="Name"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={row.designation}
-                    onChange={(e) => handleChange(row.id, 'designation', e.target.value)}
-                    placeholder="Designation"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="text"
-                    value={row.organization}
-                    onChange={(e) => handleChange(row.id, 'organization', e.target.value)}
-                    placeholder="Organization"
-                  />
-                </td>
-              </tr>
-              <tr
-                draggable
-                onDragStart={(e) => handleDragStart(e, index)}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, index)}
-              >
-                <td>
-                  <input
-                    type="text"
-                    value={row.location || ''}
-                    onChange={(e) => handleChange(row.id, 'location', e.target.value)}
-                    placeholder="Enter Location (e.g., Chennai, Tamil Nadu)"
-                  />
-                </td>
-
-                <td className="event-actions">
-                  <b> Profile</b>
-                  {/* Upload Icon (always active) */}
-                  <button
-                    type="button"
-                    className=""
-                    onClick={() => document.getElementById(`file-input-${row.id}`)?.click()}
-                    title="Upload"
-                    style={{ color: '#1D4ED8' }}
-                  >
-                    <CloudUpload size={14} />
-                  </button>
-                  <input
-                    id={`file-input-${row.id}`}
-                    type="file"
-                    style={{ display: 'none' }}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        const fileURL = URL.createObjectURL(file); // create preview link
-                        const updatedRows = rows.map((r) =>
-                          r.id === row.id
-                            ? {
-                                ...r,
-                                uploadedFile: fileURL,
-                                fileName: file.name,
-                              }
-                            : r,
-                        );
-                        setRows(updatedRows);
-                      }
-                    }}
-                  />
-
-                  {/* Eye Icon (always active, shows uploaded file if available) */}
-                  <button
-                    type="button"
-                    className=""
-                    onClick={() => {
-                      if (row.uploadedFile) {
-                        window.open(row.uploadedFile, '_blank');
-                      } else {
-                        alert('No file uploaded yet!');
-                      }
-                    }}
-                    title="Preview"
-                    style={{ color: row.uploadedFile ? '#1D4ED8' : 'gray' }}
-                  >
-                    <Eye size={14} />
-                  </button>
-                </td>
-                <td className="event-actions">
-                  {/* Delete Icon (if more than 1 row) */}
-                  {rows.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(row.id)}
-                      className="event-icon-btn"
-                      title="Delete"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-
-                  {/* Add Icon (only on last row) */}
-                  {index === rows.length - 1 && (
-                    <button type="button" onClick={handleAdd} className="event-add" title="Add Row">
-                      <Plus size={14} />
-                    </button>
-                  )}
-                </td>
-              </tr>
-            </React.Fragment>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    </section>
   );
 };
 
@@ -613,361 +771,294 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
   const [rows, setRows] = useState<ResourcePersonRow[]>([
     {
       id: Date.now(),
-      name: '',
-      designation: '',
-      organization: '',
-      email: '',
-      linkedin: '',
+      name: "",
+      designation: "",
+      organization: "",
+      email: "",
+      linkedin: "",
+      location: "",
+      purpose: "",
+      mode: "Offline",
+      date: "",
+      time: "",
+      hasTitle: false,
+      title: "",
+      invitationStatus: "Not Sent",
+      thanksStatus: "Not Sent",
     },
   ]);
 
   const [formData, setFormData] = useState<Record<string, LetterSectionData>>(
-    sections.reduce(
-      (acc, section) => {
-        acc[section] = {
-          active: false,
-          mode: 'Letter/ Email',
-          date: '',
-          file: null,
-        };
-        return acc;
-      },
-      {} as Record<string, LetterSectionData>,
-    ),
+    sections.reduce((acc, section) => {
+      acc[section] = {
+        active: false,
+        mode: "Letter/ Email",
+        date: "",
+        file: null,
+      };
+      return acc;
+    }, {} as Record<string, LetterSectionData>),
   );
 
   const eventId = 1;
 
+  const [participants, setParticipants] = useState<ParticipantRow[]>([]);
+  const [docState, setDocState] = useState<Record<string, DocumentRowState>>(
+    documentNames.reduce((acc, doc) => {
+      acc[doc] = {
+        active: false,
+        file: doc === "Photos" ? ([null, null, null, null] as (File | null)[]) : null,
+      };
+      return acc;
+    }, {} as Record<string, DocumentRowState>),
+  );
+
   const [isSubmittingUpdates, setIsSubmittingUpdates] = useState(false);
   const [websiteEnabled, setWebsiteEnabled] = useState(false);
-  const [websiteDate, setWebsiteDate] = useState('');
+  const [websiteDate, setWebsiteDate] = useState("");
   const [websiteFile, setWebsiteFile] = useState<File | null>(null);
 
   const [newspaperEnabled, setNewspaperEnabled] = useState(false);
-  const [newspaperDate, setNewspaperDate] = useState('');
+  const [newspaperDate, setNewspaperDate] = useState("");
   const [newspaperFile, setNewspaperFile] = useState<File | null>(null);
-
+  
   const [pressEnabled, setPressEnabled] = useState(false);
-  const [pressDate, setPressDate] = useState('');
+  const [pressDate, setPressDate] = useState("");
   const [pressFile, setPressFile] = useState<File | null>(null);
 
-  const [links, setLinks] = useState<SocialLinks>({
-    facebook: '',
-    x: '',
-    instagram: '',
-    linkedin: '',
+  const [alertConfig, setAlertConfig] = useState<{ show: boolean; message: string; type: AlertType; title?: string }>({
+    show: false,
+    message: "",
+    type: "info",
   });
 
-  const handleFileChange =
-    (setter: React.Dispatch<React.SetStateAction<File | null>>) =>
-    (e: React.ChangeEvent<HTMLInputElement>): void =>
-      setter(e.target.files?.[0] || null);
+  const showAlert = (message: string, type: AlertType = "info", title?: string) => {
+    setAlertConfig({ show: true, message, type, title });
+  };
 
-  const handleViewFile = (file: File | null): void => {
-    if (file) window.open(URL.createObjectURL(file), '_blank');
+  const [links, setLinks] = useState<SocialLinks>({
+    facebook: "",
+    x: "",
+    instagram: "",
+    linkedin: "",
+  });
+
+  const handleSendMail = (section: string): void => {
+    window.location.href = `mailto:?subject=${encodeURIComponent(section)}`;
   };
 
   const openLink = (link: string): void => {
-    if (link) window.open(link, '_blank');
-  };
-
-  const isValidEmail = (email: string): boolean => {
-    return /^\S+@\S+\.\S+$/.test(email);
-  };
-
-  const handleSendMail = (sectionName: string, active: boolean, file: File | null): void => {
-    if (!active) {
-      alert('Please activate the section before sending mail.');
-      return;
+    if (link) {
+      window.open(link, "_blank", "noopener,noreferrer");
     }
-    if (!file) {
-      alert('Please upload a file before sending mail.');
-      return;
-    }
-
-    const recipientInput = prompt(
-      `Enter recipient email address(es) for ${sectionName} (comma separated):`,
-    );
-    if (!recipientInput) {
-      alert('Sending cancelled: no recipients provided.');
-      return;
-    }
-
-    const recipients = recipientInput
-      .split(',')
-      .map((email) => email.trim())
-      .filter((email) => email.length > 0);
-
-    if (recipients.length === 0 || recipients.some((email) => !isValidEmail(email))) {
-      alert('Please enter valid email address(es).');
-      return;
-    }
-
-    alert(`Send mail for ${sectionName} to ${recipients.join(', ')}`);
-    // Implement backend API call here to send mail
   };
 
   const uploadFile = async (file: File): Promise<number | null> => {
     if (!file) return null;
     const data = new FormData();
-    data.append('file', file);
+    data.append("file", file);
     try {
-      const response = (await authenticityUtility.postFile(
+      const response = await authenticityUtility.postFile(
         `/updates/events/${eventId}/uploads`,
         data,
-      )) as { upload: { id: number } };
+      ) as { upload: { id: number } };
       return response.upload.id;
     } catch (err) {
-      console.error('File upload failed', err);
-      alert('Failed to upload file: ' + file.name);
+      console.error("File upload failed", err);
+      showAlert("Failed to upload file: " + file.name, "error");
       return null;
     }
   };
 
   const handleSubmit = async (): Promise<void> => {
-    console.log('handleSubmit called');
     if (isSubmittingUpdates) return;
     setIsSubmittingUpdates(true);
     try {
-      let websiteUploadId: number | null = null;
-      if (websiteEnabled && websiteFile) {
-        websiteUploadId = await uploadFile(websiteFile);
-      }
-      let newspaperUploadId: number | null = null;
-      if (newspaperEnabled && newspaperFile) {
-        newspaperUploadId = await uploadFile(newspaperFile);
-      }
-      let pressUploadId: number | null = null;
-      if (pressEnabled && pressFile) {
-        pressUploadId = await uploadFile(pressFile);
-      }
+      const uploadPromises = [
+        websiteEnabled && websiteFile ? uploadFile(websiteFile) : Promise.resolve(null),
+        newspaperEnabled && newspaperFile ? uploadFile(newspaperFile) : Promise.resolve(null),
+        pressEnabled && pressFile ? uploadFile(pressFile) : Promise.resolve(null)
+      ];
+
+      const [websiteRes, newspaperRes, pressRes] = await Promise.allSettled(uploadPromises);
+
+      const getUploadId = (res: PromiseSettledResult<number | null>) => res.status === 'fulfilled' ? res.value : null;
 
       const publicityData = {
         website_enabled: websiteEnabled,
         website_date: websiteDate,
-        website_upload_id: websiteUploadId,
+        website_upload_id: getUploadId(websiteRes),
         newspaper_enabled: newspaperEnabled,
         newspaper_date: newspaperDate,
-        newspaper_upload_id: newspaperUploadId,
+        newspaper_upload_id: getUploadId(newspaperRes),
         press_enabled: pressEnabled,
         press_date: pressDate,
-        press_upload_id: pressUploadId,
+        press_upload_id: getUploadId(pressRes),
         facebook_link: links.facebook,
         x_link: links.x,
         instagram_link: links.instagram,
         linkedin_link: links.linkedin,
       };
-      // console.log("Sending publicityData:", publicityData);
-      const res1 = await authenticityUtility.put(
-        `/updates/events/${eventId}/publicity`,
-        publicityData,
-      );
-      // console.log("Publicity response:", res1);
 
-      for (const rp of rows) {
-        // console.log("Sending resource person:", rp);
-        const resRp = await authenticityUtility.post(
-          `/updates/events/${eventId}/resource_persons`,
-          rp,
-        );
-        // console.log("Resource person response:", resRp);
-      }
+      const wrapPromise = (promise: Promise<any>, sectionName: string) => 
+        promise.catch(err => {
+          console.error(`Error saving ${sectionName}:`, err);
+          return Promise.reject(sectionName);
+        });
 
-      for (const [section, data] of Object.entries(formData)) {
-        // console.log(`Sending letter data for ${section}:`, data);
-        await authenticityUtility.put(`/updates/events/${eventId}/letters`, {
+      const updatePromises = [
+        wrapPromise(authenticityUtility.put(`/updates/events/${eventId}/publicity`, publicityData), 'Publicity'),
+        ...rows.map((rp, i) => {
+          if (rp.dbId) {
+            return wrapPromise(authenticityUtility.put(`/updates/events/${eventId}/resource_persons/${rp.dbId}`, rp), `Resource Person ${i + 1}`);
+          } else {
+            const promise = authenticityUtility.post(`/updates/events/${eventId}/resource_persons`, rp).then((res: any) => {
+              const newDbId = res.resourcePerson?.id || res.data?.resourcePerson?.id;
+              if (newDbId) {
+                setRows((prev) => prev.map((r) => (r.id === rp.id ? { ...r, dbId: newDbId } : r)));
+              }
+              return res;
+            });
+            return wrapPromise(promise, `Resource Person ${i + 1}`);
+          }
+        }),
+        ...Object.entries(formData).map(([section, data]) => wrapPromise(authenticityUtility.put(`/updates/events/${eventId}/letters`, {
           section_name: section,
           active: data.active,
           mode: data.mode,
           letter_date: data.date,
-        });
-        // console.log("Letter updated");
+        }), `Letter (${section})`)),
+        ...participants.map((participant, i) => wrapPromise(authenticityUtility.post(`/updates/events/${eventId}/participants`, {
+          type: participant.type,
+          count: participant.count,
+        }), `Participant ${i + 1}`)),
+        ...Object.entries(docState).map(([docName, docData]) => wrapPromise(authenticityUtility.put(`/updates/events/${eventId}/documents`, {
+          docname: docName,
+          active: docData.active,
+        }), `Document (${docName})`))
+      ];
+
+      const results = await Promise.allSettled(updatePromises);
+      
+      const failedSections = results
+        .filter(res => res.status === 'rejected')
+        .map(res => (res as PromiseRejectedResult).reason);
+
+      if (failedSections.length > 0) {
+        showAlert(`Partial save occurred. The following sections failed to save:\n- ${failedSections.join('\n- ')}`, "warning", "Partial Save");
+        return; // Prevent navigating away on partial save
       }
 
-      alert('✅ Event updates saved successfully!');
-      goToTab('post-event');
+      showAlert("✅ Event updates saved successfully!", "success");
+      goToTab("participants");
     } catch (error) {
-      console.error('Error in handleSubmit:', error);
-      alert('Error occurred, please check console.');
+      console.error("Error in handleSubmit:", error);
+      showAlert("Error occurred, please check console.", "error");
     } finally {
       setIsSubmittingUpdates(false);
     }
   };
 
   return (
-    <div>
-      {/* Publicity Box */}
-      <div className="event-card-section event-form-section">
-        <h2 className="event-section-title">Publicity</h2>
+    <div className="event-updates-page">
+      <div className="event-updates-top-grid">
+        {/* Publicity Box */}
+        <div className="event-card-section event-form-section event-updates-panel event-publicity-card">
+          <h2 className="event-section-title">Publicity</h2>
 
-        <div
-          className="event-row-section"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          <label className="event-section-label" style={{ minWidth: '160px' }}>
-            Website Scrolling
-          </label>
-          <button
-            type="button"
-            disabled={!websiteFile}
-            onClick={() => handleSendMail('Website Scrolling', true, websiteFile)}
-            style={{
-              padding: '4px 10px',
-              marginLeft: '4px',
-              backgroundColor: websiteFile ? '#0069ab' : '#ccc',
-              color: websiteFile ? '#fff' : '#666',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: websiteFile ? 'pointer' : 'not-allowed',
-            }}
-            title={!websiteFile ? 'Upload file first' : 'Send Mail'}
-          >
-            Send Mail
-          </button>
-          <input
-            type="date"
-            value={websiteDate}
-            onChange={(e) => setWebsiteDate(e.target.value)}
-            className="event-date-input"
-          />
-          <label className="event-upload-icon" htmlFor="website-upload">
-            <CloudUpload size={14} />
-          </label>
-          <input
-            type="file"
-            id="website-upload"
-            style={{ display: 'none' }}
-            onChange={handleFileChange(setWebsiteFile)}
-          />
-          <span
-            className={`event-eye-icon${!websiteFile ? ' disabled' : ''}`}
-            onClick={() => websiteFile && handleViewFile(websiteFile)}
-          >
-            <Eye size={14} />
-          </span>
+          {[
+            { label: "Website Scrolling", value: websiteDate, setter: setWebsiteDate },
+            { label: "Newspaper Engagement", value: newspaperDate, setter: setNewspaperDate },
+            { label: "Press Report", value: pressDate, setter: setPressDate },
+          ].map((item) => (
+            <div key={item.label} className="event-row-section event-publicity-row">
+              <span className="event-publicity-label">
+                {item.label}
+              </span>
+              <div className="event-publicity-actions">
+                <div className="event-publicity-buttons">
+                  <button
+                    type="button"
+                    className="event-publicity-preview-btn"
+                    disabled
+                  >
+                    Preview
+                  </button>
+                  <button
+                    type="button"
+                    className="event-publicity-send-btn"
+                    onClick={() => handleSendMail(item.label)}
+                  >
+                    Send Mail
+                  </button>
+                  <span className="event-publicity-status">
+                    <Info size={16} /> Not Sent
+                  </span>
+                </div>
+              </div>
+              <input
+                type="date"
+                value={item.value}
+                onChange={(e) => item.setter(e.target.value)}
+                className="event-publicity-date"
+              />
+            </div>
+          ))}
         </div>
 
-        <div
-          className="event-row-section"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          <label className="event-section-label" style={{ minWidth: '160px' }}>
-            Newspaper Engagement
-          </label>
-          <button
-            type="button"
-            disabled={!newspaperFile}
-            onClick={() => handleSendMail('Newspaper Engagement', true, newspaperFile)}
-            style={{
-              padding: '4px 10px',
-              marginLeft: '4px',
-              backgroundColor: newspaperFile ? '#0069ab' : '#ccc',
-              color: newspaperFile ? '#fff' : '#666',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: newspaperFile ? 'pointer' : 'not-allowed',
-            }}
-            title={!newspaperFile ? 'Upload file first' : 'Send Mail'}
-          >
-            Send Mail
-          </button>
-          <input
-            type="date"
-            value={newspaperDate}
-            onChange={(e) => setNewspaperDate(e.target.value)}
-            className="event-date-input"
-          />
-          <label className="event-upload-icon" htmlFor="newspaper-upload">
-            <CloudUpload size={14} />
-          </label>
-          <input
-            type="file"
-            id="newspaper-upload"
-            style={{ display: 'none' }}
-            onChange={handleFileChange(setNewspaperFile)}
-          />
-          <span
-            className={`event-eye-icon${!newspaperFile ? ' disabled' : ''}`}
-            onClick={() => newspaperFile && handleViewFile(newspaperFile)}
-          >
-            <Eye size={14} />
-          </span>
-        </div>
+        <LettersPage formData={formData} setFormData={setFormData} />
+      </div>
 
-        <div
-          className="event-row-section"
-          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-        >
-          <label className="event-section-label" style={{ minWidth: '160px' }}>
-            Press Report
-          </label>
-          <button
-            type="button"
-            disabled={!pressFile}
-            onClick={() => handleSendMail('Press Report', true, pressFile)}
-            style={{
-              padding: '4px 10px',
-              marginLeft: '4px',
-              backgroundColor: pressFile ? '#0069ab' : '#ccc',
-              color: pressFile ? '#fff' : '#666',
-              border: 'none',
-              borderRadius: '4px',
-              cursor: pressFile ? 'pointer' : 'not-allowed',
-            }}
-            title={!pressFile ? 'Upload file first' : 'Send Mail'}
-          >
-            Send Mail
-          </button>
-          <input
-            type="date"
-            value={pressDate}
-            onChange={(e) => setPressDate(e.target.value)}
-            className="event-date-input"
-          />
-          <label className="event-upload-icon" htmlFor="press-upload">
-            <CloudUpload size={14} />
-          </label>
-          <input
-            type="file"
-            id="press-upload"
-            style={{ display: 'none' }}
-            onChange={handleFileChange(setPressFile)}
-          />
-          <span
-            className={`event-eye-icon${!pressFile ? ' disabled' : ''}`}
-            onClick={() => pressFile && handleViewFile(pressFile)}
-          >
-            <Eye size={14} />
-          </span>
-        </div>
+      <div className="event-card-section event-form-section event-social-links-card">
+        <h2 className="event-section-title">Social Media Links</h2>
 
         <div className="event-social-grid">
-          {(['facebook', 'x', 'instagram', 'linkedin'] as const).map((platform) => (
-            <div key={platform} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {(
+            [
+              { key: "facebook", icon: Facebook, label: "Facebook link" },
+              { key: "x", icon: X, label: "X link" },
+              { key: "instagram", icon: Instagram, label: "Instagram link" },
+              { key: "linkedin", icon: Linkedin, label: "Linkedin link" },
+            ] as const
+          ).map(({ key, icon: Icon, label }) => (
+            <div className="event-social-link-row" key={key}>
+              <span className={`event-social-icon event-social-icon-${key}`}>
+                <Icon size={key === "facebook" ? 24 : key === "instagram" ? 22 : 20} strokeWidth={key === "x" ? 2.2 : 2} />
+              </span>
               <input
                 type="text"
                 className="event-big-social-input"
-                placeholder={`${platform.charAt(0).toUpperCase() + platform.slice(1)} link`}
-                value={links[platform]}
-                style={{ width: '350px', fontSize: '14px', padding: '12px' }}
-                onChange={(e) => setLinks({ ...links, [platform]: e.target.value })}
+                placeholder={label}
+                value={links[key]}
+                onChange={(e) => setLinks({ ...links, [key]: e.target.value })}
               />
-              <span
-                className={`event-eye-icon${!links[platform] ? ' disabled' : ''}`}
-                onClick={() => openLink(links[platform])}
+              <button
+                type="button"
+                className="event-social-view-btn"
+                onClick={() => openLink(links[key])}
+                disabled={!links[key]}
+                title={`View ${key} link`}
+                aria-label={`View ${key} link`}
               >
-                <Eye size={14} />
-              </span>
+                <Eye size={16} />
+              </button>
             </div>
           ))}
         </div>
       </div>
 
-      <ResourcePerson rows={rows} setRows={setRows} />
-      <LettersPage formData={formData} setFormData={setFormData} />
+      <ResourcePerson rows={rows} setRows={setRows} showAlert={showAlert} />
+
+      <ParticipantsCard participants={participants} setParticipants={setParticipants} />
+
+      <DocumentsCard docState={docState} setDocState={setDocState} />
 
       <div className="event-section-navigation">
-        <button type="button" className="event-prev-btn" onClick={() => goToTab('finance')}>
+        <button
+          type="button"
+          className="event-prev-btn"
+          onClick={() => goToTab("finance")}
+        >
           ← Previous
         </button>
         <button
@@ -979,6 +1070,14 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
           {isSubmittingUpdates ? 'Saving...' : 'Save & Next →'}
         </button>
       </div>
+
+      <AlertModal
+        show={alertConfig.show}
+        onHide={() => setAlertConfig(prev => ({ ...prev, show: false }))}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+      />
     </div>
   );
 };

@@ -14,7 +14,6 @@ import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
 import EventDashboard from '../features/events/components/EventDashboard';
-import EventEntry from '../features/events/components/EventEntry';
 import EventPage from '../features/events/components/EventPage';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';
@@ -416,70 +415,6 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <EventDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/event-entry"
-                    element={
-                      <ProtectedRoute>
-                        <EventEntry />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workorderdashboard"
-                    element={
-                      <ProtectedRoute>
-                        <WorkOrderDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workorder"
-                    element={
-                      <ProtectedRoute>
-                        <Navigate to="/workorderdashboard" replace />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workorder/new"
-                    element={
-                      <ProtectedRoute>
-                        <WorkOrder />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workorder/:id"
-                    element={
-                      <ProtectedRoute>
-                        <WorkOrder />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workorder/:id/edit"
-                    element={
-                      <ProtectedRoute>
-                        <WorkOrder />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/resourcepersondirectorydashboard"
-                    element={
-                      <ProtectedRoute>
-                        <ResourcePersonDirectoryDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/organizationdirectorydashboard"
-                    element={
-                      <ProtectedRoute>
-                        <OrganizationDirectoryDashboard />
                       </ProtectedRoute>
                     }
                   />

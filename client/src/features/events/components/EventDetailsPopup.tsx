@@ -1,6 +1,6 @@
-import { X, Clock, Building2, Layers, MapPin } from 'lucide-react';
-import React from 'react';
-import '../styles/EventDetailsPopup.css';
+import React from "react";
+import { X, Clock, Building2, Layers, MapPin } from "lucide-react";
+import "../styles/EventDetailsPopup.css";
 
 interface EventData {
   name: string;
