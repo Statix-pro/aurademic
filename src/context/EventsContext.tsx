@@ -145,43 +145,21 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function fetchEvents() {
       try {
-        const response = await fetch(`${apiUrl}/api/events/public`);
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch events');
-        }
-
-        const data = await response.json();
+        const response = await fetch(`${apiUrl}/api/events`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = (await response.json()) as any[];
 
         const formattedEvents: EventItem[] = data.map((item: any) => ({
           id: String(item.id),
-          eventName: item.title,
-
-          // Backend category -> Frontend category
-          category:
-            item.category === 'Hackathon'
-              ? 'TECHNICAL'
-              : item.category === 'Training'
-                ? 'MANAGEMENT'
-                : item.category === 'Sports'
-                  ? 'SPORTS'
-                  : item.category === 'Cultural'
-                    ? 'CULTURAL'
-                    : item.category === 'Literary'
-                      ? 'LITERARY'
-                      : 'TECHNICAL',
-
-          description: item.description ?? '',
-          date: new Date(item.date).toLocaleDateString('en-GB'),
-          venue: item.department ?? '',
-
+          eventName: item.title || '',
+          category: 'TECHNICAL',
+          description: '',
+          date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-GB') : '',
+          venue: '',
           participation: 'Individual',
           fees: 0,
           feesUnit: 'Participant',
-
-          // Published -> Open
           status: item.status === 'Published' ? 'Open' : 'Closed',
-
           subEvents: [],
         }));
 
@@ -194,7 +172,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     }
 
     fetchEvents();
-  }, [apiUrl]);
+  }, []);
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(registrations));
@@ -271,6 +249,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
 
   const markPaymentDone = useCallback(
     (eventId: string, paymentProof: PaymentProof | null = null) => {
+      if (!paymentProof || paymentProof.billType !== 'event registration bill') {
+        return;
+      }
       setRegistrations((prev) => ({
         ...prev,
         [eventId]: {
@@ -347,3 +328,42 @@ export function useEvents() {
 
   return ctx;
 }
+
+export const isAiHackathon = (event: EventItem) => event.eventName === 'AI Hackathon 2026';
+
+export const getMultiEventStateLabel = (event: EventItem, registration?: any) => {
+  if (registration?.reviewStatus === 'selected') return 'Selected';
+  if (registration?.reviewStatus === 'rejected') return 'Rejected';
+  if (event.eventName === 'Build Battle') return 'Selected';
+  if (event.eventName === 'Idea Pitch') return 'Rejected';
+  return '';
+};
+
+export const isPayableEvent = (event: EventItem, registration: any, paymentEventId?: string) => {
+  if (registration.paymentStatus === 'paid') return false;
+  if (isAiHackathon(event)) return registration.reviewStatus === 'selected';
+  if (event.category === 'MULTI-EVENTS') {
+    const multiEventState = getMultiEventStateLabel(event, registration);
+    if (multiEventState === 'Rejected') return false;
+  }
+  return registration.formStatus === 'ready' || event.id === paymentEventId;
+};
+
+export const flattenEvents = (items: EventItem[]): EventItem[] => {
+  return items.flatMap((event) => {
+    if (event.category === 'MULTI-EVENTS') {
+      return (event.subEvents ?? []).map((subEvent) => ({
+        ...event,
+        id: subEvent.id,
+        eventName: subEvent.eventName,
+        participation: subEvent.participation,
+        fees: subEvent.fees,
+        feesUnit: subEvent.feesUnit,
+        parentEventName: event.eventName,
+        teamSize: subEvent.participation === 'Team' ? event.teamSize : undefined,
+        subEvents: undefined,
+      }));
+    }
+    return [event];
+  });
+};

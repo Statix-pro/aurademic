@@ -241,6 +241,7 @@ export interface EventItem {
   registrationStatus?: RegistrationStatus;
   subEvents?: SubEventItem[];
   parentEventName?: string;
+  deadline?: string;
 }
 
 // ─── Registration (per event) ──────────────────────────────────────────────

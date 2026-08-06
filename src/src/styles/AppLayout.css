@@ -1,0 +1,9 @@
+@reference "../index.css";
+@reference "tailwindcss";
+.app-layout-1 {
+  @apply min-h-screen overflow-hidden bg-[#eaf2fb] dark:bg-slate-900;
+}
+
+.app-layout-2 {
+  @apply min-h-screen overflow-auto bg-[#eaf2fb] dark:bg-slate-900;
+}

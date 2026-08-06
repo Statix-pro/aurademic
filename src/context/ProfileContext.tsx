@@ -2,8 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import type { PersonalDetails, ProfessionDetails } from '../types';
 import { useAuth } from '../hooks/useAuth';
 
-const STORAGE_KEY = 'ep_profile_v1';
-
 const defaultPersonal: PersonalDetails = {
   title: '',
   firstName: '',

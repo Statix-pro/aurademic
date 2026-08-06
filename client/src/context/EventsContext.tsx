@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 import { useAuth } from '../hooks/useAuth';
+import authenticityUtility from '../shared/utils/authenticityUtility';
 
 import type {
   EventItem,
@@ -147,43 +148,19 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function fetchEvents() {
       try {
-        const response = await fetch(`${apiUrl}/api/events/public`);
-
-        if (!response.ok) {
-          throw new Error('Failed to fetch events');
-        }
-
-        const data = await response.json();
+        const data = (await authenticityUtility.get('/events')) as any[];
 
         const formattedEvents: EventItem[] = data.map((item: any) => ({
           id: String(item.id),
-          eventName: item.title,
-
-          // Backend category -> Frontend category
-          category:
-            item.category === 'Hackathon'
-              ? 'TECHNICAL'
-              : item.category === 'Training'
-                ? 'MANAGEMENT'
-                : item.category === 'Sports'
-                  ? 'SPORTS'
-                  : item.category === 'Cultural'
-                    ? 'CULTURAL'
-                    : item.category === 'Literary'
-                      ? 'LITERARY'
-                      : 'TECHNICAL',
-
-          description: item.description ?? '',
-          date: new Date(item.date).toLocaleDateString('en-GB'),
-          venue: item.department ?? '',
-
+          eventName: item.title || '',
+          category: 'TECHNICAL',
+          description: '',
+          date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-GB') : '',
+          venue: '',
           participation: 'Individual',
           fees: 0,
           feesUnit: 'Participant',
-
-          // Published -> Open
           status: item.status === 'Published' ? 'Open' : 'Closed',
-
           subEvents: [],
         }));
 
@@ -196,7 +173,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     }
 
     fetchEvents();
-  }, [apiUrl]);
+  }, []);
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(registrations));

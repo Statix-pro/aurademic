@@ -1,17 +1,17 @@
-import { useMemo, useState, useEffect } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft, ChevronUp, CreditCard, Calendar, Home } from 'lucide-react'
-import { useEvents } from '../../context/EventsContext'
-import type { EventItem } from '../../types'
-import '../../styles/Accommodation.css'
+import { useMemo, useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, ChevronUp, CreditCard, Calendar, Home } from 'lucide-react';
+import { useEvents, isPayableEvent, flattenEvents } from '../../context/EventsContext';
+import type { EventItem } from '../../types';
+import '../../styles/Accommodation.css';
 
 type RoomRow = {
-  id: string
-  roomType: string
-  charge: string
-  occupants: string
-  days: string
-}
+  id: string;
+  roomType: string;
+  charge: string;
+  occupants: string;
+  days: string;
+};
 
 const ROOM_TYPES = [
   'Single Room',
@@ -20,7 +20,7 @@ const ROOM_TYPES = [
   'Dormitory',
   'AC Room',
   'Non-AC Room',
-]
+];
 
 const ROOM_CHARGES: Record<string, number> = {
   'Single Room': 1200,
@@ -29,38 +29,38 @@ const ROOM_CHARGES: Record<string, number> = {
   Dormitory: 800,
   'AC Room': 2200,
   'Non-AC Room': 1500,
-}
+};
 
-const MAX_OCCUPANTS = 4
+const MAX_OCCUPANTS = 4;
 
 function createRoom(id = Date.now().toString()): RoomRow {
-  return { id, roomType: '', charge: '', occupants: '', days: '' }
+  return { id, roomType: '', charge: '', occupants: '', days: '' };
 }
 
 function toNumber(value: string) {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
 }
 
 function getFixedCharge(roomType: string) {
-  return roomType ? ROOM_CHARGES[roomType] ?? 0 : 0
+  return roomType ? (ROOM_CHARGES[roomType] ?? 0) : 0;
 }
 
 function getOccupancyLimit() {
-  return MAX_OCCUPANTS
+  return MAX_OCCUPANTS;
 }
 
 function calcAmount(room: RoomRow) {
-  return toNumber(room.charge) * toNumber(room.occupants) * toNumber(room.days)
+  return toNumber(room.charge) * toNumber(room.occupants) * toNumber(room.days);
 }
 
 function isRoomComplete(room: RoomRow) {
-  const occupants = toNumber(room.occupants)
-  const days = toNumber(room.days)
-  const limit = getOccupancyLimit()
-  const withinLimit = !limit || occupants <= limit
+  const occupants = toNumber(room.occupants);
+  const days = toNumber(room.days);
+  const limit = getOccupancyLimit();
+  const withinLimit = !limit || occupants <= limit;
 
-  return Boolean(room.roomType && room.charge && occupants && days && withinLimit)
+  return Boolean(room.roomType && room.charge && occupants && days && withinLimit);
 }
 
 function RoomRowItem({
@@ -68,25 +68,26 @@ function RoomRowItem({
   onChange,
   isDaysReadOnly,
 }: {
-  room: RoomRow
-  onChange: (id: string, field: keyof Omit<RoomRow, 'id'>, value: string) => void
-  isDaysReadOnly?: boolean
+  room: RoomRow;
+  onChange: (id: string, field: keyof Omit<RoomRow, 'id'>, value: string) => void;
+  isDaysReadOnly?: boolean;
 }) {
   const inputCls =
-    'h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 outline-none transition focus:border-[#064675] focus:ring-2 focus:ring-[#064675]/15'
-  const amount = calcAmount(room)
-  const fixedCharge = getFixedCharge(room.roomType)
+    'h-9 w-full min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 text-sm text-slate-700 outline-none transition focus:border-[#064675] focus:ring-2 focus:ring-[#064675]/15';
+  const amount = calcAmount(room);
+  const fixedCharge = getFixedCharge(room.roomType);
 
   return (
     <tr className="accommodation-1">
       <td className="accommodation-2">
         <select
           value={room.roomType}
-          onChange={e => onChange(room.id, 'roomType', e.target.value)}
+          onChange={(e) => onChange(room.id, 'roomType', e.target.value)}
           className={inputCls}
+          aria-label="Room type"
         >
           <option value="">Select room</option>
-          {ROOM_TYPES.map(type => (
+          {ROOM_TYPES.map((type) => (
             <option key={type} value={type}>
               {type}
             </option>
@@ -107,7 +108,7 @@ function RoomRowItem({
           min="1"
           max={MAX_OCCUPANTS}
           value={room.occupants}
-          onChange={e => onChange(room.id, 'occupants', e.target.value)}
+          onChange={(e) => onChange(room.id, 'occupants', e.target.value)}
           className={inputCls}
           placeholder="Occupants"
         />
@@ -117,7 +118,7 @@ function RoomRowItem({
           type="number"
           min="1"
           value={room.days}
-          onChange={e => onChange(room.id, 'days', e.target.value)}
+          onChange={(e) => onChange(room.id, 'days', e.target.value)}
           readOnly={isDaysReadOnly}
           className={`${inputCls} ${isDaysReadOnly ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : ''}`}
           placeholder="Days"
@@ -132,150 +133,119 @@ function RoomRowItem({
         />
       </td>
     </tr>
-  )
+  );
 }
 
 export default function Accommodation() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const { getRegistration, registrations, events } = useEvents()
-  const [requireAccommodation, setRequireAccommodation] = useState<'yes' | 'no' | null>(null)
-  const [rooms, setRooms] = useState<RoomRow[]>([createRoom('1')])
-  const [checkIn, setCheckIn] = useState({ date: '', time: '' })
-  const [checkOut, setCheckOut] = useState({ date: '', time: '' })
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { getRegistration, registrations, events } = useEvents();
+  const [requireAccommodation, setRequireAccommodation] = useState<'yes' | 'no' | null>(null);
+  const [rooms, setRooms] = useState<RoomRow[]>([createRoom('1')]);
+  const [checkIn, setCheckIn] = useState({ date: '', time: '' });
+  const [checkOut, setCheckOut] = useState({ date: '', time: '' });
 
-  const isAiHackathon = (event: EventItem) => event.eventName === 'AI Hackathon 2026'
-  const getMultiEventStateLabel = (event: EventItem, registration?: any) => {
-    if (registration?.reviewStatus === 'selected') return 'Selected'
-    if (registration?.reviewStatus === 'rejected') return 'Rejected'
-    if (event.eventName === 'Build Battle') return 'Selected'
-    if (event.eventName === 'Idea Pitch') return 'Rejected'
-    return ''
-  }
-  const isPayableEvent = (event: EventItem, registration: any) => {
-    if (registration.paymentStatus === 'paid') return false
-    if (isAiHackathon(event)) return registration.reviewStatus === 'selected'
-    if (event.category === 'MULTI-EVENTS') {
-      const multiEventState = getMultiEventStateLabel(event, registration)
-      if (multiEventState === 'Rejected') return false
-    }
-    return registration.formStatus === 'ready'
-  }
-  const flattenEvents = (items: EventItem[]) => {
-    return items.flatMap(event => {
-      if (event.category === 'MULTI-EVENTS') {
-        return (event.subEvents ?? []).map(subEvent => ({
-          ...event,
-          id: `${event.id}-${subEvent.id}`,
-          eventName: subEvent.eventName,
-          parentEventName: event.eventName,
-          category: subEvent.category ?? event.category,
-          participation: subEvent.participation,
-          fees: subEvent.fees,
-          feesUnit: subEvent.feesUnit,
-          teamSize: subEvent.participation === 'Team' ? event.teamSize : undefined,
-          subEvents: undefined,
-        }))
-      }
-      return [event]
-    })
-  }
-
-  const allDisplayEvents = useMemo(() => flattenEvents(events), [events])
+  const allDisplayEvents = useMemo(() => flattenEvents(events), [events]);
   const paymentEvents = useMemo(
-    () => allDisplayEvents.filter(event => {
-      const registration = registrations[event.id]
-      return Boolean(registration && isPayableEvent(event, registration))
-    }),
+    () =>
+      allDisplayEvents.filter((event) => {
+        const registration = registrations[event.id];
+        return Boolean(registration && isPayableEvent(event, registration));
+      }),
     [allDisplayEvents, registrations],
-  )
-  const paymentTotal = paymentEvents.reduce((sum, event) => sum + event.fees, 0)
+  );
+  const paymentTotal = paymentEvents.reduce((sum, event) => sum + event.fees, 0);
 
   const dateError = useMemo(() => {
-    if (!checkIn.date || !checkOut.date) return ''
-    const start = new Date(checkIn.date)
-    const end = new Date(checkOut.date)
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return ''
-    const diffTime = end.getTime() - start.getTime()
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    if (!checkIn.date || !checkOut.date) return '';
+    const start = new Date(checkIn.date);
+    const end = new Date(checkOut.date);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return '';
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     if (diffDays <= 0) {
-      return 'Check-out date must be after check-in date.'
+      return 'Check-out date must be after check-in date.';
     }
     if (diffDays > 10) {
-      return 'Accommodation cannot exceed 10 days.'
+      return 'Accommodation cannot exceed 10 days.';
     }
-    return ''
-  }, [checkIn.date, checkOut.date])
+    return '';
+  }, [checkIn.date, checkOut.date]);
 
   const calculatedDays = useMemo(() => {
-    if (!checkIn.date || !checkOut.date) return null
-    const start = new Date(checkIn.date)
-    const end = new Date(checkOut.date)
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null
-    const diffTime = end.getTime() - start.getTime()
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    return diffDays
-  }, [checkIn.date, checkOut.date])
+    if (!checkIn.date || !checkOut.date) return null;
+    const start = new Date(checkIn.date);
+    const end = new Date(checkOut.date);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+    const diffTime = end.getTime() - start.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  }, [checkIn.date, checkOut.date]);
 
   useEffect(() => {
     if (dateError) {
-      setRooms(prev => prev.map(room => ({ ...room, days: '' })))
+      setRooms((prev) => prev.map((room) => ({ ...room, days: '' })));
     } else if (calculatedDays !== null && calculatedDays > 0 && calculatedDays <= 10) {
-      setRooms(prev => prev.map(room => ({ ...room, days: calculatedDays.toString() })))
+      setRooms((prev) => prev.map((room) => ({ ...room, days: calculatedDays.toString() })));
     }
-  }, [calculatedDays, dateError])
+  }, [calculatedDays, dateError]);
 
-  const completeRooms = useMemo(() => rooms.filter(isRoomComplete), [rooms])
-  const totalAmount = useMemo(() => completeRooms.reduce((sum, room) => sum + calcAmount(room), 0), [completeRooms])
-  const isTravelComplete = Boolean(checkIn.date && checkIn.time && checkOut.date && checkOut.time)
-  const hasOccupantLimitError = rooms.some(room => toNumber(room.occupants) > MAX_OCCUPANTS)
-  const canProceed = requireAccommodation === 'yes' && isTravelComplete && !dateError && completeRooms.length > 0
-  const showPaymentSummary = canProceed
-  const useTallOuterCard = requireAccommodation === 'yes'
+  const completeRooms = useMemo(() => rooms.filter(isRoomComplete), [rooms]);
+  const totalAmount = useMemo(
+    () => completeRooms.reduce((sum, room) => sum + calcAmount(room), 0),
+    [completeRooms],
+  );
+  const isTravelComplete = Boolean(checkIn.date && checkIn.time && checkOut.date && checkOut.time);
+  const hasOccupantLimitError = rooms.some((room) => toNumber(room.occupants) > MAX_OCCUPANTS);
+  const canProceed =
+    requireAccommodation === 'yes' && isTravelComplete && !dateError && completeRooms.length > 0;
+  const showPaymentSummary = canProceed;
+  const useTallOuterCard = requireAccommodation === 'yes';
 
   const updateRoom = (id: string, field: keyof Omit<RoomRow, 'id'>, value: string) => {
-    setRooms(prev =>
-      prev.map(room => {
-        if (room.id !== id) return room
+    setRooms((prev) =>
+      prev.map((room) => {
+        if (room.id !== id) return room;
         if (field === 'roomType') {
-          const fixedCharge = getFixedCharge(value)
+          const fixedCharge = getFixedCharge(value);
           return {
             ...room,
             roomType: value,
             charge: fixedCharge ? fixedCharge.toString() : '',
             occupants: '',
-          }
+          };
         }
-        return { ...room, [field]: value }
+        return { ...room, [field]: value };
       }),
-    )
-  }
+    );
+  };
 
   const clearRooms = () => {
-    setRooms([createRoom('1')])
-  }
+    setRooms([createRoom('1')]);
+  };
 
   const handleProceed = () => {
-    if (!canProceed) return
+    if (!canProceed) return;
 
-    const selectedRoom = completeRooms[0]
-    const roomCount = completeRooms.length
-    const roomLabel = roomCount > 1 ? `${roomCount} Rooms` : selectedRoom.roomType || 'Accommodation'
+    const selectedRoom = completeRooms[0];
+    const roomCount = completeRooms.length;
+    const roomLabel =
+      roomCount > 1 ? `${roomCount} Rooms` : selectedRoom.roomType || 'Accommodation';
 
     navigate('/payment', {
       state: {
         ...location.state,
-        selectedEvents: [],
+        selectedEvents: paymentEvents,
         accommodation: {
           optionId: selectedRoom.id,
           roomType: roomLabel,
           nights: completeRooms.reduce((sum, room) => sum + toNumber(room.days), 0) || 1,
           pricePerNight: totalAmount,
         },
-        total: totalAmount,
+        total: paymentTotal + totalAmount,
       },
-    })
-  }
+    });
+  };
 
   return (
     <div className="accommodation-7">
@@ -285,12 +255,11 @@ export default function Accommodation() {
             <button
               onClick={() => navigate('/home')}
               className="accommodation-11"
+              aria-label="Back to home"
             >
               <ArrowLeft className="accommodation-12" />
             </button>
-            <div>
-              <h2 className="accommodation-13">Event Lists</h2>
-            </div>
+            <h2 className="accommodation-13">Event Lists</h2>
           </div>
         </div>
 
@@ -312,10 +281,7 @@ export default function Accommodation() {
                   Accommodation
                 </span>
               </button>
-              <button
-                onClick={() => navigate('/payment', { state: { ...location.state, selectedEvents: paymentEvents, total: paymentTotal } })}
-                className="accommodation-23"
-              >
+              <button onClick={handleProceed} disabled={!canProceed} className="accommodation-23">
                 <span className="accommodation-24">
                   <CreditCard className="accommodation-25" />
                   Payment
@@ -352,9 +318,7 @@ export default function Accommodation() {
                 </div>
 
                 {requireAccommodation === 'no' && (
-                  <p className="accommodation-32">
-                    No accommodation details required.
-                  </p>
+                  <p className="accommodation-32">No accommodation details required.</p>
                 )}
               </div>
             </div>
@@ -383,58 +347,62 @@ export default function Accommodation() {
                 </label>
               </div>
 
-              <div className={`mt-8 grid gap-6 ${showPaymentSummary ? 'xl:grid-cols-[minmax(840px,1fr)_300px]' : ''}`}>
+              <div
+                className={`mt-8 grid gap-6 ${showPaymentSummary ? 'xl:grid-cols-[minmax(840px,1fr)_300px]' : ''}`}
+              >
                 <div className="accommodation-38">
                   <div className="accommodation-39">
                     <div className="accommodation-40">
-                      <div className="accommodation-41">
-                        Travel Information
-                      </div>
+                      <div className="accommodation-41">Travel Information</div>
                       <div className="accommodation-42">
                         <div className="accommodation-43">
-                          <span className="accommodation-44">
-                            Check-in
-                          </span>
+                          <span className="accommodation-44">Check-in</span>
                           <span className="accommodation-45">Date</span>
                           <input
                             type="date"
                             value={checkIn.date}
-                            onChange={e => setCheckIn(prev => ({ ...prev, date: e.target.value }))}
+                            onChange={(e) =>
+                              setCheckIn((prev) => ({ ...prev, date: e.target.value }))
+                            }
                             className="accommodation-46"
+                            aria-label="Check-in date"
                           />
                           <span className="accommodation-47">Time</span>
                           <input
                             type="time"
                             value={checkIn.time}
-                            onChange={e => setCheckIn(prev => ({ ...prev, time: e.target.value }))}
+                            onChange={(e) =>
+                              setCheckIn((prev) => ({ ...prev, time: e.target.value }))
+                            }
                             className="accommodation-48"
+                            aria-label="Check-in time"
                           />
                         </div>
                         <div className="accommodation-49" />
                         <div className="accommodation-50">
-                          <span className="accommodation-51">
-                            Check-out
-                          </span>
+                          <span className="accommodation-51">Check-out</span>
                           <span className="accommodation-52">Date</span>
                           <input
                             type="date"
                             value={checkOut.date}
-                            onChange={e => setCheckOut(prev => ({ ...prev, date: e.target.value }))}
+                            onChange={(e) =>
+                              setCheckOut((prev) => ({ ...prev, date: e.target.value }))
+                            }
                             className="accommodation-53"
+                            aria-label="Check-out date"
                           />
                           <span className="accommodation-54">Time</span>
                           <input
                             type="time"
                             value={checkOut.time}
-                            onChange={e => setCheckOut(prev => ({ ...prev, time: e.target.value }))}
+                            onChange={(e) =>
+                              setCheckOut((prev) => ({ ...prev, time: e.target.value }))
+                            }
                             className="accommodation-55"
+                            aria-label="Check-out time"
                           />
                         </div>
-                        {dateError && (
-                          <div className="accommodation-56">
-                            {dateError}
-                          </div>
-                        )}
+                        {dateError && <div className="accommodation-56">{dateError}</div>}
                       </div>
                     </div>
                   </div>
@@ -443,31 +411,37 @@ export default function Accommodation() {
                     <h3 className="accommodation-57">Room Details</h3>
                     {hasOccupantLimitError && (
                       <div className="accommodation-58">
-                        Maximum of team members reached.
+                        Maximum of 4 occupants per room reached.
                       </div>
                     )}
                     <div className="accommodation-59">
                       <table className="accommodation-60">
                         <thead>
                           <tr className="accommodation-61">
-                            {['Rooms', 'Charge', 'Occupants', 'Days', 'Amount'].map((header, index) => (
-                              <th
-                                key={header}
-                                className={`px-3 py-3 text-left text-sm font-semibold ${
-                                  index === 0 ? 'w-[30%]' :
-                                  index === 1 ? 'w-[16%]' :
-                                  index === 2 ? 'w-[19%]' :
-                                  index === 3 ? 'w-[16%]' :
-                                  'w-[19%]'
-                                }`}
-                              >
-                                {header}
-                              </th>
-                            ))}
+                            {['Rooms', 'Charge', 'Occupants', 'Days', 'Amount'].map(
+                              (header, index) => (
+                                <th
+                                  key={header}
+                                  className={`px-3 py-3 text-left text-sm font-semibold ${
+                                    index === 0
+                                      ? 'w-[30%]'
+                                      : index === 1
+                                        ? 'w-[16%]'
+                                        : index === 2
+                                          ? 'w-[19%]'
+                                          : index === 3
+                                            ? 'w-[16%]'
+                                            : 'w-[19%]'
+                                  }`}
+                                >
+                                  {header}
+                                </th>
+                              ),
+                            )}
                           </tr>
                         </thead>
                         <tbody className="accommodation-62">
-                          {rooms.map(room => (
+                          {rooms.map((room) => (
                             <RoomRowItem
                               key={room.id}
                               room={room}
@@ -477,6 +451,26 @@ export default function Accommodation() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                    <div className="mt-3 flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setRooms((prev) => [...prev, createRoom(Date.now().toString())])
+                        }
+                        className="px-4 py-2 text-xs font-semibold rounded-lg bg-slate-100 hover:bg-slate-200 text-[#064675] border border-slate-200 transition"
+                      >
+                        + Add Room
+                      </button>
+                      {rooms.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setRooms((prev) => prev.slice(0, -1))}
+                          className="px-4 py-2 text-xs font-semibold rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-100 transition"
+                        >
+                          Remove Last Room
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -492,12 +486,10 @@ export default function Accommodation() {
                     </div>
 
                     <div className="accommodation-69">
-                      <span className="accommodation-70">Selected Rooms ({completeRooms.length})</span>
-                      <button
-                        type="button"
-                        onClick={clearRooms}
-                        className="accommodation-71"
-                      >
+                      <span className="accommodation-70">
+                        Selected Rooms ({completeRooms.length})
+                      </span>
+                      <button type="button" onClick={clearRooms} className="accommodation-71">
                         Clear All
                       </button>
                     </div>
@@ -508,11 +500,8 @@ export default function Accommodation() {
                           Complete room details to calculate accommodation amount.
                         </div>
                       ) : (
-                        completeRooms.map(room => (
-                          <div
-                            key={room.id}
-                            className="accommodation-74"
-                          >
+                        completeRooms.map((room) => (
+                          <div key={room.id} className="accommodation-74">
                             <div className="accommodation-75">
                               <p className="accommodation-76">{room.roomType}</p>
                               <p className="accommodation-77">
@@ -520,7 +509,9 @@ export default function Accommodation() {
                               </p>
                             </div>
                             <div className="accommodation-78">
-                              <span className="accommodation-79">₹{calcAmount(room).toLocaleString()}</span>
+                              <span className="accommodation-79">
+                                ₹{calcAmount(room).toLocaleString()}
+                              </span>
                             </div>
                           </div>
                         ))
@@ -549,5 +540,5 @@ export default function Accommodation() {
         </section>
       </div>
     </div>
-  )
+  );
 }

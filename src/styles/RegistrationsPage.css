@@ -144,7 +144,10 @@
   @apply rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3;
 }
 
-.registrations-page-37 {
+.registrations-page-37,
+.registrations-page-40,
+.registrations-page-43,
+.registrations-page-46 {
   @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
 }
 
@@ -156,10 +159,6 @@
   @apply rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3;
 }
 
-.registrations-page-40 {
-  @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
-}
-
 .registrations-page-41 {
   @apply mt-1 truncate text-sm font-bold text-slate-800;
 }
@@ -168,20 +167,12 @@
   @apply rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3;
 }
 
-.registrations-page-43 {
-  @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
-}
-
 .registrations-page-44 {
   @apply mt-1 text-sm font-bold text-slate-800;
 }
 
 .registrations-page-45 {
   @apply rounded-xl border border-slate-100 bg-slate-50 px-4 py-3;
-}
-
-.registrations-page-46 {
-  @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
 }
 
 .registrations-page-47 {
@@ -260,18 +251,9 @@
   @apply bg-[#00558f] text-white;
 }
 
-.registrations-page-66 {
-  @apply px-4 py-2.5 font-semibold text-xs;
-}
-
-.registrations-page-67 {
-  @apply px-4 py-2.5 font-semibold text-xs;
-}
-
-.registrations-page-68 {
-  @apply px-4 py-2.5 font-semibold text-xs;
-}
-
+.registrations-page-66,
+.registrations-page-67,
+.registrations-page-68,
 .registrations-page-69 {
   @apply px-4 py-2.5 font-semibold text-xs;
 }
@@ -284,14 +266,8 @@
   @apply px-4 py-2.5 font-semibold text-slate-800 text-xs;
 }
 
-.registrations-page-72 {
-  @apply px-4 py-2.5 text-slate-600 text-xs;
-}
-
-.registrations-page-73 {
-  @apply px-4 py-2.5 text-slate-600 text-xs;
-}
-
+.registrations-page-72,
+.registrations-page-73,
 .registrations-page-74 {
   @apply px-4 py-2.5 text-slate-600 text-xs;
 }
@@ -355,5 +331,3 @@
 .registrations-page-89 {
   @apply mt-2 text-sm text-slate-400 max-w-sm mx-auto;
 }
-
-

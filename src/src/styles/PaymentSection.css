@@ -1,0 +1,89 @@
+@reference "../index.css";
+@reference "tailwindcss";
+.payment-section-1 {
+  @apply sticky top-4 max-w-md rounded-2xl border border-slate-100 bg-white p-5 shadow-sm dark:border-slate-700 dark:bg-slate-800;
+}
+
+.payment-section-2 {
+  @apply mb-4 flex items-center justify-between gap-3;
+}
+
+.payment-section-3 {
+  @apply flex items-center gap-2 text-sm font-bold text-slate-800 dark:text-slate-100;
+}
+
+.payment-section-4 {
+  @apply h-4 w-4 text-blue-600;
+}
+
+.payment-section-5 {
+  @apply text-xs font-medium text-red-500 hover:underline;
+}
+
+.payment-section-6 {
+  @apply space-y-2;
+}
+
+.payment-section-7 {
+  @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
+}
+
+.payment-section-8 {
+  @apply text-xs italic text-slate-400;
+}
+
+.payment-section-9 {
+  @apply flex items-start justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-900/40;
+}
+
+.payment-section-10 {
+  @apply min-w-0;
+}
+
+.payment-section-11 {
+  @apply truncate text-sm font-semibold text-slate-700 dark:text-slate-200;
+}
+
+.payment-section-12 {
+  @apply text-[10px] text-slate-400;
+}
+
+.payment-section-13 {
+  @apply flex flex-shrink-0 items-center gap-2;
+}
+
+.payment-section-14 {
+  @apply text-sm font-bold text-emerald-600;
+}
+
+.payment-section-15 {
+  @apply rounded-full p-1 text-slate-400 transition-colors hover:bg-white hover:text-red-500;
+}
+
+.payment-section-16 {
+  @apply h-3.5 w-3.5;
+}
+
+.payment-section-17 {
+  @apply mt-4 rounded-2xl bg-slate-50 px-4 py-4 dark:bg-slate-900/30;
+}
+
+.payment-section-18 {
+  @apply flex items-center justify-between text-base font-bold text-slate-800 dark:text-slate-100;
+}
+
+.payment-section-19 {
+  @apply text-blue-700 dark:text-blue-400;
+}
+
+.payment-section-20 {
+  @apply mt-4 w-full rounded-xl bg-blue-700 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-40;
+}
+
+.payment-section-21 {
+  @apply mt-2 flex items-center justify-center gap-1 text-center text-[10px] text-slate-400;
+}
+
+.payment-section-22 {
+  @apply h-3 w-3;
+}
