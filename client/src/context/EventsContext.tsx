@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 import { useAuth } from '../hooks/useAuth';
-import authenticityUtility from '../shared/utils/authenticityUtility';
 
 import type {
   EventItem,
@@ -10,8 +9,6 @@ import type {
   TeamMember,
   RegistrationDocument,
 } from '../types';
-
-const REGS_STORAGE_KEY = 'ep_registrations_v2';
 
 const SAMPLE_EVENTS: EventItem[] = [
   {
@@ -70,7 +67,12 @@ function normalizeRegistration(
         : 'unpaid',
     paymentProof: registration.paymentProof ?? null,
     document: registration.document ?? null,
-    reviewStatus: registration.reviewStatus ?? 'pending',
+    reviewStatus:
+      registration.reviewStatus === 'shortlisted' ||
+      registration.reviewStatus === 'selected' ||
+      registration.reviewStatus === 'rejected'
+        ? registration.reviewStatus
+        : 'pending',
   };
 }
 
@@ -148,21 +150,32 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function fetchEvents() {
       try {
-        const data = (await authenticityUtility.get('/events')) as any[];
+        const response = await fetch(`${apiUrl}/api/events`);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const data = (await response.json()) as any[];
 
-        const formattedEvents: EventItem[] = data.map((item: any) => ({
-          id: String(item.id),
-          eventName: item.title || '',
-          category: 'TECHNICAL',
-          description: '',
-          date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-GB') : '',
-          venue: '',
-          participation: 'Individual',
-          fees: 0,
-          feesUnit: 'Participant',
-          status: item.status === 'Published' ? 'Open' : 'Closed',
-          subEvents: [],
-        }));
+        const formattedEvents: EventItem[] = data.map((item: any) => {
+          const fees =
+            item.fees !== undefined && item.fees !== null ? Number(item.fees) : undefined;
+          const feesUnit = item.feesUnit;
+          const participation = item.participation;
+          const isContractComplete = fees !== undefined && feesUnit && participation;
+
+          return {
+            id: String(item.id),
+            eventName: item.title || '',
+            category: item.category || 'TECHNICAL',
+            description: item.description || '',
+            date: item.createdAt ? new Date(item.createdAt).toLocaleDateString('en-GB') : '',
+            venue: item.venue || '',
+            participation: participation || 'Individual',
+            fees: fees || 0,
+            feesUnit: feesUnit || 'Participant',
+            status: item.status === 'Published' && isContractComplete ? 'Open' : 'Closed',
+            subEvents: item.subEvents || [],
+            teamSize: item.teamSize,
+          };
+        });
 
         setEvents(formattedEvents);
         setIsApiOnline(true);
@@ -250,6 +263,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
 
   const markPaymentDone = useCallback(
     (eventId: string, paymentProof: PaymentProof | null = null) => {
+      if (!paymentProof || paymentProof.billType !== 'event registration bill') {
+        return;
+      }
       setRegistrations((prev) => ({
         ...prev,
         [eventId]: {
@@ -326,3 +342,42 @@ export function useEvents() {
 
   return ctx;
 }
+
+export const isAiHackathon = (event: EventItem) => event.eventName === 'AI Hackathon 2026';
+
+export const getMultiEventStateLabel = (event: EventItem, registration?: any) => {
+  if (registration?.reviewStatus === 'selected') return 'Selected';
+  if (registration?.reviewStatus === 'rejected') return 'Rejected';
+  if (event.eventName === 'Build Battle') return 'Selected';
+  if (event.eventName === 'Idea Pitch') return 'Rejected';
+  return '';
+};
+
+export const isPayableEvent = (event: EventItem, registration: any, paymentEventId?: string) => {
+  if (registration.paymentStatus === 'paid') return false;
+  if (isAiHackathon(event)) return registration.reviewStatus === 'selected';
+  if (event.category === 'MULTI-EVENTS') {
+    const multiEventState = getMultiEventStateLabel(event, registration);
+    if (multiEventState === 'Rejected') return false;
+  }
+  return registration.formStatus === 'ready' || event.id === paymentEventId;
+};
+
+export const flattenEvents = (items: EventItem[]): EventItem[] => {
+  return items.flatMap((event) => {
+    if (event.category === 'MULTI-EVENTS') {
+      return (event.subEvents ?? []).map((subEvent) => ({
+        ...event,
+        id: subEvent.id,
+        eventName: subEvent.eventName,
+        participation: subEvent.participation,
+        fees: subEvent.fees,
+        feesUnit: subEvent.feesUnit,
+        parentEventName: event.eventName,
+        teamSize: subEvent.participation === 'Team' ? event.teamSize : undefined,
+        subEvents: undefined,
+      }));
+    }
+    return [event];
+  });
+};

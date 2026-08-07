@@ -215,6 +215,7 @@ export interface RegistrationDocument {
   documentType: string;
   fileName: string;
   uploadedAt: string;
+  dataUrl?: string;
 }
 
 export interface SubEventItem {
@@ -272,7 +273,7 @@ export interface SelectedAccommodation {
   optionId: string;
   roomType: string;
   nights: number;
-  pricePerNight: number;
+  totalPrice: number;
 }
 
 // ─── Payment Summary ───────────────────────────────────────────────────────

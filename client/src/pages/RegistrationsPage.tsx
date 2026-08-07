@@ -1,18 +1,35 @@
-import { useMemo, useState } from 'react'
-import { ClipboardList, X, Calendar, MapPin, Users, CheckCircle, Eye, IndianRupee } from 'lucide-react'
-import { useEvents } from '../context/EventsContext'
-import type { EventItem, EventRegistration, PaymentProof } from '../types'
-import { CATEGORY_COLORS, CategoryIcon, getCategorySolidBgClass, getLightLabelClass } from '../components/events/EventCard'
-import '../styles/RegistrationsPage.css'
+import {
+  ClipboardList,
+  X,
+  Calendar,
+  MapPin,
+  Users,
+  CheckCircle,
+  Eye,
+  IndianRupee,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
+
+import {
+  CATEGORY_COLORS,
+  CategoryIcon,
+  getCategorySolidBgClass,
+  getLightLabelClass,
+} from '../components/events/EventCard';
+import { useEvents } from '../context/EventsContext';
+
+import type { EventItem, EventRegistration, PaymentProof } from '../types';
+
+import '../styles/RegistrationsPage.css';
 
 type FlattenedEventItem = EventItem & {
-  parentEventObj?: EventItem
-}
+  parentEventObj?: EventItem;
+};
 
 function flattenEvents(items: EventItem[]) {
-  return items.flatMap(event => {
+  return items.flatMap((event) => {
     if (event.category === 'MULTI-EVENTS') {
-      return (event.subEvents ?? []).map(subEvent => ({
+      return (event.subEvents ?? []).map((subEvent) => ({
         ...event,
         id: `${event.id}-${subEvent.id}`,
         eventName: subEvent.eventName,
@@ -24,31 +41,10 @@ function flattenEvents(items: EventItem[]) {
         feesUnit: subEvent.feesUnit,
         teamSize: subEvent.participation === 'Team' ? event.teamSize : undefined,
         subEvents: undefined,
-      }))
+      }));
     }
-    return [event]
-  })
-}
-
-const MOCK_REGISTERED_EVENT: FlattenedEventItem = {
-  id: 'mock-registered-1',
-  eventName: 'National Web Dev Hackathon (Sample)',
-  category: 'TECHNICAL',
-  description: 'Build modern web applications with cutting edge tech.',
-  date: '15/08/2026',
-  venue: 'Lab 3, CSE Block',
-  participation: 'Team',
-  teamSize: '2-4',
-  fees: 150,
-  feesUnit: 'Team',
-  status: 'Open',
-}
-
-const MOCK_PROOF: PaymentProof = {
-  billType: 'event registration bill',
-  screenshotName: 'payment_receipt.png',
-  screenshotDataUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&q=80&w=400',
-  uploadedAt: new Date().toISOString()
+    return [event];
+  });
 }
 
 const DETAIL_LABELS: Record<string, string> = {
@@ -58,33 +54,46 @@ const DETAIL_LABELS: Record<string, string> = {
   LITERARY: 'Quiz',
   MANAGEMENT: 'Business',
   'MULTI-EVENTS': 'Extended',
-}
+};
 
 function RegisteredEventRow({
   event,
+  registration,
   onViewBill,
   onViewDetails,
 }: {
-  event: FlattenedEventItem
-  onViewBill: () => void
-  onViewDetails: () => void
+  event: FlattenedEventItem;
+  registration?: EventRegistration | null;
+  onViewBill: () => void;
+  onViewDetails: () => void;
 }) {
-  const colors = CATEGORY_COLORS[event.category] ?? { pill: 'bg-slate-100 text-slate-600', icon: 'text-slate-500', bg: 'bg-slate-50' }
-  const detailLabel = DETAIL_LABELS[event.category] ?? 'Event'
-  const displayParticipationText = event.participation === 'Team' ? `Team (${event.teamSize ?? 'Varies'})` : 'Individual'
+  const colors = CATEGORY_COLORS[event.category] ?? {
+    pill: 'bg-slate-100 text-slate-600',
+    icon: 'text-slate-500',
+    bg: 'bg-slate-50',
+  };
+  const detailLabel = DETAIL_LABELS[event.category] ?? 'Event';
+  const displayParticipationText =
+    event.participation === 'Team' ? `Team (${event.teamSize ?? 'Varies'})` : 'Individual';
 
   return (
     <div className="registrations-page-1">
       {/* Col 1: Category */}
       <div className="registrations-page-2">
-        <div className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl ${getCategorySolidBgClass(event.category)}`}>
+        <div
+          className={`flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl ${getCategorySolidBgClass(event.category)}`}
+        >
           <CategoryIcon category={event.category} iconClassName="text-white" />
         </div>
         <div className="registrations-page-3">
-          <span className={`inline-flex w-fit rounded-md px-2.5 py-1 text-[11px] font-semibold leading-none ${colors.pill}`}>
+          <span
+            className={`inline-flex w-fit rounded-md px-2.5 py-1 text-[11px] font-semibold leading-none ${colors.pill}`}
+          >
             {event.category}
           </span>
-          <span className={`inline-flex w-fit rounded-md px-2.5 py-1 text-[11px] font-semibold leading-none ${getLightLabelClass(event.category)}`}>
+          <span
+            className={`inline-flex w-fit rounded-md px-2.5 py-1 text-[11px] font-semibold leading-none ${getLightLabelClass(event.category)}`}
+          >
             {detailLabel}
           </span>
         </div>
@@ -96,9 +105,7 @@ function RegisteredEventRow({
           <div className="registrations-page-6">
             <h3 className="registrations-page-7">{event.eventName}</h3>
             {event.parentEventName && (
-              <span className="registrations-page-8">
-                {event.parentEventName}
-              </span>
+              <span className="registrations-page-8">{event.parentEventName}</span>
             )}
           </div>
           <div className="registrations-page-9">
@@ -118,7 +125,18 @@ function RegisteredEventRow({
         </div>
         <div className="registrations-page-13">
           <span className="registrations-page-14">
-            Paid & Approved
+            {(() => {
+              if (!registration) return 'Not Registered';
+              if (registration.paymentStatus === 'paid') {
+                if (registration.reviewStatus === 'selected') return 'Paid & Approved';
+                if (registration.reviewStatus === 'rejected') return 'Rejected';
+                return 'Paid (Pending Review)';
+              }
+              if (registration.paymentStatus === 'processing') return 'Verification Pending';
+              if (registration.reviewStatus === 'selected') return 'Approved (Payment Required)';
+              if (registration.reviewStatus === 'rejected') return 'Rejected';
+              return 'Pending';
+            })()}
           </span>
         </div>
       </div>
@@ -143,17 +161,12 @@ function RegisteredEventRow({
         >
           <Eye className="registrations-page-22" />
         </button>
-        <button
-          type="button"
-          onClick={onViewBill}
-          className="registrations-page-23"
-          title="Bill"
-        >
+        <button type="button" onClick={onViewBill} className="registrations-page-23" title="Bill">
           <IndianRupee className="registrations-page-24" />
         </button>
       </div>
     </div>
-  )
+  );
 }
 
 function BillModal({
@@ -161,9 +174,9 @@ function BillModal({
   eventName,
   onClose,
 }: {
-  proof: PaymentProof
-  eventName: string
-  onClose: () => void
+  proof: PaymentProof;
+  eventName: string;
+  onClose: () => void;
 }) {
   return (
     <div className="registrations-page-25">
@@ -208,7 +221,7 @@ function BillModal({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function DetailField({ label, value }: { label: string; value: string }) {
@@ -217,31 +230,33 @@ function DetailField({ label, value }: { label: string; value: string }) {
       <p className="registrations-page-46">{label}</p>
       <p className="registrations-page-47">{value || '-'}</p>
     </div>
-  )
+  );
 }
 
 function ModalSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="registrations-page-48">
-      <h3 className="registrations-page-49">
-        {title}
-      </h3>
+      <h3 className="registrations-page-49">{title}</h3>
       {children}
     </section>
-  )
+  );
 }
 
-function ReadField({ label, value, className = '' }: { label: string; value: string; className?: string }) {
+function ReadField({
+  label,
+  value,
+  className = '',
+}: {
+  label: string;
+  value: string;
+  className?: string;
+}) {
   return (
     <div className={`flex flex-col gap-2 ${className}`}>
       <label className="registrations-page-50">{label}</label>
-      <input
-        readOnly
-        value={value}
-        className="registrations-page-51"
-      />
+      <input readOnly value={value} className="registrations-page-51" />
     </div>
-  )
+  );
 }
 
 function EventDetailsModal({
@@ -249,44 +264,47 @@ function EventDetailsModal({
   registration,
   onClose,
 }: {
-  event: FlattenedEventItem
-  registration?: EventRegistration
-  onClose: () => void
+  event: FlattenedEventItem;
+  registration?: EventRegistration;
+  onClose: () => void;
 }) {
-  const document = registration?.document
-  const teamMembers = registration?.teamMembers ?? []
-  const participation = event.participation === 'Team' ? `Team (${event.teamSize ?? 'Varies'})` : 'Individual'
-  const colors = CATEGORY_COLORS[event.category] ?? { pill: 'bg-slate-700 text-white', bg: 'bg-slate-50', icon: 'text-slate-500' }
+  const document = registration?.document;
+  const teamMembers = registration?.teamMembers ?? [];
+  const participation =
+    event.participation === 'Team' ? `Team (${event.teamSize ?? 'Varies'})` : 'Individual';
+  const colors = CATEGORY_COLORS[event.category] ?? {
+    pill: 'bg-slate-700 text-white',
+    bg: 'bg-slate-50',
+    icon: 'text-slate-500',
+  };
 
   return (
     <div className="registrations-page-52">
       <div className="registrations-page-53">
-        
         {/* Header */}
         <div className="registrations-page-54">
           <div className="registrations-page-55">
-            <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${getCategorySolidBgClass(event.category)}`}>
+            <div
+              className={`flex h-12 w-12 items-center justify-center rounded-2xl ${getCategorySolidBgClass(event.category)}`}
+            >
               <CategoryIcon category={event.category} iconClassName="text-white" />
             </div>
             <div>
               <h2 className="registrations-page-56">{event.eventName}</h2>
-              <span className={`mt-1 inline-flex rounded-md px-2.5 py-0.5 text-[11px] font-semibold ${colors.pill}`}>
+              <span
+                className={`mt-1 inline-flex rounded-md px-2.5 py-0.5 text-[11px] font-semibold ${colors.pill}`}
+              >
                 {event.category}
               </span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="registrations-page-57"
-            aria-label="Close"
-          >
+          <button onClick={onClose} className="registrations-page-57" aria-label="Close">
             <X className="registrations-page-58" />
           </button>
         </div>
 
         {/* Content */}
         <div className="registrations-page-59">
-          
           {/* Event Details Section */}
           <ModalSection title="Event Details">
             <div className="registrations-page-60">
@@ -295,7 +313,10 @@ function EventDetailsModal({
               <ReadField label="Date" value={event.date} />
               <ReadField label="Venue" value={event.venue} />
               <ReadField label="Participation" value={participation} />
-              <ReadField label="Fees" value={`₹${event.fees.toLocaleString()} / ${event.feesUnit}`} />
+              <ReadField
+                label="Fees"
+                value={`₹${event.fees.toLocaleString()} / ${event.feesUnit}`}
+              />
             </div>
           </ModalSection>
 
@@ -305,7 +326,11 @@ function EventDetailsModal({
               <ReadField label="Coordinator Name" value="Dr. Anitha R" />
               <ReadField label="Designation" value="Assistant Professor" />
               <ReadField label="Mobile" value="+91 98765 43210" />
-              <ReadField label="Department" value="Computer Science & Engineering" className="registrations-page-62" />
+              <ReadField
+                label="Department"
+                value="Computer Science & Engineering"
+                className="registrations-page-62"
+              />
               <ReadField label="Email" value="anitha.r@ksrct.ac.in" />
             </div>
           </ModalSection>
@@ -325,10 +350,12 @@ function EventDetailsModal({
                       </tr>
                     </thead>
                     <tbody className="registrations-page-70">
-                      {teamMembers.map(member => (
+                      {teamMembers.map((member) => (
                         <tr key={member.id}>
                           <td className="registrations-page-71">{member.name || '-'}</td>
-                          <td className="registrations-page-72">{member.registeredMailId || '-'}</td>
+                          <td className="registrations-page-72">
+                            {member.registeredMailId || '-'}
+                          </td>
                           <td className="registrations-page-73">{member.organization || '-'}</td>
                           <td className="registrations-page-74">{member.role || '-'}</td>
                         </tr>
@@ -337,9 +364,7 @@ function EventDetailsModal({
                   </table>
                 </div>
               ) : (
-                <div className="registrations-page-75">
-                  No team member details saved.
-                </div>
+                <div className="registrations-page-75">No team member details saved.</div>
               )}
             </ModalSection>
           )}
@@ -350,34 +375,37 @@ function EventDetailsModal({
               <div className="registrations-page-76">
                 <ReadField label="Registration Document" value={document.documentType} />
                 <ReadField label="Document File" value={document.fileName} />
-                <ReadField label="Submitted At" value={new Date(document.uploadedAt).toLocaleString()} />
+                <ReadField
+                  label="Submitted At"
+                  value={new Date(document.uploadedAt).toLocaleString()}
+                />
               </div>
             ) : (
-              <div className="registrations-page-77">
-                No registration document uploaded.
-              </div>
+              <div className="registrations-page-77">No registration document uploaded.</div>
             )}
           </ModalSection>
-
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export default function RegistrationsPage() {
-  const { events, registrations } = useEvents()
-  const [openBill, setOpenBill] = useState<{ eventName: string; proof: PaymentProof } | null>(null)
-  const [openDetails, setOpenDetails] = useState<{ event: FlattenedEventItem; registration?: EventRegistration } | null>(null)
+  const { events, registrations } = useEvents();
+  const [openBill, setOpenBill] = useState<{ eventName: string; proof: PaymentProof } | null>(null);
+  const [openDetails, setOpenDetails] = useState<{
+    event: FlattenedEventItem;
+    registration?: EventRegistration;
+  } | null>(null);
 
   const registeredEvents = useMemo(() => {
-    return flattenEvents(events).filter(event => {
-      const registration = registrations[event.id]
-      return Boolean(registration?.paymentStatus === 'paid' && registration.paymentProof)
-    })
-  }, [events, registrations])
+    return flattenEvents(events).filter((event) => {
+      const registration = registrations[event.id];
+      return Boolean(registration && registration.formStatus === 'ready');
+    });
+  }, [events, registrations]);
 
-  const useTallOuterCard = registeredEvents.length > 1
+  const useTallOuterCard = registeredEvents.length > 1;
 
   return (
     <div className="registrations-page-78">
@@ -391,24 +419,22 @@ export default function RegistrationsPage() {
           </div>
         </div>
 
-        <section className={`${useTallOuterCard ? 'h-[calc(100vh-190px)] min-h-[620px] overflow-auto' : 'min-h-[260px]'} rounded-[22px] bg-white p-6 text-slate-800 shadow-sm border border-slate-300 dark:bg-slate-800 dark:border-slate-700`}>
+        <section
+          className={`${useTallOuterCard ? 'h-[calc(100vh-190px)] min-h-[620px] overflow-auto' : 'min-h-[260px]'} rounded-[22px] bg-white p-6 text-slate-800 shadow-sm border border-slate-300 dark:bg-slate-800 dark:border-slate-700`}
+        >
           <div className="registrations-page-84">
-            <RegisteredEventRow
-              event={MOCK_REGISTERED_EVENT}
-              onViewDetails={() => setOpenDetails({ event: MOCK_REGISTERED_EVENT, registration: { eventId: MOCK_REGISTERED_EVENT.id, formStatus: 'ready', paymentStatus: 'paid', paymentProof: MOCK_PROOF, reviewStatus: 'selected' } })}
-              onViewBill={() => setOpenBill({ eventName: MOCK_REGISTERED_EVENT.eventName, proof: MOCK_PROOF })}
-            />
-            {registeredEvents.map(event => {
-              const registration = registrations[event.id]
-              const proof = registration?.paymentProof
+            {registeredEvents.map((event) => {
+              const registration = registrations[event.id];
+              const proof = registration?.paymentProof;
               return (
                 <RegisteredEventRow
                   key={event.id}
                   event={event}
+                  registration={registration}
                   onViewDetails={() => setOpenDetails({ event, registration })}
                   onViewBill={() => proof && setOpenBill({ eventName: event.eventName, proof })}
                 />
-              )
+              );
             })}
           </div>
         </section>
@@ -430,5 +456,5 @@ export default function RegistrationsPage() {
         />
       )}
     </div>
-  )
+  );
 }

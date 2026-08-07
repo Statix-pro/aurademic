@@ -4,8 +4,6 @@ import { useAuth } from '../hooks/useAuth';
 
 import type { PersonalDetails, ProfessionDetails } from '../types';
 
-const STORAGE_KEY = 'ep_profile_v1';
-
 const defaultPersonal: PersonalDetails = {
   title: '',
   firstName: '',
@@ -67,6 +65,21 @@ interface ProfileData {
   profession: ProfessionDetails;
 }
 
+const INSTITUTION_TYPES = [
+  'College Student',
+  'Faculty Members',
+  'School Student',
+  'School Teacher',
+  'Research Scholar',
+];
+
+const ORGANIZATION_TYPES = [
+  'Scientist',
+  'Government Official',
+  'Industry Professional',
+  'Other Profession',
+];
+
 interface ProfileContextType {
   personal: PersonalDetails;
   profession: ProfessionDetails;
@@ -75,6 +88,7 @@ interface ProfileContextType {
   profileCompletion: number;
   isPersonalComplete: boolean;
   isProfessionComplete: boolean;
+  persistError: string | null;
 }
 
 const ProfileContext = createContext<ProfileContextType | null>(null);
@@ -82,6 +96,7 @@ const ProfileContext = createContext<ProfileContextType | null>(null);
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const storageKey = user ? `ep_profile_${user.email}` : 'ep_profile_guest';
+  const [persistError, setPersistError] = useState<string | null>(null);
 
   const [personal, setPersonal] = useState<PersonalDetails>(() => {
     const initialPersonal = {
@@ -118,8 +133,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       localStorage.setItem(storageKey, JSON.stringify({ personal, profession }));
-    } catch (err) {
-      void err;
+      setPersistError(null);
+    } catch (err: any) {
+      setPersistError(err instanceof Error ? err.message : String(err));
     }
   }, [personal, profession, storageKey]);
 
@@ -144,25 +160,13 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const isProfessionComplete = (() => {
     if (!profession.professionType) return false;
     const type = profession.professionType;
-    if (
-      [
-        'College Student',
-        'Faculty Members',
-        'School Student',
-        'School Teacher',
-        'Research Scholar',
-      ].includes(type)
-    ) {
+    if (INSTITUTION_TYPES.includes(type)) {
       return !!profession.institution;
     }
     if (type === 'Alumni') {
       return !!(profession.registerNumber && profession.department && profession.graduationYear);
     }
-    if (
-      ['Scientist', 'Government Official', 'Industry Professional', 'Other Profession'].includes(
-        type,
-      )
-    ) {
+    if (ORGANIZATION_TYPES.includes(type)) {
       return !!profession.organization;
     }
     if (type === 'General Public') {
@@ -186,16 +190,8 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
       personal.pin,
     ];
     const type = profession.professionType;
-    let profFields: any[] = [];
-    if (
-      [
-        'College Student',
-        'Faculty Members',
-        'School Student',
-        'School Teacher',
-        'Research Scholar',
-      ].includes(type)
-    ) {
+    let profFields: unknown[] = [];
+    if (INSTITUTION_TYPES.includes(type)) {
       profFields = [
         profession.professionType,
         profession.institution,
@@ -209,11 +205,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         profession.department,
         profession.graduationYear,
       ];
-    } else if (
-      ['Scientist', 'Government Official', 'Industry Professional', 'Other Profession'].includes(
-        type,
-      )
-    ) {
+    } else if (ORGANIZATION_TYPES.includes(type)) {
       profFields = [
         profession.professionType,
         profession.organization,
@@ -240,6 +232,7 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
         profileCompletion,
         isPersonalComplete,
         isProfessionComplete,
+        persistError,
       }}
     >
       {children}

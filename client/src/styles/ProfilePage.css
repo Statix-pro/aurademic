@@ -1,78 +1,42 @@
 @reference "../index.css";
-@reference "tailwindcss";
-.profile-page-1 {
+
+.profile-label-text {
   @apply text-sm font-semibold text-slate-800;
 }
 
-.profile-page-2 {
+.profile-section-card {
   @apply md:col-span-12 rounded-2xl border border-blue-100 bg-[#eaf2fb]/60 p-5 shadow-sm;
 }
 
-.profile-page-3 {
+.profile-grid-container {
   @apply grid gap-x-5 gap-y-4 md:grid-cols-12 items-center;
 }
 
-.profile-page-4 {
+.profile-bold-label {
   @apply md:col-span-2 text-sm font-bold text-[#00558f];
 }
 
-.profile-page-5 {
+.profile-select-wrapper {
   @apply md:col-span-10 relative w-full;
 }
 
-.profile-page-6 {
+.profile-select-input {
   @apply profile-input pr-10 appearance-none bg-white shadow-sm;
 }
 
-.profile-page-7 {
+.profile-select-chevron {
   @apply absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#00558f] pointer-events-none;
 }
 
-.profile-page-8 {
-  @apply md:col-span-2 flex flex-col gap-1.5;
+.profile-form-group {
+  @apply flex flex-col gap-1.5;
 }
 
-.profile-page-9 {
+.profile-input-label {
   @apply text-xs font-semibold text-slate-500;
 }
 
-.profile-page-10 {
-  @apply profile-input bg-white shadow-sm;
-}
-
-.profile-page-11 {
-  @apply md:col-span-6 flex flex-col gap-1.5;
-}
-
-.profile-page-12 {
-  @apply text-xs font-semibold text-slate-500;
-}
-
-.profile-page-13 {
-  @apply profile-input bg-white shadow-sm;
-}
-
-.profile-page-14 {
-  @apply md:col-span-2 flex flex-col gap-1.5;
-}
-
-.profile-page-15 {
-  @apply text-xs font-semibold text-slate-500;
-}
-
-.profile-page-16 {
-  @apply profile-input bg-white shadow-sm;
-}
-
-.profile-page-17 {
-  @apply md:col-span-2 flex flex-col gap-1.5;
-}
-
-.profile-page-18 {
-  @apply text-xs font-semibold text-slate-500;
-}
-
-.profile-page-19 {
+.profile-field-input {
   @apply profile-input bg-white shadow-sm;
 }
 
@@ -835,5 +799,3 @@
 .profile-page-209 {
   @apply text-sm font-semibold text-slate-500;
 }
-
-

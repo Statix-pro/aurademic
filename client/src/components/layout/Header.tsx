@@ -6,11 +6,7 @@ import { useEvents } from '../../context/EventsContext';
 import { useAuth } from '../../hooks/useAuth';
 import '../../styles/Header.css';
 
-interface HeaderProps {
-  onMenuClick?: () => void;
-}
-
-export default function Header({ onMenuClick }: HeaderProps) {
+export default function Header() {
   const { user, logout } = useAuth();
   const { apiUrl, updateApiUrl, isApiOnline } = useEvents();
   const navigate = useNavigate();

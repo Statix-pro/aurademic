@@ -1,59 +1,74 @@
-import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../hooks/useAuth'
-import { useProfile } from '../context/ProfileContext'
-import { useEvents } from '../context/EventsContext'
-import { User, ClipboardList, Star, Award, ChevronRight } from 'lucide-react'
-import EventCard from '../components/events/EventCard'
-import type { EventItem } from '../types'
-import '../styles/HomePage.css'
+import { User, ClipboardList, Star, Award, ChevronRight } from 'lucide-react';
+import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import EventCard from '../components/events/EventCard';
+import { useEvents } from '../context/EventsContext';
+import { useProfile } from '../context/ProfileContext';
+import { useAuth } from '../hooks/useAuth';
+
+import type { EventItem } from '../types';
+import '../styles/HomePage.css';
 
 export default function HomePage() {
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const { profileCompletion } = useProfile()
-  const { events, registrations } = useEvents()
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { profileCompletion } = useProfile();
+  const { events, registrations } = useEvents();
 
-  const filteredEvents = useMemo(() => events.filter(event => event.status !== 'Closed'), [events])
+  const filteredEvents = useMemo(
+    () => events.filter((event) => event.status !== 'Closed'),
+    [events],
+  );
 
   const handleViewDetails = (event: EventItem) => {
-    navigate('/event-register', { state: { event } })
-  }
+    navigate('/event-register', { state: { event } });
+  };
 
   // Calculate registrations completion percentage dynamically
   const regProgress = useMemo(() => {
-    const startedRegs = Object.values(registrations)
-    if (startedRegs.length === 0) return 0
+    const startedRegs = Object.values(registrations);
+    if (startedRegs.length === 0) return 0;
     const sum = startedRegs.reduce((acc, r) => {
-      let val = 0
-      if (r.formStatus === 'ready') val += 50
-      if (r.paymentStatus === 'paid') val += 50
-      else if (r.paymentStatus === 'processing') val += 25
-      return acc + val
-    }, 0)
-    return Math.round(sum / startedRegs.length)
-  }, [registrations])
+      let val = 0;
+      if (r.formStatus === 'ready') val += 50;
+      if (r.paymentStatus === 'paid') val += 50;
+      else if (r.paymentStatus === 'processing') val += 25;
+      return acc + val;
+    }, 0);
+    return Math.round(sum / startedRegs.length);
+  }, [registrations]);
 
   // Calculate feedback completion percentage dynamically
   const feedbackProgress = useMemo(() => {
-    const registeredCount = events.filter(e => registrations[e.id] && registrations[e.id].formStatus === 'ready').length
-    if (registeredCount === 0) return 0
+    const registeredEvents = events.filter(
+      (e) => registrations[e.id] && registrations[e.id].formStatus === 'ready',
+    );
+    const registeredCount = registeredEvents.length;
+    if (registeredCount === 0) return 0;
     try {
-      const stored = localStorage.getItem('ep_feedbacks')
-      const fbs = stored ? JSON.parse(stored) : []
-      return Math.min(100, Math.round((fbs.length / registeredCount) * 100))
+      const stored = localStorage.getItem('ep_feedbacks');
+      const fbs = stored ? (JSON.parse(stored) as { eventId: string }[]) : [];
+      const validFbsCount = fbs.filter(
+        (fb) => registrations[fb.eventId]?.formStatus === 'ready',
+      ).length;
+      return Math.min(100, Math.round((validFbsCount / registeredCount) * 100));
     } catch {
-      return 0
+      return 0;
     }
-  }, [events, registrations])
+  }, [events, registrations]);
 
   // Calculate certificate completion percentage dynamically
   const certProgress = useMemo(() => {
-    const registeredCount = events.filter(e => registrations[e.id] && registrations[e.id].formStatus === 'ready').length
-    if (registeredCount === 0) return 0
-    const paidCount = events.filter(e => registrations[e.id] && registrations[e.id].paymentStatus === 'paid').length
-    return Math.round((paidCount / registeredCount) * 100)
-  }, [events, registrations])
+    const registeredCount = events.filter(
+      (e) => registrations[e.id] && registrations[e.id].formStatus === 'ready',
+    ).length;
+    if (registeredCount === 0) return 0;
+    const paidCount = events.filter(
+      (e) => registrations[e.id] && registrations[e.id].paymentStatus === 'paid',
+    ).length;
+    return Math.round((paidCount / registeredCount) * 100);
+  }, [events, registrations]);
 
   const boxes = [
     {
@@ -96,7 +111,7 @@ export default function HomePage() {
       percentage: certProgress,
       path: '/certificates',
     },
-  ]
+  ];
 
   return (
     <div className="home-page-1">
@@ -111,7 +126,7 @@ export default function HomePage() {
         {/* 4 Boxes Grid */}
         <div className="home-page-5">
           {boxes.map((box, idx) => {
-            const Icon = box.icon
+            const Icon = box.icon;
             return (
               <button
                 key={idx}
@@ -121,18 +136,16 @@ export default function HomePage() {
                 {/* Main Content Row */}
                 <div className="home-page-6">
                   {/* Left Circle Icon */}
-                  <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${box.color} shadow-sm transition-transform duration-300 group-hover:scale-105`}>
+                  <div
+                    className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${box.color} shadow-sm transition-transform duration-300 group-hover:scale-105`}
+                  >
                     <Icon className="home-page-7" />
                   </div>
 
                   {/* Text Details */}
                   <div className="home-page-8">
-                    <h3 className="home-page-9">
-                      {box.title}
-                    </h3>
-                    <p className="home-page-10">
-                      {box.description}
-                    </p>
+                    <h3 className="home-page-9">{box.title}</h3>
+                    <p className="home-page-10">{box.description}</p>
                   </div>
 
                   {/* Arrow Icon */}
@@ -153,7 +166,7 @@ export default function HomePage() {
                   </div>
                 </div>
               </button>
-            )
+            );
           })}
         </div>
 
@@ -170,8 +183,13 @@ export default function HomePage() {
               </div>
             ) : (
               <div className="home-page-22">
-                {filteredEvents.map(event => (
-                  <EventCard key={event.id} event={event} onViewDetails={handleViewDetails} compact={true} />
+                {filteredEvents.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    onViewDetails={handleViewDetails}
+                    compact={true}
+                  />
                 ))}
               </div>
             )}
@@ -179,5 +197,5 @@ export default function HomePage() {
         </div>
       </div>
     </div>
-  )
+  );
 }

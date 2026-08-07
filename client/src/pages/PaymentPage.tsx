@@ -28,7 +28,7 @@ export default function PaymentPage() {
   const [screenshotDataUrl, setScreenshotDataUrl] = useState('');
 
   const eventsTotal = selectedEvents.reduce((sum: number, ev) => sum + ev.fees, 0);
-  const accommodationTotal = accommodation ? accommodation.pricePerNight : 0;
+  const accommodationTotal = accommodation ? accommodation.totalPrice : 0;
   const payableTotal =
     Number.isFinite(total) && total > 0 ? total : eventsTotal + accommodationTotal;
   const hasPayableItems = selectedEvents.length > 0 || Boolean(accommodation);
@@ -48,7 +48,7 @@ export default function PaymentPage() {
         id: `accommodation-${accommodation.optionId}`,
         title: accommodation.roomType || 'Accommodation',
         subtitle: `${accommodation.nights} nights`,
-        amount: accommodation.pricePerNight,
+        amount: accommodation.totalPrice,
       });
     }
 
@@ -81,17 +81,21 @@ export default function PaymentPage() {
   };
 
   const handleCompletePayment = () => {
-    const proof: PaymentProof | null =
-      billType === 'event registration bill' && screenshotDataUrl
-        ? {
-            billType,
-            screenshotName,
-            screenshotDataUrl,
-            uploadedAt: new Date().toISOString(),
-          }
-        : null;
+    const proof: PaymentProof | null = screenshotDataUrl
+      ? {
+          billType,
+          screenshotName,
+          screenshotDataUrl,
+          uploadedAt: new Date().toISOString(),
+        }
+      : null;
 
-    selectedEvents.forEach((event) => markPaymentDone(event.id, proof));
+    if (billType === 'event registration bill' && proof) {
+      selectedEvents.forEach((event) => markPaymentDone(event.id, proof));
+    } else if (billType === 'accommodation bill' && proof) {
+      localStorage.setItem('accommodation_payment_proof', JSON.stringify(proof));
+    }
+
     navigate(selectedEvents.length > 0 ? '/registrations' : '/home', { replace: true });
   };
 

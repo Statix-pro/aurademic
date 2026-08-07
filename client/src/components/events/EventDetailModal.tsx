@@ -35,6 +35,7 @@ export default function EventDetailModal({ event, onClose, onRegister }: Props) 
             </h2>
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close event details"
             className="event-detail-modal-5"
@@ -79,10 +80,11 @@ export default function EventDetailModal({ event, onClose, onRegister }: Props) 
         </div>
 
         <div className="event-detail-modal-15">
-          <button onClick={onClose} className="event-detail-modal-16">
+          <button type="button" onClick={onClose} className="event-detail-modal-16">
             Close
           </button>
           <button
+            type="button"
             onClick={() => {
               onClose();
               onRegister(event);

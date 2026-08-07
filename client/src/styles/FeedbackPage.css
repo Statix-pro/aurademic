@@ -1,5 +1,4 @@
 @reference "../index.css";
-@reference "tailwindcss";
 .feedback-page-1 {
   @apply min-h-[calc(100vh-48px)] bg-[#eaf2fb] dark:bg-slate-900/80 px-4 py-8 sm:px-6 md:py-10;
 }
@@ -107,5 +106,3 @@
 .feedback-page-27 {
   @apply w-full rounded-xl bg-blue-600 py-3 text-sm font-semibold text-white shadow-md hover:bg-blue-700 transition-colors;
 }
-
-

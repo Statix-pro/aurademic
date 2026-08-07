@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import { useProfile } from '../context/ProfileContext';
+import { useAuth } from '../hooks/useAuth';
 import '../styles/ProfilePage.css';
 
 const PROFESSIONS = [
@@ -143,12 +144,12 @@ function InstitutionBox({
   disabled?: boolean;
 }) {
   return (
-    <div className="profile-page-2">
-      <div className="profile-page-3">
-        <div className="profile-page-4">{isSchool ? 'School Name' : 'Institution'}</div>
-        <div className="profile-page-5">
+    <div className="profile-section-card">
+      <div className="profile-grid-container">
+        <div className="profile-bold-label">{isSchool ? 'School Name' : 'Institution'}</div>
+        <div className="profile-select-wrapper">
           <select
-            className="profile-page-6"
+            className="profile-select-input"
             value={isSchool ? profession.school || '' : profession.institution || ''}
             disabled={disabled}
             onChange={(e) => {
@@ -165,43 +166,43 @@ function InstitutionBox({
               <option key={item}>{item}</option>
             ))}
           </select>
-          <ChevronDown className="profile-page-7" />
+          <ChevronDown className="profile-select-chevron" />
         </div>
 
-        <div className="profile-page-8">
-          <label className="profile-page-9">Category</label>
+        <div className="profile-form-group md:col-span-2">
+          <label className="profile-input-label">Category</label>
           <input
-            className="profile-page-10"
+            className="profile-field-input"
             value={profession.institutionCategory || ''}
             disabled={disabled}
             onChange={(e) => updateProfession({ institutionCategory: e.target.value })}
             placeholder="Category"
           />
         </div>
-        <div className="profile-page-11">
-          <label className="profile-page-12">Address</label>
+        <div className="profile-form-group md:col-span-6">
+          <label className="profile-input-label">Address</label>
           <input
-            className="profile-page-13"
+            className="profile-field-input"
             value={profession.institutionAddress || ''}
             disabled={disabled}
             onChange={(e) => updateProfession({ institutionAddress: e.target.value })}
             placeholder="Address"
           />
         </div>
-        <div className="profile-page-14">
-          <label className="profile-page-15">City</label>
+        <div className="profile-form-group md:col-span-2">
+          <label className="profile-input-label">City</label>
           <input
-            className="profile-page-16"
+            className="profile-field-input"
             value={profession.institutionCity || ''}
             disabled={disabled}
             onChange={(e) => updateProfession({ institutionCity: e.target.value })}
             placeholder="City"
           />
         </div>
-        <div className="profile-page-17">
-          <label className="profile-page-18">State</label>
+        <div className="profile-form-group md:col-span-2">
+          <label className="profile-input-label">State</label>
           <input
-            className="profile-page-19"
+            className="profile-field-input"
             value={profession.institutionState || ''}
             disabled={disabled}
             onChange={(e) => updateProfession({ institutionState: e.target.value })}
@@ -288,49 +289,75 @@ function calculateAge(dateString: string) {
 }
 
 export default function ProfilePage() {
-  const { personal, profession, updatePersonal, updateProfession } = useProfile();
+  const {
+    personal,
+    profession,
+    updatePersonal,
+    updateProfession,
+    isPersonalComplete,
+    persistError,
+  } = useProfile();
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   const [showProfessionStep, setShowProfessionStep] = useState(false);
   const [showProfessionDetails, setShowProfessionDetails] = useState(
     () => !!profession.professionType,
   );
-  const [personalStatus, setPersonalStatus] = useState<'initial' | 'submitted' | 'editing'>(() => {
-    try {
-      const stored = localStorage.getItem('ep_personal_status');
-      if (stored === 'submitted' || stored === 'editing') return stored;
-    } catch (err) {
-      void err;
-    }
-    return personal.firstName ? 'submitted' : 'initial';
-  });
 
+  const personalStatusKey = user ? `ep_personal_status_${user.email}` : 'ep_personal_status_guest';
+  const professionalStatusKey = user
+    ? `ep_professional_status_${user.email}`
+    : 'ep_professional_status_guest';
+
+  const [personalStatus, setPersonalStatus] = useState<'initial' | 'submitted' | 'editing'>(
+    'initial',
+  );
   const [professionalStatus, setProfessionalStatus] = useState<'initial' | 'submitted' | 'editing'>(
-    () => {
-      try {
-        const stored = localStorage.getItem('ep_professional_status');
-        if (stored === 'submitted' || stored === 'editing') return stored;
-      } catch (err) {
-        void err;
-      }
-      return profession.professionType ? 'submitted' : 'initial';
-    },
+    'initial',
   );
 
   useEffect(() => {
     try {
-      localStorage.setItem('ep_personal_status', personalStatus);
-    } catch (err) {
-      void err;
+      const stored = localStorage.getItem(personalStatusKey);
+      if (stored === 'submitted' || stored === 'editing') {
+        setPersonalStatus(stored);
+      } else {
+        setPersonalStatus(personal.firstName ? 'submitted' : 'initial');
+      }
+    } catch {
+      setPersonalStatus(personal.firstName ? 'submitted' : 'initial');
     }
-  }, [personalStatus]);
+  }, [personalStatusKey, personal.firstName]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('ep_professional_status', professionalStatus);
+      const stored = localStorage.getItem(professionalStatusKey);
+      if (stored === 'submitted' || stored === 'editing') {
+        setProfessionalStatus(stored);
+      } else {
+        setProfessionalStatus(profession.professionType ? 'submitted' : 'initial');
+      }
+    } catch {
+      setProfessionalStatus(profession.professionType ? 'submitted' : 'initial');
+    }
+  }, [professionalStatusKey, profession.professionType]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(personalStatusKey, personalStatus);
     } catch (err) {
       void err;
     }
-  }, [professionalStatus]);
+  }, [personalStatus, personalStatusKey]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(professionalStatusKey, professionalStatus);
+    } catch (err) {
+      void err;
+    }
+  }, [professionalStatus, professionalStatusKey]);
 
   const photoRef = useRef<HTMLInputElement>(null);
   const idRef = useRef<HTMLInputElement>(null);
@@ -343,12 +370,20 @@ export default function ProfilePage() {
 
   const displayAge = personal.age || calculateAge(personal.dateOfBirth);
 
+  const MAX_FILE_SIZE = 1.5 * 1024 * 1024; // 1.5MB
+
   const handlePhotoChange = useCallback(
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
+      setUploadError(null);
+      if (file.size > MAX_FILE_SIZE) {
+        setUploadError(`The file "${file.name}" is too large. Maximum allowed size is 1.5MB.`);
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (ev) => updatePersonal({ photograph: ev.target?.result as string });
+      reader.onerror = () => setUploadError('Failed to read photo file.');
       reader.readAsDataURL(file);
     },
     [updatePersonal],
@@ -358,22 +393,20 @@ export default function ProfilePage() {
     (e: ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
+      setUploadError(null);
+      if (file.size > MAX_FILE_SIZE) {
+        setUploadError(`The file "${file.name}" is too large. Maximum allowed size is 1.5MB.`);
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (ev) => updateProfession({ idCard: ev.target?.result as string });
+      reader.onerror = () => setUploadError('Failed to read ID card file.');
       reader.readAsDataURL(file);
     },
     [updateProfession],
   );
 
   const professionFields = (() => {
-    const handleIdChange = (e: ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (ev) => updateProfession({ idCard: ev.target?.result as string });
-      reader.readAsDataURL(file);
-    };
-
     const isSubmitted = professionalStatus === 'submitted';
 
     switch (profession.professionType) {
@@ -969,6 +1002,20 @@ export default function ProfilePage() {
         </section>
 
         <section className="profile-page-142">
+          {(persistError || uploadError) && (
+            <div className="mb-4 rounded-xl bg-red-50 border border-red-200 p-4 text-sm text-red-700 flex flex-col gap-1">
+              {persistError && (
+                <div>
+                  <strong>Storage Error:</strong> {persistError}
+                </div>
+              )}
+              {uploadError && (
+                <div>
+                  <strong>Upload Error:</strong> {uploadError}
+                </div>
+              )}
+            </div>
+          )}
           {!showProfessionStep ? (
             <div className="profile-page-143">
               <div className="profile-page-144">
@@ -1175,9 +1222,13 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={() => {
-                      if (personalStatus === 'initial') setPersonalStatus('submitted');
-                      else if (personalStatus === 'submitted') setPersonalStatus('editing');
-                      else setPersonalStatus('submitted');
+                      if (personalStatus === 'initial') {
+                        if (isPersonalComplete) setPersonalStatus('submitted');
+                      } else if (personalStatus === 'submitted') {
+                        setPersonalStatus('editing');
+                      } else {
+                        if (isPersonalComplete) setPersonalStatus('submitted');
+                      }
                     }}
                     className="profile-page-200"
                   >
