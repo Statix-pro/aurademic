@@ -3034,10 +3034,26 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       });
 
       // authenticityUtility's response interceptor already unwraps to the response body.
+      // Finance answers with `success: true`, expenditure with `status: 'success'` — so
+      // only an explicit failure flag counts as an error, never a missing one.
       const payload = (response as any) || {};
+      if (payload.success === false || payload.status === 'error') {
+        showAlert(
+          payload.message || 'Failed to export the CSV file. Please try again.',
+          'error',
+          'Export Failed',
+        );
+        return;
+      }
+
       const fetchedItems: Record<string, any>[] = Array.isArray(payload.data) ? payload.data : [];
       const lineItems: Record<string, any[]> = payload.lineItems || {};
       const truncated = Boolean(payload.pagination?.truncated);
+      // Server-side counts: what the export endpoint actually returned and the cap it
+      // applied. The client-side chain below narrows further, so these must be reported
+      // instead of the post-filter row count.
+      const serverRowCap = Number(payload.pagination?.maxRows) || 0;
+      const serverExported = Number(payload.pagination?.exported) || fetchedItems.length;
 
       const stageVisibleItems = isAllProposalsTab
         ? fetchedItems
@@ -3045,10 +3061,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       const exportRows = applyDisplayFilters(stageVisibleItems);
 
       if (!exportRows.length) {
+        // Beneficiary / amount-band / stage-visibility filtering runs here, after the
+        // server cap. When the cap bound the fetch, records matching these filters can
+        // sit beyond it — so say that rather than claiming the view is empty.
         showAlert(
-          'There are no records in the current view to export.',
-          'info',
-          'Nothing to Export',
+          truncated
+            ? `The server returned the first ${serverExported} of ${payload.pagination?.total ?? serverExported} records and none of them match the current filters. Narrow the fiscal year, status or search filters and try again.`
+            : 'There are no records in the current view to export.',
+          truncated ? 'warning' : 'info',
+          truncated ? 'Partial Export' : 'Nothing to Export',
         );
         return;
       }
@@ -3074,8 +3095,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       downloadCsv(result.filename, result.content);
 
       if (truncated) {
+        const capLabel = serverRowCap ? `${serverRowCap} records` : `${serverExported} records`;
         showAlert(
-          `This export was capped at ${exportRows.length} records. Narrow the filters to export the remainder.`,
+          `The server capped this export at ${capLabel} out of ${payload.pagination?.total ?? serverExported} matching the queue filters, and ${exportRows.length} of them matched the current view. Narrow the fiscal year, status or search filters to export the remainder.`,
           'warning',
           'Partial Export',
         );
@@ -3220,7 +3242,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     onClick={handleExportCsv}
                     disabled={exportingCsv}
                     title="Export the currently filtered list as CSV"
-                    aria-label="Export CSV"
+                    aria-busy={exportingCsv}
                   >
                     <Download size={15} />
                     <span>{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
@@ -3386,7 +3408,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                         title={
                           exportingCsv ? 'Exporting…' : 'Export the currently filtered list as CSV'
                         }
-                        aria-label="Export CSV"
+                        aria-label={exportingCsv ? 'Exporting CSV' : 'Export CSV'}
+                        aria-busy={exportingCsv}
                       >
                         <Download size={17} />
                       </button>

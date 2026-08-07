@@ -6707,7 +6707,12 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
          ELSE 1
        END,
        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.resubmittedAt')), '') DESC,
-       er.created_at DESC
+       er.created_at DESC,
+       -- created_at is a second-precision TIMESTAMP, so requests raised in the same
+       -- second tie. Without a unique final key the LIMIT/OFFSET order is undefined
+       -- between pages, which makes the CSV export (10 pages of 100) repeat some rows
+       -- and drop others.
+       er.id DESC
      LIMIT ? OFFSET ?`,
     [statusStageScope, statusStageScope, ...whereParams, limit, offset],
   );

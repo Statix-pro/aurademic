@@ -1320,6 +1320,9 @@ const expenditureController = {
       });
 
       return res.status(200).json({
+        // `status` keeps this in line with the rest of the expenditure module; `success`
+        // satisfies the project-wide response contract.
+        success: true,
         status: 'success',
         data: queue.items,
         lineItems: queue.lineItems,

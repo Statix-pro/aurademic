@@ -236,13 +236,24 @@ const formatExpenditureProposalType = (record: Record<string, any>) => {
   return '';
 };
 
-const getLinkedFinanceRef = (record: Record<string, any>) =>
-  String(
-    record?.finance_request_ref ||
-      record?.financeRequestRef ||
-      record?.finance_proposal_ref ||
-      (record?.finance_request_id ? `#F-${record.finance_request_id}` : ''),
+// FALLBACK: the server joins `finance_request_refs` for the canonical ref, so the id
+// branch only fires for a finance request with no ref row. It must not synthesize a
+// `#F-…`-shaped string — the canonical form is `#F-<fiscalYear>-<id padded to 4>` and a
+// half-built one can't be looked up. Remove once every finance request has a ref row.
+const getLinkedFinanceRef = (record: Record<string, any>) => {
+  const ref = String(
+    record?.finance_request_ref || record?.financeRequestRef || record?.finance_proposal_ref || '',
   ).trim();
+
+  if (ref) {
+    return ref;
+  }
+
+  const legacyFinanceId = Number(record?.finance_request_id);
+  return Number.isFinite(legacyFinanceId) && legacyFinanceId > 0
+    ? `Finance ID ${legacyFinanceId}`
+    : '';
+};
 
 const expenditureCsvExportMapper = (
   rows: Record<string, any>[],

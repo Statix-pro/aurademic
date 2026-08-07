@@ -9,18 +9,44 @@
 export type CsvCell = string | number | null | undefined;
 
 /**
+ * Text cells that a spreadsheet would evaluate as a formula (`=`, `+`, `@`, or a
+ * leading `-` that isn't a plain number, plus tab/CR starts) get a leading
+ * apostrophe so Excel and Sheets treat them as literal text. Numbers are exempt
+ * so amount columns still add up.
+ */
+const neutralizeCsvFormula = (value: CsvCell, stringValue: string): string => {
+  if (typeof value === 'number') {
+    return stringValue;
+  }
+
+  if (!/^[=+@\t\r]/.test(stringValue) && !/^-/.test(stringValue)) {
+    return stringValue;
+  }
+
+  // A genuine negative number ("-1500", "-1500.50") is safe to leave alone.
+  if (stringValue.startsWith('-') && Number.isFinite(Number(stringValue))) {
+    return stringValue;
+  }
+
+  return `'${stringValue}`;
+};
+
+/**
  * Wraps a value in quotes when it contains a comma, quote, or newline, and
- * doubles any embedded quotes (RFC 4180).
+ * doubles any embedded quotes (RFC 4180). Formula-leading text is neutralized
+ * first so an exported cell can never execute in a spreadsheet.
  */
 export const escapeCsvValue = (value: CsvCell): string => {
   if (value === null || value === undefined) {
     return '';
   }
 
-  const stringValue = typeof value === 'number' ? String(value) : String(value);
-  if (stringValue === '') {
+  const rawValue = String(value);
+  if (rawValue === '') {
     return '';
   }
+
+  const stringValue = neutralizeCsvFormula(value, rawValue);
 
   if (/[",\r\n]/.test(stringValue)) {
     return `"${stringValue.replace(/"/g, '""')}"`;

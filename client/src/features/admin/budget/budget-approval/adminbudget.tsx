@@ -898,9 +898,24 @@ const AdminBudget: React.FC = () => {
 
     // authenticityUtility's response interceptor already unwraps to the response body.
     const payload = (response as any) || {};
+    if (payload.success === false) {
+      showAlert(
+        payload.message || 'Failed to export the CSV file. Please try again.',
+        'error',
+        'Export Failed',
+      );
+      return;
+    }
+
     const fetchedItems: BudgetRequestItem[] = Array.isArray(payload.data) ? payload.data : [];
     const lineItems: Record<string, any[]> = payload.lineItems || {};
     const truncated = Boolean(payload.pagination?.truncated);
+    // Server-side counts: the cap the endpoint applied and how many rows it returned.
+    // `exportItems` below is the client-narrowed subset, so it must not be reported as
+    // the cap.
+    const serverRowCap = Number(payload.pagination?.maxRows) || 0;
+    const serverExported = Number(payload.pagination?.exported) || fetchedItems.length;
+    const serverTotal = Number(payload.pagination?.total) || serverExported;
 
     // Mirror the list's client-side narrowing so the file matches the visible view.
     const beneficiaryScoped =
@@ -918,10 +933,14 @@ const AdminBudget: React.FC = () => {
         : beneficiaryScoped;
 
     if (!exportItems.length) {
+      // The beneficiary narrowing above runs after the server cap, so a capped fetch can
+      // leave matching proposals beyond the returned window.
       showAlert(
-        'There are no proposals in the current view to export.',
-        'info',
-        'Nothing to Export',
+        truncated
+          ? `The server returned the first ${serverExported} of ${serverTotal} proposals and none of them match the current filters. Narrow the fiscal year, status or search filters and try again.`
+          : 'There are no proposals in the current view to export.',
+        truncated ? 'warning' : 'info',
+        truncated ? 'Partial Export' : 'Nothing to Export',
       );
       return;
     }
@@ -1056,8 +1075,9 @@ const AdminBudget: React.FC = () => {
     );
 
     if (truncated) {
+      const capLabel = serverRowCap || serverExported;
       showAlert(
-        `This export was capped at ${exportItems.length} proposals. Narrow the filters to export the remainder.`,
+        `The server capped this export at ${capLabel} proposals out of ${serverTotal} matching the queue filters, and ${exportItems.length} of them matched the current view. Narrow the fiscal year, status or search filters to export the remainder.`,
         'warning',
         'Partial Export',
       );
@@ -1570,7 +1590,7 @@ const AdminBudget: React.FC = () => {
                     onClick={handleExportCsv}
                     disabled={exportingCsv}
                     title="Export the currently filtered list as CSV"
-                    aria-label="Export CSV"
+                    aria-busy={exportingCsv}
                   >
                     <Download size={15} />
                     <span>{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>

@@ -4811,7 +4811,12 @@ const financeModel = {
            ELSE 1
          END,
          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.resubmittedAt')), '') DESC,
-         fr.created_at DESC
+         fr.created_at DESC,
+         -- created_at is a second-precision TIMESTAMP, so requests raised in the same
+         -- second tie. Without a unique final key the LIMIT/OFFSET order is undefined
+         -- between pages, which makes the CSV export (10 pages of 100) repeat some rows
+         -- and drop others.
+         fr.id DESC
        LIMIT ? OFFSET ?`,
       [statusStageScope, statusStageScope, ...whereParams, limit, offset],
     );

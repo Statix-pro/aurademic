@@ -797,34 +797,46 @@ export async function listQueueForExport({ moduleKey, stage, actor, filters = {}
     const items = [];
     let total = 0;
     let statusCounts;
-
-    for (let page = 1; ; page += 1) {
-      const result = await moduleConfig.adapter.listRecordsForQueue(
-        normalizedStage,
-        { ...baseFilters, page, limit: EXPORT_PAGE_SIZE },
-        { tx: conn },
-      );
-
-      const pageItems = Array.isArray(result?.items) ? result.items : [];
-      if (page === 1) {
-        total = Number(result?.total || 0);
-        statusCounts = result?.statusCounts;
-      }
-
-      items.push(...pageItems);
-
-      if (pageItems.length < EXPORT_PAGE_SIZE || items.length >= EXPORT_MAX_ROWS) {
-        break;
-      }
-    }
-
-    const exportedItems = items.slice(0, EXPORT_MAX_ROWS);
-
+    let exportedItems = [];
     let lineItems = {};
-    if (typeof moduleConfig.adapter.listLineItemsForExport === 'function') {
-      const recordIds = exportedItems.map((row) => toPositiveInt(row?.id)).filter(Boolean);
-      lineItems =
-        (await moduleConfig.adapter.listLineItemsForExport(recordIds, { tx: conn })) || {};
+
+    // The pages, and the line-item fetch that follows them, read inside one read-only
+    // transaction so they all see the same snapshot. Without it a decision taken while
+    // the export is paging shifts the OFFSET window under us, so a record can land in
+    // the file twice or not at all.
+    await conn.beginTransaction();
+
+    try {
+      for (let page = 1; ; page += 1) {
+        const result = await moduleConfig.adapter.listRecordsForQueue(
+          normalizedStage,
+          { ...baseFilters, page, limit: EXPORT_PAGE_SIZE },
+          { tx: conn },
+        );
+
+        const pageItems = Array.isArray(result?.items) ? result.items : [];
+        if (page === 1) {
+          total = Number(result?.total || 0);
+          statusCounts = result?.statusCounts;
+        }
+
+        items.push(...pageItems);
+
+        if (pageItems.length < EXPORT_PAGE_SIZE || items.length >= EXPORT_MAX_ROWS) {
+          break;
+        }
+      }
+
+      exportedItems = items.slice(0, EXPORT_MAX_ROWS);
+
+      if (typeof moduleConfig.adapter.listLineItemsForExport === 'function') {
+        const recordIds = exportedItems.map((row) => toPositiveInt(row?.id)).filter(Boolean);
+        lineItems =
+          (await moduleConfig.adapter.listLineItemsForExport(recordIds, { tx: conn })) || {};
+      }
+    } finally {
+      // Read-only: nothing to commit, and rolling back releases the snapshot.
+      await conn.rollback();
     }
 
     return {
