@@ -3,6 +3,7 @@ import '../styles/EventForm.css';
 import { Eye, Plus, Trash2, CloudUpload } from 'lucide-react';
 
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { safeOpen } from '../../../shared/utils/safeUrl';
 
 // --- Letters Section ---
 
@@ -321,7 +322,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
   };
 
   const openLink = (url: string): void => {
-    if (url) window.open(url, '_blank');
+    safeOpen(url);
   };
 
   // --- Drag & Drop handlers ---
@@ -556,7 +557,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
                     className=""
                     onClick={() => {
                       if (row.uploadedFile) {
-                        window.open(row.uploadedFile, '_blank');
+                        safeOpen(row.uploadedFile);
                       } else {
                         alert('No file uploaded yet!');
                       }
@@ -668,7 +669,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
   };
 
   const openLink = (link: string): void => {
-    if (link) window.open(link, '_blank');
+    safeOpen(link);
   };
 
   const isValidEmail = (email: string): boolean => {

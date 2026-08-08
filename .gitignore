@@ -20,3 +20,6 @@ build/
 *.log
 
 .claude
+# Observability runtime data (logs + browser telemetry/replays)
+server/logs/
+server/observability-data/

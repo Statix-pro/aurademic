@@ -1,6 +1,8 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 
+import { reportClientError } from '../observability/telemetry';
+
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 interface AuthenticityUtility extends AxiosInstance {
@@ -60,6 +62,18 @@ authenticityUtility.interceptors.response.use(
     return response.data;
   },
   (error: AxiosError) => {
+    // Report server-side failures (5xx) and network errors to the
+    // observability backend, correlated by the X-Request-Id the server set.
+    const status = error.response?.status;
+    if (!status || status >= 500) {
+      reportClientError({
+        source: 'api-request',
+        message: `${error.config?.method?.toUpperCase() || 'REQUEST'} ${error.config?.url || ''} failed: ${status || error.message}`,
+        stack: error.stack,
+        requestId: (error.response?.headers?.['x-request-id'] as string | undefined) || null,
+      });
+    }
+
     // Handle 401 Unauthorized errors - session expired on server
     if (error.response?.status === 401) {
       performLogout();

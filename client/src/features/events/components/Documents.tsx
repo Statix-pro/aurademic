@@ -3,6 +3,7 @@ import '../styles/EventForm.css';
 import { CloudUpload, Eye, Plus, Trash2 } from 'lucide-react';
 
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { safeOpen } from '../../../shared/utils/safeUrl';
 
 interface ParticipantType {
   value: string;
@@ -261,7 +262,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
               type="button"
               className="icon-btn"
               style={{ marginLeft: '8px' }}
-              onClick={() => feedback.url && window.open(feedback.url, '_blank')}
+              onClick={() => safeOpen(feedback.url)}
               disabled={!feedback.url}
             >
               <Eye size={16} />
@@ -307,7 +308,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
                 type="button"
                 className="icon-btn"
                 style={{ marginLeft: '8px' }}
-                onClick={() => yt.url && window.open(yt.url, '_blank')}
+                onClick={() => safeOpen(yt.url)}
                 disabled={!yt.url}
               >
                 <Eye size={16} />

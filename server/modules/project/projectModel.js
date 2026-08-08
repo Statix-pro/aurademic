@@ -31,13 +31,15 @@ const researchProjectModel = {
         ),
       );
 
-      const columns = Object.keys(filteredData).join(', ');
-      const values = Object.values(filteredData)
-        .map((value) => (typeof value === 'string' ? `'${value}'` : value))
-        .join(', ');
+      // Column names come from the fixed validProjectData whitelist above, so they
+      // are safe to interpolate. Values are user-controlled and MUST be bound as
+      // parameterized placeholders to prevent SQL injection.
+      const columnNames = Object.keys(filteredData);
+      const columns = columnNames.map((column) => `\`${column}\``).join(', ');
+      const placeholders = columnNames.map(() => '?').join(', ');
 
-      const query = `INSERT INTO research_projects (${columns}) VALUES (${values})`;
-      const [result] = await db.query(query);
+      const query = `INSERT INTO research_projects (${columns}) VALUES (${placeholders})`;
+      const [result] = await db.query(query, Object.values(filteredData));
       return result;
     } catch (error) {
       throw new Error(`Error creating research project: ${error.message}`);

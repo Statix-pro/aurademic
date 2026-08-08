@@ -11,6 +11,7 @@ import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
+import ObservabilityPage from '../features/admin/observability/ObservabilityPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
 import EventDashboard from '../features/events/components/EventDashboard';
@@ -332,6 +333,14 @@ function App() {
                       <AdminRoute>
                         <ProjectFormOptions />
                       </AdminRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/observability"
+                    element={
+                      <SuperAdminRoute>
+                        <ObservabilityPage />
+                      </SuperAdminRoute>
                     }
                   />
                   <Route

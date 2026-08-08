@@ -1,7 +1,7 @@
 import express from 'express';
 
 import journalController from './journalController.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js'; // Add this import
+import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
 import upload from '../../middleware/uploadMiddleware.js';
 
 const router = express.Router();
@@ -33,6 +33,9 @@ router.post('/journals/:id/status-updates', journalController.createStatusUpdate
 router.get('/journals/:id/status-updates', journalController.getStatusUpdates);
 router.put(
   '/status-updates/:statusUpdateId/admin-reply',
+  // Posting an official admin reply must require admin-workflow permission,
+  // matching the gated /api/admin equivalent (not just any authenticated user).
+  permissionMiddleware(['admin_dashboard.approve', 'admin_dashboard.manage']),
   journalController.updateStatusUpdateAdminReply,
 );
 

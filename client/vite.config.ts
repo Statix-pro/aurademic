@@ -10,5 +10,9 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
+    // Generate source maps for production so the server can resolve minified
+    // stack traces. 'hidden' = maps are created on disk but the bundles do NOT
+    // contain a sourceMappingURL comment → maps stay private on the server.
+    sourcemap: 'hidden',
   },
 });
