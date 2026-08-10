@@ -90,6 +90,15 @@ export const formatDateForCsv = (value: unknown): string => {
     return '';
   }
 
+  // A date-only string ("2026-08-10", what `<input type="date">` and MySQL DATE columns
+  // produce) is parsed by Date as UTC midnight but read back in local time, which lands a
+  // day early for anyone behind UTC. Reformat the parts directly instead of round-tripping.
+  const dateOnlyMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value).trim());
+  if (dateOnlyMatch) {
+    const [, year, month, day] = dateOnlyMatch;
+    return `${day}.${month}.${year}`;
+  }
+
   const date = value instanceof Date ? value : new Date(String(value));
   if (Number.isNaN(date.getTime())) {
     return '';

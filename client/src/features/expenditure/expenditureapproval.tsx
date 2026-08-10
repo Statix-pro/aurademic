@@ -231,6 +231,10 @@ interface BillFileRecord {
   stored_name?: string | null;
   mime_type?: string | null;
   source_finance_annexure_id?: number | null;
+  // Bulk transaction files only: the mode the file was prepared for and, for the
+  // Excel modes, the bank template it came from.
+  transaction_type?: string | null;
+  bank_code?: string | null;
 }
 interface ApprovedBudgetOption {
   budgetLineId: number | null;
@@ -454,7 +458,60 @@ const PAYMENT_MODE_OPTIONS = [
   'Not Applicable',
 ];
 const PAYMENT_STATUS_OPTIONS = ['Paid', 'Pending', 'Processing', 'Cancelled'];
-const BULK_NEFT_TEMPLATE_VERSION = '2026-04-11';
+const BULK_TRANSACTION_TEMPLATE_VERSION = '2026-04-11';
+// NEFT/RTGS/UPI are uploaded on the bank's Excel template; DD is a physical
+// instrument, so its scan can be any file format.
+const BULK_TRANSACTION_TYPES = ['NEFT', 'RTGS', 'UPI', 'DD'] as const;
+type BulkTransactionType = (typeof BULK_TRANSACTION_TYPES)[number];
+const EXCEL_ONLY_BULK_TRANSACTION_TYPES: BulkTransactionType[] = ['NEFT', 'RTGS', 'UPI'];
+const isExcelOnlyBulkTransactionType = (type: BulkTransactionType) =>
+  EXCEL_ONLY_BULK_TRANSACTION_TYPES.includes(type);
+const isExcelFileName = (name: string) => /\.(xlsx|xls)$/i.test(name.trim());
+// Mirrors EXCEL_FILE_EXTENSIONS / DD_FILE_EXTENSIONS in expenditureController.js. Keep in
+// sync: a file that passes here but fails there costs the user the whole submission.
+const EXCEL_BULK_TRANSACTION_EXTENSIONS = ['.xlsx', '.xls'];
+const DD_BULK_TRANSACTION_EXTENSIONS = [
+  ...EXCEL_BULK_TRANSACTION_EXTENSIONS,
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.tif',
+  '.tiff',
+  '.doc',
+  '.docx',
+];
+const getAllowedBulkTransactionExtensions = (type: BulkTransactionType) =>
+  isExcelOnlyBulkTransactionType(type)
+    ? EXCEL_BULK_TRANSACTION_EXTENSIONS
+    : DD_BULK_TRANSACTION_EXTENSIONS;
+const hasAllowedExtension = (fileName: string, allowedExtensions: string[]) => {
+  const normalized = fileName.trim().toLowerCase();
+  return allowedExtensions.some((extension) => normalized.endsWith(extension));
+};
+
+// Each bank publishes its own Excel layout for bulk payouts.
+const BULK_TRANSACTION_BANKS = [
+  { value: 'AXIS', label: 'Axis Bank' },
+  { value: 'DBS', label: 'DBS' },
+] as const;
+type BulkTransactionBank = (typeof BULK_TRANSACTION_BANKS)[number]['value'];
+const resolveBulkTransactionType = (value: unknown): BulkTransactionType => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  return BULK_TRANSACTION_TYPES.find((type) => type === normalized) ?? BULK_TRANSACTION_TYPES[0];
+};
+const resolveBulkTransactionBank = (value: unknown): BulkTransactionBank => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  return (
+    BULK_TRANSACTION_BANKS.find((bank) => bank.value === normalized)?.value ??
+    BULK_TRANSACTION_BANKS[0].value
+  );
+};
 const isCashPaymentMode = (mode: unknown) =>
   ['cash', 'online transfer'].includes(
     String(mode || '')
@@ -980,7 +1037,9 @@ const ExpenditureApproval: React.FC = () => {
   const [payeeLookupResults, setPayeeLookupResults] = useState<PayeeLookupResult[]>([]);
   const [isPayeeLookupOpen, setIsPayeeLookupOpen] = useState(false);
   const [isPayeeLookupLoading, setIsPayeeLookupLoading] = useState(false);
-  const [showBulkNEFT, setShowBulkNEFT] = useState<boolean>(false);
+  const [showBulkTransaction, setShowBulkTransaction] = useState<boolean>(false);
+  const [bulkTransactionType, setBulkTransactionType] = useState<BulkTransactionType>('NEFT');
+  const [bulkTransactionBank, setBulkTransactionBank] = useState<BulkTransactionBank>('AXIS');
   const [paymentDetails, setPaymentDetails] = useState({
     mode: '',
     refNo: '',
@@ -988,9 +1047,10 @@ const ExpenditureApproval: React.FC = () => {
     status: 'Pending',
     debitAccount: '',
   });
-  const bulkNeftInputRef = useRef<HTMLInputElement>(null);
-  const [bulkNeftFile, setBulkNeftFile] = useState<File | null>(null);
-  const [existingBulkNeftFile, setExistingBulkNeftFile] = useState<BillFileRecord | null>(null);
+  const bulkTransactionInputRef = useRef<HTMLInputElement>(null);
+  const [bulkTransactionFile, setBulkTransactionFile] = useState<File | null>(null);
+  const [existingBulkTransactionFile, setExistingBulkTransactionFile] =
+    useState<BillFileRecord | null>(null);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
   const [uploadedPaymentProofs, setUploadedPaymentProofs] = useState<File[]>([]);
   const [existingPaymentProofs, setExistingPaymentProofs] = useState<BillFileRecord[]>([]);
@@ -1232,7 +1292,7 @@ const ExpenditureApproval: React.FC = () => {
   useEffect(() => {
     if (!submittedRequestIdFromState) {
       setExistingPayeeBills([]);
-      setExistingBulkNeftFile(null);
+      setExistingBulkTransactionFile(null);
       setIsReturnedWorkflowRequest(false);
       setLoadedWorkflowStatus('');
       setLoadedCurrentStage('');
@@ -1563,9 +1623,17 @@ const ExpenditureApproval: React.FC = () => {
           status: String(record.payment_status || 'Pending'),
           debitAccount: String(record.payment_debit_account || ''),
         });
-        setShowBulkNEFT(Boolean(record.bulk_neft_file));
-        setExistingBulkNeftFile(record.bulk_neft_file || null);
-        setBulkNeftFile(null);
+        // LEGACY: bulk_neft_file is the pre-rename response key. Remove once the
+        // server no longer returns it.
+        const loadedBulkTransactionFile: BillFileRecord | null =
+          record.bulk_transaction_file || record.bulk_neft_file || null;
+        setShowBulkTransaction(Boolean(loadedBulkTransactionFile));
+        setExistingBulkTransactionFile(loadedBulkTransactionFile);
+        setBulkTransactionFile(null);
+        setBulkTransactionType(
+          resolveBulkTransactionType(loadedBulkTransactionFile?.transaction_type),
+        );
+        setBulkTransactionBank(resolveBulkTransactionBank(loadedBulkTransactionFile?.bank_code));
         setShowDebitAccountDropdown(Boolean(record.payment_debit_account));
         setExistingPayeeBills(
           Array.isArray(record.bill_files)
@@ -3447,33 +3515,53 @@ const ExpenditureApproval: React.FC = () => {
     e.target.value = '';
   };
 
-  const handleBulkNeftUpload = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleBulkTransactionUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
     if (!file) {
-      setBulkNeftFile(null);
+      setBulkTransactionFile(null);
       return;
     }
 
-    const lowerName = file.name.toLowerCase();
-    const isExcelFile = lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls');
-
-    if (!isExcelFile) {
-      setBulkNeftFile(null);
-      if (bulkNeftInputRef.current) {
-        bulkNeftInputRef.current.value = '';
+    const allowedExtensions = getAllowedBulkTransactionExtensions(bulkTransactionType);
+    if (!hasAllowedExtension(file.name, allowedExtensions)) {
+      setBulkTransactionFile(null);
+      if (bulkTransactionInputRef.current) {
+        bulkTransactionInputRef.current.value = '';
       }
-      showAlert('Bulk NEFT upload accepts only Excel files (.xlsx or .xls).', 'warning');
+      showAlert(
+        `${bulkTransactionType} bulk transaction accepts only ${allowedExtensions.join(', ')} files.`,
+        'warning',
+      );
       return;
     }
 
-    setBulkNeftFile(file);
+    setBulkTransactionFile(file);
   };
 
-  const handleDownloadBulkNeftTemplate = async () => {
+  // Switching from DD to an Excel-only mode invalidates a non-Excel upload, so drop it.
+  const handleBulkTransactionTypeChange = (nextType: BulkTransactionType) => {
+    if (nextType === bulkTransactionType) return;
+    setBulkTransactionType(nextType);
+
+    if (!isExcelOnlyBulkTransactionType(nextType)) return;
+
+    const selectedName = bulkTransactionFile?.name || existingBulkTransactionFile?.original_name;
+    if (selectedName && !isExcelFileName(selectedName)) {
+      removeBulkTransactionFile();
+      showAlert(
+        `${nextType} accepts only Excel files, so the uploaded file was removed. Upload the ${nextType} template instead.`,
+        'warning',
+      );
+    }
+  };
+
+  const handleDownloadBulkTransactionTemplate = async () => {
     try {
       const token = localStorage.getItem('token');
       const response = await fetch(
-        `${authenticityUtility.getBaseURL()}/api/expenditure/templates/bulk-neft`,
+        `${authenticityUtility.getBaseURL()}/api/expenditure/templates/bulk-transaction?bank=${encodeURIComponent(
+          bulkTransactionBank,
+        )}&type=${encodeURIComponent(bulkTransactionType)}`,
         {
           method: 'GET',
           headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -3488,7 +3576,8 @@ const ExpenditureApproval: React.FC = () => {
       const contentDisposition = response.headers.get('Content-Disposition') || '';
       const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
       const filename =
-        filenameMatch?.[1] || `bulk-neft-template-v${BULK_NEFT_TEMPLATE_VERSION}.xls`;
+        filenameMatch?.[1] ||
+        `bulk-transaction-${bulkTransactionBank.toLowerCase()}-template-v${BULK_TRANSACTION_TEMPLATE_VERSION}.xls`;
       const objectUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
 
@@ -3499,16 +3588,16 @@ const ExpenditureApproval: React.FC = () => {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(objectUrl);
     } catch (error) {
-      console.error('Bulk NEFT template download error:', error);
-      showAlert('Unable to download the Bulk NEFT template right now.', 'error');
+      console.error('Bulk transaction template download error:', error);
+      showAlert('Unable to download the bulk transaction template right now.', 'error');
     }
   };
 
-  const removeBulkNeftFile = () => {
-    setBulkNeftFile(null);
-    setExistingBulkNeftFile(null);
-    if (bulkNeftInputRef.current) {
-      bulkNeftInputRef.current.value = '';
+  const removeBulkTransactionFile = () => {
+    setBulkTransactionFile(null);
+    setExistingBulkTransactionFile(null);
+    if (bulkTransactionInputRef.current) {
+      bulkTransactionInputRef.current.value = '';
     }
   };
 
@@ -3908,36 +3997,99 @@ const ExpenditureApproval: React.FC = () => {
   };
 
   const renderPayeeDetails = () => {
-    if (showBulkNEFT) {
+    if (showBulkTransaction) {
+      const isExcelOnlyType = isExcelOnlyBulkTransactionType(bulkTransactionType);
+      const hasBulkTransactionFile = Boolean(bulkTransactionFile || existingBulkTransactionFile);
+
       return (
         <div className="payee-details-card">
           <div className="payee-details-header">
-            <h5 className="payee-details-title">Bulk NEFT</h5>
+            <h5 className="payee-details-title">Bulk Transaction</h5>
             <div className="payee-details-actions">
               <button
                 className="payee-toolbar-btn payee-toolbar-btn-secondary"
-                onClick={() => setShowBulkNEFT(false)}
+                onClick={() => setShowBulkTransaction(false)}
               >
                 Back To Payee Details
               </button>
             </div>
           </div>
 
+          <div className="bulk-transaction-controls">
+            <div
+              className="bulk-transaction-segmented"
+              role="radiogroup"
+              aria-label="Bulk transaction mode"
+            >
+              {BULK_TRANSACTION_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  role="radio"
+                  aria-checked={bulkTransactionType === type}
+                  className={`bulk-transaction-segment ${
+                    bulkTransactionType === type ? 'is-active' : ''
+                  }`}
+                  disabled={isReadOnlyView}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleBulkTransactionTypeChange(type);
+                  }}
+                >
+                  {type}
+                </button>
+              ))}
+            </div>
+
+            {isExcelOnlyType && (
+              <div
+                className="bulk-transaction-segmented bulk-transaction-segmented--bank"
+                role="radiogroup"
+                aria-label="Bulk transaction bank template"
+              >
+                {BULK_TRANSACTION_BANKS.map((bank) => (
+                  <button
+                    key={bank.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={bulkTransactionBank === bank.value}
+                    className={`bulk-transaction-segment ${
+                      bulkTransactionBank === bank.value ? 'is-active' : ''
+                    }`}
+                    disabled={isReadOnlyView}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setBulkTransactionBank(bank.value);
+                    }}
+                  >
+                    {bank.label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <span className="bulk-transaction-hint">
+              {isExcelOnlyType
+                ? 'Excel only (.xlsx, .xls)'
+                : `Demand draft scan: ${DD_BULK_TRANSACTION_EXTENSIONS.join(', ')}`}
+            </span>
+          </div>
+
           <div className="bulk-neft-panel">
             <div className="bulk-neft-file-name">
               <p>
-                {bulkNeftFile?.name ||
-                  existingBulkNeftFile?.original_name ||
-                  'No Bulk NEFT file uploaded yet.'}
+                {bulkTransactionFile?.name ||
+                  existingBulkTransactionFile?.original_name ||
+                  'No Bulk Transaction file uploaded yet.'}
               </p>
             </div>
             <div className="bulk-neft-actions">
               <input
-                ref={bulkNeftInputRef}
+                ref={bulkTransactionInputRef}
                 type="file"
-                accept=".xlsx,.xls"
+                accept={getAllowedBulkTransactionExtensions(bulkTransactionType).join(',')}
                 style={{ display: 'none' }}
-                onChange={handleBulkNeftUpload}
+                onChange={handleBulkTransactionUpload}
               />
               <div style={{ display: 'flex', gap: '12px' }}>
                 {!isReadOnlyView && (
@@ -3947,7 +4099,7 @@ const ExpenditureApproval: React.FC = () => {
                     title="Upload"
                     onClick={(e) => {
                       e.preventDefault();
-                      bulkNeftInputRef.current?.click();
+                      bulkTransactionInputRef.current?.click();
                     }}
                   >
                     <Upload size={20} />
@@ -3957,15 +4109,15 @@ const ExpenditureApproval: React.FC = () => {
                   className="payee-row-btn"
                   style={{ backgroundColor: '#629ac4', color: 'white' }}
                   title="View"
-                  disabled={!bulkNeftFile && !existingBulkNeftFile}
+                  disabled={!hasBulkTransactionFile}
                   onClick={(e) => {
                     e.preventDefault();
-                    if (bulkNeftFile) {
-                      window.open(URL.createObjectURL(bulkNeftFile), '_blank');
+                    if (bulkTransactionFile) {
+                      window.open(URL.createObjectURL(bulkTransactionFile), '_blank');
                       return;
                     }
-                    const fileUrl = existingBulkNeftFile
-                      ? resolveBillFileUrl(existingBulkNeftFile)
+                    const fileUrl = existingBulkTransactionFile
+                      ? resolveBillFileUrl(existingBulkTransactionFile)
                       : '';
                     if (fileUrl) {
                       window.open(fileUrl, '_blank');
@@ -3979,26 +4131,28 @@ const ExpenditureApproval: React.FC = () => {
                     className="payee-row-btn"
                     style={{ backgroundColor: '#fff5f5', color: '#ff4d4f' }}
                     title="Delete"
-                    disabled={!bulkNeftFile && !existingBulkNeftFile}
+                    disabled={!hasBulkTransactionFile}
                     onClick={(e) => {
                       e.preventDefault();
-                      removeBulkNeftFile();
+                      removeBulkTransactionFile();
                     }}
                   >
                     <Trash2 size={20} />
                   </button>
                 )}
               </div>
-              <button
-                className="payee-toolbar-btn payee-toolbar-btn-secondary"
-                style={{ color: '#0069ab', gap: '6px' }}
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleDownloadBulkNeftTemplate();
-                }}
-              >
-                <Download size={18} /> Download Template
-              </button>
+              {isExcelOnlyType && (
+                <button
+                  className="payee-toolbar-btn payee-toolbar-btn-secondary"
+                  style={{ color: '#0069ab', gap: '6px' }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    handleDownloadBulkTransactionTemplate();
+                  }}
+                >
+                  <Download size={18} /> Download Template
+                </button>
+              )}
             </div>
           </div>
           <div className="payee-footer-grid">
@@ -4066,9 +4220,9 @@ const ExpenditureApproval: React.FC = () => {
             </button>
             <button
               className="payee-toolbar-btn payee-toolbar-btn-secondary"
-              onClick={() => setShowBulkNEFT(true)}
+              onClick={() => setShowBulkTransaction(true)}
             >
-              Bulk NEFT
+              Bulk Transaction
             </button>
           </div>
         </div>
@@ -5071,8 +5225,15 @@ const ExpenditureApproval: React.FC = () => {
         expenditurerows: selectedExpenditureRows,
 
         payeerows: normalizedPayeeRows,
-        showbulkneft: showBulkNEFT || Boolean(bulkNeftFile),
-        bulknefttemplateversion: BULK_NEFT_TEMPLATE_VERSION,
+        showbulktransaction: showBulkTransaction || Boolean(bulkTransactionFile),
+        bulktransactiontemplateversion: BULK_TRANSACTION_TEMPLATE_VERSION,
+        bulktransactiontype: bulkTransactionType,
+        // Tells the server whether an already-stored file was kept or deleted, so a
+        // removal (or a mode/bank switch) with no new upload still persists.
+        bulktransactionfileretained: Boolean(existingBulkTransactionFile),
+        bulktransactionbank: isExcelOnlyBulkTransactionType(bulkTransactionType)
+          ? bulkTransactionBank
+          : null,
         paymentdetails: paymentDetails,
       };
 
@@ -5083,8 +5244,8 @@ const ExpenditureApproval: React.FC = () => {
         formData.append('bill_files', file);
       });
 
-      if (bulkNeftFile) {
-        formData.append('bulk_neft_file', bulkNeftFile);
+      if (bulkTransactionFile) {
+        formData.append('bulk_transaction_file', bulkTransactionFile);
       }
 
       const endpoint =
@@ -5455,15 +5616,17 @@ const ExpenditureApproval: React.FC = () => {
       setExpenditureRemarks('');
       setAdvanceTentativeSettlementDate('');
       setPayeeRows([createPayeeRow()]);
-      setShowBulkNEFT(false);
-      setBulkNeftFile(null);
-      setExistingBulkNeftFile(null);
+      setShowBulkTransaction(false);
+      setBulkTransactionType('NEFT');
+      setBulkTransactionBank('AXIS');
+      setBulkTransactionFile(null);
+      setExistingBulkTransactionFile(null);
       setUploadedPayeeBills([]);
       setExistingPayeeBills([]);
       setUploadedPaymentProofs([]);
       setExistingPaymentProofs([]);
-      if (bulkNeftInputRef.current) {
-        bulkNeftInputRef.current.value = '';
+      if (bulkTransactionInputRef.current) {
+        bulkTransactionInputRef.current.value = '';
       }
       setPaymentDetails({
         mode: '',
@@ -8224,7 +8387,7 @@ const ExpenditureApproval: React.FC = () => {
         <div style={{ marginTop: '20px' }}>{renderPayeeDetails()}</div>
 
         {/* Payment Status Section - Separate Card */}
-        {!showBulkNEFT && hasDofApprovalForPaymentStatus && (
+        {!showBulkTransaction && hasDofApprovalForPaymentStatus && (
           <div
             className="payee-details-card"
             data-readonly-payment-status={canEditPaymentStatus ? 'true' : undefined}

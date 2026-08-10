@@ -64,6 +64,27 @@
   padding: 16px 24px !important;
 }
 
+/* Title + tabs + Export CSV always own the full first row, so the button lands top-right
+   whether the queue has one tab (HOD) or six (super admin). */
+.adminbudget-header-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* The tabs' own `margin-right: auto` would share the free space with the button's
+   `margin-left: auto` and strand it mid-row, so only the button absorbs it here. */
+.adminbudget-header-main .adminbudget-role-tabs {
+  margin-right: 0;
+}
+
+.adminbudget-header-main .adminbudget-export-csv-btn {
+  margin-left: auto;
+}
+
 .adminbudget-title {
   margin: 0;
   font-weight: 600;
@@ -148,12 +169,16 @@
   outline-offset: 2px;
 }
 
+/* Filters sit on their own row beneath the title row, right-aligned — the layout super
+   admin already had by wrap accident, now explicit for every role. */
 .adminbudget-header-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   align-items: center;
-  margin-left: auto;
+  flex: 1 1 100%;
+  justify-content: flex-end;
+  margin-left: 0;
 }
 
 .adminbudget-control {

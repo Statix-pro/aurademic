@@ -58,6 +58,14 @@ export interface WorkflowCsvExportMeta<TRecord extends Record<string, any> = Rec
   secondaryFilter?: string;
   searchTerm?: string;
   /**
+   * Human-readable date window chosen in the export modal, e.g.
+   * "01.04.2026 to 10.08.2026". Present only when the user set one — a date-filtered
+   * file has to say so, or a reader can't tell it from a full export.
+   */
+  dateRangeLabel?: string;
+  /** True when a date range replaced the fiscal-year scoping, so the file spans years. */
+  allFiscalYears?: boolean;
+  /**
    * Line-item breakdown keyed by record id, as returned by the module's export
    * endpoint. Empty when the module exposes no line items.
    */

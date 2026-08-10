@@ -66,7 +66,8 @@ const formatStatusFilterLabel = (statusFilter: string) =>
 
 const buildCsvHeaderLines = (moduleTitle: string, meta: WorkflowCsvExportMeta): string => {
   const scopeParts = [
-    formatFiscalYearLabel(meta.fiscalYear),
+    // A date-ranged export spans years, so naming one fiscal year would misdescribe it.
+    meta.allFiscalYears ? 'All fiscal years' : formatFiscalYearLabel(meta.fiscalYear),
     meta.stageLabel,
     formatStatusFilterLabel(meta.statusFilter),
   ].filter(Boolean);
@@ -74,6 +75,9 @@ const buildCsvHeaderLines = (moduleTitle: string, meta: WorkflowCsvExportMeta): 
   const lines = [buildCsvSection(`${moduleTitle} Export - ${scopeParts.join(' - ')}`, [], [])];
 
   const appliedFilters: string[] = [];
+  if (meta.dateRangeLabel) {
+    appliedFilters.push(`Dates: ${meta.dateRangeLabel}`);
+  }
   if (meta.beneficiaryFilter && meta.beneficiaryFilter !== 'All Beneficiary') {
     appliedFilters.push(`Beneficiary: ${meta.beneficiaryFilter}`);
   }
@@ -202,7 +206,8 @@ const financeCsvExportMapper = (
       'Finance',
       meta.stageLabel,
       formatStatusFilterLabel(meta.statusFilter),
-      formatFiscalYearLabel(meta.fiscalYear).replace(/\s+/g, ''),
+      // A date-ranged export spans years, so the fiscal year would misname the file.
+      meta.allFiscalYears ? 'AllYears' : formatFiscalYearLabel(meta.fiscalYear).replace(/\s+/g, ''),
     ]),
     content,
   };
@@ -298,7 +303,8 @@ const expenditureCsvExportMapper = (
       'Expenditure',
       meta.stageLabel,
       formatStatusFilterLabel(meta.statusFilter),
-      formatFiscalYearLabel(meta.fiscalYear).replace(/\s+/g, ''),
+      // A date-ranged export spans years, so the fiscal year would misname the file.
+      meta.allFiscalYears ? 'AllYears' : formatFiscalYearLabel(meta.fiscalYear).replace(/\s+/g, ''),
     ]),
     content,
   };

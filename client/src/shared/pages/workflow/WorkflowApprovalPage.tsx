@@ -22,6 +22,10 @@ import PendingPayeeApprovals from './PendingPayeeApprovals';
 import { useAuth } from '../../../contexts/AuthContext';
 import AlertModal, { type AlertType } from '../../../shared/components/ui/AlertModal';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import ExportOptionsModal, {
+  type ExportOptions,
+  type ExportRunResult,
+} from '../../components/export/ExportOptionsModal';
 import authenticityUtility from '../../utils/authenticityUtility';
 import {
   buildCsvFilename,
@@ -749,6 +753,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [pendingPayeeActingId, setPendingPayeeActingId] = useState<number | null>(null);
   const [pendingPayeeEditingId, setPendingPayeeEditingId] = useState<number | null>(null);
   const [exportingCsv, setExportingCsv] = useState<boolean>(false);
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [previewRecordId, setPreviewRecordId] = useState<number | string | null>(null);
   const [previewIsActionablePending, setPreviewIsActionablePending] = useState<boolean>(false);
 
@@ -2495,10 +2500,14 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     resolveStatusCategory,
   ]);
 
+  // `statusOverride` lets the CSV export narrow to a status other than the tab's — the
+  // server has already filtered to it, so this chain must agree or it would drop every
+  // row. 'total' means "every status", matching the on-screen All tab.
   const applyStatusScope = useCallback(
-    (source: Record<string, any>[]) => {
+    (source: Record<string, any>[], statusOverride?: string) => {
+      const effectiveStatus = statusOverride || statusFilter;
       const prioritizeResubmitted = (items: Record<string, any>[]) => {
-        if (statusFilter !== 'pending') return items;
+        if (effectiveStatus !== 'pending') return items;
         return [...items].sort((a, b) => {
           const aResubmitted = isResubmittedRecord(a);
           const bResubmitted = isResubmittedRecord(b);
@@ -2528,12 +2537,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         });
       };
 
-      if (statusFilter === 'total') {
+      if (effectiveStatus === 'total') {
         return source;
       }
 
       return prioritizeResubmitted(
-        source.filter((record) => resolveStatusCategory(record) === statusFilter),
+        source.filter((record) => resolveStatusCategory(record) === effectiveStatus),
       );
     },
     [isResubmittedRecord, statusFilter, resolveStatusCategory],
@@ -2927,9 +2936,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   // Runs the on-screen filter chain over an arbitrary row set, so the CSV export of the
   // full server-side result matches exactly what the current filters display.
-  const applyDisplayFilters = (source: Record<string, any>[]) =>
+  const applyDisplayFilters = (source: Record<string, any>[], statusOverride?: string) =>
     applyProposalTypeScope(
-      applyStatusScope(applyAmountScope(applySecondaryScope(applyStageScope(source)))),
+      applyStatusScope(
+        applyAmountScope(applySecondaryScope(applyStageScope(source))),
+        statusOverride,
+      ),
     );
 
   const getExportStageLabel = (record: Record<string, any>) => {
@@ -2972,10 +2984,22 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
     const content = joinCsvSections([
       buildCsvSection(
-        `${config.title} Export - ${[formatFiscalYearLabel(exportMeta.fiscalYear), exportMeta.stageLabel].filter(Boolean).join(' - ')}`,
+        `${config.title} Export - ${[
+          // Mirrors the module mappers: a date-ranged export spans years, so it must not
+          // name a single fiscal year.
+          exportMeta.allFiscalYears
+            ? 'All fiscal years'
+            : formatFiscalYearLabel(exportMeta.fiscalYear),
+          exportMeta.stageLabel,
+        ]
+          .filter(Boolean)
+          .join(' - ')}`,
         [],
         [],
       ),
+      exportMeta.dateRangeLabel
+        ? buildCsvSection(`Dates: ${exportMeta.dateRangeLabel}`, [], [])
+        : '',
       buildCsvSection(`Exported on: ${formatDateForCsv(new Date())}`, [], []),
       buildCsvSection('Request Details', headers, dataRows),
       buildCsvSection(
@@ -3000,10 +3024,48 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     };
   };
 
-  const handleExportCsv = async () => {
-    if (exportingCsv) {
-      return;
+  // Describes what the file will contain, so the modal can show the scope it inherits
+  // from the page before anything downloads.
+  const exportScopeSummary = useMemo(() => {
+    const lines = [
+      activeWorkflowTab?.label || formatStageLabel(activeStage, config.stageLabels),
+      formatFiscalYearLabel(fiscalYear),
+    ].filter(Boolean) as string[];
+
+    if (enableSecondaryFilter && beneficiaryFilter !== 'All Beneficiary') {
+      lines.push(`Beneficiary: ${beneficiaryFilter}`);
     }
+    if (secondaryFilter) {
+      lines.push(`Filter: ${secondaryFilter}`);
+    }
+    if (amountFilter) {
+      lines.push(amountFilter === 'lt_10000' ? 'Below ₹10,000' : '₹10,000 and above');
+    }
+    if (searchTerm) {
+      lines.push(`Search: ${searchTerm}`);
+    }
+    return lines;
+  }, [
+    activeStage,
+    activeWorkflowTab?.label,
+    amountFilter,
+    beneficiaryFilter,
+    config.stageLabels,
+    enableSecondaryFilter,
+    fiscalYear,
+    searchTerm,
+    secondaryFilter,
+  ]);
+
+  const runCsvExport = async (exportOptions: ExportOptions): Promise<ExportRunResult> => {
+    const emptyResult: ExportRunResult = {
+      downloaded: false,
+      recordCount: 0,
+      lineItemCount: 0,
+      totalMatching: 0,
+      maxRows: 0,
+      truncated: false,
+    };
 
     setExportingCsv(true);
     try {
@@ -3014,6 +3076,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         enableLevel1RoleTabs && normalizedStage === 'level1' && activeTab?.level1Role
           ? activeTab.level1Role
           : null;
+      // The modal's status choice overrides the tab's, and a date range replaces the
+      // fiscal-year scoping so the file can span years.
+      const statusCategoryParam =
+        exportOptions.status === 'all' ? '' : exportOptions.status || statusFilter;
 
       // The export endpoint returns every record matching the server-side filters (not
       // just the page on screen); the client-side chain below narrows it exactly the way
@@ -3021,8 +3087,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       const response = await authenticityUtility.get(`${getQueueEndpoint(activeStage)}/export`, {
         params: {
           workflowStatus: 'all',
-          ...(statusFilter !== 'total' ? { statusCategory: statusFilter } : {}),
-          fiscalYear,
+          ...(statusCategoryParam ? { statusCategory: statusCategoryParam } : {}),
+          ...(exportOptions.allFiscalYears ? {} : { fiscalYear }),
+          ...(exportOptions.dateFrom ? { dateFrom: exportOptions.dateFrom } : {}),
+          ...(exportOptions.dateTo ? { dateTo: exportOptions.dateTo } : {}),
           ...(level1RoleFilter ? { level1Role: level1RoleFilter } : {}),
           ...(isAllProposalsTab ? { allProposals: true } : {}),
           ...(beneficiaryFilter !== 'All Beneficiary'
@@ -3038,50 +3106,62 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       // only an explicit failure flag counts as an error, never a missing one.
       const payload = (response as any) || {};
       if (payload.success === false || payload.status === 'error') {
-        showAlert(
-          payload.message || 'Failed to export the CSV file. Please try again.',
-          'error',
-          'Export Failed',
-        );
-        return;
+        return {
+          ...emptyResult,
+          message: payload.message || 'Failed to export the CSV file. Please try again.',
+        };
       }
 
       const fetchedItems: Record<string, any>[] = Array.isArray(payload.data) ? payload.data : [];
-      const lineItems: Record<string, any[]> = payload.lineItems || {};
+      const lineItems: Record<string, any[]> = exportOptions.includeLineItems
+        ? payload.lineItems || {}
+        : {};
       const truncated = Boolean(payload.pagination?.truncated);
       // Server-side counts: what the export endpoint actually returned and the cap it
       // applied. The client-side chain below narrows further, so these must be reported
       // instead of the post-filter row count.
       const serverRowCap = Number(payload.pagination?.maxRows) || 0;
       const serverExported = Number(payload.pagination?.exported) || fetchedItems.length;
+      const serverTotal = Number(payload.pagination?.total) || serverExported;
 
       const stageVisibleItems = isAllProposalsTab
         ? fetchedItems
         : fetchedItems.filter((item) => isVisibleInWorkflowList(item, activeStage));
-      const exportRows = applyDisplayFilters(stageVisibleItems);
+      const exportRows = applyDisplayFilters(
+        stageVisibleItems,
+        exportOptions.status === 'all' ? 'total' : exportOptions.status,
+      );
 
       if (!exportRows.length) {
         // Beneficiary / amount-band / stage-visibility filtering runs here, after the
         // server cap. When the cap bound the fetch, records matching these filters can
-        // sit beyond it — so say that rather than claiming the view is empty.
-        showAlert(
-          truncated
-            ? `The server returned the first ${serverExported} of ${payload.pagination?.total ?? serverExported} records and none of them match the current filters. Narrow the fiscal year, status or search filters and try again.`
-            : 'There are no records in the current view to export.',
-          truncated ? 'warning' : 'info',
-          truncated ? 'Partial Export' : 'Nothing to Export',
-        );
-        return;
+        // sit beyond it — so say that rather than claiming nothing matched.
+        return {
+          ...emptyResult,
+          totalMatching: serverTotal,
+          maxRows: serverRowCap,
+          truncated,
+          message: truncated
+            ? `The server returned the first ${serverExported} of ${serverTotal} records and none of them match the current filters. Narrow the status or date range and try again.`
+            : undefined,
+        };
       }
 
       const exportMeta: WorkflowCsvExportMeta = {
         stage: activeStage,
         stageLabel: activeWorkflowTab?.label || formatStageLabel(activeStage, config.stageLabels),
         fiscalYear,
-        statusFilter,
+        statusFilter: exportOptions.status === 'all' ? 'total' : exportOptions.status,
         beneficiaryFilter,
         secondaryFilter,
         searchTerm,
+        dateRangeLabel:
+          exportOptions.dateFrom || exportOptions.dateTo
+            ? `${exportOptions.dateFrom ? formatDateForCsv(exportOptions.dateFrom) : 'earliest'} to ${
+                exportOptions.dateTo ? formatDateForCsv(exportOptions.dateTo) : 'latest'
+              }`
+            : undefined,
+        allFiscalYears: exportOptions.allFiscalYears,
         lineItems,
         getProposalRef: (record) => getRecordProposalRef(record),
         getStatusLabel: (record) => getDisplayStatus(record),
@@ -3094,17 +3174,24 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         : buildFallbackExportCsv(exportRows, exportMeta);
       downloadCsv(result.filename, result.content);
 
-      if (truncated) {
-        const capLabel = serverRowCap ? `${serverRowCap} records` : `${serverExported} records`;
-        showAlert(
-          `The server capped this export at ${capLabel} out of ${payload.pagination?.total ?? serverExported} matching the queue filters, and ${exportRows.length} of them matched the current view. Narrow the fiscal year, status or search filters to export the remainder.`,
-          'warning',
-          'Partial Export',
-        );
-      }
+      const exportedIds = new Set(exportRows.map((record) => String(record?.id)));
+      const lineItemCount = Object.entries(lineItems).reduce(
+        (sum, [recordId, rows]) =>
+          exportedIds.has(recordId) ? sum + (Array.isArray(rows) ? rows.length : 0) : sum,
+        0,
+      );
+
+      return {
+        downloaded: true,
+        recordCount: exportRows.length,
+        lineItemCount,
+        totalMatching: serverTotal,
+        maxRows: serverRowCap,
+        truncated,
+      };
     } catch (exportError) {
       console.error('Failed to export CSV', exportError);
-      showAlert('Failed to export the CSV file. Please try again.', 'error');
+      return { ...emptyResult, message: 'Failed to export the CSV file. Please try again.' };
     } finally {
       setExportingCsv(false);
     }
@@ -3123,7 +3210,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         <div className="fw-container">
           <div className="fw-card">
             <div className="fw-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+              {/* Title, view toggle, stage tabs and Export CSV own the full first row so
+                  the button sits top-right for every role. Left in the shared flex row it
+                  drifted mid-row whenever the filters didn't wrap — which is what happens
+                  on a single-tab queue such as HOD. */}
+              <div className="fw-header-main">
                 <h5 className="fw-title" style={{ margin: 0 }}>
                   {config.title}
                 </h5>
@@ -3203,43 +3294,40 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     </button>
                   </div>
                 )}
-              </div>
 
-              {stageTabs.length > 0 && (
-                <div className="fw-role-tabs" role="tablist">
-                  {stageTabs.map((tab) => (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      className={`fw-role-tab ${activeStageTabKey === tab.key ? 'active' : ''}`}
-                      onClick={() => {
-                        setActiveStageTabKey(tab.key);
-                        if (activeStage !== tab.stage) {
-                          setActiveStage(tab.stage);
-                        }
-                        if (tab.showAllProposals) {
-                          setStatusFilter('total');
-                        }
-                        setPage(1);
-                      }}
-                      role="tab"
-                      aria-selected={activeStageTabKey === tab.key}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {/* Finance keeps Export CSV on the title row; expenditure's title row is
-                  already full (Requests/Payees + five stage tabs), so it renders the
-                  button beside the search box further down instead. */}
-              {Boolean(config.enableCsvExport) &&
-                viewMode === 'workflow' &&
-                config.moduleKey !== 'expenditure' && (
+                {stageTabs.length > 0 && (
+                  <div className="fw-role-tabs" role="tablist">
+                    {stageTabs.map((tab) => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        className={`fw-role-tab ${activeStageTabKey === tab.key ? 'active' : ''}`}
+                        onClick={() => {
+                          setActiveStageTabKey(tab.key);
+                          if (activeStage !== tab.stage) {
+                            setActiveStage(tab.stage);
+                          }
+                          if (tab.showAllProposals) {
+                            setStatusFilter('total');
+                          }
+                          setPage(1);
+                        }}
+                        role="tab"
+                        aria-selected={activeStageTabKey === tab.key}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {/* Every module shows the labelled button here — expenditure used to fall
+                    back to an icon beside the search box because this row was assumed
+                    full, which only held when the queue had five stage tabs. */}
+                {Boolean(config.enableCsvExport) && viewMode === 'workflow' && (
                   <button
                     type="button"
                     className="fw-export-csv-btn"
-                    onClick={handleExportCsv}
+                    onClick={() => setShowExportModal(true)}
                     disabled={exportingCsv}
                     title="Export the currently filtered list as CSV"
                     aria-busy={exportingCsv}
@@ -3248,6 +3336,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     <span>{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
                   </button>
                 )}
+              </div>
               {config.moduleKey === 'expenditure' && viewMode === 'payees' && (
                 <div className="fw-payee-header-search">
                   <Search size={16} className="fw-payee-header-search-icon" />
@@ -3385,36 +3474,13 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     </select>
                   )}
 
-                  {/* Search + export stay in one group so a wrap moves them together
-                      and the export button never drifts away from the search box. */}
-                  <div className="fw-search-export-group">
-                    <input
-                      className="fw-control"
-                      type="text"
-                      placeholder="Search ID or Applicant Name"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-
-                    {/* Icon-only here: expenditure's actions row also carries the
-                        All/A/E/S shortcuts, and a labelled button pushed the search
-                        box onto a third line. */}
-                    {Boolean(config.enableCsvExport) && config.moduleKey === 'expenditure' && (
-                      <button
-                        type="button"
-                        className="fw-export-csv-btn fw-export-csv-btn--inline fw-export-csv-btn--icon"
-                        onClick={handleExportCsv}
-                        disabled={exportingCsv}
-                        title={
-                          exportingCsv ? 'Exporting…' : 'Export the currently filtered list as CSV'
-                        }
-                        aria-label={exportingCsv ? 'Exporting CSV' : 'Export CSV'}
-                        aria-busy={exportingCsv}
-                      >
-                        <Download size={17} />
-                      </button>
-                    )}
-                  </div>
+                  <input
+                    className="fw-control"
+                    type="text"
+                    placeholder="Search ID or Applicant Name"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
                 </div>
               )}
             </div>
@@ -4327,6 +4393,15 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           showCancel={alertConfig.showCancel}
           confirmText={alertConfig.confirmText}
           cancelText={alertConfig.cancelText}
+        />
+        <ExportOptionsModal
+          show={showExportModal}
+          onHide={() => setShowExportModal(false)}
+          title={`Export ${config.title} as CSV`}
+          scopeSummary={exportScopeSummary}
+          onExport={runCsvExport}
+          exporting={exportingCsv}
+          recordNoun="requests"
         />
         <CustomModal
           show={actionPopupOpen}

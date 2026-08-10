@@ -16,6 +16,7 @@ import {
   beneficiaryTypeToEntityTypeCode,
 } from '../shared/budget/budgetUtils.js';
 import { searchApplicant as searchEmployeeApplicants } from '../shared/budget/userResolvers.js';
+import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -78,6 +79,30 @@ const hasFinanceRequestColumn = async (columnName, { tx = db } = {}) => {
   );
   const exists = Number(rows?.[0]?.count || 0) > 0;
   FINANCE_REQUEST_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
+  return exists;
+};
+
+const BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE = new Map();
+
+// transaction_type / bank_code are added by the 20260810 migration; guard reads and
+// writes so a not-yet-migrated database keeps working.
+const hasBulkTransactionFileColumn = async (columnName, { tx = db } = {}) => {
+  const normalizedColumn = normalizeText(columnName);
+  if (!normalizedColumn) return false;
+  if (BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE.has(normalizedColumn)) {
+    return BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'expenditure_bulk_neft_files'
+        AND COLUMN_NAME = ?`,
+    [normalizedColumn],
+  );
+  const exists = Number(rows?.[0]?.count || 0) > 0;
+  BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
   return exists;
 };
 
@@ -346,7 +371,20 @@ const FINANCE_BREAKUP_APPROVED_BASE_SQL = `
 `;
 
 const VALID_REQUEST_TYPES = new Set(['Advance', 'Settlement', 'Expenditure']);
-const DEFAULT_BULK_NEFT_TEMPLATE_VERSION = '2026-04-11';
+const DEFAULT_BULK_TRANSACTION_TEMPLATE_VERSION = '2026-04-11';
+const VALID_BULK_TRANSACTION_TYPES = new Set(['NEFT', 'RTGS', 'UPI', 'DD']);
+const DEFAULT_BULK_TRANSACTION_TYPE = 'NEFT';
+const VALID_BULK_TRANSACTION_BANKS = new Set(['AXIS', 'DBS']);
+
+const normalizeBulkTransactionType = (value) => {
+  const type = normalizeText(value).toUpperCase();
+  return VALID_BULK_TRANSACTION_TYPES.has(type) ? type : DEFAULT_BULK_TRANSACTION_TYPE;
+};
+
+const normalizeBulkTransactionBank = (value) => {
+  const bank = normalizeText(value).toUpperCase();
+  return VALID_BULK_TRANSACTION_BANKS.has(bank) ? bank : null;
+};
 
 const normalizeRequestType = (value) => {
   const type = normalizeText(value);
@@ -3152,7 +3190,7 @@ export async function createExpenditure(data, userId) {
       normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
   };
 
-  return createExpenditureRequest(payload, userId, { billFiles: [], bulkNeftFile: null });
+  return createExpenditureRequest(payload, userId, { billFiles: [], bulkTransactionFile: null });
 }
 
 function sanitizeRowValue(value) {
@@ -3856,30 +3894,88 @@ async function linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeReq
   }
 }
 
-async function upsertBulkNeftFile(conn, expenditureId, file = null, templateVersion = null) {
-  if (!file?.filename || !file?.path) return;
+/**
+ * Persists the bulk transaction payout file for a request.
+ *
+ * `meta.fileRetained` tells us what the client did with an already-stored file when no
+ * new one was uploaded: `false` means the user deleted it (drop the row), `true` means
+ * they kept it but may have switched mode/bank (update those columns only). Undefined —
+ * a caller that does not manage this section at all — leaves the row untouched.
+ */
+async function upsertBulkTransactionFile(conn, expenditureId, file = null, meta = {}) {
+  const transactionType = normalizeBulkTransactionType(meta.transactionType);
+  const bankCode = normalizeBulkTransactionBank(meta.bankCode);
+
+  if (!file?.filename || !file?.path) {
+    if (meta.fileRetained === false) {
+      await conn.execute('DELETE FROM expenditure_bulk_neft_files WHERE expenditure_id = ?', [
+        expenditureId,
+      ]);
+      return;
+    }
+
+    if (meta.fileRetained !== true) return;
+
+    // File kept as-is; only the mode/bank selection can have changed.
+    const assignments = [];
+    const assignmentValues = [];
+    if (await hasBulkTransactionFileColumn('transaction_type', { tx: conn })) {
+      assignments.push('transaction_type = ?');
+      assignmentValues.push(transactionType);
+    }
+    if (await hasBulkTransactionFileColumn('bank_code', { tx: conn })) {
+      assignments.push('bank_code = ?');
+      assignmentValues.push(bankCode);
+    }
+    if (!assignments.length) return;
+
+    await conn.execute(
+      `UPDATE expenditure_bulk_neft_files
+          SET ${assignments.join(', ')},
+              updated_at = CURRENT_TIMESTAMP
+        WHERE expenditure_id = ?`,
+      [...assignmentValues, expenditureId],
+    );
+    return;
+  }
+
+  const columns = ['expenditure_id', 'template_version'];
+  const values = [
+    expenditureId,
+    sanitizeRowValue(meta.templateVersion) || DEFAULT_BULK_TRANSACTION_TEMPLATE_VERSION,
+  ];
+
+  if (await hasBulkTransactionFileColumn('transaction_type', { tx: conn })) {
+    columns.push('transaction_type');
+    values.push(transactionType);
+  }
+  if (await hasBulkTransactionFileColumn('bank_code', { tx: conn })) {
+    columns.push('bank_code');
+    values.push(bankCode);
+  }
+
+  columns.push('original_name', 'stored_name', 'file_path', 'mime_type', 'file_size');
+  values.push(
+    sanitizeRowValue(file.originalname),
+    sanitizeRowValue(file.filename),
+    toStoredUploadPath(file.path),
+    sanitizeRowValue(file.mimetype),
+    Number(file.size) || 0,
+  );
+
+  const updateSql = columns
+    .filter((column) => column !== 'expenditure_id')
+    .map((column) => `${column} = VALUES(${column})`)
+    .join(',\n       ');
 
   await conn.execute(
     `INSERT INTO expenditure_bulk_neft_files
-       (expenditure_id, template_version, original_name, stored_name, file_path, mime_type, file_size)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+       (${columns.join(', ')})
+     VALUES (${columns.map(() => '?').join(', ')})
      ON DUPLICATE KEY UPDATE
-       template_version = VALUES(template_version),
-       original_name = VALUES(original_name),
-       stored_name = VALUES(stored_name),
-       file_path = VALUES(file_path),
-       mime_type = VALUES(mime_type),
-       file_size = VALUES(file_size),
+       ${updateSql},
        updated_at = CURRENT_TIMESTAMP`,
-    [
-      expenditureId,
-      sanitizeRowValue(templateVersion) || DEFAULT_BULK_NEFT_TEMPLATE_VERSION,
-      sanitizeRowValue(file.originalname),
-      sanitizeRowValue(file.filename),
-      toStoredUploadPath(file.path),
-      sanitizeRowValue(file.mimetype),
-      Number(file.size) || 0,
-    ],
+    values,
   );
 }
 
@@ -4641,7 +4737,9 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       credit_status: normalizeText(data.credit_status) || null,
       debit_status: normalizeDebitStatus(data.debit_status),
       partial_amount: moneyOrNull(data.partial_amount),
-      show_bulk_neft: parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile) ? 1 : 0,
+      // DB column keeps its original name; the API/UI field is show_bulk_transaction.
+      show_bulk_neft:
+        parseBoolean(data.show_bulk_transaction) || Boolean(uploads.bulkTransactionFile) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
       payment_date: paymentDetails.date || data.payment_date || null,
@@ -4757,12 +4855,12 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
     await insertBillFiles(conn, expenditureId, uploads.paymentProofFiles, 'payment_proof');
     await linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeRequestId);
-    await upsertBulkNeftFile(
-      conn,
-      expenditureId,
-      uploads.bulkNeftFile,
-      data.bulk_neft_template_version,
-    );
+    await upsertBulkTransactionFile(conn, expenditureId, uploads.bulkTransactionFile, {
+      templateVersion: data.bulk_transaction_template_version,
+      transactionType: data.bulk_transaction_type,
+      bankCode: data.bulk_transaction_bank,
+      fileRetained: data.bulk_transaction_file_retained,
+    });
 
     return { expenditureId, requestRef: ref };
   });
@@ -5093,7 +5191,9 @@ export async function updateExpenditureRequest(
       credit_status: normalizeText(data.credit_status) || null,
       debit_status: normalizeDebitStatus(data.debit_status),
       partial_amount: moneyOrNull(data.partial_amount),
-      show_bulk_neft: parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile) ? 1 : 0,
+      // DB column keeps its original name; the API/UI field is show_bulk_transaction.
+      show_bulk_neft:
+        parseBoolean(data.show_bulk_transaction) || Boolean(uploads.bulkTransactionFile) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
       payment_date: normalizedPaymentDate,
@@ -5255,12 +5355,12 @@ export async function updateExpenditureRequest(
       'payment_proof',
     );
     await linkFinanceAnnexuresToExpenditure(conn, normalizedExpenditureId, financeRequestId);
-    await upsertBulkNeftFile(
-      conn,
-      normalizedExpenditureId,
-      uploads.bulkNeftFile,
-      data.bulk_neft_template_version,
-    );
+    await upsertBulkTransactionFile(conn, normalizedExpenditureId, uploads.bulkTransactionFile, {
+      templateVersion: data.bulk_transaction_template_version,
+      transactionType: data.bulk_transaction_type,
+      bankCode: data.bulk_transaction_bank,
+      fileRetained: data.bulk_transaction_file_retained,
+    });
 
     return {
       expenditureId: normalizedExpenditureId,
@@ -5282,6 +5382,37 @@ export async function getExpenditureById(id) {
   return rows[0] || null;
 }
 
+/**
+ * Bulk transaction payout file for a request, with the transaction type / bank the
+ * file was prepared for. Both are selected only when the 20260810 migration has run.
+ */
+async function getBulkTransactionFileRow(expenditureId) {
+  const optionalColumns = [];
+  for (const column of ['transaction_type', 'bank_code']) {
+    const exists = await hasBulkTransactionFileColumn(column);
+    optionalColumns.push(exists ? `${column},` : `NULL AS ${column},`);
+  }
+
+  const [rows] = await db.execute(
+    `SELECT id, template_version, ${optionalColumns.join(' ')}
+            original_name, stored_name, file_path, mime_type, file_size,
+            created_at, updated_at
+       FROM expenditure_bulk_neft_files
+      WHERE expenditure_id = ?
+      LIMIT 1`,
+    [expenditureId],
+  );
+
+  const row = rows[0] || null;
+  if (!row) return null;
+
+  return withUploadAccess({
+    ...row,
+    transaction_type: normalizeBulkTransactionType(row.transaction_type),
+    bank_code: normalizeBulkTransactionBank(row.bank_code),
+  });
+}
+
 export async function getExpenditureDetails(id) {
   const expenditureId = toPositiveInt(id);
   if (!expenditureId) {
@@ -5294,6 +5425,8 @@ export async function getExpenditureDetails(id) {
       unplanned_rows: [],
       bill_files: [],
       payment_proof_files: [],
+      bulk_transaction_file: null,
+      // LEGACY: pre-rename response key, kept for older clients. Remove once unused.
       bulk_neft_file: null,
     };
   }
@@ -5306,7 +5439,7 @@ export async function getExpenditureDetails(id) {
     expenditureRowsResult,
     billFilesResult,
     paymentProofFilesResult,
-    bulkNeftFileResult,
+    bulkTransactionFileResult,
   ] = await Promise.all([
     db.execute(
       `SELECT id, income_source, contribution, amount, status, remarks, credit_account, sort_order,
@@ -5374,14 +5507,7 @@ export async function getExpenditureDetails(id) {
         ORDER BY sort_order ASC, id ASC`,
       [expenditureId],
     ),
-    db.execute(
-      `SELECT id, template_version, original_name, stored_name, file_path, mime_type, file_size,
-              created_at, updated_at
-         FROM expenditure_bulk_neft_files
-        WHERE expenditure_id = ?
-        LIMIT 1`,
-      [expenditureId],
-    ),
+    getBulkTransactionFileRow(expenditureId),
   ]);
 
   const [income_rows] = incomeRowsResult;
@@ -5391,7 +5517,7 @@ export async function getExpenditureDetails(id) {
   const [expenditure_rows] = expenditureRowsResult;
   const [bill_files] = billFilesResult;
   const [payment_proof_files] = paymentProofFilesResult;
-  const [bulkNeftRows] = bulkNeftFileResult;
+  const bulkTransactionRow = bulkTransactionFileResult;
   let unplanned_rows = [];
   try {
     const [unplannedRowsResult] = await db.execute(
@@ -5417,7 +5543,9 @@ export async function getExpenditureDetails(id) {
     unplanned_rows,
     bill_files: bill_files.map(withUploadAccess),
     payment_proof_files: payment_proof_files.map(withUploadAccess),
-    bulk_neft_file: withUploadAccess(bulkNeftRows[0] || null),
+    bulk_transaction_file: bulkTransactionRow,
+    // LEGACY: pre-rename response key, kept for older clients. Remove once unused.
+    bulk_neft_file: bulkTransactionRow,
   };
 }
 
@@ -6335,6 +6463,17 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
 
   const whereParts = [`LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'`];
   const whereParams = [];
+
+  // Same expression the queue and the CSV's Date column display, so a date-filtered
+  // export can never contain a row dated outside the requested window.
+  const dateRange = buildDateRangeCondition('COALESCE(er.request_date, DATE(er.created_at))', {
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+  });
+  if (dateRange.sql) {
+    whereParts.push(dateRange.sql);
+    whereParams.push(...dateRange.params);
+  }
 
   if (fiscalYear) {
     whereParts.push(`(

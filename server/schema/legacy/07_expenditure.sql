@@ -408,10 +408,12 @@ CREATE TABLE expenditure_request_refs (
   CONSTRAINT fk_expenditure_request_refs_request FOREIGN KEY (expenditure_request_id) REFERENCES expenditure_requests (id) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB AUTO_INCREMENT=14 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-/* 5.3 BULK NEFT EXPORTS (System logs for exported bank payout templates) */
+/* 5.3 BULK TRANSACTION EXPORTS (System logs for exported bank payout templates) */
 CREATE TABLE expenditure_bulk_neft_files (
   id BIGINT unsigned NOT NULL AUTO_INCREMENT,
   expenditure_id INT NOT NULL,
+  transaction_type VARCHAR(20) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'NEFT' COMMENT 'Bulk transaction mode: NEFT, RTGS, UPI or DD',
+  bank_code VARCHAR(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Bank template the file was prepared from (AXIS, DBS)',
   template_version VARCHAR(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Excel template version mapping key',
   original_name VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Original filename',
   stored_name VARCHAR(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT 'Hashed disk filename',
@@ -423,8 +425,10 @@ CREATE TABLE expenditure_bulk_neft_files (
   PRIMARY KEY (id),
   UNIQUE KEY uq_expenditure_bulk_neft_request (expenditure_id),
   KEY idx_expenditure_bulk_neft_created (created_at),
-  CONSTRAINT fk_expenditure_bulk_neft_request FOREIGN KEY (expenditure_id) REFERENCES expenditure_requests (id) ON DELETE CASCADE,
-  CONSTRAINT chk_expenditure_bulk_neft_excel_name CHECK (regexp_like(lower(`original_name`),_utf8mb4'\\.(xlsx|xls)$'))
+  /* No file-extension CHECK here: NEFT/RTGS/UPI are Excel-only but DD accepts any
+     format, so the allowed extensions depend on transaction_type and are enforced
+     in expenditureController.js instead. */
+  CONSTRAINT fk_expenditure_bulk_neft_request FOREIGN KEY (expenditure_id) REFERENCES expenditure_requests (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 /* 5.4 EXPENDITURE REQUEST EDITS (Auditing log of updates) */

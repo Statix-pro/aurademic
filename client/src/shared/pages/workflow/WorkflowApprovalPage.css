@@ -31,6 +31,27 @@
   padding: 16px 24px !important;
 }
 
+/* Title + view toggle + stage tabs + Export CSV always own the full first row, so the
+   button lands top-right whether the queue has one stage tab (HOD) or five. */
+.fw-header-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 100%;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* The tabs' own `margin-right: auto` would share the free space with the button's
+   `margin-left: auto` and strand it mid-row. */
+.fw-header-main .fw-role-tabs {
+  margin-right: 0;
+}
+
+.fw-header-main .fw-export-csv-btn {
+  margin-left: auto;
+}
+
 .fw-title {
   margin: 0;
   font-weight: 600;
@@ -177,29 +198,6 @@
     background 0.2s ease,
     border-color 0.2s ease,
     color 0.2s ease;
-}
-
-/* Keeps the search field and its adjacent export button on the same line: the pair
-   wraps as a unit instead of the button being orphaned onto a row of its own. */
-.fw-search-export-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 0 1 auto;
-}
-
-/* Variant used when the button sits inside .fw-header-actions next to the search
-   box (expenditure), so it lines up with the 42px-tall .fw-control fields. */
-.fw-export-csv-btn--inline {
-  height: 42px;
-  border-radius: 12px;
-  padding: 0 14px;
-}
-
-/* Square icon-only footprint, so the row still fits the search box beside it. */
-.fw-export-csv-btn--icon {
-  width: 42px;
-  padding: 0;
 }
 
 .fw-export-csv-btn:hover {

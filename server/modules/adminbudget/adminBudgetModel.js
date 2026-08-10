@@ -2845,6 +2845,9 @@ export async function listBudgets({
   q,
   departmentFilter,
   beneficiaryType,
+  dateFrom,
+  dateTo,
+  allFiscalYears = false,
 }) {
   const hasApplicantNameColumn = await hasBudgetProposalColumn('applicant_name');
   const hasBudgetTagColumn = await hasBudgetProposalColumn('budget_tag');
@@ -2863,6 +2866,9 @@ export async function listBudgets({
     q,
     departmentFilter,
     beneficiaryType,
+    dateFrom,
+    dateTo,
+    allFiscalYears,
     isAdminView: true,
     hasColumnCache: {
       applicant_name: hasApplicantNameColumn,

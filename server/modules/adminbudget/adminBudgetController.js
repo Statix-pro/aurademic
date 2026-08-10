@@ -15,6 +15,9 @@ import {
   resolveAccessRoleFromPermissions,
   getAuthorizedRole,
 } from '../shared/budget/controllerPermissions.js';
+// Stricter than the local isValidDateOnlyString below: it rejects real-looking but
+// impossible dates (2026-02-31), matching what the model will actually filter on.
+import { normalizeDateOnly } from '../shared/dateRangeFilter.js';
 
 function isValidDateOnlyString(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false;
@@ -1447,8 +1450,16 @@ export async function exportQueueBudgets(req, res, role) {
       q,
       departmentFilter,
       beneficiaryType,
+      dateFrom,
+      dateTo,
+      allFiscalYears,
       scope: scopeParam,
     } = req.query;
+    // An explicit date range replaces the fiscal-year scoping so the export can span
+    // years. Only honoured alongside a range, so a stray flag can't widen the scope.
+    const exportAllFiscalYears =
+      ['true', '1'].includes(String(allFiscalYears || '').toLowerCase()) &&
+      Boolean(normalizeDateOnly(dateFrom) || normalizeDateOnly(dateTo));
     const isSuperAdminUser = hasSuperAdminAccess(req);
     const userId = getUserId(req);
     const userEmail = normalizeText(req.user?.email);
@@ -1490,6 +1501,9 @@ export async function exportQueueBudgets(req, res, role) {
       q,
       departmentFilter,
       beneficiaryType,
+      dateFrom,
+      dateTo,
+      allFiscalYears: exportAllFiscalYears,
     });
 
     const items = budgets.budgets || [];

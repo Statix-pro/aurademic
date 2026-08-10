@@ -19,6 +19,10 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../../contexts/AuthContext';
+import ExportOptionsModal, {
+  type ExportOptions,
+  type ExportRunResult,
+} from '../../../../shared/components/export/ExportOptionsModal';
 import AlertModal, { type AlertType } from '../../../../shared/components/ui/AlertModal';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
 import {
@@ -205,6 +209,7 @@ const AdminBudget: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [beneficiaryFilter, setBeneficiaryFilter] = useState('All Beneficiary');
   const [exportingCsv, setExportingCsv] = useState<boolean>(false);
+  const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [departmentFilter, setDepartmentFilter] = useState<string>('');
   const [departmentsList, setDepartmentsList] = useState<string[]>([]);
   const [fiscalYear, setFiscalYear] = useState<number>(() => getBudgetWorkflowFiscalYearStart());
@@ -866,30 +871,61 @@ const AdminBudget: React.FC = () => {
     return STAGE_DISPLAY_MAP[stageKey] || (item.current_stage || '').toUpperCase();
   };
 
-  const handleExportCsv = async () => {
-    if (exportingCsv) {
-      return;
+  // Describes what the file will contain, so the modal can show the scope it inherits
+  // from the page before anything downloads.
+  const exportScopeSummary = useMemo(() => {
+    const lines = [activeQueueTab?.label || 'All Queues', formatFiscalYearLabel(fiscalYear)].filter(
+      Boolean,
+    ) as string[];
+
+    if (beneficiaryFilter !== 'All Beneficiary') {
+      lines.push(`Beneficiary: ${beneficiaryFilter}`);
     }
+    if (departmentFilter) {
+      lines.push(`Department: ${departmentFilter}`);
+    }
+    if (searchTerm) {
+      lines.push(`Search: ${searchTerm}`);
+    }
+    return lines;
+  }, [activeQueueTab?.label, beneficiaryFilter, departmentFilter, fiscalYear, searchTerm]);
+
+  const runBudgetCsvExport = async (exportOptions: ExportOptions): Promise<ExportRunResult> => {
+    const emptyResult: ExportRunResult = {
+      downloaded: false,
+      recordCount: 0,
+      lineItemCount: 0,
+      totalMatching: 0,
+      maxRows: 0,
+      truncated: false,
+    };
 
     setExportingCsv(true);
     try {
-      await runBudgetCsvExport();
+      return await runBudgetCsvExportInner(exportOptions, emptyResult);
     } catch (exportError) {
       console.error('Failed to export CSV', exportError);
-      showAlert('Failed to export the CSV file. Please try again.', 'error');
+      return { ...emptyResult, message: 'Failed to export the CSV file. Please try again.' };
     } finally {
       setExportingCsv(false);
     }
   };
 
-  const runBudgetCsvExport = async () => {
+  const runBudgetCsvExportInner = async (
+    exportOptions: ExportOptions,
+    emptyResult: ExportRunResult,
+  ): Promise<ExportRunResult> => {
     // The export endpoint returns every proposal matching the server-side filters (not
-    // just the page on screen), plus each proposal's line items.
+    // just the page on screen), plus each proposal's line items. The modal's status
+    // choice overrides the tab's, and a date range replaces the fiscal-year scoping.
     const exportEndpoint = `${activeQueueTab?.endpoint || '/adminbudget/admin'}/export`;
+    const exportStatus = exportOptions.status === 'all' ? '' : exportOptions.status;
     const response = await authenticityUtility.get(exportEndpoint, {
       params: {
-        status: statusFilter === 'all' ? '' : statusFilter,
-        fiscalYear,
+        status: exportStatus,
+        ...(exportOptions.allFiscalYears ? { allFiscalYears: true } : { fiscalYear }),
+        ...(exportOptions.dateFrom ? { dateFrom: exportOptions.dateFrom } : {}),
+        ...(exportOptions.dateTo ? { dateTo: exportOptions.dateTo } : {}),
         q: searchTerm || undefined,
         beneficiaryType: beneficiaryFilter === 'All Beneficiary' ? undefined : beneficiaryFilter,
         departmentFilter: departmentFilter || undefined,
@@ -899,16 +935,16 @@ const AdminBudget: React.FC = () => {
     // authenticityUtility's response interceptor already unwraps to the response body.
     const payload = (response as any) || {};
     if (payload.success === false) {
-      showAlert(
-        payload.message || 'Failed to export the CSV file. Please try again.',
-        'error',
-        'Export Failed',
-      );
-      return;
+      return {
+        ...emptyResult,
+        message: payload.message || 'Failed to export the CSV file. Please try again.',
+      };
     }
 
     const fetchedItems: BudgetRequestItem[] = Array.isArray(payload.data) ? payload.data : [];
-    const lineItems: Record<string, any[]> = payload.lineItems || {};
+    const lineItems: Record<string, any[]> = exportOptions.includeLineItems
+      ? payload.lineItems || {}
+      : {};
     const truncated = Boolean(payload.pagination?.truncated);
     // Server-side counts: the cap the endpoint applied and how many rows it returned.
     // `exportItems` below is the client-narrowed subset, so it must not be reported as
@@ -922,8 +958,10 @@ const AdminBudget: React.FC = () => {
       beneficiaryFilter === 'All Beneficiary'
         ? fetchedItems
         : fetchedItems.filter((item) => item.beneficiary_type === beneficiaryFilter);
+    // Resubmitted-first only applies to a pending listing, which is now the modal's
+    // choice rather than the tab's.
     const exportItems =
-      statusFilter === 'pending'
+      exportStatus === 'pending'
         ? [...beneficiaryScoped].sort((a, b) => {
             const aResubmitted = isResubmittedBudgetItem(a);
             const bResubmitted = isResubmittedBudgetItem(b);
@@ -935,20 +973,20 @@ const AdminBudget: React.FC = () => {
     if (!exportItems.length) {
       // The beneficiary narrowing above runs after the server cap, so a capped fetch can
       // leave matching proposals beyond the returned window.
-      showAlert(
-        truncated
-          ? `The server returned the first ${serverExported} of ${serverTotal} proposals and none of them match the current filters. Narrow the fiscal year, status or search filters and try again.`
-          : 'There are no proposals in the current view to export.',
-        truncated ? 'warning' : 'info',
-        truncated ? 'Partial Export' : 'Nothing to Export',
-      );
-      return;
+      return {
+        ...emptyResult,
+        totalMatching: serverTotal,
+        maxRows: serverRowCap,
+        truncated,
+        message: truncated
+          ? `The server returned the first ${serverExported} of ${serverTotal} proposals and none of them match the current filters. Narrow the status or date range and try again.`
+          : undefined,
+      };
     }
 
-    const statusLabel =
-      statusFilter === 'all'
-        ? 'All Statuses'
-        : `${statusFilter.charAt(0).toUpperCase()}${statusFilter.slice(1)}`;
+    const statusLabel = exportStatus
+      ? `${exportStatus.charAt(0).toUpperCase()}${exportStatus.slice(1)}`
+      : 'All Statuses';
     const stageLabel = activeQueueTab?.label || 'All Queues';
 
     const headers = [
@@ -1013,6 +1051,15 @@ const AdminBudget: React.FC = () => {
     if (searchTerm) {
       appliedFilters.push(`Search: ${searchTerm}`);
     }
+    // The date window belongs in the file itself: without it a reader can't tell a
+    // date-filtered export from a full one.
+    if (exportOptions.dateFrom || exportOptions.dateTo) {
+      appliedFilters.push(
+        `Dates: ${exportOptions.dateFrom ? formatDateForCsv(exportOptions.dateFrom) : 'earliest'} to ${
+          exportOptions.dateTo ? formatDateForCsv(exportOptions.dateTo) : 'latest'
+        } (all fiscal years)`,
+      );
+    }
 
     // One row per proposal line, prefixed with its ref so the section reads on its own.
     const lineRows: CsvCell[][] = [];
@@ -1035,7 +1082,13 @@ const AdminBudget: React.FC = () => {
 
     const content = joinCsvSections([
       buildCsvSection(
-        `Budget Proposals Export - ${[formatFiscalYearLabel(fiscalYear), stageLabel, statusLabel]
+        `Budget Proposals Export - ${[
+          // A date-ranged export spans years, so naming one fiscal year would
+          // contradict the file's own Dates line and its AllYears filename.
+          exportOptions.allFiscalYears ? 'All fiscal years' : formatFiscalYearLabel(fiscalYear),
+          stageLabel,
+          statusLabel,
+        ]
           .filter(Boolean)
           .join(' - ')}`,
         [],
@@ -1069,19 +1122,22 @@ const AdminBudget: React.FC = () => {
         'Budget',
         stageLabel,
         statusLabel,
-        formatFiscalYearLabel(fiscalYear).replace(/\s+/g, ''),
+        // A date-ranged export spans years, so the fiscal year would misdescribe it.
+        exportOptions.allFiscalYears
+          ? 'AllYears'
+          : formatFiscalYearLabel(fiscalYear).replace(/\s+/g, ''),
       ]),
       content,
     );
 
-    if (truncated) {
-      const capLabel = serverRowCap || serverExported;
-      showAlert(
-        `The server capped this export at ${capLabel} proposals out of ${serverTotal} matching the queue filters, and ${exportItems.length} of them matched the current view. Narrow the fiscal year, status or search filters to export the remainder.`,
-        'warning',
-        'Partial Export',
-      );
-    }
+    return {
+      downloaded: true,
+      recordCount: exportItems.length,
+      lineItemCount: lineRows.length,
+      totalMatching: serverTotal,
+      maxRows: serverRowCap,
+      truncated,
+    };
   };
 
   const isHodBudgetView = useMemo(() => {
@@ -1561,40 +1617,47 @@ const AdminBudget: React.FC = () => {
             {(activeAdminBudgetTab !== 'dashboard' || !isHodBudgetView) && (
               <>
                 <div className="adminbudget-header">
-                  <h5 className="adminbudget-title">Budget Requests</h5>
+                  {/* Title, queue tabs and Export CSV share one row, with the button
+                      pinned right. Previously all four header children sat in a single
+                      flex row, so the button's position depended on whether the filters
+                      wrapped — right for super admin (many tabs), mid-row for HOD (one
+                      tab, everything fits). */}
+                  <div className="adminbudget-header-main">
+                    <h5 className="adminbudget-title">Budget Requests</h5>
 
-                  {queueTabs.length > 0 && (
-                    <div
-                      className="adminbudget-role-tabs"
-                      role="tablist"
-                      aria-label="Budget queues"
+                    {queueTabs.length > 0 && (
+                      <div
+                        className="adminbudget-role-tabs"
+                        role="tablist"
+                        aria-label="Budget queues"
+                      >
+                        {queueTabs.map((tab) => (
+                          <button
+                            key={tab.key}
+                            type="button"
+                            className={`adminbudget-role-tab ${activeQueueTabKey === tab.key ? 'active' : ''}`}
+                            onClick={() => setActiveQueueTabKey(tab.key)}
+                            role="tab"
+                            aria-selected={activeQueueTabKey === tab.key}
+                          >
+                            {tab.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      className="adminbudget-export-csv-btn"
+                      onClick={() => setShowExportModal(true)}
+                      disabled={exportingCsv}
+                      title="Export the currently filtered list as CSV"
+                      aria-busy={exportingCsv}
                     >
-                      {queueTabs.map((tab) => (
-                        <button
-                          key={tab.key}
-                          type="button"
-                          className={`adminbudget-role-tab ${activeQueueTabKey === tab.key ? 'active' : ''}`}
-                          onClick={() => setActiveQueueTabKey(tab.key)}
-                          role="tab"
-                          aria-selected={activeQueueTabKey === tab.key}
-                        >
-                          {tab.label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  <button
-                    type="button"
-                    className="adminbudget-export-csv-btn"
-                    onClick={handleExportCsv}
-                    disabled={exportingCsv}
-                    title="Export the currently filtered list as CSV"
-                    aria-busy={exportingCsv}
-                  >
-                    <Download size={15} />
-                    <span>{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
-                  </button>
+                      <Download size={15} />
+                      <span>{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
+                    </button>
+                  </div>
 
                   <div className="adminbudget-header-actions">
                     {showFreezeControls && (
@@ -2264,6 +2327,16 @@ const AdminBudget: React.FC = () => {
         showCancel={alertConfig.showCancel}
         confirmText={alertConfig.confirmText}
         cancelText={alertConfig.cancelText}
+      />
+
+      <ExportOptionsModal
+        show={showExportModal}
+        onHide={() => setShowExportModal(false)}
+        title="Export Budget Proposals as CSV"
+        scopeSummary={exportScopeSummary}
+        onExport={runBudgetCsvExport}
+        exporting={exportingCsv}
+        recordNoun="proposals"
       />
 
       {deletePopupOpen && (

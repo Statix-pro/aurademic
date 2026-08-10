@@ -7,6 +7,7 @@ import {
   resolvePrimaryHeadIds,
 } from '../budgetCatalog/budgetCatalogResolver.js';
 import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
+import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
 
 const safeParseJSON = (value, fallback = null) => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -4501,6 +4502,17 @@ const financeModel = {
     const whereParams = [];
 
     whereParts.push(FINANCE_NOT_DELETED_CONDITION_SQL);
+
+    // Same expression the queue and the CSV's Date column display, so a date-filtered
+    // export can never contain a row dated outside the requested window.
+    const dateRange = buildDateRangeCondition('COALESCE(fr.request_date, DATE(fr.created_at))', {
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+    });
+    if (dateRange.sql) {
+      whereParts.push(dateRange.sql);
+      whereParams.push(...dateRange.params);
+    }
 
     if (fiscalYear) {
       whereParts.push(`(

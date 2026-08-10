@@ -13,6 +13,7 @@ import {
   normalizeBeneficiaryType,
 } from './budgetUtils.js';
 import db from '../../../config/connection.js';
+import { buildDateRangeCondition } from '../dateRangeFilter.js';
 
 /**
  * Builds and executes the budget list query.
@@ -35,6 +36,9 @@ export async function buildBudgetList(options) {
     q,
     departmentFilter,
     beneficiaryType,
+    dateFrom,
+    dateTo,
+    allFiscalYears = false,
     isAdminView = false, // Set to true for admin-specific fields/logic
     hasColumnCache = { applicant_name: true, budget_tag: true },
   } = options;
@@ -126,8 +130,24 @@ export async function buildBudgetList(options) {
     LEFT JOIN master_entity_contacts mec ON me.id = mec.entity_id
   `;
 
-  const where = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
-  const params = [Number(currentFY)];
+  // `allFiscalYears` lets the CSV export span years when the caller filters by an explicit
+  // date range instead; every other caller keeps the single-year scoping.
+  const where = [];
+  const params = [];
+  if (!allFiscalYears) {
+    where.push('bp.fiscal_year = ?');
+    params.push(Number(currentFY));
+  }
+  where.push("LOWER(TRIM(bp.status)) <> 'deleted'");
+
+  // Filters on the same value the list and the CSV's Date column show (created_at, via
+  // the created_date alias). GROUP BY bp.id makes MAX(bp.created_at) equal to
+  // bp.created_at, so filtering here — before grouping — is exact.
+  const dateRange = buildDateRangeCondition('DATE(bp.created_at)', { dateFrom, dateTo });
+  if (dateRange.sql) {
+    where.push(dateRange.sql);
+    params.push(...dateRange.params);
+  }
   const isQueueSuperAdminView =
     Boolean(superAdminQueueView) &&
     ['hod', 'coordinator', 'ithead', 'dof', 'principal'].includes(safeRole);

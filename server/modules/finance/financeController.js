@@ -1650,7 +1650,16 @@ const financeController = {
   async getFinanceQueueExport(req, res) {
     try {
       const stage = normalizeText(req.params.stage).toLowerCase();
-      const { workflowStatus, statusCategory, level1Role, q, allProposals, fiscalYear } = req.query;
+      const {
+        workflowStatus,
+        statusCategory,
+        level1Role,
+        q,
+        allProposals,
+        fiscalYear,
+        dateFrom,
+        dateTo,
+      } = req.query;
       const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
       const effectiveLevel1Role =
         stage === 'level1'
@@ -1666,7 +1675,11 @@ const financeController = {
         filters: {
           workflowStatus,
           statusCategory,
+          // An explicit date range replaces the fiscal-year scoping so the export can
+          // span years; the client blanks fiscalYear when it sends a range.
           fiscalYear,
+          dateFrom,
+          dateTo,
           level1Role: effectiveLevel1Role,
           q,
           allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
