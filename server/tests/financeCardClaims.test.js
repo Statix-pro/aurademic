@@ -1,0 +1,186 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import db from '../config/connection.js';
+import {
+  carryForwardApprovedBudgetRowFacts,
+  getFinanceClaimTotalsByFinanceIds,
+} from '../modules/finance/financeModel.js';
+
+vi.mock('../config/connection.js', () => {
+  return {
+    default: {
+      getConnection: vi.fn(),
+      query: vi.fn(),
+      execute: vi.fn(),
+    },
+  };
+});
+
+/**
+ * A budget row as the edit form resubmits it: the approval fields are absent because the
+ * form never receives them, which is exactly what used to wipe them.
+ */
+const formRow = (overrides = {}) => ({
+  budget_head: 'Events',
+  sub_head: 'Refreshments',
+  amount: 948,
+  approved_amount: null,
+  remaining_amount_snapshot: null,
+  is_topup: 0,
+  ...overrides,
+});
+
+/** The same row as stored after Principal approval committed it. */
+const approvedRow = (overrides = {}) => ({
+  budget_head: 'Events',
+  sub_head: 'Refreshments',
+  amount: 948,
+  approved_amount: '948.00',
+  remaining_amount_snapshot: '265474.00',
+  is_topup: 0,
+  ...overrides,
+});
+
+describe('carryForwardApprovedBudgetRowFacts', () => {
+  it('preserves the approval snapshot when an edit resubmits unchanged rows', () => {
+    const [merged] = carryForwardApprovedBudgetRowFacts([formRow()], [approvedRow()]);
+
+    expect(merged.approved_amount).toBe(948);
+    expect(merged.remaining_amount_snapshot).toBe(265474);
+  });
+
+  it('keeps every other field from the incoming row', () => {
+    const [merged] = carryForwardApprovedBudgetRowFacts(
+      [formRow({ budget_line_id: 2833, sort_order: 0 })],
+      [approvedRow({ budget_line_id: null })],
+    );
+
+    expect(merged.budget_line_id).toBe(2833);
+    expect(merged.sort_order).toBe(0);
+  });
+
+  it('leaves a row whose amount changed unmatched, so a stale snapshot is not reused', () => {
+    const [merged] = carryForwardApprovedBudgetRowFacts(
+      [formRow({ amount: 1200 })],
+      [approvedRow()],
+    );
+
+    expect(merged.approved_amount).toBeNull();
+    expect(merged.remaining_amount_snapshot).toBeNull();
+  });
+
+  it('consumes each previous row once so repeated heads keep their own snapshot', () => {
+    const previousRows = [
+      approvedRow({ amount: 300, approved_amount: '300.00', remaining_amount_snapshot: '710.00' }),
+      approvedRow({ amount: 300, approved_amount: '300.00', remaining_amount_snapshot: '410.00' }),
+    ];
+
+    const merged = carryForwardApprovedBudgetRowFacts(
+      [formRow({ amount: 300 }), formRow({ amount: 300 }), formRow({ amount: 300 })],
+      previousRows,
+    );
+
+    expect(merged.map((row) => row.remaining_amount_snapshot)).toEqual([710, 410, null]);
+  });
+
+  it('lets incoming values win, so the top-up path passes DB rows through untouched', () => {
+    const [merged] = carryForwardApprovedBudgetRowFacts(
+      [formRow({ approved_amount: 948, remaining_amount_snapshot: 500 })],
+      [approvedRow()],
+    );
+
+    expect(merged.remaining_amount_snapshot).toBe(500);
+  });
+
+  it('restores the top-up flag the edit form drops', () => {
+    const [merged] = carryForwardApprovedBudgetRowFacts(
+      [formRow()],
+      [approvedRow({ is_topup: 1 })],
+    );
+
+    expect(merged.is_topup).toBe(1);
+  });
+
+  it('does not invent an approval snapshot for a brand new row', () => {
+    const merged = carryForwardApprovedBudgetRowFacts([formRow({ amount: 5000 })], []);
+
+    expect(merged[0].approved_amount).toBeNull();
+    expect(merged[0].remaining_amount_snapshot).toBeNull();
+    expect(merged[0].is_topup).toBe(0);
+  });
+});
+
+describe('getFinanceClaimTotalsByFinanceIds', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('adds expenditure to the advance while no settlement exists', async () => {
+    db.query.mockResolvedValue([
+      [
+        {
+          finance_id: 170,
+          advance_amount: '475011.00',
+          expenditure_amount: '1748.00',
+          settlement_amount: '0.00',
+          request_count: 2,
+        },
+      ],
+    ]);
+
+    const totals = await getFinanceClaimTotalsByFinanceIds([170]);
+
+    expect(totals.get(170)).toMatchObject({
+      claimed_amount: 476759,
+      expenditure_request_count: 2,
+    });
+  });
+
+  it('lets a settlement supersede the advance it settles instead of double counting', async () => {
+    db.query.mockResolvedValue([
+      [
+        {
+          finance_id: 262,
+          advance_amount: '398055.00',
+          expenditure_amount: '0.00',
+          settlement_amount: '398055.00',
+          request_count: 2,
+        },
+      ],
+    ]);
+
+    const totals = await getFinanceClaimTotalsByFinanceIds([262]);
+
+    expect(totals.get(262).claimed_amount).toBe(398055);
+  });
+
+  it('skips the query and returns an empty map when there are no finance ids', async () => {
+    const totals = await getFinanceClaimTotalsByFinanceIds([]);
+
+    expect(totals.size).toBe(0);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('excludes deleted requests and groups per finance request', async () => {
+    db.query.mockResolvedValue([[]]);
+
+    await getFinanceClaimTotalsByFinanceIds([170, 262, 170, null]);
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain("<> 'deleted'");
+    expect(sql).toContain('GROUP BY er.finance_request_id');
+    // Deduplicated and filtered, one placeholder per id.
+    expect(params).toEqual([170, 262]);
+    expect((sql.match(/\?/g) || []).length).toBe(2);
+  });
+
+  it('degrades to an empty map when the expenditure table is absent', async () => {
+    const missingTable = new Error('no such table');
+    missingTable.code = 'ER_NO_SUCH_TABLE';
+    db.query.mockRejectedValue(missingTable);
+
+    const totals = await getFinanceClaimTotalsByFinanceIds([170]);
+
+    expect(totals.size).toBe(0);
+  });
+});

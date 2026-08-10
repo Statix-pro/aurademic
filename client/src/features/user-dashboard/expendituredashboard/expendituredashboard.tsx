@@ -794,7 +794,6 @@ const ExpenditureDashboard: React.FC = () => {
       return String(item.beneficiarytype || '').trim() === selectedBeneficiary;
     });
 
-    let total = 0;
     let pending = 0;
     let returned = 0;
     let approved = 0;
@@ -802,6 +801,11 @@ const ExpenditureDashboard: React.FC = () => {
     // Closed renders as a grouped view, so the KPI counts finance cards rather
     // than individual requests (one card can hold several requests).
     const closedCardIds = new Set<string>();
+    // Active is the counterpart of Closed and must count the same unit - the
+    // finance cards the list renders. Counting requests instead under-reported a
+    // freshly approved card that is listed but has no advance/expenditure/
+    // settlement request raised against it yet.
+    const activeCardIds = new Set<string>();
 
     let totalAmount = 0;
     let pendingAmount = 0;
@@ -837,7 +841,6 @@ const ExpenditureDashboard: React.FC = () => {
         return;
       }
 
-      total++;
       totalAmount += itemAmount;
 
       if (matchesStatusFilter(item, 'pending', closedFinanceIds)) {
@@ -854,8 +857,29 @@ const ExpenditureDashboard: React.FC = () => {
       }
     });
 
+    // Mirrors the "all" branch of filteredProposalCards (minus the ref search,
+    // which KPIs never react to) so the count always matches the cards on screen.
+    const activeBeneficiaryFinanceIds =
+      selectedBeneficiary === 'all'
+        ? null
+        : new Set(beneficiaryFilteredData.map((item) => String(item.financeid ?? '')));
+
+    proposalCards.forEach((card) => {
+      if (closedFinanceIds.has(card.financeRequestId)) return;
+      if (activeBeneficiaryFinanceIds && !activeBeneficiaryFinanceIds.has(card.financeRequestId)) {
+        return;
+      }
+
+      if (selectedTypeFilter !== 'all') {
+        const rows = cardRows[card.financeRequestId] ?? [];
+        if (!rows.some((row) => row.primaryChoice === selectedTypeFilter)) return;
+      }
+
+      activeCardIds.add(card.financeRequestId);
+    });
+
     return {
-      total,
+      total: activeCardIds.size,
       pending,
       returned,
       approved,
@@ -868,7 +892,7 @@ const ExpenditureDashboard: React.FC = () => {
       pendingPaymentAmount,
       closedAmount,
     };
-  }, [data, closedFinanceIds, selectedBeneficiary, selectedTypeFilter]);
+  }, [cardRows, closedFinanceIds, data, proposalCards, selectedBeneficiary, selectedTypeFilter]);
 
   const kpiCards = [
     {
@@ -877,6 +901,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Active',
       value: stats.total,
       amount: stats.totalAmount,
+      hint: 'Proposals not yet finalized. Amount is what has been requested under them so far, so it stays 0 until the first request is raised.',
       icon: <FileText size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -885,6 +910,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Pending',
       value: stats.pending,
       amount: stats.pendingAmount,
+      hint: 'Requests awaiting approval, including resubmitted ones.',
       icon: <Clock size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -893,6 +919,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Return',
       value: stats.returned,
       amount: stats.returnedAmount,
+      hint: 'Requests sent back for correction.',
       icon: <RotateCcw size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -901,6 +928,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Approved',
       value: stats.approved,
       amount: stats.approvedAmount,
+      hint: 'Approved requests still awaiting payment.',
       icon: <CheckCircle2 size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -909,6 +937,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Paid',
       value: stats.pendingPayment,
       amount: stats.pendingPaymentAmount,
+      hint: 'Approved requests already paid, on active and closed proposals alike.',
       icon: <CreditCard size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -917,6 +946,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Closed',
       value: stats.closed,
       amount: stats.closedAmount,
+      hint: 'Proposals finalized via Finalize & Close. Amount is what was requested under them.',
       icon: <Lock size={20} className="expenditure-stats-icon" />,
     },
   ];
@@ -2325,6 +2355,7 @@ const ExpenditureDashboard: React.FC = () => {
                     onClick={() => setSelectedStatusFilter(card.key)}
                     aria-pressed={isActive}
                     aria-label={`Filter expenditure requests by ${card.label}`}
+                    title={card.hint}
                   >
                     <div className="expenditure-stats-icon-wrap">{card.icon}</div>
                     <div className="expenditure-stats-info">
