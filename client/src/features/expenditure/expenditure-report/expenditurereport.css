@@ -137,6 +137,10 @@
   margin-left: auto;
 }
 
+.expenditurereport-filter--beneficiary {
+  width: 240px;
+}
+
 .expenditurereport-filter--search {
   width: 260px;
 }
@@ -145,7 +149,9 @@
 
 .expenditurereport-toolbar {
   display: flex;
-  align-items: flex-end;
+  /* Top-aligned so every field label shares one baseline even when the month pills wrap to a
+     second line and make their field taller than the rest. */
+  align-items: flex-start;
   gap: 18px;
   flex-wrap: wrap;
   padding: 16px 24px;
@@ -162,10 +168,6 @@
 
 .expenditurereport-field--fy {
   width: 170px;
-}
-
-.expenditurereport-field--beneficiary {
-  width: 260px;
 }
 
 .expenditurereport-field-label {
@@ -224,28 +226,20 @@
 
 /* ── Month strip ─────────────────────────────────────────────────────────── */
 
-.expenditurereport-monthstrip-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 24px;
-  background: #ffffff;
-  border-bottom: 1px solid #eef2f6;
+/* Takes the rest of the toolbar row and wraps to a second line when the twelve pills stop
+   fitting. Wrapping rather than scrolling: the set is always exactly twelve, so every month
+   stays visible instead of some hiding past a scroll edge. */
+.expenditurereport-field--months {
+  flex: 1 1 420px;
+  min-width: 260px;
 }
 
-.expenditurereport-monthstrip-row .expenditurereport-field-label {
-  flex: 0 0 auto;
-}
-
-/* Twelve pills instead of a dropdown: the whole fiscal year is visible and one click away.
-   Scrolls inside itself on narrow screens rather than widening the page. */
 .expenditurereport-monthstrip {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 6px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: thin;
+  min-height: 42px;
 }
 
 .expenditurereport-monthstrip button {
@@ -314,29 +308,58 @@
   background: #ffffff;
 }
 
-.expenditurereport-range-row {
+/* The two bounds sit inline in the toolbar row alongside the year and period controls. */
+.expenditurereport-field--dates {
   display: flex;
-  align-items: flex-start;
-  gap: 16px;
-  padding: 16px 24px;
-  background: #f8fbff;
-  border-bottom: 1px solid #eef2f6;
+  align-items: flex-end;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
 .expenditurereport-date-input {
-  width: 200px;
+  width: 158px;
   margin-bottom: 0;
 }
 
-.expenditurereport-range-note {
-  margin: 0;
-  flex: 1;
-  min-width: 240px;
-  align-self: center;
-  font-size: 0.82rem;
+/* CustomInput renders a react-bootstrap Form.Group whose label and control carry their own
+   spacing; these keep it the same height and rhythm as the toolbar's other fields. */
+.expenditurereport-date-input .custom-label {
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: #64748b;
-  line-height: 1.5;
+}
+
+.expenditurereport-date-input .custom-input {
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.expenditurereport-date-input .custom-input:focus {
+  border-color: #0069ab;
+  box-shadow:
+    0 0 0 4px rgba(0, 105, 171, 0.15),
+    0 10px 22px rgba(2, 6, 23, 0.08);
+  background: #ffffff;
+}
+
+/* The full explanation lives in the title attribute; the row only needs the reminder. */
+.expenditurereport-range-hint {
+  align-self: center;
+  padding-bottom: 10px;
+  font-size: 0.78rem;
+  color: #64748b;
+  white-space: nowrap;
+  cursor: help;
+  border-bottom: 1px dotted rgba(100, 116, 139, 0.6);
 }
 
 .expenditurereport-body {
@@ -710,9 +733,10 @@
 
   .expenditurereport-field,
   .expenditurereport-field--fy,
-  .expenditurereport-field--beneficiary,
+  .expenditurereport-field--months,
+  .expenditurereport-field--dates,
+  .expenditurereport-filter--beneficiary,
   .expenditurereport-filter--search,
-  .expenditurereport-date-input,
   .expenditurereport-metric-select {
     width: 100%;
   }
@@ -726,16 +750,18 @@
     padding: 0 8px;
   }
 
-  .expenditurereport-monthstrip-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-    padding: 14px 16px;
+  /* Two bounds side by side is still the clearest reading of a range, so they share the
+     row and split it rather than stacking. */
+  .expenditurereport-date-input {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 140px;
   }
 
-  .expenditurereport-range-row {
-    flex-direction: column;
-    padding: 16px;
+  .expenditurereport-range-hint {
+    flex-basis: 100%;
+    padding-bottom: 0;
+    white-space: normal;
   }
 
   .expenditurereport-detail-header {

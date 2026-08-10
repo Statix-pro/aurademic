@@ -695,7 +695,29 @@ const ExpenditureReport: React.FC = () => {
               )}
             </div>
 
+            {/*
+              Beneficiary sits beside the search box because both narrow WHAT you are looking
+              at, while the toolbar below answers WHEN. Neither carries a label up here — the
+              placeholder says what each does, and a lone label beside a bare search box reads
+              as clutter.
+            */}
             <div className="expenditurereport-header-right">
+              <div className="expenditurereport-filter expenditurereport-filter--beneficiary">
+                <Select
+                  inputId="expenditure-report-beneficiary"
+                  aria-label="Beneficiary"
+                  options={beneficiaryOptions}
+                  value={beneficiary}
+                  onChange={(option) =>
+                    setBeneficiary((option as Option) || ALL_BENEFICIARY_OPTION)
+                  }
+                  styles={selectStyles}
+                  isSearchable
+                  placeholder="All Beneficiary"
+                  classNamePrefix="react-select"
+                />
+              </div>
+
               <div className="expenditurereport-filter expenditurereport-filter--search">
                 <Form.Control
                   type="text"
@@ -703,6 +725,7 @@ const ExpenditureReport: React.FC = () => {
                   onChange={(event) => setSearchText(event.target.value)}
                   placeholder="Search ref, applicant or head"
                   className="expenditurereport-search"
+                  aria-label="Search requests"
                 />
               </div>
             </div>
@@ -747,74 +770,61 @@ const ExpenditureReport: React.FC = () => {
               </div>
             </div>
 
-            <div className="expenditurereport-field expenditurereport-field--beneficiary">
-              <label
-                className="expenditurereport-field-label"
-                htmlFor="expenditure-report-beneficiary"
-              >
-                Beneficiary
-              </label>
-              <Select
-                inputId="expenditure-report-beneficiary"
-                options={beneficiaryOptions}
-                value={beneficiary}
-                onChange={(option) => setBeneficiary((option as Option) || ALL_BENEFICIARY_OPTION)}
-                styles={selectStyles}
-                isSearchable
-                placeholder="Search Beneficiary..."
-                classNamePrefix="react-select"
-              />
-            </div>
-          </div>
-
-          {/*
-            The twelve months as a strip rather than a dropdown: the fiscal year only ever has
-            twelve, and showing them all makes the whole year scannable and one click away.
-          */}
-          {periodMode === 'month' && (
-            <div className="expenditurereport-monthstrip-row">
-              <span className="expenditurereport-field-label">Month</span>
-              <div className="expenditurereport-monthstrip" role="group" aria-label="Month">
-                {monthOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    aria-pressed={month?.value === option.value}
-                    className={month?.value === option.value ? 'active' : ''}
-                    onClick={() => setMonth(option)}
-                  >
-                    {option.shortLabel || option.label}
-                  </button>
-                ))}
+            {/*
+              The twelve months as pills rather than a dropdown: a fiscal year only ever has
+              twelve, so the whole year fits and any month is one click away. They WRAP rather
+              than scroll — a scroll container would hide months behind an edge.
+            */}
+            {periodMode === 'month' && (
+              <div className="expenditurereport-field expenditurereport-field--months">
+                <span className="expenditurereport-field-label">Month</span>
+                <div className="expenditurereport-monthstrip" role="group" aria-label="Month">
+                  {monthOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      aria-pressed={month?.value === option.value}
+                      className={month?.value === option.value ? 'active' : ''}
+                      onClick={() => setMonth(option)}
+                      title={option.label}
+                    >
+                      {option.shortLabel || option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {periodMode === 'range' && (
-            <div className="expenditurereport-range-row">
-              <CustomInput
-                label="From date"
-                name="expenditureReportDateFrom"
-                type="date"
-                value={dateFrom}
-                onChange={setDateFrom}
-                className="expenditurereport-date-input"
-              />
-              <CustomInput
-                label="To date"
-                name="expenditureReportDateTo"
-                type="date"
-                value={dateTo}
-                onChange={setDateTo}
-                error={dateError}
-                className="expenditurereport-date-input"
-              />
-              <p className="expenditurereport-range-note">
-                Both bounds are inclusive and the range is searched across all fiscal years. Leaving
-                them empty reports on every date on record.
-              </p>
-            </div>
-          )}
+            {/* Both bounds live in this same row, so picking Date range grows the toolbar
+                instead of opening a second row underneath it. */}
+            {periodMode === 'range' && (
+              <div className="expenditurereport-field--dates">
+                <CustomInput
+                  label="From date"
+                  name="expenditureReportDateFrom"
+                  type="date"
+                  value={dateFrom}
+                  onChange={setDateFrom}
+                  className="expenditurereport-date-input"
+                />
+                <CustomInput
+                  label="To date"
+                  name="expenditureReportDateTo"
+                  type="date"
+                  value={dateTo}
+                  onChange={setDateTo}
+                  error={dateError}
+                  className="expenditurereport-date-input"
+                />
+                <span
+                  className="expenditurereport-range-hint"
+                  title="Both bounds are inclusive. A date range is searched across all fiscal years, so the year picker does not apply. Leaving both empty reports on every date on record."
+                >
+                  Inclusive · all FYs
+                </span>
+              </div>
+            )}
+          </div>
 
           <div className="expenditurereport-body">
             <div className="expenditurereport-period-summary">
