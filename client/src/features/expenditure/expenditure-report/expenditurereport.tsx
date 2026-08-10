@@ -63,9 +63,12 @@ type TabKey = 'head' | 'beneficiary' | 'monthly';
 const AMOUNT_COLUMNS: Array<{ key: MetricKey; label: string; hint: string }> = [
   { key: 'advance', label: 'Advance', hint: 'Cash advanced out on approved requests' },
   { key: 'settlement', label: 'Settlement', hint: 'Actual spend accounted against advances' },
-  { key: 'expenditure', label: 'Expenditure', hint: 'Direct expenditure with no advance' },
+  // "Direct Expenditure", not just "Expenditure": on a page called Expenditure Report the bare
+  // word reads as the total, when it means only the flow that had no advance behind it. Same
+  // wording as the Month-wise metric picker, so one metric never carries two names.
+  { key: 'expenditure', label: 'Direct Expenditure', hint: 'Expenditure paid with no advance' },
   { key: 'totalSpent', label: 'Total Spent', hint: 'Settlement + direct expenditure' },
-  { key: 'unsettledAdvance', label: 'Unsettled Adv.', hint: 'Advance not yet settled' },
+  { key: 'unsettledAdvance', label: 'Unsettled Advance', hint: 'Advance not yet settled' },
   { key: 'pending', label: 'Pending', hint: 'Amount still awaiting approval' },
 ];
 
@@ -961,7 +964,7 @@ const ExpenditureReport: React.FC = () => {
                             <th>Type</th>
                             <th>Advance</th>
                             <th>Settlement</th>
-                            <th>Expenditure</th>
+                            <th title="Expenditure paid with no advance">Direct Expenditure</th>
                             <th>Status</th>
                           </tr>
                         </thead>
