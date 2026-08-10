@@ -20,13 +20,19 @@
   margin-bottom: 24px;
 }
 
+/* Self-contained, content-sized pill. The global `.category-toggle-container` this page used
+   to borrow fixes width to 250px with 50%-wide buttons — correct for two tabs, but it clipped
+   the third one outside the pill. Every dimension here is explicit so nothing is inherited. */
 .expenditurereport-tab-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  width: auto;
+  max-width: 100%;
   background-color: #e1f0ff;
   border-radius: 50px;
-  padding: 4px 6px;
+  padding: 5px;
+  gap: 2px;
   margin: 0 auto;
 }
 
@@ -34,19 +40,32 @@
   border: none;
   background-color: transparent;
   color: #5d6b8a;
-  padding: 6px 20px;
+  width: auto;
+  flex: 0 0 auto;
+  padding: 8px 22px;
   border-radius: 50px;
   font-weight: 500;
-  white-space: nowrap;
-  transition: all 0.3s ease;
-  flex: 0 0 auto;
   font-size: 0.95rem;
+  white-space: nowrap;
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.expenditurereport-tab-toggle button:hover:not(.active) {
+  color: #0069ab;
 }
 
 .expenditurereport-tab-toggle button.active {
   background-color: #0069ab;
   color: #fff;
   box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+}
+
+.expenditurereport-tab-toggle button:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
 }
 
 .expenditurereport-card {
@@ -118,24 +137,151 @@
   margin-left: auto;
 }
 
-.expenditurereport-filter--fy {
-  width: 170px;
-}
-
-.expenditurereport-filter--period {
-  width: 150px;
-}
-
-.expenditurereport-filter--month {
-  width: 170px;
-}
-
-.expenditurereport-filter--beneficiary {
-  width: 240px;
-}
-
 .expenditurereport-filter--search {
-  width: 220px;
+  width: 260px;
+}
+
+/* ── Filter toolbar ──────────────────────────────────────────────────────── */
+
+.expenditurereport-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  background: #f8fbff;
+  border-bottom: 1px solid #eef2f6;
+}
+
+.expenditurereport-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.expenditurereport-field--fy {
+  width: 170px;
+}
+
+.expenditurereport-field--beneficiary {
+  width: 260px;
+}
+
+.expenditurereport-field-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* Segmented control: three mutually exclusive modes, all visible at once, so switching
+   period never requires opening a menu to discover the options. */
+.expenditurereport-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: #eef4fa;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  height: 42px;
+}
+
+.expenditurereport-segmented button {
+  border: none;
+  background: transparent;
+  color: #475569;
+  padding: 0 16px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.expenditurereport-segmented button:hover:not(.active) {
+  color: #0069ab;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.expenditurereport-segmented button.active {
+  background: #ffffff;
+  color: #0069ab;
+  box-shadow: 0 2px 6px rgba(2, 6, 23, 0.12);
+}
+
+.expenditurereport-segmented button:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 1px;
+}
+
+/* ── Month strip ─────────────────────────────────────────────────────────── */
+
+.expenditurereport-monthstrip-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #eef2f6;
+}
+
+.expenditurereport-monthstrip-row .expenditurereport-field-label {
+  flex: 0 0 auto;
+}
+
+/* Twelve pills instead of a dropdown: the whole fiscal year is visible and one click away.
+   Scrolls inside itself on narrow screens rather than widening the page. */
+.expenditurereport-monthstrip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.expenditurereport-monthstrip button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #334155;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.expenditurereport-monthstrip button:hover:not(.active) {
+  border-color: #0069ab;
+  color: #0069ab;
+  background: #f4faff;
+}
+
+.expenditurereport-monthstrip button.active {
+  background: #0069ab;
+  border-color: #0069ab;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.28);
+}
+
+.expenditurereport-monthstrip button:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
 }
 
 .expenditurereport-search {
@@ -533,12 +679,16 @@
     padding: 16px;
   }
 
+  /* The three tabs stop fitting one line here, so the pill scrolls rather than clipping a
+     tab outside its own background. */
   .expenditurereport-tab-toggle {
-    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    justify-content: flex-start;
   }
 
   .expenditurereport-tab-toggle button {
-    padding: 8px 10px;
+    padding: 8px 14px;
     font-size: 0.88rem;
   }
 
@@ -553,14 +703,34 @@
     width: 100%;
   }
 
-  .expenditurereport-filter--fy,
-  .expenditurereport-filter--period,
-  .expenditurereport-filter--month,
-  .expenditurereport-filter--beneficiary,
+  .expenditurereport-toolbar {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .expenditurereport-field,
+  .expenditurereport-field--fy,
+  .expenditurereport-field--beneficiary,
   .expenditurereport-filter--search,
   .expenditurereport-date-input,
   .expenditurereport-metric-select {
     width: 100%;
+  }
+
+  .expenditurereport-segmented {
+    width: 100%;
+  }
+
+  .expenditurereport-segmented button {
+    flex: 1 1 0;
+    padding: 0 8px;
+  }
+
+  .expenditurereport-monthstrip-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 14px 16px;
   }
 
   .expenditurereport-range-row {

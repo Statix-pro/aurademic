@@ -12,6 +12,8 @@ import './expenditurereport.css';
 type Option = {
   value: string;
   label: string;
+  /** Compact form for the month strip's pills, where the full label will not fit. */
+  shortLabel?: string;
   category?: 'Type' | 'Entity';
   id?: number | string;
 };
@@ -75,10 +77,20 @@ const MONTH_METRIC_OPTIONS: Option[] = [
   { value: 'expenditure', label: 'Direct Expenditure' },
 ];
 
-const PERIOD_MODE_OPTIONS: Option[] = [
-  { value: 'year', label: 'Full year' },
-  { value: 'month', label: 'Month' },
-  { value: 'range', label: 'Date range' },
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'head', label: 'Budget Head' },
+  { key: 'beneficiary', label: 'Beneficiary Summary' },
+  { key: 'monthly', label: 'Month-wise' },
+];
+
+/**
+ * Period modes are a segmented control rather than a dropdown: three mutually exclusive
+ * choices that change which other controls appear, which a closed dropdown hides.
+ */
+const PERIOD_MODES: Array<{ key: PeriodMode; label: string }> = [
+  { key: 'year', label: 'Full year' },
+  { key: 'month', label: 'Month' },
+  { key: 'range', label: 'Date range' },
 ];
 
 const ALL_BENEFICIARY_OPTION: Option = { value: 'all', label: 'All Beneficiary' };
@@ -131,7 +143,10 @@ const getCurrentFiscalYearStart = (): number => {
 
 const fiscalYearLabel = (start: number) => `FY ${start}-${String(start + 1).slice(2)}`;
 
-/** The twelve months of a fiscal year, April through the following March. */
+/**
+ * The twelve months of a fiscal year, April through the following March. Each pill carries the
+ * two-digit year because a fiscal year straddles two of them — "Mar 27" is not "Mar 26".
+ */
 const buildMonthOptions = (fiscalYearStart: number): Option[] =>
   Array.from({ length: 12 }, (_, offset) => {
     const absolute = fiscalYearStart * 12 + 3 + offset;
@@ -140,6 +155,7 @@ const buildMonthOptions = (fiscalYearStart: number): Option[] =>
     return {
       value: `${year}-${String(monthIndex + 1).padStart(2, '0')}`,
       label: `${MONTH_NAMES[monthIndex]} ${year}`,
+      shortLabel: `${MONTH_NAMES[monthIndex].slice(0, 3)} ${String(year).slice(2)}`,
     };
   });
 
@@ -647,29 +663,25 @@ const ExpenditureReport: React.FC = () => {
   return (
     <div className="expenditurereport-page">
       <div className="expenditurereport-container">
+        {/*
+          Deliberately NOT using the global `category-toggle-container` class: it is sized for
+          exactly two tabs (width: 250px, button width: 50% in journalform.css), so a third tab
+          overflowed the pill background. This toggle sizes to its content instead.
+        */}
         <div className="expenditurereport-tabs-wrap">
-          <div className="category-toggle-container expenditurereport-tab-toggle">
-            <button
-              type="button"
-              className={activeTab === 'head' ? 'active' : ''}
-              onClick={() => setActiveTab('head')}
-            >
-              Budget Head
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'beneficiary' ? 'active' : ''}
-              onClick={() => setActiveTab('beneficiary')}
-            >
-              Beneficiary Summary
-            </button>
-            <button
-              type="button"
-              className={activeTab === 'monthly' ? 'active' : ''}
-              onClick={() => setActiveTab('monthly')}
-            >
-              Month-wise
-            </button>
+          <div className="expenditurereport-tab-toggle" role="tablist">
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                aria-selected={activeTab === tab.key}
+                className={activeTab === tab.key ? 'active' : ''}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -684,59 +696,6 @@ const ExpenditureReport: React.FC = () => {
             </div>
 
             <div className="expenditurereport-header-right">
-              <div className="expenditurereport-filter expenditurereport-filter--fy">
-                <Select
-                  options={fiscalYearOptions}
-                  value={fiscalYear}
-                  onChange={(option) => option && setFiscalYear(option as Option)}
-                  styles={selectStyles}
-                  isSearchable={false}
-                  // A free date range spans fiscal years, so the year picker has no meaning there.
-                  isDisabled={periodMode === 'range'}
-                  placeholder="Financial Year"
-                />
-              </div>
-
-              <div className="expenditurereport-filter expenditurereport-filter--period">
-                <Select
-                  options={PERIOD_MODE_OPTIONS}
-                  value={PERIOD_MODE_OPTIONS.find((option) => option.value === periodMode)}
-                  onChange={(option) =>
-                    setPeriodMode(((option as Option)?.value || 'year') as PeriodMode)
-                  }
-                  styles={selectStyles}
-                  isSearchable={false}
-                  placeholder="Period"
-                />
-              </div>
-
-              {periodMode === 'month' && (
-                <div className="expenditurereport-filter expenditurereport-filter--month">
-                  <Select
-                    options={monthOptions}
-                    value={month}
-                    onChange={(option) => setMonth(option as Option | null)}
-                    styles={selectStyles}
-                    isSearchable={false}
-                    placeholder="Select month"
-                  />
-                </div>
-              )}
-
-              <div className="expenditurereport-filter expenditurereport-filter--beneficiary">
-                <Select
-                  options={beneficiaryOptions}
-                  value={beneficiary}
-                  onChange={(option) =>
-                    setBeneficiary((option as Option) || ALL_BENEFICIARY_OPTION)
-                  }
-                  styles={selectStyles}
-                  isSearchable
-                  placeholder="Search Beneficiary..."
-                  classNamePrefix="react-select"
-                />
-              </div>
-
               <div className="expenditurereport-filter expenditurereport-filter--search">
                 <Form.Control
                   type="text"
@@ -748,6 +707,88 @@ const ExpenditureReport: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/*
+            One toolbar for the whole period choice, so the controls read as a sentence
+            ("FY 2026-27, month of May") instead of a row of unlabelled dropdowns.
+          */}
+          <div className="expenditurereport-toolbar">
+            <div className="expenditurereport-field expenditurereport-field--fy">
+              <label className="expenditurereport-field-label" htmlFor="expenditure-report-fy">
+                Financial year
+              </label>
+              <Select
+                inputId="expenditure-report-fy"
+                options={fiscalYearOptions}
+                value={fiscalYear}
+                onChange={(option) => option && setFiscalYear(option as Option)}
+                styles={selectStyles}
+                isSearchable={false}
+                // A free date range spans fiscal years, so the year picker has no meaning there.
+                isDisabled={periodMode === 'range'}
+                placeholder="Financial Year"
+              />
+            </div>
+
+            <div className="expenditurereport-field">
+              <span className="expenditurereport-field-label">Period</span>
+              <div className="expenditurereport-segmented" role="group" aria-label="Period">
+                {PERIOD_MODES.map((mode) => (
+                  <button
+                    key={mode.key}
+                    type="button"
+                    aria-pressed={periodMode === mode.key}
+                    className={periodMode === mode.key ? 'active' : ''}
+                    onClick={() => setPeriodMode(mode.key)}
+                  >
+                    {mode.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="expenditurereport-field expenditurereport-field--beneficiary">
+              <label
+                className="expenditurereport-field-label"
+                htmlFor="expenditure-report-beneficiary"
+              >
+                Beneficiary
+              </label>
+              <Select
+                inputId="expenditure-report-beneficiary"
+                options={beneficiaryOptions}
+                value={beneficiary}
+                onChange={(option) => setBeneficiary((option as Option) || ALL_BENEFICIARY_OPTION)}
+                styles={selectStyles}
+                isSearchable
+                placeholder="Search Beneficiary..."
+                classNamePrefix="react-select"
+              />
+            </div>
+          </div>
+
+          {/*
+            The twelve months as a strip rather than a dropdown: the fiscal year only ever has
+            twelve, and showing them all makes the whole year scannable and one click away.
+          */}
+          {periodMode === 'month' && (
+            <div className="expenditurereport-monthstrip-row">
+              <span className="expenditurereport-field-label">Month</span>
+              <div className="expenditurereport-monthstrip" role="group" aria-label="Month">
+                {monthOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={month?.value === option.value}
+                    className={month?.value === option.value ? 'active' : ''}
+                    onClick={() => setMonth(option)}
+                  >
+                    {option.shortLabel || option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {periodMode === 'range' && (
             <div className="expenditurereport-range-row">
