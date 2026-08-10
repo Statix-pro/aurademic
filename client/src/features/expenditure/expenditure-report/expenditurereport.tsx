@@ -827,8 +827,13 @@ const ExpenditureReport: React.FC = () => {
           </div>
 
           <div className="expenditurereport-body">
+            {/* One line carries the period and whatever control the active tab needs, rather
+                than each getting a row of its own with empty space around it. */}
             <div className="expenditurereport-period-summary">
-              Showing <strong>{periodSummary}</strong>
+              <span className="expenditurereport-period-summary-text">
+                Showing <strong>{periodSummary}</strong>
+              </span>
+
               {activeTab === 'monthly' && (
                 <span className="expenditurereport-metric-inline">
                   <span>Cell metric</span>
@@ -841,6 +846,24 @@ const ExpenditureReport: React.FC = () => {
                     className="expenditurereport-metric-select"
                   />
                 </span>
+              )}
+
+              {activeTab === 'beneficiary' && beneficiaryRows.length > 0 && (
+                <button
+                  type="button"
+                  className="expenditurereport-toggle-btn"
+                  onClick={toggleAllSections}
+                >
+                  {isAllExpanded ? (
+                    <>
+                      <ChevronUp size={16} /> Collapse All
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={16} /> Expand All
+                    </>
+                  )}
+                </button>
               )}
             </div>
 
@@ -987,24 +1010,6 @@ const ExpenditureReport: React.FC = () => {
             {/* ── Tab 2: beneficiary summary ─────────────────────────────── */}
             {activeTab === 'beneficiary' && showEmptyState && beneficiaryRows.length > 0 && (
               <div className="expenditurereport-table-section">
-                <div className="expenditurereport-section-actions">
-                  <button
-                    type="button"
-                    className="expenditurereport-toggle-btn"
-                    onClick={toggleAllSections}
-                  >
-                    {isAllExpanded ? (
-                      <>
-                        <ChevronUp size={18} /> Collapse All
-                      </>
-                    ) : (
-                      <>
-                        <ChevronDown size={18} /> Expand All
-                      </>
-                    )}
-                  </button>
-                </div>
-
                 {(() => {
                   let serialNumber = 0;
                   return beneficiarySections.map(({ type, rows }) => {

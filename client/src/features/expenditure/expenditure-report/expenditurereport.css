@@ -171,6 +171,12 @@
 }
 
 .expenditurereport-field-label {
+  /* Bootstrap's reboot gives every <label> a 0.5rem bottom margin but leaves <span> alone.
+     This class is used on both, so without resetting it the fields whose label is a <label>
+     (Financial year) sat 8px lower than the ones using a <span> (Period). */
+  margin: 0;
+  /* Fixed line box so a one-line and a two-line label still leave their controls aligned. */
+  line-height: 1.2;
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -366,15 +372,20 @@
   padding: 20px;
 }
 
+/* Period on the left, the active tab's control on the right, one line. `space-between` would
+   push a lone control to the far edge, so the text takes the slack instead. */
 .expenditurereport-period-summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   font-size: 0.9rem;
   color: #475569;
+}
+
+.expenditurereport-period-summary-text {
+  flex: 1 1 auto;
 }
 
 .expenditurereport-period-summary strong {
@@ -414,12 +425,6 @@
 
 .expenditurereport-table-section {
   margin-bottom: 22px;
-}
-
-.expenditurereport-section-actions {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
 }
 
 .expenditurereport-toggle-btn,
