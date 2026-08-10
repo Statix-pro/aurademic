@@ -1,6 +1,17 @@
 import db from '../../config/connection.js';
 import { resolveCatalogIds } from '../budgetCatalog/budgetCatalogResolver.js';
 import { resolveApprovalFlow as resolveSharedApprovalFlow } from '../shared/budget/approvalFlowResolver.js';
+import {
+  buildRollupQuery,
+  buildScopeKey,
+  buildWindowTypeSql,
+  hasBudgetAnnualTable,
+  loadBudgetAnnualCache,
+  normalizeRollupRow,
+  recalcBudgetAnnualForFiscalYear,
+  resolveProposalScope,
+  syncBudgetAnnualForProposal,
+} from '../shared/budget/budgetAnnualRollup.js';
 import { buildBudgetList, buildBudgetKpiStats } from '../shared/budget/budgetListBuilder.js';
 import {
   VALID_MONTHS as SHARED_VALID_MONTHS,
@@ -78,237 +89,22 @@ async function hasBudgetProposalColumn(columnName) {
   return exists;
 }
 
-async function hasBudgetAnnualTable(conn = db) {
-  const [rows] = await conn.execute(
-    `SELECT COUNT(*) AS count
-       FROM INFORMATION_SCHEMA.TABLES
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = 'Budget_annual'`,
-  );
-  return Number(rows?.[0]?.count || 0) > 0;
-}
-
-async function resolveFreezeCutoffDateTimeForFiscalYear(fiscalYear, conn = db) {
-  const fy = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
-  const fallbackDate = getDefaultFreezeCutoffDate(fy);
-
+/**
+ * Keep the `budget_annual` cache in step with a proposal's current truth.
+ *
+ * Recomputes the affected beneficiary scope from `budget_proposals` /
+ * `budget_proposal_lines` rather than applying a delta, so it is safe to call
+ * from any mutation path, more than once, and in any order.
+ *
+ * A cache write must never fail the business transaction it rides along with,
+ * so failures are logged and swallowed; the next recompute of that scope (or
+ * `npm run reconcile:budget-annual`) repairs it.
+ */
+async function syncBudgetAnnual(proposalId, conn, previousScope = null) {
   try {
-    const [rows] = await conn.execute(
-      `SELECT cutoff_date
-         FROM budget_time_freeze_config
-         WHERE fiscal_year = ?
-         LIMIT 1`,
-      [fy],
-    );
-    const cutoffDate = rows?.[0]?.cutoff_date ? String(rows[0].cutoff_date) : fallbackDate;
-    return `${cutoffDate} 23:59:59`;
+    await syncBudgetAnnualForProposal(proposalId, conn, { previousScope });
   } catch (error) {
-    if (error?.code === 'ER_NO_SUCH_TABLE') {
-      return `${fallbackDate} 23:59:59`;
-    }
-    throw error;
-  }
-}
-
-async function applyBudgetAnnualDeltaByProposalId(proposalId, conn, direction = 'add') {
-  const proposalIdentifier = Number(proposalId);
-  if (!Number.isInteger(proposalIdentifier) || proposalIdentifier <= 0) {
-    return;
-  }
-
-  const tableExists = await hasBudgetAnnualTable(conn);
-  if (!tableExists) {
-    return;
-  }
-
-  const hasBudgetWindowTypeColumn = await hasBudgetProposalColumn('budget_window_type');
-  const budgetWindowSelect = hasBudgetWindowTypeColumn ? 'budget_window_type,' : '';
-
-  const [rows] = await conn.execute(
-    `SELECT id,
-            fiscal_year,
-            beneficiary_type,
-            beneficiary_value,
-            beneficiary_entity_id,
-            department_id,
-            ${budgetWindowSelect}
-            request_date,
-            created_at,
-            approved_total_amount
-       FROM budget_proposals
-      WHERE id = ?
-      LIMIT 1`,
-    [proposalIdentifier],
-  );
-
-  const proposal = rows?.[0];
-  if (!proposal) {
-    return;
-  }
-
-  const amount = Number(proposal.approved_total_amount || 0);
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return;
-  }
-
-  const delta = direction === 'subtract' ? -amount : amount;
-  const fiscalYear = Number.parseInt(proposal.fiscal_year, 10) || getCurrentFinancialYear();
-  const persistedWindowType = normalizeText(proposal?.budget_window_type).toLowerCase();
-  let isInitial = persistedWindowType === 'initial';
-  if (!['initial', 'additional'].includes(persistedWindowType)) {
-    const proposalDateSource = proposal?.request_date || proposal?.created_at || null;
-    const proposalCreatedAt = proposalDateSource ? new Date(proposalDateSource) : null;
-    const cutoffDateTime = await resolveFreezeCutoffDateTimeForFiscalYear(fiscalYear, conn);
-    const cutoffAt = new Date(cutoffDateTime.replace(' ', 'T'));
-    isInitial =
-      proposalCreatedAt && !Number.isNaN(proposalCreatedAt.getTime())
-        ? proposalCreatedAt.getTime() <= cutoffAt.getTime()
-        : true;
-  }
-  const initialDelta = isInitial ? delta : 0;
-  const additionalDelta = isInitial ? 0 : delta;
-  const normalizedTypeRaw = normalizeText(proposal.beneficiary_type);
-  const normalizedTypeLower = normalizedTypeRaw.toLowerCase();
-  const beneficiaryType = ['faculty', 'staff'].includes(normalizedTypeLower)
-    ? 'Department'
-    : normalizedTypeRaw || 'Unknown';
-  const departmentId =
-    Number.isInteger(Number(proposal.department_id)) && Number(proposal.department_id) > 0
-      ? Number(proposal.department_id)
-      : null;
-  let beneficiaryEntityId =
-    Number.isInteger(Number(proposal.beneficiary_entity_id)) &&
-    Number(proposal.beneficiary_entity_id) > 0
-      ? Number(proposal.beneficiary_entity_id)
-      : null;
-
-  const beneficiaryTypeForEntity = normalizeBeneficiaryType(proposal.beneficiary_type);
-  const entityTypeCode = beneficiaryTypeToEntityTypeCode(beneficiaryTypeForEntity);
-
-  // Future-proof alignment: For Entities (Centres/Cells/Clubs), we ALWAYS roll up
-  // into a single row for that entity (department_id = NULL) so the summary
-  // dashboard labels them correctly by Unit Name instead of Submitter's Dept.
-  let resolvedSummaryDepartmentId = departmentId;
-  if (isEntityBeneficiaryType(beneficiaryTypeForEntity) || entityTypeCode === 'INSTITUTION') {
-    resolvedSummaryDepartmentId = null;
-  }
-
-  if (!beneficiaryEntityId && isEntityBeneficiaryType(beneficiaryTypeForEntity) && entityTypeCode) {
-    const normalizedBeneficiaryValue = normalizeText(proposal.beneficiary_value);
-
-    if (normalizedBeneficiaryValue) {
-      const [entityRows] = await conn.execute(
-        `SELECT me.id
-           FROM master_entities me
-           JOIN master_entity_types met ON me.entity_type_id = met.id
-          WHERE me.is_active = 1
-            AND met.code = ?
-            AND LOWER(TRIM(me.name)) = LOWER(TRIM(?))
-          LIMIT 1`,
-        [entityTypeCode, normalizedBeneficiaryValue],
-      );
-      if (entityRows.length) {
-        beneficiaryEntityId = Number(entityRows[0].id);
-      }
-    }
-
-    if (!beneficiaryEntityId && entityTypeCode === 'INSTITUTION') {
-      const [entityRows] = await conn.execute(
-        `SELECT me.id
-           FROM master_entities me
-           JOIN master_entity_types met ON me.entity_type_id = met.id
-          WHERE me.is_active = 1
-            AND met.code = ?
-          ORDER BY me.id ASC
-          LIMIT 2`,
-        [entityTypeCode],
-      );
-      if (entityRows.length === 1) {
-        beneficiaryEntityId = Number(entityRows[0].id);
-      }
-    }
-
-    if (beneficiaryEntityId) {
-      await conn.execute(
-        `UPDATE budget_proposals
-            SET beneficiary_entity_id = ?
-          WHERE id = ?
-            AND (beneficiary_entity_id IS NULL OR beneficiary_entity_id <= 0)`,
-        [beneficiaryEntityId, proposalIdentifier],
-      );
-    }
-  }
-
-  const [updated] = await conn.execute(
-    `UPDATE Budget_annual
-        SET proposed_total_amount = proposed_total_amount + ?,
-            approved_total_amount = approved_total_amount + ?,
-            initial_total_amount = initial_total_amount + ?,
-            additional_total_amount = additional_total_amount + ?,
-            annual_total_amount = annual_total_amount + ?,
-            balance_total_amount = (initial_total_amount + ?) + (additional_total_amount + ?) - expenditure_total_amount
-      WHERE fiscal_year = ?
-        AND LOWER(TRIM(beneficiary_type)) = LOWER(TRIM(?))
-        AND department_id <=> ?
-        AND COALESCE(entity_id, beneficiary_entity_id) <=> ?`,
-    [
-      delta,
-      delta,
-      initialDelta,
-      additionalDelta,
-      delta,
-      initialDelta,
-      additionalDelta,
-      fiscalYear,
-      beneficiaryType,
-      resolvedSummaryDepartmentId,
-      beneficiaryEntityId,
-    ],
-  );
-
-  if (Number(updated?.affectedRows || 0) === 0 && delta > 0) {
-    await conn.execute(
-      `INSERT INTO Budget_annual (
-          fiscal_year,
-          beneficiary_type,
-          beneficiary_entity_id,
-          department_id,
-          entity_id,
-          proposed_total_amount,
-          approved_total_amount,
-          initial_total_amount,
-          additional_total_amount,
-          expenditure_total_amount,
-          balance_total_amount,
-          annual_total_amount
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
-      [
-        fiscalYear,
-        beneficiaryType,
-        beneficiaryEntityId,
-        resolvedSummaryDepartmentId,
-        beneficiaryEntityId,
-        amount,
-        amount,
-        isInitial ? amount : 0,
-        isInitial ? 0 : amount,
-        amount,
-        amount,
-      ],
-    );
-  }
-
-  if (delta < 0) {
-    await conn.execute(
-      `DELETE FROM Budget_annual
-        WHERE fiscal_year = ?
-          AND LOWER(TRIM(beneficiary_type)) = LOWER(TRIM(?))
-          AND department_id <=> ?
-          AND COALESCE(entity_id, beneficiary_entity_id) <=> ?
-          AND annual_total_amount <= 0
-          AND approved_total_amount <= 0`,
-      [fiscalYear, beneficiaryType, resolvedSummaryDepartmentId, beneficiaryEntityId],
-    );
+    console.error(`budget_annual sync failed for proposal ${proposalId}:`, error?.message || error);
   }
 }
 
@@ -422,6 +218,14 @@ export async function upsertFreezeConfig({
        WHERE bp.fiscal_year = ?`,
       [safeCutoffDate, fy],
     );
+  }
+
+  // Moving the cutoff reclassifies every proposal in the year between the
+  // initial and additional windows, so the cached split has to be rebuilt.
+  try {
+    await recalcBudgetAnnualForFiscalYear(db, fy);
+  } catch (error) {
+    console.error(`budget_annual rebuild failed for fiscal year ${fy}:`, error?.message || error);
   }
 
   return getFreezeConfig(fy);
@@ -576,6 +380,9 @@ export async function toggleArchiveState(
         ],
       );
 
+      // Archiving removes the proposal from the beneficiary totals.
+      await syncBudgetAnnual(parsedProposalId, conn);
+
       return { action: 'archived', proposal };
     }
 
@@ -637,6 +444,9 @@ export async function toggleArchiveState(
       ],
     );
 
+    // Unarchiving puts it back into them.
+    await syncBudgetAnnual(parsedProposalId, conn);
+
     return { action: 'unarchived', proposal };
   });
 }
@@ -665,6 +475,10 @@ export async function updateApprovedAmounts(
   }
 
   return withTransaction(async (conn) => {
+    // An edit can move the proposal to a different beneficiary, so remember the
+    // row it is leaving; both scopes get recomputed at the end.
+    const previousScope = await resolveProposalScope(conn, proposalId);
+
     try {
       await conn.execute(
         `ALTER TABLE budget_proposal_lines
@@ -1142,6 +956,11 @@ export async function updateApprovedAmounts(
         [proposalId, logRole, Number(editorUserId), normalizeText(editorEmail), rowText],
       );
     }
+
+    // Approved amounts and the beneficiary can both have changed here,
+    // including on already-completed proposals a super admin edits, so the
+    // beneficiary totals have to follow.
+    await syncBudgetAnnual(proposalId, conn, previousScope);
 
     return {
       changedRows,
@@ -1932,19 +1751,24 @@ export async function getConsolidatedData({
     END
   )`;
 
+  // Same column meanings as the Beneficiary Summary tab (see buildRollupQuery):
+  // Proposed is the ask, Initial + Additional split the approved budget, and
+  // Expenditure is what finance has consumed against it.
+  const sanctionedAmountExpr = `CASE WHEN ${approvedCondition} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END`;
   const sql = `
     SELECT
       bpl.budget_head AS budgetHead,
-      SUM(COALESCE(bpl.approved_line_total, bpl.line_total, 0)) AS proposed,
-      SUM(CASE WHEN ${approvedCondition} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS approved,
-      SUM(CASE WHEN ${windowTypeExpr} = 'initial' THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS initial,
-      SUM(CASE WHEN ${windowTypeExpr} = 'additional' THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END) AS additional,
-      0 AS expenditure
+      SUM(COALESCE(bpl.line_total, 0)) AS proposed,
+      SUM(${sanctionedAmountExpr}) AS approved,
+      SUM(CASE WHEN ${windowTypeExpr} = 'initial' THEN ${sanctionedAmountExpr} ELSE 0 END) AS initial,
+      SUM(CASE WHEN ${windowTypeExpr} = 'additional' THEN ${sanctionedAmountExpr} ELSE 0 END) AS additional,
+      SUM(CASE WHEN ${approvedCondition} THEN COALESCE(fblu.consumed_amount, 0) ELSE 0 END) AS expenditure
     FROM budget_proposals bp
     LEFT JOIN master_departments md ON bp.department_id = md.id
     LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
     LEFT JOIN master_employees applicant_emp ON bp.user_id = applicant_emp.user_id AND applicant_emp.status = 'Active'
     JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
+    LEFT JOIN finance_budget_line_usage fblu ON fblu.budget_line_id = bpl.id
     ${whereClause}
     GROUP BY bpl.budget_head
     ORDER BY bpl.budget_head ASC
@@ -1967,10 +1791,10 @@ export async function getConsolidatedData({
       bp.id AS proposalId,
       bp.proposal_ref AS proposalRef,
       ${applicantNameExpr} AS applicantName,
-      COALESCE(bpl.approved_line_total, bpl.line_total, 0) AS proposedAmount,
-      CASE WHEN ${approvedCondition} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS approvedAmount,
-      CASE WHEN ${windowTypeExpr} = 'initial' THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS initialAmount,
-      CASE WHEN ${windowTypeExpr} = 'additional' THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END AS additionalAmount
+      COALESCE(bpl.line_total, 0) AS proposedAmount,
+      ${sanctionedAmountExpr} AS approvedAmount,
+      CASE WHEN ${windowTypeExpr} = 'initial' THEN ${sanctionedAmountExpr} ELSE 0 END AS initialAmount,
+      CASE WHEN ${windowTypeExpr} = 'additional' THEN ${sanctionedAmountExpr} ELSE 0 END AS additionalAmount
     FROM budget_proposals bp
     LEFT JOIN master_departments md ON bp.department_id = md.id
     LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
@@ -2007,13 +1831,24 @@ export async function getConsolidatedData({
       initial: Number(r.initial || 0),
       additional: Number(r.additional || 0),
       expenditure: Number(r.expenditure || 0),
-      balance: Number(r.initial || 0) + Number(r.additional || 0) - Number(r.expenditure || 0),
+      balance: Number(r.approved || 0) - Number(r.expenditure || 0),
     })),
     detailsByHead,
     availableBeneficiaryTypes,
   };
 }
 
+/**
+ * Beneficiary Summary rows (Reports -> Budget Dashboard -> Beneficiary Summary).
+ *
+ * Derived from `budget_proposals`, `budget_proposal_lines` and
+ * `finance_budget_line_usage` on every read, via the shared rollup in
+ * `shared/budget/budgetAnnualRollup.js`, so it always agrees with the Budget
+ * Head tab and with what finance believes is spendable, and cannot drift.
+ *
+ * `budget_annual` is consulted only for the row id; every amount is derived.
+ * See `recalcBudgetAnnualForFiscalYear` for how that cache is kept in step.
+ */
 export async function listBudgetAnnualSummaryEntries({
   userId,
   userEmail,
@@ -2023,26 +1858,21 @@ export async function listBudgetAnnualSummaryEntries({
   fiscalYear,
   q,
 }) {
-  const hasBudgetWindowTypeColumn = await hasBudgetProposalColumn('budget_window_type');
-  const tableExists = await hasBudgetAnnualTable(db);
-  if (!tableExists) {
-    return [];
-  }
-
+  const hasWindowTypeColumn = await hasBudgetProposalColumn('budget_window_type');
   const currentFY = Number.parseInt(fiscalYear, 10) || getCurrentFinancialYear();
   const safeRole = normalizeBudgetRole(role);
   const safeUserId = Number(userId) > 0 ? Number(userId) : -1;
   const safeEmail = normalizeText(userEmail);
-  const where = ['ba.fiscal_year = ?'];
+  const where = ['bp.fiscal_year = ?'];
   const params = [Number(currentFY)];
 
   switch (safeRole) {
     case 'hod': {
-      where.push(`LOWER(TRIM(ba.beneficiary_type)) = 'department'`);
+      where.push(`LOWER(TRIM(bp.beneficiary_type)) IN ('department', 'faculty', 'staff')`);
       where.push('md.type = "Academic"');
       const hodAuthorizationScope = [];
       if (safeUserId > 0) {
-        hodAuthorizationScope.push(`ba.department_id IN (
+        hodAuthorizationScope.push(`bp.department_id IN (
           SELECT entity_id
           FROM user_entity_roles
           WHERE user_id = ?
@@ -2056,7 +1886,7 @@ export async function listBudgetAnnualSummaryEntries({
 
       const hodFilterScope = [];
       if (Number.isInteger(Number(departmentId)) && Number(departmentId) > 0) {
-        hodFilterScope.push('ba.department_id = ?');
+        hodFilterScope.push('bp.department_id = ?');
         params.push(Number(departmentId));
       }
       if (normalizeText(department)) {
@@ -2073,7 +1903,7 @@ export async function listBudgetAnnualSummaryEntries({
     }
     case 'coordinator': {
       where.push(
-        `LOWER(TRIM(ba.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section')`,
+        `LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'professional body', 'section')`,
       );
       const filterConditions = [];
       if (safeUserId > 0) {
@@ -2105,208 +1935,65 @@ export async function listBudgetAnnualSummaryEntries({
   if (normalizeText(q)) {
     const searchPattern = `%${normalizeText(q)}%`;
     where.push(`(
-      ba.beneficiary_type LIKE ?
-      OR md.name LIKE ?
-      OR me.name LIKE ?
-    )`);
-    params.push(searchPattern, searchPattern, searchPattern);
-  }
-
-  const sql = `
-    SELECT
-      ba.id,
-      'completed' AS status,
-      ba.beneficiary_type,
-      ba.department_id,
-      COALESCE(ba.entity_id, ba.beneficiary_entity_id) AS beneficiary_entity_id,
-      md.name AS department,
-      COALESCE(md.name, me.name, NULLIF(TRIM(ba.beneficiary_type), ''), CONCAT('Unknown #', ba.id)) AS beneficiary_label,
-      ba.created_at AS created_at,
-      ba.proposed_total_amount,
-      ba.approved_total_amount,
-      ba.initial_total_amount,
-      ba.additional_total_amount,
-      ba.expenditure_total_amount,
-      ba.balance_total_amount,
-      ba.annual_total_amount
-    FROM Budget_annual ba
-    LEFT JOIN master_departments md ON ba.department_id = md.id
-    LEFT JOIN master_entities me ON COALESCE(ba.entity_id, ba.beneficiary_entity_id) = me.id
-    WHERE ${where.join(' AND ')}
-    ORDER BY ba.beneficiary_type ASC, beneficiary_label ASC
-  `;
-
-  const [rows] = await db.execute(sql, params);
-  const annualRows = Array.isArray(rows) ? rows : [];
-
-  // Include pre-approval proposed data so summary shows proposals even before approval.
-  // This is primarily consumed by DOF/Super Admin summary views.
-  const pendingWhere = ['bp.fiscal_year = ?', "LOWER(TRIM(bp.status)) <> 'deleted'"];
-  const pendingParams = [Number(currentFY)];
-
-  switch (safeRole) {
-    case 'dof':
-    case 'principal':
-    case 'admin':
-    case 'super_admin':
-      break;
-    default:
-      // Keep legacy scoping for non-admin roles if endpoint is ever called directly.
-      pendingWhere.push('1 = 0');
-      break;
-  }
-
-  pendingWhere.push(`LOWER(TRIM(bp.status)) NOT LIKE '%rejected%'`);
-  pendingWhere.push(`LOWER(TRIM(bp.status)) NOT LIKE '%returned%'`);
-  pendingWhere.push(`LOWER(TRIM(bp.status)) NOT LIKE '%archive%'`);
-  pendingWhere.push(`LOWER(TRIM(bp.status)) NOT IN ('principal_approved', 'completed')`);
-
-  if (normalizeText(q)) {
-    const searchPattern = `%${normalizeText(q)}%`;
-    pendingWhere.push(`(
       bp.beneficiary_type LIKE ?
       OR md.name LIKE ?
       OR me.name LIKE ?
       OR bp.beneficiary_value LIKE ?
     )`);
-    pendingParams.push(searchPattern, searchPattern, searchPattern, searchPattern);
+    params.push(searchPattern, searchPattern, searchPattern, searchPattern);
   }
 
-  const pendingSql = `
-    SELECT
-      CASE
-        WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN 'Department'
-        WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('centre', 'cell', 'club', 'section') THEN CONCAT(UPPER(LEFT(TRIM(bp.beneficiary_type), 1)), LOWER(SUBSTRING(TRIM(bp.beneficiary_type), 2)))
-        WHEN LOWER(TRIM(bp.beneficiary_type)) = 'professional body' THEN 'Professional Body'
-        ELSE TRIM(bp.beneficiary_type)
-      END AS beneficiary_type,
-      CASE
-        WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN bp.department_id
-        ELSE NULL
-      END AS department_id,
-      CASE
-        WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN NULL
-        ELSE bp.beneficiary_entity_id
-      END AS beneficiary_entity_id,
-      CASE
-        WHEN LOWER(TRIM(bp.beneficiary_type)) IN ('faculty', 'staff', 'department') THEN md.name
-        ELSE COALESCE(me.name, bp.beneficiary_value)
-      END AS beneficiary_label,
-      SUM(COALESCE(bpl.line_total, 0)) AS proposed_total_amount,
-      SUM(
-        CASE
-          WHEN COALESCE(
-            ${hasBudgetWindowTypeColumn ? "NULLIF(LOWER(TRIM(bp.budget_window_type)), '')" : 'NULL'},
-            CASE
-              WHEN COALESCE(bp.request_date, DATE(bp.created_at))
-                   <= COALESCE(
-                        (
-                          SELECT btf.cutoff_date
-                          FROM budget_time_freeze_config btf
-                          WHERE btf.fiscal_year = bp.fiscal_year
-                          LIMIT 1
-                        ),
-                        STR_TO_DATE(CONCAT(bp.fiscal_year, '-02-01'), '%Y-%m-%d')
-                      )
-                THEN 'initial'
-              ELSE 'additional'
-            END
-          ) = 'initial'
-            THEN COALESCE(bpl.line_total, 0)
-          ELSE 0
-        END
-      ) AS initial_total_amount,
-      SUM(
-        CASE
-          WHEN COALESCE(
-            ${hasBudgetWindowTypeColumn ? "NULLIF(LOWER(TRIM(bp.budget_window_type)), '')" : 'NULL'},
-            CASE
-              WHEN COALESCE(bp.request_date, DATE(bp.created_at))
-                   <= COALESCE(
-                        (
-                          SELECT btf.cutoff_date
-                          FROM budget_time_freeze_config btf
-                          WHERE btf.fiscal_year = bp.fiscal_year
-                          LIMIT 1
-                        ),
-                        STR_TO_DATE(CONCAT(bp.fiscal_year, '-02-01'), '%Y-%m-%d')
-                      )
-                THEN 'initial'
-              ELSE 'additional'
-            END
-          ) = 'additional'
-            THEN COALESCE(bpl.line_total, 0)
-          ELSE 0
-        END
-      ) AS additional_total_amount
-    FROM budget_proposals bp
-    JOIN budget_proposal_lines bpl ON bp.id = bpl.budget_proposal_id
-    LEFT JOIN master_departments md ON bp.department_id = md.id
-    LEFT JOIN master_entities me ON bp.beneficiary_entity_id = me.id
-    WHERE ${pendingWhere.join(' AND ')}
-    GROUP BY beneficiary_type, department_id, beneficiary_entity_id, beneficiary_label
-  `;
-
-  const [pendingRowsRaw] = await db.execute(pendingSql, pendingParams);
-  const pendingRows = Array.isArray(pendingRowsRaw) ? pendingRowsRaw : [];
-
-  const toKey = (row = {}) => {
-    const type = normalizeText(row.beneficiary_type).toLowerCase() || 'unknown';
-    const departmentIdVal = Number(row.department_id);
-    const entityIdVal = Number(row.beneficiary_entity_id);
-    const label = normalizeText(row.beneficiary_label).toLowerCase();
-    if (Number.isInteger(departmentIdVal) && departmentIdVal > 0)
-      return `${type}::dept::${departmentIdVal}`;
-    if (Number.isInteger(entityIdVal) && entityIdVal > 0) return `${type}::entity::${entityIdVal}`;
-    return `${type}::label::${label}`;
-  };
-
-  const mergedMap = new Map();
-  for (const row of annualRows) {
-    mergedMap.set(toKey(row), { ...row });
-  }
-
-  for (const row of pendingRows) {
-    const key = toKey(row);
-    const existing = mergedMap.get(key);
-    if (!existing) {
-      mergedMap.set(key, {
-        id: null,
-        status: 'submitted',
-        beneficiary_type: row.beneficiary_type,
-        department_id: row.department_id ?? null,
-        beneficiary_entity_id: row.beneficiary_entity_id ?? null,
-        department: null,
-        beneficiary_label: row.beneficiary_label || '-',
-        created_at: null,
-        proposed_total_amount: Number(row.proposed_total_amount || 0),
-        approved_total_amount: 0,
-        initial_total_amount: Number(row.initial_total_amount || 0),
-        additional_total_amount: Number(row.additional_total_amount || 0),
-        expenditure_total_amount: 0,
-        balance_total_amount: Number(row.proposed_total_amount || 0),
-        annual_total_amount: 0,
-      });
-      continue;
-    }
-    existing.proposed_total_amount =
-      Number(existing.proposed_total_amount || 0) + Number(row.proposed_total_amount || 0);
-    existing.initial_total_amount =
-      Number(existing.initial_total_amount || 0) + Number(row.initial_total_amount || 0);
-    existing.additional_total_amount =
-      Number(existing.additional_total_amount || 0) + Number(row.additional_total_amount || 0);
-    existing.balance_total_amount =
-      Number(existing.initial_total_amount || 0) +
-      Number(existing.additional_total_amount || 0) -
-      Number(existing.expenditure_total_amount || 0);
-  }
-
-  return Array.from(mergedMap.values()).sort((a, b) => {
-    const typeA = normalizeText(a.beneficiary_type).toLowerCase();
-    const typeB = normalizeText(b.beneficiary_type).toLowerCase();
-    if (typeA !== typeB) return typeA.localeCompare(typeB);
-    return normalizeText(a.beneficiary_label).localeCompare(normalizeText(b.beneficiary_label));
+  const { sql, params: rollupParams } = buildRollupQuery({
+    windowTypeSql: buildWindowTypeSql(hasWindowTypeColumn),
+    extraWhere: where,
+    extraParams: params,
   });
+
+  const [rows] = await db.execute(sql, rollupParams);
+  const derivedRows = Array.isArray(rows) ? rows : [];
+
+  const cache = (await hasBudgetAnnualTable(db))
+    ? await loadBudgetAnnualCache(db, currentFY)
+    : new Map();
+
+  return derivedRows
+    .map((row) => {
+      const scopeKey = buildScopeKey({
+        fiscalYear: currentFY,
+        beneficiaryType: row.beneficiary_type,
+        departmentId: row.department_id,
+        entityId: row.beneficiary_entity_id,
+      });
+      const cached = cache.get(scopeKey) || null;
+      const totals = normalizeRollupRow(row);
+
+      return {
+        id: cached?.id ?? null,
+        status: 'summary',
+        beneficiary_type: totals.beneficiary_type,
+        department_id: totals.department_id,
+        beneficiary_entity_id: totals.beneficiary_entity_id,
+        department: row.department || null,
+        beneficiary_label:
+          normalizeText(row.department) ||
+          normalizeText(row.entity_name) ||
+          totals.beneficiary_type,
+        created_at: null,
+        proposed_total_amount: totals.proposed_total_amount,
+        approved_total_amount: totals.approved_total_amount,
+        initial_total_amount: totals.initial_total_amount,
+        additional_total_amount: totals.additional_total_amount,
+        expenditure_total_amount: totals.expenditure_total_amount,
+        balance_total_amount: totals.balance_total_amount,
+        annual_total_amount: totals.annual_total_amount,
+      };
+    })
+    .sort((a, b) => {
+      const typeA = normalizeText(a.beneficiary_type).toLowerCase();
+      const typeB = normalizeText(b.beneficiary_type).toLowerCase();
+      if (typeA !== typeB) return typeA.localeCompare(typeB);
+      return normalizeText(a.beneficiary_label).localeCompare(normalizeText(b.beneficiary_label));
+    });
 }
 
 /* =====================================================
@@ -2683,7 +2370,7 @@ async function deleteBudgetProposal(proposalId, actor = {}) {
       [proposalId],
     );
 
-    await applyBudgetAnnualDeltaByProposalId(proposalId, conn, 'subtract');
+    await syncBudgetAnnual(proposalId, conn);
 
     const actorRole = normalizeText(actor?.role).toLowerCase() || 'admin';
     const actorUserId = Number.isInteger(Number(actor?.userId || actor?.id))
@@ -2739,6 +2426,9 @@ export async function processApproval(
           ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
         [proposalId, logRole, approverUserId, approverEmail || '', feedback || ''],
       );
+
+      // Archived proposals drop out of the beneficiary totals.
+      await syncBudgetAnnual(proposalId, conn);
     });
   }
 
@@ -2784,8 +2474,26 @@ export async function processApproval(
       : role;
 
   return withTransaction(async (conn) => {
-    if (isCompletedReversal && proposal.status === 'completed') {
-      await applyBudgetAnnualDeltaByProposalId(proposalId, conn, 'subtract');
+    // Re-read under a row lock and re-check the stage. Without this, two clicks
+    // on Approve both pass the check above against the same pre-transaction
+    // snapshot and both write an approval, which duplicates the audit trail and
+    // used to double-count the proposal in the beneficiary totals.
+    const [lockedRows] = await conn.execute(
+      `SELECT status, current_stage
+         FROM budget_proposals
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE`,
+      [proposalId],
+    );
+
+    const lockedProposal = lockedRows?.[0];
+    if (!lockedProposal) {
+      throw new Error('Proposal not found');
+    }
+
+    if (lockedProposal.current_stage !== role && !isCompletedReversal) {
+      throw new Error(`Stage mismatch: expected ${role}, got ${lockedProposal.current_stage} `);
     }
 
     await conn.execute(
@@ -2825,9 +2533,9 @@ export async function processApproval(
       );
     }
 
-    if (normalizedDecision === 'approved' && newStatus === 'completed') {
-      await applyBudgetAnnualDeltaByProposalId(proposalId, conn, 'add');
-    }
+    // One recompute covers every transition: newly sanctioned, reverted out of
+    // completed, rejected or returned.
+    await syncBudgetAnnual(proposalId, conn);
   });
 }
 
