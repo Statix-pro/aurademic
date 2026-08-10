@@ -1642,6 +1642,67 @@ const financeController = {
     }
   },
 
+  /**
+   * Same queue, unpaginated, with each request's budget breakdown rows — backs the
+   * admin "Export CSV" action so the file covers every filtered request rather than
+   * just the page on screen.
+   */
+  async getFinanceQueueExport(req, res) {
+    try {
+      const stage = normalizeText(req.params.stage).toLowerCase();
+      const {
+        workflowStatus,
+        statusCategory,
+        level1Role,
+        q,
+        allProposals,
+        fiscalYear,
+        dateFrom,
+        dateTo,
+      } = req.query;
+      const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
+      const effectiveLevel1Role =
+        stage === 'level1'
+          ? ['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveFinanceLevel1QueueRole(req)
+          : null;
+
+      const queue = await workflowService.listQueueForExport({
+        moduleKey: 'finance',
+        stage,
+        actor: normalizeActor(req),
+        filters: {
+          workflowStatus,
+          statusCategory,
+          // An explicit date range replaces the fiscal-year scoping so the export can
+          // span years; the client blanks fiscalYear when it sends a range.
+          fiscalYear,
+          dateFrom,
+          dateTo,
+          level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: queue.items.map((row) => sanitizeFinanceRecordForUser(req, row)),
+        lineItems: queue.lineItems,
+        pagination: {
+          total: queue.total,
+          exported: queue.items.length,
+          truncated: queue.truncated,
+          maxRows: queue.maxRows,
+          statusCounts: queue.statusCounts,
+        },
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in getFinanceQueueExport');
+    }
+  },
+
   async getCarryForwardSummary(req, res) {
     try {
       if (!isSuperAdminRequest(req)) {

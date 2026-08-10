@@ -87,6 +87,18 @@ router.get('/coordinator', canAccessLevel1Queue, AdminBudgetController.getCoordi
 router.get('/ithead', canAccessItheadQueue, AdminBudgetController.getItheadBudgets);
 router.get('/dof', canAccessDofQueue, AdminBudgetController.getDofBudgets);
 router.get('/principal', canAccessPrincipalQueue, AdminBudgetController.getPrincipalBudgets);
+
+// CSV export per queue — each reuses the queue's own permission middleware so an
+// export can never reach a queue the caller cannot already list.
+const exportQueue = (role) => (req, res) =>
+  AdminBudgetController.exportQueueBudgets(req, res, role);
+
+router.get('/hod/export', canAccessLevel1Queue, exportQueue('hod'));
+router.get('/coordinator/export', canAccessLevel1Queue, exportQueue('coordinator'));
+router.get('/ithead/export', canAccessItheadQueue, exportQueue('ithead'));
+router.get('/dof/export', canAccessDofQueue, exportQueue('dof'));
+router.get('/principal/export', canAccessPrincipalQueue, exportQueue('principal'));
+router.get('/admin/export', canViewBudgetAdmin, exportQueue('admin'));
 router.get('/:id(\\d+)', AdminBudgetController.get);
 router.put('/:id(\\d+)', canProcessWorkflow, AdminBudgetController.updateApprovedAmounts);
 router.patch('/:id(\\d+)/approval', canProcessWorkflow, AdminBudgetController.approve);

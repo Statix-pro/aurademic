@@ -7,6 +7,7 @@ import {
   resolvePrimaryHeadIds,
 } from '../budgetCatalog/budgetCatalogResolver.js';
 import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
+import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
 
 const safeParseJSON = (value, fallback = null) => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -3648,6 +3649,57 @@ const financeModel = {
     }
   },
 
+  /**
+   * Bulk variant of getBudgetBreakup for the workflow CSV export: fetches the budget
+   * rows for many finance requests in one query and groups them by finance id.
+   */
+  async listBudgetBreakupRowsForExport(financeIds = [], { tx = db } = {}) {
+    const normalizedIds = Array.from(
+      new Set((financeIds || []).map(toPositiveInt).filter(Boolean)),
+    );
+    if (!normalizedIds.length) {
+      return {};
+    }
+
+    const hasApprovedAmountColumn = await hasFinanceBudgetBreakupColumn('approved_amount', { tx });
+    const hasIsTopupColumn = await hasFinanceBudgetBreakupColumn('is_topup', { tx });
+    const approvedAmountSelectSql = hasApprovedAmountColumn
+      ? 'approved_amount'
+      : 'NULL AS approved_amount';
+    const isTopupSelectSql = hasIsTopupColumn ? 'is_topup' : '0 AS is_topup';
+
+    const [rows] = await tx.query(
+      `SELECT
+         finance_id,
+         budget_head,
+         sub_head,
+         amount,
+         ${approvedAmountSelectSql},
+         ${isTopupSelectSql},
+         sort_order
+       FROM finance_budget_breakup
+       WHERE finance_id IN (?)
+       ORDER BY finance_id ASC, sort_order ASC, id ASC`,
+      [normalizedIds],
+    );
+
+    const grouped = {};
+    for (const row of rows || []) {
+      const key = String(row.finance_id);
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push({
+        budget_head: row.budget_head,
+        sub_head: row.sub_head,
+        amount: row.amount,
+        approved_amount: row.approved_amount,
+        is_topup: Number(row.is_topup || 0),
+      });
+    }
+    return grouped;
+  },
+
   async getIncomeRows(financeId) {
     try {
       const hasRemarksColumn = await hasFinanceIncomeRowsColumn('remarks');
@@ -4451,6 +4503,17 @@ const financeModel = {
 
     whereParts.push(FINANCE_NOT_DELETED_CONDITION_SQL);
 
+    // Same expression the queue and the CSV's Date column display, so a date-filtered
+    // export can never contain a row dated outside the requested window.
+    const dateRange = buildDateRangeCondition('COALESCE(fr.request_date, DATE(fr.created_at))', {
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+    });
+    if (dateRange.sql) {
+      whereParts.push(dateRange.sql);
+      whereParams.push(...dateRange.params);
+    }
+
     if (fiscalYear) {
       whereParts.push(`(
         EXISTS (
@@ -4760,7 +4823,12 @@ const financeModel = {
            ELSE 1
          END,
          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.resubmittedAt')), '') DESC,
-         fr.created_at DESC
+         fr.created_at DESC,
+         -- created_at is a second-precision TIMESTAMP, so requests raised in the same
+         -- second tie. Without a unique final key the LIMIT/OFFSET order is undefined
+         -- between pages, which makes the CSV export (10 pages of 100) repeat some rows
+         -- and drop others.
+         fr.id DESC
        LIMIT ? OFFSET ?`,
       [statusStageScope, statusStageScope, ...whereParams, limit, offset],
     );
