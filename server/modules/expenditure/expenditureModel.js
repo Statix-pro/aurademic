@@ -17,6 +17,7 @@ import {
 } from '../shared/budget/budgetUtils.js';
 import { searchApplicant as searchEmployeeApplicants } from '../shared/budget/userResolvers.js';
 import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
+import { buildExpenditureFiscalYearCondition } from '../shared/expenditureFilters.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -6476,48 +6477,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   }
 
   if (fiscalYear) {
-    whereParts.push(`(
-      EXISTS (
-        SELECT 1
-          FROM expenditure_advance_rows ar_fy
-          JOIN budget_proposals bp_fy ON bp_fy.id = ar_fy.budget_proposal_id
-         WHERE ar_fy.expenditure_id = er.id
-           AND bp_fy.fiscal_year = ?
-      )
-      OR EXISTS (
-        SELECT 1
-          FROM expenditure_settlement_rows sr_fy
-          JOIN budget_proposals bp_fy ON bp_fy.id = sr_fy.budget_proposal_id
-         WHERE sr_fy.expenditure_id = er.id
-           AND bp_fy.fiscal_year = ?
-      )
-      OR EXISTS (
-        SELECT 1
-          FROM expenditure_line_rows lr_fy
-          JOIN budget_proposals bp_fy ON bp_fy.id = lr_fy.budget_proposal_id
-         WHERE lr_fy.expenditure_id = er.id
-           AND bp_fy.fiscal_year = ?
-      )
-      OR EXISTS (
-        -- Carry-forward: a proposal carried into the target year must surface
-        -- under that target year for approvers too — matching finance/budget
-        -- (financeModel.listFinanceQueueRecords) and the creator dashboard.
-        SELECT 1
-          FROM finance_carry_forward_allocations cf_fy
-         WHERE cf_fy.finance_request_id = er.finance_request_id
-           AND cf_fy.target_fiscal_year = ?
-           AND LOWER(TRIM(COALESCE(cf_fy.status, 'active'))) = 'active'
-      )
-      OR (
-        NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar_any WHERE ar_any.expenditure_id = er.id AND ar_any.budget_proposal_id IS NOT NULL)
-        AND NOT EXISTS (SELECT 1 FROM expenditure_settlement_rows sr_any WHERE sr_any.expenditure_id = er.id AND sr_any.budget_proposal_id IS NOT NULL)
-        AND NOT EXISTS (SELECT 1 FROM expenditure_line_rows lr_any WHERE lr_any.expenditure_id = er.id AND lr_any.budget_proposal_id IS NOT NULL)
-        AND (
-          YEAR(COALESCE(er.request_date, er.created_at))
-            - (MONTH(COALESCE(er.request_date, er.created_at)) < 4)
-        ) = ?
-      )
-    )`);
+    whereParts.push(buildExpenditureFiscalYearCondition('er'));
     whereParams.push(fiscalYear, fiscalYear, fiscalYear, fiscalYear, fiscalYear);
   }
 

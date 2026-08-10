@@ -121,7 +121,7 @@ The Events domain nests sub-modules: `modules/events/{events,preevents,finance,u
 
 All endpoints return `{ success: boolean, data?: T, message?: string, error?: string }`.
 
-Key prefixes: `/api/auth`, `/api/admin`, `/api/dashboard`, `/api/form-options`, `/api/journals`, `/api/projects`, `/api/events`, `/api/pre-events`, `/api/finance` (events), `/api/finance-requests`, `/api/budget`, `/api/adminbudget`, `/api/budget-catalog`, `/api/account-options`, `/api/expenditure`, `/api/expenditure-requests`, `/api/expenditure-dashboard`, `/api/updates`, `/api/documents`, `/api/access-control`, `/api/master-data`.
+Key prefixes: `/api/auth`, `/api/admin`, `/api/dashboard`, `/api/form-options`, `/api/journals`, `/api/projects`, `/api/events`, `/api/pre-events`, `/api/finance` (events), `/api/finance-requests`, `/api/budget`, `/api/adminbudget`, `/api/budget-catalog`, `/api/account-options`, `/api/expenditure`, `/api/expenditure-requests`, `/api/expenditure-dashboard`, `/api/expenditure-report`, `/api/updates`, `/api/documents`, `/api/access-control`, `/api/master-data`.
 
 ### File uploads
 
