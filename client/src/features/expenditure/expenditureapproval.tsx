@@ -1623,10 +1623,12 @@ const ExpenditureApproval: React.FC = () => {
           status: String(record.payment_status || 'Pending'),
           debitAccount: String(record.payment_debit_account || ''),
         });
-        // LEGACY: bulk_neft_file is the pre-rename response key. Remove once the
-        // server no longer returns it.
+        // LEGACY: `bulk_neft_file` is the pre-"Bulk Transaction" response key, kept in its
+        // own named variable so the alias is searchable. Remove once the server no longer
+        // returns it (see server/scripts/FRESH_DEPLOY_CLEANUP.md).
+        const legacyBulkNeftFile: BillFileRecord | null = record.bulk_neft_file || null;
         const loadedBulkTransactionFile: BillFileRecord | null =
-          record.bulk_transaction_file || record.bulk_neft_file || null;
+          record.bulk_transaction_file || legacyBulkNeftFile;
         setShowBulkTransaction(Boolean(loadedBulkTransactionFile));
         setExistingBulkTransactionFile(loadedBulkTransactionFile);
         setBulkTransactionFile(null);
@@ -3557,26 +3559,16 @@ const ExpenditureApproval: React.FC = () => {
 
   const handleDownloadBulkTransactionTemplate = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(
-        `${authenticityUtility.getBaseURL()}/api/expenditure/templates/bulk-transaction?bank=${encodeURIComponent(
-          bulkTransactionBank,
-        )}&type=${encodeURIComponent(bulkTransactionType)}`,
-        {
-          method: 'GET',
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        },
+      // Routed through authenticityUtility rather than fetch so the request picks up the
+      // shared token handling — expiry check and 401 logout included — instead of reading
+      // the JWT out of localStorage here.
+      const { blob, filename: serverFilename } = await authenticityUtility.getFile(
+        '/expenditure/templates/bulk-transaction',
+        { bank: bulkTransactionBank, type: bulkTransactionType },
       );
 
-      if (!response.ok) {
-        throw new Error(`Template download failed with status ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      const contentDisposition = response.headers.get('Content-Disposition') || '';
-      const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
       const filename =
-        filenameMatch?.[1] ||
+        serverFilename ||
         `bulk-transaction-${bulkTransactionBank.toLowerCase()}-template-v${BULK_TRANSACTION_TEMPLATE_VERSION}.xls`;
       const objectUrl = window.URL.createObjectURL(blob);
       const link = document.createElement('a');

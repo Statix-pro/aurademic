@@ -70,8 +70,11 @@ DEALLOCATE PREPARE stmt_excel_name_check;
 -- ==================================================================
 -- ROLLBACK (keep commented)
 -- ==================================================================
--- ALTER TABLE expenditure_bulk_neft_files DROP COLUMN bank_code;
--- ALTER TABLE expenditure_bulk_neft_files DROP COLUMN transaction_type;
--- ALTER TABLE expenditure_bulk_neft_files
---   ADD CONSTRAINT chk_expenditure_bulk_neft_excel_name
---   CHECK (regexp_like(lower(`original_name`), _utf8mb4'\\.(xlsx|xls)$'));
+-- NOT a plain three-statement revert. Restoring the Excel-only CHECK fails with "Check
+-- constraint is violated" once a single DD upload exists (its file is a scan or PDF), and
+-- dropping transaction_type first erases the only column that identifies those rows — so
+-- the failure is unrecoverable in that order.
+--
+-- The DD-safe procedure lives in the rollback section of:
+--   20260810_enforce_mode_aware_bulk_transaction_file_check.sql
+-- Follow it there; it archives the DD rows before restoring the old constraint.

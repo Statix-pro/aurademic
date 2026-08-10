@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 
 import * as expenditureModel from './expenditureModel.js';
 import './expenditureWorkflowAdapter.js';
+import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
@@ -347,13 +348,11 @@ const getExpenditureUploads = (req) => ({
     : [],
 });
 
+// `file.path` is derived from the client-supplied `originalname`, so the delete is routed
+// through deleteUploadedFile, which refuses any path resolving outside `uploads/`.
 const discardUploadedFile = (file) => {
   if (!file?.path) return;
-  try {
-    fs.unlinkSync(file.path);
-  } catch (err) {
-    console.error('Failed to remove rejected upload:', err);
-  }
+  deleteUploadedFile(file.path);
 };
 
 // Multer has already written every part of the multipart request to disk by the time a

@@ -7,6 +7,7 @@ import multer from 'multer';
 import expenditureController from './expenditureController.js';
 import * as expenditureModel from './expenditureModel.js';
 import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
+import { sanitizeUploadFilename } from '../shared/uploadPaths.js';
 
 const router = express.Router();
 const expenditureUploadRoot = path.join(process.cwd(), 'uploads', 'expenditure');
@@ -15,16 +16,6 @@ const ensureUploadDirectory = (directoryPath) => {
   if (!fs.existsSync(directoryPath)) {
     fs.mkdirSync(directoryPath, { recursive: true });
   }
-};
-
-const sanitizeFilename = (filename = '') => {
-  const extension = path.extname(filename);
-  const basename = path
-    .basename(filename, extension)
-    .replace(/[^a-zA-Z0-9._-]+/g, '_')
-    .slice(0, 80);
-
-  return `${basename || 'file'}${extension}`;
 };
 
 // LEGACY: `bulk_neft_file` is the pre-"Bulk Transaction" field name. Remove once no
@@ -71,7 +62,7 @@ const expenditureUpload = multer({
     },
     filename: (req, file, cb) => {
       const uniquePrefix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-      cb(null, `${uniquePrefix}-${sanitizeFilename(file.originalname)}`);
+      cb(null, `${uniquePrefix}-${sanitizeUploadFilename(file.originalname)}`);
     },
   }),
   fileFilter: (req, file, cb) => {
