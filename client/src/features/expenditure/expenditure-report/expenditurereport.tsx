@@ -253,6 +253,23 @@ const selectStyles = {
     borderBottom: '1px solid #e2e8f0',
     letterSpacing: '0.05em',
   }),
+  // Portalled to <body>, so it has to outrank the app's sticky chrome.
+  menuPortal: (base: any) => ({ ...base, zIndex: 9999 }),
+};
+
+/**
+ * Every select on this page renders its menu into `<body>`.
+ *
+ * `.expenditurereport-card` sets `overflow: hidden` to keep its tables inside the rounded
+ * corners, which also clips an absolutely positioned menu: on a short card — Month-wise with no
+ * data, say — the Cell metric menu extended past the card's bottom edge and its last option was
+ * unreachable. `menuPosition: 'fixed'` keeps the portalled menu pinned to its control while the
+ * page scrolls, and `menuPlacement: 'auto'` flips it upward when there is no room below.
+ */
+const menuPortalProps = {
+  menuPortalTarget: typeof document === 'undefined' ? undefined : document.body,
+  menuPosition: 'fixed' as const,
+  menuPlacement: 'auto' as const,
 };
 
 const SCOPE_LABELS: Record<string, string> = {
@@ -261,6 +278,31 @@ const SCOPE_LABELS: Record<string, string> = {
   entity: 'Your entities',
   own: 'Your requests only',
 };
+
+/**
+ * Label for the role pill, matched on the EXACT role_code.
+ *
+ * The system ships super_admin, admin, hod, finance_admin, principal, coordinator, it_head,
+ * user and chairman. Substring matching mislabelled real users: `it_head` contains "head" so
+ * it read as "HOD", and `finance_admin` — this system's Director of Finance, since there is no
+ * `dof` role_code (see GLOBAL_REPORT_ROLES in expenditureReportModel.js) — fell through to
+ * "Admin". `dof` is kept for the same forward compatibility the server keeps it for.
+ *
+ * Ordered strongest first, so someone holding several roles is labelled by the one that
+ * actually determines what they see.
+ */
+const ROLE_PILL_LABELS: ReadonlyArray<readonly [string, string]> = [
+  ['super_admin', 'Super Admin'],
+  ['principal', 'Principal'],
+  ['chairman', 'Chairman'],
+  ['finance_admin', 'DOF'],
+  ['dof', 'DOF'],
+  ['admin', 'Admin'],
+  ['hod', 'HOD'],
+  ['coordinator', 'Coordinator'],
+  ['entity_approver', 'Coordinator'],
+  ['it_head', 'IT Head'],
+];
 
 const ExpenditureReport: React.FC = () => {
   const { user } = useAuth();
@@ -300,7 +342,6 @@ const ExpenditureReport: React.FC = () => {
 
   const [expandedHead, setExpandedHead] = useState<string | null>(null);
   const [detailSubHeadFilter, setDetailSubHeadFilter] = useState('');
-  const [isAllExpanded, setIsAllExpanded] = useState(true);
   const [expandedByType, setExpandedByType] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
@@ -317,14 +358,10 @@ const ExpenditureReport: React.FC = () => {
         if (typeof role === 'string') return role;
         return role.role_code || role.role_name || '';
       })
-      .map((role) => String(role).toLowerCase());
+      .map((role) => String(role).trim().toLowerCase());
 
-    if (roleCodes.some((code) => code.includes('principal'))) return 'Principal';
-    if (roleCodes.some((code) => code.includes('dof'))) return 'DOF';
-    if (roleCodes.some((code) => code.includes('coordinator'))) return 'Coordinator';
-    if (roleCodes.some((code) => code.includes('hod') || code.includes('head'))) return 'HOD';
-    if (roleCodes.some((code) => code.includes('admin'))) return 'Admin';
-    return 'User';
+    const held = new Set(roleCodes);
+    return ROLE_PILL_LABELS.find(([code]) => held.has(code))?.[1] ?? 'User';
   }, [user]);
 
   // Fiscal years and beneficiary types come from the expenditure workflow meta endpoint the
@@ -469,12 +506,20 @@ const ExpenditureReport: React.FC = () => {
     return params;
   }, [periodMode, fiscalYear.value, month?.value, dateFrom, dateTo, beneficiary, debouncedSearch]);
 
-  const requestParamsKey = JSON.stringify(requestParams);
-
   useEffect(() => {
-    if (dateError) return;
+    if (dateError) {
+      // Drop the previous period's figures. Leaving them rendered showed numbers under the
+      // new (invalid) period label, presenting one range's totals as another's.
+      setHeadRows([]);
+      setDetailsByHead({});
+      setBeneficiaryRows([]);
+      setMonthColumns([]);
+      setMonthlyRows([]);
+      setMonthColumnsTruncated(false);
+      setLoading(false);
+      return;
+    }
 
-    const params = JSON.parse(requestParamsKey);
     let cancelled = false;
 
     const endpoint =
@@ -489,7 +534,7 @@ const ExpenditureReport: React.FC = () => {
         setLoading(true);
         setError('');
 
-        const response: any = await authenticityUtility.get(endpoint, { params });
+        const response: any = await authenticityUtility.get(endpoint, { params: requestParams });
         if (cancelled) return;
 
         if (response?.success === false) {
@@ -503,6 +548,20 @@ const ExpenditureReport: React.FC = () => {
             Array.isArray(response?.data?.consolidatedRows) ? response.data.consolidatedRows : [],
           );
           setDetailsByHead(response?.data?.detailsByHead || {});
+
+          // Backfill the beneficiary-type filter. The meta endpoint used above is gated on the
+          // expenditure workflow permission and 403s for an ordinary user, while this report is
+          // open to everyone (the API scopes what it returns instead). This response is one the
+          // caller can always fetch, and it lists the types actually present in their scope, so
+          // it fills the filter rather than leaving the group missing entirely.
+          const reportTypes: string[] = Array.isArray(response?.data?.availableBeneficiaryTypes)
+            ? response.data.availableBeneficiaryTypes
+                .map((type: unknown) => String(type))
+                .filter(Boolean)
+            : [];
+          if (reportTypes.length) {
+            setBeneficiaryTypes((current) => (current.length ? current : reportTypes));
+          }
         } else if (activeTab === 'beneficiary') {
           setBeneficiaryRows(Array.isArray(response?.data) ? response.data : []);
         } else {
@@ -537,7 +596,7 @@ const ExpenditureReport: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, requestParamsKey, dateError]);
+  }, [activeTab, requestParams, dateError]);
 
   const headTotals = useMemo(() => sumMetrics(headRows), [headRows]);
 
@@ -586,31 +645,28 @@ const ExpenditureReport: React.FC = () => {
 
   const beneficiaryTotals = useMemo(() => sumMetrics(beneficiaryRows), [beneficiaryRows]);
 
-  useEffect(() => {
-    if (!beneficiarySections.length) return;
-    setExpandedByType((previous) => {
-      const next: Record<string, boolean> = {};
-      beneficiarySections.forEach(({ type }) => {
-        next[type] = previous[type] ?? isAllExpanded;
-      });
-      return next;
-    });
-  }, [beneficiarySections, isAllExpanded]);
+  /**
+   * Derived, never stored: `expandedByType` is the only state.
+   *
+   * Holding a second `isAllExpanded` boolean meant keeping the two in step with an effect AND
+   * a `setIsAllExpanded` call nested inside the `setExpandedByType` updater — a side effect in
+   * a reducer, which React runs twice under StrictMode. Sections default to expanded, so an
+   * unseen type reads as expanded here too.
+   */
+  const isAllExpanded = useMemo(
+    () => beneficiarySections.every(({ type }) => expandedByType[type] ?? true),
+    [beneficiarySections, expandedByType],
+  );
 
   const toggleAllSections = () => {
     const nextExpanded = !isAllExpanded;
-    setIsAllExpanded(nextExpanded);
     setExpandedByType(
       Object.fromEntries(beneficiarySections.map(({ type }) => [type, nextExpanded])),
     );
   };
 
   const toggleSection = (type: string) => {
-    setExpandedByType((previous) => {
-      const next = { ...previous, [type]: !(previous[type] ?? isAllExpanded) };
-      setIsAllExpanded(beneficiarySections.every(({ type: sectionType }) => next[sectionType]));
-      return next;
-    });
+    setExpandedByType((previous) => ({ ...previous, [type]: !(previous[type] ?? true) }));
   };
 
   const monthMetricKey = monthMetric.value as MetricKey;
@@ -654,6 +710,23 @@ const ExpenditureReport: React.FC = () => {
       </th>
     ));
 
+  /**
+   * Shared by the Beneficiary tab's per-type tables and the GRAND TOTAL table below them.
+   *
+   * They are separate `<table>` elements, so without identical fixed widths each one sizes its
+   * columns from its own content — long beneficiary names stretch the sections while the grand
+   * total holds only "GRAND TOTAL" — and the totals stop lining up with the figures they sum.
+   */
+  const renderBeneficiaryColgroup = () => (
+    <colgroup>
+      <col className="expenditurereport-col-sno" />
+      <col className="expenditurereport-col-beneficiary" />
+      {AMOUNT_COLUMNS.map((column) => (
+        <col key={column.key} className="expenditurereport-col-amount" />
+      ))}
+    </colgroup>
+  );
+
   const renderAmountCells = (row: Metrics, bold = false) =>
     AMOUNT_COLUMNS.map((column) => (
       <td key={column.key}>
@@ -661,7 +734,9 @@ const ExpenditureReport: React.FC = () => {
       </td>
     ));
 
-  const showEmptyState = !loading && !error;
+  // An invalid date range is not an empty result — the banner explains it, so neither a table
+  // nor "no expenditure recorded" should be shown underneath.
+  const showEmptyState = !loading && !error && !dateError;
 
   return (
     <div className="expenditurereport-page">
@@ -715,6 +790,7 @@ const ExpenditureReport: React.FC = () => {
                     setBeneficiary((option as Option) || ALL_BENEFICIARY_OPTION)
                   }
                   styles={selectStyles}
+                  {...menuPortalProps}
                   isSearchable
                   placeholder="All Beneficiary"
                   classNamePrefix="react-select"
@@ -749,6 +825,7 @@ const ExpenditureReport: React.FC = () => {
                 value={fiscalYear}
                 onChange={(option) => option && setFiscalYear(option as Option)}
                 styles={selectStyles}
+                {...menuPortalProps}
                 isSearchable={false}
                 // A free date range spans fiscal years, so the year picker has no meaning there.
                 isDisabled={periodMode === 'range'}
@@ -845,6 +922,7 @@ const ExpenditureReport: React.FC = () => {
                     value={monthMetric}
                     onChange={(option) => option && setMonthMetric(option as Option)}
                     styles={selectStyles}
+                    {...menuPortalProps}
                     isSearchable={false}
                     className="expenditurereport-metric-select"
                   />
@@ -949,6 +1027,7 @@ const ExpenditureReport: React.FC = () => {
                         value={detailSubHeadFilter}
                         onChange={(event) => setDetailSubHeadFilter(event.target.value)}
                         className="expenditurereport-detail-filter-input"
+                        aria-label="Filter requests by sub head, reference or applicant"
                         placeholder="Filter by sub head, ref or applicant..."
                       />
                     </div>
@@ -965,6 +1044,12 @@ const ExpenditureReport: React.FC = () => {
                             <th>Advance</th>
                             <th>Settlement</th>
                             <th title="Expenditure paid with no advance">Direct Expenditure</th>
+                            {/* Without this column an in-progress request showed a dash under
+                                every amount, so the requests making up a head's Pending figure
+                                were invisible and unaccountable. */}
+                            <th title="Requested but not yet cleared through the workflow">
+                              Pending
+                            </th>
                             <th>Status</th>
                           </tr>
                         </thead>
@@ -980,6 +1065,7 @@ const ExpenditureReport: React.FC = () => {
                               <td>{formatAmount(row.advance)}</td>
                               <td>{formatAmount(row.settlement)}</td>
                               <td>{formatAmount(row.expenditure)}</td>
+                              <td>{formatAmount(row.pending)}</td>
                               <td>
                                 <span
                                   className={`expenditurereport-status-pill expenditurereport-status-pill--${row.status}`}
@@ -991,7 +1077,7 @@ const ExpenditureReport: React.FC = () => {
                           ))}
                           {filteredDetails.length === 0 && (
                             <tr>
-                              <td colSpan={10} className="expenditurereport-detail-empty">
+                              <td colSpan={11} className="expenditurereport-detail-empty">
                                 No matching request found.
                               </td>
                             </tr>
@@ -1016,7 +1102,7 @@ const ExpenditureReport: React.FC = () => {
                 {(() => {
                   let serialNumber = 0;
                   return beneficiarySections.map(({ type, rows }) => {
-                    const isExpanded = expandedByType[type] ?? isAllExpanded;
+                    const isExpanded = expandedByType[type] ?? true;
                     const sectionTotals = sumMetrics(rows);
 
                     return (
@@ -1042,7 +1128,8 @@ const ExpenditureReport: React.FC = () => {
                           </button>
                         </div>
                         <div className="expenditurereport-table-wrapper">
-                          <table className="expenditurereport-table">
+                          <table className="expenditurereport-table expenditurereport-beneficiary-table">
+                            {renderBeneficiaryColgroup()}
                             {isExpanded && (
                               <thead>
                                 <tr>
@@ -1083,7 +1170,8 @@ const ExpenditureReport: React.FC = () => {
                 })()}
 
                 <div className="expenditurereport-table-wrapper">
-                  <table className="expenditurereport-table expenditurereport-grand-table">
+                  <table className="expenditurereport-table expenditurereport-beneficiary-table expenditurereport-grand-table">
+                    {renderBeneficiaryColgroup()}
                     <tbody>
                       <tr className="expenditurereport-total-row">
                         <td />

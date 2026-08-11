@@ -857,18 +857,13 @@ const ExpenditureDashboard: React.FC = () => {
       }
     });
 
-    // Mirrors the "all" branch of filteredProposalCards (minus the ref search,
-    // which KPIs never react to) so the count always matches the cards on screen.
-    const activeBeneficiaryFinanceIds =
-      selectedBeneficiary === 'all'
-        ? null
-        : new Set(beneficiaryFilteredData.map((item) => String(item.financeid ?? '')));
-
-    proposalCards.forEach((card) => {
+    // Counted off searchFilteredProposalCards, the same list the cards are rendered from, so
+    // this mirrors the "all" branch of filteredProposalCards exactly — including the ref
+    // search. Iterating the unfiltered proposalCards instead made the count contradict the
+    // list the moment a ref was typed, and "all" is precisely the view clicking this KPI
+    // opens. Beneficiary filtering is already applied by searchFilteredProposalCards.
+    searchFilteredProposalCards.forEach((card) => {
       if (closedFinanceIds.has(card.financeRequestId)) return;
-      if (activeBeneficiaryFinanceIds && !activeBeneficiaryFinanceIds.has(card.financeRequestId)) {
-        return;
-      }
 
       if (selectedTypeFilter !== 'all') {
         const rows = cardRows[card.financeRequestId] ?? [];
@@ -892,7 +887,14 @@ const ExpenditureDashboard: React.FC = () => {
       pendingPaymentAmount,
       closedAmount,
     };
-  }, [cardRows, closedFinanceIds, data, proposalCards, selectedBeneficiary, selectedTypeFilter]);
+  }, [
+    cardRows,
+    closedFinanceIds,
+    data,
+    searchFilteredProposalCards,
+    selectedBeneficiary,
+    selectedTypeFilter,
+  ]);
 
   const kpiCards = [
     {

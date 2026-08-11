@@ -8,6 +8,27 @@
  * `budget_proposal_lines`. `budget_annual` is a cache of that derivation, never
  * an independent counter.
  *
+ * WHO READS WHAT: nothing in the application reads `budget_annual`'s amounts.
+ * `listBudgetAnnualSummaryEntries` derives every figure through `buildRollupQuery`
+ * on each read, so the report cannot show a stale total. `budget_annual` is a
+ * reporting-only snapshot, rebuilt on demand by
+ * `npm run reconcile:budget-annual` (see `recalcBudgetAnnualForFiscalYear`).
+ *
+ * WHY NO WRITE-THROUGH: the per-proposal sync below is deliberately NOT wired into
+ * the mutation paths. Maintaining the snapshot inside each approve/edit/delete
+ * transaction bought nothing — no reader consumed the amounts — while costing
+ * extra in-transaction queries and, because a cache failure must not fail a
+ * user's approval, requiring the error to be swallowed. A swallowed error that
+ * InnoDB had already turned into a full rollback (a deadlock) would then be
+ * committed as a success, silently losing the approval. Deriving on read removes
+ * that whole class of failure.
+ *
+ * TO RE-ENABLE write-through (only if a consumer of the cached amounts appears):
+ * call `syncBudgetAnnualSafe(proposalId, conn, { previousScope })` as the last
+ * statement of each mutation transaction, passing the `resolveProposalScope`
+ * result captured BEFORE the write whenever the beneficiary can change. That
+ * helper re-throws transaction-fatal errors for the reason above.
+ *
  * Why: `budget_annual` used to be maintained with `column = column +/- delta`
  * arithmetic applied from a handful of mutation sites. Any missed add, repeated
  * add, or subtract-without-a-matching-add drifted the row permanently, and the
@@ -132,13 +153,13 @@ const LEGACY_ENTITY_TYPE_CODE_SQL = `
 `;
 
 const legacyEntityLookupSql = (column) => `
-  (SELECT me_legacy.${column}
-     FROM master_entities me_legacy
-     JOIN master_entity_types met_legacy ON met_legacy.id = me_legacy.entity_type_id
-    WHERE me_legacy.is_active = 1
-      AND met_legacy.code = ${LEGACY_ENTITY_TYPE_CODE_SQL}
-      AND LOWER(TRIM(me_legacy.name)) = LOWER(TRIM(bp.beneficiary_value))
-    ORDER BY me_legacy.id
+  (SELECT legacy_me.${column}
+     FROM master_entities legacy_me
+     JOIN master_entity_types legacy_met ON legacy_met.id = legacy_me.entity_type_id
+    WHERE legacy_me.is_active = 1
+      AND legacy_met.code = ${LEGACY_ENTITY_TYPE_CODE_SQL}
+      AND LOWER(TRIM(legacy_me.name)) = LOWER(TRIM(bp.beneficiary_value))
+    ORDER BY legacy_me.id
     LIMIT 1)
 `;
 
@@ -146,6 +167,22 @@ export const ROLLUP_SCOPE_ENTITY_SQL = `
   CASE
     WHEN LOWER(TRIM(bp.beneficiary_type)) IN ${DEPARTMENT_ROLLUP_TYPES_SQL} THEN NULL
     ELSE COALESCE(NULLIF(bp.beneficiary_entity_id, 0), ${legacyEntityLookupSql('id')})
+  END
+`;
+
+/**
+ * Display name for the department a scope belongs to, if it is a department scope.
+ *
+ * Guarded exactly like `ROLLUP_SCOPE_DEPARTMENT_SQL`, so the name is NULL precisely when
+ * `scope_department_id` is. Emitting a bare `md.name` handed every entity scope the SUBMITTER's
+ * department name, and because the summary prefers `department` over `entity_name` when
+ * labelling a row, a Centre/Cell/Club row was labelled with that department instead of the
+ * unit — contradicting the scope rule in this file's header.
+ */
+export const ROLLUP_DEPARTMENT_NAME_SQL = `
+  CASE
+    WHEN LOWER(TRIM(bp.beneficiary_type)) IN ${ENTITY_ROLLUP_TYPES_SQL} THEN NULL
+    ELSE md.name
   END
 `;
 
@@ -161,9 +198,16 @@ export const ROLLUP_ENTITY_NAME_SQL = `
  * Whether a proposal belongs to the initial or the additional budget window.
  *
  * Prefers the persisted `budget_window_type`, which `upsertFreezeConfig`
- * rewrites whenever the cutoff date moves; falls back to comparing the request
- * date against the configured cutoff (or 1 Feb of the fiscal year) for
- * deployments where the column does not exist yet.
+ * rewrites whenever the cutoff date moves.
+ *
+ * FALLBACK: deployments whose `budget_proposals` table predates the
+ * `budget_window_type` column infer the window by comparing the request date
+ * against the configured cutoff (or 1 Feb of the fiscal year).
+ * Remove this fallback — along with `hasBudgetWindowTypeColumn` and the
+ * `hasBudgetWindowTypeColumn` argument — once every deployment has the column,
+ * i.e. once this returns a row everywhere:
+ *   SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS
+ *    WHERE TABLE_NAME = 'budget_proposals' AND COLUMN_NAME = 'budget_window_type';
  */
 export function buildWindowTypeSql(hasBudgetWindowTypeColumn) {
   const persistedWindow = hasBudgetWindowTypeColumn
@@ -262,7 +306,7 @@ export function buildRollupQuery({ windowTypeSql, extraWhere = [], extraParams =
         ${ROLLUP_SCOPE_TYPE_SQL} AS scope_type,
         ${ROLLUP_SCOPE_DEPARTMENT_SQL} AS scope_department_id,
         ${ROLLUP_SCOPE_ENTITY_SQL} AS scope_entity_id,
-        md.name AS department_name,
+        ${ROLLUP_DEPARTMENT_NAME_SQL} AS department_name,
         ${ROLLUP_ENTITY_NAME_SQL} AS entity_name,
         ${windowTypeSql} AS window_type,
         ${ROLLUP_REQUESTED_AMOUNT_SQL} AS requested_amount,
@@ -511,6 +555,52 @@ export async function syncBudgetAnnualForProposal(proposalId, conn, { previousSc
     results.push(await recalcBudgetAnnualScope(conn, scope));
   }
   return results.length === 1 ? results[0] : results;
+}
+
+/**
+ * Errors that mean the caller's transaction is already gone.
+ *
+ * InnoDB rolls the WHOLE transaction back on a deadlock, and does the same on a
+ * lock-wait timeout when `innodb_rollback_on_timeout` is set; a lost or killed
+ * connection ends it too. These must never be swallowed: the caller commits as
+ * soon as its callback returns, so hiding one of these turns a rolled-back
+ * approval into a silent success — the business writes are gone and the user is
+ * told they succeeded.
+ */
+const TRANSACTION_FATAL_ERROR_CODES = new Set([
+  'ER_LOCK_DEADLOCK',
+  'ER_LOCK_WAIT_TIMEOUT',
+  'ER_QUERY_INTERRUPTED',
+  'ER_CONNECTION_KILLED',
+  'PROTOCOL_CONNECTION_LOST',
+  'ECONNRESET',
+]);
+
+export function isTransactionFatalError(error) {
+  return TRANSACTION_FATAL_ERROR_CODES.has(error?.code);
+}
+
+/**
+ * `syncBudgetAnnualForProposal` for mutation paths that must not fail when only
+ * the cache write fails.
+ *
+ * A stale cache row is recoverable — `npm run reconcile:budget-annual` rebuilds
+ * it from source — so an ordinary cache error is logged and swallowed rather
+ * than failing the user's approval. Errors that already killed the transaction
+ * are re-thrown instead, so the caller rolls back and reports failure honestly.
+ *
+ * Shared by budgetModel and adminBudgetModel so the two cannot drift.
+ */
+export async function syncBudgetAnnualSafe(proposalId, conn, { previousScope = null } = {}) {
+  try {
+    return await syncBudgetAnnualForProposal(proposalId, conn, { previousScope });
+  } catch (error) {
+    if (isTransactionFatalError(error)) {
+      throw error;
+    }
+    console.error(`budget_annual sync failed for proposal ${proposalId}:`, error?.message || error);
+    return null;
+  }
 }
 
 /**

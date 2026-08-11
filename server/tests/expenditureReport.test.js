@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import db from '../config/connection.js';
 import {
   buildReportFilters,
+  resolveMonthColumns,
   resolveReportScope,
 } from '../modules/expenditureReport/expenditureReportModel.js';
 
@@ -257,5 +258,84 @@ describe('resolveReportScope', () => {
 
     expect(scope.scopeType).toBe('own');
     expect(scope.userId).toBeNull();
+  });
+
+  it('counts only assignments granted by a scope-granting approver role', async () => {
+    // Matches workflowScopeResolver.loadAssignmentBuckets. Without the role filter, a
+    // non-approver grant on another department would widen an HOD's scope.
+    db.query.mockResolvedValue([[{ entity_id: 3, entity_type: 'DEPARTMENT' }]]);
+
+    await resolveReportScope({ userId: 7, roles: ['hod'] });
+
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toContain('JOIN roles r ON r.id = uer.role_id');
+    expect(sql).toContain('LOWER(TRIM(r.role_code)) IN (?)');
+    expect(params[1]).toEqual(['hod']);
+  });
+});
+
+describe('resolveMonthColumns', () => {
+  const APRIL_TO_MARCH = [
+    '2026-04',
+    '2026-05',
+    '2026-06',
+    '2026-07',
+    '2026-08',
+    '2026-09',
+    '2026-10',
+    '2026-11',
+    '2026-12',
+    '2027-01',
+    '2027-02',
+    '2027-03',
+  ];
+
+  it('spans April to March for a full fiscal year', () => {
+    const { months, truncated } = resolveMonthColumns({
+      fiscalYear: 2026,
+      dataMonthKeys: ['2026-05', '2027-01'],
+    });
+
+    expect(months).toEqual(APRIL_TO_MARCH);
+    expect(truncated).toBe(false);
+  });
+
+  // Fiscal-year membership is proposal-based, so a request dated outside April→March can still
+  // belong to the year. Dropping its column hid the money from every cell AND from the tab's
+  // totals, leaving Month-wise disagreeing with the Budget Head tab on identical filters.
+  it('widens the span to cover spend dated outside the fiscal year', () => {
+    const { months, truncated } = resolveMonthColumns({
+      fiscalYear: 2026,
+      dataMonthKeys: ['2026-05', '2027-06', '2026-01'],
+    });
+
+    expect(truncated).toBe(false);
+    expect(months).toContain('2027-06');
+    expect(months).toContain('2026-01');
+    expect(months).toEqual([...months].sort());
+    // Every fiscal-year column is still present, so an empty month still shows as empty.
+    for (const key of APRIL_TO_MARCH) {
+      expect(months).toContain(key);
+    }
+  });
+
+  it('falls back to only the months carrying data when the widened span is unreadable', () => {
+    const dataMonthKeys = Array.from({ length: 20 }, (_, offset) => `20${30 + offset}-07`);
+
+    const { months, truncated } = resolveMonthColumns({ fiscalYear: 2026, dataMonthKeys });
+
+    expect(truncated).toBe(true);
+    expect(months).toEqual([...new Set(dataMonthKeys)].sort());
+  });
+
+  it('lets an explicit date window define the columns', () => {
+    const { months, truncated } = resolveMonthColumns({
+      fiscalYear: 2026,
+      dateFrom: '2026-05-01',
+      dateTo: '2026-07-31',
+    });
+
+    expect(months).toEqual(['2026-05', '2026-06', '2026-07']);
+    expect(truncated).toBe(false);
   });
 });

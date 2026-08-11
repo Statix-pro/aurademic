@@ -17,7 +17,13 @@ import {
 } from '../shared/budget/budgetUtils.js';
 import { searchApplicant as searchEmployeeApplicants } from '../shared/budget/userResolvers.js';
 import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
-import { buildExpenditureFiscalYearCondition } from '../shared/expenditureFilters.js';
+import { resolveAdvanceUsageAmount } from '../shared/expenditureClaims.js';
+import {
+  buildClaimedExpenditureStatusCondition,
+  buildExpenditureDisplayRefExpr,
+  buildExpenditureFiscalYearCondition,
+  collateBudgetText,
+} from '../shared/expenditureFilters.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -420,20 +426,6 @@ const normalizeSqlDate = (value) => {
 
 const ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL = `
   LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) NOT IN ('rejected', 'deleted', 'archived')
-`;
-
-// Normalize a text column to a single charset/collation so it can be combined
-// across tables in a UNION. Different expenditure tables were created with
-// differing column collations, which triggers ER_CANT_AGGREGATE_NCOLLATIONS
-// (Illegal mix of collations) on UNION. Force a common collation here.
-const collateBudgetText = (expr) => `CONVERT(${expr} USING utf8mb4) COLLATE utf8mb4_unicode_ci`;
-
-const FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL = `
-  (
-    LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
-    OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
-    OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
-  )
 `;
 
 const WORKFLOW_ROW_REF_SQL_EXPR = `
@@ -2293,7 +2285,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Advance'
-             AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
            THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
            ELSE 0
          END
@@ -2301,7 +2293,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Expenditure'
-             AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
            THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
            ELSE 0
          END
@@ -2309,12 +2301,17 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Settlement'
-             AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
            THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
            ELSE 0
          END
        ), 0) AS settlement_amount,
-       COUNT(DISTINCT er.id) AS expenditure_request_count
+       -- Counted over the same requests the amounts above are summed over. A bare
+       -- COUNT(DISTINCT er.id) also counted deleted and rejected requests, so a card could
+       -- report requests raised against it while every amount beside the count read zero.
+       COUNT(DISTINCT
+         CASE WHEN ${buildClaimedExpenditureStatusCondition('er')} THEN er.id END
+       ) AS expenditure_request_count
      FROM finance_requests fr
      LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
      LEFT JOIN master_employees emp ON emp.id = fr.employee_id
@@ -2421,7 +2418,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       const advanceAmount = toMoney(row.advance_amount);
       const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
-      const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+      const effectiveUsageAmount = resolveAdvanceUsageAmount(advanceAmount, settlementAmount);
       const sourceFiscalYear = toPositiveInt(row.source_fiscal_year);
       return {
         finance_request_id: toPositiveInt(row.finance_request_id),
@@ -5887,18 +5884,8 @@ const WORKFLOW_STAGE_SQL_EXPR = `
   )
 `;
 
-const QUEUE_DISPLAY_REF_SQL_EXPR = `
-  COALESCE(
-    (
-      SELECT err_display.request_ref
-        FROM expenditure_request_refs err_display
-       WHERE err_display.expenditure_request_id = er.id
-       ORDER BY err_display.id ASC
-       LIMIT 1
-    ),
-    CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))
-  )
-`;
+/** Shared with the report, which searches on this expression. */
+const QUEUE_DISPLAY_REF_SQL_EXPR = buildExpenditureDisplayRefExpr('er');
 
 const normalizeWorkflowState = (workflowState) => {
   if (!workflowState) return null;

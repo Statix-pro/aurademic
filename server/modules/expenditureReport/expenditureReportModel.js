@@ -15,13 +15,20 @@
  *
  *   totalSpent       = settlement + spend  (an advance is realised BY its settlement, so
  *                                           adding both would double-count the same money)
- *   unsettledAdvance = max(advance - settlement, 0)
+ *   unsettledAdvance = max(advance - settlement, 0), clamped PER ROW and then summed — never
+ *                      recomputed from summed totals, or a row that settled more than it
+ *                      advanced would cancel another row's outstanding advance.
  */
 
 import db from '../../config/connection.js';
 import { normalizeBeneficiaryType } from '../shared/budget/budgetUtils.js';
 import { buildDateRangeCondition, normalizeDateRange } from '../shared/dateRangeFilter.js';
-import { buildExpenditureFiscalYearCondition } from '../shared/expenditureFilters.js';
+import {
+  buildExpenditureDisplayRefExpr,
+  buildExpenditureFiscalYearCondition,
+  buildFinalizedExpenditureStatusCondition,
+  collateBudgetText,
+} from '../shared/expenditureFilters.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -36,14 +43,6 @@ const toMoney = (value) => {
   const parsed = Number(String(value ?? '').replace(/,/g, ''));
   return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0;
 };
-
-/**
- * The three row tables were created with different default collations
- * (expenditure_unplanned_rows is utf8mb4_0900_ai_ci, the rest utf8mb4_unicode_ci), so a
- * UNION over their text columns needs an explicit collation or MySQL raises
- * "Illegal mix of collations". Same helper the expenditure model uses.
- */
-const collateBudgetText = (expr) => `CONVERT(${expr} USING utf8mb4) COLLATE utf8mb4_unicode_ci`;
 
 /**
  * Roles that see the whole institution. Everyone else is narrowed or falls back to own records.
@@ -97,15 +96,11 @@ const MAX_MONTH_COLUMNS = 24;
 const REPORT_DATE_SQL = `COALESCE(er.request_date, DATE(er.created_at))`;
 
 /**
- * A request counts as finalized once it has cleared its workflow. Only finalized money is
- * reported as advance/settlement/expenditure; anything still moving is reported as pending.
- * Mirrors FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL in expenditureModel.js.
+ * Only finalized money is reported as advance/settlement/expenditure; anything still moving is
+ * reported as pending. Defined in shared/ so a second screen needing "has this cleared its
+ * workflow" adopts this definition instead of restating it.
  */
-const FINALIZED_SQL = `(
-  LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
-  OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
-  OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
-)`;
+const FINALIZED_SQL = buildFinalizedExpenditureStatusCondition('er');
 
 /**
  * Deleted, rejected and archived requests never contribute to the report — the same
@@ -117,16 +112,8 @@ const REPORTABLE_REQUEST_SQL = `NOT (
   OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('rejected', 'archived')
 )`;
 
-const DISPLAY_REF_SQL = `COALESCE(
-  (
-    SELECT err_display.request_ref
-      FROM expenditure_request_refs err_display
-     WHERE err_display.expenditure_request_id = er.id
-     ORDER BY err_display.id ASC
-     LIMIT 1
-  ),
-  CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))
-)`;
+/** Same expression the queue displays, so a ref copied from there matches the search here. */
+const DISPLAY_REF_SQL = buildExpenditureDisplayRefExpr('er');
 
 const APPLICANT_NAME_SQL = `COALESCE(
   NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''),
@@ -259,11 +246,23 @@ export async function resolveReportScope({
     return { scopeType: 'own', departmentIds: [], entityIds: [], userId: normalizedUserId };
   }
 
+  // Only an assignment made UNDER a scope-granting approver role widens the scope. Counting
+  // every `user_entity_roles` row regardless of the role that granted it would hand an HOD any
+  // other department they hold a non-approver grant in, and would disagree with the approval
+  // queue, which filters the same way (workflowScopeResolver.loadAssignmentBuckets). The early
+  // return above guarantees this list is non-empty.
+  const scopeRoleCodes = [
+    ...(isHod ? ['hod'] : []),
+    ...(isCoordinator ? ['coordinator', 'entity_approver'] : []),
+  ];
+
   const [rows] = await db.query(
     `SELECT uer.entity_id, uer.entity_type
        FROM user_entity_roles uer
-      WHERE uer.user_id = ?`,
-    [normalizedUserId],
+       JOIN roles r ON r.id = uer.role_id
+      WHERE uer.user_id = ?
+        AND LOWER(TRIM(r.role_code)) IN (?)`,
+    [normalizedUserId, scopeRoleCodes],
   );
 
   const departmentIds = [];
@@ -505,9 +504,27 @@ export async function getExpenditureConsolidation(filters = {}) {
 }
 
 /**
- * Beneficiary types present in the filtered set, for the beneficiary dropdown. Deliberately
- * ignores the caller's own beneficiary filters so selecting one type does not empty the
- * list it was chosen from.
+ * "This request has at least one row in the spend ledger."
+ *
+ * Equivalent to what joining the ledger does for a DISTINCT over `er` columns — the join yields
+ * a row exactly when one of these exists — but each EXISTS can stop at the first hit on the
+ * `expenditure_id` index instead of materializing the whole three-table union, and it skips the
+ * collation conversion that union needs for its text columns.
+ */
+const HAS_LEDGER_ROWS_SQL = `(
+  EXISTS (SELECT 1 FROM expenditure_advance_rows led_ar WHERE led_ar.expenditure_id = er.id)
+  OR EXISTS (SELECT 1 FROM expenditure_settlement_rows led_sr WHERE led_sr.expenditure_id = er.id)
+  OR EXISTS (SELECT 1 FROM expenditure_line_rows led_lr WHERE led_lr.expenditure_id = er.id)
+)`;
+
+/**
+ * Beneficiary types present in the filtered set, for the beneficiary dropdown.
+ *
+ * Deliberately ignores the caller's own beneficiary filters AND their search term, so neither
+ * picking a type nor typing a search can empty the list those choices are made from.
+ *
+ * Because both are blanked, the resulting WHERE touches only `er`, which is what lets this
+ * avoid the ledger join entirely and test for ledger rows with EXISTS instead.
  */
 async function listReportBeneficiaryTypes(filters = {}) {
   const { whereSql, params } = buildReportFilters({
@@ -519,8 +536,9 @@ async function listReportBeneficiaryTypes(filters = {}) {
 
   const [rows] = await db.query(
     `SELECT DISTINCT TRIM(er.beneficiary_type) AS beneficiaryType
-     ${REPORT_FROM_SQL}
+     FROM expenditure_requests er
      ${whereSql}
+       AND ${HAS_LEDGER_ROWS_SQL}
        AND er.beneficiary_type IS NOT NULL
        AND TRIM(er.beneficiary_type) <> ''
      ORDER BY beneficiaryType ASC`,
@@ -611,10 +629,13 @@ export async function getExpenditureBeneficiarySummary(filters = {}) {
     existing.pending += metrics.pending;
     existing.requestCount += metrics.requestCount;
     existing.totalSpent = Math.round((existing.settlement + existing.expenditure) * 100) / 100;
-    existing.unsettledAdvance = Math.max(
-      Math.round((existing.advance - existing.settlement) * 100) / 100,
-      0,
-    );
+    // Sum the already-clamped per-row values rather than recomputing from the summed totals.
+    // `mapMetrics` clamps each group row at zero, so recomputing here let a row that settled
+    // more than it advanced cancel another row's outstanding advance — making a beneficiary row
+    // disagree with the GRAND TOTAL, which the client builds by summing the clamped values
+    // (see sumMetrics in expenditurereport.tsx).
+    existing.unsettledAdvance =
+      Math.round((existing.unsettledAdvance + metrics.unsettledAdvance) * 100) / 100;
   }
 
   return [...merged.values()].sort(
@@ -645,7 +666,7 @@ const monthLabel = (key) => {
  *
  * @returns {{months: string[], truncated: boolean}}
  */
-function resolveMonthColumns({ fiscalYear, dateFrom, dateTo, dataMonthKeys = [] }) {
+export function resolveMonthColumns({ fiscalYear, dateFrom, dateTo, dataMonthKeys = [] }) {
   const monthsWithData = [...new Set(dataMonthKeys)].sort();
   const spanFrom = (startYear, startMonth, count) =>
     Array.from({ length: count }, (_, offset) => {
@@ -668,7 +689,24 @@ function resolveMonthColumns({ fiscalYear, dateFrom, dateTo, dataMonthKeys = [] 
   if (fiscalYear) {
     // April of the fiscal year through March of the next — the April start every
     // expenditure and finance fiscal-year expression already uses.
-    return { months: spanFrom(fiscalYear, 4, 12), truncated: false };
+    const fiscalSpan = spanFrom(fiscalYear, 4, 12);
+
+    // Fiscal-year membership is proposal-based, not date-based: a request counts
+    // towards this year through the proposal its rows point at, or through a
+    // carry-forward, so its own date can fall outside April→March. Those months
+    // still need a column — dropping them would hide the money from every cell
+    // AND from this tab's totals, leaving Month-wise disagreeing with the Budget
+    // Head tab under identical filters.
+    const outsideSpan = monthsWithData.filter((key) => !fiscalSpan.includes(key));
+    if (!outsideSpan.length) {
+      return { months: fiscalSpan, truncated: false };
+    }
+
+    const widened = [...fiscalSpan, ...outsideSpan].sort();
+    if (widened.length <= MAX_MONTH_COLUMNS) {
+      return { months: widened, truncated: false };
+    }
+    return { months: monthsWithData, truncated: true };
   }
 
   return { months: monthsWithData, truncated: false };

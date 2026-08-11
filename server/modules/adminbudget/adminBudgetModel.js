@@ -5,12 +5,7 @@ import {
   buildRollupQuery,
   buildScopeKey,
   buildWindowTypeSql,
-  hasBudgetAnnualTable,
-  loadBudgetAnnualCache,
   normalizeRollupRow,
-  recalcBudgetAnnualForFiscalYear,
-  resolveProposalScope,
-  syncBudgetAnnualForProposal,
 } from '../shared/budget/budgetAnnualRollup.js';
 import { buildBudgetList, buildBudgetKpiStats } from '../shared/budget/budgetListBuilder.js';
 import {
@@ -87,25 +82,6 @@ async function hasBudgetProposalColumn(columnName) {
   }
 
   return exists;
-}
-
-/**
- * Keep the `budget_annual` cache in step with a proposal's current truth.
- *
- * Recomputes the affected beneficiary scope from `budget_proposals` /
- * `budget_proposal_lines` rather than applying a delta, so it is safe to call
- * from any mutation path, more than once, and in any order.
- *
- * A cache write must never fail the business transaction it rides along with,
- * so failures are logged and swallowed; the next recompute of that scope (or
- * `npm run reconcile:budget-annual`) repairs it.
- */
-async function syncBudgetAnnual(proposalId, conn, previousScope = null) {
-  try {
-    await syncBudgetAnnualForProposal(proposalId, conn, { previousScope });
-  } catch (error) {
-    console.error(`budget_annual sync failed for proposal ${proposalId}:`, error?.message || error);
-  }
 }
 
 export async function getBudgetTags() {
@@ -220,14 +196,10 @@ export async function upsertFreezeConfig({
     );
   }
 
-  // Moving the cutoff reclassifies every proposal in the year between the
-  // initial and additional windows, so the cached split has to be rebuilt.
-  try {
-    await recalcBudgetAnnualForFiscalYear(db, fy);
-  } catch (error) {
-    console.error(`budget_annual rebuild failed for fiscal year ${fy}:`, error?.message || error);
-  }
-
+  // Moving the cutoff reclassifies the whole year between the initial and additional windows,
+  // but the Beneficiary Summary derives that split per read from `budget_window_type` above,
+  // so there is nothing further to recompute here. The `budget_annual` snapshot is rebuilt on
+  // demand by `npm run reconcile:budget-annual`.
   return getFreezeConfig(fy);
 }
 
@@ -380,9 +352,6 @@ export async function toggleArchiveState(
         ],
       );
 
-      // Archiving removes the proposal from the beneficiary totals.
-      await syncBudgetAnnual(parsedProposalId, conn);
-
       return { action: 'archived', proposal };
     }
 
@@ -444,9 +413,6 @@ export async function toggleArchiveState(
       ],
     );
 
-    // Unarchiving puts it back into them.
-    await syncBudgetAnnual(parsedProposalId, conn);
-
     return { action: 'unarchived', proposal };
   });
 }
@@ -475,10 +441,6 @@ export async function updateApprovedAmounts(
   }
 
   return withTransaction(async (conn) => {
-    // An edit can move the proposal to a different beneficiary, so remember the
-    // row it is leaving; both scopes get recomputed at the end.
-    const previousScope = await resolveProposalScope(conn, proposalId);
-
     try {
       await conn.execute(
         `ALTER TABLE budget_proposal_lines
@@ -956,11 +918,6 @@ export async function updateApprovedAmounts(
         [proposalId, logRole, Number(editorUserId), normalizeText(editorEmail), rowText],
       );
     }
-
-    // Approved amounts and the beneficiary can both have changed here,
-    // including on already-completed proposals a super admin edits, so the
-    // beneficiary totals have to follow.
-    await syncBudgetAnnual(proposalId, conn, previousScope);
 
     return {
       changedRows,
@@ -1754,6 +1711,19 @@ export async function getConsolidatedData({
   // Same column meanings as the Beneficiary Summary tab (see buildRollupQuery):
   // Proposed is the ask, Initial + Additional split the approved budget, and
   // Expenditure is what finance has consumed against it.
+  //
+  // The two tabs do NOT share a definition of "approved", and that is deliberate. This tab uses
+  // `approvedCondition`, which is ROLE-RELATIVE: it accepts the intermediate statuses
+  // (level1_approved, hod_approved, ithead_approved, dof_approved) so each approver sees what
+  // has cleared up to their own stage. The Beneficiary Summary uses
+  // ROLLUP_SANCTIONED_STATUS_SQL, which counts only budget that is fully sanctioned and
+  // therefore spendable — the same rule finance applies when releasing money.
+  //
+  // So Approved/Initial/Additional/Expenditure can legitimately read higher here than there for
+  // a proposal still mid-flow. Do not "unify" these by swapping in the shared constant: that
+  // would show a mid-flow proposal as 0 approved to the approver who just approved it. If the
+  // tabs must agree, the product decision to make is whether this tab should stop being
+  // role-relative.
   const sanctionedAmountExpr = `CASE WHEN ${approvedCondition} THEN COALESCE(bpl.approved_line_total, bpl.line_total, 0) ELSE 0 END`;
   const sql = `
     SELECT
@@ -1846,8 +1816,10 @@ export async function getConsolidatedData({
  * `shared/budget/budgetAnnualRollup.js`, so it always agrees with the Budget
  * Head tab and with what finance believes is spendable, and cannot drift.
  *
- * `budget_annual` is consulted only for the row id; every amount is derived.
- * See `recalcBudgetAnnualForFiscalYear` for how that cache is kept in step.
+ * Reads nothing from `budget_annual`: money on this report is always derived, never
+ * cached, and each row is identified by its scope key. That table is now a
+ * reporting-only snapshot maintained on demand by
+ * `npm run reconcile:budget-annual`.
  */
 export async function listBudgetAnnualSummaryEntries({
   userId,
@@ -1952,23 +1924,21 @@ export async function listBudgetAnnualSummaryEntries({
   const [rows] = await db.execute(sql, rollupParams);
   const derivedRows = Array.isArray(rows) ? rows : [];
 
-  const cache = (await hasBudgetAnnualTable(db))
-    ? await loadBudgetAnnualCache(db, currentFY)
-    : new Map();
-
   return derivedRows
     .map((row) => {
-      const scopeKey = buildScopeKey({
-        fiscalYear: currentFY,
-        beneficiaryType: row.beneficiary_type,
-        departmentId: row.department_id,
-        entityId: row.beneficiary_entity_id,
-      });
-      const cached = cache.get(scopeKey) || null;
       const totals = normalizeRollupRow(row);
 
       return {
-        id: cached?.id ?? null,
+        // A row IS its scope, so its identity is the scope key rather than a surrogate id.
+        // This used to be the `budget_annual` row id, which meant a full-year cache fetch on
+        // every read purely to label rows, gave every uncached scope the same id, and made a
+        // derived-from-source report depend on cache freshness for its identities.
+        scope_key: buildScopeKey({
+          fiscalYear: currentFY,
+          beneficiaryType: row.beneficiary_type,
+          departmentId: row.department_id,
+          entityId: row.beneficiary_entity_id,
+        }),
         status: 'summary',
         beneficiary_type: totals.beneficiary_type,
         department_id: totals.department_id,
@@ -2370,8 +2340,6 @@ async function deleteBudgetProposal(proposalId, actor = {}) {
       [proposalId],
     );
 
-    await syncBudgetAnnual(proposalId, conn);
-
     const actorRole = normalizeText(actor?.role).toLowerCase() || 'admin';
     const actorUserId = Number.isInteger(Number(actor?.userId || actor?.id))
       ? Number(actor.userId || actor.id)
@@ -2426,9 +2394,6 @@ export async function processApproval(
           ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
         [proposalId, logRole, approverUserId, approverEmail || '', feedback || ''],
       );
-
-      // Archived proposals drop out of the beneficiary totals.
-      await syncBudgetAnnual(proposalId, conn);
     });
   }
 
@@ -2532,10 +2497,6 @@ export async function processApproval(
         [proposalId, approverUserId, 'system-auto@ksrct.ac.in'],
       );
     }
-
-    // One recompute covers every transition: newly sanctioned, reverted out of
-    // completed, rejected or returned.
-    await syncBudgetAnnual(proposalId, conn);
   });
 }
 

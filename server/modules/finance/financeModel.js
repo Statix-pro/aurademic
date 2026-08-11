@@ -6,8 +6,14 @@ import {
   resolveCatalogIds,
   resolvePrimaryHeadIds,
 } from '../budgetCatalog/budgetCatalogResolver.js';
+// The one definition of "this proposal's budget is sanctioned and spendable". The budget
+// dashboard derives its Beneficiary Summary from the same constant, so the two can never
+// disagree about how much budget exists to release.
+import { ROLLUP_SANCTIONED_STATUS_SQL } from '../shared/budget/budgetAnnualRollup.js';
 import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
 import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
+import { resolveAdvanceUsageAmount } from '../shared/expenditureClaims.js';
+import { buildClaimedExpenditureStatusCondition } from '../shared/expenditureFilters.js';
 
 const safeParseJSON = (value, fallback = null) => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -510,7 +516,7 @@ export const getFinanceClaimTotalsByFinanceIds = async (financeIds = [], { tx = 
          COUNT(*) AS request_count
        FROM expenditure_requests er
        WHERE er.finance_request_id IN (${placeholders})
-         AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+         AND ${buildClaimedExpenditureStatusCondition('er')}
        GROUP BY er.finance_request_id`,
       normalizedFinanceIds,
     );
@@ -520,8 +526,7 @@ export const getFinanceClaimTotalsByFinanceIds = async (financeIds = [], { tx = 
       const advanceAmount = toMoney(row.advance_amount);
       const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
-      // A settlement supersedes the advance it settles, so the two are never added.
-      const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+      const effectiveUsageAmount = resolveAdvanceUsageAmount(advanceAmount, settlementAmount);
 
       map.set(toPositiveInt(row.finance_id), {
         advance_amount: advanceAmount,
@@ -533,6 +538,11 @@ export const getFinanceClaimTotalsByFinanceIds = async (financeIds = [], { tx = 
     }
     return map;
   } catch (error) {
+    // FALLBACK: deployments predating the expenditure module have no
+    // `expenditure_requests` table, so no card can have been claimed against.
+    // Remove once every deployment has the table (it is part of the documented
+    // schema) — until then this masks a genuinely missing table by rendering
+    // every card as unclaimed rather than erroring.
     if (error?.code === 'ER_NO_SUCH_TABLE') {
       return new Map();
     }
@@ -1289,10 +1299,7 @@ const getBudgetLineAvailabilityById = async (conn, budgetLineId) => {
      JOIN budget_proposals bp ON bp.id = bpl.budget_proposal_id
      LEFT JOIN finance_budget_line_usage fblu ON fblu.budget_line_id = bpl.id
      WHERE bpl.id = ?
-       AND (
-         LOWER(TRIM(bp.status)) IN ('completed', 'approved', 'principal_approved')
-         OR LOWER(TRIM(bp.current_stage)) = 'completed'
-       )
+       AND ${ROLLUP_SANCTIONED_STATUS_SQL}
      LIMIT 1`,
     [budgetLineId],
   );
@@ -1495,10 +1502,7 @@ const resolveBudgetAvailabilityForUser = async (
      ) frbr ON frbr.budget_line_id = bpl.id
      WHERE (${ownerScopeSql})
        AND (? IS NULL OR bp.fiscal_year = ?)
-       AND (
-         LOWER(TRIM(bp.status)) IN ('completed', 'approved', 'principal_approved')
-         OR LOWER(TRIM(bp.current_stage)) = 'completed'
-       )
+       AND ${ROLLUP_SANCTIONED_STATUS_SQL}
      ORDER BY
        (
          COALESCE(bpl.approved_line_total, bpl.line_total, 0)
@@ -1857,28 +1861,58 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
 // every row from that payload. Without this merge those three facts are silently
 // dropped: calculateApprovedFinanceTotalsSnapshot then sums NULL snapshots and
 // collapses finance_requests.balance_amount to 0, and top-up rows stop being
-// distinguishable. Rows are paired on head/sub-head/amount and each previous row is
-// consumed once, so a repeated head keeps its own snapshot. A row whose amount changed
-// finds no partner and stays NULL - the old approval genuinely no longer covers it.
+// distinguishable.
+//
+// Pairing runs in two passes and consumes each previous row once, so a repeated head keeps
+// its own snapshot:
+//   1. by budget_line_id + amount - the line's own identity, so two rows that happen to
+//      share head, sub-head AND amount cannot be handed each other's approval snapshot.
+//   2. by head + sub-head + amount, for rows on either side with no budget_line_id (older
+//      payloads and pre-catalog rows). Two rows that BOTH carry ids are never paired this
+//      way, since different ids mean genuinely different budget lines.
+// Amount is part of both keys: a row whose amount changed finds no partner and stays NULL,
+// because the old approval genuinely no longer covers it.
 export const carryForwardApprovedBudgetRowFacts = (incomingRows = [], previousRows = []) => {
   const moneyOrNull = (value) => (value === undefined || value === null ? null : toMoney(value));
-  const rowMatchKey = (row) =>
+  const lineMatchKey = (row) => {
+    const budgetLineId = toPositiveInt(row?.budget_line_id);
+    return budgetLineId ? `${budgetLineId}|${toMoney(row?.amount)}` : null;
+  };
+  const textMatchKey = (row) =>
     [normalizeText(row?.budget_head), normalizeText(row?.sub_head), toMoney(row?.amount)].join('|');
 
   const availablePreviousRows = (previousRows || []).map((row) => ({ row, matched: false }));
-
-  return (incomingRows || []).map((incomingRow) => {
-    const key = rowMatchKey(incomingRow);
-    const previousEntry = availablePreviousRows.find(
-      (entry) => !entry.matched && rowMatchKey(entry.row) === key,
+  const claimPreviousRow = (isMatch) => {
+    const entry = availablePreviousRows.find(
+      (candidate) => !candidate.matched && isMatch(candidate.row),
     );
+    if (!entry) return null;
+    entry.matched = true;
+    return entry.row;
+  };
 
-    if (!previousEntry) {
+  const pairs = (incomingRows || []).map((incomingRow) => {
+    const key = lineMatchKey(incomingRow);
+    return {
+      incomingRow,
+      previousRow: key ? claimPreviousRow((row) => lineMatchKey(row) === key) : null,
+    };
+  });
+
+  for (const pair of pairs) {
+    if (pair.previousRow) continue;
+    const key = textMatchKey(pair.incomingRow);
+    const incomingHasLineId = lineMatchKey(pair.incomingRow) !== null;
+    pair.previousRow = claimPreviousRow(
+      (row) => textMatchKey(row) === key && !(incomingHasLineId && lineMatchKey(row) !== null),
+    );
+  }
+
+  return pairs.map(({ incomingRow, previousRow }) => {
+    if (!previousRow) {
       return incomingRow;
     }
-    previousEntry.matched = true;
 
-    const previousRow = previousEntry.row;
     return {
       ...incomingRow,
       approved_amount: moneyOrNull(incomingRow.approved_amount ?? previousRow.approved_amount),
@@ -2010,7 +2044,7 @@ const getFinanceUsageSnapshot = async (conn, financeId) => {
   const advanceAmount = toMoney(usageRows?.[0]?.advance_amount);
   const settlementAmount = toMoney(usageRows?.[0]?.settlement_amount);
   const expenditureAmount = toMoney(usageRows?.[0]?.expenditure_amount);
-  const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+  const effectiveUsageAmount = resolveAdvanceUsageAmount(advanceAmount, settlementAmount);
 
   return {
     advanceAmount,
@@ -2150,10 +2184,7 @@ const getCarryForwardTargetBudgetAvailability = async (conn, financeId, targetFi
        FROM budget_proposals bp
        JOIN budget_proposal_lines bpl ON bpl.budget_proposal_id = bp.id
       WHERE bp.fiscal_year = ?
-        AND (
-          LOWER(TRIM(COALESCE(bp.status, ''))) IN ('completed', 'approved', 'principal_approved')
-          OR LOWER(TRIM(COALESCE(bp.current_stage, ''))) = 'completed'
-        )
+        AND ${ROLLUP_SANCTIONED_STATUS_SQL}
         ${scopeParts.length ? `AND ${scopeParts.join(' AND ')}` : ''}
         AND LOWER(TRIM(CONVERT(COALESCE(bpl.budget_head, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci)) IN (${headPlaceholders})`,
     [normalizedTargetYear, ...scopeParams, ...sourceHeads.map((head) => head.toLowerCase())],

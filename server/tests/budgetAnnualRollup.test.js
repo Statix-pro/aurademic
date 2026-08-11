@@ -8,6 +8,7 @@ import {
   recalcBudgetAnnualScope,
   resolveProposalScope,
   syncBudgetAnnualForProposal,
+  syncBudgetAnnualSafe,
 } from '../modules/shared/budget/budgetAnnualRollup.js';
 
 /**
@@ -198,15 +199,38 @@ describe('budgetAnnualRollup', () => {
       // Without this fallback, entity proposals that predate
       // beneficiary_entity_id split off into their own nameless row.
       expect(sql).toContain('COALESCE(NULLIF(bp.beneficiary_entity_id, 0)');
-      expect(sql).toContain('me_legacy');
+      expect(sql).toContain('legacy_me');
       expect(sql).toContain('LOWER(TRIM(bp.beneficiary_value))');
     });
 
     it('resolves the legacy entity with a scalar subquery so budget lines cannot multiply', () => {
       const { sql } = buildRollupQuery({ windowTypeSql: buildWindowTypeSql(true) });
 
-      expect(sql).not.toMatch(/JOIN\s+master_entities\s+me_legacy/);
+      expect(sql).not.toMatch(/JOIN\s+master_entities\s+legacy_me/);
       expect(sql).toContain('LIMIT 1)');
+    });
+
+    // The Beneficiary Summary labels a row with `department` first and falls back to
+    // `entity_name`, so a non-null department name on an entity scope labelled a Centre/Cell
+    // row with the SUBMITTER's department instead of the unit.
+    it('nulls the department name for entity scopes, so entity rows are labelled by unit', () => {
+      const { sql } = buildRollupQuery({ windowTypeSql: buildWindowTypeSql(true) });
+      const squashed = sql.replace(/\s+/g, ' ');
+
+      // A bare `md.name` resolved through bp.department_id for entity proposals too.
+      expect(squashed).not.toContain('md.name AS department_name');
+      // Guarded on the same entity-type list that nulls scope_department_id, so the name is
+      // absent exactly when the department id is.
+      expect(squashed).toContain(
+        "IN ('centre', 'cell', 'club', 'section', 'professional body', 'professional bodies', 'institution') THEN NULL ELSE md.name END AS department_name",
+      );
+    });
+
+    it('nulls the entity name for department scopes', () => {
+      const { sql } = buildRollupQuery({ windowTypeSql: buildWindowTypeSql(true) });
+      const squashed = sql.replace(/\s+/g, ' ');
+
+      expect(squashed).toContain("IN ('department', 'faculty', 'staff') THEN NULL");
     });
 
     it('threads caller predicates and their params through in order', () => {
@@ -421,5 +445,34 @@ describe('budgetAnnualRollup', () => {
         conn.calls.filter((call) => call.sql.includes('DELETE FROM budget_annual')),
       ).toHaveLength(1);
     });
+  });
+
+  describe('syncBudgetAnnualSafe', () => {
+    const failingConn = (code) => ({
+      calls: [],
+      execute: vi.fn(async () => {
+        const error = new Error(code || 'cache write failed');
+        if (code) error.code = code;
+        throw error;
+      }),
+    });
+
+    it('swallows an ordinary cache failure so it cannot fail the business transaction', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(syncBudgetAnnualSafe(1199, failingConn())).resolves.toBeNull();
+      expect(consoleError).toHaveBeenCalled();
+
+      consoleError.mockRestore();
+    });
+
+    // InnoDB has already rolled the whole transaction back by this point. Swallowing it would
+    // let the caller commit and report a lost approval as a success.
+    it.each(['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT', 'PROTOCOL_CONNECTION_LOST', 'ECONNRESET'])(
+      're-throws %s so the caller rolls back instead of committing',
+      async (code) => {
+        await expect(syncBudgetAnnualSafe(1199, failingConn(code))).rejects.toThrow();
+      },
+    );
   });
 });

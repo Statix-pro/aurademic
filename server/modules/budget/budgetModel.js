@@ -1,10 +1,6 @@
 import db from '../../config/connection.js';
 import { resolveCatalogIds } from '../budgetCatalog/budgetCatalogResolver.js';
 import { resolveApprovalFlow as resolveSharedApprovalFlow } from '../shared/budget/approvalFlowResolver.js';
-import {
-  resolveProposalScope,
-  syncBudgetAnnualForProposal,
-} from '../shared/budget/budgetAnnualRollup.js';
 import { buildBudgetList, buildBudgetKpiStats } from '../shared/budget/budgetListBuilder.js';
 import {
   VALID_MONTHS as SHARED_VALID_MONTHS,
@@ -48,23 +44,6 @@ const normalizeEntityName = sharedNormalizeEntityName;
 const parsePositiveAmount = sharedParsePositiveAmount;
 const getInitialApprovalStage = (flow) => sharedGetInitialApprovalStage(flow);
 const isReturnedBudgetStatus = (status) => normalizeText(status).toLowerCase().includes('returned');
-
-/**
- * Keep the `budget_annual` cache in step with a proposal's current truth.
- *
- * These user-side paths previously left the cache untouched, so whether the
- * Beneficiary Summary saw an approval depended on which route handled it.
- * Recomputing from source is idempotent, so calling it here and from the admin
- * paths cannot double-count. Cache failures must not fail the business
- * transaction; `npm run reconcile:budget-annual` repairs anything missed.
- */
-async function syncBudgetAnnual(proposalId, conn, previousScope = null) {
-  try {
-    await syncBudgetAnnualForProposal(proposalId, conn, { previousScope });
-  } catch (error) {
-    console.error(`budget_annual sync failed for proposal ${proposalId}:`, error?.message || error);
-  }
-}
 
 export const normalizeBeneficiaryType = (beneficiaryType) =>
   sharedNormalizeBeneficiaryType(beneficiaryType);
@@ -793,10 +772,6 @@ export async function create(payload, options = {}) {
         }
       }
 
-      // A DoF direct submission is created already sanctioned, so it counts
-      // towards the beneficiary totals from the moment it exists.
-      await syncBudgetAnnual(proposalId, conn);
-
       return {
         proposalId,
         proposalRef,
@@ -1083,10 +1058,6 @@ export async function update(
   }
 
   return withTransaction(async (conn) => {
-    // An edit can move the proposal to a different beneficiary, so remember the
-    // row it is leaving; both scopes get recomputed at the end.
-    const previousScope = await resolveProposalScope(conn, proposalId);
-
     const [previousLines] = await conn.execute(
       `SELECT id, budget_head, sub_head, unit_amount, quantity, line_description
          FROM budget_proposal_lines
@@ -1448,10 +1419,6 @@ export async function update(
         throw error;
       }
     }
-
-    // Amounts, beneficiary and status can all have changed here — a resubmitted
-    // proposal also re-enters the totals it left when it was returned.
-    await syncBudgetAnnual(proposalId, conn, previousScope);
   });
 }
 
@@ -1498,8 +1465,6 @@ async function deleteBudgetProposal(proposalId, actor = {}) {
       [proposalId, actorRole, actorUserId, actorEmail, feedback],
     );
 
-    await syncBudgetAnnual(proposalId, conn);
-
     return result.affectedRows > 0;
   });
 }
@@ -1539,9 +1504,6 @@ export async function processApproval(
           ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
         [proposalId, logRole, approverUserId, approverEmail || '', feedback || ''],
       );
-
-      // Archived proposals drop out of the beneficiary totals.
-      await syncBudgetAnnual(proposalId, conn);
     });
   }
 
@@ -1663,10 +1625,6 @@ export async function processApproval(
         [proposalId, approverUserId, 'system-auto@ksrct.ac.in'],
       );
     }
-
-    // One recompute covers every transition: newly sanctioned, rejected or
-    // returned.
-    await syncBudgetAnnual(proposalId, conn);
   });
 }
 

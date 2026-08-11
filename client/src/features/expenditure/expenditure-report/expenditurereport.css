@@ -68,6 +68,9 @@
   outline-offset: 2px;
 }
 
+/* overflow:hidden keeps the table wrappers inside the rounded corners. It also clips anything
+   absolutely positioned within the card, which is why the toolbar's select menus are portalled
+   to <body> (see menuPortalProps) rather than rendered in place. */
 .expenditurereport-card {
   background: #ffffff;
   border-radius: 18px;
@@ -452,6 +455,14 @@
   background: #f4faff;
 }
 
+/* Matches every other interactive control on the page, so tabbing to "Collapse All" or a
+   section's own toggle shows the same focus ring as the tabs and month pills. */
+.expenditurereport-toggle-btn:focus-visible,
+.expenditurereport-section-toggle-btn:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+}
+
 .expenditurereport-type-section {
   margin-bottom: 22px;
 }
@@ -585,6 +596,27 @@
 
 .expenditurereport-grand-table {
   margin-top: 8px;
+}
+
+/* The GRAND TOTAL row sits in its own table below the per-type section tables, so both must
+   resolve to the SAME column widths. Auto layout sized each table from its own content, which
+   left the grand total's figures out of column with the section totals they add together. The
+   min-width keeps the columns readable and hands overflow to the wrapper's horizontal scroll. */
+.expenditurereport-beneficiary-table {
+  table-layout: fixed;
+  min-width: 900px;
+}
+
+.expenditurereport-col-sno {
+  width: 64px;
+}
+
+.expenditurereport-col-beneficiary {
+  width: 22%;
+}
+
+.expenditurereport-col-amount {
+  width: 13%;
 }
 
 .expenditurereport-detail-section {

@@ -33,8 +33,21 @@ const readFilters = (req, scope) => ({
   scope,
 });
 
+/**
+ * Logs the failure without logging the query.
+ *
+ * mysql2 errors carry `sql` and `sqlMessage`, and `sql` holds the statement with the params
+ * already interpolated. Logging the whole error object therefore wrote the caller's free-text
+ * search term — commonly an applicant's name — and the beneficiary department/entity name into
+ * the application log. The code and stack are enough to locate a failure.
+ */
 const handleError = (res, error, message) => {
-  console.error(`${message}:`, error);
+  console.error(
+    `${message}: [${error?.code || error?.name || 'Error'}] ${error?.message || error}`,
+  );
+  if (error?.stack) {
+    console.error(error.stack);
+  }
   return res.status(500).json({ success: false, message, error: message });
 };
 
