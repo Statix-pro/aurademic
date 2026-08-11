@@ -151,6 +151,8 @@ authenticityUtility.getFile = async (
   }
 
   return { blob: response.data, filename };
+};
+
 authenticityUtility.putFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
     const response = await authenticityUtility.put(endpoint, formData);
