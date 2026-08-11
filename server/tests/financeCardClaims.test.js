@@ -234,6 +234,27 @@ describe('getFinanceClaimTotalsByFinanceIds', () => {
     expect(totals.get(302).claimed_amount).toBe(80000);
   });
 
+  // Real shape from the production dump: a settlement row naming its target advance before any
+  // spend is recorded. The advance is still out, so the card must still report it as claimed.
+  it('keeps an advance claimed while its settlement records no spend', async () => {
+    db.query.mockResolvedValue([
+      [
+        {
+          finance_id: 303,
+          advance_amount: '17700.00',
+          expenditure_amount: '0.00',
+          settlement_amount: '0.00',
+          settled_advance_amount: '0.00',
+          request_count: 2,
+        },
+      ],
+    ]);
+
+    const totals = await getFinanceClaimTotalsByFinanceIds([303]);
+
+    expect(totals.get(303).claimed_amount).toBe(17700);
+  });
+
   it('asks the database how much advance the settlements discharged', async () => {
     db.query.mockResolvedValue([[]]);
 

@@ -11,11 +11,18 @@ const toMoney = (value) => {
 };
 
 /**
- * The advance a settlement request discharges, as a scalar SQL expression.
+ * The advance a settlement request has actually discharged, as a scalar SQL expression.
  *
  * `expenditure_settlement_rows` records both sides on one row: `advance_amount` is the advance
  * being settled and `settlement_amount` is what was actually spent. Summing the former is what
  * lets `resolveAdvanceUsageAmount` tell a settled advance from one still outstanding.
+ *
+ * Only rows that account for spend count. A settlement row can name its target advance before
+ * anything is spent against it — production holds exactly that shape, an advance of ₹17,700
+ * recorded against a settlement of ₹0 — and treating that as discharged would report the card
+ * as having claimed nothing while the ₹17,700 is still out. A settlement genuinely returning
+ * the whole advance ends up here too, but it stays counted as claimed only until that
+ * settlement records its spend.
  *
  * A scalar subquery rather than a join, so it can be summed per request without the settlement
  * rows multiplying the request rows around it.
@@ -30,6 +37,7 @@ export function buildSettledAdvanceExpr(alias = 'er') {
     SELECT COALESCE(SUM(settled_sr.advance_amount), 0)
       FROM expenditure_settlement_rows settled_sr
      WHERE settled_sr.expenditure_id = ${alias}.id
+       AND COALESCE(settled_sr.settlement_amount, 0) > 0
   )`;
 }
 

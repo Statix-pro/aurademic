@@ -138,6 +138,14 @@ describe('buildSettledAdvanceExpr', () => {
     expect(sql).toContain('WHERE settled_sr.expenditure_id = er.id');
   });
 
+  // Production holds a settlement row naming a ₹17,700 advance with ₹0 spent. Counting it as
+  // discharged would report the card as having claimed nothing while that advance is still out.
+  it('ignores rows that record a target advance but no spend yet', () => {
+    const sql = buildSettledAdvanceExpr('er').replace(/\s+/g, ' ');
+
+    expect(sql).toContain('COALESCE(settled_sr.settlement_amount, 0) > 0');
+  });
+
   it('honours the caller alias so it can be embedded in any request query', () => {
     expect(buildSettledAdvanceExpr('ex_req')).toContain('settled_sr.expenditure_id = ex_req.id');
   });
