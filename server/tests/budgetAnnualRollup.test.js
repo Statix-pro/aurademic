@@ -467,11 +467,29 @@ describe('budgetAnnualRollup', () => {
     });
 
     // InnoDB has already rolled the whole transaction back by this point. Swallowing it would
-    // let the caller commit and report a lost approval as a success.
-    it.each(['ER_LOCK_DEADLOCK', 'ER_LOCK_WAIT_TIMEOUT', 'PROTOCOL_CONNECTION_LOST', 'ECONNRESET'])(
-      're-throws %s so the caller rolls back instead of committing',
+    // let the caller commit and report a lost approval as a success. Every code here is one
+    // mysql2 actually emits — see the note on TRANSACTION_FATAL_ERROR_CODES.
+    it.each([
+      'ER_LOCK_DEADLOCK',
+      'ER_LOCK_WAIT_TIMEOUT',
+      'ER_QUERY_INTERRUPTED',
+      'PROTOCOL_CONNECTION_LOST',
+      'ETIMEDOUT',
+      'ECONNRESET',
+      'EPIPE',
+    ])('re-throws %s so the caller rolls back instead of committing', async (code) => {
+      await expect(syncBudgetAnnualSafe(1199, failingConn(code))).rejects.toThrow();
+    });
+
+    // A cache-specific failure is the case the swallow exists for.
+    it.each(['ER_NO_SUCH_TABLE', 'ER_BAD_FIELD_ERROR', 'ER_DUP_ENTRY'])(
+      'still swallows %s, which leaves the transaction usable',
       async (code) => {
-        await expect(syncBudgetAnnualSafe(1199, failingConn(code))).rejects.toThrow();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+        await expect(syncBudgetAnnualSafe(1199, failingConn(code))).resolves.toBeNull();
+
+        consoleError.mockRestore();
       },
     );
   });

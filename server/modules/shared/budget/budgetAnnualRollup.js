@@ -561,19 +561,32 @@ export async function syncBudgetAnnualForProposal(proposalId, conn, { previousSc
  * Errors that mean the caller's transaction is already gone.
  *
  * InnoDB rolls the WHOLE transaction back on a deadlock, and does the same on a
- * lock-wait timeout when `innodb_rollback_on_timeout` is set; a lost or killed
+ * lock-wait timeout when `innodb_rollback_on_timeout` is set; a broken or timed-out
  * connection ends it too. These must never be swallowed: the caller commits as
  * soon as its callback returns, so hiding one of these turns a rolled-back
  * approval into a silent success — the business writes are gone and the user is
  * told they succeeded.
+ *
+ * Every name below is one mysql2 actually produces, checked against the installed
+ * driver — a name it never emits would sit here looking like protection while
+ * matching nothing:
+ *   ER_LOCK_DEADLOCK / ER_LOCK_WAIT_TIMEOUT / ER_QUERY_INTERRUPTED
+ *     server error names, in mysql2/lib/constants/errors.js.
+ *   PROTOCOL_CONNECTION_LOST   set in mysql2/lib/base/connection.js when the
+ *                              connection dies mid-command.
+ *   ETIMEDOUT                  set by the same file's connect-timeout handler.
+ *   ECONNRESET / EPIPE         socket deaths it propagates verbatim; the driver
+ *                              names both as the errors that precede a lost
+ *                              connection.
  */
 const TRANSACTION_FATAL_ERROR_CODES = new Set([
   'ER_LOCK_DEADLOCK',
   'ER_LOCK_WAIT_TIMEOUT',
   'ER_QUERY_INTERRUPTED',
-  'ER_CONNECTION_KILLED',
   'PROTOCOL_CONNECTION_LOST',
+  'ETIMEDOUT',
   'ECONNRESET',
+  'EPIPE',
 ]);
 
 export function isTransactionFatalError(error) {

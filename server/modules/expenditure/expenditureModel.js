@@ -17,7 +17,7 @@ import {
 } from '../shared/budget/budgetUtils.js';
 import { searchApplicant as searchEmployeeApplicants } from '../shared/budget/userResolvers.js';
 import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
-import { resolveAdvanceUsageAmount } from '../shared/expenditureClaims.js';
+import { buildSettledAdvanceExpr, resolveAdvanceUsageAmount } from '../shared/expenditureClaims.js';
 import {
   buildClaimedExpenditureStatusCondition,
   buildExpenditureDisplayRefExpr,
@@ -2306,6 +2306,14 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
            ELSE 0
          END
        ), 0) AS settlement_amount,
+       COALESCE(SUM(
+         CASE
+           WHEN er.request_type = 'Settlement'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
+           THEN ${buildSettledAdvanceExpr('er')}
+           ELSE 0
+         END
+       ), 0) AS settled_advance_amount,
        -- Counted over the same requests the amounts above are summed over. A bare
        -- COUNT(DISTINCT er.id) also counted deleted and rejected requests, so a card could
        -- report requests raised against it while every amount beside the count read zero.
@@ -2418,7 +2426,11 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       const advanceAmount = toMoney(row.advance_amount);
       const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
-      const effectiveUsageAmount = resolveAdvanceUsageAmount(advanceAmount, settlementAmount);
+      const effectiveUsageAmount = resolveAdvanceUsageAmount({
+        advanceAmount,
+        settlementAmount,
+        settledAdvanceAmount: row.settled_advance_amount,
+      });
       const sourceFiscalYear = toPositiveInt(row.source_fiscal_year);
       return {
         finance_request_id: toPositiveInt(row.finance_request_id),

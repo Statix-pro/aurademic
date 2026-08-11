@@ -194,6 +194,56 @@ describe('getFinanceClaimTotalsByFinanceIds', () => {
     expect(totals.get(262).claimed_amount).toBe(398055);
   });
 
+  // Two ₹1,00,000 advances, the first settled at ₹1,20,000. The overspend and the advance still
+  // outstanding both count, so the card reports ₹2,20,000 rather than losing one of them.
+  it('counts an over-settlement and a still-outstanding advance on the same card', async () => {
+    db.query.mockResolvedValue([
+      [
+        {
+          finance_id: 301,
+          advance_amount: '200000.00',
+          expenditure_amount: '0.00',
+          settlement_amount: '120000.00',
+          settled_advance_amount: '100000.00',
+          request_count: 3,
+        },
+      ],
+    ]);
+
+    const totals = await getFinanceClaimTotalsByFinanceIds([301]);
+
+    expect(totals.get(301).claimed_amount).toBe(220000);
+  });
+
+  it('reports only what was spent when an advance is settled for less', async () => {
+    db.query.mockResolvedValue([
+      [
+        {
+          finance_id: 302,
+          advance_amount: '100000.00',
+          expenditure_amount: '0.00',
+          settlement_amount: '80000.00',
+          settled_advance_amount: '100000.00',
+          request_count: 2,
+        },
+      ],
+    ]);
+
+    const totals = await getFinanceClaimTotalsByFinanceIds([302]);
+
+    expect(totals.get(302).claimed_amount).toBe(80000);
+  });
+
+  it('asks the database how much advance the settlements discharged', async () => {
+    db.query.mockResolvedValue([[]]);
+
+    await getFinanceClaimTotalsByFinanceIds([170]);
+
+    const [sql] = db.query.mock.calls[0];
+    expect(sql).toContain('AS settled_advance_amount');
+    expect(sql.replace(/\s+/g, ' ')).toContain('SUM(settled_sr.advance_amount)');
+  });
+
   it('skips the query and returns an empty map when there are no finance ids', async () => {
     const totals = await getFinanceClaimTotalsByFinanceIds([]);
 

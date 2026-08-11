@@ -12,8 +12,11 @@ import {
 import { ROLLUP_SANCTIONED_STATUS_SQL } from '../shared/budget/budgetAnnualRollup.js';
 import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
 import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
-import { resolveAdvanceUsageAmount } from '../shared/expenditureClaims.js';
-import { buildClaimedExpenditureStatusCondition } from '../shared/expenditureFilters.js';
+import { buildSettledAdvanceExpr, resolveAdvanceUsageAmount } from '../shared/expenditureClaims.js';
+import {
+  buildClaimedExpenditureStatusCondition,
+  buildFinalizedExpenditureStatusCondition,
+} from '../shared/expenditureFilters.js';
 
 const safeParseJSON = (value, fallback = null) => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -513,6 +516,13 @@ export const getFinanceClaimTotalsByFinanceIds = async (financeIds = [], { tx = 
              ELSE 0
            END
          ), 0) AS settlement_amount,
+         COALESCE(SUM(
+           CASE
+             WHEN er.request_type = 'Settlement'
+             THEN ${buildSettledAdvanceExpr('er')}
+             ELSE 0
+           END
+         ), 0) AS settled_advance_amount,
          COUNT(*) AS request_count
        FROM expenditure_requests er
        WHERE er.finance_request_id IN (${placeholders})
@@ -526,7 +536,11 @@ export const getFinanceClaimTotalsByFinanceIds = async (financeIds = [], { tx = 
       const advanceAmount = toMoney(row.advance_amount);
       const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
-      const effectiveUsageAmount = resolveAdvanceUsageAmount(advanceAmount, settlementAmount);
+      const effectiveUsageAmount = resolveAdvanceUsageAmount({
+        advanceAmount,
+        settlementAmount,
+        settledAdvanceAmount: row.settled_advance_amount,
+      });
 
       map.set(toPositiveInt(row.finance_id), {
         advance_amount: advanceAmount,
@@ -2008,12 +2022,8 @@ const resolveFinanceSourceFiscalYear = async (
   return resolveReferenceFiscalYearFromBudgetRows([], fallbackDate);
 };
 
-const FINALIZED_EXPENDITURE_STATUS_SQL = `
-    (
-      LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
-      OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
-      OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
-    )`;
+/** Shared with the expenditure report, so the two cannot disagree on what has cleared. */
+const FINALIZED_EXPENDITURE_STATUS_SQL = buildFinalizedExpenditureStatusCondition('er');
 
 const getFinanceUsageSnapshot = async (conn, financeId) => {
   const [usageRows] = await conn.query(
@@ -2035,7 +2045,13 @@ const getFinanceUsageSnapshot = async (conn, financeId) => {
           AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
          THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
          ELSE 0
-       END), 0) AS expenditure_amount
+       END), 0) AS expenditure_amount,
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Settlement'
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
+         THEN ${buildSettledAdvanceExpr('er')}
+         ELSE 0
+       END), 0) AS settled_advance_amount
      FROM expenditure_requests er
      WHERE er.finance_request_id = ?`,
     [financeId],
@@ -2044,7 +2060,11 @@ const getFinanceUsageSnapshot = async (conn, financeId) => {
   const advanceAmount = toMoney(usageRows?.[0]?.advance_amount);
   const settlementAmount = toMoney(usageRows?.[0]?.settlement_amount);
   const expenditureAmount = toMoney(usageRows?.[0]?.expenditure_amount);
-  const effectiveUsageAmount = resolveAdvanceUsageAmount(advanceAmount, settlementAmount);
+  const effectiveUsageAmount = resolveAdvanceUsageAmount({
+    advanceAmount,
+    settlementAmount,
+    settledAdvanceAmount: usageRows?.[0]?.settled_advance_amount,
+  });
 
   return {
     advanceAmount,
