@@ -532,6 +532,21 @@
   min-width: 180px;
 }
 
+/* Auto layout stretches to fill 100% of the wrapper no matter how many month
+   columns exist, so a 2-month date range spreads its columns into wide gaps
+   while a 12-month full year barely notices. Fixed layout + explicit widths
+   keep column width constant regardless of column count; the wrapper's
+   horizontal scroll takes over once the table exceeds its container. */
+.expenditurereport-month-table {
+  table-layout: fixed;
+  width: max-content;
+}
+
+.expenditurereport-month-table th,
+.expenditurereport-month-table td {
+  width: 130px;
+}
+
 .expenditurereport-month-table th:nth-child(1),
 .expenditurereport-month-table td:nth-child(1) {
   text-align: left;
@@ -539,7 +554,7 @@
   left: 0;
   background: #fff;
   z-index: 1;
-  min-width: 200px;
+  width: 200px;
 }
 
 .expenditurereport-month-table th:nth-child(1) {

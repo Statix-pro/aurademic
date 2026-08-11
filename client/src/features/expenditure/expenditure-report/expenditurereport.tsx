@@ -482,6 +482,9 @@ const ExpenditureReport: React.FC = () => {
   /**
    * The period modes are mutually exclusive on purpose: a free date range drops fiscalYear so
    * it can span fiscal years, while Month sends both so the month is read inside its year.
+   * A range with no dates entered isn't really "spanning" anything, so it falls back to
+   * fiscalYear too — otherwise the backend has no year to anchor the 12-month column list to
+   * and only returns months that already have data.
    */
   const requestParams = useMemo(() => {
     const params: Record<string, string> = {};
@@ -489,6 +492,7 @@ const ExpenditureReport: React.FC = () => {
     if (periodMode === 'range') {
       if (dateFrom) params.dateFrom = dateFrom;
       if (dateTo) params.dateTo = dateTo;
+      if (!dateFrom && !dateTo) params.fiscalYear = fiscalYear.value;
     } else {
       params.fiscalYear = fiscalYear.value;
 
