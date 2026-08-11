@@ -9,9 +9,7 @@ import {
   canAccessBudgetApproval,
   canAccessExpenditureWorkflow,
   canAccessFinanceWorkflow,
-  canAccessGuesthouseWorkflow,
   canManageAccessControl,
-  hasPermission,
   isSuperAdmin,
 } from '../../../utils/permissionUtils';
 
@@ -91,24 +89,6 @@ const IconBookings = () => (
     <line x1="3" y1="10" x2="21" y2="10" />
     <circle cx="14" cy="16" r="2" />
     <path d="M14 14v2" />
-  </svg>
-);
-
-// Directory — users/address book
-const IconDirectory = () => (
-  <svg
-    className="sb-icon"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-    <circle cx="9" cy="7" r="4" />
-    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
   </svg>
 );
 
@@ -232,6 +212,17 @@ interface SidebarProps {
   setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
+const getNameInitial = (name?: string): string => {
+  if (!name) return 'U';
+  const salutations = ['dr.', 'mr.', 'mrs.', 'ms.', 'prof.', 'er.'];
+  const parts = name.trim().split(/\s+/);
+  const firstWord = parts[0].toLowerCase();
+  if (salutations.includes(firstWord) && parts.length > 1) {
+    return parts[1].charAt(0).toUpperCase();
+  }
+  return parts[0].charAt(0).toUpperCase();
+};
+
 const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const { logout, user } = useAuth();
   const location = useLocation();
@@ -246,11 +237,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showBudgetApproval = canAccessBudgetApproval(user);
   const showFinanceWorkflow = canAccessFinanceWorkflow(user);
   const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
-  const showGuesthouseApproval = canAccessGuesthouseWorkflow(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu =
-    showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow || showGuesthouseApproval;
+    showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow;
   const showSuperAdminMenu = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
@@ -438,13 +428,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <button
             className={`sb-link ${
               isGroupActive([
-                '/guesthouse-dashboard',
+                '/guestHouse-dashboard',
                 '/vehicle-booking',
                 '/hall-booking',
                 '/eventdashboard',
                 '/event',
-                '/workorderdashboard',
-                '/workorder'
               ])
                 ? 'active'
                 : ''
@@ -459,8 +447,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           {isExpanded && activeMenu === 'Bookings' && (
             <div className="sb-submenu">
               <Link
-                to="/guesthouse-dashboard"
-                className={`sb-sublink ${isActive('/guesthouse-dashboard') ? 'active' : ''}`}
+                to="/guestHouse-dashboard"
+                className={`sb-sublink ${isActive('/guestHouse-dashboard') ? 'active' : ''}`}
                 onClick={handleLinkClick}
               >
                 Guest House
@@ -485,51 +473,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 onClick={handleLinkClick}
               >
                 Event
-              </Link>
-              <Link
-                to="/workorderdashboard"
-                className={`sb-sublink ${isActive('/workorderdashboard') ? 'active' : ''}`}
-                onClick={handleLinkClick}
-              >
-                Work Order
-              </Link>
-            </div>
-          )}
-        </div>
-
-        {/* Directory */}
-        <div className="sb-group">
-          <button
-            className={`sb-link ${
-              isGroupActive([
-                '/resourcepersondirectorydashboard',
-                '/organizationdirectorydashboard'
-              ])
-                ? 'active'
-                : ''
-            } ${activeMenu === 'Directory' ? 'open' : ''}`}
-            onClick={() => toggleDropdown('Directory')}
-            title="Directory"
-          >
-            <IconDirectory />
-            <span className="sb-text">Directory</span>
-            <ChevronDown />
-          </button>
-          {isExpanded && activeMenu === 'Directory' && (
-            <div className="sb-submenu">
-              <Link
-                to="/resourcepersondirectorydashboard"
-                className={`sb-sublink ${isActive('/resourcepersondirectorydashboard') ? 'active' : ''}`}
-                onClick={handleLinkClick}
-              >
-                Resource Person
-              </Link>
-              <Link
-                to="/organizationdirectorydashboard"
-                className={`sb-sublink ${isActive('/organizationdirectorydashboard') ? 'active' : ''}`}
-                onClick={handleLinkClick}
-              >
-                Organization
               </Link>
             </div>
           )}
@@ -556,7 +499,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                   '/project-dashboard',
                   '/admin-dashboard',
                   '/admin/budget',
-                  '/admin/guesthouse',
                   '/workflow/finance',
                   '/workflow/expenditure',
                 ])
@@ -622,15 +564,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     onClick={handleLinkClick}
                   >
                     Expenditure Approval
-                  </Link>
-                )}
-                {showGuesthouseApproval && (
-                  <Link
-                    to="/admin/guesthouse"
-                    className={`sb-sublink ${isActive('/admin/guesthouse') ? 'active' : ''}`}
-                    onClick={handleLinkClick}
-                  >
-                    Guesthouse Approval
                   </Link>
                 )}
               </div>
