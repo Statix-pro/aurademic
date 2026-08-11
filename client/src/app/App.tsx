@@ -16,6 +16,7 @@ import Budget from '../features/budget/budget';
 import EventDashboard from '../features/events/components/EventDashboard';
 import EventEntry from '../features/events/components/EventEntry';
 import EventPage from '../features/events/components/EventPage';
+import ExpenditureReport from '../features/expenditure/expenditure-report/expenditurereport';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
@@ -467,11 +468,14 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
+                  {/* Any authenticated user may open the report: the API scopes what it
+                      returns by role, down to "your own requests" for a plain user, so a
+                      route-level approver check would only bounce them to /home. */}
                   <Route
                     path="/reports/expenditure"
                     element={
                       <ProtectedRoute>
-                        <UnderConstruction pageName="Expenditure Reports" />
+                        <ExpenditureReport />
                       </ProtectedRoute>
                     }
                   />

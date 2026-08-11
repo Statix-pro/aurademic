@@ -20,21 +20,22 @@ import authRoutes from './modules/auth/authRoutes.js';
 import budgetRoutes from './modules/budget/budgetRoutes.js';
 
 // Events routes
-import updatesRoutes from './modules/events/updates/updatesRoutes.js';
-import documentsRoutes from './modules/events/documents/documentsRoutes.js';
-import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
 import budgetCatalogRoutes from './modules/budgetCatalog/budgetCatalogRoutes.js';
 import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
+import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import eventRoutes from './modules/events/events/eventRoutes.js';
 import financeRoutes from './modules/events/finance/financeRoutes.js';
 import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
+import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
 import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
+import expenditureReportRoutes from './modules/expenditureReport/expenditureReportRoutes.js';
 
 // Finance page
 import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
+import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
 
@@ -144,6 +145,7 @@ app.use('/api/adminbudget', adminBudgetRoutes);
 app.use('/api/expenditure', expenditureRoutes);
 app.use('/api/expenditure-requests', expenditureRoutes);
 app.use('/api/expenditure-dashboard', expenditureUserDashboardRoutes);
+app.use('/api/expenditure-report', expenditureReportRoutes);
 
 // FinanceCard API
 // app.use('/api/finance-dashboard', financeCardRoutes);

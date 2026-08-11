@@ -13,7 +13,13 @@ type Option = {
 };
 
 type AdminProposalGroup = {
-  id: number;
+  /**
+   * Identity of the beneficiary scope this row rolls up (fiscal year + type + department or
+   * entity), from the server. It replaced a `budget_annual` row id, which was a surrogate
+   * key for a cache row: every uncached scope arrived as the same `0`, and it was never
+   * anything a user could recognise or search for.
+   */
+  scopeKey: string;
   beneficiaryType: string;
   departmentName?: string;
   departmentId?: number | null;
@@ -264,7 +270,7 @@ const AdminBudgetSummary: React.FC = () => {
           );
 
           return {
-            id: Number(item.id),
+            scopeKey: String(item.scope_key ?? ''),
             beneficiaryType: item.beneficiary_type || '',
             departmentName: item.department || '',
             departmentId: Number.isInteger(Number(item.department_id))
@@ -312,11 +318,12 @@ const AdminBudgetSummary: React.FC = () => {
   const beneficiarySummaryRows = useMemo(() => {
     const summaryMap: Record<string, BeneficiarySummaryRow> = {};
     const query = normalizeText(searchText).toLowerCase();
-    const isProposalSearchMatch = (proposal: AdminProposalGroup, label: string) => {
+    // Matches the beneficiary name only. This used to also match the row's numeric id, but
+    // that was a `budget_annual` cache row id — not a proposal number, and not something on
+    // screen — so typing it was accidental at best and it matched every uncached row as "0".
+    const isProposalSearchMatch = (_proposal: AdminProposalGroup, label: string) => {
       if (!query) return true;
-      const proposalId = String(proposal?.id ?? '').toLowerCase();
-      const beneficiaryLabel = normalizeText(label).toLowerCase();
-      return proposalId.includes(query) || beneficiaryLabel.includes(query);
+      return normalizeText(label).toLowerCase().includes(query);
     };
 
     const ensureRow = (key: string, label: string, typeKey: string, typeLabel: string) => {

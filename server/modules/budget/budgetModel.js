@@ -1566,9 +1566,30 @@ export async function processApproval(
 
   // Database Update
   return withTransaction(async (conn) => {
+    // Re-read under a row lock and re-check the stage. Without this, two clicks
+    // on Approve both pass the check above against the same pre-transaction
+    // snapshot and both write an approval, duplicating the audit trail.
+    const [lockedRows] = await conn.execute(
+      `SELECT current_stage
+         FROM budget_proposals
+        WHERE id = ?
+        LIMIT 1
+        FOR UPDATE`,
+      [proposalId],
+    );
+
+    const lockedProposal = lockedRows?.[0];
+    if (!lockedProposal) {
+      throw new Error('Proposal not found');
+    }
+
+    if (lockedProposal.current_stage !== role) {
+      throw new Error(`Stage mismatch: expected ${role}, got ${lockedProposal.current_stage} `);
+    }
+
     await conn.execute(
-      `UPDATE budget_proposals 
-             SET status = ?, current_stage = ?, updated_at = NOW() 
+      `UPDATE budget_proposals
+             SET status = ?, current_stage = ?, updated_at = NOW()
              WHERE id = ? `,
       [newStatus, nextStage, proposalId],
     );
