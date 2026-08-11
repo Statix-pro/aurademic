@@ -1259,6 +1259,63 @@
   color: #b42318;
 }
 
+.bulk-transaction-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bulk-transaction-segmented {
+  display: inline-flex;
+  padding: 4px;
+  border: 1px solid #cfe2ff;
+  border-radius: 12px;
+  background: #f4f8ff;
+}
+
+.bulk-transaction-segmented--bank {
+  border-color: #e0e7ff;
+  background: #f6f7ff;
+}
+
+.bulk-transaction-segment {
+  border: none;
+  border-radius: 9px;
+  padding: 8px 18px;
+  background: transparent;
+  color: #4b5563;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.bulk-transaction-segment:hover:not(:disabled):not(.is-active) {
+  background: #e5efff;
+  color: #0069ab;
+}
+
+.bulk-transaction-segment.is-active {
+  background: #0069ab;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 105, 171, 0.35);
+}
+
+.bulk-transaction-segment:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.bulk-transaction-hint {
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
 .bulk-neft-panel {
   display: flex;
   align-items: center;
@@ -1556,6 +1613,19 @@
   .bulk-neft-panel {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .bulk-transaction-controls {
+    align-items: flex-start;
+  }
+
+  .bulk-transaction-segmented {
+    width: 100%;
+  }
+
+  .bulk-transaction-segment {
+    flex: 1;
+    padding: 8px 10px;
   }
 }
 

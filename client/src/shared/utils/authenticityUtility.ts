@@ -3,9 +3,15 @@ import { jwtDecode, JwtPayload } from 'jwt-decode';
 
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
+export interface DownloadedFile {
+  blob: Blob;
+  /** Server-supplied name from Content-Disposition, or '' when the header is absent. */
+  filename: string;
+}
+
 interface AuthenticityUtility extends AxiosInstance {
   postFile: (endpoint: string, formData: FormData) => Promise<unknown>;
-  putFile: (endpoint: string, formData: FormData) => Promise<unknown>;
+  getFile: (endpoint: string, params?: Record<string, unknown>) => Promise<DownloadedFile>;
   getBaseURL: () => string;
 }
 
@@ -58,6 +64,14 @@ authenticityUtility.interceptors.request.use(
 
 authenticityUtility.interceptors.response.use(
   (response: AxiosResponse) => {
+    // File downloads need the headers (Content-Disposition carries the filename), which
+    // unwrapping to `data` would discard. Only getFile sets this flag.
+    if (
+      (response.config as InternalAxiosRequestConfig & { returnRawResponse?: boolean })
+        ?.returnRawResponse
+    ) {
+      return response;
+    }
     return response.data;
   },
   (error: AxiosError) => {
@@ -94,7 +108,11 @@ authenticityUtility.interceptors.response.use(
 
 authenticityUtility.postFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
-    const response = await authenticityUtility.post(endpoint, formData);
+    const response = await authenticityUtility.post(endpoint, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
@@ -103,28 +121,43 @@ authenticityUtility.postFile = async (endpoint: string, formData: FormData): Pro
   }
 };
 
-authenticityUtility.putFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
-  try {
-    const response = await authenticityUtility.put(endpoint, formData);
-    return response;
-  } catch (error: unknown) {
-    const axiosError = error as { response?: { data?: unknown }; message?: string };
-    console.error('Error in putFile request:', axiosError.response?.data || axiosError.message);
-    throw error;
+/**
+ * GETs a binary response (template, report, generated document) as a Blob, keeping the
+ * shared token handling, expiry check and 401 logout that a bare `fetch` would bypass.
+ * Returns the Content-Disposition filename when the server sends one so callers do not
+ * have to re-derive it.
+ */
+authenticityUtility.getFile = async (
+  endpoint: string,
+  params?: Record<string, unknown>,
+): Promise<DownloadedFile> => {
+  const response = (await authenticityUtility.get(endpoint, {
+    params,
+    responseType: 'blob',
+    returnRawResponse: true,
+  } as never)) as unknown as AxiosResponse<Blob>;
+
+  const contentDisposition = String(response.headers?.['content-disposition'] || '');
+  // Prefer RFC 5987 filename*= when present, since it survives non-ASCII names.
+  const encodedMatch = /filename\*=(?:UTF-8'')?"?([^";]+)"?/i.exec(contentDisposition);
+  const plainMatch = /filename="?([^";]+)"?/i.exec(contentDisposition);
+  const rawFilename = encodedMatch?.[1] || plainMatch?.[1] || '';
+
+  let filename = rawFilename.trim();
+  if (encodedMatch?.[1]) {
+    try {
+      filename = decodeURIComponent(filename);
+    } catch {
+      // A malformed encoding is not worth failing a download over — fall back to the raw
+      // value and let the caller's default name win if it is unusable.
+    }
   }
+
+  return { blob: response.data, filename };
 };
 
 authenticityUtility.getBaseURL = (): string => {
   return baseURL.replace(/\/api\/?$/, '');
-};
-
-export const isFallbackEligible = (error: any): boolean => {
-  return !!(
-    error &&
-    typeof error === 'object' &&
-    !error.response &&
-    (error.request || error.isAxiosError === true || error.code === 'ERR_NETWORK')
-  );
 };
 
 export default authenticityUtility;

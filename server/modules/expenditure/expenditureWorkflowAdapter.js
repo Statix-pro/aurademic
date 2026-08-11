@@ -26,6 +26,10 @@ const expenditureWorkflowAdapter = {
     return expenditureModel.listExpenditureQueueRecords(stage, filters, options);
   },
 
+  async listLineItemsForExport(recordIds = [], options = {}) {
+    return expenditureModel.listExpenditureRowsForExport(recordIds, options);
+  },
+
   async validateModuleMeta(moduleMeta) {
     if (moduleMeta === null || moduleMeta === undefined) {
       return null;

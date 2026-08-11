@@ -784,7 +784,44 @@ const financeController = {
         }
       }
 
-      const result = await financeModel.updateFinanceRequest(financeId, req.body || {}, actor);
+      // A top-up cycle only puts its own top-up rows up for decision — every pre-top-up
+      // row is money already approved in an earlier cycle. This path replaces the whole
+      // breakup, so an approver (HOD, DOF, Principal, Chairman) or super admin editing
+      // the in-flight top-up could otherwise rewrite those approved amounts. Rebuild the
+      // pre-top-up rows from the database and keep only the submitted top-up rows,
+      // mirroring the topup submission path above.
+      const updateBody = { ...(req.body || {}) };
+      if (
+        isTopupWorkflowCycle(finance.workflow_state) &&
+        Object.prototype.hasOwnProperty.call(updateBody, 'budget_rows')
+      ) {
+        const existingBudgetRows = await financeModel.getBudgetBreakup(financeId);
+        const approvedBudgetRows = existingBudgetRows.filter(
+          (row) => !parseBooleanLike(row?.is_topup),
+        );
+        const submittedTopupRows = (
+          Array.isArray(updateBody.budget_rows) ? updateBody.budget_rows : []
+        )
+          .filter((row) => parseBooleanLike(row?.is_topup))
+          .map((row) => {
+            const sanitizedRow = { ...(row || {}) };
+            delete sanitizedRow.approved_amount;
+            delete sanitizedRow.remaining_amount_snapshot;
+            sanitizedRow.is_topup = 1;
+            return sanitizedRow;
+          });
+
+        if (!submittedTopupRows.length) {
+          return res.status(400).json({
+            success: false,
+            message: 'At least one topup budget row is required',
+          });
+        }
+
+        updateBody.budget_rows = [...approvedBudgetRows, ...submittedTopupRows];
+      }
+
+      const result = await financeModel.updateFinanceRequest(financeId, updateBody, actor);
 
       if (result.affectedRows > 0) {
         try {
@@ -1602,6 +1639,67 @@ const financeController = {
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getFinanceQueue');
+    }
+  },
+
+  /**
+   * Same queue, unpaginated, with each request's budget breakdown rows — backs the
+   * admin "Export CSV" action so the file covers every filtered request rather than
+   * just the page on screen.
+   */
+  async getFinanceQueueExport(req, res) {
+    try {
+      const stage = normalizeText(req.params.stage).toLowerCase();
+      const {
+        workflowStatus,
+        statusCategory,
+        level1Role,
+        q,
+        allProposals,
+        fiscalYear,
+        dateFrom,
+        dateTo,
+      } = req.query;
+      const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
+      const effectiveLevel1Role =
+        stage === 'level1'
+          ? ['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveFinanceLevel1QueueRole(req)
+          : null;
+
+      const queue = await workflowService.listQueueForExport({
+        moduleKey: 'finance',
+        stage,
+        actor: normalizeActor(req),
+        filters: {
+          workflowStatus,
+          statusCategory,
+          // An explicit date range replaces the fiscal-year scoping so the export can
+          // span years; the client blanks fiscalYear when it sends a range.
+          fiscalYear,
+          dateFrom,
+          dateTo,
+          level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: queue.items.map((row) => sanitizeFinanceRecordForUser(req, row)),
+        lineItems: queue.lineItems,
+        pagination: {
+          total: queue.total,
+          exported: queue.items.length,
+          truncated: queue.truncated,
+          maxRows: queue.maxRows,
+          statusCounts: queue.statusCounts,
+        },
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in getFinanceQueueExport');
     }
   },
 

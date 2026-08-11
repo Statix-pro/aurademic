@@ -504,6 +504,153 @@ describe('Finance Workflow Integration Tests', () => {
       expect(financeModel.updateFinanceRequest).not.toHaveBeenCalled();
       expect(workflowService.startWorkflow).not.toHaveBeenCalled();
     });
+
+    it('keeps pre-topup amounts authoritative when an approver edits an in-flight topup', async () => {
+      // An approver (HOD, DOF, Principal, Chairman) or super admin may open Edit on a
+      // top-up that is still in the queue. Only the top-up rows are up for decision —
+      // the pre-top-up rows are money approved in the earlier cycle.
+      const topupInFlightRequest = {
+        id: 202,
+        proposal_ref: '#F-2026-0002',
+        created_by: 99,
+        total_budget: 17000,
+        beneficiary_type: 'Department',
+        workflow_state: {
+          status: 'in_progress',
+          currentStage: 'principal',
+          topupAt: '2026-08-01T10:00:00.000Z',
+          topupAmount: 5000,
+        },
+      };
+
+      financeModel.getFinanceRequestById.mockResolvedValue(topupInFlightRequest);
+      financeModel.getBudgetBreakup.mockResolvedValue([
+        {
+          budget_head: 'Research',
+          sub_head: 'Lab Equipment',
+          amount: 12000,
+          approved_amount: 12000,
+          available_amount_snapshot: 12000,
+          is_topup: 0,
+        },
+        {
+          budget_head: 'Research',
+          sub_head: 'Consumables',
+          amount: 5000,
+          available_amount_snapshot: 5000,
+          is_topup: 1,
+        },
+      ]);
+      financeModel.updateFinanceRequest.mockResolvedValue({ affectedRows: 1 });
+      financeModel.getFinanceRecordContext.mockResolvedValue({
+        totalBudget: 18000,
+        workflowState: { status: 'awaiting_decision' },
+      });
+
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['principal'],
+        permissions: ['finance.workflow.principal'],
+        isAdmin: false,
+        isSuperAdmin: false,
+      });
+
+      const approverToken = generateTestToken({
+        userId: 5,
+        email: 'principal@ksrct.ac.in',
+        name: 'Principal',
+        roles: ['principal'],
+        permissions: ['finance.workflow.principal'],
+      });
+
+      const response = await request(app)
+        .put('/api/finance-requests/202')
+        .set('Authorization', `Bearer ${approverToken}`)
+        .send({
+          budget_rows: [
+            // Tampered pre-top-up row: must be discarded in favour of the stored amount.
+            {
+              budget_head: 'Research',
+              sub_head: 'Lab Equipment',
+              amount: 999999,
+              is_topup: 0,
+            },
+            // Legitimate top-up edit: this one is allowed through.
+            {
+              budget_head: 'Research',
+              sub_head: 'Consumables',
+              amount: 6000,
+              approved_amount: 6000,
+              is_topup: 1,
+            },
+          ],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      const persistedRows = financeModel.updateFinanceRequest.mock.calls[0][1].budget_rows;
+      expect(persistedRows).toHaveLength(2);
+      // Pre-top-up row came back from the database, not the request body.
+      expect(persistedRows[0]).toMatchObject({
+        budget_head: 'Research',
+        sub_head: 'Lab Equipment',
+        amount: 12000,
+        is_topup: 0,
+      });
+      // The top-up row keeps the approver's edit, with approval fields stripped.
+      expect(persistedRows[1]).toMatchObject({
+        budget_head: 'Research',
+        sub_head: 'Consumables',
+        amount: 6000,
+        is_topup: 1,
+      });
+      expect(persistedRows[1]).not.toHaveProperty('approved_amount');
+    });
+
+    it('rejects an edit that would strip every topup row from an in-flight topup', async () => {
+      financeModel.getFinanceRequestById.mockResolvedValue({
+        id: 203,
+        created_by: 99,
+        workflow_state: {
+          status: 'in_progress',
+          currentStage: 'principal',
+          topupAt: '2026-08-01T10:00:00.000Z',
+        },
+      });
+      financeModel.getBudgetBreakup.mockResolvedValue([
+        { budget_head: 'Research', sub_head: 'Lab Equipment', amount: 12000, is_topup: 0 },
+        { budget_head: 'Research', sub_head: 'Consumables', amount: 5000, is_topup: 1 },
+      ]);
+
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['principal'],
+        permissions: ['finance.workflow.principal'],
+        isAdmin: false,
+        isSuperAdmin: false,
+      });
+
+      const approverToken = generateTestToken({
+        userId: 5,
+        email: 'principal@ksrct.ac.in',
+        name: 'Principal',
+        roles: ['principal'],
+        permissions: ['finance.workflow.principal'],
+      });
+
+      const response = await request(app)
+        .put('/api/finance-requests/203')
+        .set('Authorization', `Bearer ${approverToken}`)
+        .send({
+          budget_rows: [
+            { budget_head: 'Research', sub_head: 'Lab Equipment', amount: 12000, is_topup: 0 },
+          ],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.message).toContain('topup budget row is required');
+      expect(financeModel.updateFinanceRequest).not.toHaveBeenCalled();
+    });
   });
 
   describe('DELETE /api/finance-requests/:id - Topup Protection', () => {

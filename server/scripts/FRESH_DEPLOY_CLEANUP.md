@@ -43,6 +43,7 @@
 | 28  | Client (finance)     | Legacy annexure flat-column fallback                                   | ✅ Safe |
 | 29  | Client (workflow)    | `user.role` singular read                                              | ✅ Safe |
 | 30  | Client (finance)     | `stageRoleFallback` role-name matching                                 | ⚠️ Keep |
+| 31  | Expenditure (API)    | Bulk NEFT → Bulk Transaction rename aliases                            | ✅ Safe |
 
 **Legend:** ✅ Safe = remove on fresh deploy. ⚠️ Keep = functional safety net, not just legacy compat.
 
@@ -692,3 +693,33 @@ ALTER TABLE finance_requests
 > **⚠️ WARNING:** Do NOT run these column drops until all code in Phases 1–6
 > has been cleaned up and deployed. Dropping a column while code still reads it
 > will cause runtime errors.
+
+
+---
+
+## 31. Expenditure — Bulk NEFT → Bulk Transaction rename aliases
+
+**Files:** `expenditureRoutes.js`, `expenditureController.js`, `expenditureModel.js`,
+`expenditureapproval.tsx`
+
+"Bulk NEFT" was renamed to "Bulk Transaction" (modes NEFT / RTGS / UPI / DD). The API
+field names were renamed with the UI; these aliases keep an older deployed client working:
+
+| Where                    | Legacy alias                                          | Replacement                       |
+| ------------------------ | ----------------------------------------------------- | --------------------------------- |
+| Upload field (routes)    | `bulk_neft_file`                                      | `bulk_transaction_file`           |
+| Template route           | `GET /templates/bulk-neft`                            | `GET /templates/bulk-transaction` |
+| Payload keys             | `showbulkneft`, `bulknefttemplateversion`             | `showbulktransaction`, `bulktransactiontype`, `bulktransactionbank`, `bulktransactiontemplateversion` |
+| Response key             | `bulk_neft_file`                                      | `bulk_transaction_file`           |
+| Client load path         | `record.bulk_neft_file` fallback                      | `record.bulk_transaction_file`    |
+
+**When to remove:** once no deployed client posts the old field/payload names or reads the
+old response key. Search for `LEGACY: pre-rename` to find every site.
+
+**Not legacy (keep):** the DB table `expenditure_bulk_neft_files` and the column
+`expenditure_requests.show_bulk_neft` were deliberately left un-renamed — only the API
+and UI were renamed. A future rename would need a migration plus a data move.
+
+**Also removed as part of this change:** the `chk_expenditure_bulk_neft_excel_name` CHECK
+constraint, since DD uploads accept any file format (validated per transaction type in
+`expenditureController.js` instead).

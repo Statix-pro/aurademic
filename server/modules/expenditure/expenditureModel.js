@@ -16,6 +16,14 @@ import {
   beneficiaryTypeToEntityTypeCode,
 } from '../shared/budget/budgetUtils.js';
 import { searchApplicant as searchEmployeeApplicants } from '../shared/budget/userResolvers.js';
+import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
+import { buildSettledAdvanceExpr, resolveAdvanceUsageAmount } from '../shared/expenditureClaims.js';
+import {
+  buildClaimedExpenditureStatusCondition,
+  buildExpenditureDisplayRefExpr,
+  buildExpenditureFiscalYearCondition,
+  collateBudgetText,
+} from '../shared/expenditureFilters.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -78,6 +86,30 @@ const hasFinanceRequestColumn = async (columnName, { tx = db } = {}) => {
   );
   const exists = Number(rows?.[0]?.count || 0) > 0;
   FINANCE_REQUEST_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
+  return exists;
+};
+
+const BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE = new Map();
+
+// transaction_type / bank_code are added by the 20260810 migration; guard reads and
+// writes so a not-yet-migrated database keeps working.
+const hasBulkTransactionFileColumn = async (columnName, { tx = db } = {}) => {
+  const normalizedColumn = normalizeText(columnName);
+  if (!normalizedColumn) return false;
+  if (BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE.has(normalizedColumn)) {
+    return BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'expenditure_bulk_neft_files'
+        AND COLUMN_NAME = ?`,
+    [normalizedColumn],
+  );
+  const exists = Number(rows?.[0]?.count || 0) > 0;
+  BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
   return exists;
 };
 
@@ -346,7 +378,20 @@ const FINANCE_BREAKUP_APPROVED_BASE_SQL = `
 `;
 
 const VALID_REQUEST_TYPES = new Set(['Advance', 'Settlement', 'Expenditure']);
-const DEFAULT_BULK_NEFT_TEMPLATE_VERSION = '2026-04-11';
+const DEFAULT_BULK_TRANSACTION_TEMPLATE_VERSION = '2026-04-11';
+const VALID_BULK_TRANSACTION_TYPES = new Set(['NEFT', 'RTGS', 'UPI', 'DD']);
+const DEFAULT_BULK_TRANSACTION_TYPE = 'NEFT';
+const VALID_BULK_TRANSACTION_BANKS = new Set(['AXIS', 'DBS']);
+
+const normalizeBulkTransactionType = (value) => {
+  const type = normalizeText(value).toUpperCase();
+  return VALID_BULK_TRANSACTION_TYPES.has(type) ? type : DEFAULT_BULK_TRANSACTION_TYPE;
+};
+
+const normalizeBulkTransactionBank = (value) => {
+  const bank = normalizeText(value).toUpperCase();
+  return VALID_BULK_TRANSACTION_BANKS.has(bank) ? bank : null;
+};
 
 const normalizeRequestType = (value) => {
   const type = normalizeText(value);
@@ -381,20 +426,6 @@ const normalizeSqlDate = (value) => {
 
 const ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL = `
   LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) NOT IN ('rejected', 'deleted', 'archived')
-`;
-
-// Normalize a text column to a single charset/collation so it can be combined
-// across tables in a UNION. Different expenditure tables were created with
-// differing column collations, which triggers ER_CANT_AGGREGATE_NCOLLATIONS
-// (Illegal mix of collations) on UNION. Force a common collation here.
-const collateBudgetText = (expr) => `CONVERT(${expr} USING utf8mb4) COLLATE utf8mb4_unicode_ci`;
-
-const FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL = `
-  (
-    LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
-    OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
-    OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
-  )
 `;
 
 const WORKFLOW_ROW_REF_SQL_EXPR = `
@@ -2254,7 +2285,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Advance'
-             AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
            THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
            ELSE 0
          END
@@ -2262,7 +2293,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Expenditure'
-             AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
            THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
            ELSE 0
          END
@@ -2270,12 +2301,25 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Settlement'
-             AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
            THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
            ELSE 0
          END
        ), 0) AS settlement_amount,
-       COUNT(DISTINCT er.id) AS expenditure_request_count
+       COALESCE(SUM(
+         CASE
+           WHEN er.request_type = 'Settlement'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
+           THEN ${buildSettledAdvanceExpr('er')}
+           ELSE 0
+         END
+       ), 0) AS settled_advance_amount,
+       -- Counted over the same requests the amounts above are summed over. A bare
+       -- COUNT(DISTINCT er.id) also counted deleted and rejected requests, so a card could
+       -- report requests raised against it while every amount beside the count read zero.
+       COUNT(DISTINCT
+         CASE WHEN ${buildClaimedExpenditureStatusCondition('er')} THEN er.id END
+       ) AS expenditure_request_count
      FROM finance_requests fr
      LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
      LEFT JOIN master_employees emp ON emp.id = fr.employee_id
@@ -2382,7 +2426,11 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       const advanceAmount = toMoney(row.advance_amount);
       const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
-      const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+      const effectiveUsageAmount = resolveAdvanceUsageAmount({
+        advanceAmount,
+        settlementAmount,
+        settledAdvanceAmount: row.settled_advance_amount,
+      });
       const sourceFiscalYear = toPositiveInt(row.source_fiscal_year);
       return {
         finance_request_id: toPositiveInt(row.finance_request_id),
@@ -3152,7 +3200,7 @@ export async function createExpenditure(data, userId) {
       normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
   };
 
-  return createExpenditureRequest(payload, userId, { billFiles: [], bulkNeftFile: null });
+  return createExpenditureRequest(payload, userId, { billFiles: [], bulkTransactionFile: null });
 }
 
 function sanitizeRowValue(value) {
@@ -3856,30 +3904,88 @@ async function linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeReq
   }
 }
 
-async function upsertBulkNeftFile(conn, expenditureId, file = null, templateVersion = null) {
-  if (!file?.filename || !file?.path) return;
+/**
+ * Persists the bulk transaction payout file for a request.
+ *
+ * `meta.fileRetained` tells us what the client did with an already-stored file when no
+ * new one was uploaded: `false` means the user deleted it (drop the row), `true` means
+ * they kept it but may have switched mode/bank (update those columns only). Undefined —
+ * a caller that does not manage this section at all — leaves the row untouched.
+ */
+async function upsertBulkTransactionFile(conn, expenditureId, file = null, meta = {}) {
+  const transactionType = normalizeBulkTransactionType(meta.transactionType);
+  const bankCode = normalizeBulkTransactionBank(meta.bankCode);
+
+  if (!file?.filename || !file?.path) {
+    if (meta.fileRetained === false) {
+      await conn.execute('DELETE FROM expenditure_bulk_neft_files WHERE expenditure_id = ?', [
+        expenditureId,
+      ]);
+      return;
+    }
+
+    if (meta.fileRetained !== true) return;
+
+    // File kept as-is; only the mode/bank selection can have changed.
+    const assignments = [];
+    const assignmentValues = [];
+    if (await hasBulkTransactionFileColumn('transaction_type', { tx: conn })) {
+      assignments.push('transaction_type = ?');
+      assignmentValues.push(transactionType);
+    }
+    if (await hasBulkTransactionFileColumn('bank_code', { tx: conn })) {
+      assignments.push('bank_code = ?');
+      assignmentValues.push(bankCode);
+    }
+    if (!assignments.length) return;
+
+    await conn.execute(
+      `UPDATE expenditure_bulk_neft_files
+          SET ${assignments.join(', ')},
+              updated_at = CURRENT_TIMESTAMP
+        WHERE expenditure_id = ?`,
+      [...assignmentValues, expenditureId],
+    );
+    return;
+  }
+
+  const columns = ['expenditure_id', 'template_version'];
+  const values = [
+    expenditureId,
+    sanitizeRowValue(meta.templateVersion) || DEFAULT_BULK_TRANSACTION_TEMPLATE_VERSION,
+  ];
+
+  if (await hasBulkTransactionFileColumn('transaction_type', { tx: conn })) {
+    columns.push('transaction_type');
+    values.push(transactionType);
+  }
+  if (await hasBulkTransactionFileColumn('bank_code', { tx: conn })) {
+    columns.push('bank_code');
+    values.push(bankCode);
+  }
+
+  columns.push('original_name', 'stored_name', 'file_path', 'mime_type', 'file_size');
+  values.push(
+    sanitizeRowValue(file.originalname),
+    sanitizeRowValue(file.filename),
+    toStoredUploadPath(file.path),
+    sanitizeRowValue(file.mimetype),
+    Number(file.size) || 0,
+  );
+
+  const updateSql = columns
+    .filter((column) => column !== 'expenditure_id')
+    .map((column) => `${column} = VALUES(${column})`)
+    .join(',\n       ');
 
   await conn.execute(
     `INSERT INTO expenditure_bulk_neft_files
-       (expenditure_id, template_version, original_name, stored_name, file_path, mime_type, file_size)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+       (${columns.join(', ')})
+     VALUES (${columns.map(() => '?').join(', ')})
      ON DUPLICATE KEY UPDATE
-       template_version = VALUES(template_version),
-       original_name = VALUES(original_name),
-       stored_name = VALUES(stored_name),
-       file_path = VALUES(file_path),
-       mime_type = VALUES(mime_type),
-       file_size = VALUES(file_size),
+       ${updateSql},
        updated_at = CURRENT_TIMESTAMP`,
-    [
-      expenditureId,
-      sanitizeRowValue(templateVersion) || DEFAULT_BULK_NEFT_TEMPLATE_VERSION,
-      sanitizeRowValue(file.originalname),
-      sanitizeRowValue(file.filename),
-      toStoredUploadPath(file.path),
-      sanitizeRowValue(file.mimetype),
-      Number(file.size) || 0,
-    ],
+    values,
   );
 }
 
@@ -4641,7 +4747,9 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       credit_status: normalizeText(data.credit_status) || null,
       debit_status: normalizeDebitStatus(data.debit_status),
       partial_amount: moneyOrNull(data.partial_amount),
-      show_bulk_neft: parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile) ? 1 : 0,
+      // DB column keeps its original name; the API/UI field is show_bulk_transaction.
+      show_bulk_neft:
+        parseBoolean(data.show_bulk_transaction) || Boolean(uploads.bulkTransactionFile) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
       payment_date: paymentDetails.date || data.payment_date || null,
@@ -4757,12 +4865,12 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
     await insertBillFiles(conn, expenditureId, uploads.paymentProofFiles, 'payment_proof');
     await linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeRequestId);
-    await upsertBulkNeftFile(
-      conn,
-      expenditureId,
-      uploads.bulkNeftFile,
-      data.bulk_neft_template_version,
-    );
+    await upsertBulkTransactionFile(conn, expenditureId, uploads.bulkTransactionFile, {
+      templateVersion: data.bulk_transaction_template_version,
+      transactionType: data.bulk_transaction_type,
+      bankCode: data.bulk_transaction_bank,
+      fileRetained: data.bulk_transaction_file_retained,
+    });
 
     return { expenditureId, requestRef: ref };
   });
@@ -5093,7 +5201,9 @@ export async function updateExpenditureRequest(
       credit_status: normalizeText(data.credit_status) || null,
       debit_status: normalizeDebitStatus(data.debit_status),
       partial_amount: moneyOrNull(data.partial_amount),
-      show_bulk_neft: parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile) ? 1 : 0,
+      // DB column keeps its original name; the API/UI field is show_bulk_transaction.
+      show_bulk_neft:
+        parseBoolean(data.show_bulk_transaction) || Boolean(uploads.bulkTransactionFile) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
       payment_date: normalizedPaymentDate,
@@ -5255,12 +5365,12 @@ export async function updateExpenditureRequest(
       'payment_proof',
     );
     await linkFinanceAnnexuresToExpenditure(conn, normalizedExpenditureId, financeRequestId);
-    await upsertBulkNeftFile(
-      conn,
-      normalizedExpenditureId,
-      uploads.bulkNeftFile,
-      data.bulk_neft_template_version,
-    );
+    await upsertBulkTransactionFile(conn, normalizedExpenditureId, uploads.bulkTransactionFile, {
+      templateVersion: data.bulk_transaction_template_version,
+      transactionType: data.bulk_transaction_type,
+      bankCode: data.bulk_transaction_bank,
+      fileRetained: data.bulk_transaction_file_retained,
+    });
 
     return {
       expenditureId: normalizedExpenditureId,
@@ -5282,6 +5392,37 @@ export async function getExpenditureById(id) {
   return rows[0] || null;
 }
 
+/**
+ * Bulk transaction payout file for a request, with the transaction type / bank the
+ * file was prepared for. Both are selected only when the 20260810 migration has run.
+ */
+async function getBulkTransactionFileRow(expenditureId) {
+  const optionalColumns = [];
+  for (const column of ['transaction_type', 'bank_code']) {
+    const exists = await hasBulkTransactionFileColumn(column);
+    optionalColumns.push(exists ? `${column},` : `NULL AS ${column},`);
+  }
+
+  const [rows] = await db.execute(
+    `SELECT id, template_version, ${optionalColumns.join(' ')}
+            original_name, stored_name, file_path, mime_type, file_size,
+            created_at, updated_at
+       FROM expenditure_bulk_neft_files
+      WHERE expenditure_id = ?
+      LIMIT 1`,
+    [expenditureId],
+  );
+
+  const row = rows[0] || null;
+  if (!row) return null;
+
+  return withUploadAccess({
+    ...row,
+    transaction_type: normalizeBulkTransactionType(row.transaction_type),
+    bank_code: normalizeBulkTransactionBank(row.bank_code),
+  });
+}
+
 export async function getExpenditureDetails(id) {
   const expenditureId = toPositiveInt(id);
   if (!expenditureId) {
@@ -5294,6 +5435,8 @@ export async function getExpenditureDetails(id) {
       unplanned_rows: [],
       bill_files: [],
       payment_proof_files: [],
+      bulk_transaction_file: null,
+      // LEGACY: pre-rename response key, kept for older clients. Remove once unused.
       bulk_neft_file: null,
     };
   }
@@ -5306,7 +5449,7 @@ export async function getExpenditureDetails(id) {
     expenditureRowsResult,
     billFilesResult,
     paymentProofFilesResult,
-    bulkNeftFileResult,
+    bulkTransactionFileResult,
   ] = await Promise.all([
     db.execute(
       `SELECT id, income_source, contribution, amount, status, remarks, credit_account, sort_order,
@@ -5374,14 +5517,7 @@ export async function getExpenditureDetails(id) {
         ORDER BY sort_order ASC, id ASC`,
       [expenditureId],
     ),
-    db.execute(
-      `SELECT id, template_version, original_name, stored_name, file_path, mime_type, file_size,
-              created_at, updated_at
-         FROM expenditure_bulk_neft_files
-        WHERE expenditure_id = ?
-        LIMIT 1`,
-      [expenditureId],
-    ),
+    getBulkTransactionFileRow(expenditureId),
   ]);
 
   const [income_rows] = incomeRowsResult;
@@ -5391,7 +5527,7 @@ export async function getExpenditureDetails(id) {
   const [expenditure_rows] = expenditureRowsResult;
   const [bill_files] = billFilesResult;
   const [payment_proof_files] = paymentProofFilesResult;
-  const [bulkNeftRows] = bulkNeftFileResult;
+  const bulkTransactionRow = bulkTransactionFileResult;
   let unplanned_rows = [];
   try {
     const [unplannedRowsResult] = await db.execute(
@@ -5417,7 +5553,9 @@ export async function getExpenditureDetails(id) {
     unplanned_rows,
     bill_files: bill_files.map(withUploadAccess),
     payment_proof_files: payment_proof_files.map(withUploadAccess),
-    bulk_neft_file: withUploadAccess(bulkNeftRows[0] || null),
+    bulk_transaction_file: bulkTransactionRow,
+    // LEGACY: pre-rename response key, kept for older clients. Remove once unused.
+    bulk_neft_file: bulkTransactionRow,
   };
 }
 
@@ -5758,18 +5896,8 @@ const WORKFLOW_STAGE_SQL_EXPR = `
   )
 `;
 
-const QUEUE_DISPLAY_REF_SQL_EXPR = `
-  COALESCE(
-    (
-      SELECT err_display.request_ref
-        FROM expenditure_request_refs err_display
-       WHERE err_display.expenditure_request_id = er.id
-       ORDER BY err_display.id ASC
-       LIMIT 1
-    ),
-    CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))
-  )
-`;
+/** Shared with the report, which searches on this expression. */
+const QUEUE_DISPLAY_REF_SQL_EXPR = buildExpenditureDisplayRefExpr('er');
 
 const normalizeWorkflowState = (workflowState) => {
   if (!workflowState) return null;
@@ -6203,6 +6331,62 @@ export async function getLatestArchiveAction(recordId, { tx = db } = {}) {
   };
 }
 
+/**
+ * Bulk row breakdown for the workflow CSV export: every advance, expenditure and
+ * settlement row for the given requests, grouped by expenditure id. One query per
+ * row table so the export stays a fixed number of round trips.
+ */
+export async function listExpenditureRowsForExport(expenditureIds = [], { tx = db } = {}) {
+  const normalizedIds = Array.from(
+    new Set(
+      (Array.isArray(expenditureIds) ? expenditureIds : [])
+        .map((value) => toPositiveInt(value))
+        .filter(Boolean),
+    ),
+  );
+
+  if (!normalizedIds.length) {
+    return {};
+  }
+
+  const placeholders = normalizedIds.map(() => '?').join(', ');
+  const [rows] = await tx.query(
+    `SELECT expenditure_id, 'Advance' AS row_kind, budget_head, sub_head, amount_source,
+            budget_amount, advance_amount AS amount, sort_order, id
+       FROM expenditure_advance_rows
+      WHERE expenditure_id IN (${placeholders})
+     UNION ALL
+     SELECT expenditure_id, 'Expenditure' AS row_kind, budget_head, sub_head, amount_source,
+            budget_amount, auto_sum_amount AS amount, sort_order, id
+       FROM expenditure_line_rows
+      WHERE expenditure_id IN (${placeholders})
+     UNION ALL
+     SELECT expenditure_id, 'Settlement' AS row_kind, budget_head, sub_head, amount_source,
+            budget_amount, settlement_amount AS amount, sort_order, id
+       FROM expenditure_settlement_rows
+      WHERE expenditure_id IN (${placeholders})
+      ORDER BY expenditure_id ASC, row_kind ASC, sort_order ASC, id ASC`,
+    [...normalizedIds, ...normalizedIds, ...normalizedIds],
+  );
+
+  const grouped = {};
+  for (const row of rows || []) {
+    const key = String(toPositiveInt(row.expenditure_id));
+    if (!grouped[key]) {
+      grouped[key] = [];
+    }
+    grouped[key].push({
+      row_kind: row.row_kind,
+      budget_head: row.budget_head,
+      sub_head: row.sub_head,
+      amount_source: row.amount_source,
+      budget_amount: row.budget_amount,
+      amount: row.amount,
+    });
+  }
+  return grouped;
+}
+
 export async function getExpenditureBillsByExpenditureIds(expenditureIds = [], { tx = db } = {}) {
   const normalizedIds = Array.from(
     new Set(
@@ -6280,49 +6464,19 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   const whereParts = [`LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'`];
   const whereParams = [];
 
+  // Same expression the queue and the CSV's Date column display, so a date-filtered
+  // export can never contain a row dated outside the requested window.
+  const dateRange = buildDateRangeCondition('COALESCE(er.request_date, DATE(er.created_at))', {
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+  });
+  if (dateRange.sql) {
+    whereParts.push(dateRange.sql);
+    whereParams.push(...dateRange.params);
+  }
+
   if (fiscalYear) {
-    whereParts.push(`(
-      EXISTS (
-        SELECT 1
-          FROM expenditure_advance_rows ar_fy
-          JOIN budget_proposals bp_fy ON bp_fy.id = ar_fy.budget_proposal_id
-         WHERE ar_fy.expenditure_id = er.id
-           AND bp_fy.fiscal_year = ?
-      )
-      OR EXISTS (
-        SELECT 1
-          FROM expenditure_settlement_rows sr_fy
-          JOIN budget_proposals bp_fy ON bp_fy.id = sr_fy.budget_proposal_id
-         WHERE sr_fy.expenditure_id = er.id
-           AND bp_fy.fiscal_year = ?
-      )
-      OR EXISTS (
-        SELECT 1
-          FROM expenditure_line_rows lr_fy
-          JOIN budget_proposals bp_fy ON bp_fy.id = lr_fy.budget_proposal_id
-         WHERE lr_fy.expenditure_id = er.id
-           AND bp_fy.fiscal_year = ?
-      )
-      OR EXISTS (
-        -- Carry-forward: a proposal carried into the target year must surface
-        -- under that target year for approvers too — matching finance/budget
-        -- (financeModel.listFinanceQueueRecords) and the creator dashboard.
-        SELECT 1
-          FROM finance_carry_forward_allocations cf_fy
-         WHERE cf_fy.finance_request_id = er.finance_request_id
-           AND cf_fy.target_fiscal_year = ?
-           AND LOWER(TRIM(COALESCE(cf_fy.status, 'active'))) = 'active'
-      )
-      OR (
-        NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar_any WHERE ar_any.expenditure_id = er.id AND ar_any.budget_proposal_id IS NOT NULL)
-        AND NOT EXISTS (SELECT 1 FROM expenditure_settlement_rows sr_any WHERE sr_any.expenditure_id = er.id AND sr_any.budget_proposal_id IS NOT NULL)
-        AND NOT EXISTS (SELECT 1 FROM expenditure_line_rows lr_any WHERE lr_any.expenditure_id = er.id AND lr_any.budget_proposal_id IS NOT NULL)
-        AND (
-          YEAR(COALESCE(er.request_date, er.created_at))
-            - (MONTH(COALESCE(er.request_date, er.created_at)) < 4)
-        ) = ?
-      )
-    )`);
+    whereParts.push(buildExpenditureFiscalYearCondition('er'));
     whereParams.push(fiscalYear, fiscalYear, fiscalYear, fiscalYear, fiscalYear);
   }
 
@@ -6587,6 +6741,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        COALESCE(err.request_ref, CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) AS proposal_ref,
        er.request_type,
        er.finance_request_id,
+       COALESCE(frr.request_ref, '') AS finance_request_ref,
        (
          -- Carry-forward eligibility for the Advance card: unsettled advance for
          -- this finance request = all approved advances - all approved settlements.
@@ -6639,6 +6794,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        er.updated_at
      FROM expenditure_requests er
      LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
+     LEFT JOIN finance_request_refs frr ON frr.finance_request_id = er.finance_request_id
      LEFT JOIN master_employees emp ON emp.id = er.employee_id
      ${whereClause}
      ORDER BY
@@ -6649,7 +6805,12 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
          ELSE 1
        END,
        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.resubmittedAt')), '') DESC,
-       er.created_at DESC
+       er.created_at DESC,
+       -- created_at is a second-precision TIMESTAMP, so requests raised in the same
+       -- second tie. Without a unique final key the LIMIT/OFFSET order is undefined
+       -- between pages, which makes the CSV export (10 pages of 100) repeat some rows
+       -- and drop others.
+       er.id DESC
      LIMIT ? OFFSET ?`,
     [statusStageScope, statusStageScope, ...whereParams, limit, offset],
   );

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 
 import * as expenditureModel from './expenditureModel.js';
 import './expenditureWorkflowAdapter.js';
+import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
@@ -11,12 +12,62 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const EXPENDITURE_TEMPLATE_DIR = path.resolve(__dirname, '../../templates/expenditure');
-const BULK_NEFT_TEMPLATE_PATH = path.join(EXPENDITURE_TEMPLATE_DIR, 'bulk-neft-template.xls');
-const SAMPLE_BULK_NEFT_TEMPLATE_PATH = path.join(
-  EXPENDITURE_TEMPLATE_DIR,
+
+// Bulk transaction modes. NEFT/RTGS/UPI are uploaded on the bank's Excel template;
+// DD is a physical instrument, so a document or image scan of it is accepted too.
+const BULK_TRANSACTION_TYPES = ['NEFT', 'RTGS', 'UPI', 'DD'];
+const DEFAULT_BULK_TRANSACTION_TYPE = 'NEFT';
+const EXCEL_ONLY_BULK_TRANSACTION_TYPES = new Set(['NEFT', 'RTGS', 'UPI']);
+const EXCEL_FILE_EXTENSIONS = new Set(['.xlsx', '.xls']);
+// DD scans. Kept in sync with BULK_TRANSACTION_ALLOWED_EXTENSIONS in expenditureRoutes.js,
+// which is the outer multer guard. Browser-renderable active formats (.html, .svg, .xml)
+// are excluded on purpose: /uploads is served by express.static, so a stored one would be
+// a same-origin XSS URL for whoever opens the request.
+const DD_FILE_EXTENSIONS = new Set([
+  ...EXCEL_FILE_EXTENSIONS,
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.tif',
+  '.tiff',
+  '.doc',
+  '.docx',
+]);
+
+// Each bank publishes its own Excel layout. The files themselves are dropped into
+// server/templates/expenditure/ — until then the shared template below is served.
+const BULK_TRANSACTION_BANKS = ['AXIS', 'DBS'];
+const DEFAULT_BULK_TRANSACTION_BANK = 'AXIS';
+const BULK_TRANSACTION_BANK_LABELS = { AXIS: 'Axis Bank', DBS: 'DBS' };
+const BULK_TRANSACTION_BANK_TEMPLATE_FILES = {
+  AXIS: ['bulk-transaction-axis-template.xlsx', 'bulk-transaction-axis-template.xls'],
+  DBS: ['bulk-transaction-dbs-template.xlsx', 'bulk-transaction-dbs-template.xls'],
+};
+// FALLBACK: single shared template used before the per-bank Axis/DBS files exist.
+// Remove the fallbacks once both bank templates are in place.
+const FALLBACK_BULK_TRANSACTION_TEMPLATE_FILES = [
+  'bulk-transaction-template.xls',
+  'bulk-neft-template.xls',
   'sample-bulk-neft-template.xls',
-);
-const BULK_NEFT_TEMPLATE_DOWNLOAD_NAME = 'bulk-neft-template.xls';
+];
+
+const normalizeBulkTransactionType = (value) => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  return BULK_TRANSACTION_TYPES.includes(normalized) ? normalized : null;
+};
+
+const normalizeBulkTransactionBank = (value) => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  return BULK_TRANSACTION_BANKS.includes(normalized) ? normalized : null;
+};
+
+const isExcelOnlyBulkTransactionType = (type) => EXCEL_ONLY_BULK_TRANSACTION_TYPES.has(type);
 
 const normalizeText = (value) => String(value || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
@@ -286,11 +337,51 @@ const parseRequestPayload = (req) => {
 
 const getExpenditureUploads = (req) => ({
   billFiles: Array.isArray(req.files?.bill_files) ? req.files.bill_files : [],
-  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file) ? req.files.bulk_neft_file[0] : null,
+  bulkTransactionFile: Array.isArray(req.files?.bulk_transaction_file)
+    ? req.files.bulk_transaction_file[0]
+    : // LEGACY: pre-rename field name. Remove with the route's bulk_neft_file entry.
+      Array.isArray(req.files?.bulk_neft_file)
+      ? req.files.bulk_neft_file[0]
+      : null,
   paymentProofFiles: Array.isArray(req.files?.payment_proof_files)
     ? req.files.payment_proof_files
     : [],
 });
+
+// `file.path` is derived from the client-supplied `originalname`, so the delete is routed
+// through deleteUploadedFile, which refuses any path resolving outside `uploads/`.
+const discardUploadedFile = (file) => {
+  if (!file?.path) return;
+  deleteUploadedFile(file.path);
+};
+
+// Multer has already written every part of the multipart request to disk by the time a
+// handler can reject it, so all of them have to go — not just the offending one.
+const discardExpenditureUploads = (uploads = {}) => {
+  [
+    uploads.bulkTransactionFile,
+    ...(Array.isArray(uploads.billFiles) ? uploads.billFiles : []),
+    ...(Array.isArray(uploads.paymentProofFiles) ? uploads.paymentProofFiles : []),
+  ].forEach(discardUploadedFile);
+};
+
+/**
+ * NEFT/RTGS/UPI files must be the bank's Excel template; DD also accepts a document or
+ * image scan. Returns an error message when the upload does not match the selected mode.
+ */
+const validateBulkTransactionUpload = (file, transactionType) => {
+  if (!file) return null;
+
+  const extension = path.extname(file.originalname || '').toLowerCase();
+
+  if (isExcelOnlyBulkTransactionType(transactionType)) {
+    if (EXCEL_FILE_EXTENSIONS.has(extension)) return null;
+    return `${transactionType} bulk transaction upload only accepts Excel files (.xlsx or .xls)`;
+  }
+
+  if (DD_FILE_EXTENSIONS.has(extension)) return null;
+  return `DD bulk transaction upload accepts only ${[...DD_FILE_EXTENSIONS].join(', ')} files`;
+};
 
 const VALID_REQUEST_TYPES = new Set(['Advance', 'Settlement', 'Expenditure']);
 
@@ -414,12 +505,55 @@ const normalizeIncomingPayload = (payload = {}) => {
   if (normalized.paymentdebitaccount && !normalized.payment_debit_account) {
     normalized.payment_debit_account = normalized.paymentdebitaccount;
   }
-  if (normalized.showbulkneft !== undefined && normalized.show_bulk_neft === undefined) {
-    normalized.show_bulk_neft = normalized.showbulkneft;
+  if (
+    normalized.showbulktransaction !== undefined &&
+    normalized.show_bulk_transaction === undefined
+  ) {
+    normalized.show_bulk_transaction = normalized.showbulktransaction;
   }
-  if (normalized.bulknefttemplateversion && !normalized.bulk_neft_template_version) {
-    normalized.bulk_neft_template_version = normalized.bulknefttemplateversion;
+  if (normalized.bulktransactiontemplateversion && !normalized.bulk_transaction_template_version) {
+    normalized.bulk_transaction_template_version = normalized.bulktransactiontemplateversion;
   }
+  if (normalized.bulktransactiontype && !normalized.bulk_transaction_type) {
+    normalized.bulk_transaction_type = normalized.bulktransactiontype;
+  }
+  if (normalized.bulktransactionbank && !normalized.bulk_transaction_bank) {
+    normalized.bulk_transaction_bank = normalized.bulktransactionbank;
+  }
+  // Tri-state: absent means "this client does not manage the bulk transaction section",
+  // which must not be read as "the stored file was deleted".
+  if (
+    normalized.bulktransactionfileretained !== undefined &&
+    normalized.bulk_transaction_file_retained === undefined
+  ) {
+    normalized.bulk_transaction_file_retained = normalized.bulktransactionfileretained;
+  }
+  normalized.bulk_transaction_file_retained =
+    normalized.bulk_transaction_file_retained === undefined
+      ? undefined
+      : parseBoolean(normalized.bulk_transaction_file_retained);
+  // LEGACY: pre-"Bulk Transaction" payload keys. Remove once no deployed client sends them.
+  if (normalized.showbulkneft !== undefined && normalized.show_bulk_transaction === undefined) {
+    normalized.show_bulk_transaction = normalized.showbulkneft;
+  }
+  if (normalized.show_bulk_neft !== undefined && normalized.show_bulk_transaction === undefined) {
+    normalized.show_bulk_transaction = normalized.show_bulk_neft;
+  }
+  if (normalized.bulknefttemplateversion && !normalized.bulk_transaction_template_version) {
+    normalized.bulk_transaction_template_version = normalized.bulknefttemplateversion;
+  }
+  if (normalized.bulk_neft_template_version && !normalized.bulk_transaction_template_version) {
+    normalized.bulk_transaction_template_version = normalized.bulk_neft_template_version;
+  }
+
+  normalized.bulk_transaction_type =
+    normalizeBulkTransactionType(normalized.bulk_transaction_type) || DEFAULT_BULK_TRANSACTION_TYPE;
+  normalized.bulk_transaction_bank = isExcelOnlyBulkTransactionType(
+    normalized.bulk_transaction_type,
+  )
+    ? normalizeBulkTransactionBank(normalized.bulk_transaction_bank) ||
+      DEFAULT_BULK_TRANSACTION_BANK
+    : null;
 
   if (Array.isArray(normalized.advancerows) && !normalized.advance_rows) {
     normalized.advance_rows = normalized.advancerows;
@@ -486,10 +620,23 @@ const sendAccessDeniedError = (res, err) => {
   return true;
 };
 
-const resolveBulkNeftTemplatePath = () => {
-  if (fs.existsSync(BULK_NEFT_TEMPLATE_PATH)) return BULK_NEFT_TEMPLATE_PATH;
-  if (fs.existsSync(SAMPLE_BULK_NEFT_TEMPLATE_PATH)) return SAMPLE_BULK_NEFT_TEMPLATE_PATH;
-  return null;
+/**
+ * Locates the template to serve for a bank. `isBankSpecific` is false when the shared
+ * fallback template was served instead of that bank's own layout — the caller must not
+ * then name the download after the bank, or users fill in the wrong layout.
+ */
+const resolveBulkTransactionTemplate = (bank) => {
+  for (const candidate of BULK_TRANSACTION_BANK_TEMPLATE_FILES[bank] || []) {
+    const candidatePath = path.join(EXPENDITURE_TEMPLATE_DIR, candidate);
+    if (fs.existsSync(candidatePath)) return { templatePath: candidatePath, isBankSpecific: true };
+  }
+
+  for (const candidate of FALLBACK_BULK_TRANSACTION_TEMPLATE_FILES) {
+    const candidatePath = path.join(EXPENDITURE_TEMPLATE_DIR, candidate);
+    if (fs.existsSync(candidatePath)) return { templatePath: candidatePath, isBankSpecific: false };
+  }
+
+  return { templatePath: null, isBankSpecific: false };
 };
 
 const isSuperAdminRequest = (req) =>
@@ -558,15 +705,27 @@ const canAccessExpenditureRecord = (req, record) => {
 };
 
 const expenditureController = {
-  async downloadBulkNeftTemplate(req, res) {
+  async downloadBulkTransactionTemplate(req, res) {
     try {
-      const templatePath = resolveBulkNeftTemplatePath();
-      if (!templatePath) return sendError(res, 404, 'Bulk NEFT template not found');
+      const bank = normalizeBulkTransactionBank(req.query?.bank) || DEFAULT_BULK_TRANSACTION_BANK;
+      const { templatePath, isBankSpecific } = resolveBulkTransactionTemplate(bank);
+      if (!templatePath) {
+        return sendError(
+          res,
+          404,
+          `${BULK_TRANSACTION_BANK_LABELS[bank]} bulk transaction template not found`,
+        );
+      }
 
+      // FALLBACK: the shared template is not the bank's layout, so it is not named after
+      // the bank. Remove this branch once both Axis and DBS templates are in place.
+      const downloadName = isBankSpecific
+        ? `bulk-transaction-${bank.toLowerCase()}-template${path.extname(templatePath)}`
+        : `bulk-transaction-template${path.extname(templatePath)}`;
       res.setHeader('Content-Type', 'application/vnd.ms-excel');
-      return res.download(templatePath, BULK_NEFT_TEMPLATE_DOWNLOAD_NAME);
+      return res.download(templatePath, downloadName);
     } catch (err) {
-      return handleError(res, err, 'Error downloading Bulk NEFT template');
+      return handleError(res, err, 'Error downloading bulk transaction template');
     }
   },
 
@@ -903,6 +1062,15 @@ const expenditureController = {
       }
       const uploads = getExpenditureUploads(req);
 
+      const bulkTransactionUploadError = validateBulkTransactionUpload(
+        uploads.bulkTransactionFile,
+        payload.bulk_transaction_type,
+      );
+      if (bulkTransactionUploadError) {
+        discardExpenditureUploads(uploads);
+        return sendError(res, 400, bulkTransactionUploadError);
+      }
+
       const result = await expenditureModel.createExpenditureRequest(payload, userId, uploads);
       const submittedTotal = calculateSubmittedExpenditureTotal(payload);
       const expenditureMeta = resolveUnplannedBudgetMeta(payload);
@@ -1079,6 +1247,8 @@ const expenditureController = {
       const hasProposalPayload = Boolean(
         req.body?.payload ||
         req.files?.bill_files ||
+        req.files?.bulk_transaction_file ||
+        // LEGACY: pre-rename field name. Remove with the route's bulk_neft_file entry.
         req.files?.bulk_neft_file ||
         req.body?.workflowrequesttype ||
         req.body?.workflow_request_type ||
@@ -1109,6 +1279,15 @@ const expenditureController = {
           );
         }
         const uploads = getExpenditureUploads(req);
+
+        const bulkTransactionUploadError = validateBulkTransactionUpload(
+          uploads.bulkTransactionFile,
+          payload.bulk_transaction_type,
+        );
+        if (bulkTransactionUploadError) {
+          discardExpenditureUploads(uploads);
+          return sendError(res, 400, bulkTransactionUploadError);
+        }
 
         const result = await expenditureModel.updateExpenditureRequest(
           id,
@@ -1286,6 +1465,69 @@ const expenditureController = {
       });
     } catch (err) {
       return handleError(res, err, 'Error in getExpenditureQueue');
+    }
+  },
+
+  /**
+   * Same queue, unpaginated, with every request's advance/expenditure/settlement rows —
+   * backs the admin "Export CSV" action so the file covers the whole filtered set.
+   */
+  async getExpenditureQueueExport(req, res) {
+    try {
+      const stage = normalizeText(req.params.stage).toLowerCase();
+      const {
+        workflowStatus,
+        statusCategory,
+        level1Role,
+        q,
+        allProposals,
+        fiscalYear,
+        dateFrom,
+        dateTo,
+      } = req.query;
+      const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
+      const effectiveLevel1Role =
+        stage === 'level1'
+          ? ['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveExpenditureLevel1QueueRole(req)
+          : null;
+
+      const queue = await workflowService.listQueueForExport({
+        moduleKey: 'expenditure',
+        stage,
+        actor: resolveActor(req),
+        filters: {
+          workflowStatus,
+          statusCategory,
+          // An explicit date range replaces the fiscal-year scoping so the export can
+          // span years; the client blanks fiscalYear when it sends a range.
+          fiscalYear,
+          dateFrom,
+          dateTo,
+          level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
+        },
+      });
+
+      return res.status(200).json({
+        // `status` keeps this in line with the rest of the expenditure module; `success`
+        // satisfies the project-wide response contract.
+        success: true,
+        status: 'success',
+        data: queue.items,
+        lineItems: queue.lineItems,
+        pagination: {
+          total: queue.total,
+          exported: queue.items.length,
+          truncated: queue.truncated,
+          maxRows: queue.maxRows,
+          statusCounts: queue.statusCounts,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in getExpenditureQueueExport');
     }
   },
 
