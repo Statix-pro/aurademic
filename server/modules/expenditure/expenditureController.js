@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 
 import * as expenditureModel from './expenditureModel.js';
 import './expenditureWorkflowAdapter.js';
+import { isFinanceRequestOwner } from '../shared/financeOwnership.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
@@ -699,7 +700,9 @@ const canAccessExpenditureRecord = (req, record) => {
   const userId = toPositiveInt(req.user?.id);
   if (!record) return false;
   if (isSuperAdminRequest(req)) return true;
-  if (userId && userId === toPositiveInt(record.created_by)) return true;
+  // Creator OR the applicant it was raised for — the dashboard and list show a claim to both,
+  // so both have to be able to open it. See shared/financeOwnership.js.
+  if (isFinanceRequestOwner(record, userId)) return true;
   if (hasAnyExpenditureWorkflowPermission(req)) return true;
   return canAccessExpenditureByRole(req);
 };
@@ -791,8 +794,26 @@ const expenditureController = {
       const dashboardRowId = normalizeText(req.query.dashboard_row_id);
       const workflowRowRef = normalizeText(req.query.workflowrowref || req.query.workflow_row_ref);
 
+      // The applicant the form is being filled for, so the running total covers claims a shared
+      // department login raised for them too. It arrives from the query string, so honour it
+      // only for a caller entitled to that applicant's figures — an unrelated employee_id would
+      // otherwise report someone else's advances. A finance request pins the card on its own,
+      // making the applicant filter redundant, so skip the lookup on that path.
+      const requestedEmployeeId = toPositiveInt(req.query.employee_id);
+      const canScopeToApplicant =
+        Boolean(requestedEmployeeId) &&
+        !financeRequestId &&
+        (isSuperAdminRequest(req) ||
+          hasAnyExpenditureWorkflowPermission(req) ||
+          (await expenditureModel.canReadApplicantAdvanceTotals({
+            userId,
+            employeeId: requestedEmployeeId,
+          })));
+      const employeeId = canScopeToApplicant ? requestedEmployeeId : null;
+
       const summary = await expenditureModel.getAdvanceSummary({
         userId,
+        employeeId,
         budgetLineId,
         head,
         subHead,
@@ -838,7 +859,7 @@ const expenditureController = {
       const context = await expenditureModel.getFinanceRequestContext(financeId);
       if (!context) return sendError(res, 404, 'Finance request not found');
 
-      const isOwner = userId && toPositiveInt(context.created_by) === userId;
+      const isOwner = isFinanceRequestOwner(context, userId);
       if (
         !isSuperAdmin &&
         !isOwner &&
@@ -1189,7 +1210,7 @@ const expenditureController = {
       const record = await expenditureModel.getExpenditureById(id);
       if (!record) return sendError(res, 404, 'Expenditure request not found');
 
-      const isOwner = userId && userId === toPositiveInt(record.created_by);
+      const isOwner = isFinanceRequestOwner(record, userId);
       const isWorkflowEditor = hasAnyExpenditureWorkflowPermission(req) || isSuperAdminRequest(req);
       const workflowState = parseWorkflowState(record.workflow_state) || null;
       const workflowStatus = normalizeText(
@@ -1340,7 +1361,7 @@ const expenditureController = {
       const record = await expenditureModel.getExpenditureById(id);
       if (!record) return sendError(res, 404, 'Expenditure request not found');
 
-      if (!isSuperAdmin && (!userId || toPositiveInt(record.created_by) !== userId)) {
+      if (!isSuperAdmin && !isFinanceRequestOwner(record, userId)) {
         return sendError(res, 403, 'Only applicant can delete this request');
       }
 
@@ -1729,7 +1750,7 @@ const expenditureController = {
         return sendError(res, 404, 'Expenditure request not found');
       }
 
-      if (!userId || toPositiveInt(record.created_by) !== userId) {
+      if (!isFinanceRequestOwner(record, userId)) {
         return sendError(res, 403, 'Only applicant can resubmit this request');
       }
 
