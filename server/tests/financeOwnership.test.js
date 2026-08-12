@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import db from '../config/connection.js';
 import {
+  canReadApplicantAdvanceTotals,
   getAdvanceSummary,
   getExpenditureDashboard,
   listExpenditures,
@@ -215,6 +216,19 @@ describe('getAdvanceSummary claimant scoping', () => {
     expect(params.slice(0, 2)).toEqual([138, 138]);
   });
 
+  it('ignores an applicant it was not given', async () => {
+    const find = mockExecuteByStatement();
+
+    await getAdvanceSummary({
+      userId: 138,
+      employeeId: 0,
+      head: 'Consumables',
+      subHead: 'Chemicals',
+    });
+
+    expect(find(/legacy_totals/i)[0]).not.toContain('er.employee_id = ?');
+  });
+
   // A finance request pins one card, which is narrower than any person filter — and it must not
   // cost an extra lookup of that card's creator.
   it('drops the person filter entirely when a finance request scopes the total', async () => {
@@ -233,5 +247,48 @@ describe('getAdvanceSummary claimant scoping', () => {
     expect(sql).not.toContain('er.employee_id = ?');
     expect(sql).not.toContain('me_owner_er');
     expect(find(/FROM finance_requests WHERE id/i)).toBeUndefined();
+  });
+});
+
+/**
+ * The applicant on the advance-summary endpoint comes from the query string, and the total it
+ * scopes is a money figure — so an arbitrary employee_id must not be honoured.
+ */
+describe('canReadApplicantAdvanceTotals', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('admits a caller the applicant link or a prior request vouches for', async () => {
+    db.execute.mockResolvedValue([[{ 1: 1 }]]);
+
+    await expect(canReadApplicantAdvanceTotals({ userId: 248, employeeId: 29 })).resolves.toBe(
+      true,
+    );
+
+    const [sql, params] = db.execute.mock.calls[0];
+    // The applicant themselves, or a login that already raised a request FOR them.
+    expect(sql).toContain('me.user_id = ?');
+    expect(sql).toContain('FROM finance_requests fr');
+    expect(sql).toContain('FROM expenditure_requests er');
+    expect(params).toEqual([29, 248, 248, 248]);
+  });
+
+  it('refuses an applicant the caller has no relationship to', async () => {
+    db.execute.mockResolvedValue([[]]);
+
+    await expect(canReadApplicantAdvanceTotals({ userId: 999, employeeId: 29 })).resolves.toBe(
+      false,
+    );
+  });
+
+  it('refuses, without querying, when either id is missing', async () => {
+    await expect(canReadApplicantAdvanceTotals({ userId: 0, employeeId: 29 })).resolves.toBe(false);
+    await expect(canReadApplicantAdvanceTotals({ userId: 138, employeeId: 0 })).resolves.toBe(
+      false,
+    );
+    await expect(canReadApplicantAdvanceTotals()).resolves.toBe(false);
+
+    expect(db.execute).not.toHaveBeenCalled();
   });
 });

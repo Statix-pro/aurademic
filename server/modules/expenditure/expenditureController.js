@@ -785,9 +785,6 @@ const expenditureController = {
   async getAdvanceSummary(req, res) {
     try {
       const userId = toPositiveInt(req.user?.id);
-      // The applicant the form is being filled for, so the running total covers claims a
-      // shared department login raised for them too.
-      const employeeId = toPositiveInt(req.query.employee_id);
       const budgetLineId = toPositiveInt(req.query.budget_line_id);
       const financeRequestId = toPositiveInt(req.query.finance_request_id);
       const rowIndex = toPositiveInt(req.query.row_index);
@@ -796,6 +793,23 @@ const expenditureController = {
       const subHead = normalizeText(req.query.sub_head);
       const dashboardRowId = normalizeText(req.query.dashboard_row_id);
       const workflowRowRef = normalizeText(req.query.workflowrowref || req.query.workflow_row_ref);
+
+      // The applicant the form is being filled for, so the running total covers claims a shared
+      // department login raised for them too. It arrives from the query string, so honour it
+      // only for a caller entitled to that applicant's figures — an unrelated employee_id would
+      // otherwise report someone else's advances. A finance request pins the card on its own,
+      // making the applicant filter redundant, so skip the lookup on that path.
+      const requestedEmployeeId = toPositiveInt(req.query.employee_id);
+      const canScopeToApplicant =
+        Boolean(requestedEmployeeId) &&
+        !financeRequestId &&
+        (isSuperAdminRequest(req) ||
+          hasAnyExpenditureWorkflowPermission(req) ||
+          (await expenditureModel.canReadApplicantAdvanceTotals({
+            userId,
+            employeeId: requestedEmployeeId,
+          })));
+      const employeeId = canScopeToApplicant ? requestedEmployeeId : null;
 
       const summary = await expenditureModel.getAdvanceSummary({
         userId,

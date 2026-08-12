@@ -741,6 +741,11 @@ const hasSettlementRowsForClosure = (rows = []) =>
       hasBudgetLineSelection(row),
   );
 
+// LEGACY: expenditure requests raised before `expenditure_requests.employee_id` existed carry
+// NULL there, so the creating login is the only claimant identity available for them. Remove
+// once every row has employee_id populated.
+const LEGACY_NULL_APPLICANT_CLAIMANT_SQL = '(er.employee_id IS NULL AND er.created_by = ?)';
+
 async function getCumulativeAdvanceSummary(
   connOrDb,
   {
@@ -847,9 +852,8 @@ async function getCumulativeAdvanceSummary(
   // Who the prior advances have to belong to, in order of precision:
   //   1. a finance request pins the card, which is narrower than any person — no person filter.
   //   2. the applicant employee, when known: every claim raised FOR them counts, whichever
-  //      login typed it. LEGACY: rows predating `expenditure_requests.employee_id` carry NULL
-  //      there, so fall back to the creating login for those; remove that branch once
-  //      employee_id is populated on every row.
+  //      login typed it. Callers must authorize the applicant first — see
+  //      `canReadApplicantAdvanceTotals`.
   //   3. otherwise the caller's own identity — creator OR the applicant whose login this is —
   //      which is the same rule the dashboard and list use.
   const claimantEmployeeId = toPositiveInt(employeeId);
@@ -859,7 +863,7 @@ async function getCumulativeAdvanceSummary(
     claimantClause = '1 = 1';
     claimantParams = [];
   } else if (claimantEmployeeId) {
-    claimantClause = '(er.employee_id = ? OR (er.employee_id IS NULL AND er.created_by = ?))';
+    claimantClause = `(er.employee_id = ? OR ${LEGACY_NULL_APPLICANT_CLAIMANT_SQL})`;
     claimantParams = [claimantEmployeeId, uid];
   } else {
     claimantClause = buildFinanceOwnerCondition('er');
@@ -1815,11 +1819,57 @@ export async function getApprovedBudgets({
 // ─── Pre-advance summary ──────────────────────────────────────────────────────
 
 /**
+ * May this login read the cumulative advance total of this applicant?
+ *
+ * The advance-summary endpoint takes its applicant from the query string, and that total is a
+ * money figure, so an arbitrary employee_id must not be honoured — otherwise any authenticated
+ * user could probe any employee's advances. Entitled callers are:
+ *
+ *   - the applicant themselves (their login is `master_employees.user_id`);
+ *   - a login that has already raised a finance or expenditure request FOR that applicant,
+ *     which is the shared department-account case this whole rule exists for.
+ *
+ * Everyone else falls back to their own totals — see `getAdvanceSummary`. Workflow actors and
+ * super admins are allowed by the caller, since they already see every claim.
+ */
+export async function canReadApplicantAdvanceTotals({ userId, employeeId } = {}) {
+  const uid = toPositiveInt(userId);
+  const empId = toPositiveInt(employeeId);
+  if (!uid || !empId) return false;
+
+  const [rows] = await db.execute(
+    `SELECT 1
+       FROM master_employees me
+      WHERE me.id = ?
+        AND (
+          me.user_id = ?
+          OR EXISTS (
+            SELECT 1
+              FROM finance_requests fr
+             WHERE fr.employee_id = me.id
+               AND fr.created_by = ?
+          )
+          OR EXISTS (
+            SELECT 1
+              FROM expenditure_requests er
+             WHERE er.employee_id = me.id
+               AND er.created_by = ?
+          )
+        )
+      LIMIT 1`,
+    [empId, uid, uid, uid],
+  );
+
+  return rows.length > 0;
+}
+
+/**
  * Total amount already advanced for a given applicant on a given budget line.
  * First-time → preAdvance = 0.
  *
- * Pass `employeeId` whenever the caller knows the applicant: it is the identity the total
- * belongs to, and without it the total covers only claims the calling login owns.
+ * Pass `employeeId` whenever the caller knows the applicant AND has authorized it via
+ * `canReadApplicantAdvanceTotals`: it is the identity the total belongs to, and without it the
+ * total covers only claims the calling login owns.
  */
 export async function getAdvanceSummary({
   userId,
