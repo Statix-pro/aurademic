@@ -17,6 +17,10 @@ import {
   buildClaimedExpenditureStatusCondition,
   buildFinalizedExpenditureStatusCondition,
 } from '../shared/expenditureFilters.js';
+import {
+  buildFinanceOwnerCondition,
+  buildFinanceOwnerParams,
+} from '../shared/financeOwnership.js';
 
 const safeParseJSON = (value, fallback = null) => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -3661,16 +3665,10 @@ const financeModel = {
       query += ` AND ${FINANCE_NOT_DELETED_CONDITION_SQL}`;
 
       if (mine) {
-        query += ` AND (
-          fr.created_by = ?
-          OR EXISTS (
-            SELECT 1
-              FROM master_employees me_owner
-             WHERE me_owner.id = fr.employee_id
-               AND me_owner.user_id = ?
-          )
-        )`;
-        params.push(userId, userId);
+        // Shared with the expenditure dashboard so a request raised by a department login for
+        // an applicant appears on both pages for both of them. See shared/financeOwnership.js.
+        query += ` AND ${buildFinanceOwnerCondition('fr')}`;
+        params.push(...buildFinanceOwnerParams(userId));
       }
 
       if (status) {
