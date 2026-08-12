@@ -6,7 +6,17 @@ import {
   resolveCatalogIds,
   resolvePrimaryHeadIds,
 } from '../budgetCatalog/budgetCatalogResolver.js';
+// The one definition of "this proposal's budget is sanctioned and spendable". The budget
+// dashboard derives its Beneficiary Summary from the same constant, so the two can never
+// disagree about how much budget exists to release.
+import { ROLLUP_SANCTIONED_STATUS_SQL } from '../shared/budget/budgetAnnualRollup.js';
 import * as orgUnitQueries from '../shared/budget/orgUnitQueries.js';
+import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
+import { buildSettledAdvanceExpr, resolveAdvanceUsageAmount } from '../shared/expenditureClaims.js';
+import {
+  buildClaimedExpenditureStatusCondition,
+  buildFinalizedExpenditureStatusCondition,
+} from '../shared/expenditureFilters.js';
 
 const safeParseJSON = (value, fallback = null) => {
   if (value === undefined || value === null || value === '') return fallback;
@@ -459,6 +469,101 @@ const getFinancePrincipalDocumentsByFinanceIds = async (financeIds = [], { tx = 
   }
 };
 
+// How much of an approved finance card has actually been claimed. Claims live in
+// expenditure_requests, so they are derived here using the same formula the expenditure
+// dashboard uses (getExpenditureDashboard in expenditureModel.js) - anything else makes
+// the two screens disagree about the same card.
+//
+// finance_requests.balance_amount must NOT be used for this. Approval writes the parent
+// budget line's leftover headroom into that column, an unrelated quantity that merely
+// looked like an unclaimed balance while it happened to exceed the approved total.
+export const getFinanceClaimTotalsByFinanceIds = async (financeIds = [], { tx = db } = {}) => {
+  const normalizedFinanceIds = Array.from(
+    new Set(
+      (Array.isArray(financeIds) ? financeIds : [])
+        .map((value) => toPositiveInt(value))
+        .filter(Boolean),
+    ),
+  );
+
+  if (!normalizedFinanceIds.length) {
+    return new Map();
+  }
+
+  const placeholders = normalizedFinanceIds.map(() => '?').join(', ');
+  try {
+    const [rows] = await tx.query(
+      `SELECT
+         er.finance_request_id AS finance_id,
+         COALESCE(SUM(
+           CASE
+             WHEN er.request_type = 'Advance'
+             THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
+             ELSE 0
+           END
+         ), 0) AS advance_amount,
+         COALESCE(SUM(
+           CASE
+             WHEN er.request_type = 'Expenditure'
+             THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
+             ELSE 0
+           END
+         ), 0) AS expenditure_amount,
+         COALESCE(SUM(
+           CASE
+             WHEN er.request_type = 'Settlement'
+             THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
+             ELSE 0
+           END
+         ), 0) AS settlement_amount,
+         COALESCE(SUM(
+           CASE
+             WHEN er.request_type = 'Settlement'
+             THEN ${buildSettledAdvanceExpr('er')}
+             ELSE 0
+           END
+         ), 0) AS settled_advance_amount,
+         COUNT(*) AS request_count
+       FROM expenditure_requests er
+       WHERE er.finance_request_id IN (${placeholders})
+         AND ${buildClaimedExpenditureStatusCondition('er')}
+       GROUP BY er.finance_request_id`,
+      normalizedFinanceIds,
+    );
+
+    const map = new Map();
+    for (const row of rows || []) {
+      const advanceAmount = toMoney(row.advance_amount);
+      const settlementAmount = toMoney(row.settlement_amount);
+      const expenditureAmount = toMoney(row.expenditure_amount);
+      const effectiveUsageAmount = resolveAdvanceUsageAmount({
+        advanceAmount,
+        settlementAmount,
+        settledAdvanceAmount: row.settled_advance_amount,
+      });
+
+      map.set(toPositiveInt(row.finance_id), {
+        advance_amount: advanceAmount,
+        expenditure_amount: expenditureAmount,
+        settlement_amount: settlementAmount,
+        claimed_amount: toMoney(effectiveUsageAmount + expenditureAmount),
+        expenditure_request_count: Number(row.request_count || 0),
+      });
+    }
+    return map;
+  } catch (error) {
+    // FALLBACK: deployments predating the expenditure module have no
+    // `expenditure_requests` table, so no card can have been claimed against.
+    // Remove once every deployment has the table (it is part of the documented
+    // schema) — until then this masks a genuinely missing table by rendering
+    // every card as unclaimed rather than erroring.
+    if (error?.code === 'ER_NO_SUCH_TABLE') {
+      return new Map();
+    }
+    throw error;
+  }
+};
+
 const getFinancePrincipalDocumentByFinanceId = async (financeId, { tx = db } = {}) => {
   const normalizedFinanceId = toPositiveInt(financeId);
   if (!normalizedFinanceId) {
@@ -641,6 +746,8 @@ const buildFinanceSelectSql = ({
   annexureFileSizeSelectSql = 'NULL AS annexure_file_size',
   paymentDebitAccountSelectSql = 'NULL AS payment_debit_account',
   topupAmountSelectSql = '0 AS topup_amount',
+  closedAtSelectSql = 'NULL AS closed_at',
+  closedBySelectSql = 'NULL AS closed_by',
 } = {}) => `
   SELECT
     fr.id,
@@ -701,6 +808,8 @@ const buildFinanceSelectSql = ({
     fr.chairman_status,
     fr.chairman_comment,
     fr.overall_status,
+    ${closedAtSelectSql},
+    ${closedBySelectSql},
     fr.workflow_state,
     ${WORKFLOW_STATUS_SQL_EXPR} AS workflow_status,
     ${WORKFLOW_STAGE_SQL_EXPR} AS workflow_stage,
@@ -785,6 +894,11 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
   const hasAnnexureMimeType = await hasFinanceRequestColumn('annexure_mime_type', { tx });
   const hasAnnexureFileSize = await hasFinanceRequestColumn('annexure_file_size', { tx });
   const hasPaymentDebitAccount = await hasFinanceRequestColumn('payment_debit_account', { tx });
+  // FALLBACK: closed_at/closed_by arrive with the
+  // 20260710_add_closed_status_to_finance_requests migration; emit NULL until then so
+  // every consumer simply sees an open card. Remove once the columns exist everywhere.
+  const hasClosedAt = await hasFinanceRequestColumn('closed_at', { tx });
+  const hasClosedBy = await hasFinanceRequestColumn('closed_by', { tx });
   // FALLBACK: finance_budget_breakup.is_topup may not exist on older deployments;
   // emit 0 so top-up totals default to zero until the column is present. Remove
   // once every environment has the is_topup column.
@@ -828,6 +942,8 @@ const getFinanceSelectSql = async ({ tx = db } = {}) => {
       ? 'fr.payment_debit_account'
       : 'NULL AS payment_debit_account',
     topupAmountSelectSql,
+    closedAtSelectSql: hasClosedAt ? 'fr.closed_at' : 'NULL AS closed_at',
+    closedBySelectSql: hasClosedBy ? 'fr.closed_by' : 'NULL AS closed_by',
   });
 };
 
@@ -1197,10 +1313,7 @@ const getBudgetLineAvailabilityById = async (conn, budgetLineId) => {
      JOIN budget_proposals bp ON bp.id = bpl.budget_proposal_id
      LEFT JOIN finance_budget_line_usage fblu ON fblu.budget_line_id = bpl.id
      WHERE bpl.id = ?
-       AND (
-         LOWER(TRIM(bp.status)) IN ('completed', 'approved', 'principal_approved')
-         OR LOWER(TRIM(bp.current_stage)) = 'completed'
-       )
+       AND ${ROLLUP_SANCTIONED_STATUS_SQL}
      LIMIT 1`,
     [budgetLineId],
   );
@@ -1403,10 +1516,7 @@ const resolveBudgetAvailabilityForUser = async (
      ) frbr ON frbr.budget_line_id = bpl.id
      WHERE (${ownerScopeSql})
        AND (? IS NULL OR bp.fiscal_year = ?)
-       AND (
-         LOWER(TRIM(bp.status)) IN ('completed', 'approved', 'principal_approved')
-         OR LOWER(TRIM(bp.current_stage)) = 'completed'
-       )
+       AND ${ROLLUP_SANCTIONED_STATUS_SQL}
      ORDER BY
        (
          COALESCE(bpl.approved_line_total, bpl.line_total, 0)
@@ -1759,6 +1869,75 @@ const replaceBudgetRows = async (conn, financeId, budgetRows = []) => {
   }
 };
 
+// approved_amount, remaining_amount_snapshot and is_topup are written by the approval
+// and top-up paths, never by the edit form - but an edit that only touches, say, the
+// annexure still resubmits the whole budget breakup, and replaceBudgetRows re-inserts
+// every row from that payload. Without this merge those three facts are silently
+// dropped: calculateApprovedFinanceTotalsSnapshot then sums NULL snapshots and
+// collapses finance_requests.balance_amount to 0, and top-up rows stop being
+// distinguishable.
+//
+// Pairing runs in two passes and consumes each previous row once, so a repeated head keeps
+// its own snapshot:
+//   1. by budget_line_id + amount - the line's own identity, so two rows that happen to
+//      share head, sub-head AND amount cannot be handed each other's approval snapshot.
+//   2. by head + sub-head + amount, for rows on either side with no budget_line_id (older
+//      payloads and pre-catalog rows). Two rows that BOTH carry ids are never paired this
+//      way, since different ids mean genuinely different budget lines.
+// Amount is part of both keys: a row whose amount changed finds no partner and stays NULL,
+// because the old approval genuinely no longer covers it.
+export const carryForwardApprovedBudgetRowFacts = (incomingRows = [], previousRows = []) => {
+  const moneyOrNull = (value) => (value === undefined || value === null ? null : toMoney(value));
+  const lineMatchKey = (row) => {
+    const budgetLineId = toPositiveInt(row?.budget_line_id);
+    return budgetLineId ? `${budgetLineId}|${toMoney(row?.amount)}` : null;
+  };
+  const textMatchKey = (row) =>
+    [normalizeText(row?.budget_head), normalizeText(row?.sub_head), toMoney(row?.amount)].join('|');
+
+  const availablePreviousRows = (previousRows || []).map((row) => ({ row, matched: false }));
+  const claimPreviousRow = (isMatch) => {
+    const entry = availablePreviousRows.find(
+      (candidate) => !candidate.matched && isMatch(candidate.row),
+    );
+    if (!entry) return null;
+    entry.matched = true;
+    return entry.row;
+  };
+
+  const pairs = (incomingRows || []).map((incomingRow) => {
+    const key = lineMatchKey(incomingRow);
+    return {
+      incomingRow,
+      previousRow: key ? claimPreviousRow((row) => lineMatchKey(row) === key) : null,
+    };
+  });
+
+  for (const pair of pairs) {
+    if (pair.previousRow) continue;
+    const key = textMatchKey(pair.incomingRow);
+    const incomingHasLineId = lineMatchKey(pair.incomingRow) !== null;
+    pair.previousRow = claimPreviousRow(
+      (row) => textMatchKey(row) === key && !(incomingHasLineId && lineMatchKey(row) !== null),
+    );
+  }
+
+  return pairs.map(({ incomingRow, previousRow }) => {
+    if (!previousRow) {
+      return incomingRow;
+    }
+
+    return {
+      ...incomingRow,
+      approved_amount: moneyOrNull(incomingRow.approved_amount ?? previousRow.approved_amount),
+      remaining_amount_snapshot: moneyOrNull(
+        incomingRow.remaining_amount_snapshot ?? previousRow.remaining_amount_snapshot,
+      ),
+      is_topup: incomingRow.is_topup || parseBooleanLike(previousRow.is_topup) ? 1 : 0,
+    };
+  });
+};
+
 const replaceIncomeRows = async (conn, financeId, incomeRows = []) => {
   await conn.query('DELETE FROM finance_income_rows WHERE finance_id = ?', [financeId]);
 
@@ -1843,12 +2022,8 @@ const resolveFinanceSourceFiscalYear = async (
   return resolveReferenceFiscalYearFromBudgetRows([], fallbackDate);
 };
 
-const FINALIZED_EXPENDITURE_STATUS_SQL = `
-    (
-      LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
-      OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
-      OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
-    )`;
+/** Shared with the expenditure report, so the two cannot disagree on what has cleared. */
+const FINALIZED_EXPENDITURE_STATUS_SQL = buildFinalizedExpenditureStatusCondition('er');
 
 const getFinanceUsageSnapshot = async (conn, financeId) => {
   const [usageRows] = await conn.query(
@@ -1870,7 +2045,13 @@ const getFinanceUsageSnapshot = async (conn, financeId) => {
           AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
          THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
          ELSE 0
-       END), 0) AS expenditure_amount
+       END), 0) AS expenditure_amount,
+       COALESCE(SUM(CASE
+         WHEN er.request_type = 'Settlement'
+          AND ${FINALIZED_EXPENDITURE_STATUS_SQL}
+         THEN ${buildSettledAdvanceExpr('er')}
+         ELSE 0
+       END), 0) AS settled_advance_amount
      FROM expenditure_requests er
      WHERE er.finance_request_id = ?`,
     [financeId],
@@ -1879,7 +2060,11 @@ const getFinanceUsageSnapshot = async (conn, financeId) => {
   const advanceAmount = toMoney(usageRows?.[0]?.advance_amount);
   const settlementAmount = toMoney(usageRows?.[0]?.settlement_amount);
   const expenditureAmount = toMoney(usageRows?.[0]?.expenditure_amount);
-  const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+  const effectiveUsageAmount = resolveAdvanceUsageAmount({
+    advanceAmount,
+    settlementAmount,
+    settledAdvanceAmount: usageRows?.[0]?.settled_advance_amount,
+  });
 
   return {
     advanceAmount,
@@ -2019,10 +2204,7 @@ const getCarryForwardTargetBudgetAvailability = async (conn, financeId, targetFi
        FROM budget_proposals bp
        JOIN budget_proposal_lines bpl ON bpl.budget_proposal_id = bp.id
       WHERE bp.fiscal_year = ?
-        AND (
-          LOWER(TRIM(COALESCE(bp.status, ''))) IN ('completed', 'approved', 'principal_approved')
-          OR LOWER(TRIM(COALESCE(bp.current_stage, ''))) = 'completed'
-        )
+        AND ${ROLLUP_SANCTIONED_STATUS_SQL}
         ${scopeParts.length ? `AND ${scopeParts.join(' AND ')}` : ''}
         AND LOWER(TRIM(CONVERT(COALESCE(bpl.budget_head, '') USING utf8mb4) COLLATE utf8mb4_unicode_ci)) IN (${headPlaceholders})`,
     [normalizedTargetYear, ...scopeParams, ...sourceHeads.map((head) => head.toLowerCase())],
@@ -3056,15 +3238,12 @@ const financeModel = {
       const previousAnnexures = hasAnnexuresInput
         ? await getFinanceAnnexures(id, { tx: connection })
         : [];
-      const [previousBudgetRows] = hasBudgetRowsInput
-        ? await connection.query(
-            `SELECT budget_head, sub_head, amount
-               FROM finance_budget_breakup
-               WHERE finance_id = ?
-               ORDER BY sort_order ASC, id ASC`,
-            [id],
-          )
-        : [[]];
+      // Fetched in full (not just head/sub_head/amount) because the approval facts on
+      // these rows have to survive the rewrite below - see
+      // carryForwardApprovedBudgetRowFacts.
+      const previousBudgetRows = hasBudgetRowsInput
+        ? await financeModel.getBudgetBreakup(id, { tx: connection })
+        : [];
       const [previousIncomeRows] = hasIncomeRowsInput
         ? await connection.query(
             `SELECT income_source, contribution, amount, status, remarks, credit_account
@@ -3238,7 +3417,11 @@ const financeModel = {
       updateData.beneficiary_entity_id = workflowContext.beneficiaryEntityId;
 
       if (hasBudgetRowsInput) {
-        await replaceBudgetRows(connection, id, budgetRows);
+        await replaceBudgetRows(
+          connection,
+          id,
+          carryForwardApprovedBudgetRowFacts(budgetRows, previousBudgetRows),
+        );
         const totalBudget = calculateFinanceTotalBudget(budgetRows, {
           unplanned_budget_enabled: Object.prototype.hasOwnProperty.call(
             updateData,
@@ -3498,18 +3681,28 @@ const financeModel = {
       query += ' ORDER BY fr.created_at DESC';
 
       const [rows] = await db.query(query, params);
-      const principalDocuments = await getFinancePrincipalDocumentsByFinanceIds(
-        rows.map((row) => row.id),
-      );
+      const financeIds = rows.map((row) => row.id);
+      const [principalDocuments, claimTotals] = await Promise.all([
+        getFinancePrincipalDocumentsByFinanceIds(financeIds),
+        getFinanceClaimTotalsByFinanceIds(financeIds),
+      ]);
 
-      return rows.map((row) => ({
-        ...row,
-        enclosures: safeParseJSON(row.enclosures, []),
-        workflow_state: normalizeWorkflowState(row.workflow_state),
-        level1_route_type: resolveFinanceLevel1RouteType(row),
-        annexures: getLegacyAnnexureFromRecord(row),
-        principal_document: principalDocuments.get(toPositiveInt(row.id)) || null,
-      }));
+      return rows.map((row) => {
+        const claims = claimTotals.get(toPositiveInt(row.id)) || null;
+
+        return {
+          ...row,
+          enclosures: safeParseJSON(row.enclosures, []),
+          workflow_state: normalizeWorkflowState(row.workflow_state),
+          level1_route_type: resolveFinanceLevel1RouteType(row),
+          annexures: getLegacyAnnexureFromRecord(row),
+          principal_document: principalDocuments.get(toPositiveInt(row.id)) || null,
+          // null (not 0) when the card carries no expenditure requests at all, so the
+          // card UI can tell "nothing claimed yet" from "claims tracked and zero".
+          claimed_amount: claims ? claims.claimed_amount : null,
+          expenditure_request_count: claims ? claims.expenditure_request_count : 0,
+        };
+      });
     } catch (error) {
       throw new Error(`Error listing finance requests: ${error.message}`);
     }
@@ -3635,6 +3828,57 @@ const financeModel = {
     } catch (error) {
       throw new Error(`Error fetching budget breakup: ${error.message}`);
     }
+  },
+
+  /**
+   * Bulk variant of getBudgetBreakup for the workflow CSV export: fetches the budget
+   * rows for many finance requests in one query and groups them by finance id.
+   */
+  async listBudgetBreakupRowsForExport(financeIds = [], { tx = db } = {}) {
+    const normalizedIds = Array.from(
+      new Set((financeIds || []).map(toPositiveInt).filter(Boolean)),
+    );
+    if (!normalizedIds.length) {
+      return {};
+    }
+
+    const hasApprovedAmountColumn = await hasFinanceBudgetBreakupColumn('approved_amount', { tx });
+    const hasIsTopupColumn = await hasFinanceBudgetBreakupColumn('is_topup', { tx });
+    const approvedAmountSelectSql = hasApprovedAmountColumn
+      ? 'approved_amount'
+      : 'NULL AS approved_amount';
+    const isTopupSelectSql = hasIsTopupColumn ? 'is_topup' : '0 AS is_topup';
+
+    const [rows] = await tx.query(
+      `SELECT
+         finance_id,
+         budget_head,
+         sub_head,
+         amount,
+         ${approvedAmountSelectSql},
+         ${isTopupSelectSql},
+         sort_order
+       FROM finance_budget_breakup
+       WHERE finance_id IN (?)
+       ORDER BY finance_id ASC, sort_order ASC, id ASC`,
+      [normalizedIds],
+    );
+
+    const grouped = {};
+    for (const row of rows || []) {
+      const key = String(row.finance_id);
+      if (!grouped[key]) {
+        grouped[key] = [];
+      }
+      grouped[key].push({
+        budget_head: row.budget_head,
+        sub_head: row.sub_head,
+        amount: row.amount,
+        approved_amount: row.approved_amount,
+        is_topup: Number(row.is_topup || 0),
+      });
+    }
+    return grouped;
   },
 
   async getIncomeRows(financeId) {
@@ -4134,6 +4378,11 @@ const financeModel = {
     }
 
     const lockClause = forUpdate ? ' FOR UPDATE' : '';
+    // FALLBACK: closed_at arrives with the
+    // 20260710_add_closed_status_to_finance_requests migration. Remove once every
+    // environment has the column.
+    const hasClosedAtColumn = await hasFinanceRequestColumn('closed_at', { tx });
+    const closedAtSelectSql = hasClosedAtColumn ? 'fr.closed_at' : 'NULL AS closed_at';
 
     const [rows] = await tx.query(
       `SELECT
@@ -4143,6 +4392,7 @@ const financeModel = {
          fr.beneficiary_entity_id,
          COALESCE(fr.department_id, scope_dept.id) AS department_id,
          fr.total_budget,
+         ${closedAtSelectSql},
          fr.workflow_state
        FROM finance_requests fr
        LEFT JOIN master_departments scope_dept
@@ -4166,6 +4416,7 @@ const financeModel = {
       departmentId: toPositiveInt(row.department_id),
       totalBudget: toMoney(row.total_budget),
       applicantUserId: toPositiveInt(row.created_by),
+      closedAt: row.closed_at || null,
       workflowState,
       workflowStatus: normalizeWorkflowStatus(workflowState),
     };
@@ -4432,6 +4683,17 @@ const financeModel = {
     const whereParams = [];
 
     whereParts.push(FINANCE_NOT_DELETED_CONDITION_SQL);
+
+    // Same expression the queue and the CSV's Date column display, so a date-filtered
+    // export can never contain a row dated outside the requested window.
+    const dateRange = buildDateRangeCondition('COALESCE(fr.request_date, DATE(fr.created_at))', {
+      dateFrom: filters.dateFrom,
+      dateTo: filters.dateTo,
+    });
+    if (dateRange.sql) {
+      whereParts.push(dateRange.sql);
+      whereParams.push(...dateRange.params);
+    }
 
     if (fiscalYear) {
       whereParts.push(`(
@@ -4742,7 +5004,12 @@ const financeModel = {
            ELSE 1
          END,
          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(fr.workflow_state, '$.resubmittedAt')), '') DESC,
-         fr.created_at DESC
+         fr.created_at DESC,
+         -- created_at is a second-precision TIMESTAMP, so requests raised in the same
+         -- second tie. Without a unique final key the LIMIT/OFFSET order is undefined
+         -- between pages, which makes the CSV export (10 pages of 100) repeat some rows
+         -- and drop others.
+         fr.id DESC
        LIMIT ? OFFSET ?`,
       [statusStageScope, statusStageScope, ...whereParams, limit, offset],
     );
@@ -5070,7 +5337,7 @@ const financeModel = {
     }
 
     const [financeRows] = await db.query(
-      `SELECT id, closed_at FROM finance_requests WHERE id = ? LIMIT 1`,
+      `SELECT id, closed_at, workflow_state FROM finance_requests WHERE id = ? LIMIT 1`,
       [normalizedFinanceId],
     );
 
@@ -5083,6 +5350,23 @@ const financeModel = {
     if (financeRows[0].closed_at) {
       const error = new Error('This finance card is already closed');
       error.code = 'ALREADY_CLOSED';
+      throw error;
+    }
+
+    // Closing settles the card, so no funding decision may still be open — otherwise a
+    // top-up submitted before the close would keep approving money onto a closed card,
+    // bypassing the top-up guard in financeController.updateFinanceRequest.
+    // LEGACY: records without a workflow_state report an empty status and are not
+    // blocked here. Remove the empty-status tolerance once every row has a
+    // workflow_state.
+    const financeWorkflowStatus = normalizeWorkflowStatus(
+      normalizeWorkflowState(financeRows[0].workflow_state),
+    );
+    if (['in_progress', 'returned'].includes(financeWorkflowStatus)) {
+      const error = new Error(
+        'This finance card cannot be closed while an approval or top-up request is still pending.',
+      );
+      error.code = 'PENDING_WORKFLOW';
       throw error;
     }
 

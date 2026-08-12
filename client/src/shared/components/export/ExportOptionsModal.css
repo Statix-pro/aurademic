@@ -1,0 +1,110 @@
+/* The modal is a short options form, so it reads better narrow than the 80% width
+   common.css forces on every `.custom-modal .modal-dialog.modal-lg`. That rule uses
+   !important, so overriding it needs both !important and a heavier selector — hence
+   matching `custom-modal` and `export-options-modal` on the same element rather than
+   relying on stylesheet order. `width: auto` keeps it responsive: the dialog fills the
+   space up to the cap and shrinks below it on a narrow screen. */
+.custom-modal.export-options-modal .modal-dialog.modal-lg {
+  max-width: 560px !important;
+  width: auto !important;
+}
+
+.export-options-body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.export-options-scope {
+  background: #f6f8fb;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.export-options-scope-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.export-options-scope-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 13px;
+  color: #1e293b;
+}
+
+.export-options-scope-list li:not(:last-child)::after {
+  content: '·';
+  margin-left: 10px;
+  color: #94a3b8;
+}
+
+.export-options-scope-override {
+  flex-basis: 100%;
+  color: #92400e;
+  font-weight: 500;
+}
+
+.export-options-scope-override::after {
+  content: none !important;
+}
+
+/* Status on its own row, the two date bounds paired beneath it — at this width three
+   across would squeeze the date inputs below their native control size. */
+.export-options-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.export-options-status {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 480px) {
+  .export-options-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.export-options-result {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.export-options-result.is-warning {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+}
+
+.export-options-result.is-empty {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  color: #334155;
+}
+
+.export-options-result svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.export-options-result-note {
+  color: inherit;
+  opacity: 0.85;
+}

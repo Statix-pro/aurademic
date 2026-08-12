@@ -36,6 +36,9 @@ interface FinanceCardItem {
   total_budget?: number | string | null;
   approved_total_amount?: number | string | null;
   balance_amount?: number | string | null;
+  // Derived server-side from the expenditure requests under this card. null means the
+  // card has no expenditure requests at all, so nothing has been claimed yet.
+  claimed_amount?: number | string | null;
   topup_amount?: number | string | null;
   overall_status: string;
   workflow_status?: string;
@@ -52,8 +55,11 @@ interface FinanceCardItem {
     isEditableByApplicant?: boolean;
     submittedTotalBudget?: number | string | null;
     topupAt?: string | null;
+    topupAmount?: number | string | null;
   };
   has_topup?: boolean | number | null;
+  // Set when the card has been finalized and closed from the Expenditure module.
+  closed_at?: string | null;
   principal_document?: {
     id?: number | null;
     original_name?: string | null;
@@ -263,19 +269,26 @@ const FinanceCard: React.FC = () => {
 
   const hasTopup = (item: FinanceCardItem) => Boolean(item.workflow_state?.topupAt);
 
+  // The pending cycle's own delta, which the server stamps on workflow_state.topupAmount
+  // when the top-up restarts the workflow. topup_amount is the cumulative total of every
+  // top-up row ever added, so it overstates the request from the second top-up onwards.
   const getTopupAmount = (item: FinanceCardItem) => {
-    const parsedAmount = Number(item.topup_amount ?? 0);
-    return Number.isFinite(parsedAmount) ? parsedAmount : 0;
+    const cycleAmount = Number(item.workflow_state?.topupAmount ?? 0);
+    if (Number.isFinite(cycleAmount) && cycleAmount > 0) return cycleAmount;
+
+    // FALLBACK: top-ups submitted before workflow_state.topupAmount existed only have
+    // the cumulative total, which equals the cycle amount for a first top-up. Remove
+    // once no in-flight top-up predates topupAmount.
+    const legacyTopupAmount = Number(item.topup_amount ?? 0);
+    return Number.isFinite(legacyTopupAmount) ? legacyTopupAmount : 0;
   };
 
   const isFullyClaimed = (item: FinanceCardItem) => {
-    const approvedAmount = Number(item.approved_total_amount ?? 0);
+    const approvedAmount = getApprovedAmount(item);
     if (!(approvedAmount > 0)) return false;
-    // A missing/NULL balance means it was never tracked (not that it hit zero),
-    // so don't treat it as fully claimed.
-    if (item.balance_amount === null || item.balance_amount === undefined) return false;
-    const balanceAmount = Number(item.balance_amount);
-    return Number.isFinite(balanceAmount) && balanceAmount <= 0;
+    const claimedAmount = getClaimedAmount(item);
+    if (claimedAmount === null) return false;
+    return claimedAmount >= approvedAmount;
   };
 
   // A top-up restarts the approval workflow, so the status must keep tracking the
@@ -337,28 +350,31 @@ const FinanceCard: React.FC = () => {
     return Number.isFinite(parsedAmount) ? parsedAmount : 0;
   };
 
-  // Claims are tracked by draining balance_amount from the approved total. A missing
-  // balance means claims were never tracked, so there is nothing meaningful to show.
+  // Claims come from the expenditure requests raised under this card (claimed_amount is
+  // derived server-side). It is deliberately NOT read from balance_amount: approval
+  // writes the parent budget line's leftover headroom there, so an unrelated edit that
+  // rewrote the budget breakup could zero it and make an untouched card read as fully
+  // claimed. Clamped to the approved total so a card never reports over-claiming.
   const getClaimedAmount = (item: FinanceCardItem) => {
-    if (item.balance_amount === null || item.balance_amount === undefined) return null;
-    const balanceAmount = Number(item.balance_amount);
-    if (!Number.isFinite(balanceAmount)) return null;
+    if (item.claimed_amount === null || item.claimed_amount === undefined) return null;
+    const claimedAmount = Number(item.claimed_amount);
+    if (!Number.isFinite(claimedAmount)) return null;
     const approvedAmount = getApprovedAmount(item);
     if (!(approvedAmount > 0)) return null;
-    return Math.max(0, approvedAmount - balanceAmount);
+    return Math.min(approvedAmount, Math.max(0, claimedAmount));
   };
 
   // The two amount boxes are stage-aware:
   //   Initial proposal          -> Proposed | Approved
   //   After expenditure claims  -> Approved | Claimed
-  //   During a top-up request   -> Top-up   | Approved (Previous)
+  //   During a top-up request   -> Top-up   | Approved
   const getCardAmountBoxes = (
     item: FinanceCardItem,
-  ): Array<{ key: string; label: string; value: number; highlight?: boolean }> => {
+  ): Array<{ key: string; label: string; value: number }> => {
     if (isTopupInProgress(item) && getTopupAmount(item) > 0) {
       return [
-        { key: 'topup', label: 'Top-up', value: getTopupAmount(item), highlight: true },
-        { key: 'approved-previous', label: 'Approved (Previous)', value: getApprovedAmount(item) },
+        { key: 'topup', label: 'Top-up', value: getTopupAmount(item) },
+        { key: 'approved-previous', label: 'Approved', value: getApprovedAmount(item) },
       ];
     }
 
@@ -922,8 +938,12 @@ const FinanceCard: React.FC = () => {
     navigate(`/finance/${item.id}/edit`);
   };
 
+  const isCardClosed = (item: FinanceCardItem) => Boolean(item.closed_at);
+
+  // A card finalized & closed in the Expenditure module is settled money, so no
+  // further top-up may be drawn against it. The API rejects it too.
   const canTopupRequest = (item: FinanceCardItem) =>
-    ['approved', 'completed'].includes(getNormalizedStatus(item));
+    ['approved', 'completed'].includes(getNormalizedStatus(item)) && !isCardClosed(item);
 
   const handleTopupClick = (item: FinanceCardItem) => {
     if (!canTopupRequest(item)) return;
@@ -1224,15 +1244,7 @@ const FinanceCard: React.FC = () => {
 
                           <div className="card-header-right">
                             {getCardAmountBoxes(item).map((box) => (
-                              <div
-                                key={box.key}
-                                className="card-amount-box"
-                                style={
-                                  box.highlight
-                                    ? { backgroundColor: '#d1fae5', borderColor: '#10b981' }
-                                    : undefined
-                                }
-                              >
+                              <div key={box.key} className="card-amount-box">
                                 <span className="amount-label">{box.label}</span>
                                 <span className="amount-value">₹{box.value.toLocaleString()}</span>
                               </div>

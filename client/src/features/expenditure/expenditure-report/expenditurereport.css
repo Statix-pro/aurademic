@@ -1,0 +1,837 @@
+/* Expenditure Report — deliberately mirrors adminbudgetdashboard.css so the two reports
+   under the Reports menu read as one system. */
+
+.expenditurereport-page {
+  background: #f3f7fb;
+  min-height: calc(100vh - 64px);
+  padding: 24px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.expenditurereport-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.expenditurereport-tabs-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+/* Self-contained, content-sized pill. The global `.category-toggle-container` this page used
+   to borrow fixes width to 250px with 50%-wide buttons — correct for two tabs, but it clipped
+   the third one outside the pill. Every dimension here is explicit so nothing is inherited. */
+.expenditurereport-tab-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  max-width: 100%;
+  background-color: #e1f0ff;
+  border-radius: 50px;
+  padding: 5px;
+  gap: 2px;
+  margin: 0 auto;
+}
+
+.expenditurereport-tab-toggle button {
+  border: none;
+  background-color: transparent;
+  color: #5d6b8a;
+  width: auto;
+  flex: 0 0 auto;
+  padding: 8px 22px;
+  border-radius: 50px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  transition:
+    background-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.expenditurereport-tab-toggle button:hover:not(.active) {
+  color: #0069ab;
+}
+
+.expenditurereport-tab-toggle button.active {
+  background-color: #0069ab;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+}
+
+.expenditurereport-tab-toggle button:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+}
+
+/* overflow:hidden keeps the table wrappers inside the rounded corners. It also clips anything
+   absolutely positioned within the card, which is why the toolbar's select menus are portalled
+   to <body> (see menuPortalProps) rather than rendered in place. */
+.expenditurereport-card {
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.expenditurereport-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  border-bottom: 1px solid #eef2f6;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.expenditurereport-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 240px;
+}
+
+.expenditurereport-title {
+  margin: 0;
+  font-weight: 600;
+  color: #0a2540;
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.expenditurereport-role-pill,
+.expenditurereport-scope-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.expenditurereport-role-pill {
+  background: #0069ab;
+  color: #fff;
+}
+
+/* Says what slice of the institution the numbers cover, so a scoped total is never
+   mistaken for an institution-wide one. */
+.expenditurereport-scope-pill {
+  background: #e7f8ef;
+  color: #137a3a;
+  font-weight: 600;
+}
+
+.expenditurereport-header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.expenditurereport-filter--beneficiary {
+  width: 240px;
+}
+
+.expenditurereport-filter--search {
+  width: 260px;
+}
+
+/* ── Filter toolbar ──────────────────────────────────────────────────────── */
+
+.expenditurereport-toolbar {
+  display: flex;
+  /* Top-aligned so every field label shares one baseline even when the month pills wrap to a
+     second line and make their field taller than the rest. */
+  align-items: flex-start;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 16px 24px;
+  background: #f8fbff;
+  border-bottom: 1px solid #eef2f6;
+}
+
+.expenditurereport-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.expenditurereport-field--fy {
+  width: 170px;
+}
+
+.expenditurereport-field-label {
+  /* Bootstrap's reboot gives every <label> a 0.5rem bottom margin but leaves <span> alone.
+     This class is used on both, so without resetting it the fields whose label is a <label>
+     (Financial year) sat 8px lower than the ones using a <span> (Period). */
+  margin: 0;
+  /* Fixed line box so a one-line and a two-line label still leave their controls aligned. */
+  line-height: 1.2;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+/* Segmented control: three mutually exclusive modes, all visible at once, so switching
+   period never requires opening a menu to discover the options. */
+.expenditurereport-segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: #eef4fa;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  height: 42px;
+}
+
+.expenditurereport-segmented button {
+  border: none;
+  background: transparent;
+  color: #475569;
+  padding: 0 16px;
+  height: 32px;
+  border-radius: 9px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.expenditurereport-segmented button:hover:not(.active) {
+  color: #0069ab;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.expenditurereport-segmented button.active {
+  background: #ffffff;
+  color: #0069ab;
+  box-shadow: 0 2px 6px rgba(2, 6, 23, 0.12);
+}
+
+.expenditurereport-segmented button:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 1px;
+}
+
+/* ── Month strip ─────────────────────────────────────────────────────────── */
+
+/* Takes the rest of the toolbar row and wraps to a second line when the twelve pills stop
+   fitting. Wrapping rather than scrolling: the set is always exactly twelve, so every month
+   stays visible instead of some hiding past a scroll edge. */
+.expenditurereport-field--months {
+  flex: 1 1 420px;
+  min-width: 260px;
+}
+
+.expenditurereport-monthstrip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 42px;
+}
+
+.expenditurereport-monthstrip button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #334155;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.expenditurereport-monthstrip button:hover:not(.active) {
+  border-color: #0069ab;
+  color: #0069ab;
+  background: #f4faff;
+}
+
+.expenditurereport-monthstrip button.active {
+  background: #0069ab;
+  border-color: #0069ab;
+  color: #ffffff;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.28);
+}
+
+.expenditurereport-monthstrip button:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+}
+
+.expenditurereport-search {
+  width: 100%;
+  height: 42px;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  border-radius: 12px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #0f172a;
+  outline: none;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+.expenditurereport-search::placeholder {
+  color: #64748b;
+}
+
+.expenditurereport-search:focus {
+  border-color: #0069ab;
+  box-shadow:
+    0 0 0 4px rgba(0, 105, 171, 0.15),
+    0 10px 22px rgba(2, 6, 23, 0.08);
+  background: #ffffff;
+}
+
+/* The two bounds sit inline in the toolbar row alongside the year and period controls. */
+.expenditurereport-field--dates {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.expenditurereport-date-input {
+  width: 158px;
+  margin-bottom: 0;
+}
+
+/* CustomInput renders a react-bootstrap Form.Group whose label and control carry their own
+   spacing; these keep it the same height and rhythm as the toolbar's other fields. */
+.expenditurereport-date-input .custom-label {
+  margin-bottom: 6px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #64748b;
+}
+
+.expenditurereport-date-input .custom-input {
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.18);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.expenditurereport-date-input .custom-input:focus {
+  border-color: #0069ab;
+  box-shadow:
+    0 0 0 4px rgba(0, 105, 171, 0.15),
+    0 10px 22px rgba(2, 6, 23, 0.08);
+  background: #ffffff;
+}
+
+/* The full explanation lives in the title attribute; the row only needs the reminder. */
+.expenditurereport-range-hint {
+  align-self: center;
+  padding-bottom: 10px;
+  font-size: 0.78rem;
+  color: #64748b;
+  white-space: nowrap;
+  cursor: help;
+  border-bottom: 1px dotted rgba(100, 116, 139, 0.6);
+}
+
+.expenditurereport-body {
+  padding: 20px;
+}
+
+/* Period on the left, the active tab's control on the right, one line. `space-between` would
+   push a lone control to the far edge, so the text takes the slack instead. */
+.expenditurereport-period-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.expenditurereport-period-summary-text {
+  flex: 1 1 auto;
+}
+
+.expenditurereport-period-summary strong {
+  color: #0a2540;
+}
+
+.expenditurereport-metric-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expenditurereport-metric-select {
+  width: 200px;
+}
+
+.expenditurereport-notice {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #fff8e6;
+  border: 1px solid #f3e3ab;
+  color: #8a6100;
+  font-size: 0.85rem;
+}
+
+.expenditurereport-state {
+  text-align: center;
+  padding: 60px 0;
+  font-size: 0.95rem;
+  color: #6b7280;
+}
+
+.expenditurereport-state--error {
+  color: #b42318;
+}
+
+.expenditurereport-table-section {
+  margin-bottom: 22px;
+}
+
+.expenditurereport-toggle-btn,
+.expenditurereport-section-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #d0d8e2;
+  background: #fff;
+  color: #0069ab;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+.expenditurereport-toggle-btn:hover,
+.expenditurereport-section-toggle-btn:hover {
+  border-color: #0069ab;
+  background: #f4faff;
+}
+
+/* Matches every other interactive control on the page, so tabbing to "Collapse All" or a
+   section's own toggle shows the same focus ring as the tabs and month pills. */
+.expenditurereport-toggle-btn:focus-visible,
+.expenditurereport-section-toggle-btn:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+}
+
+.expenditurereport-type-section {
+  margin-bottom: 22px;
+}
+
+.expenditurereport-type-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.expenditurereport-type-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0a2540;
+}
+
+/* Wide tables scroll inside their own wrapper so the page body never scrolls sideways. */
+.expenditurereport-table-wrapper,
+.expenditurereport-detail-table-wrapper {
+  overflow-x: auto;
+}
+
+.expenditurereport-table,
+.expenditurereport-detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+
+.expenditurereport-table th {
+  background: #e7f8ef;
+  color: #137a3a;
+  padding: 14px 12px;
+  text-align: right;
+  font-weight: 700;
+  font-size: 0.86rem;
+  border-bottom: 2px solid #d7f1e3;
+  white-space: nowrap;
+}
+
+.expenditurereport-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+  font-size: 0.88rem;
+  color: #1f2937;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* First two columns are labels, not amounts. */
+.expenditurereport-table th:nth-child(1),
+.expenditurereport-table td:nth-child(1),
+.expenditurereport-table th:nth-child(2),
+.expenditurereport-table td:nth-child(2) {
+  text-align: left;
+}
+
+.expenditurereport-table td:nth-child(2) {
+  white-space: normal;
+  min-width: 180px;
+}
+
+/* Auto layout stretches to fill 100% of the wrapper no matter how many month
+   columns exist, so a 2-month date range spreads its columns into wide gaps
+   while a 12-month full year barely notices. Fixed layout + explicit widths
+   keep column width constant regardless of column count; the wrapper's
+   horizontal scroll takes over once the table exceeds its container. */
+.expenditurereport-month-table {
+  table-layout: fixed;
+  width: max-content;
+}
+
+.expenditurereport-month-table th,
+.expenditurereport-month-table td {
+  width: 130px;
+}
+
+.expenditurereport-month-table th:nth-child(1),
+.expenditurereport-month-table td:nth-child(1) {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 1;
+  width: 200px;
+}
+
+.expenditurereport-month-table th:nth-child(1) {
+  background: #e7f8ef;
+}
+
+.expenditurereport-month-head {
+  font-weight: 600;
+  color: #0a2540;
+}
+
+.expenditurereport-row-clickable {
+  cursor: pointer;
+}
+
+.expenditurereport-row-clickable:hover {
+  background: #f8fafc;
+}
+
+.expenditurereport-row-selected td {
+  background: #e8f4ff;
+}
+
+.expenditurereport-row-selected td:first-child {
+  box-shadow: inset 4px 0 0 #0069ab;
+}
+
+.expenditurereport-row-selected:hover td {
+  background: #d9ecff;
+}
+
+.expenditurereport-row-toggle-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.expenditurereport-row-toggle-btn:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.expenditurereport-total-row td {
+  background: #f3f6f9 !important;
+  font-weight: 800 !important;
+  border-top: 2px solid #d8dee5 !important;
+  border-bottom: none !important;
+}
+
+.expenditurereport-grand-table {
+  margin-top: 8px;
+}
+
+/* The GRAND TOTAL row sits in its own table below the per-type section tables, so both must
+   resolve to the SAME column widths. Auto layout sized each table from its own content, which
+   left the grand total's figures out of column with the section totals they add together. The
+   min-width keeps the columns readable and hands overflow to the wrapper's horizontal scroll. */
+.expenditurereport-beneficiary-table {
+  table-layout: fixed;
+  min-width: 900px;
+}
+
+.expenditurereport-col-sno {
+  width: 64px;
+}
+
+.expenditurereport-col-beneficiary {
+  width: 22%;
+}
+
+.expenditurereport-col-amount {
+  width: 13%;
+}
+
+.expenditurereport-detail-section {
+  margin-top: 22px;
+}
+
+.expenditurereport-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.expenditurereport-detail-title {
+  margin: 0;
+  color: #0a2540;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.expenditurereport-detail-filter-input {
+  width: 320px;
+  max-width: 100%;
+  border: 1px solid #d0d8e2;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  color: #1f2937;
+  background: #fff;
+}
+
+.expenditurereport-detail-filter-input:focus {
+  outline: none;
+  border-color: #0069ab;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
+.expenditurereport-detail-table th {
+  background: #fff4d6;
+  color: #a97900;
+  padding: 13px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.86rem;
+  border-bottom: 2px solid #f3e8a5;
+  white-space: nowrap;
+}
+
+.expenditurereport-detail-table td {
+  padding: 13px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 0.86rem;
+  color: #1f2937;
+  vertical-align: middle;
+}
+
+.expenditurereport-detail-table th:nth-child(n + 7):nth-child(-n + 9),
+.expenditurereport-detail-table td:nth-child(n + 7):nth-child(-n + 9) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.expenditurereport-detail-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.expenditurereport-detail-ref {
+  font-weight: 600;
+  color: #0069ab;
+  white-space: nowrap;
+}
+
+.expenditurereport-detail-empty {
+  text-align: center;
+  color: #6b7280;
+}
+
+.expenditurereport-status-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.expenditurereport-status-pill--approved {
+  background: #e7f8ef;
+  color: #137a3a;
+}
+
+.expenditurereport-status-pill--in_progress {
+  background: #fff4d6;
+  color: #a97900;
+}
+
+@media (max-width: 1200px) {
+  .expenditurereport-container {
+    padding: 0 8px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .expenditurereport-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .expenditurereport-header-right {
+    justify-content: flex-start;
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .expenditurereport-page {
+    padding: 16px;
+  }
+
+  /* The three tabs stop fitting one line here, so the pill scrolls rather than clipping a
+     tab outside its own background. */
+  .expenditurereport-tab-toggle {
+    max-width: 100%;
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .expenditurereport-tab-toggle button {
+    padding: 8px 14px;
+    font-size: 0.88rem;
+  }
+
+  .expenditurereport-header {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .expenditurereport-header-right {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .expenditurereport-toolbar {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .expenditurereport-field,
+  .expenditurereport-field--fy,
+  .expenditurereport-field--months,
+  .expenditurereport-field--dates,
+  .expenditurereport-filter--beneficiary,
+  .expenditurereport-filter--search,
+  .expenditurereport-metric-select {
+    width: 100%;
+  }
+
+  .expenditurereport-segmented {
+    width: 100%;
+  }
+
+  .expenditurereport-segmented button {
+    flex: 1 1 0;
+    padding: 0 8px;
+  }
+
+  /* Two bounds side by side is still the clearest reading of a range, so they share the
+     row and split it rather than stacking. */
+  .expenditurereport-date-input {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 140px;
+  }
+
+  .expenditurereport-range-hint {
+    flex-basis: 100%;
+    padding-bottom: 0;
+    white-space: normal;
+  }
+
+  .expenditurereport-detail-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .expenditurereport-detail-filter-input {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .expenditurereport-table th,
+  .expenditurereport-table td,
+  .expenditurereport-detail-table th,
+  .expenditurereport-detail-table td {
+    padding: 8px 6px;
+    font-size: 0.8rem;
+  }
+}

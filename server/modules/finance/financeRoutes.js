@@ -85,6 +85,11 @@ router.delete('/:id/principal-document', financeController.deletePrincipalDocume
 
 // Workflow metadata + queues
 router.get('/workflow/meta', canAccessFinanceWorkflow, financeController.getWorkflowMeta);
+router.get(
+  '/queue/:stage/export',
+  canAccessFinanceWorkflow,
+  financeController.getFinanceQueueExport,
+);
 router.get('/queue/:stage', canAccessFinanceWorkflow, financeController.getFinanceQueue);
 
 // Workflow actions
