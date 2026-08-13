@@ -60,18 +60,42 @@ const participantAuthModel = {
           [name, picture, googleSub, emailVerified ? 1 : 0, participant.id],
         );
       } else {
-        const [result] = await connection.query(
-          `INSERT INTO event_participants
-             (email, name, picture, google_sub, email_verified, last_login_at)
-           VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-          [email, name, picture, googleSub, emailVerified ? 1 : 0],
-        );
+        // The lookups above take no row lock, so two concurrent first sign-ins
+        // for the same account both reach this INSERT and the loser hits
+        // uq_participants_email / uq_participants_google_sub. That is a race, not
+        // a client error: re-read the row the winner just wrote. A double-clicked
+        // sign-in button is enough to trigger it.
+        try {
+          const [result] = await connection.query(
+            `INSERT INTO event_participants
+               (email, name, picture, google_sub, email_verified, last_login_at)
+             VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            [email, name, picture, googleSub, emailVerified ? 1 : 0],
+          );
 
-        if (!result.insertId) {
-          throw new Error('Failed to create participant');
+          if (!result.insertId) {
+            throw new Error('Failed to create participant');
+          }
+
+          participant = { id: result.insertId };
+        } catch (error) {
+          if (error.code !== 'ER_DUP_ENTRY') {
+            throw error;
+          }
+
+          const [raced] = await connection.query(
+            `SELECT id FROM event_participants
+              WHERE ${googleSub ? 'google_sub = ? OR email = ?' : 'email = ?'}
+              LIMIT 1`,
+            googleSub ? [googleSub, email] : [email],
+          );
+
+          if (!raced[0]) {
+            throw error;
+          }
+
+          participant = { id: raced[0].id };
         }
-
-        participant = { id: result.insertId };
       }
 
       const [rows] = await connection.query(

@@ -1,4 +1,6 @@
-import participantRegistrationModel from './participantRegistrationModel.js';
+import participantRegistrationModel, {
+  NotImplementedError,
+} from './participantRegistrationModel.js';
 import {
   PARTICIPANT_UPLOAD_CATEGORIES,
   removeUploadedFile,
@@ -7,7 +9,26 @@ import {
 
 const OPEN_REGISTRATION_STATUSES = new Set(['Ongoing', 'Extended']);
 
+/** Sentinel so the caller can map "no such event" to 404 rather than 409. */
+const EVENT_NOT_FOUND = 'Event not found';
+
 const fail = (res, status, message) => res.status(status).json({ success: false, message });
+
+/**
+ * Chooses the status for a handler that threw.
+ *
+ * A route that is mounted but unbuilt answers 501, not 500: the endpoint exists
+ * and is reachable, it just has no implementation yet. Keeping the two apart
+ * means a real fault is visible in the logs instead of sitting among the
+ * scaffold's noise.
+ */
+const failFromError = (res, error, message) => {
+  if (error instanceof NotImplementedError) {
+    return fail(res, 501, 'This feature is not available yet');
+  }
+
+  return fail(res, 500, message);
+};
 
 /**
  * Fails a request that had a file attached, deleting the file first.
@@ -20,6 +41,13 @@ const failUpload = async (req, res, status, message) => {
   await removeUploadedFile(req.file);
   return fail(res, status, message);
 };
+
+/** failUpload + the 501/500 distinction, for an upload handler that threw. */
+const failUploadFromError = async (req, res, error, message) => {
+  await removeUploadedFile(req.file);
+  return failFromError(res, error, message);
+};
+
 const ok = (res, data) => res.json({ success: true, data });
 
 const parseId = (value) => {
@@ -55,8 +83,8 @@ const loadOwnedRegistration = async (req, res) => {
 
 /** Recomputes eligibility server-side; never trust the client's "Open" badge. */
 const assertRegistrationOpen = (context) => {
-  if (!context) return 'Event not found';
-  if (context.is_deleted || !context.is_active) return 'Event not found';
+  if (!context) return EVENT_NOT_FOUND;
+  if (context.is_deleted || !context.is_active) return EVENT_NOT_FOUND;
   if (context.workflow_status !== 'completed') return 'Event is not open to the public';
   if (!OPEN_REGISTRATION_STATUSES.has(context.registration_status)) {
     return 'Registration is not open for this event';
@@ -92,7 +120,10 @@ const participantRegistrationController = {
       const problem = assertRegistrationOpen(context);
 
       if (problem) {
-        return fail(res, 409, problem);
+        // A missing event is a 404; an existing one that is closed, full or past
+        // its deadline is a 409. Collapsing both into 409 tells the client the
+        // event exists when it may not.
+        return fail(res, problem === EVENT_NOT_FOUND ? 404 : 409, problem);
       }
 
       // TODO(intern): create the registration, then return it.
@@ -106,7 +137,7 @@ const participantRegistrationController = {
       return ok(res, { registrationId });
     } catch (error) {
       console.error('createRegistration failed:', error);
-      return fail(res, 500, 'Could not create registration');
+      return failFromError(res, error, 'Could not create registration');
     }
   },
 
@@ -120,7 +151,7 @@ const participantRegistrationController = {
       return ok(res, { registrations });
     } catch (error) {
       console.error('listRegistrations failed:', error);
-      return fail(res, 500, 'Could not load registrations');
+      return failFromError(res, error, 'Could not load registrations');
     }
   },
 
@@ -136,7 +167,7 @@ const participantRegistrationController = {
       return ok(res, { cancelled: true });
     } catch (error) {
       console.error('cancelRegistration failed:', error);
-      return fail(res, 500, 'Could not cancel registration');
+      return failFromError(res, error, 'Could not cancel registration');
     }
   },
 
@@ -185,7 +216,7 @@ const participantRegistrationController = {
       return ok(res, { saved: true });
     } catch (error) {
       console.error('saveTeamMembers failed:', error);
-      return fail(res, 500, 'Could not save team members');
+      return failFromError(res, error, 'Could not save team members');
     }
   },
 
@@ -266,7 +297,12 @@ const participantRegistrationController = {
           occupants,
           roomsCount,
           nights,
-          amount: Number(tariff.price_per_night) * occupants * nights * roomsCount,
+          // price_per_night is a per-ROOM rate: the tariff row carries it beside
+          // max_occupants (the capacity of one room at that rate) and
+          // total_rooms. occupants is validated against that capacity above but
+          // must not multiply the price, or a 2-person room for 2 nights bills
+          // at 4x the nightly rate.
+          amount: Number(tariff.price_per_night) * nights * roomsCount,
         });
       }
 
@@ -284,7 +320,7 @@ const participantRegistrationController = {
       return ok(res, { saved: true, totalAmount, rooms: priced });
     } catch (error) {
       console.error('saveAccommodation failed:', error);
-      return fail(res, 500, 'Could not save accommodation');
+      return failFromError(res, error, 'Could not save accommodation');
     }
   },
 
@@ -302,33 +338,25 @@ const participantRegistrationController = {
         return fail(res, 400, 'A payment screenshot is required');
       }
 
-      const billType = req.body?.billType === 'Accommodation' ? 'Accommodation' : 'Registration';
-
-      // TODO(intern): compute the amount server-side.
+      // TODO(intern): compute the amount server-side, then record the proof and
+      // delete this guard.
       //   Registration -> findApplicableFee(event, participant type) and pick
       //     individual_fee or team_fee + member_fee * (members - 1).
       //   Accommodation -> the stored total_amount for this registration.
-      // The client must not supply the amount; if req.body.amount exists, ignore it.
-      const amount = 0;
+      // The client must not supply the amount; if req.body.amount exists, ignore
+      // it. Then call model.insertPaymentProof, which hardcodes status
+      // 'Submitted', and return { paymentId, paymentStatus, proofFilePath }.
+      //
+      // Until then this route refuses instead of inserting amount = 0. A payment
+      // row is a financial record: one carrying a number nobody computed is
+      // worse than no row, because staff verify against it and it reconciles to
+      // zero without ever looking wrong.
+      await removeUploadedFile(req.file);
 
-      const proofFilePath = toPublicUploadPath(
-        PARTICIPANT_UPLOAD_CATEGORIES.paymentProof,
-        req.file.filename,
-      );
-
-      const paymentId = await participantRegistrationModel.insertPaymentProof({
-        registrationId: registration.id,
-        amount,
-        billType,
-        proofFilePath,
-        transactionReference: req.body?.transactionReference,
-      });
-
-      // Status is 'Submitted'. Staff move it to 'Verified' via event.verify_payment.
-      return ok(res, { paymentId, paymentStatus: 'Submitted', proofFilePath });
+      return fail(res, 501, 'Payment submission is not available yet');
     } catch (error) {
       console.error('submitPaymentProof failed:', error);
-      return failUpload(req, res, 500, 'Could not submit payment proof');
+      return failUploadFromError(req, res, error, 'Could not submit payment proof');
     }
   },
 
@@ -342,7 +370,7 @@ const participantRegistrationController = {
       return ok(res, { payments });
     } catch (error) {
       console.error('listPayments failed:', error);
-      return fail(res, 500, 'Could not load payments');
+      return failFromError(res, error, 'Could not load payments');
     }
   },
 
@@ -374,7 +402,7 @@ const participantRegistrationController = {
       return ok(res, { filePath });
     } catch (error) {
       console.error('uploadRegistrationDocument failed:', error);
-      return failUpload(req, res, 500, 'Could not upload document');
+      return failUploadFromError(req, res, error, 'Could not upload document');
     }
   },
 
@@ -390,7 +418,7 @@ const participantRegistrationController = {
       return ok(res, { profile });
     } catch (error) {
       console.error('getProfile failed:', error);
-      return fail(res, 500, 'Could not load profile');
+      return failFromError(res, error, 'Could not load profile');
     }
   },
 
@@ -403,7 +431,7 @@ const participantRegistrationController = {
       return ok(res, { saved: true });
     } catch (error) {
       console.error('savePersonalDetails failed:', error);
-      return fail(res, 500, 'Could not save personal details');
+      return failFromError(res, error, 'Could not save personal details');
     }
   },
 
@@ -420,7 +448,7 @@ const participantRegistrationController = {
       return ok(res, { saved: true });
     } catch (error) {
       console.error('saveProfessionDetails failed:', error);
-      return fail(res, 500, 'Could not save profession details');
+      return failFromError(res, error, 'Could not save profession details');
     }
   },
 
@@ -443,7 +471,7 @@ const participantRegistrationController = {
       return ok(res, { filePath });
     } catch (error) {
       console.error('uploadProfileFile failed:', error);
-      return failUpload(req, res, 500, 'Could not upload file');
+      return failUploadFromError(req, res, error, 'Could not upload file');
     }
   },
 
@@ -462,7 +490,7 @@ const participantRegistrationController = {
       return ok(res, { submitted: true });
     } catch (error) {
       console.error('submitFeedback failed:', error);
-      return fail(res, 500, 'Could not submit feedback');
+      return failFromError(res, error, 'Could not submit feedback');
     }
   },
 };

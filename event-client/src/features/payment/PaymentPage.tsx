@@ -32,7 +32,8 @@ export default function PaymentPage() {
   const [screenshotDataUrl, setScreenshotDataUrl] = useState('');
 
   const eventsTotal = selectedEvents.reduce((sum: number, ev) => sum + ev.fees, 0);
-  const accommodationTotal = accommodation ? accommodation.pricePerNight : 0;
+  // Already the total for the whole stay — see SelectedAccommodation.amount.
+  const accommodationTotal = accommodation ? accommodation.amount : 0;
   const payableTotal =
     Number.isFinite(total) && total > 0 ? total : eventsTotal + accommodationTotal;
   const hasPayableItems = selectedEvents.length > 0 || Boolean(accommodation);
@@ -52,7 +53,7 @@ export default function PaymentPage() {
         id: `accommodation-${accommodation.optionId}`,
         title: accommodation.roomType || 'Accommodation',
         subtitle: `${accommodation.nights} nights`,
-        amount: accommodation.pricePerNight,
+        amount: accommodation.amount,
       });
     }
 

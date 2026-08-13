@@ -146,7 +146,12 @@ export interface SelectedAccommodation {
   optionId: string;
   roomType: string;
   nights: number;
-  pricePerNight: number;
+  /**
+   * Total payable for the whole stay, across every room and night — NOT a
+   * nightly rate. It was called `pricePerNight` while carrying this value, which
+   * invited call sites to multiply it by `nights` and charge the stay twice.
+   */
+  amount: number;
 }
 
 // ─── Payment Summary ───────────────────────────────────────────────────────

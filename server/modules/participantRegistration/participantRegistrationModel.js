@@ -1,5 +1,19 @@
 import db from '../../config/connection.js';
 
+/**
+ * Marks a route that is mounted but not yet built.
+ *
+ * The controller maps this to 501, so a caller can tell "not written yet" from
+ * "the server broke". Without it every unbuilt endpoint answers 500 with a stack
+ * trace, which buries real failures in the same log line.
+ */
+export class NotImplementedError extends Error {
+  constructor(method) {
+    super(`Not implemented: ${method}`);
+    this.name = 'NotImplementedError';
+  }
+}
+
 // Data access for participant-owned records.
 //
 // The helpers marked IMPLEMENTED below are the security-critical ones: ownership,
@@ -146,27 +160,27 @@ const participantRegistrationModel = {
 
   /** TODO: SELECT profile + JSON profession_details for this participant. */
   async findProfile(_participantId) {
-    throw new Error('Not implemented: findProfile');
+    throw new NotImplementedError('findProfile');
   },
 
   /** TODO: INSERT ... ON DUPLICATE KEY UPDATE on event_participant_profiles. */
   async upsertPersonalDetails(_participantId, _details) {
-    throw new Error('Not implemented: upsertPersonalDetails');
+    throw new NotImplementedError('upsertPersonalDetails');
   },
 
   /** TODO: as above, writing promoted columns + profession_details JSON. */
   async upsertProfessionDetails(_participantId, _details) {
-    throw new Error('Not implemented: upsertProfessionDetails');
+    throw new NotImplementedError('upsertProfessionDetails');
   },
 
   /** TODO: UPDATE photo_path / id_card_path after a Multer upload. */
   async updateProfileFilePath(_participantId, _column, _filePath) {
-    throw new Error('Not implemented: updateProfileFilePath');
+    throw new NotImplementedError('updateProfileFilePath');
   },
 
   /** TODO: list this participant's registrations with event + payment summary. */
   async listRegistrations(_participantId) {
-    throw new Error('Not implemented: listRegistrations');
+    throw new NotImplementedError('listRegistrations');
   },
 
   /**
@@ -175,32 +189,32 @@ const participantRegistrationModel = {
    * uq_event_participant to reject a duplicate registration.
    */
   async createRegistration(_participantId, _eventId) {
-    throw new Error('Not implemented: createRegistration');
+    throw new NotImplementedError('createRegistration');
   },
 
   /** TODO: replace team rows in a transaction; member_order starts at 1. */
   async replaceTeamMembers(_registrationId, _members) {
-    throw new Error('Not implemented: replaceTeamMembers');
+    throw new NotImplementedError('replaceTeamMembers');
   },
 
   /** TODO: upsert event_registration_accommodation + its room rows. */
   async saveAccommodation(_registrationId, _accommodation) {
-    throw new Error('Not implemented: saveAccommodation');
+    throw new NotImplementedError('saveAccommodation');
   },
 
   /** TODO: INSERT into event_registration_documents (verification_status Pending). */
   async insertRegistrationDocument(_registrationId, _document) {
-    throw new Error('Not implemented: insertRegistrationDocument');
+    throw new NotImplementedError('insertRegistrationDocument');
   },
 
   /** TODO: INSERT event_feedbacks + event_feedback_answers in a transaction. */
   async submitFeedback(_registrationId, _answers) {
-    throw new Error('Not implemented: submitFeedback');
+    throw new NotImplementedError('submitFeedback');
   },
 
   /** TODO: soft-cancel (is_cancelled = 1), never a hard DELETE. */
   async cancelRegistration(_registrationId) {
-    throw new Error('Not implemented: cancelRegistration');
+    throw new NotImplementedError('cancelRegistration');
   },
 };
 

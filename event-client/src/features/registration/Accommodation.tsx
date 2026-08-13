@@ -240,7 +240,7 @@ export default function Accommodation() {
           optionId: selectedRoom.id,
           roomType: roomLabel,
           nights: completeRooms.reduce((sum, room) => sum + toNumber(room.days), 0) || 1,
-          pricePerNight: totalAmount,
+          amount: totalAmount,
         },
         total: paymentTotal + totalAmount,
       },

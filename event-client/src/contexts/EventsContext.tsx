@@ -134,7 +134,15 @@ export function getReviewStateLabel(registration?: EventRegistration) {
   return '';
 }
 
-function toRowEvent(
+/**
+ * Flattens a multi-event's child into a standalone row.
+ *
+ * The composite `${event.id}-${subEvent.id}` id is what keys every registration
+ * lookup for sub-events, so this must stay the single definition. A second copy
+ * that drifts would make `registrations[event.id]` miss silently, and payable
+ * rows would vanish from the payment summary with no error.
+ */
+export function toRowEvent(
   event: EventItem,
   subEvent: NonNullable<EventItem['subEvents']>[number],
 ): EventItem {

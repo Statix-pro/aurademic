@@ -15,8 +15,20 @@ export const PARTICIPANT_UPLOAD_CATEGORIES = {
   paymentProof: 'payment-proofs',
 };
 
-const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp'];
-const DOCUMENT_MIMES = [...IMAGE_MIMES, 'application/pdf'];
+// MIME type -> the extensions allowed to carry it.
+//
+// The declared mimetype alone is not a check: it comes from the client, and
+// sanitizeUploadFilename keeps whatever extension the client supplied. Accepting
+// on mimetype only let `evil.html` be uploaded as `image/png` and land on disk
+// as `.html`, which express.static then serves as text/html from the API origin
+// — script execution alongside the staff portal. Both halves must agree.
+const IMAGE_TYPES = {
+  'image/jpeg': ['.jpg', '.jpeg'],
+  'image/png': ['.png'],
+  'image/webp': ['.webp'],
+};
+
+const DOCUMENT_TYPES = { ...IMAGE_TYPES, 'application/pdf': ['.pdf'] };
 
 const resolveDir = (category) => {
   const dir = path.join(process.cwd(), 'uploads', category);
@@ -28,8 +40,10 @@ const resolveDir = (category) => {
   return dir;
 };
 
-const buildUploader = (category, allowedMimes, maxBytes) =>
-  multer({
+const buildUploader = (category, allowedTypes, maxBytes) => {
+  const allowedMimes = Object.keys(allowedTypes);
+
+  return multer({
     storage: multer.diskStorage({
       destination: (req, file, cb) => cb(null, resolveDir(category)),
       filename: (req, file, cb) => {
@@ -41,39 +55,57 @@ const buildUploader = (category, allowedMimes, maxBytes) =>
       },
     }),
     fileFilter: (req, file, cb) => {
-      if (allowedMimes.includes(file.mimetype)) {
-        cb(null, true);
+      const extensions = allowedTypes[file.mimetype];
+
+      if (!extensions) {
+        cb(new Error(`Invalid file type. Allowed: ${allowedMimes.join(', ')}`));
         return;
       }
 
-      cb(new Error(`Invalid file type. Allowed: ${allowedMimes.join(', ')}`));
+      // Compare against the sanitized name, which is what actually reaches disk.
+      const extension = path.extname(sanitizeUploadFilename(file.originalname)).toLowerCase();
+
+      if (!extensions.includes(extension)) {
+        cb(
+          new Error(
+            `Invalid file type. A ${file.mimetype} file must end in ${extensions.join(' or ')}`,
+          ),
+        );
+        return;
+      }
+
+      cb(null, true);
     },
     limits: { fileSize: maxBytes },
   });
+};
 
 export const uploadParticipantPhoto = buildUploader(
   PARTICIPANT_UPLOAD_CATEGORIES.photo,
-  IMAGE_MIMES,
+  IMAGE_TYPES,
   2 * 1024 * 1024,
 );
 
 export const uploadParticipantIdCard = buildUploader(
   PARTICIPANT_UPLOAD_CATEGORIES.idCard,
-  DOCUMENT_MIMES,
+  DOCUMENT_TYPES,
   5 * 1024 * 1024,
 );
 
 export const uploadRegistrationDocument = buildUploader(
   PARTICIPANT_UPLOAD_CATEGORIES.registrationDocument,
-  DOCUMENT_MIMES,
+  DOCUMENT_TYPES,
   5 * 1024 * 1024,
 );
 
 export const uploadPaymentProof = buildUploader(
   PARTICIPANT_UPLOAD_CATEGORIES.paymentProof,
-  IMAGE_MIMES,
+  IMAGE_TYPES,
   5 * 1024 * 1024,
 );
+
+/** Directories holding participant-uploaded files, for the static-serving guard. */
+export const PARTICIPANT_UPLOAD_DIRS = new Set(Object.values(PARTICIPANT_UPLOAD_CATEGORIES));
 
 /** Web path stored in the DB and served by express.static('/uploads'). */
 export const toPublicUploadPath = (category, filename) => `/uploads/${category}/${filename}`;

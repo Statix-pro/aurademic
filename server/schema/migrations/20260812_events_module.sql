@@ -996,10 +996,21 @@ UPDATE `events`
 SET `event_ref_no` = CONCAT('EVT-LEGACY-', LPAD(`id`, 6, '0')) 
 WHERE `event_ref_no` IS NULL OR `event_ref_no` = '';
 
+-- Every backfill below is guarded by NOT EXISTS on the target's natural key,
+-- NOT by INSERT IGNORE. IGNORE only suppresses a duplicate that violates a
+-- UNIQUE or PRIMARY key, and event_documents, event_payments and
+-- event_sponsoring_agency have no unique key over the copied columns — so on any
+-- database where the legacy source tables still exist, each re-run of this file
+-- would insert the whole set again. This file documents itself as re-runnable,
+-- so the guard has to be explicit.
+
 -- Migrate legacy event plans into event registration settings
 SET @has_event_plans = (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'event_plans');
-SET @sql_event_plans = IF(@has_event_plans > 0, 
-  'INSERT IGNORE INTO `event_registration_settings` (`event_id`, `eligible_participants`, `max_participants`, `created_at`) SELECT `event_id`, `target_audience`, `max_capacity`, CURRENT_TIMESTAMP FROM `event_plans`',
+SET @sql_event_plans = IF(@has_event_plans > 0,
+  'INSERT INTO `event_registration_settings` (`event_id`, `eligible_participants`, `max_participants`, `created_at`)
+     SELECT s.`event_id`, s.`target_audience`, s.`max_capacity`, CURRENT_TIMESTAMP
+       FROM `event_plans` s
+      WHERE NOT EXISTS (SELECT 1 FROM `event_registration_settings` t WHERE t.`event_id` = s.`event_id`)',
   'SELECT 1');
 PREPARE stmt_plans FROM @sql_event_plans;
 EXECUTE stmt_plans;
@@ -1007,8 +1018,11 @@ DEALLOCATE PREPARE stmt_plans;
 
 -- Migrate legacy event uploads into event documents
 SET @has_event_uploads = (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'event_uploads');
-SET @sql_event_uploads = IF(@has_event_uploads > 0, 
-  'INSERT IGNORE INTO `event_documents` (`event_id`, `document_name`, `file_path`, `created_at`) SELECT `event_id`, `doc_name`, `file_url`, CURRENT_TIMESTAMP FROM `event_uploads`',
+SET @sql_event_uploads = IF(@has_event_uploads > 0,
+  'INSERT INTO `event_documents` (`event_id`, `document_name`, `file_path`, `created_at`)
+     SELECT s.`event_id`, s.`doc_name`, s.`file_url`, CURRENT_TIMESTAMP
+       FROM `event_uploads` s
+      WHERE NOT EXISTS (SELECT 1 FROM `event_documents` t WHERE t.`event_id` = s.`event_id` AND t.`file_path` = s.`file_url`)',
   'SELECT 1');
 PREPARE stmt_uploads FROM @sql_event_uploads;
 EXECUTE stmt_uploads;
@@ -1016,8 +1030,11 @@ DEALLOCATE PREPARE stmt_uploads;
 
 -- Migrate legacy event finance into event payments
 SET @has_event_finance = (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'event_finance');
-SET @sql_event_finance = IF(@has_event_finance > 0, 
-  'INSERT IGNORE INTO `event_payments` (`registration_id`, `amount`, `payment_mode`, `payment_status`, `created_at`) SELECT `registration_id`, `amount`, `payment_mode`, `status`, CURRENT_TIMESTAMP FROM `event_finance`',
+SET @sql_event_finance = IF(@has_event_finance > 0,
+  'INSERT INTO `event_payments` (`registration_id`, `amount`, `payment_mode`, `payment_status`, `created_at`)
+     SELECT s.`registration_id`, s.`amount`, s.`payment_mode`, s.`status`, CURRENT_TIMESTAMP
+       FROM `event_finance` s
+      WHERE NOT EXISTS (SELECT 1 FROM `event_payments` t WHERE t.`registration_id` = s.`registration_id` AND t.`amount` = s.`amount`)',
   'SELECT 1');
 PREPARE stmt_finance FROM @sql_event_finance;
 EXECUTE stmt_finance;
@@ -1025,8 +1042,11 @@ DEALLOCATE PREPARE stmt_finance;
 
 -- Migrate legacy event_finance_sponsors into event_sponsoring_agency
 SET @has_ef_sponsors = (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'event_finance_sponsors');
-SET @sql_ef_sponsors = IF(@has_ef_sponsors > 0, 
-  'INSERT IGNORE INTO `event_sponsoring_agency` (`event_id`, `agency_name`, `sponsor_amount`, `created_at`) SELECT `event_id`, `sponsor_name`, `amount`, CURRENT_TIMESTAMP FROM `event_finance_sponsors`',
+SET @sql_ef_sponsors = IF(@has_ef_sponsors > 0,
+  'INSERT INTO `event_sponsoring_agency` (`event_id`, `agency_name`, `sponsor_amount`, `created_at`)
+     SELECT s.`event_id`, s.`sponsor_name`, s.`amount`, CURRENT_TIMESTAMP
+       FROM `event_finance_sponsors` s
+      WHERE NOT EXISTS (SELECT 1 FROM `event_sponsoring_agency` t WHERE t.`event_id` = s.`event_id` AND t.`agency_name` = s.`sponsor_name`)',
   'SELECT 1');
 PREPARE stmt_ef_sponsors FROM @sql_ef_sponsors;
 EXECUTE stmt_ef_sponsors;
@@ -1034,8 +1054,11 @@ DEALLOCATE PREPARE stmt_ef_sponsors;
 
 -- Migrate legacy event_finance_docs into event_documents
 SET @has_ef_docs = (SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'event_finance_docs');
-SET @sql_ef_docs = IF(@has_ef_docs > 0, 
-  'INSERT IGNORE INTO `event_documents` (`event_id`, `document_name`, `file_path`, `created_at`) SELECT `event_id`, `doc_name`, `file_url`, CURRENT_TIMESTAMP FROM `event_finance_docs`',
+SET @sql_ef_docs = IF(@has_ef_docs > 0,
+  'INSERT INTO `event_documents` (`event_id`, `document_name`, `file_path`, `created_at`)
+     SELECT s.`event_id`, s.`doc_name`, s.`file_url`, CURRENT_TIMESTAMP
+       FROM `event_finance_docs` s
+      WHERE NOT EXISTS (SELECT 1 FROM `event_documents` t WHERE t.`event_id` = s.`event_id` AND t.`file_path` = s.`file_url`)',
   'SELECT 1');
 PREPARE stmt_ef_docs FROM @sql_ef_docs;
 EXECUTE stmt_ef_docs;

@@ -398,8 +398,11 @@ unwraps `{ success, data }` and clears the token on `shouldLogout`.
   (ownership, eligibility, accommodation pricing, payment-proof insert) are done
   and tested; the CRUD is marked `TODO(intern)`. **Read that module's README
   first** — it lists the four rules that must not be broken.
-- `submitPaymentProof` inserts `amount = 0` with a TODO. Left deliberately blank
-  rather than guessed, because it is the one number that must be right.
+- `submitPaymentProof` answers **501** until the amount is computed server-side.
+  It previously inserted `amount = 0`; a payment row carrying a number nobody
+  computed is worse than no row, because staff verify against it and it
+  reconciles to zero without ever looking wrong. The amount is the one number
+  that must be right, so the route refuses rather than guessing.
 - Registrations, payments and feedback still persist to `localStorage` on the
   frontend until those endpoints exist. Every key is now namespaced per
   participant via `shared/storage.ts` and wiped on logout, so a shared browser no
@@ -456,8 +459,48 @@ endpoint left an orphan behind.
 **This one is on you:** every upload handler must fail through `failUpload`, not
 `fail`. If you add a route that takes a file, the same rule applies.
 
-New tests: `participantLoginGuards.test.js` (8), `participantUploadErrors.test.js`
-(6). Suite is 207.
+### A second pass, from the bot reviews
+
+CodeRabbit and Greptile raised 64 comments between them. Most were style; these
+were real, and all are fixed:
+
+- **Uploads accepted any file that claimed an allowed MIME type.** `file.mimetype`
+  comes from the client and `sanitizeUploadFilename` keeps the extension, so
+  `evil.html` sent as `image/png` landed on disk as `.html` — and
+  `express.static` serves that as `text/html` from the API origin, which in
+  production is the staff portal's origin. Each MIME type is now bound to its
+  allowed extensions, `/uploads` sends `X-Content-Type-Options: nosniff`, and
+  participant directories send `Content-Disposition: attachment` (subresource
+  loads ignore it, so `<img>` still renders).
+- **Accommodation was priced per occupant.** `price_per_night` sits beside
+  `max_occupants` — the capacity of one room at that rate — so it is a per-room
+  rate. Multiplying by occupants billed a 2-person room for 2 nights at 4x.
+- **`min_fee` collapsed to NULL** whenever one fee column was 0, which is the
+  normal shape for an event that prices only individuals or only teams. The site
+  advertised paid events as free.
+- **A self-referencing `parent_id` 500'd the whole public catalogue** —
+  `JSON.stringify` throws on the cycle the nesting loop built.
+- **Concurrent first sign-ins raced to a duplicate-key 500.** A double-clicked
+  Google button was enough.
+- **The certificate preview showed one hardcoded name to every participant**, and
+  the registration modal showed one hardcoded coordinator's name, mobile and
+  email on every event. Both were demo data on a live path; the same class of bug
+  as the event-title matching in §3.
+- **A paid registration still offered an enabled "Register Now"**, which routed
+  back through the form to `/payment` for an event already paid for.
+- **`SelectedAccommodation.pricePerNight` actually held a total.** Renamed to
+  `amount`. The bots proposed multiplying it by `nights`, which would have
+  double-charged — worth knowing that a plausible-looking suggested fix was
+  wrong.
+- Unbuilt endpoints answer **501**, not 500, so a real fault stays visible.
+- The migration backfills use `NOT EXISTS` guards rather than `INSERT IGNORE`,
+  which only suppresses duplicates on a UNIQUE key that these tables lack; and
+  legacy status values are normalised before the CHECK constraints are added,
+  since one stray `'Paid'` would abort the ALTER and leave the DB half-migrated.
+
+New tests: `participantLoginGuards.test.js`, `participantUploadErrors.test.js`,
+`participantAccommodationPricing.test.js`, `publicEventsNesting.test.js`.
+Suite is 222 across 20 files, up from 193 across 16.
 
 ### Frontend — one of these is temporary
 
@@ -865,7 +908,7 @@ Everything below was executed, not assumed.
 | `npm run typecheck` (both frontends)                         | 0 errors                                                                                                                                      |
 | `npm run build` (both frontends)                             | clean                                                                                                                                         |
 | `npm run check:server`                                       | clean                                                                                                                                         |
-| `npm run test:server`                                        | 193 passed / 16 files (186 pre-existing + 7 new)                                                                                              |
+| `npm run test:server`                                        | 222 passed / 20 files (186 pre-existing + 36 new)                                                                                             |
 | Migrations on a scratch DB                                   | both clean; delta run **twice** to prove idempotency                                                                                          |
 | Migration guard                                              | refuses to run with existing `user_id` rows; data intact                                                                                      |
 | Publish gate                                                 | approved event listed; draft and in-review both 404                                                                                           |

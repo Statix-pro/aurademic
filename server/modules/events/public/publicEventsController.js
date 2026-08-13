@@ -71,8 +71,26 @@ const publicEventsController = {
       const byId = new Map(events.map((event) => [event.id, { ...event, subEvents: [] }]));
       const roots = [];
 
+      // fk_events_parent permits parent_id = id, and nothing forbids a two-row
+      // cycle. Nesting one of those would build a self-referencing object, and
+      // res.json's JSON.stringify throws on it — turning one bad row into a 500
+      // for the whole public catalogue. Treat any event that cannot reach a root
+      // by walking parents as a root itself.
+      const nestsUnderARoot = (event) => {
+        const seen = new Set([event.id]);
+        let parentId = event.parentId;
+
+        while (parentId && byId.has(parentId)) {
+          if (seen.has(parentId)) return false;
+          seen.add(parentId);
+          parentId = byId.get(parentId).parentId;
+        }
+
+        return true;
+      };
+
       for (const event of byId.values()) {
-        if (event.parentId && byId.has(event.parentId)) {
+        if (event.parentId && byId.has(event.parentId) && nestsUnderARoot(event)) {
           byId.get(event.parentId).subEvents.push(event);
         } else {
           roots.push(event);

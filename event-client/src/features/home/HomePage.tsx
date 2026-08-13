@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../contexts/AuthContext';
-import { useEvents } from '../../contexts/EventsContext';
+import { flattenEvents, useEvents } from '../../contexts/EventsContext';
 import { useProfile } from '../../contexts/ProfileContext';
 import { STORES, readScoped } from '../../shared/storage';
 import EventCard from '../events/EventCard';
@@ -40,27 +40,35 @@ export default function HomePage() {
     return Math.round(sum / startedRegs.length);
   }, [registrations]);
 
+  // Registrations for a multi-event's children are keyed by the composite row id
+  // (`${event.id}-${subEvent.id}`), which never matches a parent's id. Counting
+  // over the raw `events` list therefore missed every sub-event registration, so
+  // a participant registered only for sub-events saw 0% on both bars.
+  const readyCount = useMemo(
+    () =>
+      flattenEvents(events).filter(
+        (e) => registrations[e.id] && registrations[e.id].formStatus === 'ready',
+      ).length,
+    [events, registrations],
+  );
+
   // Calculate feedback completion percentage dynamically
   const feedbackProgress = useMemo(() => {
-    const registeredCount = events.filter(
-      (e) => registrations[e.id] && registrations[e.id].formStatus === 'ready',
-    ).length;
-    if (registeredCount === 0) return 0;
+    if (readyCount === 0) return 0;
     const fbs = readScoped<unknown[]>(STORES.feedbacks, user?.email, []);
-    return Math.min(100, Math.round((fbs.length / registeredCount) * 100));
-  }, [events, registrations, user?.email]);
+    return Math.min(100, Math.round((fbs.length / readyCount) * 100));
+  }, [readyCount, user?.email]);
 
   // Calculate certificate completion percentage dynamically
   const certProgress = useMemo(() => {
-    const registeredCount = events.filter(
-      (e) => registrations[e.id] && registrations[e.id].formStatus === 'ready',
-    ).length;
-    if (registeredCount === 0) return 0;
-    const paidCount = events.filter(
+    if (readyCount === 0) return 0;
+    const paidCount = flattenEvents(events).filter(
       (e) => registrations[e.id] && registrations[e.id].paymentStatus === 'paid',
     ).length;
-    return Math.round((paidCount / registeredCount) * 100);
-  }, [events, registrations]);
+    // Clamped: a registration can be paid without its form being ready, so
+    // paidCount can exceed readyCount and overflow the progress bar.
+    return Math.min(100, Math.round((paidCount / readyCount) * 100));
+  }, [events, registrations, readyCount]);
 
   const boxes = [
     {

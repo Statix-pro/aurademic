@@ -445,6 +445,31 @@ CALL sp_evt_add_column_if_not_exists('event_payments', 'bill_type',
 CALL sp_evt_add_column_if_not_exists('event_payments', 'rejection_reason',
   'VARCHAR(512) DEFAULT NULL COMMENT ''Set when a verifier rejects the submitted proof''');
 
+-- Normalize before constraining. MySQL validates every existing row when a CHECK
+-- is added, and 20260812_events_module.sql copies event_finance.status verbatim
+-- into event_payments.payment_status. One legacy value outside the allow-list —
+-- 'Paid', say — aborts the ALTER with errno 3819, and because this file has no
+-- transaction boundary the sections after it never run, leaving the database
+-- half-migrated. Map the known synonyms, then floor anything unrecognised to
+-- 'Pending' so a stray value cannot block the migration.
+UPDATE `event_payments`
+   SET `payment_status` = CASE
+     WHEN LOWER(`payment_status`) IN ('paid', 'success', 'completed', 'verified') THEN 'Verified'
+     WHEN LOWER(`payment_status`) IN ('failed', 'rejected', 'cancelled', 'canceled') THEN 'Rejected'
+     WHEN LOWER(`payment_status`) = 'refunded' THEN 'Refunded'
+     WHEN LOWER(`payment_status`) = 'submitted' THEN 'Submitted'
+     ELSE 'Pending'
+   END
+ WHERE `payment_status` NOT IN ('Pending', 'Submitted', 'Verified', 'Rejected', 'Refunded');
+
+UPDATE `event_registration_documents`
+   SET `verification_status` = CASE
+     WHEN LOWER(`verification_status`) IN ('approved', 'verified') THEN 'Verified'
+     WHEN LOWER(`verification_status`) IN ('declined', 'rejected') THEN 'Rejected'
+     ELSE 'Pending'
+   END
+ WHERE `verification_status` NOT IN ('Pending', 'Verified', 'Rejected');
+
 CALL sp_evt_add_constraint_if_not_exists('event_payments', 'chk_pay_status_values',
   'CHECK (`payment_status` IN (''Pending'',''Submitted'',''Verified'',''Rejected'',''Refunded''))');
 CALL sp_evt_add_constraint_if_not_exists('event_payments', 'chk_pay_bill_type',

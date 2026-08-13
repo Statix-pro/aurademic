@@ -12,13 +12,12 @@ import swaggerUi from 'swagger-ui-express';
 
 import specs from './config/swagger.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
+import { PARTICIPANT_UPLOAD_DIRS } from './middleware/participantUploadMiddleware.js';
 import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import accountOptionsRoutes from './modules/accountOptions/accountOptionsRoutes.js';
 import adminBudgetRoutes from './modules/adminbudget/adminBudgetRoutes.js';
 import adminRoutes from './modules/admindashboard/adminRoutes.js';
 import authRoutes from './modules/auth/authRoutes.js';
-import participantAuthRoutes from './modules/participantAuth/participantAuthRoutes.js';
-import participantRegistrationRoutes from './modules/participantRegistration/participantRegistrationRoutes.js';
 import budgetRoutes from './modules/budget/budgetRoutes.js';
 
 // Events routes
@@ -39,6 +38,8 @@ import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
+import participantAuthRoutes from './modules/participantAuth/participantAuthRoutes.js';
+import participantRegistrationRoutes from './modules/participantRegistration/participantRegistrationRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
 
@@ -99,7 +100,26 @@ if (process.env.NODE_ENV !== 'production') {
 
 console.log('Attempting to serve static files from:', path.join(__dirname, '..', 'uploads'));
 
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use(
+  '/uploads',
+  express.static(path.join(process.cwd(), 'uploads'), {
+    setHeaders: (res, filePath) => {
+      // Never let a browser second-guess the declared type.
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+
+      // Participant uploads come from the public internet. Forcing a download on
+      // navigation means that even if a disallowed type ever reaches disk, it
+      // cannot execute as a document on this origin — which is shared with the
+      // staff portal. Subresource loads (<img src>) ignore this header, so the
+      // staff UI still renders participant photos and proofs inline.
+      const dir = path.basename(path.dirname(filePath));
+
+      if (PARTICIPANT_UPLOAD_DIRS.has(dir)) {
+        res.setHeader('Content-Disposition', 'attachment');
+      }
+    },
+  }),
+);
 
 /* ================= ENSURE UPLOAD DIRS ================= */
 

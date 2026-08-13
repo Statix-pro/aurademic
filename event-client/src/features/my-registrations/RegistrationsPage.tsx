@@ -310,20 +310,12 @@ function EventDetailsModal({
             </div>
           </ModalSection>
 
-          {/* Coordinator Details Section */}
-          <ModalSection title="Coordinator Details">
-            <div className="registrations-page-61">
-              <ReadField label="Coordinator Name" value="Dr. Anitha R" />
-              <ReadField label="Designation" value="Assistant Professor" />
-              <ReadField label="Mobile" value="+91 98765 43210" />
-              <ReadField
-                label="Department"
-                value="Computer Science & Engineering"
-                className="registrations-page-62"
-              />
-              <ReadField label="Email" value="anitha.r@ksrct.ac.in" />
-            </div>
-          </ModalSection>
+          {/* Coordinator Details: removed, not hidden.
+              This block showed one hardcoded staff member — name, mobile and
+              email — on every event, so it named the wrong contact for all but
+              one of them and shipped that person's direct number in a bundle
+              anyone can download. Restore it once /api/events/public carries
+              per-event coordinator fields the event owner has approved. */}
 
           {/* Team Details Section */}
           {event.participation === 'Team' && (

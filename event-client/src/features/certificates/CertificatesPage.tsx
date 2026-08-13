@@ -2,12 +2,24 @@ import { Award, ArrowLeft, Download, Eye, Sparkles } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useAuth } from '../../contexts/AuthContext';
 import { useEvents } from '../../contexts/EventsContext';
+import { useProfile } from '../../contexts/ProfileContext';
 import './CertificatesPage.css';
 
 export default function CertificatesPage() {
   const navigate = useNavigate();
   const { events, registrations } = useEvents();
+  const { user } = useAuth();
+  const { personal } = useProfile();
+
+  // The profile name is the one the participant entered for this event; fall
+  // back to the Google account name. Previously a demo name was hardcoded here,
+  // so every participant saw the same person's certificate.
+  const participantName = useMemo(() => {
+    const fromProfile = [personal.firstName, personal.lastName].filter(Boolean).join(' ').trim();
+    return fromProfile || user?.name || '';
+  }, [personal.firstName, personal.lastName, user?.name]);
 
   // Get events with paid registrations
   const certifiedEvents = useMemo(() => {
@@ -109,7 +121,7 @@ export default function CertificatesPage() {
                       <Award className="certificates-page-29" />
                       <h4 className="certificates-page-30">CERTIFICATE OF PARTICIPATION</h4>
                       <p className="certificates-page-31">PROUDLY PRESENTED TO</p>
-                      <p className="certificates-page-32">Kathirselvam</p>
+                      <p className="certificates-page-32">{participantName}</p>
                       <p className="certificates-page-33">
                         for active participation and completion of the technical/non-technical
                         challenges at {event.eventName}.

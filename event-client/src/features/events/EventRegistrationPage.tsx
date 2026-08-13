@@ -25,9 +25,10 @@ import {
   getReviewStateLabel,
   isPayableEvent,
   flattenEvents,
+  toRowEvent,
 } from '../../contexts/EventsContext';
 
-import type { EventItem, EventRegistration, SubEventItem } from '../../types';
+import type { EventItem, EventRegistration } from '../../types';
 
 import './EventRegistrationPage.css';
 
@@ -80,22 +81,6 @@ function toDisplayRows(selected?: EventItem) {
   return [selected];
 }
 
-function toRowEvent(event: EventItem, subEvent?: SubEventItem): EventItem {
-  if (!subEvent) return event;
-  return {
-    ...event,
-    id: `${event.id}-${subEvent.id}`,
-    eventName: subEvent.eventName,
-    parentEventName: event.eventName,
-    category: subEvent.category ?? event.category,
-    participation: subEvent.participation,
-    fees: subEvent.fees,
-    feesUnit: subEvent.feesUnit,
-    teamSize: subEvent.participation === 'Team' ? event.teamSize : undefined,
-    subEvents: undefined,
-  };
-}
-
 function getRegisterState(
   event: EventItem,
   registration: EventRegistration | undefined,
@@ -142,13 +127,14 @@ function getRegisterState(
     };
   }
 
+  // Paid is terminal. This used to fall through to an enabled "Register Now",
+  // which routed back into the form and on to /payment for an event the
+  // participant had already paid for.
   if (registration.paymentStatus === 'paid') {
     return {
-      label: 'Register Now',
-      className: isOpen
-        ? 'bg-[#064675] hover:bg-[#05375c] text-white'
-        : 'bg-slate-300 text-slate-500 cursor-not-allowed',
-      disabled: !isOpen,
+      label: 'Registered',
+      className: 'bg-emerald-600 text-white cursor-default',
+      disabled: true,
       kind: 'register' as const,
     };
   }

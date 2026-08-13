@@ -49,9 +49,17 @@ const PUBLIC_EVENT_SELECT = `
   LEFT JOIN event_accommodation acc
          ON acc.event_id = e.id AND acc.is_deleted = 0 AND acc.is_active = 1
   LEFT JOIN (
+    -- Lowest fee that is actually charged. individual_fee and team_fee are
+    -- NOT NULL DEFAULT 0, and an event usually prices only one of them, so a
+    -- plain LEAST() returns the unused 0 and the site advertises a paid event as
+    -- free. COALESCE each column onto the other so a zero is ignored unless both
+    -- are zero, which is a genuinely free event (min_fee NULL -> presented as 0).
     SELECT event_id,
-           MIN(NULLIF(LEAST(individual_fee, team_fee), 0)) AS min_fee,
-           MAX(GREATEST(individual_fee, team_fee))         AS max_fee
+           MIN(LEAST(
+             COALESCE(NULLIF(individual_fee, 0), NULLIF(team_fee, 0)),
+             COALESCE(NULLIF(team_fee, 0), NULLIF(individual_fee, 0))
+           ))                                      AS min_fee,
+           MAX(GREATEST(individual_fee, team_fee)) AS max_fee
       FROM event_registration_fees
      WHERE is_deleted = 0
      GROUP BY event_id
