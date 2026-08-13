@@ -413,10 +413,39 @@ unwraps `{ success, data }` and clears the token on `shouldLogout`.
 - The UPI payee (`eventpro@upi` / `EventPro` in `PaymentPage.tsx`) is still a
   placeholder and must come from the event before this takes real money.
 - `express-rate-limit` is already a dependency but commented out. The public
-  endpoints are unauthenticated — enable it before this faces the internet.
+  endpoints are unauthenticated — enable it before this faces the internet, and
+  put a per-participant limit on the four upload routes first: they accept 2-5 MB
+  from any signed-in account, and Multer writes to disk before ownership is
+  checked, so one account can fill the volume.
 - `server/modules/events/` still implements the _legacy_ design and queries tables
   (`pre_events`, `coordinators`, `budgets`) that no longer have a schema. It is
   superseded and should be retired in its own PR.
+- The coordinator block in `RegistrationsPage.tsx` is **removed, not hidden**. It
+  showed one hardcoded staff member's name, mobile and email on every event.
+  Restore it once `/api/events/public` carries per-event coordinator fields the
+  event owner has approved.
+
+### Three the bots raised that were left for you on purpose
+
+These are real, and each was deferred because the durable fix is a participant
+endpoint, not a client-side patch. Do not paper over them in `event-client/`.
+
+1. **The session outlives the browser.** The token lives in `localStorage`, so on
+   a shared machine the next person opens the site already signed in as the
+   previous participant. Per-key scoping does not help — the token itself is the
+   leak. `sessionStorage` closes it but drops the session on every tab close,
+   mid-registration, so it is a product decision. Raise it before launch.
+2. **`EventItem.fees` is the _lowest_ applicable fee, and the registration and
+   payment flows spend it as if it were the final price.** Fees vary by
+   participant type, and the public list cannot know the type of someone who has
+   not signed in. When you build the profile endpoints, return the exact fee for
+   the participant's type and have the payment flow refuse to total an
+   unresolved one — showing a range is fine, charging a range is not.
+3. **"Clear All" on the payment summary calls `clearRegistration`,** which deletes
+   the whole entry: team members, form status, uploaded document, payment proof.
+   The control sits under "Selected Events", so it reads as a selection reset.
+   Separate the payment selection from the registration record when
+   `/registrations` exists.
 
 ---
 
@@ -501,6 +530,19 @@ were real, and all are fixed:
 New tests: `participantLoginGuards.test.js`, `participantUploadErrors.test.js`,
 `participantAccommodationPricing.test.js`, `publicEventsNesting.test.js`.
 Suite is 222 across 20 files, up from 193 across 16.
+
+Three findings were deliberately **not** fixed — see the end of §10 for what they
+are and why they are yours.
+
+> **Lesson — a confident review comment can still be wrong.** Both bots said
+> `PaymentPage` should multiply `pricePerNight` by `nights`. Doing that would
+> have charged every stay twice: `Accommodation.tsx` was already writing the full
+> computed total into a field _named_ `pricePerNight`. The fix was to rename the
+> field to `amount`, which removes the trap instead of patching one call site.
+> Both bots also filed the same "registrations are overwritten on refresh" bug
+> against `EventsContext`, which the `key` in `App.tsx` prevents — and
+> CodeRabbit's own comment on `ProfileContext` says so explicitly. Verify against
+> the code before acting, including on a 🔴.
 
 ### Frontend — one of these is temporary
 
