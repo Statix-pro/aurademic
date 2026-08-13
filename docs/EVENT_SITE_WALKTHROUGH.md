@@ -137,6 +137,11 @@ Registrations and profile were keyed per email, but `ep_feedbacks`,
 `accommodation_payment_proof`, `ep_personal_status` and `ep_professional_status`
 were **global** keys. On a shared browser the next user saw the previous one's data.
 
+> **Fixed.** `shared/storage.ts` now owns every key: `readScoped`/`writeScoped`
+> namespace by participant email, `STORES` names each store in one place so a
+> reader and a writer cannot drift, and `clearAppStorage()` runs on logout so
+> nothing survives the session on a shared machine.
+
 ### Files as base64 in localStorage
 
 Payment screenshots and ID cards were read with `FileReader.readAsDataURL` and
@@ -162,6 +167,13 @@ event names**. Accommodation room types and prices were hardcoded too.
 > **Lesson.** Demo data belongs in a seed script, never in a branch condition. If
 > you must stub, name it (`FALLBACK_`, `LEGACY_` — see CLAUDE.md) so it is
 > greppable and deletable.
+
+> **Fixed.** Both helpers are gone. `getReviewStateLabel(registration)` derives
+> the badge from `reviewStatus` alone, and `isPayableEvent` keys off the same
+> field. Until the backend fills `event_registrations.review_status` every
+> registration reads as `'pending'`, so no event shows a decision it has not been
+> given — where the name-matching used to invent one. `markPaymentDone` no longer
+> writes `reviewStatus: 'selected'` either: paying is not being shortlisted.
 
 ---
 
@@ -389,11 +401,14 @@ unwraps `{ success, data }` and clears the token on `shouldLogout`.
 - `submitPaymentProof` inserts `amount = 0` with a TODO. Left deliberately blank
   rather than guessed, because it is the one number that must be right.
 - Registrations, payments and feedback still persist to `localStorage` on the
-  frontend until those endpoints exist.
-- `event_registrations.review_status` should replace the hardcoded event-name
-  matching in `EventsContext.tsx`.
+  frontend until those endpoints exist. Every key is now namespaced per
+  participant via `shared/storage.ts` and wiped on logout, so a shared browser no
+  longer leaks one participant's data to the next — but this is a cache standing
+  in for a database, and it goes away when the endpoints land.
 - Accommodation room types are served per event by the API now; the frontend still
   uses its hardcoded list.
+- The UPI payee (`eventpro@upi` / `EventPro` in `PaymentPage.tsx`) is still a
+  placeholder and must come from the event before this takes real money.
 - `express-rate-limit` is already a dependency but commented out. The public
   endpoints are unauthenticated — enable it before this faces the internet.
 - `server/modules/events/` still implements the _legacy_ design and queries tables
@@ -402,13 +417,95 @@ unwraps `{ success, data }` and clears the token on `shouldLogout`.
 
 ---
 
+## 11. Review fixes applied after this walkthrough was written
+
+A review of the branch turned up eight defects. All are fixed; this section says
+what changed and, where it matters, what you are expected to undo.
+
+### Backend — keep these
+
+**`getParticipantGoogleClientId()` throws instead of returning `undefined`** —
+`config/participantAuth.js`. google-auth-library skips audience verification
+entirely when `audience` is undefined, so an unset env var meant an ID token from
+_any_ Google OAuth app would verify: sign-in as any email. The OAuth client is now
+built on first login rather than at import, so a missing var cannot stop the
+shared server — and with it the whole staff portal — from booting.
+
+**Login matches soft-deleted rows too** — `participantAuthModel.js`.
+`uq_participants_email` and `uq_participants_google_sub` are unconditional, so
+filtering `is_deleted = 0` sent a returning removed participant into an `INSERT`
+that died on `ER_DUP_ENTRY`: an unrecoverable 500 on every future sign-in. The row
+comes back untouched and login refuses it with a reason, because reviving it would
+silently undo an admin's decision.
+
+**Login checks `is_deleted`, `is_blocked` and `is_active`** —
+`participantAuthController.js`. The same three the middleware enforces. An
+inactive account used to receive a working token and then fail every request with
+a misleading "Participant account not found".
+
+**Multer rejections return 400 `{ success, message }`** —
+`participantUploadMiddleware.js`, wired at the end of
+`participantRegistrationRoutes.js`. They used to fall through to the app-wide
+handler's 500 `{ error }`, a shape `apiFetch` cannot read, so an oversized file
+told the participant "Request failed (500)".
+
+**Failed uploads delete the stored file** — `removeUploadedFile` / `failUpload`.
+Multer writes to disk before the handler runs, so every 500 from an unimplemented
+endpoint left an orphan behind.
+
+**This one is on you:** every upload handler must fail through `failUpload`, not
+`fail`. If you add a route that takes a file, the same rule applies.
+
+New tests: `participantLoginGuards.test.js` (8), `participantUploadErrors.test.js`
+(6). Suite is 207.
+
+### Frontend — one of these is temporary
+
+**`shared/storage.ts` is a stop-gap. Delete it when your endpoints land.**
+
+`ep_feedbacks`, `accommodation_payment_proof`, `ep_personal_status` and
+`ep_professional_status` were global keys — on a shared browser (lab, help desk,
+registration counter) the next participant saw the previous one's data. Rather
+than scatter more per-email key building around, all browser persistence went
+behind one 45-line module:
+
+- `readScoped` / `writeScoped` — namespace by participant email
+- `STORES` — names each store once, so a writer and a reader cannot drift apart
+- `clearAppStorage()` — called from `AuthContext.logout`, wipes every `ep_*` key
+
+When `GET/PUT /api/participant/profile`, `/registrations` and `/feedback` exist,
+the four call sites (`FeedbackPage`, `HomePage`, `ProfilePage`, `PaymentPage`)
+swap `readScoped`/`writeScoped` for `apiFetch` and the file reduces to the auth
+token in `config/api.ts`. It is deliberately small so that removal is mechanical.
+
+The rest are permanent:
+
+- **The payment QR is rendered in-browser** (`qrcode`) rather than fetched from
+  `api.qrserver.com`. A QR standing between a participant and a payment must not
+  depend on a third party being up, and the payee VPA and amount were not theirs
+  to receive. Falls back to showing the UPI ID as text if rendering fails.
+- **`isAiHackathon` and the `Build Battle` / `Idea Pitch` matching are gone** —
+  see §3. `getReviewStateLabel(registration)` and `isPayableEvent` read
+  `reviewStatus` alone. **This is the field you fill:** until
+  `event_registrations.review_status` is served, every registration reads
+  `'pending'` and no event shows a decision it was not given. Wire that column
+  through and the shortlist UI lights up with no frontend change.
+- **`markPaymentDone` no longer sets `reviewStatus: 'selected'`.** Paying is not
+  being shortlisted; only staff make that call.
+- **`apiFetch` also reads `body.error`**, so messages from Express's app-wide
+  handler reach the user instead of "Request failed (500)".
+
+---
+
 ## Reading order for someone picking this up
 
 1. `event-client/README.md` — the app, its conventions, and what is still stubbed
 2. `server/modules/participantRegistration/README.md` — the work to do and its rules
-3. `server/schema/migrations/20260813_...delta.sql` — the header explains the
+3. §11 above — what the review changed, and the one piece you are expected to delete
+4. `server/schema/migrations/20260813_...delta.sql` — the header explains the
    participant-vs-staff split in full
-4. `server/tests/participantAuthBoundary.test.js` — the boundary, as executable spec
+5. `server/tests/participantAuthBoundary.test.js` — the boundary, as executable spec
+6. `server/tests/participantLoginGuards.test.js` — the account guards, likewise
 
 ---
 
