@@ -1,0 +1,125 @@
+@reference "../../index.css";
+@reference "tailwindcss";
+.header-1 {
+  @apply fixed inset-x-0 top-0 z-50 h-[48px] border-b border-[#083965] bg-[#064675] px-3 shadow-[0_1px_0_rgba(255,255,255,0.12)];
+}
+
+.header-2 {
+  @apply flex h-full items-center justify-between gap-3;
+}
+
+.header-3 {
+  @apply flex min-w-0 items-center gap-3;
+}
+
+.header-4 {
+  @apply flex min-w-0 items-center gap-2 text-left;
+}
+
+.header-5 {
+  @apply flex h-7 w-7 items-center justify-center rounded-full border border-white/35 bg-white/15 shadow-sm;
+}
+
+.header-6 {
+  @apply text-[10px] font-bold leading-none text-white;
+}
+
+.header-7 {
+  @apply truncate text-[11px] font-semibold uppercase tracking-[0.12em] text-white sm:text-sm;
+}
+
+.header-8 {
+  @apply relative flex items-center gap-3;
+}
+
+.header-9 {
+  @apply relative;
+}
+
+.header-10 {
+  @apply relative flex h-2 w-2;
+}
+
+.header-11 {
+  @apply hidden sm:inline;
+}
+
+.header-12 {
+  @apply absolute right-0 top-[38px] z-50 w-[280px] rounded-xl border border-slate-200 bg-white p-4 shadow-xl text-slate-800;
+}
+
+.header-13 {
+  @apply mb-3;
+}
+
+.header-14 {
+  @apply text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5;
+}
+
+.header-15 {
+  @apply w-3.5 h-3.5 text-blue-500;
+}
+
+.header-16 {
+  @apply mt-1 text-[11px] text-slate-400;
+}
+
+.header-17 {
+  @apply space-y-3;
+}
+
+.header-18 {
+  @apply block text-[11px] font-semibold text-slate-500 mb-1;
+}
+
+.header-19 {
+  @apply w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs focus:border-blue-500 focus:outline-none;
+}
+
+.header-20 {
+  @apply flex gap-2;
+}
+
+.header-21 {
+  @apply flex-1 rounded-lg bg-blue-600 py-1.5 text-center text-xs font-semibold text-white hover:bg-blue-700 transition-colors;
+}
+
+.header-22 {
+  @apply rounded-lg border border-slate-300 px-3 py-1.5 text-center text-xs font-semibold hover:bg-slate-50 transition-colors;
+}
+
+.header-23 {
+  @apply hidden text-[11px] font-medium text-white/90 sm:block;
+}
+
+.header-24 {
+  @apply flex h-8 w-8 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white transition-colors hover:bg-white/20;
+}
+
+.header-25 {
+  @apply text-[10px] font-bold uppercase;
+}
+
+.header-26 {
+  @apply absolute right-0 top-[44px] z-50 min-w-[180px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-lg;
+}
+
+.header-27 {
+  @apply border-b border-slate-100 px-3 py-2;
+}
+
+.header-28 {
+  @apply text-xs text-slate-500;
+}
+
+.header-29 {
+  @apply truncate text-sm font-medium text-slate-700;
+}
+
+.header-30 {
+  @apply flex w-full items-center gap-2 px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50;
+}
+
+.header-31 {
+  @apply w-4 h-4;
+}
