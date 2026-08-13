@@ -8,16 +8,25 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 # From repo root
-npm run dev            # Run both servers concurrently (client :3000, server :5000)
-npm run dev:client     # Frontend only
+npm run dev            # Everything: server :5000, staff client :3000, event client :3001
+npm run dev:staff      # Server + staff client only
+npm run dev:public     # Server + event client only
+npm run dev:client     # Staff frontend only
+npm run dev:event      # Event frontend only
 npm run dev:server     # Backend only
-npm install            # Installs dependencies for both client and server
+npm install            # Installs dependencies for server, client and event-client
+npm run typecheck      # Typechecks both frontends
+npm run build          # Builds both frontends
 npm run test:server    # Run backend Vitest test suite
 
 # From client/
 npm run build          # tsc + vite build → client/dist/
 npm run preview        # Preview production build
 npm run lint           # ESLint
+
+# From event-client/
+npm run build          # tsc + vite build → event-client/dist/
+npm run typecheck      # tsc --noEmit
 
 # From server/
 npm start              # node server.js (production)
@@ -29,7 +38,9 @@ A backend Vitest test suite is available under `server/tests/`. Run `npm run tes
 
 ## Architecture
 
-Full-stack monorepo: React/TypeScript frontend (Vite, port 3000) + Express.js backend (Node.js ES modules, port 5000) + MySQL 8.x database.
+Full-stack monorepo: React/TypeScript staff frontend (`client/`, Vite, port 3000) + participant-facing event site (`event-client/`, Vite, port 3001) + Express.js backend (`server/`, Node.js ES modules, port 5000) + MySQL 8.x database.
+
+The two frontends are **separate builds sharing one backend**. `client/` is the internal staff portal (`research.ksrct.ac.in`); `event-client/` is the public event site deployed to its own subdomain. Keeping them separate ensures staff-only code never ships in a bundle the public can download. Participant sign-in and event listing are wired to the backend; registration writes are still being built. See [event-client/README.md](event-client/README.md).
 
 ### Directory layout
 
@@ -63,6 +74,16 @@ aurademic/
 │   │   └── utils/               # authenticityUtility, permissionUtils, etc.
 │   ├── types/                   # Top-level TypeScript interfaces (User, Author, etc.)
 │   └── main.tsx                 # Entry point
+├── event-client/                # Participant-facing event site (own build, port 3001)
+│   └── src/                     # Feature-grouped, flat inside each feature
+│       ├── App.tsx              # Routing tree + provider composition
+│       ├── config/api.ts        # API base URL + OAuth client ID from env
+│       ├── contexts/            # AuthContext, EventsContext, ProfileContext
+│       ├── features/<domain>/   # Component + its CSS together. Domains: auth, home,
+│       │                        #   events, registration, my-registrations, payment,
+│       │                        #   profile, feedback, certificates
+│       ├── shared/              # components/ (AppLayout, Header, FormElements), utils.ts
+│       └── types/               # Shared TypeScript interfaces
 ├── server/
 │   ├── server.js                # Express entry point (port 5000)
 │   ├── config/
@@ -70,7 +91,9 @@ aurademic/
 │   │   ├── env.js               # dotenv loader (picks .env.development or .env.production)
 │   │   └── swagger.js           # Swagger/OpenAPI setup
 │   ├── middleware/
-│   │   ├── authMiddleware.js    # JWT verify + enrich user with roles/permissions
+│   │   ├── authMiddleware.js    # Staff JWT verify; rejects participant tokens
+│   │   ├── participantAuthMiddleware.js  # Event participant JWT -> req.participant
+│   │   ├── participantUploadMiddleware.js # Multer config for participant uploads
 │   │   └── uploadMiddleware.js  # Multer file upload config
 │   ├── modules/                 # Feature modules (MVC, one dir per domain)
 │   ├── schema/                  # SQL schema, migrations, seed data
@@ -91,7 +114,7 @@ modules/[name]/
 └── [name]Routes.js      # Express router + middleware wiring
 ```
 
-The Events domain nests sub-modules: `modules/events/{events,preevents,finance,updates,documents}/`.
+The Events domain nests sub-modules: `modules/events/{events,preevents,finance,updates,documents,public}/`. `public/` is the unauthenticated projection the event site reads.
 
 ### Authentication & authorization flow
 
@@ -101,6 +124,19 @@ The Events domain nests sub-modules: `modules/events/{events,preevents,finance,u
 4. `authMiddleware.js` verifies JWT and enriches `req.user` with roles/permissions fetched from the `access_control` table
 5. Route handlers call a permission middleware before business logic
 6. Frontend uses CASL (`AbilityContext`) for UI-level permission checks; `ProtectedRoute` variants guard routes
+
+#### Event participants are a separate identity
+
+Public event-site users live in `event_participants`, **not** `users`. They hold no
+roles or permissions, and never enter the RBAC graph. Two guards keep the identities
+apart, and both must stay in place:
+
+- Participant tokens carry `aud: 'participant'` and are signed with
+  `JWT_PARTICIPANT_SECRET` (required in production).
+- `authMiddleware` rejects participant tokens; `participantAuthMiddleware` rejects
+  staff tokens and sets `req.participant`, never `req.user`.
+
+Covered by `server/tests/participantAuthBoundary.test.js`.
 
 ### Protected route variants
 
@@ -122,6 +158,9 @@ The Events domain nests sub-modules: `modules/events/{events,preevents,finance,u
 All endpoints return `{ success: boolean, data?: T, message?: string, error?: string }`.
 
 Key prefixes: `/api/auth`, `/api/admin`, `/api/dashboard`, `/api/form-options`, `/api/journals`, `/api/projects`, `/api/events`, `/api/pre-events`, `/api/finance` (events), `/api/finance-requests`, `/api/budget`, `/api/adminbudget`, `/api/budget-catalog`, `/api/account-options`, `/api/expenditure`, `/api/expenditure-requests`, `/api/expenditure-dashboard`, `/api/expenditure-report`, `/api/updates`, `/api/documents`, `/api/access-control`, `/api/master-data`.
+
+**Public event site prefixes** (separate identity — see below): `/api/events/public`
+(unauthenticated), `/api/participant-auth`, `/api/participant`.
 
 ### File uploads
 
