@@ -6860,6 +6860,8 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        er.beneficiary_type,
        er.beneficiary_value,
        er.beneficiary_entity_id,
+       er.budget_tag,
+       er.description,
        er.primary_head,
        er.total_amount,
        er.approved_total_amount,
