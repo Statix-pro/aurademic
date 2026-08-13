@@ -27,6 +27,7 @@ import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import eventRoutes from './modules/events/events/eventRoutes.js';
 import financeRoutes from './modules/events/finance/financeRoutes.js';
 import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
+import publicEventsRoutes from './modules/events/public/publicEventsRoutes.js';
 import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
 import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
@@ -142,6 +143,8 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 // Public event participants sign in here (any Google account, not just @ksrct.ac.in).
 app.use('/api/participant-auth', participantAuthRoutes);
+// What the participant-facing event site reads.
+app.use('/api/events/public', publicEventsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', userDashboardRoutes);
 app.use('/api/form-options', formOptionsRoutes);
