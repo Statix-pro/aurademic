@@ -1,15 +1,15 @@
 import express from 'express';
 
+import participantRegistrationController from './participantRegistrationController.js';
 import { participantAuthMiddleware } from '../../middleware/participantAuthMiddleware.js';
 import {
   PARTICIPANT_UPLOAD_CATEGORIES,
+  handleParticipantUploadError,
   uploadParticipantIdCard,
   uploadParticipantPhoto,
   uploadPaymentProof,
   uploadRegistrationDocument,
 } from '../../middleware/participantUploadMiddleware.js';
-
-import participantRegistrationController from './participantRegistrationController.js';
 
 const router = express.Router();
 
@@ -70,5 +70,9 @@ router.post('/registrations/:id/payments', uploadPaymentProof.single('file'), (r
 router.post('/registrations/:id/feedback', (req, res) =>
   participantRegistrationController.submitFeedback(req, res),
 );
+
+// Last: catches rejections thrown by the upload middleware above, which would
+// otherwise fall through to the app-wide errorHandler as an opaque 500.
+router.use(handleParticipantUploadError);
 
 export default router;

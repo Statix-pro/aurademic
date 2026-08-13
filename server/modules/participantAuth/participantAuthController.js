@@ -1,6 +1,7 @@
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 
+import participantAuthModel from './participantAuthModel.js';
 import {
   PARTICIPANT_TOKEN_AUDIENCE,
   PARTICIPANT_TOKEN_TTL,
@@ -8,10 +9,19 @@ import {
   getParticipantJwtSecret,
 } from '../../config/participantAuth.js';
 
-import participantAuthModel from './participantAuthModel.js';
+// Resolved on first sign-in rather than at import time: a missing participant
+// OAuth var must not stop the shared server (and with it the whole staff portal)
+// from booting. getParticipantGoogleClientId throws if it is unset, so the
+// failure surfaces here as a 500 on login and never as a skipped audience check.
+let googleClient = null;
 
-const clientId = getParticipantGoogleClientId();
-const googleClient = new OAuth2Client(clientId);
+const getGoogleClient = () => {
+  if (!googleClient) {
+    googleClient = new OAuth2Client(getParticipantGoogleClientId());
+  }
+
+  return googleClient;
+};
 
 const buildParticipantToken = (participant) =>
   jwt.sign(
@@ -45,10 +55,14 @@ const participantAuthController = {
         return res.status(400).json({ success: false, message: 'No Google credential provided' });
       }
 
+      // Resolved outside the verify try/catch: a missing client id is a
+      // deployment fault, and must not be reported to the caller as a bad token.
+      const clientId = getParticipantGoogleClientId();
+
       let payload;
 
       try {
-        const ticket = await googleClient.verifyIdToken({
+        const ticket = await getGoogleClient().verifyIdToken({
           idToken: credential,
           audience: clientId,
         });
@@ -83,10 +97,28 @@ const participantAuthController = {
         return res.status(500).json({ success: false, message: 'Could not create participant' });
       }
 
+      // These three mirror what participantAuthMiddleware enforces on every
+      // later request. Checking them here too means a barred account is told why
+      // at sign-in, instead of receiving a working token and then failing every
+      // call with a misleading "account not found".
+      if (participant.is_deleted) {
+        return res.status(403).json({
+          success: false,
+          message: 'This account has been removed. Contact the event organisers.',
+        });
+      }
+
       if (participant.is_blocked) {
         return res.status(403).json({
           success: false,
           message: 'This account has been blocked. Contact the event organisers.',
+        });
+      }
+
+      if (!participant.is_active) {
+        return res.status(403).json({
+          success: false,
+          message: 'This account is inactive. Contact the event organisers.',
         });
       }
 

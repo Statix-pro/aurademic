@@ -1,13 +1,25 @@
+import participantRegistrationModel from './participantRegistrationModel.js';
 import {
   PARTICIPANT_UPLOAD_CATEGORIES,
+  removeUploadedFile,
   toPublicUploadPath,
 } from '../../middleware/participantUploadMiddleware.js';
-
-import participantRegistrationModel from './participantRegistrationModel.js';
 
 const OPEN_REGISTRATION_STATUSES = new Set(['Ongoing', 'Extended']);
 
 const fail = (res, status, message) => res.status(status).json({ success: false, message });
+
+/**
+ * Fails a request that had a file attached, deleting the file first.
+ *
+ * Multer writes to disk before the handler runs, so a handler that rejects or
+ * throws leaves a file no DB row points at. Every upload handler must fail
+ * through here rather than through `fail` directly.
+ */
+const failUpload = async (req, res, status, message) => {
+  await removeUploadedFile(req.file);
+  return fail(res, status, message);
+};
 const ok = (res, data) => res.json({ success: true, data });
 
 const parseId = (value) => {
@@ -281,7 +293,10 @@ const participantRegistrationController = {
   async submitPaymentProof(req, res) {
     try {
       const registration = await loadOwnedRegistration(req, res);
-      if (!registration) return undefined;
+      if (!registration) {
+        await removeUploadedFile(req.file);
+        return undefined;
+      }
 
       if (!req.file) {
         return fail(res, 400, 'A payment screenshot is required');
@@ -313,7 +328,7 @@ const participantRegistrationController = {
       return ok(res, { paymentId, paymentStatus: 'Submitted', proofFilePath });
     } catch (error) {
       console.error('submitPaymentProof failed:', error);
-      return fail(res, 500, 'Could not submit payment proof');
+      return failUpload(req, res, 500, 'Could not submit payment proof');
     }
   },
 
@@ -336,7 +351,10 @@ const participantRegistrationController = {
   async uploadRegistrationDocument(req, res) {
     try {
       const registration = await loadOwnedRegistration(req, res);
-      if (!registration) return undefined;
+      if (!registration) {
+        await removeUploadedFile(req.file);
+        return undefined;
+      }
 
       if (!req.file) {
         return fail(res, 400, 'A file is required');
@@ -356,7 +374,7 @@ const participantRegistrationController = {
       return ok(res, { filePath });
     } catch (error) {
       console.error('uploadRegistrationDocument failed:', error);
-      return fail(res, 500, 'Could not upload document');
+      return failUpload(req, res, 500, 'Could not upload document');
     }
   },
 
@@ -425,7 +443,7 @@ const participantRegistrationController = {
       return ok(res, { filePath });
     } catch (error) {
       console.error('uploadProfileFile failed:', error);
-      return fail(res, 500, 'Could not upload file');
+      return failUpload(req, res, 500, 'Could not upload file');
     }
   },
 

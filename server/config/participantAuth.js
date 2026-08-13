@@ -22,5 +22,18 @@ export const getParticipantJwtSecret = () => {
   return process.env.JWT_SECRET;
 };
 
-export const getParticipantGoogleClientId = () =>
-  process.env.GOOGLE_PARTICIPANT_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+// Must never resolve to undefined: google-auth-library skips the audience check
+// entirely when `audience` is undefined, so an ID token minted by any Google
+// OAuth app would verify and let its holder sign in as any email. Throwing here
+// turns a missing env var into a boot-time failure instead of an auth bypass.
+export const getParticipantGoogleClientId = () => {
+  const clientId = process.env.GOOGLE_PARTICIPANT_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+
+  if (!clientId) {
+    throw new Error(
+      'GOOGLE_PARTICIPANT_CLIENT_ID (or GOOGLE_CLIENT_ID) is required to verify participant sign-in',
+    );
+  }
+
+  return clientId;
+};

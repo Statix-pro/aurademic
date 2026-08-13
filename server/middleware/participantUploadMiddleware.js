@@ -77,3 +77,55 @@ export const uploadPaymentProof = buildUploader(
 
 /** Web path stored in the DB and served by express.static('/uploads'). */
 export const toPublicUploadPath = (category, filename) => `/uploads/${category}/${filename}`;
+
+/**
+ * Deletes a file Multer already wrote to disk.
+ *
+ * Multer stores the upload before the route handler runs, so any handler that
+ * fails after that point leaves a file nothing in the DB refers to. Best-effort:
+ * a failed cleanup is logged, never thrown, because the request has already
+ * failed for a more interesting reason.
+ */
+export const removeUploadedFile = async (file) => {
+  if (!file?.path) {
+    return;
+  }
+
+  try {
+    await fs.promises.unlink(file.path);
+  } catch (error) {
+    if (error.code !== 'ENOENT') {
+      console.error('Failed to remove orphaned upload:', file.path, error);
+    }
+  }
+};
+
+/**
+ * Turns a Multer rejection into the `{ success, message }` shape the event site
+ * parses. Without this these reach the app-wide errorHandler, which answers 500
+ * with an `{ error }` body — so the participant is told "Request failed (500)"
+ * when the real cause is a file that is too large or of the wrong type.
+ *
+ * Mount with `router.use()` after the routes that upload.
+ */
+export const handleParticipantUploadError = async (err, req, res, next) => {
+  if (!err) {
+    return next();
+  }
+
+  await removeUploadedFile(req.file);
+
+  if (err instanceof multer.MulterError) {
+    const message =
+      err.code === 'LIMIT_FILE_SIZE' ? 'That file is too large' : `Upload rejected: ${err.message}`;
+
+    return res.status(400).json({ success: false, message });
+  }
+
+  // fileFilter rejects with a plain Error carrying the allowed-types message.
+  if (err.message?.startsWith('Invalid file type')) {
+    return res.status(400).json({ success: false, message: err.message });
+  }
+
+  return next(err);
+};
