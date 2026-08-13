@@ -1,40 +1,90 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 
-interface AuthUser {
+import { apiFetch, clearStoredToken, setStoredToken, getStoredToken } from '../config/api';
+
+export interface AuthUser {
+  id: number;
   email: string;
   name: string;
+  picture: string | null;
+  profileComplete: boolean;
+  personalComplete: boolean;
+  professionComplete: boolean;
 }
+
+interface LoginResponse {
+  token: string;
+  participant: AuthUser;
+}
+
 interface AuthContextType {
   user: AuthUser | null;
-  login: (email: string, password: string) => Promise<void>;
+  /** True while an existing token is being revalidated on first load. */
+  initializing: boolean;
+  /** Exchanges a Google ID token for a participant session. */
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => void;
+  refresh: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(() => {
-    try {
-      const stored = localStorage.getItem('ep_auth');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [initializing, setInitializing] = useState(Boolean(getStoredToken()));
 
-  const login = useCallback(async (email: string, _password: string) => {
-    await new Promise((r) => setTimeout(r, 600));
-    const u = { email, name: email.split('@')[0] };
-    setUser(u);
-    localStorage.setItem('ep_auth', JSON.stringify(u));
+  // A stored token is not trusted: the server revalidates it, so a blocked or
+  // deleted account cannot keep a stale session alive.
+  useEffect(() => {
+    if (!getStoredToken()) {
+      setInitializing(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    apiFetch<{ participant: AuthUser }>('/participant-auth/me')
+      .then((data) => {
+        if (!cancelled) setUser(data.participant);
+      })
+      .catch(() => {
+        clearStoredToken();
+        if (!cancelled) setUser(null);
+      })
+      .finally(() => {
+        if (!cancelled) setInitializing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loginWithGoogle = useCallback(async (credential: string) => {
+    const data = await apiFetch<LoginResponse>('/participant-auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    });
+
+    setStoredToken(data.token);
+    setUser(data.participant);
+  }, []);
+
+  const refresh = useCallback(async () => {
+    if (!getStoredToken()) return;
+    const data = await apiFetch<{ participant: AuthUser }>('/participant-auth/me');
+    setUser(data.participant);
   }, []);
 
   const logout = useCallback(() => {
+    clearStoredToken();
     setUser(null);
-    localStorage.removeItem('ep_auth');
   }, []);
 
-  const value = useMemo(() => ({ user, login, logout }), [user, login, logout]);
+  const value = useMemo(
+    () => ({ user, initializing, loginWithGoogle, logout, refresh }),
+    [user, initializing, loginWithGoogle, logout, refresh],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
