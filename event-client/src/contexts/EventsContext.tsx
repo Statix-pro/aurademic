@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 import { useAuth } from './AuthContext';
-import { API_BASE_URL } from '../config/api';
+import { apiFetch } from '../config/api';
 
 import type {
   EventItem,
@@ -11,46 +11,107 @@ import type {
   RegistrationDocument,
 } from '../types';
 
-type PublicApiEvent = Record<string, unknown>;
+/** Shape returned by GET /api/events/public. */
+interface PublicApiEvent {
+  id: string;
+  title: string;
+  description: string;
+  category: string | null;
+  categoryCode: string | null;
+  eventType: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  venue: string | null;
+  isMultiEvent: boolean;
+  participation: 'Individual' | 'Team';
+  minTeamSize: number | null;
+  maxTeamSize: number | null;
+  hasRegistrationFee: boolean;
+  feeRange: { min: number; max: number };
+  hasAccommodation: boolean;
+  accommodationFee: number;
+  registrationClosesAt: string | null;
+  registrationOpen: boolean;
+  status: 'Open' | 'Closed';
+  subEvents?: PublicApiEvent[];
+}
 
+// The admin side stores categories as m_category rows (Academic,
+// Co-Curricular, Extra-Curricular) plus a free-text event type. Map both onto
+// the card colours defined in EventCard, falling back to TECHNICAL.
 const CATEGORY_MAP: Record<string, string> = {
+  academic: 'TECHNICAL',
+  acad: 'TECHNICAL',
   hackathon: 'TECHNICAL',
   technical: 'TECHNICAL',
+  workshop: 'MANAGEMENT',
   training: 'MANAGEMENT',
   management: 'MANAGEMENT',
+  'co-curricular': 'MANAGEMENT',
+  cocurr: 'MANAGEMENT',
   sports: 'SPORTS',
+  'extra-curricular': 'SPORTS',
+  extracurr: 'SPORTS',
   cultural: 'CULTURAL',
   literary: 'LITERARY',
 };
 
-function formatEventDate(value: unknown) {
-  if (!value || typeof value !== 'string') return 'Date to be announced';
+function resolveCategory(item: PublicApiEvent) {
+  if (item.isMultiEvent) return 'MULTI-EVENTS';
+
+  const candidates = [item.categoryCode, item.category, item.eventType]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.toLowerCase());
+
+  for (const candidate of candidates) {
+    if (CATEGORY_MAP[candidate]) return CATEGORY_MAP[candidate];
+  }
+
+  return 'TECHNICAL';
+}
+
+function formatEventDate(value: string | null | undefined) {
+  if (!value) return 'Date to be announced';
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('en-GB');
 }
 
-function mapPublicEvent(item: PublicApiEvent): EventItem {
-  const categoryValue = String(item.category ?? 'technical').toLowerCase();
-  const statusValue = String(item.status ?? '').toLowerCase();
+function formatTeamSize(item: PublicApiEvent) {
+  if (item.participation !== 'Team') return undefined;
+  const { minTeamSize: min, maxTeamSize: max } = item;
+  if (min && max) return `${min} \u2013 ${max} Members`;
+  if (max) return `Up to ${max} Members`;
+  if (min) return `${min}+ Members`;
+  return undefined;
+}
 
+function mapPublicEvent(item: PublicApiEvent): EventItem {
   return {
     id: String(item.id),
-    eventName: String(item.title ?? item.eventName ?? 'Untitled event'),
-    category: CATEGORY_MAP[categoryValue] ?? 'TECHNICAL',
-    description: String(item.description ?? ''),
-    date: formatEventDate(item.startDate ?? item.date),
-    fromDate: formatEventDate(item.startDate ?? item.fromDate ?? item.date),
-    toDate: formatEventDate(item.endDate ?? item.toDate ?? item.startDate ?? item.date),
-    deadline: item.deadline ? formatEventDate(item.deadline) : undefined,
-    venue: String(item.venue ?? item.department ?? 'Venue to be announced'),
+    eventName: item.title || 'Untitled event',
+    category: resolveCategory(item),
+    description: item.description ?? '',
+    date: formatEventDate(item.startDate),
+    fromDate: formatEventDate(item.startDate),
+    toDate: formatEventDate(item.endDate ?? item.startDate),
+    deadline: item.registrationClosesAt ? formatEventDate(item.registrationClosesAt) : undefined,
+    venue: item.venue ?? 'Venue to be announced',
     participation: item.participation === 'Team' ? 'Team' : 'Individual',
-    teamSize: typeof item.teamSize === 'string' ? item.teamSize : undefined,
-    fees: Number(item.fees ?? 0),
-    feesUnit: item.feesUnit === 'Team' ? 'Team' : 'Participant',
-    // The admin API returns approved public events.  Keep explicit closed
-    // statuses closed; approved/published events are open for users.
-    status: ['closed', 'cancelled', 'inactive', 'draft'].includes(statusValue) ? 'Closed' : 'Open',
-    subEvents: [],
+    teamSize: formatTeamSize(item),
+    // Fees vary by participant type, so the list exposes a range. Show the
+    // lowest applicable fee until the participant's type is known.
+    fees: item.feeRange?.min ?? 0,
+    feeRange: item.feeRange,
+    feesUnit: item.participation === 'Team' ? 'Team' : 'Participant',
+    status: item.registrationOpen ? 'Open' : 'Closed',
+    subEvents: (item.subEvents ?? []).map((sub) => ({
+      id: String(sub.id),
+      eventName: sub.title,
+      participation: sub.participation === 'Team' ? 'Team' : 'Individual',
+      fees: sub.feeRange?.min ?? 0,
+      feesUnit: sub.participation === 'Team' ? 'Team' : 'Participant',
+      category: resolveCategory(sub),
+    })),
     hasAccommodation: Boolean(item.hasAccommodation),
     hasRegistrationFee: Boolean(item.hasRegistrationFee),
   };
@@ -174,19 +235,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     async function fetchEvents() {
       try {
-        const response = await fetch(`${API_BASE_URL}/events/public`);
+        const data = await apiFetch<{ events: PublicApiEvent[] }>('/events/public');
 
-        if (!response.ok) {
-          throw new Error('Failed to fetch events');
-        }
-
-        const data = await response.json();
-        const apiEvents = Array.isArray(data) ? data : data.events;
-        if (!Array.isArray(apiEvents)) {
-          throw new Error('Public events response does not contain an events array');
-        }
-
-        setEvents(apiEvents.map(mapPublicEvent));
+        setEvents((data.events ?? []).map(mapPublicEvent));
         setIsApiOnline(true);
       } catch (err) {
         console.error(err);

@@ -104,7 +104,10 @@ export interface EventItem {
   venue: string;
   participation: 'Individual' | 'Team';
   teamSize?: string;
+  /** Lowest applicable fee. Use feeRange when the exact type is unknown. */
   fees: number;
+  /** Fees vary by participant type, so the public list carries a range. */
+  feeRange?: { min: number; max: number };
   feesUnit: 'Team' | 'Participant';
   status: 'Open' | 'Closed';
   registrationStatus?: RegistrationStatus;
