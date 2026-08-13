@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEvents } from '../../contexts/EventsContext';
 import { useProfile } from '../../contexts/ProfileContext';
+import { STORES, readScoped } from '../../shared/storage';
 import EventCard from '../events/EventCard';
 
 import type { EventItem } from '../../types';
@@ -45,14 +46,9 @@ export default function HomePage() {
       (e) => registrations[e.id] && registrations[e.id].formStatus === 'ready',
     ).length;
     if (registeredCount === 0) return 0;
-    try {
-      const stored = localStorage.getItem('ep_feedbacks');
-      const fbs = stored ? JSON.parse(stored) : [];
-      return Math.min(100, Math.round((fbs.length / registeredCount) * 100));
-    } catch {
-      return 0;
-    }
-  }, [events, registrations]);
+    const fbs = readScoped<unknown[]>(STORES.feedbacks, user?.email, []);
+    return Math.min(100, Math.round((fbs.length / registeredCount) * 100));
+  }, [events, registrations, user?.email]);
 
   // Calculate certificate completion percentage dynamically
   const certProgress = useMemo(() => {

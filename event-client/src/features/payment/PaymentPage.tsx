@@ -1,8 +1,11 @@
 import { ArrowLeft, CreditCard, CheckCircle, Upload, Calendar, Home } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import QRCode from 'qrcode';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { useAuth } from '../../contexts/AuthContext';
 import { useEvents } from '../../contexts/EventsContext';
+import { writeScoped } from '../../shared/storage';
 
 import type { EventItem, PaymentBillType, PaymentProof, SelectedAccommodation } from '../../types';
 
@@ -12,6 +15,7 @@ export default function PaymentPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { markPaymentDone } = useEvents();
+  const { user } = useAuth();
   const {
     selectedEvents = [],
     accommodation = null,
@@ -63,7 +67,31 @@ export default function PaymentPage() {
     const amount = payableTotal.toFixed(2);
     return `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${encodeURIComponent(amount)}&cu=INR&tn=${encodeURIComponent(upiNote)}`;
   }, [payableTotal, upiNote]);
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(upiUri)}`;
+
+  // Rendered in the browser rather than fetched from an image service. A QR that
+  // stands between a participant and a payment must not depend on a third party
+  // being up, and the payee VPA and amount are not theirs to receive.
+  const [qrUrl, setQrUrl] = useState('');
+  const [qrError, setQrError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    QRCode.toDataURL(upiUri, { width: 240, margin: 1, errorCorrectionLevel: 'M' })
+      .then((dataUrl) => {
+        if (cancelled) return;
+        setQrUrl(dataUrl);
+        setQrError(false);
+      })
+      .catch((err) => {
+        console.error('Could not render payment QR:', err);
+        if (!cancelled) setQrError(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [upiUri]);
 
   const handleScreenshotChange = (file?: File | null) => {
     if (!file) {
@@ -93,7 +121,7 @@ export default function PaymentPage() {
     if (billType === 'event registration bill' && proof) {
       selectedEvents.forEach((event) => markPaymentDone(event.id, proof));
     } else if (billType === 'accommodation bill' && proof) {
-      localStorage.setItem('accommodation_payment_proof', JSON.stringify(proof));
+      writeScoped('accommodation_payment_proof', user?.email, proof);
     }
 
     navigate(selectedEvents.length > 0 ? '/registrations' : '/home', { replace: true });
@@ -147,7 +175,13 @@ export default function PaymentPage() {
             <div className="payment-page-21">
               <div className="payment-page-22">
                 <div className="payment-page-23">
-                  <img src={qrUrl} alt="Payment QR" className="payment-page-24" />
+                  {qrError ? (
+                    <p className="payment-page-56">
+                      Could not display the QR code. Pay {upiId} directly from any UPI app.
+                    </p>
+                  ) : (
+                    qrUrl && <img src={qrUrl} alt="Payment QR" className="payment-page-24" />
+                  )}
                 </div>
                 <div className="payment-page-25">
                   <p className="payment-page-26">Scan to pay exact amount</p>

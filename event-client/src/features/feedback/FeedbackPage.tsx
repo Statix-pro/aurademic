@@ -2,7 +2,9 @@ import { Star, ArrowLeft, MessageSquare, CheckCircle } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { useAuth } from '../../contexts/AuthContext';
 import { useEvents } from '../../contexts/EventsContext';
+import { STORES, readScoped, writeScoped } from '../../shared/storage';
 import './FeedbackPage.css';
 
 interface FeedbackEntry {
@@ -15,6 +17,8 @@ interface FeedbackEntry {
 export default function FeedbackPage() {
   const navigate = useNavigate();
   const { events, registrations } = useEvents();
+  const { user } = useAuth();
+  const email = user?.email;
 
   // Get registered events
   const registeredEvents = useMemo(() => {
@@ -32,13 +36,8 @@ export default function FeedbackPage() {
   // is served by the API.
   const feedbacks: FeedbackEntry[] = useMemo(() => {
     void success;
-    try {
-      const stored = localStorage.getItem('ep_feedbacks');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  }, [success]);
+    return readScoped<FeedbackEntry[]>(STORES.feedbacks, email, []);
+  }, [success, email]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,26 +50,22 @@ export default function FeedbackPage() {
       submittedAt: new Date().toISOString(),
     };
 
-    try {
-      const stored = localStorage.getItem('ep_feedbacks');
-      const current: FeedbackEntry[] = stored ? JSON.parse(stored) : [];
-      // Update or insert
-      const index = current.findIndex((f) => f.eventId === selectedEventId);
-      if (index > -1) {
-        current[index] = newFeedback;
-      } else {
-        current.push(newFeedback);
-      }
-      localStorage.setItem('ep_feedbacks', JSON.stringify(current));
-      setSuccess(true);
-      setComment('');
-      setTimeout(() => {
-        setSuccess(false);
-        setSelectedEventId('');
-      }, 2000);
-    } catch (err) {
-      console.error(err);
+    const current = readScoped<FeedbackEntry[]>(STORES.feedbacks, email, []);
+    // Update or insert
+    const index = current.findIndex((f) => f.eventId === selectedEventId);
+    if (index > -1) {
+      current[index] = newFeedback;
+    } else {
+      current.push(newFeedback);
     }
+    writeScoped(STORES.feedbacks, email, current);
+
+    setSuccess(true);
+    setComment('');
+    setTimeout(() => {
+      setSuccess(false);
+      setSelectedEventId('');
+    }, 2000);
   };
 
   const selectedEventFeedback = feedbacks.find((f) => f.eventId === selectedEventId);

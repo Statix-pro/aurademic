@@ -46,6 +46,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const body = (payload ?? {}) as {
     success?: boolean;
     message?: string;
+    /** Express's app-wide errorHandler answers `{ error }`, not `{ message }`. */
+    error?: string;
     shouldLogout?: boolean;
     data?: T;
   };
@@ -56,7 +58,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     }
 
     throw new ApiError(
-      body.message || `Request failed (${response.status})`,
+      body.message || body.error || `Request failed (${response.status})`,
       response.status,
       Boolean(body.shouldLogout),
     );

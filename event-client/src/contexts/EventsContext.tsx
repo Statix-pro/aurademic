@@ -117,15 +117,20 @@ function mapPublicEvent(item: PublicApiEvent): EventItem {
   };
 }
 
-export function isAiHackathon(event: EventItem) {
-  return event.eventName === 'AI Hackathon 2026';
-}
-
-export function getMultiEventStateLabel(event: EventItem, registration?: EventRegistration) {
+/**
+ * The shortlist badge for a registration, or '' while none has been decided.
+ *
+ * Events used to be matched by title ('AI Hackathon 2026', 'Build Battle',
+ * 'Idea Pitch') to decide who saw this badge. That was demo data reaching a live
+ * code path: with events now served by the API, any real event sharing one of
+ * those titles would show a fabricated Selected/Rejected state and have its pay
+ * button locked. The decision belongs to the registration, and only exists once
+ * the backend fills `event_registrations.review_status` — until then every
+ * registration reads as 'pending' and no badge is shown.
+ */
+export function getReviewStateLabel(registration?: EventRegistration) {
   if (registration?.reviewStatus === 'selected') return 'Selected';
   if (registration?.reviewStatus === 'rejected') return 'Rejected';
-  if (event.eventName === 'Build Battle') return 'Selected';
-  if (event.eventName === 'Idea Pitch') return 'Rejected';
   return '';
 }
 
@@ -162,8 +167,10 @@ export function isPayableEvent(
 ) {
   if (!event.hasRegistrationFee) return false;
   if (registration.paymentStatus === 'paid') return false;
-  if (isAiHackathon(event)) return registration.reviewStatus === 'selected';
-  if (getMultiEventStateLabel(event, registration) === 'Rejected') return false;
+  // A rejected registration is never payable. A selected one is payable straight
+  // away — being shortlisted is what the participant was waiting on.
+  if (registration.reviewStatus === 'rejected') return false;
+  if (registration.reviewStatus === 'selected') return true;
   return registration.formStatus === 'ready' || event.id === paymentEventId;
 }
 
@@ -330,7 +337,8 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
           ...prev[eventId],
           paymentStatus: 'paid',
           paymentProof,
-          reviewStatus: 'selected',
+          // reviewStatus is deliberately untouched: paying is not being
+          // shortlisted, and only staff can make that call.
         },
       }));
     },

@@ -22,8 +22,7 @@ import {
 } from './EventCard';
 import {
   useEvents,
-  isAiHackathon,
-  getMultiEventStateLabel,
+  getReviewStateLabel,
   isPayableEvent,
   flattenEvents,
 } from '../../contexts/EventsContext';
@@ -61,14 +60,7 @@ function getStyles(category: string) {
   return CATEGORY_COLORS[category] ?? DEFAULT_COLOR;
 }
 
-function getAiShortlistLabel(registration?: EventRegistration) {
-  if (!registration) return 'Shortlist Event';
-  if (registration.reviewStatus === 'rejected') return 'Rejected';
-  if (registration.reviewStatus === 'selected') return 'Selected';
-  return 'Shortlist Event';
-}
-
-function getAiShortlistClass(label: string) {
+function getShortlistClass(label: string) {
   if (label === 'Selected')
     return 'border border-emerald-200 bg-emerald-100 text-emerald-800 shadow-sm';
   if (label === 'Rejected') return 'border border-rose-200 bg-rose-100 text-rose-700 shadow-sm';
@@ -109,64 +101,34 @@ function getRegisterState(
   registration: EventRegistration | undefined,
   isOpen: boolean,
 ) {
-  if (isAiHackathon(event)) {
-    if (!registration) {
-      return {
-        label: 'Register Now',
-        className: isOpen
-          ? 'bg-[#064675] hover:bg-[#05375c] text-white'
-          : 'bg-slate-300 text-slate-500 cursor-not-allowed',
-        disabled: !isOpen,
-        kind: 'register' as const,
-      };
-    }
-
-    if (registration.reviewStatus === 'rejected') {
-      return {
-        label: 'Register Now',
-        className: 'opacity-60 cursor-not-allowed',
-        disabled: true,
-        kind: 'register' as const,
-      };
-    }
-
-    if (registration.reviewStatus === 'selected') {
-      if (registration.paymentStatus === 'paid') {
-        return {
-          label: 'Selected',
-          className: 'bg-emerald-600 text-white cursor-default',
-          disabled: true,
-          kind: 'register' as const,
-        };
-      }
-
-      return {
-        label: 'Pay Now',
-        className: getPayNowButtonClass(event.category),
-        disabled: false,
-        kind: 'pay' as const,
-      };
-    }
-
+  // A staff review decision, when one exists, outranks the ordinary
+  // register/pay progression for any event. Before staff rule on a registration
+  // its reviewStatus is 'pending' and the normal flow below applies.
+  if (registration?.reviewStatus === 'rejected') {
     return {
-      label: 'Pending',
-      className: 'bg-amber-500 text-white cursor-default',
+      label: 'Register Now',
+      className: 'opacity-60 cursor-not-allowed',
       disabled: true,
       kind: 'register' as const,
     };
   }
 
-  if (event.category === 'MULTI-EVENTS') {
-    const multiEventState = getMultiEventStateLabel(event, registration);
-
-    if (multiEventState === 'Rejected') {
+  if (registration?.reviewStatus === 'selected') {
+    if (registration.paymentStatus === 'paid') {
       return {
-        label: 'Register Now',
-        className: 'opacity-60 cursor-not-allowed',
+        label: 'Selected',
+        className: 'bg-emerald-600 text-white cursor-default',
         disabled: true,
         kind: 'register' as const,
       };
     }
+
+    return {
+      label: 'Pay Now',
+      className: getPayNowButtonClass(event.category),
+      disabled: false,
+      kind: 'pay' as const,
+    };
   }
 
   if (!registration) {
@@ -213,13 +175,11 @@ function getRegisterState(
 function EventRow({
   event,
   registration,
-  showMultiEventState = false,
   compactParticipation = false,
   onRegister,
 }: {
   event: EventItem;
   registration?: EventRegistration;
-  showMultiEventState?: boolean;
   compactParticipation?: boolean;
   onRegister: (event: EventItem) => void;
 }) {
@@ -236,14 +196,9 @@ function EventRow({
     : 'bg-slate-300 text-slate-500 cursor-not-allowed';
   const statusClass = isOpen ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600';
   const regState = getRegisterState(event, registration, isOpen);
-  const shortlistLabel = isAiHackathon(event) ? getAiShortlistLabel(registration) : '';
-  const multiEventStateLabel = showMultiEventState
-    ? getMultiEventStateLabel(event, registration)
-    : '';
-  const shortlistStateLabel = shortlistLabel || multiEventStateLabel;
-  const showLockedRegisterArrow =
-    (isAiHackathon(event) && registration?.reviewStatus === 'rejected') ||
-    multiEventStateLabel === 'Rejected';
+  // Only shown once a decision actually exists — never inferred from the title.
+  const shortlistStateLabel = getReviewStateLabel(registration);
+  const showLockedRegisterArrow = registration?.reviewStatus === 'rejected';
   const buttonClass =
     regState.kind === 'register'
       ? showLockedRegisterArrow
@@ -330,7 +285,7 @@ function EventRow({
         {shortlistStateLabel && (
           <div className="event-registration-page-9">
             <span
-              className={`inline-flex whitespace-nowrap rounded-md px-3 py-1 text-center text-[11px] font-bold leading-none ${getAiShortlistClass(shortlistStateLabel)}`}
+              className={`inline-flex whitespace-nowrap rounded-md px-3 py-1 text-center text-[11px] font-bold leading-none ${getShortlistClass(shortlistStateLabel)}`}
             >
               {shortlistStateLabel}
             </span>
@@ -389,7 +344,6 @@ export default function EventRegistrationPage() {
   const parentEvent = location.state?.parentEvent as EventItem | undefined;
   const paymentEventId = location.state?.paymentEventId as string | undefined;
   const [paymentSummaryDismissed, setPaymentSummaryDismissed] = useState(false);
-  const isMultiEventsGroup = selectedEvent?.category === 'MULTI-EVENTS';
   const allDisplayEvents = useMemo(
     () => flattenEvents(events).filter((event) => event.status !== 'Closed'),
     [events],
@@ -496,7 +450,6 @@ export default function EventRegistrationPage() {
                   key={event.id}
                   event={event}
                   registration={getRegistration(event.id)}
-                  showMultiEventState={isMultiEventsGroup}
                   compactParticipation={showPaymentSummary}
                   onRegister={handleRegister}
                 />

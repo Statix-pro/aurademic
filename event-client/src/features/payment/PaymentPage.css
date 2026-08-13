@@ -219,3 +219,8 @@
 .payment-page-55 {
   @apply h-4 w-4;
 }
+
+/* Fallback shown when the QR cannot be rendered. */
+.payment-page-56 {
+  @apply px-4 text-center text-sm font-medium text-slate-500;
+}

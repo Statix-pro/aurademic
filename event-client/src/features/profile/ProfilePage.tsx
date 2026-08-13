@@ -10,7 +10,9 @@ import {
   type ReactNode,
 } from 'react';
 
+import { useAuth } from '../../contexts/AuthContext';
 import { useProfile } from '../../contexts/ProfileContext';
+import { STORES, readScoped, writeScoped } from '../../shared/storage';
 import './ProfilePage.css';
 
 const PROFESSIONS = [
@@ -316,6 +318,8 @@ function calculateAge(dateString: string) {
 
 export default function ProfilePage() {
   const { personal, profession, updatePersonal, updateProfession } = useProfile();
+  const { user } = useAuth();
+  const email = user?.email;
 
   const [institutions, setInstitutions] = useState(INSTITUTION_OPTIONS);
   const [schools, setSchools] = useState(SCHOOL_OPTIONS);
@@ -387,42 +391,26 @@ export default function ProfilePage() {
     () => !!profession.professionType,
   );
   const [personalStatus, setPersonalStatus] = useState<'initial' | 'submitted' | 'editing'>(() => {
-    try {
-      const stored = localStorage.getItem('ep_personal_status');
-      if (stored === 'submitted' || stored === 'editing') return stored;
-    } catch (err) {
-      void err;
-    }
+    const stored = readScoped<string | null>(STORES.personalStatus, email, null);
+    if (stored === 'submitted' || stored === 'editing') return stored;
     return personal.firstName ? 'submitted' : 'initial';
   });
 
   const [professionalStatus, setProfessionalStatus] = useState<'initial' | 'submitted' | 'editing'>(
     () => {
-      try {
-        const stored = localStorage.getItem('ep_professional_status');
-        if (stored === 'submitted' || stored === 'editing') return stored;
-      } catch (err) {
-        void err;
-      }
+      const stored = readScoped<string | null>(STORES.professionStatus, email, null);
+      if (stored === 'submitted' || stored === 'editing') return stored;
       return profession.professionType ? 'submitted' : 'initial';
     },
   );
 
   useEffect(() => {
-    try {
-      localStorage.setItem('ep_personal_status', personalStatus);
-    } catch (err) {
-      void err;
-    }
-  }, [personalStatus]);
+    writeScoped(STORES.personalStatus, email, personalStatus);
+  }, [personalStatus, email]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('ep_professional_status', professionalStatus);
-    } catch (err) {
-      void err;
-    }
-  }, [professionalStatus]);
+    writeScoped(STORES.professionStatus, email, professionalStatus);
+  }, [professionalStatus, email]);
 
   const photoRef = useRef<HTMLInputElement>(null);
   const idRef = useRef<HTMLInputElement>(null);

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
 
 import { apiFetch, clearStoredToken, setStoredToken, getStoredToken } from '../config/api';
+import { clearAppStorage } from '../shared/storage';
 
 export interface AuthUser {
   id: number;
@@ -78,6 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     clearStoredToken();
+    // Wipes the cached registrations, profile and feedback too. On a shared
+    // machine, signing out has to leave nothing behind for the next person.
+    clearAppStorage();
     setUser(null);
   }, []);
 
