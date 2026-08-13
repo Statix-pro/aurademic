@@ -18,6 +18,7 @@ import adminBudgetRoutes from './modules/adminbudget/adminBudgetRoutes.js';
 import adminRoutes from './modules/admindashboard/adminRoutes.js';
 import authRoutes from './modules/auth/authRoutes.js';
 import participantAuthRoutes from './modules/participantAuth/participantAuthRoutes.js';
+import participantRegistrationRoutes from './modules/participantRegistration/participantRegistrationRoutes.js';
 import budgetRoutes from './modules/budget/budgetRoutes.js';
 
 // Events routes
@@ -145,6 +146,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/participant-auth', participantAuthRoutes);
 // What the participant-facing event site reads.
 app.use('/api/events/public', publicEventsRoutes);
+// Participant-owned writes (registrations, profile, payments). Authenticated by
+// participantAuthMiddleware inside the router, not by authMiddleware.
+app.use('/api/participant', participantRegistrationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', userDashboardRoutes);
 app.use('/api/form-options', formOptionsRoutes);
