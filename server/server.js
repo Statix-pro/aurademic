@@ -17,6 +17,7 @@ import accountOptionsRoutes from './modules/accountOptions/accountOptionsRoutes.
 import adminBudgetRoutes from './modules/adminbudget/adminBudgetRoutes.js';
 import adminRoutes from './modules/admindashboard/adminRoutes.js';
 import authRoutes from './modules/auth/authRoutes.js';
+import participantAuthRoutes from './modules/participantAuth/participantAuthRoutes.js';
 import budgetRoutes from './modules/budget/budgetRoutes.js';
 
 // Events routes
@@ -50,9 +51,20 @@ const app = express();
 
 /* ================= CORS ================= */
 
+// FRONTEND_URL accepts a comma-separated list so the staff portal and the event
+// subdomain can both be allowed. In practice the event site is same-origin (IIS
+// rewrites /api on its subdomain), so this only matters if that changes.
+const allowedOrigins = (
+  process.env.NODE_ENV === 'production'
+    ? process.env.FRONTEND_URL || ''
+    : 'http://localhost:3000,http://localhost:3001'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const corsOptions = {
-  origin:
-    process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : ['http://localhost:3000'],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -122,7 +134,14 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+/* --- Public endpoints (no authentication) ---
+   These must be mounted before `app.use('/api', journalRoutes)` below: that
+   router applies authMiddleware to everything under /api, so anything mounted
+   after it would demand a staff token. */
+
 app.use('/api/auth', authRoutes);
+// Public event participants sign in here (any Google account, not just @ksrct.ac.in).
+app.use('/api/participant-auth', participantAuthRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', userDashboardRoutes);
 app.use('/api/form-options', formOptionsRoutes);

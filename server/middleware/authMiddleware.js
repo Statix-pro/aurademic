@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 
+import { PARTICIPANT_TOKEN_AUDIENCE } from '../config/participantAuth.js';
 import accessControlModel from '../modules/accessControl/accessControlModel.js';
 
 const extractToken = (req) => {
@@ -26,7 +27,19 @@ const decodeTokenFromRequest = (req, res) => {
   }
 
   try {
-    return jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Participant tokens must never satisfy a staff route. Rejecting here covers
+    // every consumer of authMiddleware at once.
+    if (decoded?.aud === PARTICIPANT_TOKEN_AUDIENCE) {
+      res.status(403).json({
+        message: 'This endpoint is not available to event participants',
+        shouldLogout: false,
+      });
+      return null;
+    }
+
+    return decoded;
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
       res.status(401).json({
