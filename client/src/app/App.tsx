@@ -10,11 +10,11 @@ import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/admi
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
+import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-approval/AdminGuesthouseApproval';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
 import EventDashboard from '../features/events/components/EventDashboard';
-import EventEntry from '../features/events/components/EventEntry';
 import EventPage from '../features/events/components/EventPage';
 import ExpenditureReport from '../features/expenditure/expenditure-report/expenditurereport';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
@@ -28,9 +28,13 @@ import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetda
 import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
+import OrganizationDirectoryDashboard from '../features/user-dashboard/organizationdirectorydashboard/OrganizationDirectoryDashboard';
 import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
 import PublicationsPage from '../features/user-dashboard/publicationspage/PublicationsPage';
+import ResourcePersonDirectoryDashboard from '../features/user-dashboard/resourcepersondirectorydashboard/ResourcePersonDirectoryDashboard';
 import UserDashboard from '../features/user-dashboard/userdashboard';
+import WorkOrderDashboard from '../features/user-dashboard/workorderdashboard/WorkOrderDashboard';
+import WorkOrder from '../features/workorder/WorkOrder';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
 import { MsalProvider } from '../shared/components/MsalProvider';
@@ -39,6 +43,7 @@ import {
   AdminRoute,
   BudgetApprovalRoute,
   FinanceWorkflowRoute,
+  GuesthouseWorkflowRoute,
   ModuleWorkflowRoute,
   SuperAdminRoute,
   ExpenditureApprovalRoute,
@@ -202,6 +207,10 @@ function App() {
                   {/* GUEST HOUSE */}
                   <Route
                     path="/guesthouse-booking"
+                    element={<Navigate to="/guesthouse/new" replace />}
+                  />
+                  <Route
+                    path="/guesthouse/new"
                     element={
                       <ProtectedRoute>
                         <GuestHouseBooking />
@@ -209,7 +218,15 @@ function App() {
                     }
                   />
                   <Route
-                    path="/guestHouse-dashboard"
+                    path="/guesthouse/:id"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse-dashboard"
                     element={
                       <ProtectedRoute>
                         <GuestHouseDashboard />
@@ -400,18 +417,9 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
-                  <Route
-                    path="/event-entry"
-                    element={
-                      <ProtectedRoute>
-                        <EventEntry />
-                      </ProtectedRoute>
-                    }
-                  />
                   <Route path="/storybook" element={<Storybook />} />
                   <Route path="/" element={<Navigate to="/dashboard" />} />
 
-                  {/* UNDER CONSTRUCTION */}
                   <Route
                     path="/vehicle-booking"
                     element={
@@ -476,6 +484,22 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <ExpenditureReport />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/guesthouse"
+                    element={
+                      <GuesthouseWorkflowRoute>
+                        <AdminGuesthouseApproval />
+                      </GuesthouseWorkflowRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
                       </ProtectedRoute>
                     }
                   />

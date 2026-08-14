@@ -1,0 +1,424 @@
+/* ParticipantDetails.css */
+
+.participant-details-wrapper {
+  width: 100%;
+}
+
+.participant-details-wrapper .event-finance-card {
+  background-color: #ffffff;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+  margin: 20px auto;
+}
+
+/* Stats Cards Section */
+.participant-details-wrapper .stats-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.participant-details-wrapper .stat-card {
+  background-color: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  transition: all 0.2s ease;
+}
+
+.participant-details-wrapper .stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 105, 171, 0.08);
+  border-color: #0069ab;
+}
+
+.participant-details-wrapper .stat-icon-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.participant-details-wrapper .stat-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.participant-details-wrapper .stat-label {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 600;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.participant-details-wrapper .stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1;
+}
+
+/* Table Style matching budgetEntryTable (border: 1px solid #e0e0e0) with no horizontal scroll */
+.participant-details-wrapper .event-finance-table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  background: #ffffff !important;
+  border: 1px solid #e0e0e0 !important;
+  min-width: auto !important; /* Force no horizontal scrolling */
+  margin-top: 10px;
+  table-layout: auto !important;
+}
+
+.participant-details-wrapper .event-finance-table thead tr {
+  background: #f0f6ff !important;
+}
+
+.participant-details-wrapper .event-finance-table th {
+  border-top: 1px solid #e0e0e0 !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+  border-left: none !important;
+  border-right: none !important;
+  padding: 12px !important;
+  color: #0069ab !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+  white-space: nowrap !important;
+  font-size: 14px !important;
+  background-color: #f0f6ff !important; /* Match Budget page header background exactly */
+}
+
+.participant-details-wrapper .event-finance-table td {
+  border-top: 1px solid #e0e0e0 !important;
+  border-bottom: 1px solid #e0e0e0 !important;
+  border-left: none !important;
+  border-right: none !important;
+  padding: 12px !important;
+  vertical-align: middle !important;
+  color: #495057 !important;
+  font-size: 14px !important;
+  background-color: #ffffff !important;
+}
+
+/* Ensure left and right outer borders of the table remain visible */
+.participant-details-wrapper .event-finance-table th:first-child,
+.participant-details-wrapper .event-finance-table td:first-child {
+  border-left: 1px solid #e0e0e0 !important;
+}
+
+.participant-details-wrapper .event-finance-table th:last-child,
+.participant-details-wrapper .event-finance-table td:last-child {
+  border-right: 1px solid #e0e0e0 !important;
+}
+
+.participant-details-wrapper .event-finance-table tbody tr {
+  transition: background-color 0.2s ease !important;
+}
+
+.participant-details-wrapper .event-finance-table tbody tr:hover td {
+  background-color: #f8fafc !important; /* Proper hover color over cells */
+}
+
+/* Proportional Column Widths matching cropped image with no scrolling */
+.participant-details-wrapper .event-finance-table th.col-sno,
+.participant-details-wrapper .event-finance-table td.col-sno {
+  width: 45px !important;
+  text-align: center !important;
+  font-weight: 600 !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-participant {
+  width: 270px !important;
+  max-width: 270px !important;
+  text-align: center !important; /* Centered column names */
+}
+
+.participant-details-wrapper .event-finance-table td.col-participant {
+  width: 270px !important;
+  max-width: 270px !important;
+  text-align: left !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-category {
+  width: 130px !important;
+  max-width: 130px !important;
+  text-align: center !important;
+}
+
+.participant-details-wrapper .event-finance-table td.col-category {
+  width: 130px !important;
+  max-width: 130px !important;
+  text-align: left !important;
+  font-size: 12px !important; /* Slightly smaller category text */
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-group,
+.participant-details-wrapper .event-finance-table td.col-group {
+  width: 50px !important;
+  text-align: center !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-doc,
+.participant-details-wrapper .event-finance-table td.col-doc {
+  width: 50px !important;
+  text-align: center !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-hostel,
+.participant-details-wrapper .event-finance-table td.col-hostel {
+  width: 48px !important;
+  max-width: 48px !important;
+  text-align: center !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-fees,
+.participant-details-wrapper .event-finance-table td.col-fees {
+  width: 160px !important;
+  max-width: 160px !important;
+  text-align: center !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-status,
+.participant-details-wrapper .event-finance-table td.col-status {
+  width: 190px !important;
+  text-align: center !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-action-1,
+.participant-details-wrapper .event-finance-table td.col-action-1 {
+  width: 55px !important;
+  text-align: center !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-action-2,
+.participant-details-wrapper .event-finance-table td.col-action-2 {
+  width: 55px !important;
+  text-align: center !important;
+}
+
+.participant-details-wrapper .event-finance-table th.col-action-3,
+.participant-details-wrapper .event-finance-table td.col-action-3 {
+  width: 60px !important;
+  text-align: center !important;
+}
+
+.participant-details-wrapper .participant-info-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.participant-details-wrapper .info-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background-color: #f0f6ff;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.participant-details-wrapper .info-icon {
+  color: #0069ab;
+}
+
+.participant-details-wrapper .participant-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.participant-details-wrapper .participant-name {
+  font-weight: 600;
+  color: #1e293b;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.participant-details-wrapper .participant-inst {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.participant-details-wrapper .blue-icon {
+  color: #0069ab;
+}
+
+.participant-details-wrapper .clickable-icon {
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    color 0.2s ease;
+}
+
+.participant-details-wrapper .clickable-icon:hover {
+  transform: scale(1.15);
+  color: #005492;
+}
+
+/* Fees Cell */
+.participant-details-wrapper .fees-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+.participant-details-wrapper .hostel-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.participant-details-wrapper .hostel-text.yes {
+  color: #16a34a;
+}
+
+.participant-details-wrapper .hostel-text.no {
+  color: #dc2626;
+}
+
+/* Status Dropdown styling to match budget.css inputs & cropped image */
+.participant-details-wrapper .status-cell-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+}
+
+.participant-details-wrapper .status-dropdown {
+  position: relative;
+  width: 100%;
+  min-width: 125px; /* Increased dropdown width slightly */
+}
+
+.participant-details-wrapper .status-dropdown select {
+  width: 100%;
+  appearance: none;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 4px 28px 4px 10px !important; /* Clean padding */
+  font-size: 13px !important; /* Clean font-size */
+  background-color: #ffffff;
+  color: #334155;
+  font-family: inherit;
+  outline: none;
+  transition: all 0.3s ease;
+  height: 28px !important; /* Restored proper compact height */
+}
+
+.participant-details-wrapper .status-dropdown select:focus {
+  border-color: #0069ab;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
+.participant-details-wrapper .dropdown-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+}
+
+/* Success Check Circle custom coloring matching cropped layout exactly */
+.participant-details-wrapper .success-icon {
+  transition: transform 0.2s ease;
+}
+
+.participant-details-wrapper .success-icon.outline circle {
+  stroke: #cbd5e1;
+  fill: none;
+}
+
+.participant-details-wrapper .success-icon.outline path {
+  stroke: #cbd5e1;
+}
+
+.participant-details-wrapper .success-icon.filled circle {
+  fill: #22c55e;
+  stroke: #22c55e;
+}
+
+.participant-details-wrapper .success-icon.filled path {
+  stroke: #ffffff;
+}
+
+/* Custom Checkbox - square, rounded, solid blue checked */
+.participant-details-wrapper .custom-checkbox-wrapper {
+  width: 22px;
+  height: 22px;
+  border: 2px solid #cbd5e1;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background-color: #ffffff;
+  transition: all 0.2s ease;
+  margin: 0 auto;
+}
+
+.participant-details-wrapper .custom-checkbox-wrapper:hover {
+  border-color: #0069ab;
+}
+
+.participant-details-wrapper .custom-checkbox-wrapper.checked {
+  background-color: #0069ab;
+  border-color: #0069ab;
+}
+
+.participant-details-wrapper .checkbox-check {
+  color: #ffffff;
+  stroke-width: 3.5;
+}
+
+.participant-details-wrapper .disabled-icon {
+  color: #cbd5e1;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+  .participant-details-wrapper .stats-cards-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .participant-details-wrapper .stats-cards-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .participant-details-wrapper .stats-cards-grid {
+    grid-template-columns: 1fr;
+  }
+}
