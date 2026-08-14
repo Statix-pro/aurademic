@@ -3,7 +3,7 @@ import path from 'path';
 
 import multer from 'multer';
 
-import { sanitizeUploadFilename } from '../modules/shared/uploadPaths.js';
+import { sanitizeUploadFilename, resolveUploadPath } from '../modules/shared/uploadPaths.js';
 
 // Participant uploads are public-facing, so they are stricter than the staff
 // uploader: images only for proofs/photos, smaller size cap, and one directory
@@ -123,8 +123,14 @@ export const removeUploadedFile = async (file) => {
     return;
   }
 
+  const resolved = resolveUploadPath(file.path);
+  if (!resolved) {
+    console.error('Refused to delete an upload outside the uploads directory:', file.path);
+    return;
+  }
+
   try {
-    await fs.promises.unlink(file.path);
+    await fs.promises.unlink(resolved);
   } catch (error) {
     if (error.code !== 'ENOENT') {
       console.error('Failed to remove orphaned upload:', file.path, error);
