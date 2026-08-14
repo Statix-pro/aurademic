@@ -107,7 +107,7 @@
 }
 
 .event-dashboard-select::after {
-  content: "";
+  content: '';
   position: absolute;
   right: 12px;
   top: 50%;
@@ -361,7 +361,6 @@
   font-size: 0.92rem;
   font-weight: 700;
   color: #17355a;
-  
 }
 
 .event-request-type-badge {
@@ -386,7 +385,7 @@
 .event-request-amount {
   display: flex;
   flex-direction: column;
-  align-items:center;
+  align-items: center;
   min-width: 84px;
   gap: 1px;
 }
@@ -401,7 +400,6 @@
   font-size: 0.92rem;
   font-weight: 800;
   color: #0a6bb0;
-  
 }
 
 .event-request-mini-actions {

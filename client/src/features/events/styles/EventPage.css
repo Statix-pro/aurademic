@@ -2,7 +2,7 @@
   background-color: var(--bg-light, #f0f6ff);
   min-height: 100vh;
   padding: 20px 20px 28px;
-  font-family: "Roboto", sans-serif;
+  font-family: 'Roboto', sans-serif;
   color: var(--text-main, #4f4f6e);
 }
 

@@ -1,9 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
 import { Search, X, Edit3 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+
 import './OrganizationDirectoryDashboard.css';
-import OrganizationDirectory, { Organization } from '../../organizationdirectory/OrganizationDirectory';
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import { useAbility } from '../../../shared/casl/AbilityContext';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import OrganizationDirectory, {
+  Organization,
+} from '../../organizationdirectory/OrganizationDirectory';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /organizations          → { success: true, data: Organization[] }
@@ -11,7 +14,6 @@ import { useAbility } from '../../../shared/casl/AbilityContext';
  * PUT    /organizations/:id      → { success: true, data: Organization }   (body: Omit<Organization, 'id'|'date'>)
  * DELETE /organizations/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
-
 
 const apiGetAll = async (): Promise<Organization[]> => {
   const res = (await authenticityUtility.get('/organizations')) as any;
@@ -25,7 +27,10 @@ const apiCreate = async (orgData: Omit<Organization, 'id' | 'date'>): Promise<Or
   throw new Error(res?.message || 'Failed to create organization.');
 };
 
-const apiUpdate = async (id: number, orgData: Omit<Organization, 'id' | 'date'>): Promise<Organization> => {
+const apiUpdate = async (
+  id: number,
+  orgData: Omit<Organization, 'id' | 'date'>,
+): Promise<Organization> => {
   const res = (await authenticityUtility.put(`/organizations/${id}`, orgData)) as any;
   if (res?.success && res.data) return res.data;
   throw new Error(res?.message || 'Failed to update organization.');
@@ -34,7 +39,12 @@ const apiUpdate = async (id: number, orgData: Omit<Organization, 'id' | 'date'>)
 /* ─── Constants ─────────────────────────────────────────────────────────── */
 
 const CATEGORY_OPTIONS = [
-  'Academic', 'Industry', 'National Labs', 'Incubation', 'Start-up', 'Government'
+  'Academic',
+  'Industry',
+  'National Labs',
+  'Incubation',
+  'Start-up',
+  'Government',
 ];
 
 /* ═══════════════════════════════════════════════════════════
@@ -73,14 +83,19 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
   const filtered = useMemo(() => {
     const nameFilter = searchName.trim().toLowerCase();
-    const categoryFilter = searchCategory.trim().toLowerCase().replace(/^legacy-/, '');
+    const categoryFilter = searchCategory
+      .trim()
+      .toLowerCase()
+      .replace(/^legacy-/, '');
 
     return records.filter(
       (record) =>
-        (!nameFilter || (record.name ?? '').toLowerCase().includes(nameFilter) || (record.abbreviation ?? '').toLowerCase().includes(nameFilter) || (record.city && record.city.toLowerCase().includes(nameFilter))) &&
+        (!nameFilter ||
+          (record.name ?? '').toLowerCase().includes(nameFilter) ||
+          (record.abbreviation ?? '').toLowerCase().includes(nameFilter) ||
+          (record.city && record.city.toLowerCase().includes(nameFilter))) &&
         (!categoryFilter || (record.category ?? '').toLowerCase() === categoryFilter),
     );
-
   }, [records, searchName, searchCategory]);
 
   const handleAdd = () => {
@@ -119,7 +134,10 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <section className="budgetdashboard-page d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+      <section
+        className="budgetdashboard-page d-flex justify-content-center align-items-center"
+        style={{ minHeight: '60vh' }}
+      >
         <div className="text-center">
           <div className="spinner-border text-primary" role="status">
             <span className="visually-hidden">Loading...</span>
@@ -128,7 +146,6 @@ const OrganizationDirectoryDashboard: React.FC = () => {
       </section>
     );
   }
-
 
   return (
     <section className="budgetdashboard-page">
@@ -151,11 +168,16 @@ const OrganizationDirectoryDashboard: React.FC = () => {
             {/* Header section styled like Consolidated Budget */}
             <div className="budgetdashboard-header">
               <div className="budgetdashboard-header-left">
-                <h5 className="budgetdashboard-title" style={{ paddingLeft: 0 }}>Organization</h5>
+                <h5 className="budgetdashboard-title" style={{ paddingLeft: 0 }}>
+                  Organization
+                </h5>
               </div>
 
               <div className="budgetdashboard-header-right">
-                <div className="budgetdashboard-header-search-group" style={{ display: 'flex', alignItems: 'center' }}>
+                <div
+                  className="budgetdashboard-header-search-group"
+                  style={{ display: 'flex', alignItems: 'center' }}
+                >
                   <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                     <input
                       type="text"
@@ -191,7 +213,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                           position: 'absolute',
                           right: '20px',
                           color: '#94a3b8',
-                          pointerEvents: 'none'
+                          pointerEvents: 'none',
                         }}
                       />
                     )}
@@ -213,11 +235,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                 </div>
 
                 {ability.can('create', 'MasterData') && (
-                  <button
-                    type="button"
-                    className="budgetdashboard-add-btn"
-                    onClick={handleAdd}
-                  >
+                  <button type="button" className="budgetdashboard-add-btn" onClick={handleAdd}>
                     Add +
                   </button>
                 )}
@@ -226,11 +244,26 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
             {loadError && (
               <div className="budgetdashboard-body" style={{ paddingTop: 0 }}>
-                <div className="alert alert-warning d-flex align-items-center justify-content-between mb-0" role="alert" style={{ borderRadius: '8px', fontSize: '0.875rem' }}>
+                <div
+                  className="alert alert-warning d-flex align-items-center justify-content-between mb-0"
+                  role="alert"
+                  style={{ borderRadius: '8px', fontSize: '0.875rem' }}
+                >
                   <span>{loadError}</span>
                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                    <button type="button" className="btn btn-sm btn-outline-warning" onClick={fetchRecords}>Retry</button>
-                    <button type="button" className="btn-close" aria-label="Dismiss" onClick={() => setLoadError(null)} />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-warning"
+                      onClick={fetchRecords}
+                    >
+                      Retry
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-close"
+                      aria-label="Dismiss"
+                      onClick={() => setLoadError(null)}
+                    />
                   </div>
                 </div>
               </div>
@@ -253,29 +286,27 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                       filtered.map((org, index) => {
                         return (
                           <tr key={org.id}>
-                            <td style={{ textAlign: 'center' }}>
-                              {index + 1}
-                            </td>
+                            <td style={{ textAlign: 'center' }}>{index + 1}</td>
                             <td>
                               <div style={{ display: 'flex', flexDirection: 'column' }}>
                                 <span style={{ fontWeight: 600, color: '#1f2937' }}>
                                   {org.name}
                                 </span>
                                 {org.city && (
-                                  <span style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '2px' }}>
+                                  <span
+                                    style={{
+                                      fontSize: '0.78rem',
+                                      color: '#64748b',
+                                      marginTop: '2px',
+                                    }}
+                                  >
                                     {org.city}
                                   </span>
                                 )}
                               </div>
                             </td>
                             <td>{org.category}</td>
-                            <td>
-                              {org.tag && (
-                                <span className="org-tag-pill">
-                                  {org.tag}
-                                </span>
-                              )}
-                            </td>
+                            <td>{org.tag && <span className="org-tag-pill">{org.tag}</span>}</td>
                             <td style={{ textAlign: 'center' }}>
                               {ability.can('edit', 'MasterData') && (
                                 <button

@@ -33,7 +33,7 @@ export default tseslint.config(
   },
   js.configs.recommended,
   {
-    files: ['client/**/*.{ts,tsx}'],
+    files: ['client/**/*.{ts,tsx}', 'event-client/**/*.{ts,tsx}'],
     extends: [...tseslint.configs.recommended],
     languageOptions: {
       globals: {

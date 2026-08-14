@@ -1,10 +1,3 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import authenticityUtility from '../../shared/utils/authenticityUtility';
-import { useAbility } from '../../shared/casl/AbilityContext';
-import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
-import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDropdown';
 import {
   BatteryCharging,
   Building2,
@@ -25,6 +18,14 @@ import {
   type LucideIcon,
   ChevronDown,
 } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+
+import { useAuth } from '../../contexts/AuthContext';
+import { useAbility } from '../../shared/casl/AbilityContext';
+import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import CustomDropdown, { OptionType } from '../../shared/components/ui/CustomDropdown';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
 import '../../shared/styles/forms.css';
 import '../../shared/components/ui/common.css';
 import './WorkOrder.css';
@@ -55,8 +56,6 @@ interface BeneficiaryEmployee {
   designation?: string;
   department?: string;
 }
-
-
 
 const WORK_TYPES = [
   'Installation',
@@ -106,7 +105,7 @@ const BENEFICIARY_ENTITY_TYPES: Record<string, string> = {
 
 // Work Category Types and Sub-types map
 const WORK_CATALOG: Record<string, Record<string, string[]>> = {
-  'Electrical': {
+  Electrical: {
     Installation: [
       'New wiring layout',
       'Switchboard installation',
@@ -276,7 +275,7 @@ const WORK_CATALOG: Record<string, Record<string, string[]>> = {
       'Bathroom fittings labour',
     ],
   },
-  'HVAC': {
+  HVAC: {
     Installation: [
       'Split AC installation',
       'Window AC installation',
@@ -329,7 +328,7 @@ const WORK_CATALOG: Record<string, Record<string, string[]>> = {
       'Drain pipe fitting',
     ],
   },
-  'Carpentry': {
+  Carpentry: {
     Installation: [
       'New door installation',
       'New window installation',
@@ -385,7 +384,7 @@ const WORK_CATALOG: Record<string, Record<string, string[]>> = {
       'Heavy item loading / unloading',
     ],
   },
-  'Gardening': {
+  Gardening: {
     Installation: [
       'New garden bed setup',
       'Plant sapling installation',
@@ -433,7 +432,7 @@ const WORK_CATALOG: Record<string, Record<string, string[]>> = {
       'General gardening helper work',
     ],
   },
-  'Civil': {
+  Civil: {
     Installation: [
       'New flooring (tiles / marble)',
       'Carpet / mat laying',
@@ -727,8 +726,6 @@ const WORK_CATALOG: Record<string, Record<string, string[]>> = {
   },
 };
 
-
-
 const CATEGORIES = [
   'Carpentry',
   'Civil',
@@ -745,18 +742,18 @@ const CATEGORIES = [
 ];
 
 const CATEGORY_ICON_MAP: Record<string, LucideIcon> = {
-  'Electrical': Zap,
+  Electrical: Zap,
   'IT Infrastructure': Wifi,
-  'Plumbing': Droplets,
-  'HVAC': Snowflake,
-  'Carpentry': Hammer,
-  'Gardening': Leaf,
-  'Civil': Building2,
+  Plumbing: Droplets,
+  HVAC: Snowflake,
+  Carpentry: Hammer,
+  Gardening: Leaf,
+  Civil: Building2,
   'Metal Works': Factory,
-  'Interior': Wrench,
-  'Labour': Users,
-  'Painting': Paintbrush,
-  'UPS': BatteryCharging,
+  Interior: Wrench,
+  Labour: Users,
+  Painting: Paintbrush,
+  UPS: BatteryCharging,
 };
 
 const BLOCKS = [
@@ -779,7 +776,6 @@ const FLOORS = [
   'Third Floor',
   'Fourth Floor',
 ];
-
 
 const toDropdownOptions = (values: string[]): OptionType[] =>
   values.filter((value) => value !== 'Select').map((value) => ({ value, label: value }));
@@ -910,7 +906,6 @@ const WorkOrder: React.FC = () => {
     ? ability.can('edit', 'WorkOrder')
     : ability.can('create', 'WorkOrder');
 
-
   // Collapsible section states
   const [isApplicantOpen, setIsApplicantOpen] = useState(true);
   const [isBeneficiaryOpen, setIsBeneficiaryOpen] = useState(true);
@@ -928,7 +923,9 @@ const WorkOrder: React.FC = () => {
   const [beneficiaryValue, setBeneficiaryValue] = useState('');
   const [beneficiaryValueOptions, setBeneficiaryValueOptions] = useState<OptionType[]>([]);
   const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState('');
-  const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<BeneficiaryEmployee[]>([]);
+  const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<BeneficiaryEmployee[]>(
+    [],
+  );
   const [showBeneficiarySearch, setShowBeneficiarySearch] = useState(false);
   const [selectedTag, setSelectedTag] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('Carpentry');
@@ -1039,8 +1036,6 @@ const WorkOrder: React.FC = () => {
     fetchUserDetails();
   }, [id]);
 
-
-
   useEffect(() => {
     if (isHydrating.current) return;
     setSelectedTag((prev) => {
@@ -1068,7 +1063,10 @@ const WorkOrder: React.FC = () => {
 
     if (beneficiaryType === 'Institution') {
       setBeneficiaryValueOptions([
-        { value: 'K.S.Rangasamy College of Technology', label: 'K.S.Rangasamy College of Technology' },
+        {
+          value: 'K.S.Rangasamy College of Technology',
+          label: 'K.S.Rangasamy College of Technology',
+        },
       ]);
       return;
     }
@@ -1170,7 +1168,7 @@ const WorkOrder: React.FC = () => {
 
       return prev.map((item) => {
         const isTypeValid = validTypes.includes(item.type);
-        const validSubTypes = isTypeValid ? (categoryData[item.type] || []) : [];
+        const validSubTypes = isTypeValid ? categoryData[item.type] || [] : [];
         const isSubTypeValid = validSubTypes.includes(item.subType);
 
         return {
@@ -1341,7 +1339,10 @@ const WorkOrder: React.FC = () => {
           const formData = new FormData();
           formData.append('file', photo.file);
           // BACKEND CONTRACT: expecting /workorders/upload to return { success: true, data: { url: "..." } }
-          const uploadRes = (await authenticityUtility.postFile('/workorders/upload', formData)) as any;
+          const uploadRes = (await authenticityUtility.postFile(
+            '/workorders/upload',
+            formData,
+          )) as any;
           if (!uploadRes?.success || !uploadRes.data?.url) {
             throw new Error(uploadRes?.message || 'Upload response missing url');
           }
@@ -1401,7 +1402,7 @@ const WorkOrder: React.FC = () => {
       }
       setTimeout(() => {
         resetWorkOrderForm();
-        navigate("/workorderdashboard");
+        navigate('/workorderdashboard');
       }, 900);
     } catch (error) {
       console.error('Failed to submit work order:', error);
@@ -1417,7 +1418,10 @@ const WorkOrder: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="workorderPage journal-form-body d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+      <div
+        className="workorderPage journal-form-body d-flex justify-content-center align-items-center"
+        style={{ minHeight: '60vh' }}
+      >
         <div className="spinner-border text-primary" role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
@@ -1427,7 +1431,10 @@ const WorkOrder: React.FC = () => {
 
   if (error) {
     return (
-      <div className="workorderPage journal-form-body d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+      <div
+        className="workorderPage journal-form-body d-flex justify-content-center align-items-center"
+        style={{ minHeight: '60vh' }}
+      >
         <div className="alert alert-danger d-flex flex-column align-items-center" role="alert">
           <div style={{ marginBottom: '15px' }}>{error}</div>
           <button type="button" className="btn btn-outline-danger btn-sm" onClick={fetchRecord}>
@@ -1485,9 +1492,7 @@ const WorkOrder: React.FC = () => {
             onToggle={() => setIsBeneficiaryOpen((prev) => !prev)}
           >
             <div className="workorderBeneficiaryCardBody">
-              <div
-                className={`workorderBeneficiaryGrid ${beneficiaryType ? 'has-selection' : ''}`}
-              >
+              <div className={`workorderBeneficiaryGrid ${beneficiaryType ? 'has-selection' : ''}`}>
                 <div className="workorderBeneficiaryField">
                   <label className="custom-label form-label">Beneficiary</label>
                   <WorkOrderDropdown
@@ -1507,7 +1512,9 @@ const WorkOrder: React.FC = () => {
                 {beneficiaryType && (
                   <>
                     <div className="workorderBeneficiaryField workorderBeneficiaryFieldWide">
-                      <label className="custom-label form-label">{getBeneficiaryValueLabel()}</label>
+                      <label className="custom-label form-label">
+                        {getBeneficiaryValueLabel()}
+                      </label>
                       {['Faculty', 'Staff'].includes(beneficiaryType) ? (
                         <div className="workorderBeneficiarySearchWrap">
                           <input
@@ -1515,7 +1522,9 @@ const WorkOrder: React.FC = () => {
                             className="form-control custom-input workorderBeneficiaryInput"
                             value={beneficiarySearchQuery || beneficiaryValue}
                             onChange={(event) => void handleBeneficiarySearch(event.target.value)}
-                            onFocus={() => void handleBeneficiarySearch(beneficiarySearchQuery || '')}
+                            onFocus={() =>
+                              void handleBeneficiarySearch(beneficiarySearchQuery || '')
+                            }
                             onBlur={() => setTimeout(() => setShowBeneficiarySearch(false), 200)}
                             placeholder={getBeneficiaryValuePlaceholder()}
                             disabled={isViewMode}
@@ -1536,7 +1545,9 @@ const WorkOrder: React.FC = () => {
                                   }}
                                 >
                                   <strong>{employee.name}</strong>
-                                  <span>{employee.designation || 'N/A'} | {employee.department || 'N/A'}</span>
+                                  <span>
+                                    {employee.designation || 'N/A'} | {employee.department || 'N/A'}
+                                  </span>
                                 </button>
                               ))}
                             </div>

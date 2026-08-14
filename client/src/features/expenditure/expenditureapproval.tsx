@@ -2919,6 +2919,10 @@ const ExpenditureApproval: React.FC = () => {
       if (normalizedSubHead) query.set('sub_head', normalizedSubHead);
       if (resolvedFinanceRequestId)
         query.set('finance_request_id', String(resolvedFinanceRequestId));
+      // Without a finance request to pin the card, the server scopes the running total by
+      // applicant — send it, so a claim a shared department login raised for this person
+      // still counts towards their pre-advance.
+      if (employeeId) query.set('employee_id', String(employeeId));
       if (dashboardRowIdFromState) query.set('dashboard_row_id', dashboardRowIdFromState);
       if (workflowRowRefFromState ?? rowReferenceIdFromState) {
         query.set('workflowrowref', workflowRowRefFromState ?? rowReferenceIdFromState ?? '');

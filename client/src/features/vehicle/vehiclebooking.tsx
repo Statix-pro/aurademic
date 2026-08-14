@@ -1,4 +1,3 @@
-import React, { useEffect, useMemo, useState } from 'react';
 import {
   BadgeAlert,
   CarFront,
@@ -24,6 +23,8 @@ import {
   Info,
   CheckCircle2,
 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+
 import { useAuth } from '../../contexts/AuthContext';
 import { useAbility } from '../../shared/casl/AbilityContext';
 import './vehiclebooking.css';
@@ -149,7 +150,7 @@ const DEFAULT_VEHICLE_FEATURES: Record<string, boolean> = {
   'CCTV Camera': false,
   'Audio System': false,
   'Push Back Seats': false,
-  'Umbrella': false,
+  Umbrella: false,
   'Bluetooth Audio': false,
   'USB Charging Ports': false,
   'Tissue Box': false,
@@ -187,7 +188,6 @@ const bookingForOptions: BookingFor[] = [
 const logisticsVehicleRequirements: VehicleRequirement[] = ['Mini Truck', 'Eicher', 'Lorry'];
 
 const logisticsBookingForOptions: BookingFor[] = ['Logistics Transport', 'Others'];
-
 
 const formatDateInput = (date: Date) => {
   const year = date.getFullYear();
@@ -237,7 +237,6 @@ const parseDisplayDate = (value: string) => {
 
   return formatDateInput(date);
 };
-
 
 const normalizeTimeEntry = (value: string) => {
   const trimmed = value.trim().toUpperCase().replace(/\s+/g, ' ');
@@ -399,12 +398,6 @@ const createDriverManagementRow = (): DriverManagementRow => ({
 
 // applicantUiDetails is built inside the component from user context
 
-
-
-
-
-
-
 const MapPinWithBase = ({ size = 22, className = '' }: { size?: number; className?: string }) => (
   <svg
     width={size}
@@ -461,18 +454,16 @@ const VehicleBooking: React.FC = () => {
     tag: 'Booking Dates',
   });
   const [travelPlanRows, setTravelPlanRows] = useState<TravelPlanRow[]>([createTravelPlanRow()]);
-  const [shuttleBookingMode, setShuttleBookingMode] =
-    useState<ShuttleBookingMode>('Day Booking');
+  const [shuttleBookingMode, setShuttleBookingMode] = useState<ShuttleBookingMode>('Day Booking');
   const [shuttleTripRows, setShuttleTripRows] = useState<ShuttleTripRow[]>([
     createShuttleTripRow(),
   ]);
-  const [shuttleDayRows, setShuttleDayRows] = useState<ShuttleDayRow[]>([
-    createShuttleDayRow(),
+  const [shuttleDayRows, setShuttleDayRows] = useState<ShuttleDayRow[]>([createShuttleDayRow()]);
+  const [vehicleAllotmentRows, setVehicleAllotmentRows] = useState<VehicleAllotmentRow[]>([
+    createVehicleAllotmentRow(),
   ]);
-  const [vehicleAllotmentRows, setVehicleAllotmentRows] = useState<
-    VehicleAllotmentRow[]
-  >([createVehicleAllotmentRow()]);
-  const [managedVehicles, setManagedVehicles] = useState<ManagedVehicleRow[]>(initialManagedVehicles);
+  const [managedVehicles, setManagedVehicles] =
+    useState<ManagedVehicleRow[]>(initialManagedVehicles);
   const [drivers, setDrivers] = useState<DriverManagementRow[]>(initialDrivers);
   const vehicleNumberOptions = useMemo(
     () => managedVehicles.map((vehicle) => vehicle.number).filter(Boolean),
@@ -487,23 +478,31 @@ const VehicleBooking: React.FC = () => {
   const [editingDriverId, setEditingDriverId] = useState<number | null>(null);
   const [viewingDriverId, setViewingDriverId] = useState<number | null>(null);
 
-  const [travelPlanBoardingDateInputs, setTravelPlanBoardingDateInputs] = useState<Record<number, string>>({});
-  const [travelPlanDroppingDateInputs, setTravelPlanDroppingDateInputs] = useState<Record<number, string>>({});
+  const [travelPlanBoardingDateInputs, setTravelPlanBoardingDateInputs] = useState<
+    Record<number, string>
+  >({});
+  const [travelPlanDroppingDateInputs, setTravelPlanDroppingDateInputs] = useState<
+    Record<number, string>
+  >({});
   const [shuttleTripDateInputs, setShuttleTripDateInputs] = useState<Record<number, string>>({});
   const [shuttleDayDateInputs, setShuttleDayDateInputs] = useState<Record<number, string>>({});
 
   useEffect(() => {
     setTravelPlanBoardingDateInputs((prevInputs) =>
       travelPlanRows.reduce<Record<number, string>>((nextInputs, row) => {
-        nextInputs[row.id] = row.boardingDate ? formatDateForDisplay(row.boardingDate) : prevInputs[row.id] || '';
+        nextInputs[row.id] = row.boardingDate
+          ? formatDateForDisplay(row.boardingDate)
+          : prevInputs[row.id] || '';
         return nextInputs;
-      }, {})
+      }, {}),
     );
     setTravelPlanDroppingDateInputs((prevInputs) =>
       travelPlanRows.reduce<Record<number, string>>((nextInputs, row) => {
-        nextInputs[row.id] = row.droppingDate ? formatDateForDisplay(row.droppingDate) : prevInputs[row.id] || '';
+        nextInputs[row.id] = row.droppingDate
+          ? formatDateForDisplay(row.droppingDate)
+          : prevInputs[row.id] || '';
         return nextInputs;
-      }, {})
+      }, {}),
     );
   }, [travelPlanRows]);
 
@@ -512,7 +511,7 @@ const VehicleBooking: React.FC = () => {
       shuttleTripRows.reduce<Record<number, string>>((nextInputs, row) => {
         nextInputs[row.id] = row.date ? formatDateForDisplay(row.date) : prevInputs[row.id] || '';
         return nextInputs;
-      }, {})
+      }, {}),
     );
   }, [shuttleTripRows]);
 
@@ -521,23 +520,22 @@ const VehicleBooking: React.FC = () => {
       shuttleDayRows.reduce<Record<number, string>>((nextInputs, row) => {
         nextInputs[row.id] = row.date ? formatDateForDisplay(row.date) : prevInputs[row.id] || '';
         return nextInputs;
-      }, {})
+      }, {}),
     );
   }, [shuttleDayRows]);
-
 
   const totalTravelers = useMemo(
     () =>
       String(
         (Number(transportDetails.accompaniedMale) || 0) +
-        (Number(transportDetails.accompaniedFemale) || 0) +
-        (Number(transportDetails.accompaniedChildren) || 0)
+          (Number(transportDetails.accompaniedFemale) || 0) +
+          (Number(transportDetails.accompaniedChildren) || 0),
       ),
     [
       transportDetails.accompaniedChildren,
       transportDetails.accompaniedFemale,
       transportDetails.accompaniedMale,
-    ]
+    ],
   );
 
   const availableBookingForOptions = useMemo(
@@ -545,13 +543,10 @@ const VehicleBooking: React.FC = () => {
       logisticsVehicleRequirements.includes(transportDetails.vehicleRequirement)
         ? logisticsBookingForOptions
         : bookingForOptions,
-    [transportDetails.vehicleRequirement]
+    [transportDetails.vehicleRequirement],
   );
 
-  const updateTransportDetails = (
-    field: keyof TransportBookingDetails,
-    value: string
-  ) => {
+  const updateTransportDetails = (field: keyof TransportBookingDetails, value: string) => {
     setTransportDetails((prevDetails) => ({ ...prevDetails, [field]: value }));
   };
 
@@ -578,30 +573,30 @@ const VehicleBooking: React.FC = () => {
   const updateTravelPlanRow = (
     id: number,
     field: keyof Omit<TravelPlanRow, 'id'>,
-    value: string
+    value: string,
   ) => {
     setTravelPlanRows((prevRows) =>
-      prevRows.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+      prevRows.map((row) => (row.id === id ? { ...row, [field]: value } : row)),
     );
   };
 
   const updateShuttleTripRow = (
     id: number,
     field: keyof Omit<ShuttleTripRow, 'id'>,
-    value: string
+    value: string,
   ) => {
     setShuttleTripRows((prevRows) =>
-      prevRows.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+      prevRows.map((row) => (row.id === id ? { ...row, [field]: value } : row)),
     );
   };
 
   const updateShuttleDayRow = (
     id: number,
     field: keyof Omit<ShuttleDayRow, 'id'>,
-    value: ShuttleRequirement | string
+    value: ShuttleRequirement | string,
   ) => {
     setShuttleDayRows((prevRows) =>
-      prevRows.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+      prevRows.map((row) => (row.id === id ? { ...row, [field]: value } : row)),
     );
   };
 
@@ -677,26 +672,23 @@ const VehicleBooking: React.FC = () => {
     }));
   };
 
-
   const updateVehicleAllotmentRow = (
     id: number,
     field: keyof Omit<VehicleAllotmentRow, 'id'>,
-    value: string
+    value: string,
   ) => {
     setVehicleAllotmentRows((prevRows) =>
-      prevRows.map((row) => (row.id === id ? { ...row, [field]: value } : row))
+      prevRows.map((row) => (row.id === id ? { ...row, [field]: value } : row)),
     );
   };
 
   const updateManagedVehicle = (
     id: number,
     field: keyof Omit<ManagedVehicleRow, 'id'>,
-    value: any
+    value: any,
   ) => {
     setManagedVehicles((prevVehicles) =>
-      prevVehicles.map((vehicle) =>
-        vehicle.id === id ? { ...vehicle, [field]: value } : vehicle
-      )
+      prevVehicles.map((vehicle) => (vehicle.id === id ? { ...vehicle, [field]: value } : vehicle)),
     );
   };
 
@@ -708,9 +700,7 @@ const VehicleBooking: React.FC = () => {
   };
 
   const removeManagedVehicle = (id: number) => {
-    setManagedVehicles((prevVehicles) =>
-      prevVehicles.filter((vehicle) => vehicle.id !== id)
-    );
+    setManagedVehicles((prevVehicles) => prevVehicles.filter((vehicle) => vehicle.id !== id));
     setEditingManagedVehicleId((currentId) => (currentId === id ? null : currentId));
     setViewingManagedVehicleId((currentId) => (currentId === id ? null : currentId));
   };
@@ -718,12 +708,10 @@ const VehicleBooking: React.FC = () => {
   const updateDriver = (
     id: number,
     field: keyof Omit<DriverManagementRow, 'id'>,
-    value: string
+    value: string,
   ) => {
     setDrivers((prevDrivers) =>
-      prevDrivers.map((driver) =>
-        driver.id === id ? { ...driver, [field]: value } : driver
-      )
+      prevDrivers.map((driver) => (driver.id === id ? { ...driver, [field]: value } : driver)),
     );
   };
 
@@ -735,47 +723,47 @@ const VehicleBooking: React.FC = () => {
   };
 
   const removeDriver = (id: number) => {
-    setDrivers((prevDrivers) =>
-      prevDrivers.filter((driver) => driver.id !== id)
-    );
+    setDrivers((prevDrivers) => prevDrivers.filter((driver) => driver.id !== id));
     setEditingDriverId((currentId) => (currentId === id ? null : currentId));
     setViewingDriverId((currentId) => (currentId === id ? null : currentId));
   };
 
   const removeTravelPlanRow = (id: number) => {
     setTravelPlanRows((prevRows) =>
-      prevRows.length === 1 ? prevRows : prevRows.filter((row) => row.id !== id)
+      prevRows.length === 1 ? prevRows : prevRows.filter((row) => row.id !== id),
     );
   };
 
   const removeShuttleTripRow = (id: number) => {
     setShuttleTripRows((prevRows) =>
-      prevRows.length === 1 ? prevRows : prevRows.filter((row) => row.id !== id)
+      prevRows.length === 1 ? prevRows : prevRows.filter((row) => row.id !== id),
     );
   };
 
   const removeShuttleDayRow = (id: number) => {
     setShuttleDayRows((prevRows) =>
-      prevRows.length === 1 ? prevRows : prevRows.filter((row) => row.id !== id)
+      prevRows.length === 1 ? prevRows : prevRows.filter((row) => row.id !== id),
     );
   };
 
   const removeVehicleAllotmentRow = (id: number) => {
     setVehicleAllotmentRows((prevRows) =>
-      prevRows.length === 1 ? prevRows : prevRows.filter((row) => row.id !== id)
+      prevRows.length === 1 ? prevRows : prevRows.filter((row) => row.id !== id),
     );
   };
 
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitMessage('Preview only — submission will be enabled once backend integration is complete.');
+    setSubmitMessage(
+      'Preview only — submission will be enabled once backend integration is complete.',
+    );
   };
 
   const renderReadOnlyInput = (
     label: string,
     value: string,
     type: React.HTMLInputTypeAttribute = 'text',
-    placeholder = ''
+    placeholder = '',
   ) => (
     <div className="vehiclebooking-field">
       <label className="vehiclebooking-label">{label}</label>
@@ -793,11 +781,12 @@ const VehicleBooking: React.FC = () => {
     label: T,
     selectedValue: T,
     groupName: string,
-    onSelect: (value: T) => void
+    onSelect: (value: T) => void,
   ) => (
     <label
-      className={`vehiclebooking-radio vehiclebooking-choice-button ${selectedValue === label ? 'vehiclebooking-radio--active' : ''
-        }`}
+      className={`vehiclebooking-radio vehiclebooking-choice-button ${
+        selectedValue === label ? 'vehiclebooking-radio--active' : ''
+      }`}
       key={label}
     >
       <input
@@ -815,7 +804,7 @@ const VehicleBooking: React.FC = () => {
     removeRow: () => void,
     removeDisabled: boolean,
     addLabel: string,
-    removeLabel: string
+    removeLabel: string,
   ) => (
     <div className="vehiclebooking-row-actions vehiclebooking-table-actions">
       <button
@@ -848,7 +837,7 @@ const VehicleBooking: React.FC = () => {
     deleteDisabled: boolean,
     isEditing: boolean,
     isViewing: boolean,
-    label: string
+    label: string,
   ) => (
     <div className="vehiclebooking-management-actions">
       <button
@@ -897,7 +886,7 @@ const VehicleBooking: React.FC = () => {
     onDelete: () => void,
     deleteDisabled: boolean,
     isEditing: boolean,
-    label: string
+    label: string,
   ) => (
     <div className="vehiclebooking-management-actions vehiclebooking-management-actions--compact">
       <button
@@ -934,7 +923,7 @@ const VehicleBooking: React.FC = () => {
   const renderVehicleDetailsCard = (
     vehicle: ManagedVehicleRow,
     isEditing: boolean,
-    onUpdate: (field: keyof Omit<ManagedVehicleRow, 'id'>, value: any) => void
+    onUpdate: (field: keyof Omit<ManagedVehicleRow, 'id'>, value: any) => void,
   ) => {
     const vehicleFeatures = vehicle.features || DEFAULT_VEHICLE_FEATURES;
     const currentFuelType = vehicle.fuelType || 'Petrol';
@@ -965,7 +954,7 @@ const VehicleBooking: React.FC = () => {
       'CCTV Camera': <Cctv size={20} className="vehicle-feature-main-icon" />,
       'Audio System': <Speaker size={20} className="vehicle-feature-main-icon" />,
       'Push Back Seats': <Armchair size={20} className="vehicle-feature-main-icon" />,
-      'Umbrella': <Umbrella size={20} className="vehicle-feature-main-icon" />,
+      Umbrella: <Umbrella size={20} className="vehicle-feature-main-icon" />,
       'Bluetooth Audio': <Bluetooth size={20} className="vehicle-feature-main-icon" />,
       'USB Charging Ports': <Usb size={20} className="vehicle-feature-main-icon" />,
       'Tissue Box': <Box size={20} className="vehicle-feature-main-icon" />,
@@ -980,164 +969,164 @@ const VehicleBooking: React.FC = () => {
           <div className="vehicle-details-card-header-bar">
             <span>Vehicle Details</span>
           </div>
-          
+
           <div className="vehicle-details-card-body-form">
             <div className="vehicle-details-form-panel">
-            <div className="vehicle-details-grid-row vehicle-details-grid-row-3">
-              {/* Type Dropdown */}
-              <div className="vehicle-details-form-field">
-                <label className="vehicle-details-form-label">Type</label>
-                <select
-                  className="vehicle-details-form-select"
-                  value={vehicle.vehicleType}
-                  onChange={(e) => onUpdate('vehicleType', e.target.value)}
-                  disabled={!isEditing}
-                >
-                  {vehicleRequirements.map((type) => (
-                    <option key={type} value={type}>
-                      {type}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Vehicle Number */}
-              <div className="vehicle-details-form-field">
-                <label className="vehicle-details-form-label">Vehicle Number</label>
-                <input
-                  type="text"
-                  className="vehicle-details-form-input"
-                  value={vehicle.number}
-                  onChange={(e) => onUpdate('number', e.target.value)}
-                  readOnly={!isEditing}
-                  placeholder="e.g. TN 37 AB 1234"
-                />
-              </div>
-
-              {/* Fuel Type Pills */}
-              <div className="vehicle-details-form-field">
-                <label className="vehicle-details-form-label">Fuel Type</label>
-                <div className="vehicle-details-pills-row">
-                  {(['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'] as const).map((fuel) => (
-                    <button
-                      key={fuel}
-                      type="button"
-                      className={`vehicle-details-pill-btn ${currentFuelType === fuel ? 'active' : ''}`}
-                      onClick={() => handleFuelTypeChange(fuel)}
-                      disabled={!isEditing}
-                    >
-                      {fuel}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="vehicle-details-grid-row vehicle-details-grid-row-3">
-              {/* Make */}
-              <div className="vehicle-details-form-field">
-                <label className="vehicle-details-form-label">Make</label>
-                <input
-                  type="text"
-                  className="vehicle-details-form-input"
-                  value={vehicle.make}
-                  onChange={(e) => onUpdate('make', e.target.value)}
-                  readOnly={!isEditing}
-                  placeholder="e.g. Toyota"
-                />
-              </div>
-
-              {/* Model */}
-              <div className="vehicle-details-form-field">
-                <label className="vehicle-details-form-label">Model</label>
-                <input
-                  type="text"
-                  className="vehicle-details-form-input"
-                  value={vehicle.model || ''}
-                  onChange={(e) => onUpdate('model', e.target.value)}
-                  readOnly={!isEditing}
-                  placeholder="e.g. Innova"
-                />
-              </div>
-
-              {/* Transmission Pills */}
-              <div className="vehicle-details-form-field">
-                <label className="vehicle-details-form-label">Transmission</label>
-                <div className="vehicle-details-pills-row">
-                  {(['Manual', 'Automatic'] as const).map((trans) => (
-                    <button
-                      key={trans}
-                      type="button"
-                      className={`vehicle-details-pill-btn ${currentTransmission === trans ? 'active' : ''}`}
-                      onClick={() => handleTransmissionChange(trans)}
-                      disabled={!isEditing}
-                    >
-                      {trans}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="vehicle-details-grid-row vehicle-details-grid-row-4">
-              {/* Year of Registration */}
-              <div className="vehicle-details-form-field">
-                <label className="vehicle-details-form-label">Year of Registration</label>
-                <input
-                  type="text"
-                  className="vehicle-details-form-input"
-                  value={vehicle.yearOfRegistration || ''}
-                  onChange={(e) => onUpdate('yearOfRegistration', e.target.value)}
-                  readOnly={!isEditing}
-                  placeholder="e.g. 2019"
-                />
-              </div>
-
-              {/* Year of Purchase */}
-              <div className="vehicle-details-form-field">
-                <label className="vehicle-details-form-label">Year of Purchase</label>
-                <input
-                  type="text"
-                  className="vehicle-details-form-input"
-                  value={vehicle.yearOfPurchase || ''}
-                  onChange={(e) => onUpdate('yearOfPurchase', e.target.value)}
-                  readOnly={!isEditing}
-                  placeholder="e.g. 2019"
-                />
-              </div>
-
-              {/* Sealing (representing Seating) */}
-              <div className="vehicle-details-form-field field-sealing">
-                <label className="vehicle-details-form-label">Sealing</label>
-                <input
-                  type="text"
-                  className="vehicle-details-form-input"
-                  value={vehicle.seating}
-                  onChange={(e) => onUpdate('seating', e.target.value)}
-                  readOnly={!isEditing}
-                  placeholder="e.g. 6+1"
-                />
-              </div>
-
-              {/* Status */}
-              <div className="vehicle-details-form-field field-status-row">
-                <label className="vehicle-details-form-label">Status</label>
-                <div className="status-input-validated-wrapper">
+              <div className="vehicle-details-grid-row vehicle-details-grid-row-3">
+                {/* Type Dropdown */}
+                <div className="vehicle-details-form-field">
+                  <label className="vehicle-details-form-label">Type</label>
                   <select
                     className="vehicle-details-form-select"
-                    value={vehicle.status}
-                    onChange={(e) => onUpdate('status', e.target.value)}
+                    value={vehicle.vehicleType}
+                    onChange={(e) => onUpdate('vehicleType', e.target.value)}
                     disabled={!isEditing}
                   >
-                    <option value="Active">Active</option>
-                    <option value="Service">Service</option>
+                    {vehicleRequirements.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
+                    ))}
                   </select>
-                  {vehicle.status === 'Active' && (
-                    <CheckCircle2 className="vehicle-details-validated-checkmark" size={18} />
-                  )}
+                </div>
+
+                {/* Vehicle Number */}
+                <div className="vehicle-details-form-field">
+                  <label className="vehicle-details-form-label">Vehicle Number</label>
+                  <input
+                    type="text"
+                    className="vehicle-details-form-input"
+                    value={vehicle.number}
+                    onChange={(e) => onUpdate('number', e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="e.g. TN 37 AB 1234"
+                  />
+                </div>
+
+                {/* Fuel Type Pills */}
+                <div className="vehicle-details-form-field">
+                  <label className="vehicle-details-form-label">Fuel Type</label>
+                  <div className="vehicle-details-pills-row">
+                    {(['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid'] as const).map((fuel) => (
+                      <button
+                        key={fuel}
+                        type="button"
+                        className={`vehicle-details-pill-btn ${currentFuelType === fuel ? 'active' : ''}`}
+                        onClick={() => handleFuelTypeChange(fuel)}
+                        disabled={!isEditing}
+                      >
+                        {fuel}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+
+              <div className="vehicle-details-grid-row vehicle-details-grid-row-3">
+                {/* Make */}
+                <div className="vehicle-details-form-field">
+                  <label className="vehicle-details-form-label">Make</label>
+                  <input
+                    type="text"
+                    className="vehicle-details-form-input"
+                    value={vehicle.make}
+                    onChange={(e) => onUpdate('make', e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="e.g. Toyota"
+                  />
+                </div>
+
+                {/* Model */}
+                <div className="vehicle-details-form-field">
+                  <label className="vehicle-details-form-label">Model</label>
+                  <input
+                    type="text"
+                    className="vehicle-details-form-input"
+                    value={vehicle.model || ''}
+                    onChange={(e) => onUpdate('model', e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="e.g. Innova"
+                  />
+                </div>
+
+                {/* Transmission Pills */}
+                <div className="vehicle-details-form-field">
+                  <label className="vehicle-details-form-label">Transmission</label>
+                  <div className="vehicle-details-pills-row">
+                    {(['Manual', 'Automatic'] as const).map((trans) => (
+                      <button
+                        key={trans}
+                        type="button"
+                        className={`vehicle-details-pill-btn ${currentTransmission === trans ? 'active' : ''}`}
+                        onClick={() => handleTransmissionChange(trans)}
+                        disabled={!isEditing}
+                      >
+                        {trans}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="vehicle-details-grid-row vehicle-details-grid-row-4">
+                {/* Year of Registration */}
+                <div className="vehicle-details-form-field">
+                  <label className="vehicle-details-form-label">Year of Registration</label>
+                  <input
+                    type="text"
+                    className="vehicle-details-form-input"
+                    value={vehicle.yearOfRegistration || ''}
+                    onChange={(e) => onUpdate('yearOfRegistration', e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="e.g. 2019"
+                  />
+                </div>
+
+                {/* Year of Purchase */}
+                <div className="vehicle-details-form-field">
+                  <label className="vehicle-details-form-label">Year of Purchase</label>
+                  <input
+                    type="text"
+                    className="vehicle-details-form-input"
+                    value={vehicle.yearOfPurchase || ''}
+                    onChange={(e) => onUpdate('yearOfPurchase', e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="e.g. 2019"
+                  />
+                </div>
+
+                {/* Sealing (representing Seating) */}
+                <div className="vehicle-details-form-field field-sealing">
+                  <label className="vehicle-details-form-label">Sealing</label>
+                  <input
+                    type="text"
+                    className="vehicle-details-form-input"
+                    value={vehicle.seating}
+                    onChange={(e) => onUpdate('seating', e.target.value)}
+                    readOnly={!isEditing}
+                    placeholder="e.g. 6+1"
+                  />
+                </div>
+
+                {/* Status */}
+                <div className="vehicle-details-form-field field-status-row">
+                  <label className="vehicle-details-form-label">Status</label>
+                  <div className="status-input-validated-wrapper">
+                    <select
+                      className="vehicle-details-form-select"
+                      value={vehicle.status}
+                      onChange={(e) => onUpdate('status', e.target.value)}
+                      disabled={!isEditing}
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Service">Service</option>
+                    </select>
+                    {vehicle.status === 'Active' && (
+                      <CheckCircle2 className="vehicle-details-validated-checkmark" size={18} />
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="vehicle-features-panel">
@@ -1200,104 +1189,108 @@ const VehicleBooking: React.FC = () => {
               {managedVehicles.length === 0 ? (
                 <tr>
                   <td colSpan={7}>
-                    <button type="button" onClick={addManagedVehicle}>Add vehicle</button>
+                    <button type="button" onClick={addManagedVehicle}>
+                      Add vehicle
+                    </button>
                   </td>
                 </tr>
-              ) : managedVehicles.map((vehicle, index) => {
-                const isEditing = editingManagedVehicleId === vehicle.id;
-                const isViewing = viewingManagedVehicleId === vehicle.id;
+              ) : (
+                managedVehicles.map((vehicle, index) => {
+                  const isEditing = editingManagedVehicleId === vehicle.id;
+                  const isViewing = viewingManagedVehicleId === vehicle.id;
 
-                return (
-                  <tr className={isViewing ? 'is-viewing' : ''} key={vehicle.id}>
-                    <td>{index + 1}</td>
-                    <td>
-                      <select
-                        className="vehiclebooking-management-control"
-                        value={vehicle.vehicleType}
-                        onChange={(event) =>
-                          updateManagedVehicle(vehicle.id, 'vehicleType', event.target.value)
-                        }
-                        disabled={!isEditing}
-                        aria-label="Vehicle type"
-                      >
-                        {vehicleRequirements.map((type) => (
-                          <option value={type} key={type}>
-                            {type}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        className="vehiclebooking-management-control"
-                        type="text"
-                        value={vehicle.number}
-                        onChange={(event) =>
-                          updateManagedVehicle(vehicle.id, 'number', event.target.value)
-                        }
-                        readOnly={!isEditing}
-                        aria-label="Vehicle number"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="vehiclebooking-management-control"
-                        type="text"
-                        value={vehicle.make}
-                        onChange={(event) =>
-                          updateManagedVehicle(vehicle.id, 'make', event.target.value)
-                        }
-                        readOnly={!isEditing}
-                        aria-label="Vehicle make"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="vehiclebooking-management-control"
-                        type="text"
-                        value={vehicle.seating}
-                        onChange={(event) =>
-                          updateManagedVehicle(vehicle.id, 'seating', event.target.value)
-                        }
-                        readOnly={!isEditing}
-                        aria-label="Vehicle seating"
-                      />
-                    </td>
-                    <td>
-                      <select
-                        className={`vehiclebooking-management-status vehiclebooking-management-status--${vehicle.status.toLowerCase()}`}
-                        value={vehicle.status}
-                        onChange={(event) =>
-                          updateManagedVehicle(vehicle.id, 'status', event.target.value)
-                        }
-                        disabled={!isEditing}
-                        aria-label="Vehicle status"
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Service">Service</option>
-                      </select>
-                    </td>
-                    <td>
-                      {renderVehicleManagementActions(
-                        addManagedVehicle,
-                        () =>
-                          setEditingManagedVehicleId((currentId) =>
-                            currentId === vehicle.id ? null : vehicle.id,
-                          ),
-                        () =>
-                          setViewingManagedVehicleId((currentId) =>
-                            currentId === vehicle.id ? null : vehicle.id,
-                          ),
-                        () => removeManagedVehicle(vehicle.id),
-                        false,
-                        isEditing,
-                        isViewing,
-                        'vehicle'
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr className={isViewing ? 'is-viewing' : ''} key={vehicle.id}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <select
+                          className="vehiclebooking-management-control"
+                          value={vehicle.vehicleType}
+                          onChange={(event) =>
+                            updateManagedVehicle(vehicle.id, 'vehicleType', event.target.value)
+                          }
+                          disabled={!isEditing}
+                          aria-label="Vehicle type"
+                        >
+                          {vehicleRequirements.map((type) => (
+                            <option value={type} key={type}>
+                              {type}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          className="vehiclebooking-management-control"
+                          type="text"
+                          value={vehicle.number}
+                          onChange={(event) =>
+                            updateManagedVehicle(vehicle.id, 'number', event.target.value)
+                          }
+                          readOnly={!isEditing}
+                          aria-label="Vehicle number"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="vehiclebooking-management-control"
+                          type="text"
+                          value={vehicle.make}
+                          onChange={(event) =>
+                            updateManagedVehicle(vehicle.id, 'make', event.target.value)
+                          }
+                          readOnly={!isEditing}
+                          aria-label="Vehicle make"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="vehiclebooking-management-control"
+                          type="text"
+                          value={vehicle.seating}
+                          onChange={(event) =>
+                            updateManagedVehicle(vehicle.id, 'seating', event.target.value)
+                          }
+                          readOnly={!isEditing}
+                          aria-label="Vehicle seating"
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className={`vehiclebooking-management-status vehiclebooking-management-status--${vehicle.status.toLowerCase()}`}
+                          value={vehicle.status}
+                          onChange={(event) =>
+                            updateManagedVehicle(vehicle.id, 'status', event.target.value)
+                          }
+                          disabled={!isEditing}
+                          aria-label="Vehicle status"
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Service">Service</option>
+                        </select>
+                      </td>
+                      <td>
+                        {renderVehicleManagementActions(
+                          addManagedVehicle,
+                          () =>
+                            setEditingManagedVehicleId((currentId) =>
+                              currentId === vehicle.id ? null : vehicle.id,
+                            ),
+                          () =>
+                            setViewingManagedVehicleId((currentId) =>
+                              currentId === vehicle.id ? null : vehicle.id,
+                            ),
+                          () => removeManagedVehicle(vehicle.id),
+                          false,
+                          isEditing,
+                          isViewing,
+                          'vehicle',
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -1321,76 +1314,86 @@ const VehicleBooking: React.FC = () => {
               {drivers.length === 0 ? (
                 <tr>
                   <td colSpan={6}>
-                    <button type="button" onClick={addDriver}>Add driver</button>
+                    <button type="button" onClick={addDriver}>
+                      Add driver
+                    </button>
                   </td>
                 </tr>
-              ) : drivers.map((driver, index) => {
-                const isEditing = editingDriverId === driver.id;
-                const isViewing = viewingDriverId === driver.id;
+              ) : (
+                drivers.map((driver, index) => {
+                  const isEditing = editingDriverId === driver.id;
+                  const isViewing = viewingDriverId === driver.id;
 
-                return (
-                  <tr className={isViewing ? 'is-viewing' : ''} key={driver.id}>
-                    <td>{index + 1}</td>
-                    <td>
-                      <input
-                        className="vehiclebooking-management-control"
-                        type="text"
-                        value={driver.name}
-                        onChange={(event) => updateDriver(driver.id, 'name', event.target.value)}
-                        readOnly={!isEditing}
-                        aria-label="Driver name"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="vehiclebooking-management-control"
-                        type="tel"
-                        value={driver.mobile}
-                        onChange={(event) => updateDriver(driver.id, 'mobile', event.target.value)}
-                        readOnly={!isEditing}
-                        aria-label="Driver mobile number"
-                      />
-                    </td>
-                    <td>
-                      <select
-                        className="vehiclebooking-management-control"
-                        value={driver.category}
-                        onChange={(event) => updateDriver(driver.id, 'category', event.target.value)}
-                        disabled={!isEditing}
-                        aria-label="Driver category"
-                      >
-                        <option value="Car Driver">Car Driver</option>
-                        <option value="Bus Driver">Bus Driver</option>
-                      </select>
-                    </td>
-                    <td>
-                      <select
-                        className={`vehiclebooking-management-status vehiclebooking-management-status--${driver.status.toLowerCase()}`}
-                        value={driver.status}
-                        onChange={(event) => updateDriver(driver.id, 'status', event.target.value)}
-                        disabled={!isEditing}
-                        aria-label="Driver status"
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Leave">Leave</option>
-                      </select>
-                    </td>
-                    <td>
-                      {renderDriverManagementActions(
-                        addDriver,
-                        () =>
-                          setEditingDriverId((currentId) =>
-                            currentId === driver.id ? null : driver.id,
-                          ),
-                        () => removeDriver(driver.id),
-                        false,
-                        isEditing,
-                        'driver'
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
+                  return (
+                    <tr className={isViewing ? 'is-viewing' : ''} key={driver.id}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <input
+                          className="vehiclebooking-management-control"
+                          type="text"
+                          value={driver.name}
+                          onChange={(event) => updateDriver(driver.id, 'name', event.target.value)}
+                          readOnly={!isEditing}
+                          aria-label="Driver name"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="vehiclebooking-management-control"
+                          type="tel"
+                          value={driver.mobile}
+                          onChange={(event) =>
+                            updateDriver(driver.id, 'mobile', event.target.value)
+                          }
+                          readOnly={!isEditing}
+                          aria-label="Driver mobile number"
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className="vehiclebooking-management-control"
+                          value={driver.category}
+                          onChange={(event) =>
+                            updateDriver(driver.id, 'category', event.target.value)
+                          }
+                          disabled={!isEditing}
+                          aria-label="Driver category"
+                        >
+                          <option value="Car Driver">Car Driver</option>
+                          <option value="Bus Driver">Bus Driver</option>
+                        </select>
+                      </td>
+                      <td>
+                        <select
+                          className={`vehiclebooking-management-status vehiclebooking-management-status--${driver.status.toLowerCase()}`}
+                          value={driver.status}
+                          onChange={(event) =>
+                            updateDriver(driver.id, 'status', event.target.value)
+                          }
+                          disabled={!isEditing}
+                          aria-label="Driver status"
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Leave">Leave</option>
+                        </select>
+                      </td>
+                      <td>
+                        {renderDriverManagementActions(
+                          addDriver,
+                          () =>
+                            setEditingDriverId((currentId) =>
+                              currentId === driver.id ? null : driver.id,
+                            ),
+                          () => removeDriver(driver.id),
+                          false,
+                          isEditing,
+                          'driver',
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
@@ -1414,7 +1417,7 @@ const VehicleBooking: React.FC = () => {
                   'Applicant Name',
                   applicantUiDetails.name,
                   'text',
-                  'Search employee by name or ERP ID'
+                  'Search employee by name or ERP ID',
                 )}
                 {renderReadOnlyInput('Date', applicantUiDetails.date, 'date')}
                 {renderReadOnlyInput('Department', applicantUiDetails.department)}
@@ -1422,15 +1425,10 @@ const VehicleBooking: React.FC = () => {
                   'Designation',
                   applicantUiDetails.designation,
                   'text',
-                  'e.g., Manager, Staff'
+                  'e.g., Manager, Staff',
                 )}
                 {renderReadOnlyInput('Email', applicantUiDetails.email, 'email')}
-                {renderReadOnlyInput(
-                  'Mobile',
-                  applicantUiDetails.mobile,
-                  'tel',
-                  '10 digit mobile'
-                )}
+                {renderReadOnlyInput('Mobile', applicantUiDetails.mobile, 'tel', '10 digit mobile')}
               </div>
             </div>
           </section>
@@ -1498,9 +1496,7 @@ const VehicleBooking: React.FC = () => {
                     <input
                       className="vehiclebooking-input"
                       value={transportDetails.purpose}
-                      onChange={(event) =>
-                        updateTransportDetails('purpose', event.target.value)
-                      }
+                      onChange={(event) => updateTransportDetails('purpose', event.target.value)}
                       aria-label="Purpose"
                     />
                   </label>
@@ -1516,8 +1512,8 @@ const VehicleBooking: React.FC = () => {
                           priority,
                           transportDetails.priority,
                           'vehicle-priority',
-                          (value) => updateTransportDetails('priority', value)
-                        )
+                          (value) => updateTransportDetails('priority', value),
+                        ),
                       )}
                     </div>
                   </div>
@@ -1525,7 +1521,9 @@ const VehicleBooking: React.FC = () => {
 
                 <div className="vehiclebooking-section-wrapper">
                   <hr className="vehiclebooking-divider" />
-                  <div className="vehiclebooking-subsection-title vehiclebooking-subsection-title--above">Vehicle Requirement</div>
+                  <div className="vehiclebooking-subsection-title vehiclebooking-subsection-title--above">
+                    Vehicle Requirement
+                  </div>
                   <div className="vehiclebooking-layout-row vehiclebooking-layout-row--vehicle vehiclebooking-row-container">
                     <div className="vehiclebooking-option-panel">
                       <div className="vehiclebooking-radio-group vehiclebooking-option-strip">
@@ -1534,8 +1532,8 @@ const VehicleBooking: React.FC = () => {
                             vehicleRequirement,
                             transportDetails.vehicleRequirement,
                             'vehicle-requirement',
-                            handleVehicleRequirementSelect
-                          )
+                            handleVehicleRequirementSelect,
+                          ),
                         )}
                       </div>
                     </div>
@@ -1561,7 +1559,9 @@ const VehicleBooking: React.FC = () => {
 
                 <div className="vehiclebooking-section-wrapper">
                   <hr className="vehiclebooking-divider" />
-                  <div className="vehiclebooking-subsection-title vehiclebooking-subsection-title--above">Booking For</div>
+                  <div className="vehiclebooking-subsection-title vehiclebooking-subsection-title--above">
+                    Booking For
+                  </div>
                   <div className="vehiclebooking-layout-row vehiclebooking-layout-row--booking-for vehiclebooking-row-container">
                     <div className="vehiclebooking-option-panel">
                       <div className="vehiclebooking-radio-group vehiclebooking-option-strip vehiclebooking-option-strip--booking-for">
@@ -1570,8 +1570,8 @@ const VehicleBooking: React.FC = () => {
                             bookingFor,
                             transportDetails.bookingFor,
                             'vehicle-booking-for',
-                            (value) => updateTransportDetails('bookingFor', value)
-                          )
+                            (value) => updateTransportDetails('bookingFor', value),
+                          ),
                         )}
                       </div>
                     </div>
@@ -1587,8 +1587,8 @@ const VehicleBooking: React.FC = () => {
                             serviceType,
                             transportDetails.serviceType,
                             'vehicle-service',
-                            (value) => updateTransportDetails('serviceType', value)
-                          )
+                            (value) => updateTransportDetails('serviceType', value),
+                          ),
                         )}
                       </div>
                     </div>
@@ -1597,7 +1597,9 @@ const VehicleBooking: React.FC = () => {
 
                 <div className="vehiclebooking-section-wrapper">
                   <hr className="vehiclebooking-divider" />
-                  <div className="vehiclebooking-subsection-title vehiclebooking-subsection-title--above">Accompanied by</div>
+                  <div className="vehiclebooking-subsection-title vehiclebooking-subsection-title--above">
+                    Accompanied by
+                  </div>
                   <div className="vehiclebooking-layout-row vehiclebooking-layout-row--accompanied vehiclebooking-row-container">
                     <div className="vehiclebooking-inline-panel vehiclebooking-traveler-panel">
                       <div className="vehiclebooking-traveler-heading">
@@ -1673,9 +1675,7 @@ const VehicleBooking: React.FC = () => {
                         className="vehiclebooking-remarks-input"
                         type="text"
                         value={transportDetails.remarks}
-                        onChange={(event) =>
-                          updateTransportDetails('remarks', event.target.value)
-                        }
+                        onChange={(event) => updateTransportDetails('remarks', event.target.value)}
                         placeholder="Enter remarks (if any)"
                         aria-label="Remarks"
                       />
@@ -1692,8 +1692,8 @@ const VehicleBooking: React.FC = () => {
                             travelMode,
                             transportDetails.travelMode,
                             'vehicle-travel-mode',
-                            (value) => updateTransportDetails('travelMode', value)
-                          )
+                            (value) => updateTransportDetails('travelMode', value),
+                          ),
                         )}
                       </div>
                     </div>
@@ -1728,8 +1728,13 @@ const VehicleBooking: React.FC = () => {
                             <input
                               className="vehiclebooking-input vehiclebooking-table-input"
                               type="text"
-                              value={travelPlanBoardingDateInputs[row.id] ?? formatDateForDisplay(row.boardingDate)}
-                              onChange={(event) => updateTravelPlanBoardingDateInput(row.id, event.target.value)}
+                              value={
+                                travelPlanBoardingDateInputs[row.id] ??
+                                formatDateForDisplay(row.boardingDate)
+                              }
+                              onChange={(event) =>
+                                updateTravelPlanBoardingDateInput(row.id, event.target.value)
+                              }
                               onBlur={() => resetTravelPlanBoardingDateInput(row)}
                               placeholder="dd/mm/yyyy"
                               inputMode="numeric"
@@ -1742,7 +1747,9 @@ const VehicleBooking: React.FC = () => {
                               className="vehiclebooking-native-date-picker"
                               type="date"
                               value={row.boardingDate}
-                              onChange={(event) => updateTravelPlanRow(row.id, 'boardingDate', event.target.value)}
+                              onChange={(event) =>
+                                updateTravelPlanRow(row.id, 'boardingDate', event.target.value)
+                              }
                               aria-label="Open boarding date calendar"
                               tabIndex={-1}
                             />
@@ -1763,14 +1770,14 @@ const VehicleBooking: React.FC = () => {
                               updateTravelPlanRow(
                                 row.id,
                                 'boardingTime',
-                                formatTimeAsYouType(event.target.value, row.boardingTime)
+                                formatTimeAsYouType(event.target.value, row.boardingTime),
                               )
                             }
                             onBlur={(event) =>
                               updateTravelPlanRow(
                                 row.id,
                                 'boardingTime',
-                                normalizeTimeEntry(event.target.value)
+                                normalizeTimeEntry(event.target.value),
                               )
                             }
                             aria-label="Boarding time"
@@ -1792,8 +1799,13 @@ const VehicleBooking: React.FC = () => {
                             <input
                               className="vehiclebooking-input vehiclebooking-table-input"
                               type="text"
-                              value={travelPlanDroppingDateInputs[row.id] ?? formatDateForDisplay(row.droppingDate)}
-                              onChange={(event) => updateTravelPlanDroppingDateInput(row.id, event.target.value)}
+                              value={
+                                travelPlanDroppingDateInputs[row.id] ??
+                                formatDateForDisplay(row.droppingDate)
+                              }
+                              onChange={(event) =>
+                                updateTravelPlanDroppingDateInput(row.id, event.target.value)
+                              }
                               onBlur={() => resetTravelPlanDroppingDateInput(row)}
                               placeholder="dd/mm/yyyy"
                               inputMode="numeric"
@@ -1806,7 +1818,9 @@ const VehicleBooking: React.FC = () => {
                               className="vehiclebooking-native-date-picker"
                               type="date"
                               value={row.droppingDate}
-                              onChange={(event) => updateTravelPlanRow(row.id, 'droppingDate', event.target.value)}
+                              onChange={(event) =>
+                                updateTravelPlanRow(row.id, 'droppingDate', event.target.value)
+                              }
                               aria-label="Open dropping date calendar"
                               tabIndex={-1}
                             />
@@ -1827,14 +1841,14 @@ const VehicleBooking: React.FC = () => {
                               updateTravelPlanRow(
                                 row.id,
                                 'droppingTime',
-                                formatTimeAsYouType(event.target.value, row.droppingTime)
+                                formatTimeAsYouType(event.target.value, row.droppingTime),
                               )
                             }
                             onBlur={(event) =>
                               updateTravelPlanRow(
                                 row.id,
                                 'droppingTime',
-                                normalizeTimeEntry(event.target.value)
+                                normalizeTimeEntry(event.target.value),
                               )
                             }
                             aria-label="Dropping time"
@@ -1854,14 +1868,11 @@ const VehicleBooking: React.FC = () => {
                         <td>
                           {renderRowActions(
                             () =>
-                              setTravelPlanRows((prevRows) => [
-                                ...prevRows,
-                                createTravelPlanRow(),
-                              ]),
+                              setTravelPlanRows((prevRows) => [...prevRows, createTravelPlanRow()]),
                             () => removeTravelPlanRow(row.id),
                             travelPlanRows.length === 1,
                             'Add travel plan row',
-                            'Remove travel plan row'
+                            'Remove travel plan row',
                           )}
                         </td>
                       </tr>
@@ -1877,193 +1888,215 @@ const VehicleBooking: React.FC = () => {
               <div className="vehiclebooking-radio-group vehiclebooking-centered-toggle">
                 {(['Day Booking', 'Trip Booking'] as ShuttleBookingMode[]).map((mode) =>
                   renderChoiceButton(mode, shuttleBookingMode, 'vehicle-shuttle-mode', (value) =>
-                    setShuttleBookingMode(value)
-                  )
+                    setShuttleBookingMode(value),
+                  ),
                 )}
               </div>
 
-              {shuttleBookingMode === 'Trip Booking' && <div className="vehiclebooking-table-wrap vehiclebooking-shuttle-table-wrap">
-                <table className="vehiclebooking-table vehiclebooking-shuttle-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Time</th>
-                      <th>Purpose</th>
-                      <th># Trips</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shuttleTripRows.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <span className="vehiclebooking-date-input-wrap">
-                            <input
-                              className="vehiclebooking-input vehiclebooking-table-input"
-                              type="text"
-                              value={shuttleTripDateInputs[row.id] ?? formatDateForDisplay(row.date)}
-                              onChange={(event) => updateShuttleTripDateInput(row.id, event.target.value)}
-                              onBlur={() => resetShuttleTripDateInput(row)}
-                              placeholder="dd/mm/yyyy"
-                              inputMode="numeric"
-                              pattern="\d{2}/\d{2}/\d{4}"
-                              title="Enter date as DD/MM/YYYY"
-                              maxLength={10}
-                              aria-label="Shuttle trip date"
-                            />
-                            <input
-                              className="vehiclebooking-native-date-picker"
-                              type="date"
-                              value={row.date}
-                              onChange={(event) => updateShuttleTripRow(row.id, 'date', event.target.value)}
-                              aria-label="Open shuttle trip date calendar"
-                              tabIndex={-1}
-                            />
-                          </span>
-                        </td>
-                        <td>
-                          <input
-                            className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-input--time"
-                            type="text"
-                            placeholder="HH:MM AM/PM"
-                            inputMode="text"
-                            autoCapitalize="characters"
-                            maxLength={9}
-                            pattern="^(0?[1-9]|1[0-2]):[0-5][0-9] ?(AM|PM|am|pm)$"
-                            title="Enter time as HH:MM AM or HH:MM PM"
-                            value={row.time}
-                            onChange={(event) =>
-                              updateShuttleTripRow(
-                                row.id,
-                                'time',
-                                formatTimeAsYouType(event.target.value, row.time)
-                              )
-                            }
-                            onBlur={(event) =>
-                              updateShuttleTripRow(
-                                row.id,
-                                'time',
-                                normalizeTimeEntry(event.target.value)
-                              )
-                            }
-                            aria-label="Shuttle trip time"
-                          />
-                        </td>
-                        <td>
-                          <select
-                            className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-select"
-                            value={row.purpose}
-                            onChange={(event) =>
-                              updateShuttleTripRow(row.id, 'purpose', event.target.value)
-                            }
-                            aria-label="Shuttle trip purpose"
-                          >
-                            <option value=""></option>
-                            <option value="Academic">Academic</option>
-                            <option value="Official">Official</option>
-                            <option value="Guest Pickup">Guest Pickup</option>
-                            <option value="Logistics">Logistics</option>
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-input--compact"
-                            type="number"
-                            min="0"
-                            value={row.trips}
-                            onChange={(event) =>
-                              updateShuttleTripRow(row.id, 'trips', event.target.value)
-                            }
-                            aria-label="Number of shuttle trips"
-                          />
-                        </td>
-                        <td>
-                          {renderRowActions(
-                            () =>
-                              setShuttleTripRows((prevRows) => [
-                                ...prevRows,
-                                createShuttleTripRow(),
-                              ]),
-                            () => removeShuttleTripRow(row.id),
-                            shuttleTripRows.length === 1,
-                            'Add shuttle trip row',
-                            'Remove shuttle trip row'
-                          )}
-                        </td>
+              {shuttleBookingMode === 'Trip Booking' && (
+                <div className="vehiclebooking-table-wrap vehiclebooking-shuttle-table-wrap">
+                  <table className="vehiclebooking-table vehiclebooking-shuttle-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Purpose</th>
+                        <th># Trips</th>
+                        <th>Action</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>}
-
-              {shuttleBookingMode === 'Day Booking' && <div className="vehiclebooking-table-wrap vehiclebooking-shuttle-table-wrap">
-                <table className="vehiclebooking-table vehiclebooking-day-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Requirement</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shuttleDayRows.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <span className="vehiclebooking-date-input-wrap">
+                    </thead>
+                    <tbody>
+                      {shuttleTripRows.map((row) => (
+                        <tr key={row.id}>
+                          <td>
+                            <span className="vehiclebooking-date-input-wrap">
+                              <input
+                                className="vehiclebooking-input vehiclebooking-table-input"
+                                type="text"
+                                value={
+                                  shuttleTripDateInputs[row.id] ?? formatDateForDisplay(row.date)
+                                }
+                                onChange={(event) =>
+                                  updateShuttleTripDateInput(row.id, event.target.value)
+                                }
+                                onBlur={() => resetShuttleTripDateInput(row)}
+                                placeholder="dd/mm/yyyy"
+                                inputMode="numeric"
+                                pattern="\d{2}/\d{2}/\d{4}"
+                                title="Enter date as DD/MM/YYYY"
+                                maxLength={10}
+                                aria-label="Shuttle trip date"
+                              />
+                              <input
+                                className="vehiclebooking-native-date-picker"
+                                type="date"
+                                value={row.date}
+                                onChange={(event) =>
+                                  updateShuttleTripRow(row.id, 'date', event.target.value)
+                                }
+                                aria-label="Open shuttle trip date calendar"
+                                tabIndex={-1}
+                              />
+                            </span>
+                          </td>
+                          <td>
                             <input
-                              className="vehiclebooking-input vehiclebooking-table-input"
+                              className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-input--time"
                               type="text"
-                              value={shuttleDayDateInputs[row.id] ?? formatDateForDisplay(row.date)}
-                              onChange={(event) => updateShuttleDayDateInput(row.id, event.target.value)}
-                              onBlur={() => resetShuttleDayDateInput(row)}
-                              placeholder="dd/mm/yyyy"
-                              inputMode="numeric"
-                              pattern="\d{2}/\d{2}/\d{4}"
-                              title="Enter date as DD/MM/YYYY"
-                              maxLength={10}
-                              aria-label="Shuttle day date"
+                              placeholder="HH:MM AM/PM"
+                              inputMode="text"
+                              autoCapitalize="characters"
+                              maxLength={9}
+                              pattern="^(0?[1-9]|1[0-2]):[0-5][0-9] ?(AM|PM|am|pm)$"
+                              title="Enter time as HH:MM AM or HH:MM PM"
+                              value={row.time}
+                              onChange={(event) =>
+                                updateShuttleTripRow(
+                                  row.id,
+                                  'time',
+                                  formatTimeAsYouType(event.target.value, row.time),
+                                )
+                              }
+                              onBlur={(event) =>
+                                updateShuttleTripRow(
+                                  row.id,
+                                  'time',
+                                  normalizeTimeEntry(event.target.value),
+                                )
+                              }
+                              aria-label="Shuttle trip time"
                             />
+                          </td>
+                          <td>
+                            <select
+                              className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-select"
+                              value={row.purpose}
+                              onChange={(event) =>
+                                updateShuttleTripRow(row.id, 'purpose', event.target.value)
+                              }
+                              aria-label="Shuttle trip purpose"
+                            >
+                              <option value=""></option>
+                              <option value="Academic">Academic</option>
+                              <option value="Official">Official</option>
+                              <option value="Guest Pickup">Guest Pickup</option>
+                              <option value="Logistics">Logistics</option>
+                            </select>
+                          </td>
+                          <td>
                             <input
-                              className="vehiclebooking-native-date-picker"
-                              type="date"
-                              value={row.date}
-                              onChange={(event) => updateShuttleDayRow(row.id, 'date', event.target.value)}
-                              aria-label="Open shuttle day date calendar"
-                              tabIndex={-1}
+                              className="vehiclebooking-input vehiclebooking-table-input vehiclebooking-table-input--compact"
+                              type="number"
+                              min="0"
+                              value={row.trips}
+                              onChange={(event) =>
+                                updateShuttleTripRow(row.id, 'trips', event.target.value)
+                              }
+                              aria-label="Number of shuttle trips"
                             />
-                          </span>
-                        </td>
-                        <td>
-                          <div className="vehiclebooking-radio-group vehiclebooking-requirement-group">
-                            {(['Full Day', 'FN Session', 'AN Session', 'Night'] as ShuttleRequirement[]).map(
-                              (requirement) =>
+                          </td>
+                          <td>
+                            {renderRowActions(
+                              () =>
+                                setShuttleTripRows((prevRows) => [
+                                  ...prevRows,
+                                  createShuttleTripRow(),
+                                ]),
+                              () => removeShuttleTripRow(row.id),
+                              shuttleTripRows.length === 1,
+                              'Add shuttle trip row',
+                              'Remove shuttle trip row',
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {shuttleBookingMode === 'Day Booking' && (
+                <div className="vehiclebooking-table-wrap vehiclebooking-shuttle-table-wrap">
+                  <table className="vehiclebooking-table vehiclebooking-day-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Requirement</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shuttleDayRows.map((row) => (
+                        <tr key={row.id}>
+                          <td>
+                            <span className="vehiclebooking-date-input-wrap">
+                              <input
+                                className="vehiclebooking-input vehiclebooking-table-input"
+                                type="text"
+                                value={
+                                  shuttleDayDateInputs[row.id] ?? formatDateForDisplay(row.date)
+                                }
+                                onChange={(event) =>
+                                  updateShuttleDayDateInput(row.id, event.target.value)
+                                }
+                                onBlur={() => resetShuttleDayDateInput(row)}
+                                placeholder="dd/mm/yyyy"
+                                inputMode="numeric"
+                                pattern="\d{2}/\d{2}/\d{4}"
+                                title="Enter date as DD/MM/YYYY"
+                                maxLength={10}
+                                aria-label="Shuttle day date"
+                              />
+                              <input
+                                className="vehiclebooking-native-date-picker"
+                                type="date"
+                                value={row.date}
+                                onChange={(event) =>
+                                  updateShuttleDayRow(row.id, 'date', event.target.value)
+                                }
+                                aria-label="Open shuttle day date calendar"
+                                tabIndex={-1}
+                              />
+                            </span>
+                          </td>
+                          <td>
+                            <div className="vehiclebooking-radio-group vehiclebooking-requirement-group">
+                              {(
+                                [
+                                  'Full Day',
+                                  'FN Session',
+                                  'AN Session',
+                                  'Night',
+                                ] as ShuttleRequirement[]
+                              ).map((requirement) =>
                                 renderChoiceButton(
                                   requirement,
                                   row.requirement,
                                   `vehicle-shuttle-requirement-${row.id}`,
-                                  (value) => updateShuttleDayRow(row.id, 'requirement', value)
-                                )
+                                  (value) => updateShuttleDayRow(row.id, 'requirement', value),
+                                ),
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            {renderRowActions(
+                              () =>
+                                setShuttleDayRows((prevRows) => [
+                                  ...prevRows,
+                                  createShuttleDayRow(),
+                                ]),
+                              () => removeShuttleDayRow(row.id),
+                              shuttleDayRows.length === 1,
+                              'Add shuttle day row',
+                              'Remove shuttle day row',
                             )}
-                          </div>
-                        </td>
-                        <td>
-                          {renderRowActions(
-                            () =>
-                              setShuttleDayRows((prevRows) => [
-                                ...prevRows,
-                                createShuttleDayRow(),
-                              ]),
-                            () => removeShuttleDayRow(row.id),
-                            shuttleDayRows.length === 1,
-                            'Add shuttle day row',
-                            'Remove shuttle day row'
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           </section>
 
@@ -2151,8 +2184,13 @@ const VehicleBooking: React.FC = () => {
                               <input
                                 className="vehiclebooking-input vehiclebooking-table-input"
                                 type="text"
-                                value={travelPlanBoardingDateInputs[row.id] ?? formatDateForDisplay(row.boardingDate)}
-                                onChange={(event) => updateTravelPlanBoardingDateInput(row.id, event.target.value)}
+                                value={
+                                  travelPlanBoardingDateInputs[row.id] ??
+                                  formatDateForDisplay(row.boardingDate)
+                                }
+                                onChange={(event) =>
+                                  updateTravelPlanBoardingDateInput(row.id, event.target.value)
+                                }
                                 onBlur={() => resetTravelPlanBoardingDateInput(row)}
                                 placeholder="dd/mm/yyyy"
                                 inputMode="numeric"
@@ -2165,7 +2203,9 @@ const VehicleBooking: React.FC = () => {
                                 className="vehiclebooking-native-date-picker"
                                 type="date"
                                 value={row.boardingDate}
-                                onChange={(event) => updateTravelPlanRow(row.id, 'boardingDate', event.target.value)}
+                                onChange={(event) =>
+                                  updateTravelPlanRow(row.id, 'boardingDate', event.target.value)
+                                }
                                 aria-label="Open allotment boarding date calendar"
                                 tabIndex={-1}
                               />
@@ -2186,14 +2226,14 @@ const VehicleBooking: React.FC = () => {
                                 updateTravelPlanRow(
                                   row.id,
                                   'boardingTime',
-                                  formatTimeAsYouType(event.target.value, row.boardingTime)
+                                  formatTimeAsYouType(event.target.value, row.boardingTime),
                                 )
                               }
                               onBlur={(event) =>
                                 updateTravelPlanRow(
                                   row.id,
                                   'boardingTime',
-                                  normalizeTimeEntry(event.target.value)
+                                  normalizeTimeEntry(event.target.value),
                                 )
                               }
                               aria-label="Allotment boarding time"
@@ -2215,8 +2255,13 @@ const VehicleBooking: React.FC = () => {
                               <input
                                 className="vehiclebooking-input vehiclebooking-table-input"
                                 type="text"
-                                value={travelPlanDroppingDateInputs[row.id] ?? formatDateForDisplay(row.droppingDate)}
-                                onChange={(event) => updateTravelPlanDroppingDateInput(row.id, event.target.value)}
+                                value={
+                                  travelPlanDroppingDateInputs[row.id] ??
+                                  formatDateForDisplay(row.droppingDate)
+                                }
+                                onChange={(event) =>
+                                  updateTravelPlanDroppingDateInput(row.id, event.target.value)
+                                }
                                 onBlur={() => resetTravelPlanDroppingDateInput(row)}
                                 placeholder="dd/mm/yyyy"
                                 inputMode="numeric"
@@ -2229,7 +2274,9 @@ const VehicleBooking: React.FC = () => {
                                 className="vehiclebooking-native-date-picker"
                                 type="date"
                                 value={row.droppingDate}
-                                onChange={(event) => updateTravelPlanRow(row.id, 'droppingDate', event.target.value)}
+                                onChange={(event) =>
+                                  updateTravelPlanRow(row.id, 'droppingDate', event.target.value)
+                                }
                                 aria-label="Open allotment dropping date calendar"
                                 tabIndex={-1}
                               />
@@ -2250,14 +2297,14 @@ const VehicleBooking: React.FC = () => {
                                 updateTravelPlanRow(
                                   row.id,
                                   'droppingTime',
-                                  formatTimeAsYouType(event.target.value, row.droppingTime)
+                                  formatTimeAsYouType(event.target.value, row.droppingTime),
                                 )
                               }
                               onBlur={(event) =>
                                 updateTravelPlanRow(
                                   row.id,
                                   'droppingTime',
-                                  normalizeTimeEntry(event.target.value)
+                                  normalizeTimeEntry(event.target.value),
                                 )
                               }
                               aria-label="Allotment dropping time"
@@ -2284,7 +2331,7 @@ const VehicleBooking: React.FC = () => {
                               () => removeTravelPlanRow(row.id),
                               travelPlanRows.length === 1,
                               'Add travel plan row',
-                              'Remove travel plan row'
+                              'Remove travel plan row',
                             )}
                           </td>
                         </tr>
@@ -2379,7 +2426,7 @@ const VehicleBooking: React.FC = () => {
                       () => removeVehicleAllotmentRow(row.id),
                       vehicleAllotmentRows.length === 1,
                       'Add vehicle allotment row',
-                      'Remove vehicle allotment row'
+                      'Remove vehicle allotment row',
                     )}
                   </div>
                 ))}
@@ -2391,24 +2438,21 @@ const VehicleBooking: React.FC = () => {
             <>
               {viewingManagedVehicleId !== null &&
                 managedVehicles.find((vehicle) => vehicle.id === viewingManagedVehicleId) && (
-                <section className="vehiclebooking-card vehiclebooking-vehicle-details-standalone">
-                  {renderVehicleDetailsCard(
-                    managedVehicles.find((vehicle) => vehicle.id === viewingManagedVehicleId)!,
-                    editingManagedVehicleId === viewingManagedVehicleId,
-                    (field, value) => updateManagedVehicle(viewingManagedVehicleId, field, value),
-                  )}
-                </section>
-              )}
+                  <section className="vehiclebooking-card vehiclebooking-vehicle-details-standalone">
+                    {renderVehicleDetailsCard(
+                      managedVehicles.find((vehicle) => vehicle.id === viewingManagedVehicleId)!,
+                      editingManagedVehicleId === viewingManagedVehicleId,
+                      (field, value) => updateManagedVehicle(viewingManagedVehicleId, field, value),
+                    )}
+                  </section>
+                )}
               {renderVehicleAdminManagement()}
             </>
           )}
 
           <div className="vehiclebooking-submit-actions">
             {submitMessage && <span className="vehiclebooking-success">{submitMessage}</span>}
-            <button
-              type="submit"
-              className="vehiclebooking-submit-btn"
-            >
+            <button type="submit" className="vehiclebooking-submit-btn">
               Submit Booking
             </button>
           </div>

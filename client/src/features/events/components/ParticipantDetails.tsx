@@ -1,5 +1,3 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import {
   ClipboardList,
   Hourglass,
@@ -18,10 +16,13 @@ import {
   X,
   Check,
   ArrowDown,
-  Star
+  Star,
 } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import '../styles/ParticipantDetails.css';
-import { EVENT_COPY } from "../constants";
+import { EVENT_COPY } from '../constants';
 
 interface EventSummary {
   teamEnabled?: boolean;
@@ -50,7 +51,17 @@ const StarPath: React.FC<{ cx: number; cy: number; r: number }> = ({ cx, cy, r }
 
 // Custom SVG component: User with checkmark badge
 const UserCheckCustom: React.FC = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: 'visible', display: 'block', margin: '0 auto' }}>
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#0069ab"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ overflow: 'visible', display: 'block', margin: '0 auto' }}
+  >
     <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
     <circle cx="12" cy="7" r="4" />
     <circle cx="18" cy="18" r="4.5" fill="#0069ab" stroke="none" />
@@ -60,12 +71,22 @@ const UserCheckCustom: React.FC = () => (
 
 // Custom SVG component: User with stars and checkmark badge
 const UserStarsCustom: React.FC = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: 'visible', display: 'block', margin: '0 auto' }}>
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#0069ab"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ overflow: 'visible', display: 'block', margin: '0 auto' }}
+  >
     <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
     <circle cx="12" cy="7" r="4" />
     <circle cx="18" cy="18" r="4.5" fill="#0069ab" stroke="none" />
     <path d="M16.5 18l1 1 2-2" stroke="#ffffff" strokeWidth="1.2" />
-    
+
     <StarPath cx={4} cy={6} r={2} />
     <StarPath cx={8} cy={3.5} r={2} />
     <StarPath cx={12} cy={2.5} r={2} />
@@ -76,7 +97,17 @@ const UserStarsCustom: React.FC = () => (
 
 // Custom SVG component: Certificate with seal on the bottom-left
 const CertificateCustom: React.FC = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ overflow: 'visible', display: 'block', margin: '0 auto' }}>
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#0069ab"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ overflow: 'visible', display: 'block', margin: '0 auto' }}
+  >
     <rect x="3" y="5" width="18" height="13" rx="1.5" />
     <line x1="8" y1="9" x2="17" y2="9" strokeWidth="1.5" />
     <line x1="8" y1="12" x2="14" y2="12" strokeWidth="1.5" />
@@ -88,7 +119,17 @@ const CertificateCustom: React.FC = () => (
 
 // Custom SVG Icons matching the mockup exactly
 const RegisteredIcon: React.FC = () => (
-  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg
+    width="34"
+    height="34"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#0069ab"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0 }}
+  >
     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
     <rect x="8" y="2" width="8" height="4" rx="1" ry="1" fill="#f0f6ff" />
     <line x1="8" y1="10" x2="14" y2="10" />
@@ -101,7 +142,17 @@ const RegisteredIcon: React.FC = () => (
 );
 
 const ShortlistedIcon: React.FC = () => (
-  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg
+    width="34"
+    height="34"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#0069ab"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0 }}
+  >
     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
     <rect x="8" y="2" width="8" height="4" rx="1" ry="1" fill="#f0f6ff" />
     <line x1="8" y1="10" x2="14" y2="10" />
@@ -114,7 +165,17 @@ const ShortlistedIcon: React.FC = () => (
 );
 
 const SelectedIcon: React.FC = () => (
-  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg
+    width="34"
+    height="34"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#0069ab"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0 }}
+  >
     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
     <rect x="8" y="2" width="8" height="4" rx="1" ry="1" fill="#f0f6ff" />
     <line x1="8" y1="10" x2="13" y2="10" />
@@ -127,7 +188,17 @@ const SelectedIcon: React.FC = () => (
 );
 
 const NotSelectedIcon: React.FC = () => (
-  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg
+    width="34"
+    height="34"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#0069ab"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0 }}
+  >
     <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
     <rect x="8" y="2" width="8" height="4" rx="1" ry="1" fill="#f0f6ff" />
     <line x1="8" y1="10" x2="13" y2="10" />
@@ -140,7 +211,17 @@ const NotSelectedIcon: React.FC = () => (
 );
 
 const HostelIcon: React.FC = () => (
-  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg
+    width="34"
+    height="34"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#0069ab"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0 }}
+  >
     <path d="M3 9l9-6 9 6v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z" />
     <rect x="6" y="13" width="12" height="6" rx="1" />
     <path d="M9 13v6" />
@@ -149,8 +230,17 @@ const HostelIcon: React.FC = () => (
 );
 
 const FeesIcon: React.FC = () => (
-  
-  <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#0069ab" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+  <svg
+    width="34"
+    height="34"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="#0069ab"
+    strokeWidth="1.5"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    style={{ flexShrink: 0 }}
+  >
     {/* Tilted banknotes */}
     <rect x="6" y="5" width="12" height="7" rx="1" transform="rotate(-15 12 8.5)" />
     <rect x="7" y="6" width="12" height="7" rx="1" fill="#ffffff" />
@@ -203,66 +293,77 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
       participant?.document?.url ||
       participant?.upload?.url ||
       participant?.uploadUrl ||
-      "";
+      '';
 
     if (!documentUrl) {
       setError('No document is available for this participant.');
       return;
     }
 
-    window.open(documentUrl, "_blank", "noopener,noreferrer");
+    window.open(documentUrl, '_blank', 'noopener,noreferrer');
   };
 
   const toggleHostel = (id: number) => {
-    const p = participants.find(p => p.id === id);
+    const p = participants.find((p) => p.id === id);
     if (!p) return;
-    const newHostel = p.hostel === "YES" ? "NO" : "YES";
-    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { hostel: newHostel }).then(() => {
-      setParticipants(prev =>
-        prev.map(p => (p.id === id ? { ...p, hostel: newHostel } : p))
-      );
-    }).catch(console.error);
+    const newHostel = p.hostel === 'YES' ? 'NO' : 'YES';
+    authenticityUtility
+      .put(`/events/${eventId}/participants/${id}`, { hostel: newHostel })
+      .then(() => {
+        setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, hostel: newHostel } : p)));
+      })
+      .catch(console.error);
   };
 
   const handleStatusChange = (id: number, status: string) => {
-    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { status }).then(() => {
-      setParticipants(prev =>
-        prev.map(p => (p.id === id ? { ...p, status } : p))
-      );
-    }).catch(console.error);
+    authenticityUtility
+      .put(`/events/${eventId}/participants/${id}`, { status })
+      .then(() => {
+        setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, status } : p)));
+      })
+      .catch(console.error);
   };
 
   const toggleAction1 = (id: number) => {
-    const p = participants.find(p => p.id === id);
+    const p = participants.find((p) => p.id === id);
     if (!p) return;
     const newAction1 = !p.action1;
-    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { action1: newAction1 }).then(() => {
-      setParticipants(prev =>
-        prev.map(p => (p.id === id ? { ...p, action1: newAction1 } : p))
-      );
-    }).catch(console.error);
+    authenticityUtility
+      .put(`/events/${eventId}/participants/${id}`, { action1: newAction1 })
+      .then(() => {
+        setParticipants((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, action1: newAction1 } : p)),
+        );
+      })
+      .catch(console.error);
   };
 
   const toggleAction2 = (id: number) => {
-    const p = participants.find(p => p.id === id);
+    const p = participants.find((p) => p.id === id);
     if (!p) return;
     const newAction2 = !p.action2;
-    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { action2: newAction2 }).then(() => {
-      setParticipants(prev =>
-        prev.map(p => (p.id === id ? { ...p, action2: newAction2 } : p))
-      );
-    }).catch(console.error);
+    authenticityUtility
+      .put(`/events/${eventId}/participants/${id}`, { action2: newAction2 })
+      .then(() => {
+        setParticipants((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, action2: newAction2 } : p)),
+        );
+      })
+      .catch(console.error);
   };
 
   const toggleAction3 = (id: number) => {
-    const p = participants.find(p => p.id === id);
+    const p = participants.find((p) => p.id === id);
     if (!p) return;
     const newAction3 = { ...p.action3, active: !p.action3?.active };
-    authenticityUtility.put(`/events/${eventId}/participants/${id}`, { action3: newAction3 }).then(() => {
-      setParticipants(prev =>
-        prev.map(p => (p.id === id ? { ...p, action3: newAction3 } : p))
-      );
-    }).catch(console.error);
+    authenticityUtility
+      .put(`/events/${eventId}/participants/${id}`, { action3: newAction3 })
+      .then(() => {
+        setParticipants((prev) =>
+          prev.map((p) => (p.id === id ? { ...p, action3: newAction3 } : p)),
+        );
+      })
+      .catch(console.error);
   };
 
   const stats = useMemo(() => {
@@ -272,11 +373,12 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
       0;
     return {
       registered: participants.length,
-      shortlisted: participants.filter(p => p.status === "Shortlisted" || p.status === "Selected").length,
-      selected: participants.filter(p => p.status === "Selected").length,
-      rejected: participants.filter(p => p.status === "Rejected").length,
-      hostel: participants.filter(p => p.hostel === "YES").length,
-      fees: feeValue
+      shortlisted: participants.filter((p) => p.status === 'Shortlisted' || p.status === 'Selected')
+        .length,
+      selected: participants.filter((p) => p.status === 'Selected').length,
+      rejected: participants.filter((p) => p.status === 'Rejected').length,
+      hostel: participants.filter((p) => p.hostel === 'YES').length,
+      fees: feeValue,
     };
   }, [participants]);
 
@@ -353,7 +455,11 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
               <th className="col-sno">S.No.</th>
               <th className="col-participant">Participant</th>
               <th className="col-category">Category</th>
-              {summary?.teamEnabled && <th className="col-group"><Users size={18} /></th>}
+              {summary?.teamEnabled && (
+                <th className="col-group">
+                  <Users size={18} />
+                </th>
+              )}
               {summary?.documentEnabled && <th className="col-doc">Doc.</th>}
               {summary?.accommodationEnabled && <th className="col-hostel">Hostel</th>}
               {summary?.registrationFeeEnabled && <th className="col-fees">Fees</th>}
@@ -374,144 +480,154 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={11} style={{ textAlign: 'center', padding: '20px' }}>{EVENT_COPY.loadingParticipants}</td>
+                <td colSpan={11} style={{ textAlign: 'center', padding: '20px' }}>
+                  {EVENT_COPY.loadingParticipants}
+                </td>
               </tr>
             ) : error ? (
               <tr>
-                <td colSpan={11} style={{ textAlign: 'center', padding: '20px', color: 'red' }}>{error}</td>
+                <td colSpan={11} style={{ textAlign: 'center', padding: '20px', color: 'red' }}>
+                  {error}
+                </td>
               </tr>
             ) : participants.length === 0 ? (
               <tr>
-                <td colSpan={11} style={{ textAlign: 'center', padding: '20px' }}>{EVENT_COPY.noParticipantsFound}</td>
+                <td colSpan={11} style={{ textAlign: 'center', padding: '20px' }}>
+                  {EVENT_COPY.noParticipantsFound}
+                </td>
               </tr>
             ) : (
               participants.map((p, index) => (
                 <tr key={p.id}>
                   <td className="col-sno">{index + 1}</td>
-                <td className="col-participant">
-                  <div className="participant-info-cell">
-                    <div className="info-icon-wrapper">
-                      <Info size={16} className="info-icon" />
+                  <td className="col-participant">
+                    <div className="participant-info-cell">
+                      <div className="info-icon-wrapper">
+                        <Info size={16} className="info-icon" />
+                      </div>
+                      <div className="participant-text">
+                        <div className="participant-name">{p.name}</div>
+                        <div className="participant-inst">{p.institution}</div>
+                      </div>
                     </div>
-                    <div className="participant-text">
-                      <div className="participant-name">{p.name}</div>
-                      <div className="participant-inst">{p.institution}</div>
-                    </div>
-                  </div>
-                </td>
-                <td className="col-category">{p.category}</td>
-                <td className="col-group">{p.group}</td>
-                <td className="col-doc">
-                  {p.hasDoc ? (
-                    <Paperclip 
-                      size={18} 
-                      className="blue-icon clickable-icon" 
-                      onClick={() => handleViewDocument(p)}
-                    />
-                  ) : (
-                    <span className="text-muted">-</span>
-                  )}
-                </td>
-                <td className="col-hostel">
-                  <span className={`hostel-text ${p.hostel === "YES" ? "yes" : "no"}`}>
-                    {p.hostel}
-                  </span>
-                </td>
-                <td className="col-fees">
-                  <div className="fees-cell">
-                    <span>₹{p.fees}</span>
-                    <FileText 
-                      size={16} 
-                      className="blue-icon clickable-icon" 
-                      onClick={() => handleViewDocument(p)}
-                    />
-                  </div>
-                </td>
-                <td className="col-status">
-                  <div className="status-cell-wrapper">
-                    <div className="status-dropdown">
-                      <select 
-                        value={p.status} 
-                        onChange={(e) => handleStatusChange(p.id, e.target.value)}
-                      >
-                        <option value="Registered">Pending</option>
-                        <option value="Shortlisted">Shortlisted</option>
-                        <option value="Selected">Selected</option>
-                        <option value="Rejected">Rejected</option>
-                        
-                      </select>
-                      <ChevronDown size={12} className="dropdown-icon" />
-                    </div>
-                    <CheckCircle2 
-                      size={22} 
-                      className={`success-icon ${p.action1 ? 'filled' : 'outline'}`} 
-                      onClick={() => toggleAction1(p.id)}
-                      style={{ cursor: 'pointer', flexShrink: 0 }}
-                    />
-                  </div>
-                </td>
-                {summary?.teamEnabled && <td className="col-group" style={{ fontSize: '13px' }}>{p.group_id ? p.group_id : '-'}</td>}
-                {summary?.documentEnabled && (
+                  </td>
+                  <td className="col-category">{p.category}</td>
+                  <td className="col-group">{p.group}</td>
                   <td className="col-doc">
-                    {p.document_upload ? (
-                      <button
-                        className="icon-btn"
-                        title="View Document"
+                    {p.hasDoc ? (
+                      <Paperclip
+                        size={18}
+                        className="blue-icon clickable-icon"
                         onClick={() => handleViewDocument(p)}
-                      >
-                        <Paperclip size={18} />
-                      </button>
+                      />
                     ) : (
-                      <span style={{ color: '#ccc' }}>-</span>
+                      <span className="text-muted">-</span>
                     )}
                   </td>
-                )}
-                {summary?.accommodationEnabled && (
                   <td className="col-hostel">
-                    {p.accommodation_required === 1 ? (
-                      <CheckCircle2 size={18} className="status-icon green" />
-                    ) : (
-                      <span style={{ color: '#ccc' }}>-</span>
-                    )}
+                    <span className={`hostel-text ${p.hostel === 'YES' ? 'yes' : 'no'}`}>
+                      {p.hostel}
+                    </span>
                   </td>
-                )}
-                {summary?.registrationFeeEnabled && (
                   <td className="col-fees">
-                    {p.fee_status === 'Paid' ? (
-                      <CheckCircle2 size={18} className="status-icon green" />
-                    ) : p.fee_status === 'Pending' ? (
-                      <Hourglass size={18} className="status-icon yellow" />
-                    ) : (
-                      <span style={{ color: '#ccc' }}>-</span>
-                    )}
+                    <div className="fees-cell">
+                      <span>₹{p.fees}</span>
+                      <FileText
+                        size={16}
+                        className="blue-icon clickable-icon"
+                        onClick={() => handleViewDocument(p)}
+                      />
+                    </div>
                   </td>
-                )}
-                <td className="col-action-1">
-                  <div 
-                    className={`custom-checkbox-wrapper ${p.action2 ? 'checked' : ''}`}
-                    onClick={() => toggleAction2(p.id)}
-                  >
-                    {p.action2 && <Check size={14} className="checkbox-check" />}
-                  </div>
-                </td>
-                <td className="col-action-2">
-                  <button className="icon-btn">
-                    <CheckCircle2 size={18} />
-                  </button>
-                </td>
-                {summary?.certificateEnabled && (
-                  <td className="col-action-3">
-                    <button
-                      className="icon-btn certificate-btn"
-                      title="Certificate"
-                      onClick={() => handleViewDocument(p)}
+                  <td className="col-status">
+                    <div className="status-cell-wrapper">
+                      <div className="status-dropdown">
+                        <select
+                          value={p.status}
+                          onChange={(e) => handleStatusChange(p.id, e.target.value)}
+                        >
+                          <option value="Registered">Pending</option>
+                          <option value="Shortlisted">Shortlisted</option>
+                          <option value="Selected">Selected</option>
+                          <option value="Rejected">Rejected</option>
+                        </select>
+                        <ChevronDown size={12} className="dropdown-icon" />
+                      </div>
+                      <CheckCircle2
+                        size={22}
+                        className={`success-icon ${p.action1 ? 'filled' : 'outline'}`}
+                        onClick={() => toggleAction1(p.id)}
+                        style={{ cursor: 'pointer', flexShrink: 0 }}
+                      />
+                    </div>
+                  </td>
+                  {summary?.teamEnabled && (
+                    <td className="col-group" style={{ fontSize: '13px' }}>
+                      {p.group_id ? p.group_id : '-'}
+                    </td>
+                  )}
+                  {summary?.documentEnabled && (
+                    <td className="col-doc">
+                      {p.document_upload ? (
+                        <button
+                          className="icon-btn"
+                          title="View Document"
+                          onClick={() => handleViewDocument(p)}
+                        >
+                          <Paperclip size={18} />
+                        </button>
+                      ) : (
+                        <span style={{ color: '#ccc' }}>-</span>
+                      )}
+                    </td>
+                  )}
+                  {summary?.accommodationEnabled && (
+                    <td className="col-hostel">
+                      {p.accommodation_required === 1 ? (
+                        <CheckCircle2 size={18} className="status-icon green" />
+                      ) : (
+                        <span style={{ color: '#ccc' }}>-</span>
+                      )}
+                    </td>
+                  )}
+                  {summary?.registrationFeeEnabled && (
+                    <td className="col-fees">
+                      {p.fee_status === 'Paid' ? (
+                        <CheckCircle2 size={18} className="status-icon green" />
+                      ) : p.fee_status === 'Pending' ? (
+                        <Hourglass size={18} className="status-icon yellow" />
+                      ) : (
+                        <span style={{ color: '#ccc' }}>-</span>
+                      )}
+                    </td>
+                  )}
+                  <td className="col-action-1">
+                    <div
+                      className={`custom-checkbox-wrapper ${p.action2 ? 'checked' : ''}`}
+                      onClick={() => toggleAction2(p.id)}
                     >
-                      <Award size={18} />
+                      {p.action2 && <Check size={14} className="checkbox-check" />}
+                    </div>
+                  </td>
+                  <td className="col-action-2">
+                    <button className="icon-btn">
+                      <CheckCircle2 size={18} />
                     </button>
                   </td>
-                )}
-              </tr>
-            )))}
+                  {summary?.certificateEnabled && (
+                    <td className="col-action-3">
+                      <button
+                        className="icon-btn certificate-btn"
+                        title="Certificate"
+                        onClick={() => handleViewDocument(p)}
+                      >
+                        <Award size={18} />
+                      </button>
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

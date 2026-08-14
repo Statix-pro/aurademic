@@ -10,6 +10,7 @@ import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/admi
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
+import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-approval/AdminGuesthouseApproval';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
@@ -18,7 +19,6 @@ import EventPage from '../features/events/components/EventPage';
 import ExpenditureReport from '../features/expenditure/expenditure-report/expenditurereport';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';
-import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-approval/AdminGuesthouseApproval';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import Journalform from '../features/journals/journalform';
 import ProfilePage from '../features/profile/ProfilePage';
@@ -207,9 +207,7 @@ function App() {
                   {/* GUEST HOUSE */}
                   <Route
                     path="/guesthouse-booking"
-                    element={
-                      <Navigate to="/guesthouse/new" replace />
-                    }
+                    element={<Navigate to="/guesthouse/new" replace />}
                   />
                   <Route
                     path="/guesthouse/new"

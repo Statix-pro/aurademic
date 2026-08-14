@@ -134,7 +134,10 @@
   font-size: 0.95rem;
   padding: 10px 15px;
   outline: none;
-  transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    background-color 0.3s ease;
 }
 
 .vehiclebooking-beneficiary-control::placeholder {
@@ -176,7 +179,10 @@
   font: inherit;
   font-size: 13px;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .vehiclebooking-input {
@@ -225,7 +231,11 @@
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    color 0.18s ease;
 }
 
 .vehiclebooking-radio:hover {
@@ -266,7 +276,10 @@
   background: transparent;
   color: var(--primary-color, #0069ab);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, opacity 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    opacity 0.15s ease;
 }
 
 .vehiclebooking-icon-button:hover:not(:disabled) {
@@ -918,7 +931,7 @@
 }
 
 .vehiclebooking-allotment-applicant strong,
-.vehiclebooking-allotment-applicant div>span {
+.vehiclebooking-allotment-applicant div > span {
   display: block;
 }
 
@@ -928,7 +941,7 @@
   line-height: 1.25;
 }
 
-.vehiclebooking-allotment-applicant div>span {
+.vehiclebooking-allotment-applicant div > span {
   margin-top: 5px;
   color: #4f4f4f;
   font-size: 12px;
@@ -1156,7 +1169,8 @@
   color: var(--booking-white, #ffffff);
 }
 
-.vehiclebooking-allotment-row .vehiclebooking-icon-button:not(.vehiclebooking-icon-button--muted):hover {
+.vehiclebooking-allotment-row
+  .vehiclebooking-icon-button:not(.vehiclebooking-icon-button--muted):hover {
   background: var(--primary-hover, #005492);
 }
 
@@ -1356,7 +1370,6 @@
     margin-top: 8px;
   }
 }
-
 
 /* Custom occupant icons matching Guest House */
 .vehiclebooking-allotment-person-icon {
@@ -1612,7 +1625,10 @@
   background: transparent;
   color: var(--primary-color, #0069ab);
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .vehiclebooking-management-icon-button:hover:not(:disabled),
@@ -1765,7 +1781,10 @@
   font-size: 12px;
   padding: 6px 10px;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .vehicle-details-form-input:focus,
@@ -1802,7 +1821,10 @@
   padding: 7px 10px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .vehicle-details-pill-btn:hover:not(:disabled) {
@@ -1869,7 +1891,10 @@
   background: #e8f2fc;
   padding: 6px 10px;
   cursor: pointer;
-  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .vehicle-feature-card:hover {
@@ -2209,7 +2234,10 @@
 }
 
 .vehicle-details-grid-row-4 {
-  grid-template-columns: minmax(310px, 1.25fr) minmax(300px, 1.2fr) minmax(220px, 0.85fr) minmax(300px, 1.15fr);
+  grid-template-columns: minmax(310px, 1.25fr) minmax(300px, 1.2fr) minmax(220px, 0.85fr) minmax(
+      300px,
+      1.15fr
+    );
 }
 
 .vehicle-details-form-input,

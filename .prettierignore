@@ -1,10 +1,12 @@
 node_modules/
 client/node_modules/
+event-client/node_modules/
 server/node_modules/
 
 dist/
 build/
 client/dist/
+event-client/dist/
 client/build/
 server/build/
 .next/
@@ -16,9 +18,11 @@ server/schema/dump/
 
 package-lock.json
 client/package-lock.json
+event-client/package-lock.json
 server/package-lock.json
 bun.lock
 client/bun.lock
+event-client/bun.lock
 server/bun.lock
 
 .git/

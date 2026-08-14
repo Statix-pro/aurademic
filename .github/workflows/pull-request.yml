@@ -27,6 +27,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             client/package-lock.json
+            event-client/package-lock.json
             server/package-lock.json
 
       - name: Install root tooling
@@ -34,6 +35,9 @@ jobs:
 
       - name: Install client dependencies
         run: npm ci --prefix client
+
+      - name: Install event-client dependencies
+        run: npm ci --prefix event-client
 
       - name: Install server dependencies
         run: npm ci --prefix server

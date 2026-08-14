@@ -1,7 +1,6 @@
+import { Linkedin, Globe } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
-import {
-  Linkedin, Globe
-} from 'lucide-react';
+
 import './OrganizationDirectory.css';
 import { useAbility } from '../../shared/casl/AbilityContext';
 
@@ -33,7 +32,12 @@ interface OrganizationDirectoryProps {
 }
 
 const CATEGORY_OPTIONS = [
-  'Academic', 'Industry', 'National Labs', 'Incubation', 'Start-up', 'Government'
+  'Academic',
+  'Industry',
+  'National Labs',
+  'Incubation',
+  'Start-up',
+  'Government',
 ];
 
 /* ═══════════════════════════════════════════════════════════
@@ -46,9 +50,8 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
   onCancel,
 }) => {
   const ability = useAbility();
-  const isAllowed = editingOrg !== null
-    ? ability.can('edit', 'MasterData')
-    : ability.can('create', 'MasterData');
+  const isAllowed =
+    editingOrg !== null ? ability.can('edit', 'MasterData') : ability.can('create', 'MasterData');
   /* form fields */
   const [category, setCategory] = useState('Academic');
   const [name, setName] = useState('');
@@ -88,8 +91,6 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       setStatus(editingOrg.status || 'Active');
     }
   }, [editingOrg]);
-
-
 
   const handleSubmit = () => {
     setFormError(null);
@@ -142,13 +143,15 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
 
         {/* Organization Details Section */}
         <h5 className="orgd-section-title">Organization Details</h5>
-        
+
         <div className="orgd-split-row">
           {/* Left panel - Basic fields */}
           <div className="orgd-left-col">
             <div style={{ display: 'flex', gap: '16px' }}>
               <div className="orgd-field" style={{ flex: '1.6' }}>
-                <label htmlFor="orgd-name-input">Organization Name <span className="req">*</span></label>
+                <label htmlFor="orgd-name-input">
+                  Organization Name <span className="req">*</span>
+                </label>
                 <input
                   id="orgd-name-input"
                   type="text"
@@ -179,8 +182,20 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                   placeholder="Address line"
                 />
               </div>
-              <fieldset className="orgd-field" style={{ flex: '1', border: 'none', padding: 0, margin: 0 }}>
-                <legend style={{ fontSize: '0.9rem', fontWeight: 600, color: '#344054', marginBottom: '8px' }}>Status</legend>
+              <fieldset
+                className="orgd-field"
+                style={{ flex: '1', border: 'none', padding: 0, margin: 0 }}
+              >
+                <legend
+                  style={{
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    color: '#344054',
+                    marginBottom: '8px',
+                  }}
+                >
+                  Status
+                </legend>
                 <div className="orgd-toggle-group">
                   {['Active', 'Inactive'].map((s) => (
                     <button
@@ -210,7 +225,6 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                   placeholder="Website"
                   aria-label="Website"
                 />
-
               </div>
             </div>
 
@@ -224,13 +238,10 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                   placeholder="LinkedIn Profile"
                   aria-label="LinkedIn Profile"
                 />
-
               </div>
             </div>
           </div>
         </div>
-
-
 
         {/* City, State, Country, PIN Row */}
         <div className="orgd-row-4" style={{ marginTop: '8px', marginBottom: '16px' }}>
@@ -299,14 +310,22 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
             />
           </div>
         </div>
-
-
-
       </div>
 
       {/* Form actions - outside the card */}
       {formError && (
-        <div role="alert" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: '8px', padding: '10px 16px', marginBottom: '12px', fontSize: '0.9rem' }}>
+        <div
+          role="alert"
+          style={{
+            color: '#b91c1c',
+            background: '#fef2f2',
+            border: '1px solid #fca5a5',
+            borderRadius: '8px',
+            padding: '10px 16px',
+            marginBottom: '12px',
+            fontSize: '0.9rem',
+          }}
+        >
           {formError}
         </div>
       )}
@@ -319,15 +338,10 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
         >
           {editingOrg !== null ? 'Update Record' : 'Save Record'}
         </button>
-        <button
-          type="button"
-          className="orgd-btn-cancel"
-          onClick={onCancel}
-        >
+        <button type="button" className="orgd-btn-cancel" onClick={onCancel}>
           Cancel
         </button>
       </div>
-
     </div>
   );
 };

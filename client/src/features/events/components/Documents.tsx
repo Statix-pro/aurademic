@@ -1,9 +1,10 @@
-import React, { useState, useEffect, ChangeEvent } from "react";
-import "../styles/EventForm.css";
-import { CloudUpload, Eye, Plus, Trash2 } from "lucide-react";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
-import { useAbility } from "../../../shared/casl/AbilityContext";
-import { DOCUMENT_PARTICIPANT_TYPES, EVENT_DOCUMENTS, EVENT_COPY } from "../constants";
+import React, { useState, useEffect, ChangeEvent } from 'react';
+import '../styles/EventForm.css';
+import { CloudUpload, Eye, Plus, Trash2 } from 'lucide-react';
+
+import { useAbility } from '../../../shared/casl/AbilityContext';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { DOCUMENT_PARTICIPANT_TYPES, EVENT_DOCUMENTS, EVENT_COPY } from '../constants';
 
 interface ParticipantType {
   value: string;
@@ -44,10 +45,14 @@ interface DocumentsPageProps {
 
 const participantTypes: ParticipantType[] = DOCUMENT_PARTICIPANT_TYPES;
 
-const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setParticipants, eventId }) => {
-  const [selectedType, setSelectedType] = useState("");
-  const [count, setCount] = useState("");
-  const canAddParticipant = selectedType !== "" && count !== "" && !isNaN(Number(count));
+const ParticipantsPage: React.FC<ParticipantsPageProps> = ({
+  participants,
+  setParticipants,
+  eventId,
+}) => {
+  const [selectedType, setSelectedType] = useState('');
+  const [count, setCount] = useState('');
+  const canAddParticipant = selectedType !== '' && count !== '' && !isNaN(Number(count));
 
   const handleAdd = async () => {
     if (canAddParticipant) {
@@ -60,8 +65,8 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
           count: parseInt(count, 10),
         },
       ]);
-      setSelectedType("");
-      setCount("");
+      setSelectedType('');
+      setCount('');
 
       try {
         await authenticityUtility.post(`/documents/${eventId}/participant`, {
@@ -69,7 +74,7 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
           count: parseInt(count, 10),
         });
       } catch (error) {
-        console.error("Error adding participant:", error);
+        console.error('Error adding participant:', error);
       }
     }
   };
@@ -79,12 +84,10 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
 
     try {
       if (participantId) {
-        await authenticityUtility.delete(
-          `/documents/participant/${participantId}`,
-        );
+        await authenticityUtility.delete(`/documents/participant/${participantId}`);
       }
     } catch (error) {
-      console.error("Error deleting participant:", error);
+      console.error('Error deleting participant:', error);
     }
   };
 
@@ -151,12 +154,12 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
                       className="event-cancel-btn"
                       onClick={() => handleDelete(index, p.id)}
                       style={{
-                        color: "black",
-                        background: "transparent",
-                        border: "none",
-                        cursor: "pointer",
+                        color: 'black',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
                         padding: 0,
-                        fontSize: "16px",
+                        fontSize: '16px',
                       }}
                     >
                       <Trash2 size={16} />
@@ -177,25 +180,25 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({ participants, setPa
 };
 
 const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
-  const [registration, setRegistration] = useState<LinkState>({ enabled: false, url: "" });
-  const [feedback, setFeedback] = useState<LinkState>({ enabled: false, url: "" });
-  const [youtubeLinks, setYoutubeLinks] = useState<LinkState[]>([
-    { enabled: false, url: "" },
-  ]);
+  const [registration, setRegistration] = useState<LinkState>({ enabled: false, url: '' });
+  const [feedback, setFeedback] = useState<LinkState>({ enabled: false, url: '' });
+  const [youtubeLinks, setYoutubeLinks] = useState<LinkState[]>([{ enabled: false, url: '' }]);
   const youtubeEnabled = youtubeLinks[0]?.enabled || false;
 
   useEffect(() => {
     const loadLinks = async () => {
       try {
-        const response = await authenticityUtility.get(
-          `/documents/${eventId}/links`,
-        ) as { registration: LinkState; feedback: LinkState; youtube: LinkState[] };
+        const response = (await authenticityUtility.get(`/documents/${eventId}/links`)) as {
+          registration: LinkState;
+          feedback: LinkState;
+          youtube: LinkState[];
+        };
         const { registration: reg, feedback: fb, youtube } = response;
         setRegistration(reg);
         setFeedback(fb);
         setYoutubeLinks(youtube);
       } catch (error) {
-        console.error("Error loading links:", error);
+        console.error('Error loading links:', error);
       }
     };
     if (eventId) loadLinks();
@@ -209,12 +212,12 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
         youtube: youtubeLinks,
       });
     } catch (error) {
-      console.error("Error saving links:", error);
+      console.error('Error saving links:', error);
     }
   };
 
   const handleAddYoutube = () => {
-    setYoutubeLinks([...youtubeLinks, { enabled: true, url: "" }]);
+    setYoutubeLinks([...youtubeLinks, { enabled: true, url: '' }]);
     setTimeout(saveLinks, 100);
   };
 
@@ -258,7 +261,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
             <button
               type="button"
               className="icon-btn"
-              onClick={() => feedback.url && window.open(feedback.url, "_blank")}
+              onClick={() => feedback.url && window.open(feedback.url, '_blank')}
               disabled={!feedback.url}
             >
               <Eye size={16} />
@@ -276,9 +279,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
                   checked={youtubeEnabled}
                   onChange={() => {
                     setYoutubeLinks((prev) =>
-                      prev.map((item, i) =>
-                        i === 0 ? { ...item, enabled: !item.enabled } : item,
-                      ),
+                      prev.map((item, i) => (i === 0 ? { ...item, enabled: !item.enabled } : item)),
                     );
                     setTimeout(saveLinks, 100);
                   }}
@@ -318,7 +319,7 @@ const ImportantLinksPage: React.FC<ImportantLinksPageProps> = ({ eventId }) => {
                   <button
                     type="button"
                     className="icon-btn"
-                    onClick={() => yt.url && window.open(yt.url, "_blank")}
+                    onClick={() => yt.url && window.open(yt.url, '_blank')}
                     disabled={!yt.url}
                   >
                     <Eye size={16} />
@@ -348,19 +349,22 @@ const documents = EVENT_DOCUMENTS;
 
 const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
   const ability = useAbility();
-  const canEditDocuments = ability.can("edit", "Event");
+  const canEditDocuments = ability.can('edit', 'Event');
   const [docState, setDocState] = useState<Record<string, DocState>>(
-    documents.reduce((acc, doc) => {
-      acc[doc] = {
-        active: false,
-        file: doc === "Photos" ? ([null, null, null, null] as (File | null)[]) : null,
-      };
-      return acc;
-    }, {} as Record<string, DocState>),
+    documents.reduce(
+      (acc, doc) => {
+        acc[doc] = {
+          active: false,
+          file: doc === 'Photos' ? ([null, null, null, null] as (File | null)[]) : null,
+        };
+        return acc;
+      },
+      {} as Record<string, DocState>,
+    ),
   );
 
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const [popupMessage, setPopupMessage] = useState("");
+  const [popupMessage, setPopupMessage] = useState('');
   const [isSubmittingApproval, setIsSubmittingApproval] = useState(false);
   const hasEventId = Boolean(eventId);
 
@@ -369,7 +373,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
 
     const loadData = async () => {
       try {
-        const response = await authenticityUtility.get(`/documents/${eventId}`) as {
+        const response = (await authenticityUtility.get(`/documents/${eventId}`)) as {
           documents?: Array<{ docname: string; active: boolean }>;
           participants?: Array<{ id: number; type: string; count: number }>;
         };
@@ -389,14 +393,13 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
           const formattedParticipants = backendParticipants.map((p) => ({
             id: p.id,
             type: p.type,
-            label:
-              participantTypes.find((t) => t.value === p.type)?.label || p.type,
+            label: participantTypes.find((t) => t.value === p.type)?.label || p.type,
             count: p.count,
           }));
           setParticipants(formattedParticipants);
         }
       } catch (error) {
-        console.error("Error loading data:", error);
+        console.error('Error loading data:', error);
       }
     };
 
@@ -416,26 +419,27 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
     const syncWithBackend = async () => {
       try {
         const newActiveState = !docState[doc].active;
-        await authenticityUtility.put(
-          `/documents/${eventId}/doc/${encodeURIComponent(doc)}`,
-          {
-            active: newActiveState,
-            upload_id: null,
-          },
-        );
+        await authenticityUtility.put(`/documents/${eventId}/doc/${encodeURIComponent(doc)}`, {
+          active: newActiveState,
+          upload_id: null,
+        });
       } catch (error) {
-        console.error("Error updating document:", error);
+        console.error('Error updating document:', error);
       }
     };
     syncWithBackend();
   };
 
-  const handleFileUpload = async (doc: string, event: ChangeEvent<HTMLInputElement>, index: number | null = null) => {
+  const handleFileUpload = async (
+    doc: string,
+    event: ChangeEvent<HTMLInputElement>,
+    index: number | null = null,
+  ) => {
     const input = event.currentTarget;
     const file = event.target.files?.[0];
     if (file && hasEventId && canEditDocuments) {
       setDocState((prev) => {
-        if (doc === "Photos" && index !== null) {
+        if (doc === 'Photos' && index !== null) {
           const currentFiles = prev[doc].file as (File | null)[];
           const newFiles = [...currentFiles];
           newFiles[index] = file;
@@ -453,15 +457,15 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
 
       try {
         const formData = new FormData();
-        formData.append("file", file);
+        formData.append('file', file);
         await authenticityUtility.postFile(
           `/documents/${eventId}/doc/${encodeURIComponent(doc)}/upload`,
           formData,
         );
       } catch (error) {
-        console.error("Error uploading file:", error);
+        console.error('Error uploading file:', error);
         setDocState((prev) => {
-          if (doc === "Photos" && index !== null) {
+          if (doc === 'Photos' && index !== null) {
             const currentFiles = prev[doc].file as (File | null)[];
             if (currentFiles[index] !== file) {
               return prev;
@@ -483,7 +487,7 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
             [doc]: { ...prev[doc], file: null },
           };
         });
-        input.value = "";
+        input.value = '';
         setPopupMessage(`Failed to upload file: ${file.name}`);
       }
     }
@@ -491,12 +495,13 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
 
   const handleViewFile = (doc: string, index: number | null = null) => {
     const docData = docState[doc];
-    const file = doc === "Photos" && index !== null
-      ? (docData.file as (File | null)[])[index]
-      : docData.file as File | null;
+    const file =
+      doc === 'Photos' && index !== null
+        ? (docData.file as (File | null)[])[index]
+        : (docData.file as File | null);
     if (file) {
       const fileURL = URL.createObjectURL(file);
-      window.open(fileURL, "_blank");
+      window.open(fileURL, '_blank');
     }
   };
 
@@ -505,10 +510,10 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
 
     try {
       await authenticityUtility.post(`/documents/${eventId}/edit-request`);
-      setPopupMessage("Your edit request has been sent successfully!");
+      setPopupMessage('Your edit request has been sent successfully!');
     } catch (error) {
-      console.error("Error sending edit request:", error);
-      setPopupMessage("Failed to send edit request. Please try again.");
+      console.error('Error sending edit request:', error);
+      setPopupMessage('Failed to send edit request. Please try again.');
     }
   };
 
@@ -519,21 +524,21 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
     setIsSubmittingApproval(true);
     try {
       await authenticityUtility.post(`/documents/${eventId}/submit`);
-      setPopupMessage("Your form has been submitted for approval!");
+      setPopupMessage('Your form has been submitted for approval!');
     } catch (error) {
-      console.error("Error submitting for approval:", error);
-      setPopupMessage("Failed to submit for approval. Please try again.");
+      console.error('Error submitting for approval:', error);
+      setPopupMessage('Failed to submit for approval. Please try again.');
     } finally {
       setIsSubmittingApproval(false);
     }
   };
 
   const closePopup = () => {
-    setPopupMessage("");
+    setPopupMessage('');
   };
 
   const renderDocRow = (doc: string) => {
-    if (doc === "Photos") {
+    if (doc === 'Photos') {
       const photoFiles = docState[doc].file as (File | null)[];
       return (
         <div className="event-doc-row event-doc-row-photos" key={doc}>
@@ -551,21 +556,19 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
             <div className="event-doc-actions-photos">
               {photoFiles.map((_, i) => (
                 <div key={i} className="event-photo-pair">
-                  <label
-                    className={`event-photo-slot ${!docState[doc].active ? "disabled" : ""}`}
-                  >
+                  <label className={`event-photo-slot ${!docState[doc].active ? 'disabled' : ''}`}>
                     <CloudUpload size={16} />
                     <input
                       type="file"
                       onChange={(e) => handleFileUpload(doc, e, i)}
-                      style={{ display: "none" }}
+                      style={{ display: 'none' }}
                       disabled={!docState[doc].active || !canEditDocuments}
                     />
                   </label>
 
                   <button
                     type="button"
-                    className={`event-photo-slot ${!photoFiles[i] ? "disabled" : ""}`}
+                    className={`event-photo-slot ${!photoFiles[i] ? 'disabled' : ''}`}
                     onClick={() => handleViewFile(doc, i)}
                     disabled={!photoFiles[i]}
                   >
@@ -591,20 +594,18 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
           />
           <span className="event-slider"></span>
         </label>
-        <label
-          className={`event-upload-icon ${!docState[doc].active ? "disabled" : ""}`}
-        >
+        <label className={`event-upload-icon ${!docState[doc].active ? 'disabled' : ''}`}>
           <CloudUpload size={16} />
           <input
             type="file"
             onChange={(e) => handleFileUpload(doc, e)}
-            style={{ display: "none" }}
+            style={{ display: 'none' }}
             disabled={!docState[doc].active || !canEditDocuments}
           />
         </label>
         <button
           type="button"
-          className={`event-eye-icon ${!docState[doc].file ? "disabled" : ""}`}
+          className={`event-eye-icon ${!docState[doc].file ? 'disabled' : ''}`}
           onClick={() => docState[doc].file && handleViewFile(doc)}
           disabled={!docState[doc].file}
         >
@@ -627,47 +628,41 @@ const DocumentsPage: React.FC<DocumentsPageProps> = ({ eventId }) => {
         </div>
       ) : (
         <>
-      <ParticipantsPage
-        participants={participants}
-        setParticipants={setParticipants}
-        eventId={eventId}
-      />
+          <ParticipantsPage
+            participants={participants}
+            setParticipants={setParticipants}
+            eventId={eventId}
+          />
 
-      <ImportantLinksPage eventId={eventId} />
+          <ImportantLinksPage eventId={eventId} />
 
-      <div className="event-card-section">
-        <h2 className="event-section-title">Documents</h2>
-        <div className="event-docs-grid">
-          {documents.map(renderDocRow)}
-        </div>
-      </div>
-
-      <div className="event-doc-buttons">
-        <button
-          type="button"
-          className="event-btn event-submit"
-          onClick={handleEditRequest}
-        >
-          Edit Request
-        </button>
-        <button
-          type="button"
-          className="event-btn event-submit"
-          onClick={handleSubmitApproval}
-          disabled={isSubmittingApproval}
-        >
-          {isSubmittingApproval ? 'Submitting...' : 'Submit for Approval'}
-        </button>
-      </div>
-
-      {popupMessage && (
-        <div className="event-message-overlay">
-          <div className="event-message-box">
-            <h3>{popupMessage}</h3>
-            <button onClick={closePopup}>OK</button>
+          <div className="event-card-section">
+            <h2 className="event-section-title">Documents</h2>
+            <div className="event-docs-grid">{documents.map(renderDocRow)}</div>
           </div>
-        </div>
-      )}
+
+          <div className="event-doc-buttons">
+            <button type="button" className="event-btn event-submit" onClick={handleEditRequest}>
+              Edit Request
+            </button>
+            <button
+              type="button"
+              className="event-btn event-submit"
+              onClick={handleSubmitApproval}
+              disabled={isSubmittingApproval}
+            >
+              {isSubmittingApproval ? 'Submitting...' : 'Submit for Approval'}
+            </button>
+          </div>
+
+          {popupMessage && (
+            <div className="event-message-overlay">
+              <div className="event-message-box">
+                <h3>{popupMessage}</h3>
+                <button onClick={closePopup}>OK</button>
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

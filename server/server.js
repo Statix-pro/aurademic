@@ -12,6 +12,7 @@ import swaggerUi from 'swagger-ui-express';
 
 import specs from './config/swagger.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
+import { PARTICIPANT_UPLOAD_DIRS } from './middleware/participantUploadMiddleware.js';
 import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import accountOptionsRoutes from './modules/accountOptions/accountOptionsRoutes.js';
 import adminBudgetRoutes from './modules/adminbudget/adminBudgetRoutes.js';
@@ -26,6 +27,7 @@ import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import eventRoutes from './modules/events/events/eventRoutes.js';
 import financeRoutes from './modules/events/finance/financeRoutes.js';
 import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
+import publicEventsRoutes from './modules/events/public/publicEventsRoutes.js';
 import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
 import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
@@ -36,6 +38,8 @@ import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
+import participantAuthRoutes from './modules/participantAuth/participantAuthRoutes.js';
+import participantRegistrationRoutes from './modules/participantRegistration/participantRegistrationRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
 
@@ -50,9 +54,20 @@ const app = express();
 
 /* ================= CORS ================= */
 
+// FRONTEND_URL accepts a comma-separated list so the staff portal and the event
+// subdomain can both be allowed. In practice the event site is same-origin (IIS
+// rewrites /api on its subdomain), so this only matters if that changes.
+const allowedOrigins = (
+  process.env.NODE_ENV === 'production'
+    ? process.env.FRONTEND_URL || ''
+    : 'http://localhost:3000,http://localhost:3001'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const corsOptions = {
-  origin:
-    process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : ['http://localhost:3000'],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -85,7 +100,26 @@ if (process.env.NODE_ENV !== 'production') {
 
 console.log('Attempting to serve static files from:', path.join(__dirname, '..', 'uploads'));
 
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use(
+  '/uploads',
+  express.static(path.join(process.cwd(), 'uploads'), {
+    setHeaders: (res, filePath) => {
+      // Never let a browser second-guess the declared type.
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+
+      // Participant uploads come from the public internet. Forcing a download on
+      // navigation means that even if a disallowed type ever reaches disk, it
+      // cannot execute as a document on this origin — which is shared with the
+      // staff portal. Subresource loads (<img src>) ignore this header, so the
+      // staff UI still renders participant photos and proofs inline.
+      const dir = path.basename(path.dirname(filePath));
+
+      if (PARTICIPANT_UPLOAD_DIRS.has(dir)) {
+        res.setHeader('Content-Disposition', 'attachment');
+      }
+    },
+  }),
+);
 
 /* ================= ENSURE UPLOAD DIRS ================= */
 
@@ -122,7 +156,19 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+/* --- Public endpoints (no authentication) ---
+   These must be mounted before `app.use('/api', journalRoutes)` below: that
+   router applies authMiddleware to everything under /api, so anything mounted
+   after it would demand a staff token. */
+
 app.use('/api/auth', authRoutes);
+// Public event participants sign in here (any Google account, not just @ksrct.ac.in).
+app.use('/api/participant-auth', participantAuthRoutes);
+// What the participant-facing event site reads.
+app.use('/api/events/public', publicEventsRoutes);
+// Participant-owned writes (registrations, profile, payments). Authenticated by
+// participantAuthMiddleware inside the router, not by authMiddleware.
+app.use('/api/participant', participantRegistrationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', userDashboardRoutes);
 app.use('/api/form-options', formOptionsRoutes);

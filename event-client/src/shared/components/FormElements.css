@@ -1,0 +1,93 @@
+@reference "tailwindcss";
+@reference "../../index.css";
+.form-elements-1 {
+  @apply flex flex-col gap-1;
+}
+
+.form-elements-2 {
+  @apply label;
+}
+
+.form-elements-3 {
+  @apply text-xs text-red-500;
+}
+
+.form-elements-4 {
+  @apply flex flex-col gap-1;
+}
+
+.form-elements-5 {
+  @apply label;
+}
+
+.form-elements-6 {
+  @apply flex flex-col gap-2;
+}
+
+.form-elements-7 {
+  @apply label;
+}
+
+.form-elements-8 {
+  @apply flex gap-4 flex-wrap;
+}
+
+.form-elements-9 {
+  @apply flex items-center gap-2 cursor-pointer;
+}
+
+.form-elements-10 {
+  @apply accent-blue-700;
+}
+
+.form-elements-11 {
+  @apply flex flex-col gap-1;
+}
+
+.form-elements-12 {
+  @apply label;
+}
+
+.form-elements-13 {
+  @apply flex items-center gap-3;
+}
+
+.form-elements-14 {
+  @apply btn-primary flex items-center gap-2 cursor-pointer;
+}
+
+.form-elements-15 {
+  @apply w-4 h-4;
+}
+
+.form-elements-16 {
+  @apply hidden;
+}
+
+.form-elements-17 {
+  @apply text-xs text-slate-500 truncate max-w-[200px];
+}
+
+.form-elements-18 {
+  @apply text-xs text-slate-400;
+}
+
+.form-elements-19 {
+  @apply py-6 first:pt-0 last:pb-0;
+}
+
+.form-elements-20 {
+  @apply section-title;
+}
+
+.form-elements-21 {
+  @apply mt-4;
+}
+
+.form-elements-22 {
+  @apply flex items-center justify-between pt-6 border-t border-slate-200 dark:border-slate-700 mt-6;
+}
+
+.form-elements-23 {
+  @apply btn-primary;
+}

@@ -1,5 +1,3 @@
-import React, { useState } from "react";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
 import {
   Award,
   ClipboardList,
@@ -23,14 +21,17 @@ import {
   Star,
   User,
   Calendar,
-} from "lucide-react";
-import "../styles/Feedback.css";
+} from 'lucide-react';
+import React, { useState } from 'react';
+
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import '../styles/Feedback.css';
 import {
   EVENT_COPY,
   EVENT_FEEDBACK_AWARENESS_CHANNELS,
   EVENT_FEEDBACK_TOGGLES,
   EVENT_RESOURCE_PERSON_OPTIONS,
-} from "../constants";
+} from '../constants';
 
 interface ResourcePersonState {
   id: number;
@@ -78,17 +79,17 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
   });
 
   const [awarenessChannel, setAwarenessChannel] = useState<string>(EVENT_COPY.socialMedia);
-  const [eventSuggestion, setEventSuggestion] = useState("");
+  const [eventSuggestion, setEventSuggestion] = useState('');
 
   // --- Section 2: Resource Person Feedback State ---
   const [resourcePersons, setResourcePersons] = useState<ResourcePersonState[]>([
     {
       id: 1,
-      name: "",
-      organization: "",
-      date: "",
-      time: "",
-      topic: "",
+      name: '',
+      organization: '',
+      date: '',
+      time: '',
+      topic: '',
       feedbackEnabled: false,
       isOnline: false,
       ratings: {
@@ -98,8 +99,8 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
         timeManagement: 0,
         onlineQuality: 0,
       },
-      takeaway: "",
-      suggestion: "",
+      takeaway: '',
+      suggestion: '',
     },
   ]);
 
@@ -109,12 +110,12 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
     amenities: 0,
     food: 0,
   });
-  const [accommodationSuggestion, setAccommodationSuggestion] = useState("");
+  const [accommodationSuggestion, setAccommodationSuggestion] = useState('');
 
   // --- API State ---
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   // --- Helpers for Event state ---
   const toggleEventParam = (param: keyof typeof eventToggles) => {
@@ -127,16 +128,17 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
 
   // --- Helpers for Resource Person state ---
   const addResourcePerson = () => {
-    const nextId = resourcePersons.length > 0 ? Math.max(...resourcePersons.map((rp) => rp.id)) + 1 : 1;
+    const nextId =
+      resourcePersons.length > 0 ? Math.max(...resourcePersons.map((rp) => rp.id)) + 1 : 1;
     setResourcePersons((prev) => [
       ...prev,
       {
         id: nextId,
-        name: "",
-        organization: "",
-        date: "",
-        time: "",
-        topic: "",
+        name: '',
+        organization: '',
+        date: '',
+        time: '',
+        topic: '',
         feedbackEnabled: false,
         isOnline: false,
         ratings: {
@@ -146,8 +148,8 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
           timeManagement: 0,
           onlineQuality: 0,
         },
-        takeaway: "",
-        suggestion: "",
+        takeaway: '',
+        suggestion: '',
       },
     ]);
   };
@@ -163,11 +165,15 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
           return { ...rp, [key]: value };
         }
         return rp;
-      })
+      }),
     );
   };
 
-  const updateResourcePersonRating = (id: number, ratingKey: keyof ResourcePersonState["ratings"], rating: number) => {
+  const updateResourcePersonRating = (
+    id: number,
+    ratingKey: keyof ResourcePersonState['ratings'],
+    rating: number,
+  ) => {
     setResourcePersons((prev) =>
       prev.map((rp) => {
         if (rp.id === id) {
@@ -177,7 +183,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
           };
         }
         return rp;
-      })
+      }),
     );
   };
 
@@ -188,12 +194,12 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
 
   const getCateringQuestionText = (): string => {
     const selectedItems = [
-      eventToggles.food ? "food" : "",
-      eventToggles.refreshment ? "refreshment" : "",
+      eventToggles.food ? 'food' : '',
+      eventToggles.refreshment ? 'refreshment' : '',
     ].filter(Boolean);
 
     if (selectedItems.length === 0) {
-      return "";
+      return '';
     }
 
     if (selectedItems.length === 1) {
@@ -209,12 +215,12 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventId) {
-      setError("Event ID is missing");
+      setError('Event ID is missing');
       return;
     }
-    
+
     setLoading(true);
-    setError("");
+    setError('');
     setSuccess(false);
 
     const payload = {
@@ -235,7 +241,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
       await authenticityUtility.post(`/events/${eventId}/feedback`, payload);
       setSuccess(true);
     } catch (err: any) {
-      setError(err?.response?.data?.message || "Failed to submit feedback.");
+      setError(err?.response?.data?.message || 'Failed to submit feedback.');
     } finally {
       setLoading(false);
     }
@@ -249,10 +255,10 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
           <button
             key={star}
             type="button"
-            className={`feedback-star-btn ${star <= currentRating ? "active" : ""}`}
+            className={`feedback-star-btn ${star <= currentRating ? 'active' : ''}`}
             onClick={() => onSelect(star)}
           >
-            <Star size={18} fill={star <= currentRating ? "#ffb800" : "none"} strokeWidth={2} />
+            <Star size={18} fill={star <= currentRating ? '#ffb800' : 'none'} strokeWidth={2} />
           </button>
         ))}
       </div>
@@ -277,14 +283,14 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
               <div className="feedback-toggle-pill">
                 <button
                   type="button"
-                  className={`feedback-toggle-btn ${eventToggles[param] ? "active" : "inactive"}`}
+                  className={`feedback-toggle-btn ${eventToggles[param] ? 'active' : 'inactive'}`}
                   onClick={() => toggleEventParam(param)}
                 >
                   Yes
                 </button>
                 <button
                   type="button"
-                  className={`feedback-toggle-btn ${!eventToggles[param] ? "active" : "inactive"}`}
+                  className={`feedback-toggle-btn ${!eventToggles[param] ? 'active' : 'inactive'}`}
                   onClick={() => toggleEventParam(param)}
                 >
                   No
@@ -308,7 +314,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
               How would you rate the overall quality of the event?
             </div>
             <div className="feedback-action-container">
-              {renderStars(eventRatings.overall, (rating) => handleEventRating("overall", rating))}
+              {renderStars(eventRatings.overall, (rating) => handleEventRating('overall', rating))}
             </div>
           </div>
 
@@ -324,7 +330,9 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
               How would you rate the planning, coordination and execution of the event?
             </div>
             <div className="feedback-action-container">
-              {renderStars(eventRatings.planning, (rating) => handleEventRating("planning", rating))}
+              {renderStars(eventRatings.planning, (rating) =>
+                handleEventRating('planning', rating),
+              )}
             </div>
           </div>
 
@@ -340,7 +348,9 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
               How effectively was the event managed within the scheduled time?
             </div>
             <div className="feedback-action-container">
-              {renderStars(eventRatings.timeManagement, (rating) => handleEventRating("timeManagement", rating))}
+              {renderStars(eventRatings.timeManagement, (rating) =>
+                handleEventRating('timeManagement', rating),
+              )}
             </div>
           </div>
 
@@ -355,7 +365,9 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
               </div>
               <div className="feedback-question-text">{getCateringQuestionText()}</div>
               <div className="feedback-action-container">
-                {renderStars(eventRatings.catering, (rating) => handleEventRating("catering", rating))}
+                {renderStars(eventRatings.catering, (rating) =>
+                  handleEventRating('catering', rating),
+                )}
               </div>
             </div>
           )}
@@ -372,7 +384,9 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
               How would you rate the venue, facilities, and overall event arrangements?
             </div>
             <div className="feedback-action-container">
-              {renderStars(eventRatings.facilities, (rating) => handleEventRating("facilities", rating))}
+              {renderStars(eventRatings.facilities, (rating) =>
+                handleEventRating('facilities', rating),
+              )}
             </div>
           </div>
 
@@ -389,7 +403,9 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                 How satisfied were you with the opportunity provided to present your work?
               </div>
               <div className="feedback-action-container">
-                {renderStars(eventRatings.presentation, (rating) => handleEventRating("presentation", rating))}
+                {renderStars(eventRatings.presentation, (rating) =>
+                  handleEventRating('presentation', rating),
+                )}
               </div>
             </div>
           )}
@@ -407,7 +423,9 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                 How would you rate the fairness and transparency of the evaluation/judging process?
               </div>
               <div className="feedback-action-container">
-                {renderStars(eventRatings.evaluation, (rating) => handleEventRating("evaluation", rating))}
+                {renderStars(eventRatings.evaluation, (rating) =>
+                  handleEventRating('evaluation', rating),
+                )}
               </div>
             </div>
           )}
@@ -425,7 +443,9 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                 How engaging and enjoyable was the event?
               </div>
               <div className="feedback-action-container">
-                {renderStars(eventRatings.enjoyment, (rating) => handleEventRating("enjoyment", rating))}
+                {renderStars(eventRatings.enjoyment, (rating) =>
+                  handleEventRating('enjoyment', rating),
+                )}
               </div>
             </div>
           )}
@@ -438,19 +458,17 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                 Awareness
               </span>
             </div>
-            <div className="feedback-question-text">
-              How did you come to know about this event?
-            </div>
+            <div className="feedback-question-text">How did you come to know about this event?</div>
             <div className="feedback-action-container">
               <div className="feedback-awareness-list">
                 {EVENT_FEEDBACK_AWARENESS_CHANNELS.map((channel) => (
                   <button
                     key={channel}
                     type="button"
-                    className={`feedback-awareness-pill ${awarenessChannel === channel ? "active" : ""}`}
+                    className={`feedback-awareness-pill ${awarenessChannel === channel ? 'active' : ''}`}
                     onClick={() => setAwarenessChannel(channel)}
                   >
-                  {channel}
+                    {channel}
                   </button>
                 ))}
               </div>
@@ -484,13 +502,13 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
       {resourcePersons.map((rp) => (
         <div className="feedback-card" key={rp.id}>
           {/* Card Header */}
-            <div className="feedback-resource-topbar">
-              <div className="feedback-resource-topbar-left">
-                <span className="feedback-resource-label">{EVENT_COPY.resourcePersonLabel}</span>
-                <select
+          <div className="feedback-resource-topbar">
+            <div className="feedback-resource-topbar-left">
+              <span className="feedback-resource-label">{EVENT_COPY.resourcePersonLabel}</span>
+              <select
                 className="feedback-resource-select"
                 value={rp.name}
-                onChange={(e) => updateResourcePerson(rp.id, "name", e.target.value)}
+                onChange={(e) => updateResourcePerson(rp.id, 'name', e.target.value)}
               >
                 <option value="">Name, Organization</option>
                 {EVENT_RESOURCE_PERSON_OPTIONS.map((person) => (
@@ -508,7 +526,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                   type="date"
                   className="feedback-resource-meta-input"
                   value={rp.date}
-                  onChange={(e) => updateResourcePerson(rp.id, "date", e.target.value)}
+                  onChange={(e) => updateResourcePerson(rp.id, 'date', e.target.value)}
                 />
               </div>
               <div className="feedback-resource-meta-item feedback-resource-time-field">
@@ -517,16 +535,21 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                   type="time"
                   className="feedback-resource-meta-input"
                   value={rp.time}
-                  onChange={(e) => updateResourcePerson(rp.id, "time", e.target.value)}
+                  onChange={(e) => updateResourcePerson(rp.id, 'time', e.target.value)}
                 />
               </div>
               <div className="feedback-resource-meta-item feedback-resource-toggle-item">
                 <span className="feedback-resource-toggle-label">Feedback</span>
-                <label className="feedback-resource-switch feedback-resource-switch--wide" aria-label="Toggle feedback section">
+                <label
+                  className="feedback-resource-switch feedback-resource-switch--wide"
+                  aria-label="Toggle feedback section"
+                >
                   <input
                     type="checkbox"
                     checked={rp.feedbackEnabled}
-                    onChange={() => updateResourcePerson(rp.id, "feedbackEnabled", !rp.feedbackEnabled)}
+                    onChange={() =>
+                      updateResourcePerson(rp.id, 'feedbackEnabled', !rp.feedbackEnabled)
+                    }
                   />
                   <span className="feedback-resource-switch-slider" />
                 </label>
@@ -563,21 +586,25 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                   type="text"
                   className="feedback-resource-topic-input"
                   value={rp.topic}
-                  onChange={(e) => updateResourcePerson(rp.id, "topic", e.target.value)}
+                  onChange={(e) => updateResourcePerson(rp.id, 'topic', e.target.value)}
                 />
               </div>
-              <div className="feedback-resource-mode-pill" role="group" aria-label="Toggle online/offline mode">
+              <div
+                className="feedback-resource-mode-pill"
+                role="group"
+                aria-label="Toggle online/offline mode"
+              >
                 <button
                   type="button"
-                  className={`feedback-resource-mode-pill-btn ${rp.isOnline ? "inactive" : "active"}`}
-                  onClick={() => updateResourcePerson(rp.id, "isOnline", false)}
+                  className={`feedback-resource-mode-pill-btn ${rp.isOnline ? 'inactive' : 'active'}`}
+                  onClick={() => updateResourcePerson(rp.id, 'isOnline', false)}
                 >
                   Offline
                 </button>
                 <button
                   type="button"
-                  className={`feedback-resource-mode-pill-btn ${rp.isOnline ? "active" : "inactive"}`}
-                  onClick={() => updateResourcePerson(rp.id, "isOnline", true)}
+                  className={`feedback-resource-mode-pill-btn ${rp.isOnline ? 'active' : 'inactive'}`}
+                  onClick={() => updateResourcePerson(rp.id, 'isOnline', true)}
                 >
                   Online
                 </button>
@@ -602,7 +629,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                   </div>
                   <div className="feedback-action-container">
                     {renderStars(rp.ratings.expertise, (rating) =>
-                      updateResourcePersonRating(rp.id, "expertise", rating)
+                      updateResourcePersonRating(rp.id, 'expertise', rating),
                     )}
                   </div>
                 </div>
@@ -620,7 +647,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                   </div>
                   <div className="feedback-action-container">
                     {renderStars(rp.ratings.engagement, (rating) =>
-                      updateResourcePersonRating(rp.id, "engagement", rating)
+                      updateResourcePersonRating(rp.id, 'engagement', rating),
                     )}
                   </div>
                 </div>
@@ -634,11 +661,12 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                     </span>
                   </div>
                   <div className="feedback-question-text">
-                    How relevant and useful was the content of the lecture to your learning or professional needs?
+                    How relevant and useful was the content of the lecture to your learning or
+                    professional needs?
                   </div>
                   <div className="feedback-action-container">
                     {renderStars(rp.ratings.relevance, (rating) =>
-                      updateResourcePersonRating(rp.id, "relevance", rating)
+                      updateResourcePersonRating(rp.id, 'relevance', rating),
                     )}
                   </div>
                 </div>
@@ -656,7 +684,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                   </div>
                   <div className="feedback-action-container">
                     {renderStars(rp.ratings.timeManagement, (rating) =>
-                      updateResourcePersonRating(rp.id, "timeManagement", rating)
+                      updateResourcePersonRating(rp.id, 'timeManagement', rating),
                     )}
                   </div>
                 </div>
@@ -675,7 +703,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                     </div>
                     <div className="feedback-action-container">
                       {renderStars(rp.ratings.onlineQuality, (rating) =>
-                        updateResourcePersonRating(rp.id, "onlineQuality", rating)
+                        updateResourcePersonRating(rp.id, 'onlineQuality', rating),
                       )}
                     </div>
                   </div>
@@ -697,7 +725,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                       type="text"
                       className="feedback-text-input"
                       value={rp.takeaway}
-                      onChange={(e) => updateResourcePerson(rp.id, "takeaway", e.target.value)}
+                      onChange={(e) => updateResourcePerson(rp.id, 'takeaway', e.target.value)}
                     />
                   </div>
                 </div>
@@ -718,7 +746,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
                       type="text"
                       className="feedback-text-input"
                       value={rp.suggestion}
-                      onChange={(e) => updateResourcePerson(rp.id, "suggestion", e.target.value)}
+                      onChange={(e) => updateResourcePerson(rp.id, 'suggestion', e.target.value)}
                     />
                   </div>
                 </div>
@@ -750,7 +778,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
             </div>
             <div className="feedback-action-container">
               {renderStars(accommodationRatings.cleanliness, (rating) =>
-                handleAccommodationRating("cleanliness", rating)
+                handleAccommodationRating('cleanliness', rating),
               )}
             </div>
           </div>
@@ -768,7 +796,7 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
             </div>
             <div className="feedback-action-container">
               {renderStars(accommodationRatings.amenities, (rating) =>
-                handleAccommodationRating("amenities", rating)
+                handleAccommodationRating('amenities', rating),
               )}
             </div>
           </div>
@@ -785,7 +813,9 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
               How would you rate the quality of the food and refreshments provided?
             </div>
             <div className="feedback-action-container">
-              {renderStars(accommodationRatings.food, (rating) => handleAccommodationRating("food", rating))}
+              {renderStars(accommodationRatings.food, (rating) =>
+                handleAccommodationRating('food', rating),
+              )}
             </div>
           </div>
 
@@ -812,12 +842,26 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
         </div>
       </div>
 
-      {error && <div className="feedback-error-msg" style={{ color: "red", textAlign: "center", marginBottom: "16px" }}>{error}</div>}
-      {success && <div className="feedback-success-msg" style={{ color: "green", textAlign: "center", marginBottom: "16px" }}>Feedback submitted successfully!</div>}
-      
+      {error && (
+        <div
+          className="feedback-error-msg"
+          style={{ color: 'red', textAlign: 'center', marginBottom: '16px' }}
+        >
+          {error}
+        </div>
+      )}
+      {success && (
+        <div
+          className="feedback-success-msg"
+          style={{ color: 'green', textAlign: 'center', marginBottom: '16px' }}
+        >
+          Feedback submitted successfully!
+        </div>
+      )}
+
       {/* Submit Button */}
       <button type="submit" className="feedback-submit-btn" disabled={loading}>
-        {loading ? "Submitting..." : EVENT_COPY.submitFeedback}
+        {loading ? 'Submitting...' : EVENT_COPY.submitFeedback}
       </button>
     </form>
   );

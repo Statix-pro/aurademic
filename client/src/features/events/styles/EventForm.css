@@ -4907,7 +4907,7 @@ input:checked + .slider:before {
   border: none;
   border-radius: 0;
   box-shadow: none;
-  font-family: "Helvetica Neue", Arial, sans-serif;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
 }
 
 .event-page .event-tab-content {
@@ -4933,7 +4933,9 @@ input:checked + .slider:before {
   box-shadow: var(--shadow-sm, 0 2px 8px rgba(0, 105, 171, 0.1)) !important;
   padding: 16px 18px !important;
   margin: 0 0 14px !important;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
 }
 
 .event-page .event-card-section:hover,
@@ -4991,7 +4993,8 @@ input:checked + .slider:before {
   font-size: 14px !important;
   line-height: 1.4 !important;
   box-shadow: none !important;
-  transition: border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+  transition:
+    border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -5089,7 +5092,10 @@ input:checked + .slider:before {
   font-size: 14px !important;
   font-weight: 500 !important;
   cursor: pointer;
-  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .event-page .event-next-btn:hover,
@@ -5108,7 +5114,8 @@ input:checked + .slider:before {
   background-color: var(--bg-input, #fcfdff) !important;
   box-shadow: none !important;
   cursor: pointer !important;
-  transition: border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+  transition:
+    border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
@@ -5225,7 +5232,8 @@ input:checked + .slider:before {
   background-color: var(--bg-input, #fcfdff);
   color: var(--text-main, #4f4f6e);
   font-size: 14px;
-  transition: border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+  transition:
+    border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -5422,7 +5430,8 @@ input:checked + .slider:before {
   height: 32px !important;
   border-radius: 8px !important;
   border: none !important;
-  transition: background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+  transition:
+    background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
@@ -5457,7 +5466,9 @@ input:checked + .slider:before {
   padding: 9px 20px !important;
   font-size: 14px !important;
   font-weight: 500 !important;
-  transition: background-color 0.2s ease, transform 0.2s ease !important;
+  transition:
+    background-color 0.2s ease,
+    transform 0.2s ease !important;
 }
 
 .event-page .event-prev-btn:hover {
@@ -5651,7 +5662,8 @@ input:checked + .slider:before {
   color: var(--text-main, #4f4f6e) !important;
   font-size: 14px !important;
   line-height: 1.5 !important;
-  transition: border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
+  transition:
+    border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     background-color 0.15s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
@@ -5742,7 +5754,8 @@ input:checked + .slider:before {
   align-items: center !important;
   justify-content: center !important;
   min-height: 46px !important;
-  transition: background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+  transition:
+    background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
 }
@@ -5750,14 +5763,16 @@ input:checked + .slider:before {
 .event-page .event-save-next-btn {
   background-color: var(--primary-color, #0069ab) !important;
   color: #ffffff !important;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04),
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.04),
     0 2px 4px -1px rgba(0, 0, 0, 0.02) !important;
 }
 
 .event-page .event-save-next-btn:hover {
   background-color: var(--primary-hover, #005492) !important;
   transform: translateY(-1px) !important;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04),
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.04),
     0 4px 6px -2px rgba(0, 0, 0, 0.02) !important;
 }
 
@@ -6009,7 +6024,10 @@ input:checked + .slider:before {
 
 .event-page .finance-approval-body .event-expenditure-grid .event-modern-grid-head,
 .event-page .finance-approval-body .event-expenditure-grid .event-modern-grid-row {
-  grid-template-columns: 70px minmax(170px, 1.1fr) minmax(150px, 0.9fr) minmax(150px, 0.9fr) 140px 132px !important;
+  grid-template-columns: 70px minmax(170px, 1.1fr) minmax(150px, 0.9fr) minmax(
+      150px,
+      0.9fr
+    ) 140px 132px !important;
 }
 
 .event-page .finance-approval-body .event-modern-grid-head {
@@ -6100,7 +6118,7 @@ input:checked + .slider:before {
   }
 
   .event-page .finance-approval-body .event-row-index::before {
-    content: "S.No. ";
+    content: 'S.No. ';
     font-weight: 550;
     color: var(--primary-color, #0069ab);
   }
@@ -6628,7 +6646,7 @@ input:checked + .slider:before {
 /* Keep Event finance table typography identical to FinanceApproval tables. */
 .event-page .finance-approval-body .event-finance-budget-table,
 .event-page .finance-approval-body .event-finance-budget-table * {
-  font-family: "Helvetica Neue", Arial, sans-serif !important;
+  font-family: 'Helvetica Neue', Arial, sans-serif !important;
 }
 
 .event-page .finance-approval-body .event-finance-budget-table thead,
@@ -6742,7 +6760,10 @@ input:checked + .slider:before {
   color: #ffffff !important;
   cursor: pointer;
   box-shadow: 0 6px 12px rgba(15, 111, 198, 0.22);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .event-page .event-updates-page .resource-person-icon-btn.resource-person-add-row:hover {
@@ -6763,7 +6784,10 @@ input:checked + .slider:before {
   background: #fff1f1 !important;
   color: #dc2626 !important;
   cursor: pointer;
-  transition: transform 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .event-page .event-updates-page .resource-person-icon-btn.resource-person-delete:hover {
@@ -6782,7 +6806,10 @@ input:checked + .slider:before {
 }
 
 .event-page .event-updates-page .resource-person-card-grid-four {
-  grid-template-columns: minmax(280px, 1.2fr) minmax(220px, 1fr) minmax(180px, 0.8fr) minmax(150px, 0.7fr);
+  grid-template-columns: minmax(280px, 1.2fr) minmax(220px, 1fr) minmax(180px, 0.8fr) minmax(
+      150px,
+      0.7fr
+    );
   align-items: center;
 }
 
@@ -6824,7 +6851,10 @@ input:checked + .slider:before {
   font-size: 14px;
   padding: 8px 12px;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 .event-page .event-updates-page .resource-person-date-group .resource-person-field-label,
@@ -6872,7 +6902,10 @@ input:checked + .slider:before {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .event-page .event-updates-page .resource-person-toggle-btn.active {
@@ -6935,7 +6968,7 @@ input:checked + .slider:before {
 }
 
 .event-page .event-updates-page .resource-person-slider::before {
-  content: "";
+  content: '';
   position: absolute;
   left: 4px;
   top: 3px;
@@ -6951,7 +6984,11 @@ input:checked + .slider:before {
   background: #0069ab;
 }
 
-.event-page .event-updates-page .resource-person-switch input:checked + .resource-person-slider::before {
+.event-page
+  .event-updates-page
+  .resource-person-switch
+  input:checked
+  + .resource-person-slider::before {
   transform: translateX(22px);
 }
 
@@ -7016,7 +7053,9 @@ input:checked + .slider:before {
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .event-page .event-updates-page .resource-person-email-btn-preview {
@@ -7235,7 +7274,9 @@ input:checked + .slider:before {
   font-weight: 400 !important;
   line-height: 1.4 !important;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .event-page .event-collaboration-section .event-collab-table select {
@@ -7297,14 +7338,19 @@ input:checked + .slider:before {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .event-page .event-collaboration-section .event-collab-table .event-delete-btn:not(:disabled) {
   color: #f43f5e;
 }
 
-.event-page .event-collaboration-section .event-collab-table .event-delete-btn:hover:not(:disabled) {
+.event-page
+  .event-collaboration-section
+  .event-collab-table
+  .event-delete-btn:hover:not(:disabled) {
   background: #ffd9e2;
   color: #e11d48;
 }
@@ -7447,7 +7493,10 @@ input:checked + .slider:before {
   line-height: 1.5 !important;
   padding: 8px 12px !important;
   outline: none !important;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .event-page .event-updates-page .event-date-input:focus,
@@ -7493,7 +7542,7 @@ input:checked + .slider:before {
 }
 
 .event-page .event-updates-page .event-letters-slider::before {
-  content: "" !important;
+  content: '' !important;
   position: absolute !important;
   top: 2px !important;
   left: 2px !important;
@@ -7509,7 +7558,11 @@ input:checked + .slider:before {
   background: #0069ab !important;
 }
 
-.event-page .event-updates-page .event-letters-switch input:checked + .event-letters-slider::before {
+.event-page
+  .event-updates-page
+  .event-letters-switch
+  input:checked
+  + .event-letters-slider::before {
   transform: translateX(18px) !important;
 }
 
@@ -7528,7 +7581,10 @@ input:checked + .slider:before {
   font-size: 14px !important;
   font-weight: 700 !important;
   cursor: pointer !important;
-  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .event-page .event-updates-page .event-send-mail-btn:hover {
@@ -7563,7 +7619,10 @@ input:checked + .slider:before {
   background: #f5f6f8 !important;
   color: #0069ab !important;
   cursor: pointer !important;
-  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .event-page .event-updates-page .event-upload-icon:hover {
@@ -7616,7 +7675,10 @@ input:checked + .slider:before {
   background: #f5f6f8;
   color: #0069ab;
   cursor: pointer;
-  transition: background-color 0.18s ease, color 0.18s ease, transform 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .event-page .event-updates-page .event-social-view-btn:hover:not(:disabled) {
@@ -7730,7 +7792,10 @@ input:checked + .slider:before {
   box-shadow: 0 6px 14px rgba(0, 105, 171, 0.16);
 }
 
-.event-page .event-updates-page .participants-entry-card .event-participant-add:hover:not(:disabled) {
+.event-page
+  .event-updates-page
+  .participants-entry-card
+  .event-participant-add:hover:not(:disabled) {
   background: #005a93 !important;
 }
 
@@ -7741,7 +7806,7 @@ input:checked + .slider:before {
 }
 
 .event-page .event-updates-page .participants-entry-card .event-participant-add::after {
-  content: "";
+  content: '';
 }
 
 .event-page .event-updates-page .participants-table-card {
@@ -7820,7 +7885,7 @@ input:checked + .slider:before {
   background-color: #fff !important;
   border-radius: 12px !important;
   padding: 24px !important;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.05) !important;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05) !important;
   border: 1px solid #e2e8f0 !important;
 }
 
@@ -8157,13 +8222,34 @@ input:checked + .slider:before {
   vertical-align: middle;
 }
 
-.event-page .event-updates-page .event-participants-card .event-participants-table tbody td:nth-child(1),
-.event-page .event-updates-page .event-participants-card .event-participants-table tbody td:nth-child(3),
-.event-page .event-updates-page .event-participants-card .event-participants-table tbody td:nth-child(4) {
+.event-page
+  .event-updates-page
+  .event-participants-card
+  .event-participants-table
+  tbody
+  td:nth-child(1),
+.event-page
+  .event-updates-page
+  .event-participants-card
+  .event-participants-table
+  tbody
+  td:nth-child(3),
+.event-page
+  .event-updates-page
+  .event-participants-card
+  .event-participants-table
+  tbody
+  td:nth-child(4) {
   text-align: center;
 }
 
-.event-page .event-updates-page .event-participants-card .event-participants-table tbody tr:last-child td {
+.event-page
+  .event-updates-page
+  .event-participants-card
+  .event-participants-table
+  tbody
+  tr:last-child
+  td {
   border-bottom: 0;
 }
 

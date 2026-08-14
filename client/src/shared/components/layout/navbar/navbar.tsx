@@ -250,7 +250,11 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu =
-    showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow || showGuesthouseApproval;
+    showAdminDashboard ||
+    showBudgetApproval ||
+    showFinanceWorkflow ||
+    showExpenditureWorkflow ||
+    showGuesthouseApproval;
   const showSuperAdminMenu = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
@@ -444,7 +448,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 '/eventdashboard',
                 '/event',
                 '/workorderdashboard',
-                '/workorder'
+                '/workorder',
               ])
                 ? 'active'
                 : ''
@@ -503,7 +507,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
             className={`sb-link ${
               isGroupActive([
                 '/resourcepersondirectorydashboard',
-                '/organizationdirectorydashboard'
+                '/organizationdirectorydashboard',
               ])
                 ? 'active'
                 : ''

@@ -120,8 +120,6 @@
   min-height: 40px;
 }
 
-
-
 .workorderdashboard-date-filter {
   display: flex;
   align-items: center;
@@ -606,8 +604,6 @@
   font-size: 0.88rem;
   font-weight: 600;
 }
-
-
 
 .workorderdashboard-pagination button {
   min-width: 34px;
@@ -1175,13 +1171,27 @@
   margin-right: 8px;
   flex-shrink: 0;
 }
-.status-dot--pending { background-color: #ef4444; }
-.status-dot--in-progress { background-color: #f59e0b; }
-.status-dot--ordered { background-color: #0ea5e9; }
-.status-dot--completed { background-color: #10b981; }
-.status-dot--on-hold { background-color: #8b5cf6; }
-.status-dot--assigned { background-color: #22c55e; }
-.status-dot--reminder { background-color: #8b5cf6; }
+.status-dot--pending {
+  background-color: #ef4444;
+}
+.status-dot--in-progress {
+  background-color: #f59e0b;
+}
+.status-dot--ordered {
+  background-color: #0ea5e9;
+}
+.status-dot--completed {
+  background-color: #10b981;
+}
+.status-dot--on-hold {
+  background-color: #8b5cf6;
+}
+.status-dot--assigned {
+  background-color: #22c55e;
+}
+.status-dot--reminder {
+  background-color: #8b5cf6;
+}
 
 .workorderdashboard-location-cell {
   display: flex;
@@ -1659,7 +1669,9 @@
   background-repeat: no-repeat;
   background-position: right 14px center;
   background-size: 10px 6px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .workorderdashboard-financial-year:focus,
@@ -1667,8 +1679,6 @@
   border-color: #0069ab;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
 }
-
-
 
 .search-box {
   position: relative;
@@ -1741,7 +1751,10 @@
   min-height: 96px;
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
   cursor: pointer;
-  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease,
+    border-color 0.25s ease;
   border: 1px solid #d8e1ec;
   text-align: left;
 }
@@ -1754,7 +1767,9 @@
 
 .stats-card.active {
   border-color: rgba(0, 105, 171, 0.28);
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.14), 0 14px 28px rgba(0, 105, 171, 0.16);
+  box-shadow:
+    0 0 0 3px rgba(0, 105, 171, 0.14),
+    0 14px 28px rgba(0, 105, 171, 0.16);
 }
 
 .stats-card:first-child {
@@ -2131,7 +2146,9 @@
   background-repeat: no-repeat;
   background-position: right 14px center;
   background-size: 10px 6px;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .filter-item select:focus {

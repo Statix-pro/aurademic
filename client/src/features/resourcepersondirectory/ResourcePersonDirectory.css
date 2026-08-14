@@ -52,8 +52,6 @@
   gap: 10px;
 }
 
-
-
 .category-chip-btn {
   background-color: #f0f6ff;
   color: #0069ab;
@@ -403,11 +401,14 @@
   padding: 12px 14px;
   font-size: 0.95rem;
   background: #ffffff;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 }
 
 /* Blue border + tint when input has a value */
-.rpd-field input:not([type="date"]):not(:placeholder-shown) {
+.rpd-field input:not([type='date']):not(:placeholder-shown) {
   border-color: #0069ab;
   background: #f0f7ff;
 }
@@ -428,7 +429,9 @@
   border-radius: 12px;
   padding: 12px 14px;
   background: #ffffff;
-  transition: border-color 0.2s ease, background 0.2s ease;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
   font-size: 0.95rem;
 }
 
@@ -1083,4 +1086,3 @@
 .rpd-req {
   color: #ef4444;
 }
-

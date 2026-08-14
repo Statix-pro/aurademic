@@ -1,10 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
 import { Search, Plus, X, Edit3 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+
 import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
-import ResourcePersonDirectory, { ResourcePerson } from '../../resourcepersondirectory/ResourcePersonDirectory';
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import { useAbility } from '../../../shared/casl/AbilityContext';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import ResourcePersonDirectory, {
+  ResourcePerson,
+} from '../../resourcepersondirectory/ResourcePersonDirectory';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
@@ -12,7 +15,6 @@ import { useAbility } from '../../../shared/casl/AbilityContext';
  * PUT    /resource-persons/:id      → { success: true, data: ResourcePerson }   (body: Omit<ResourcePerson, 'id'|'date'>)
  * DELETE /resource-persons/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
-
 
 const apiGetAll = async (): Promise<ResourcePerson[]> => {
   const res = (await authenticityUtility.get('/resource-persons')) as any;
@@ -37,22 +39,24 @@ const buildPersonFormData = (personData: Omit<ResourcePerson, 'id' | 'date'>): F
   return formData;
 };
 
-const apiCreate = async (personData: Omit<ResourcePerson, 'id' | 'date'>): Promise<ResourcePerson> => {
+const apiCreate = async (
+  personData: Omit<ResourcePerson, 'id' | 'date'>,
+): Promise<ResourcePerson> => {
   const formData = buildPersonFormData(personData);
   const res = (await authenticityUtility.postFile('/resource-persons', formData)) as any;
   if (res?.success && res.data) return res.data;
   throw new Error(res?.message || 'Failed to create resource person.');
 };
 
-const apiUpdate = async (id: number, personData: Omit<ResourcePerson, 'id' | 'date'>): Promise<ResourcePerson> => {
+const apiUpdate = async (
+  id: number,
+  personData: Omit<ResourcePerson, 'id' | 'date'>,
+): Promise<ResourcePerson> => {
   const formData = buildPersonFormData(personData);
   const res = (await authenticityUtility.putFile(`/resource-persons/${id}`, formData)) as any;
   if (res?.success && res.data) return res.data;
   throw new Error(res?.message || 'Failed to update resource person.');
 };
-
-
-
 
 const getPrimary = (p: ResourcePerson) => {
   if (!p.professions?.length) return null;
@@ -148,7 +152,10 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="financecard-page d-flex justify-content-center align-items-center" style={{ minHeight: '60vh' }}>
+      <div
+        className="financecard-page d-flex justify-content-center align-items-center"
+        style={{ minHeight: '60vh' }}
+      >
         <div className="text-center">
           <div className="spinner-border text-primary" role="status">
             <span className="visually-hidden">Loading...</span>
@@ -157,7 +164,6 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
       </div>
     );
   }
-
 
   return (
     <div className="financecard-page">
@@ -210,11 +216,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                 </div>
 
                 {ability.can('create', 'MasterData') && (
-                  <button
-                    type="button"
-                    className="financecard-add-btn"
-                    onClick={handleAdd}
-                  >
+                  <button type="button" className="financecard-add-btn" onClick={handleAdd}>
                     <Plus size={15} /> Add
                   </button>
                 )}
@@ -223,11 +225,26 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
 
             {loadError && (
               <div className="financecard-body" style={{ paddingTop: 0 }}>
-                <div className="alert alert-warning d-flex align-items-center justify-content-between mb-0" role="alert" style={{ borderRadius: '8px', fontSize: '0.875rem' }}>
+                <div
+                  className="alert alert-warning d-flex align-items-center justify-content-between mb-0"
+                  role="alert"
+                  style={{ borderRadius: '8px', fontSize: '0.875rem' }}
+                >
                   <span>{loadError}</span>
                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                    <button type="button" className="btn btn-sm btn-outline-warning" onClick={fetchRecords}>Retry</button>
-                    <button type="button" className="btn-close" aria-label="Dismiss" onClick={() => setLoadError(null)} />
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-outline-warning"
+                      onClick={fetchRecords}
+                    >
+                      Retry
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-close"
+                      aria-label="Dismiss"
+                      onClick={() => setLoadError(null)}
+                    />
                   </div>
                 </div>
               </div>
@@ -235,55 +252,56 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
 
             <div className="financecard-body">
               <div className="rpd-table-wrap">
-              <table className="rpd-table">
-                <thead>
-                  <tr>
-                    <th>S.No.</th>
-                    <th>Resource Person</th>
-                    <th>Organization</th>
-                    <th>Category</th>
-                    <th>Tag</th>
-                    <th className="rpd-center">Profile</th>
-                    <th className="rpd-center">Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtered.length > 0 ? (
-                    filtered.map((person, index) => {
-                      const primary = getPrimary(person);
-                      return (
-                        <tr key={person.id}>
-                          <td>
-                            <div className="rpd-sno-cell">
-                              <span
-                                className="rpd-status-dot"
-                                style={{
-                                  backgroundColor: person.status === 'In Service' ? '#137a3a' : '#a97900',
-                                }}
-                                title={person.status}
-                              />
-                              <span>{index + 1}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="rpd-name-cell">
-                              <strong>{person.name}</strong>
-                              <span>{primary?.designation || '—'}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="rpd-org-cell">
-                              <strong>{primary?.organization || '—'}</strong>
-                              <span>{primary?.city || ''}</span>
-                            </div>
-                          </td>
-                          <td>{person.category}</td>
-                          <td>
-                            <span className="rpd-tag">{person.tag}</span>
-                          </td>
-                          
-                          <td className="rpd-center">-</td>
-                          <td className="rpd-center">
+                <table className="rpd-table">
+                  <thead>
+                    <tr>
+                      <th>S.No.</th>
+                      <th>Resource Person</th>
+                      <th>Organization</th>
+                      <th>Category</th>
+                      <th>Tag</th>
+                      <th className="rpd-center">Profile</th>
+                      <th className="rpd-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filtered.length > 0 ? (
+                      filtered.map((person, index) => {
+                        const primary = getPrimary(person);
+                        return (
+                          <tr key={person.id}>
+                            <td>
+                              <div className="rpd-sno-cell">
+                                <span
+                                  className="rpd-status-dot"
+                                  style={{
+                                    backgroundColor:
+                                      person.status === 'In Service' ? '#137a3a' : '#a97900',
+                                  }}
+                                  title={person.status}
+                                />
+                                <span>{index + 1}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="rpd-name-cell">
+                                <strong>{person.name}</strong>
+                                <span>{primary?.designation || '—'}</span>
+                              </div>
+                            </td>
+                            <td>
+                              <div className="rpd-org-cell">
+                                <strong>{primary?.organization || '—'}</strong>
+                                <span>{primary?.city || ''}</span>
+                              </div>
+                            </td>
+                            <td>{person.category}</td>
+                            <td>
+                              <span className="rpd-tag">{person.tag}</span>
+                            </td>
+
+                            <td className="rpd-center">-</td>
+                            <td className="rpd-center">
                               {ability.can('edit', 'MasterData') && (
                                 <button
                                   type="button"
@@ -294,28 +312,25 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                                   <Edit3 size={15} />
                                 </button>
                               )}
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="rpd-empty">
-                        {records.length === 0
-                          ? 'No records yet. Click "Add" to add a resource person.'
-
-                          : 'No records match the filter criteria.'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="rpd-empty">
+                          {records.length === 0
+                            ? 'No records yet. Click "Add" to add a resource person.'
+                            : 'No records match the filter criteria.'}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
         )}
-
-        
       </div>
     </div>
   );

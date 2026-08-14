@@ -22,10 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import {  
-  getGuesthouseWorkflowStage,  
-  isSuperAdmin,
-} from '../../../shared/utils/permissionUtils';
+import { getGuesthouseWorkflowStage, isSuperAdmin } from '../../../shared/utils/permissionUtils';
 
 interface GuesthouseCardItem {
   id: number;
@@ -137,12 +134,12 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   const [pageSize, setPageSize] = useState<number>(10);
   const [activeInfoId, setActiveInfoId] = useState<number | null>(null);
   const [loadingInfoId, setLoadingInfoId] = useState<number | null>(null);
-  const [showGuesthouseStatusDetail, setShowGuesthouseStatusDetail] = useState<Record<number, boolean>>(
-    {},
-  );
-  const [statusUpdatesById, setStatusUpdatesById] = useState<Record<number, GuesthouseStatusUpdate[]>>(
-    {},
-  );
+  const [showGuesthouseStatusDetail, setShowGuesthouseStatusDetail] = useState<
+    Record<number, boolean>
+  >({});
+  const [statusUpdatesById, setStatusUpdatesById] = useState<
+    Record<number, GuesthouseStatusUpdate[]>
+  >({});
   const [previewRecordId, setPreviewRecordId] = useState<number | null>(null);
   const navigate = useNavigate();
   const principalDocInputRef = useRef<HTMLInputElement | null>(null);
@@ -195,9 +192,11 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         setData([]);
         return;
       }
-      const res = (await authenticityUtility.get(approvalMode
-        ? `/guesthouse/queue/${approvalStage}?status=in_progress&limit=100`
-        : '/guesthouse?mine=true')) as {
+      const res = (await authenticityUtility.get(
+        approvalMode
+          ? `/guesthouse/queue/${approvalStage}?status=in_progress&limit=100`
+          : '/guesthouse?mine=true',
+      )) as {
         success?: boolean;
         items?: GuesthouseCardItem[];
       };
@@ -424,7 +423,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         }),
       );
     } catch (error: any) {
-      setDialogMessage(error?.response?.data?.message || error?.message || 'Failed to upload principal document');
+      setDialogMessage(
+        error?.response?.data?.message || error?.message || 'Failed to upload principal document',
+      );
     } finally {
       setPrincipalDocBusyId(null);
     }
@@ -455,7 +456,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         prev.map((row) => (row.id === item.id ? { ...row, principal_document: null } : row)),
       );
     } catch (error: any) {
-      setDialogMessage(error?.response?.data?.message || error?.message || 'Failed to delete principal document');
+      setDialogMessage(
+        error?.response?.data?.message || error?.message || 'Failed to delete principal document',
+      );
     } finally {
       setPrincipalDocBusyId(null);
     }
@@ -617,7 +620,10 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   ) => {
     setApprovalBusyId(id);
     try {
-      const response = (await authenticityUtility.patch(`/guesthouse/${id}/approval`, { decision, comment })) as any;
+      const response = (await authenticityUtility.patch(`/guesthouse/${id}/approval`, {
+        decision,
+        comment,
+      })) as any;
       if (!response?.success) {
         throw new Error(response?.message || 'Guesthouse approval could not be completed');
       }
@@ -625,7 +631,11 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       await fetchKpiStats();
     } catch (error) {
       console.error('Guesthouse approval action failed', error);
-      setDialogMessage((error as any)?.response?.data?.message || (error as Error).message || 'Guesthouse approval could not be completed');
+      setDialogMessage(
+        (error as any)?.response?.data?.message ||
+          (error as Error).message ||
+          'Guesthouse approval could not be completed',
+      );
     } finally {
       setApprovalBusyId(null);
     }
@@ -867,7 +877,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   const handleDeleteClick = async (item: GuesthouseCardItem) => {
     if (!canDeleteRequest(item)) return;
 
-    const confirmed = window.confirm('Delete this guesthouse request? This action cannot be undone.');
+    const confirmed = window.confirm(
+      'Delete this guesthouse request? This action cannot be undone.',
+    );
     if (!confirmed) return;
 
     try {
@@ -888,7 +900,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       await fetchDashboard();
     } catch (error) {
       console.error('Failed to delete guesthouse request', error);
-      setDialogMessage((error as any)?.response?.data?.message || 'Failed to delete guesthouse request');
+      setDialogMessage(
+        (error as any)?.response?.data?.message || 'Failed to delete guesthouse request',
+      );
     }
   };
 
@@ -1064,21 +1078,23 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                   </div>
                 </div>
 
-                {!approvalMode && <button
-                  className="guesthousedashboard-add-btn"
-                  onClick={() =>
-                    navigate('/guesthouse/new', {
-                      state: {
-                        fiscalYear:
-                          selectedFiscalYear && selectedFiscalYear !== 'all'
-                            ? selectedFiscalYear
-                            : currentFiscalYear,
-                      },
-                    })
-                  }
-                >
-                  Add +
-                </button>}
+                {!approvalMode && (
+                  <button
+                    className="guesthousedashboard-add-btn"
+                    onClick={() =>
+                      navigate('/guesthouse/new', {
+                        state: {
+                          fiscalYear:
+                            selectedFiscalYear && selectedFiscalYear !== 'all'
+                              ? selectedFiscalYear
+                              : currentFiscalYear,
+                        },
+                      })
+                    }
+                  >
+                    Add +
+                  </button>
+                )}
               </div>
             </div>
 
@@ -1103,7 +1119,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
 
             {/* CONTENT */}
             <div className="guesthousedashboard-body">
-              {loading && <div className="guesthousedashboard-state">Loading guesthouse requests...</div>}
+              {loading && (
+                <div className="guesthousedashboard-state">Loading guesthouse requests...</div>
+              )}
 
               {!loading && filteredData.length === 0 && (
                 <div
@@ -1140,7 +1158,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                             <span className="card-applicant-name">{item.applicant_name}</span>
                             <span className="card-category-tag">
                               Stay: {formatBookingDate(item.check_in_date)}
-                              {item.check_out_date ? ` – ${formatBookingDate(item.check_out_date)}` : ''}
+                              {item.check_out_date
+                                ? ` – ${formatBookingDate(item.check_out_date)}`
+                                : ''}
                             </span>
                           </div>
 
@@ -1180,21 +1200,26 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                             <span className="beneficiary-label">Guest:</span>
                             <span className="beneficiary-label">Guest Details :</span>
                             <span className="beneficiary-value">
-                              {item.guest_details || item.beneficiary_name || item.beneficiary_value || '-'}
+                              {item.guest_details ||
+                                item.beneficiary_name ||
+                                item.beneficiary_value ||
+                                '-'}
                             </span>
                           </div>
                           <div className="card-footer-right">
-                            {isPrincipalUser && isPrincipalDocumentEligible(item) && !principalDocumentUrl && (
-                              <button
-                                type="button"
-                                className="icon-btn-subtle guesthousedashboard-principal-mini-btn"
-                                title="Upload Principal Document"
-                                onClick={() => openPrincipalDocumentPicker(item)}
-                                disabled={principalActionLoading}
-                              >
-                                <Upload size={16} />
-                              </button>
-                            )}
+                            {isPrincipalUser &&
+                              isPrincipalDocumentEligible(item) &&
+                              !principalDocumentUrl && (
+                                <button
+                                  type="button"
+                                  className="icon-btn-subtle guesthousedashboard-principal-mini-btn"
+                                  title="Upload Principal Document"
+                                  onClick={() => openPrincipalDocumentPicker(item)}
+                                  disabled={principalActionLoading}
+                                >
+                                  <Upload size={16} />
+                                </button>
+                              )}
                             {showPrincipalDocumentAction && (
                               <>
                                 <button
@@ -1346,7 +1371,10 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
               {!loading && filteredData.length > 0 && (
                 <div className="guesthousedashboard-pagination">
                   <div className="guesthousedashboard-pagination-left">
-                    <label className="guesthousedashboard-pagination-label" htmlFor="guesthousedashboard-page-size">
+                    <label
+                      className="guesthousedashboard-pagination-label"
+                      htmlFor="guesthousedashboard-page-size"
+                    >
                       Rows per page
                     </label>
                     <select
@@ -1393,13 +1421,18 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       </section>
       {activeInfoItem && (
         <div className="guesthousedashboard-log-overlay" onClick={() => setActiveInfoId(null)}>
-          <div className="guesthousedashboard-log-modal" onClick={(event) => event.stopPropagation()}>
+          <div
+            className="guesthousedashboard-log-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className="guesthousedashboard-log-header">Submission Logs</div>
             <div className="guesthousedashboard-log-body guesthousedashboard-log-body-modal">
               <div className="guesthousedashboard-log-summary">
                 <div className="guesthousedashboard-log-summary-row">
                   <span className="guesthousedashboard-log-label">Proposal:</span>
-                  <span className="guesthousedashboard-log-value">{getProposalRef(activeInfoItem)}</span>
+                  <span className="guesthousedashboard-log-value">
+                    {getProposalRef(activeInfoItem)}
+                  </span>
                 </div>
                 <div className="guesthousedashboard-log-summary-row">
                   <span className="guesthousedashboard-log-label">Last Edited:</span>
@@ -1419,7 +1452,10 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                       className={`guesthousedashboard-log-entry guesthousedashboard-log-entry-modal${event.actorBadgeLabel ? ' guesthousedashboard-log-entry--admin' : ''}`}
                     >
                       {event.actorBadgeLabel === 'SUPERADMIN' && (
-                        <span className="guesthousedashboard-log-admin-mark" title="Updated by Admin">
+                        <span
+                          className="guesthousedashboard-log-admin-mark"
+                          title="Updated by Admin"
+                        >
                           {`\u2605 ${event.actorBadgeLabel}`}
                         </span>
                       )}
@@ -1473,7 +1509,11 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         size="sm"
         footer={
           <>
-            <button type="button" className="btn btn-secondary" onClick={() => setPendingApproval(null)}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setPendingApproval(null)}
+            >
               Cancel
             </button>
             <button
@@ -1482,7 +1522,11 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
               disabled={!approvalComment.trim()}
               onClick={() => {
                 if (!pendingApproval) return;
-                void submitApprovalDecision(pendingApproval.id, pendingApproval.decision, approvalComment.trim());
+                void submitApprovalDecision(
+                  pendingApproval.id,
+                  pendingApproval.decision,
+                  approvalComment.trim(),
+                );
                 setPendingApproval(null);
               }}
             >

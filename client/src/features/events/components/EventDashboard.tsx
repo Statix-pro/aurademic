@@ -1,5 +1,3 @@
-import React, { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import {
   Archive,
   Bell,
@@ -18,14 +16,17 @@ import {
   XCircle,
   Trash2,
   type LucideIcon,
-} from "lucide-react";
-import authenticityUtility from "../../../shared/utils/authenticityUtility";
-import AlertModal, { AlertType } from "../../../shared/components/ui/AlertModal";
-import DeleteConfirmationModal from "../../../shared/components/ui/DeleteConfirmationModal";
-import CustomModal from "../../../shared/components/ui/CustomModal";
-import { useAbility } from "../../../shared/casl/AbilityContext";
-import "../styles/Dashboard.css";
-import { EVENT_DASHBOARD_MONTHS } from "../constants";
+} from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import { useAbility } from '../../../shared/casl/AbilityContext';
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomModal from '../../../shared/components/ui/CustomModal';
+import DeleteConfirmationModal from '../../../shared/components/ui/DeleteConfirmationModal';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import '../styles/Dashboard.css';
+import { EVENT_DASHBOARD_MONTHS } from '../constants';
 
 interface EventData {
   id: number;
@@ -65,7 +66,14 @@ interface CalendarCell {
   active?: boolean;
 }
 
-type DashboardStatusKey = "all" | "draft" | "pending" | "return" | "reject" | "approved" | "archive";
+type DashboardStatusKey =
+  | 'all'
+  | 'draft'
+  | 'pending'
+  | 'return'
+  | 'reject'
+  | 'approved'
+  | 'archive';
 
 interface DashboardStat {
   key: DashboardStatusKey;
@@ -75,34 +83,34 @@ interface DashboardStat {
   tone: string;
 }
 
-const getEventIdentity = (event: Pick<EventData, "id" | "isSubEvent">): string =>
-  `${event.isSubEvent ? "sub" : "main"}-${event.id}`;
+const getEventIdentity = (event: Pick<EventData, 'id' | 'isSubEvent'>): string =>
+  `${event.isSubEvent ? 'sub' : 'main'}-${event.id}`;
 
-const STATUS_LABELS: Record<Exclude<DashboardStatusKey, "all">, string> = {
-  draft: "Draft",
-  pending: "Pending",
-  return: "Return",
-  reject: "Reject",
-  approved: "Approved",
-  archive: "Archive",
+const STATUS_LABELS: Record<Exclude<DashboardStatusKey, 'all'>, string> = {
+  draft: 'Draft',
+  pending: 'Pending',
+  return: 'Return',
+  reject: 'Reject',
+  approved: 'Approved',
+  archive: 'Archive',
 };
 
 const getStatusDisplayLabel = (status: string): string => {
   const value = status.trim().toLowerCase();
-  if (value === "draft") return "Draft";
-  if (value === "unknown" || value.length === 0) return "Unknown";
+  if (value === 'draft') return 'Draft';
+  if (value === 'unknown' || value.length === 0) return 'Unknown';
   return STATUS_LABELS[normalizeStatus(status)];
 };
 
-const normalizeStatus = (status: string): Exclude<DashboardStatusKey, "all"> => {
+const normalizeStatus = (status: string): Exclude<DashboardStatusKey, 'all'> => {
   const value = status.trim().toLowerCase();
-  if (value === "draft") return "draft";
-  if (value === "pending") return "pending";
-  if (value === "return") return "return";
-  if (value === "rejected") return "reject";
-  if (value === "approved") return "approved";
-  if (value === "archived") return "archive";
-  return "pending";
+  if (value === 'draft') return 'draft';
+  if (value === 'pending') return 'pending';
+  if (value === 'return') return 'return';
+  if (value === 'rejected') return 'reject';
+  if (value === 'approved') return 'approved';
+  if (value === 'archived') return 'archive';
+  return 'pending';
 };
 
 const getFiscalYearLabel = (date: string): string => {
@@ -110,15 +118,22 @@ const getFiscalYearLabel = (date: string): string => {
   return `FY ${year}-${String(year + 1).slice(-2)}`;
 };
 
-const matchesSearchTerm = (event: Pick<EventData, "proposedBy" | "category" | "department" | "name" | "venue" | "time">, term: string): boolean => {
+const matchesSearchTerm = (
+  event: Pick<EventData, 'proposedBy' | 'category' | 'department' | 'name' | 'venue' | 'time'>,
+  term: string,
+): boolean => {
   if (term.length === 0) return true;
   return [event.proposedBy, event.category, event.department, event.name, event.venue, event.time]
-    .join(" ")
+    .join(' ')
     .toLowerCase()
     .includes(term);
 };
 
-const buildBellCalendar = (year: number, monthIndex: number, selectedDate: Date): CalendarCell[] => {
+const buildBellCalendar = (
+  year: number,
+  monthIndex: number,
+  selectedDate: Date,
+): CalendarCell[] => {
   const firstOfMonth = new Date(year, monthIndex, 1);
   const firstWeekDay = firstOfMonth.getDay();
   const startDate = new Date(year, monthIndex, 1 - firstWeekDay);
@@ -143,11 +158,11 @@ const buildBellCalendar = (year: number, monthIndex: number, selectedDate: Date)
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const ability = useAbility();
-  const canEditEvents = ability.can("edit", "Event");
-  const canDeleteEvents = ability.can("delete", "Event");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [yearFilter, setYearFilter] = useState("all");
-  const [selectedStatus, setSelectedStatus] = useState<DashboardStatusKey>("all");
+  const canEditEvents = ability.can('edit', 'Event');
+  const canDeleteEvents = ability.can('delete', 'Event');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [yearFilter, setYearFilter] = useState('all');
+  const [selectedStatus, setSelectedStatus] = useState<DashboardStatusKey>('all');
   const [showBellPreview, setShowBellPreview] = useState(false);
   const [activePendingId, setActivePendingId] = useState<string | null>(null);
   const [bellViewYear, setBellViewYear] = useState(new Date().getFullYear());
@@ -161,10 +176,14 @@ const Dashboard: React.FC = () => {
 
   const [subEventToDelete, setSubEventToDelete] = useState<EventData | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [alertConfig, setAlertConfig] = useState<{ show: boolean; message: string; type: AlertType }>({
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: string;
+    type: AlertType;
+  }>({
     show: false,
-    message: "",
-    type: "info",
+    message: '',
+    type: 'info',
   });
 
   React.useEffect(() => {
@@ -181,21 +200,21 @@ const Dashboard: React.FC = () => {
     let isMounted = true;
 
     const isAPISubEvent = (value: unknown): value is APISubEvent => {
-      if (!value || typeof value !== "object") return false;
+      if (!value || typeof value !== 'object') return false;
       const candidate = value as Partial<APISubEvent>;
-      return typeof candidate.id === "number";
+      return typeof candidate.id === 'number';
     };
 
     const isAPIMainEvent = (value: unknown): value is APIMainEvent =>
       isAPISubEvent(value) &&
-      (!("sub_events" in value) ||
+      (!('sub_events' in value) ||
         value.sub_events === undefined ||
         (Array.isArray(value.sub_events) && value.sub_events.every(isAPISubEvent)));
 
     const isAPIMainEventArrayResponse = (value: unknown): value is { data: APIMainEvent[] } =>
       !!value &&
-      typeof value === "object" &&
-      "data" in value &&
+      typeof value === 'object' &&
+      'data' in value &&
       Array.isArray((value as { data?: unknown }).data) &&
       (value as { data: unknown[] }).data.every(isAPIMainEvent);
 
@@ -213,48 +232,53 @@ const Dashboard: React.FC = () => {
       data.forEach((main: APIMainEvent) => {
         flattenedEvents.push({
           id: main.id,
-          name: main.title || "Untitled Event",
-          status: main.status || "Draft",
-          proposedBy: main.proposedBy || "N/A",
-          category: main.category || "N/A",
-          department: main.department || "N/A",
-          time: main.date ? new Date(main.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "TBD",
-          venue: main.venue || "TBD",
+          name: main.title || 'Untitled Event',
+          status: main.status || 'Draft',
+          proposedBy: main.proposedBy || 'N/A',
+          category: main.category || 'N/A',
+          department: main.department || 'N/A',
+          time: main.date
+            ? new Date(main.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : 'TBD',
+          venue: main.venue || 'TBD',
           date: main.date || main.createdAt || new Date().toISOString(),
           parent_id: null,
-          isSubEvent: false
+          isSubEvent: false,
         });
-        
+
         if (main.sub_events && main.sub_events.length > 0) {
           main.sub_events.forEach((sub: APISubEvent) => {
             flattenedEvents.push({
               id: sub.id,
-              name: sub.title || "Untitled Sub Event",
-              status: sub.status || "Draft",
-              proposedBy: sub.proposedBy || "N/A",
-              category: sub.category || "N/A",
-              department: sub.department || "N/A",
-              time: sub.date ? new Date(sub.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "TBD",
-              venue: sub.venue || "TBD",
+              name: sub.title || 'Untitled Sub Event',
+              status: sub.status || 'Draft',
+              proposedBy: sub.proposedBy || 'N/A',
+              category: sub.category || 'N/A',
+              department: sub.department || 'N/A',
+              time: sub.date
+                ? new Date(sub.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                : 'TBD',
+              venue: sub.venue || 'TBD',
               date: sub.date || sub.createdAt || new Date().toISOString(),
               parent_id: main.id,
-              isSubEvent: true
+              isSubEvent: true,
             });
           });
-          }
+        }
       });
       setEvents(flattenedEvents);
     };
 
-    authenticityUtility.get<APIMainEvent[] | { data: APIMainEvent[] }>("/events")
+    authenticityUtility
+      .get<APIMainEvent[] | { data: APIMainEvent[] }>('/events')
       .then(handleResponse)
       .catch((err) => {
         if (!isMounted) return;
-        console.error("Error fetching events:", err);
+        console.error('Error fetching events:', err);
         setAlertConfig({
           show: true,
-          message: "Failed to fetch events. Please try again.",
-          type: "error",
+          message: 'Failed to fetch events. Please try again.',
+          type: 'error',
         });
       });
 
@@ -284,7 +308,7 @@ const Dashboard: React.FC = () => {
 
     events.forEach((event) => {
       const eventYear = getFiscalYearLabel(event.date);
-      const matchesYear = yearFilter === "all" || eventYear === yearFilter;
+      const matchesYear = yearFilter === 'all' || eventYear === yearFilter;
       const matchesSearch = matchesSearchTerm(event, term);
 
       if (matchesYear && matchesSearch) {
@@ -294,12 +318,36 @@ const Dashboard: React.FC = () => {
     });
 
     return [
-      { key: "all", label: "Total", value: counts.all, icon: Briefcase, tone: "tone-total" },
-      { key: "pending", label: "Pending", value: counts.pending, icon: Clock, tone: "tone-pending" },
-      { key: "return", label: "Return", value: counts.return, icon: RotateCcw, tone: "tone-return" },
-      { key: "reject", label: "Reject", value: counts.reject, icon: XCircle, tone: "tone-reject" },
-      { key: "approved", label: "Approved", value: counts.approved, icon: CheckCircle, tone: "tone-approved" },
-      { key: "archive", label: "Archive", value: counts.archive, icon: Archive, tone: "tone-archive" },
+      { key: 'all', label: 'Total', value: counts.all, icon: Briefcase, tone: 'tone-total' },
+      {
+        key: 'pending',
+        label: 'Pending',
+        value: counts.pending,
+        icon: Clock,
+        tone: 'tone-pending',
+      },
+      {
+        key: 'return',
+        label: 'Return',
+        value: counts.return,
+        icon: RotateCcw,
+        tone: 'tone-return',
+      },
+      { key: 'reject', label: 'Reject', value: counts.reject, icon: XCircle, tone: 'tone-reject' },
+      {
+        key: 'approved',
+        label: 'Approved',
+        value: counts.approved,
+        icon: CheckCircle,
+        tone: 'tone-approved',
+      },
+      {
+        key: 'archive',
+        label: 'Archive',
+        value: counts.archive,
+        icon: Archive,
+        tone: 'tone-archive',
+      },
     ] satisfies DashboardStat[];
   }, [events, yearFilter, searchTerm]);
 
@@ -307,7 +355,7 @@ const Dashboard: React.FC = () => {
     const term = searchTerm.trim().toLowerCase();
     return events.filter((event) => {
       const eventYear = getFiscalYearLabel(event.date);
-      const matchesYear = yearFilter === "all" || eventYear === yearFilter;
+      const matchesYear = yearFilter === 'all' || eventYear === yearFilter;
       const matchesSearch = matchesSearchTerm(event, term);
       return matchesYear && matchesSearch;
     });
@@ -316,7 +364,7 @@ const Dashboard: React.FC = () => {
   const filteredEvents = useMemo(() => {
     return filteredEventsByYearAndSearch.filter((event) => {
       const normalizedStatus = normalizeStatus(event.status);
-      return selectedStatus === "all" || normalizedStatus === selectedStatus;
+      return selectedStatus === 'all' || normalizedStatus === selectedStatus;
     });
   }, [filteredEventsByYearAndSearch, selectedStatus]);
 
@@ -326,10 +374,10 @@ const Dashboard: React.FC = () => {
   );
 
   const bellTitle = (() => {
-    const day = String(bellSelectedDate.getDate()).padStart(2, "0");
-    const month = String(bellSelectedDate.getMonth() + 1).padStart(2, "0");
+    const day = String(bellSelectedDate.getDate()).padStart(2, '0');
+    const month = String(bellSelectedDate.getMonth() + 1).padStart(2, '0');
     const year = bellSelectedDate.getFullYear();
-    const weekday = bellSelectedDate.toLocaleDateString("en-US", { weekday: "long" });
+    const weekday = bellSelectedDate.toLocaleDateString('en-US', { weekday: 'long' });
     return `${day}.${month}.${year} (${weekday})`;
   })();
 
@@ -341,7 +389,7 @@ const Dashboard: React.FC = () => {
   const handleDelete = (event: EventData): void => {
     if (!event || !event.id) return;
     if (!canDeleteEvents) return;
-    
+
     if (event.isSubEvent) {
       setSubEventToDelete(event);
     } else {
@@ -355,19 +403,19 @@ const Dashboard: React.FC = () => {
     if (!subEventToDelete) return;
     setIsDeleting(true);
     const subEventIdentity = getEventIdentity(subEventToDelete);
-    authenticityUtility.delete(`/events/${subEventToDelete.id}`)
+    authenticityUtility
+      .delete(`/events/${subEventToDelete.id}`)
       .then(() => {
         setEvents((prev) => prev.filter((e) => getEventIdentity(e) !== subEventIdentity));
         setSubEventToDelete(null);
       })
-      .catch(err => {
-        console.error("Error deleting event:", err);
-        setAlertConfig({ show: true, message: "Failed to delete event.", type: "error" });
+      .catch((err) => {
+        console.error('Error deleting event:', err);
+        setAlertConfig({ show: true, message: 'Failed to delete event.', type: 'error' });
         setSubEventToDelete(null);
       })
       .finally(() => setIsDeleting(false));
   };
-
 
   const executeDelete = () => {
     if (!eventToDelete) return;
@@ -377,14 +425,17 @@ const Dashboard: React.FC = () => {
     const eventIdentity = getEventIdentity(eventToDelete);
     const eventId = eventToDelete.id;
     setEventToDelete(null);
-    authenticityUtility.delete(`/events/${eventId}`)
+    authenticityUtility
+      .delete(`/events/${eventId}`)
       .then(() => {
-        setEvents((prev) => prev.filter((e) => getEventIdentity(e) !== eventIdentity && e.parent_id !== eventId));
+        setEvents((prev) =>
+          prev.filter((e) => getEventIdentity(e) !== eventIdentity && e.parent_id !== eventId),
+        );
         setDeleteCountdown(5);
       })
-      .catch(err => {
-        console.error("Error deleting event:", err);
-        setAlertConfig({ show: true, message: "Failed to delete event.", type: "error" });
+      .catch((err) => {
+        console.error('Error deleting event:', err);
+        setAlertConfig({ show: true, message: 'Failed to delete event.', type: 'error' });
       })
       .finally(() => {
         setEventToDelete(null);
@@ -398,7 +449,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleKpiClick = (statusKey: DashboardStatusKey): void => {
-    setSelectedStatus((current) => (current === statusKey ? "all" : statusKey));
+    setSelectedStatus((current) => (current === statusKey ? 'all' : statusKey));
     setActivePendingId(null);
   };
 
@@ -499,7 +550,7 @@ const Dashboard: React.FC = () => {
             <button
               type="button"
               className="event-dashboard-add-btn"
-              onClick={() => navigate("/event/new?tab=pre-event")}
+              onClick={() => navigate('/event/new?tab=pre-event')}
             >
               Add +
             </button>
@@ -507,7 +558,7 @@ const Dashboard: React.FC = () => {
             <button
               type="button"
               className="event-dashboard-add-btn event-dashboard-add-btn--secondary"
-              onClick={() => navigate("/event/new?isSubEvent=true&tab=pre-event")}
+              onClick={() => navigate('/event/new?isSubEvent=true&tab=pre-event')}
             >
               Sub +
             </button>
@@ -521,7 +572,7 @@ const Dashboard: React.FC = () => {
               <button
                 key={stat.label}
                 type="button"
-                className={`event-stat-card ${stat.tone}${selectedStatus === stat.key ? " is-active" : ""}`}
+                className={`event-stat-card ${stat.tone}${selectedStatus === stat.key ? ' is-active' : ''}`}
                 onClick={() => handleKpiClick(stat.key)}
                 aria-pressed={selectedStatus === stat.key}
               >
@@ -543,180 +594,229 @@ const Dashboard: React.FC = () => {
               <h2>No events found</h2>
               <p>Try adjusting your search or filters.</p>
             </div>
-          ) : filteredEvents.map((event) => {
-            return (
-              <article
-                key={getEventIdentity(event)}
-                className="event-request-card"
-              >
-                {(() => {
-                  const normalizedStatus = normalizeStatus(event.status);
-                  const hideEdit = normalizedStatus === "approved";
-                  const hideDelete = normalizedStatus === "reject";
+          ) : (
+            filteredEvents.map((event) => {
+              return (
+                <article key={getEventIdentity(event)} className="event-request-card">
+                  {(() => {
+                    const normalizedStatus = normalizeStatus(event.status);
+                    const hideEdit = normalizedStatus === 'approved';
+                    const hideDelete = normalizedStatus === 'reject';
 
-                  return (
-                    <div className="event-request-row event-request-row--top">
-                      <div className="event-request-head-left">
-                        <span className="event-request-id" style={{ minWidth: '80px', color: event.isSubEvent ? '#64748b' : undefined }}>
-                          #EV-{new Date(event.date || new Date()).getFullYear()}-{String(event.id).padStart(4, "0")}
-                        </span>
-                        <span className="event-request-name">{event.proposedBy}</span>
-                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                          <span className="event-request-type-badge">{event.category}</span>
-                          <span 
-                            className="event-request-type-badge" 
-                            style={{ 
-                              backgroundColor: event.isSubEvent ? "#f1f5f9" : "#eff6ff", 
-                              color: event.isSubEvent ? "#475569" : "#1d4ed8",
-                              fontWeight: 600
+                    return (
+                      <div className="event-request-row event-request-row--top">
+                        <div className="event-request-head-left">
+                          <span
+                            className="event-request-id"
+                            style={{
+                              minWidth: '80px',
+                              color: event.isSubEvent ? '#64748b' : undefined,
                             }}
                           >
-                            {event.isSubEvent ? "[Sub Event]" : "[Main Event]"}
+                            #EV-{new Date(event.date || new Date()).getFullYear()}-
+                            {String(event.id).padStart(4, '0')}
                           </span>
+                          <span className="event-request-name">{event.proposedBy}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <span className="event-request-type-badge">{event.category}</span>
+                            <span
+                              className="event-request-type-badge"
+                              style={{
+                                backgroundColor: event.isSubEvent ? '#f1f5f9' : '#eff6ff',
+                                color: event.isSubEvent ? '#475569' : '#1d4ed8',
+                                fontWeight: 600,
+                              }}
+                            >
+                              {event.isSubEvent ? '[Sub Event]' : '[Main Event]'}
+                            </span>
+                          </div>
                         </div>
-                      </div>
 
-                      <div className="event-request-head-right">
-                        <div className="event-request-amount">
-                          <span>Date</span>
-                          <strong>
-                            {(() => {
-                              const d = new Date(event.date);
-                              const day = String(d.getDate()).padStart(2, "0");
-                              const month = String(d.getMonth() + 1).padStart(2, "0");
-                              const year = d.getFullYear();
-                              return `${day}-${month}-${year}`;
-                            })()}
-                          </strong>
-                        </div>
+                        <div className="event-request-head-right">
+                          <div className="event-request-amount">
+                            <span>Date</span>
+                            <strong>
+                              {(() => {
+                                const d = new Date(event.date);
+                                const day = String(d.getDate()).padStart(2, '0');
+                                const month = String(d.getMonth() + 1).padStart(2, '0');
+                                const year = d.getFullYear();
+                                return `${day}-${month}-${year}`;
+                              })()}
+                            </strong>
+                          </div>
 
-                        <div className="event-request-mini-actions">
-                          <button type="button" className="event-request-mini-btn" onClick={(e) => { e.stopPropagation(); openEventTab(event.id, "updates"); }} aria-label="Info" title="Info"><Info size={16} /></button>
-                          <button type="button" className="event-request-mini-btn" onClick={(e) => { e.stopPropagation(); openEventTab(event.id, "pre-event"); }} aria-label="View" title="View"><Eye size={16} /></button>
-                          {canEditEvents && !hideEdit && (
+                          <div className="event-request-mini-actions">
                             <button
                               type="button"
                               className="event-request-mini-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openEventTab(event.id, "edit");
+                                openEventTab(event.id, 'updates');
                               }}
-                              aria-label="Edit"
-                              title="Edit"
+                              aria-label="Info"
+                              title="Info"
                             >
-                              <Edit2 size={16} />
+                              <Info size={16} />
                             </button>
-                          )}
-                          {canDeleteEvents && !hideDelete && (
                             <button
                               type="button"
                               className="event-request-mini-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDelete(event);
+                                openEventTab(event.id, 'pre-event');
                               }}
-                              aria-label="Delete"
-                              title="Delete"
+                              aria-label="View"
+                              title="View"
                             >
-                              <Trash2 size={16} />
+                              <Eye size={16} />
                             </button>
-                          )}
+                            {canEditEvents && !hideEdit && (
+                              <button
+                                type="button"
+                                className="event-request-mini-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEventTab(event.id, 'edit');
+                                }}
+                                aria-label="Edit"
+                                title="Edit"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                            )}
+                            {canDeleteEvents && !hideDelete && (
+                              <button
+                                type="button"
+                                className="event-request-mini-btn"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(event);
+                                }}
+                                aria-label="Delete"
+                                title="Delete"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
+                    );
+                  })()}
+                  <div className="event-request-row event-request-row--bottom">
+                    <div
+                      className="event-request-bottom-left"
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      {event.isSubEvent && (
+                        <span
+                          style={{
+                            backgroundColor: '#e2e8f0',
+                            color: '#475569',
+                            fontSize: '11px',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontWeight: 600,
+                            marginRight: '8px',
+                          }}
+                        >
+                          SUB EVENT
+                        </span>
+                      )}
+                      <span className="event-request-beneficiary-value">{event.name}</span>
                     </div>
-                  );
-                })()}
-                <div className="event-request-row event-request-row--bottom">
-                  <div className="event-request-bottom-left" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    {event.isSubEvent && (
-                      <span style={{ 
-                        backgroundColor: '#e2e8f0', 
-                        color: '#475569', 
-                        fontSize: '11px', 
-                        padding: '2px 6px', 
-                        borderRadius: '4px', 
-                        fontWeight: 600, 
-                        marginRight: '8px' 
-                      }}>
-                        SUB EVENT
-                      </span>
-                    )}
-                    <span className="event-request-beneficiary-value">{event.name}</span>
+
+                    <div className="event-request-actions">
+                      {(() => {
+                        const normalizedStatus = normalizeStatus(event.status);
+                        const isClickableStatus =
+                          normalizedStatus === 'pending' ||
+                          normalizedStatus === 'approved' ||
+                          normalizedStatus === 'reject';
+                        const eventIdentity = getEventIdentity(event);
+                        const showSteps = isClickableStatus && activePendingId === eventIdentity;
+
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              className="event-request-doc-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEventTab(event.id, 'updates');
+                              }}
+                              aria-label="Open documents"
+                              title="Open documents"
+                            >
+                              <ClipboardList size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className={`event-request-status event-request-status--${normalizedStatus}${
+                                isClickableStatus ? ' is-clickable' : ''
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!isClickableStatus) return;
+                                setActivePendingId(
+                                  activePendingId === eventIdentity ? null : eventIdentity,
+                                );
+                              }}
+                              aria-pressed={showSteps}
+                              disabled={!isClickableStatus}
+                            >
+                              {STATUS_LABELS[normalizedStatus]}
+                            </button>
+
+                            {showSteps && (
+                              <div
+                                className="event-request-progress"
+                                aria-label="Three approval steps"
+                              >
+                                <span
+                                  className="event-request-progress-step is-active"
+                                  aria-hidden="true"
+                                />
+                                <span className="event-request-progress-line" aria-hidden="true" />
+                                <span
+                                  className={`event-request-progress-step ${
+                                    normalizedStatus === 'approved' ||
+                                    normalizedStatus === 'pending'
+                                      ? 'is-active'
+                                      : ''
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                                <span className="event-request-progress-line" aria-hidden="true" />
+                                <span
+                                  className={`event-request-progress-step ${
+                                    normalizedStatus === 'approved' ? 'is-active' : ''
+                                  }`}
+                                  aria-hidden="true"
+                                />
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
-
-                  <div className="event-request-actions">
-                    {(() => {
-                      const normalizedStatus = normalizeStatus(event.status);
-                      const isClickableStatus =
-                        normalizedStatus === "pending" ||
-                        normalizedStatus === "approved" ||
-                        normalizedStatus === "reject";
-                      const eventIdentity = getEventIdentity(event);
-                      const showSteps = isClickableStatus && activePendingId === eventIdentity;
-
-                      return (
-                        <>
-                          <button
-                            type="button"
-                            className="event-request-doc-btn"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openEventTab(event.id, "updates");
-                            }}
-                            aria-label="Open documents"
-                            title="Open documents"
-                          >
-                            <ClipboardList size={16} />
-                          </button>
-
-                          <button
-                            type="button"
-                            className={`event-request-status event-request-status--${normalizedStatus}${
-                              isClickableStatus ? " is-clickable" : ""
-                            }`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (!isClickableStatus) return;
-                              setActivePendingId(activePendingId === eventIdentity ? null : eventIdentity);
-                            }}
-                            aria-pressed={showSteps}
-                            disabled={!isClickableStatus}
-                          >
-                            {STATUS_LABELS[normalizedStatus]}
-                          </button>
-
-                          {showSteps && (
-                            <div className="event-request-progress" aria-label="Three approval steps">
-                              <span className="event-request-progress-step is-active" aria-hidden="true" />
-                              <span className="event-request-progress-line" aria-hidden="true" />
-                              <span
-                                className={`event-request-progress-step ${
-                                  normalizedStatus === "approved" || normalizedStatus === "pending" ? "is-active" : ""
-                                }`}
-                                aria-hidden="true"
-                              />
-                              <span className="event-request-progress-line" aria-hidden="true" />
-                              <span
-                                className={`event-request-progress-step ${
-                                  normalizedStatus === "approved" ? "is-active" : ""
-                                }`}
-                                aria-hidden="true"
-                              />
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
+                </article>
+              );
+            })
+          )}
         </section>
       </section>
 
       {showBellPreview && (
-        <CustomModal show={showBellPreview} onHide={() => setShowBellPreview(false)} title="Event Calendar" size="lg">
+        <CustomModal
+          show={showBellPreview}
+          onHide={() => setShowBellPreview(false)}
+          title="Event Calendar"
+          size="lg"
+        >
           <div className="event-bell-modal">
             <div className="event-bell-panel">
               <div className="event-bell-left">
@@ -730,7 +830,7 @@ const Dashboard: React.FC = () => {
                         <button
                           type="button"
                           className="event-bell-event-link"
-                          onClick={() => openEventTab(event.id, "pre-event")}
+                          onClick={() => openEventTab(event.id, 'pre-event')}
                         >
                           {event.name}
                         </button>
@@ -755,7 +855,7 @@ const Dashboard: React.FC = () => {
                     aria-label="Previous month"
                     onClick={goToBellPrevMonth}
                   >
-                    {"<"}
+                    {'<'}
                   </button>
                   <div className="event-bell-month-label">
                     {currentBellMonthLabel} {bellViewYear}
@@ -766,7 +866,7 @@ const Dashboard: React.FC = () => {
                     aria-label="Next month"
                     onClick={goToBellNextMonth}
                   >
-                    {">"}
+                    {'>'}
                   </button>
                   <select
                     className="event-bell-select"
@@ -786,7 +886,10 @@ const Dashboard: React.FC = () => {
                   >
                     {Array.from(
                       new Set([
-                        ...Array.from({ length: 7 }, (_, index) => new Date().getFullYear() - 3 + index),
+                        ...Array.from(
+                          { length: 7 },
+                          (_, index) => new Date().getFullYear() - 3 + index,
+                        ),
                         bellViewYear,
                       ]),
                     )
@@ -800,7 +903,7 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="event-bell-calendar-grid">
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
                     <div key={day} className="event-bell-day-head">
                       {day}
                     </div>
@@ -810,13 +913,13 @@ const Dashboard: React.FC = () => {
                     <button
                       key={`${day.date.toISOString()}-${index}`}
                       className={[
-                        "event-bell-day-cell",
-                        day.muted ? "muted" : "",
-                        day.weekend ? "weekend" : "",
-                        day.active ? "active" : "",
+                        'event-bell-day-cell',
+                        day.muted ? 'muted' : '',
+                        day.weekend ? 'weekend' : '',
+                        day.active ? 'active' : '',
                       ]
                         .filter(Boolean)
-                        .join(" ")}
+                        .join(' ')}
                       type="button"
                       tabIndex={0}
                       onClick={() => {
@@ -826,7 +929,7 @@ const Dashboard: React.FC = () => {
                         setBellViewMonth(day.date.getMonth());
                       }}
                       onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
+                        if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           if (day.muted) return;
                           setBellSelectedDate(day.date);
@@ -855,10 +958,15 @@ const Dashboard: React.FC = () => {
             <button className="btn btn-secondary btn-sm" onClick={cancelDelete}>
               Cancel
             </button>
-            <button 
-              className="btn btn-danger btn-sm" 
+            <button
+              className="btn btn-danger btn-sm"
               onClick={executeDelete}
-              disabled={Boolean(eventToDelete?.parent_id == null && eventToDelete && events.some((event) => event.parent_id === eventToDelete.id) && deleteCountdown > 0)}
+              disabled={Boolean(
+                eventToDelete?.parent_id == null &&
+                eventToDelete &&
+                events.some((event) => event.parent_id === eventToDelete.id) &&
+                deleteCountdown > 0,
+              )}
             >
               Delete Now
             </button>
@@ -866,14 +974,25 @@ const Dashboard: React.FC = () => {
         }
       >
         <p className="mb-0 fw-medium" style={{ fontSize: '0.95rem' }}>
-          {eventToDelete && eventToDelete.parent_id == null && events.some((event) => event.parent_id === eventToDelete.id) ? (
-            <>This Main Event has associated Sub Events. Deleting this Main Event will permanently delete all related Sub Events.</>
+          {eventToDelete &&
+          eventToDelete.parent_id == null &&
+          events.some((event) => event.parent_id === eventToDelete.id) ? (
+            <>
+              This Main Event has associated Sub Events. Deleting this Main Event will permanently
+              delete all related Sub Events.
+            </>
           ) : (
             <>Please confirm if you wish to proceed.</>
           )}
           <span aria-live="polite" className="d-block mt-2">
-            {eventToDelete && eventToDelete.parent_id == null && events.some((event) => event.parent_id === eventToDelete.id) && deleteCountdown > 0 ? (
-              <>You can confirm this action in <strong className="text-danger">{deleteCountdown}</strong> seconds.</>
+            {eventToDelete &&
+            eventToDelete.parent_id == null &&
+            events.some((event) => event.parent_id === eventToDelete.id) &&
+            deleteCountdown > 0 ? (
+              <>
+                You can confirm this action in{' '}
+                <strong className="text-danger">{deleteCountdown}</strong> seconds.
+              </>
             ) : null}
           </span>
         </p>
@@ -889,7 +1008,7 @@ const Dashboard: React.FC = () => {
 
       <AlertModal
         show={alertConfig.show}
-        onHide={() => setAlertConfig(prev => ({ ...prev, show: false }))}
+        onHide={() => setAlertConfig((prev) => ({ ...prev, show: false }))}
         message={alertConfig.message}
         type={alertConfig.type}
       />

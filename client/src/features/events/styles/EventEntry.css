@@ -69,7 +69,9 @@
   border: 0;
   background: var(--primary-color, #0069ab);
   color: #ffffff;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -1px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 4px 6px -1px rgba(0, 0, 0, 0.04),
+    0 2px 4px -1px rgba(0, 0, 0, 0.02);
 }
 
 .event-entry-shell .btn-secondary-action {
@@ -89,7 +91,9 @@
 .event-entry-save-btn:hover {
   background: var(--primary-hover, #005492);
   transform: translateY(-1px);
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  box-shadow:
+    0 10px 15px -3px rgba(0, 0, 0, 0.04),
+    0 4px 6px -2px rgba(0, 0, 0, 0.02);
 }
 
 .event-entry-shell .btn-secondary-action:hover,
@@ -201,7 +205,9 @@
   font-weight: 400;
   outline: none;
   padding: 8px 14px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .event-entry-page select {

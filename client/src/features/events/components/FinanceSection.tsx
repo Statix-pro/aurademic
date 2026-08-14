@@ -2,6 +2,7 @@ import { Trash2, Eye, Plus, CloudUpload } from 'lucide-react';
 import React, { useState } from 'react';
 import '../styles/EventForm.css';
 import { v4 as uuidv4 } from 'uuid';
+
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import { FINANCE_INCOME_HEADS, FINANCE_BUDGET_HEADS, FINANCE_INITIAL_DOCS } from '../constants';
 
@@ -182,8 +183,10 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                         }
                       >
                         <option value="">-- Select --</option>
-                        {FINANCE_INCOME_HEADS.map(head => (
-                          <option key={head} value={head}>{head}</option>
+                        {FINANCE_INCOME_HEADS.map((head) => (
+                          <option key={head} value={head}>
+                            {head}
+                          </option>
                         ))}
                       </select>
                     ) : (
@@ -339,8 +342,10 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
                         }
                       >
                         <option value="">-- Select --</option>
-                        {FINANCE_BUDGET_HEADS.map(head => (
-                          <option key={head} value={head}>{head}</option>
+                        {FINANCE_BUDGET_HEADS.map((head) => (
+                          <option key={head} value={head}>
+                            {head}
+                          </option>
                         ))}
                       </select>
                     ) : (
@@ -556,7 +561,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
   const [enabled, setEnabled] = useState<boolean>(true);
   const [isSubmittingFinance, setIsSubmittingFinance] = useState<boolean>(false);
 
-  const initialDocStates: DocState[] = FINANCE_INITIAL_DOCS.map(name => ({
+  const initialDocStates: DocState[] = FINANCE_INITIAL_DOCS.map((name) => ({
     name,
     enabled: false,
     file: null,

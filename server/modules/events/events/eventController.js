@@ -12,16 +12,16 @@ export const getEvents = async (req, res) => {
     const events = await query(
       `SELECT id, event_title AS title, status, created_at AS createdAt, updated_at AS updatedAt, start_date AS date, parent_id
        FROM events
-       ORDER BY created_at DESC`
+       ORDER BY created_at DESC`,
     );
 
     // Separate main events and sub-events
-    const mainEvents = events.filter(e => !e.parent_id);
-    const subEvents = events.filter(e => e.parent_id);
+    const mainEvents = events.filter((e) => !e.parent_id);
+    const subEvents = events.filter((e) => e.parent_id);
 
     // Attach sub-events to their parent
-    mainEvents.forEach(main => {
-      main.sub_events = subEvents.filter(sub => sub.parent_id === main.id);
+    mainEvents.forEach((main) => {
+      main.sub_events = subEvents.filter((sub) => sub.parent_id === main.id);
     });
 
     res.status(200).json(mainEvents);
@@ -84,7 +84,10 @@ export const updateEvent = async (req, res) => {
   const { id } = req.params;
   const { title } = req.body;
   try {
-    await query('UPDATE events SET event_title=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', [title, id]);
+    await query('UPDATE events SET event_title=?, updated_at=CURRENT_TIMESTAMP WHERE id=?', [
+      title,
+      id,
+    ]);
     const [updated] = await query('SELECT * FROM events WHERE id=?', [id]);
     res.json(updated);
   } catch (err) {

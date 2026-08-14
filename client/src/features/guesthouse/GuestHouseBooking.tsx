@@ -1,5 +1,3 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   AirVent,
   Armchair,
@@ -33,6 +31,9 @@ import {
   WashingMachine,
   Wifi,
 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAbility } from '../../shared/casl/AbilityContext';
@@ -494,9 +495,7 @@ const buildStayDates = (checkInDate: string, checkOutDate: string) => {
   return dates;
 };
 
-const createGuest = (
-  id = createNumericId(),
-): GuestDetails => ({
+const createGuest = (id = createNumericId()): GuestDetails => ({
   id,
   name: '',
   gender: '',
@@ -551,7 +550,6 @@ const createCareTakerRow = (): CareTakerRow => ({
   status: 'Active',
 });
 
-
 const ROOM_REQUIREMENT_CONFIG: Array<{
   field: RoomRequirementField;
   roomType: RoomType;
@@ -561,7 +559,6 @@ const ROOM_REQUIREMENT_CONFIG: Array<{
   { field: 'roomDouble', roomType: 'Double', occupants: '2' },
   { field: 'roomDeluxe', roomType: 'Deluxe', occupants: '2' },
 ];
-
 
 const GUEST_AMENITY_OPTIONS: Array<{ key: GuestAmenityKey; label: string }> = [
   { key: 'roomCleaning', label: 'Room Cleaning' },
@@ -696,7 +693,10 @@ const normalizeTextOptions = (payload: unknown, keys: string[]) => {
   const items = Array.isArray(source)
     ? source
     : source && typeof source === 'object'
-      ? (source as ApiRecord).items || (source as ApiRecord).options || (source as ApiRecord).data || []
+      ? (source as ApiRecord).items ||
+        (source as ApiRecord).options ||
+        (source as ApiRecord).data ||
+        []
       : [];
 
   if (!Array.isArray(items)) {
@@ -780,7 +780,9 @@ const normalizeRoomBlockOptions = (payload: unknown): RoomBlockOption[] => {
   const items = Array.isArray(source)
     ? source
     : source && typeof source === 'object'
-      ? (source as Record<string, unknown>).blocks || (source as Record<string, unknown>).rooms || []
+      ? (source as Record<string, unknown>).blocks ||
+        (source as Record<string, unknown>).rooms ||
+        []
       : [];
 
   if (!Array.isArray(items)) {
@@ -796,12 +798,7 @@ const normalizeRoomBlockOptions = (payload: unknown): RoomBlockOption[] => {
 
     const option = item as Record<string, unknown>;
     const block = getTextValue(option, ['block', 'blockName', 'block_name', 'name']);
-    const roomNumber = getTextValue(option, [
-      'roomNumber',
-      'room_number',
-      'room_no',
-      'number',
-    ]);
+    const roomNumber = getTextValue(option, ['roomNumber', 'room_number', 'room_no', 'number']);
     const nestedRooms = readRoomNumbers(option.roomNumbers || option.rooms || option.room_numbers);
 
     if (nestedRooms.length) {
@@ -916,8 +913,9 @@ const GuestHouseBooking: React.FC = () => {
   });
   const [beneficiaryEntityOptions, setBeneficiaryEntityOptions] =
     useState<BeneficiaryEntityOptions>({});
-  const [beneficiaryEmployeeOptions, setBeneficiaryEmployeeOptions] =
-    useState<BeneficiaryEmployeeOption[]>([]);
+  const [beneficiaryEmployeeOptions, setBeneficiaryEmployeeOptions] = useState<
+    BeneficiaryEmployeeOption[]
+  >([]);
   const [beneficiarySearchOpen, setBeneficiarySearchOpen] = useState(false);
   const [roomBlockOptions, setRoomBlockOptions] = useState<RoomBlockOption[]>([]);
   const [spocOptions, setSpocOptions] = useState<string[]>([]);
@@ -1047,7 +1045,10 @@ const GuestHouseBooking: React.FC = () => {
           bookingGuests.map((guest: any) => {
             const roomRequests = Array.isArray(guest.roomRequests) ? guest.roomRequests : [];
             const roomCount = (roomType: RoomType) =>
-              toText(roomRequests.find((request: any) => request.room_type === roomType)?.requested_count);
+              toText(
+                roomRequests.find((request: any) => request.room_type === roomType)
+                  ?.requested_count,
+              );
             return {
               id: Number(guest.id),
               name: toText(guest.name),
@@ -1071,7 +1072,9 @@ const GuestHouseBooking: React.FC = () => {
           }),
         );
 
-        const requirements = Array.isArray(booking.foodRequirements) ? booking.foodRequirements : [];
+        const requirements = Array.isArray(booking.foodRequirements)
+          ? booking.foodRequirements
+          : [];
         if (requirements.length) {
           setFoodRows(
             requirements.map((row: any) => ({
@@ -1101,7 +1104,6 @@ const GuestHouseBooking: React.FC = () => {
       isMounted = false;
     };
   }, [bookingId, hasBookingId]);
-
 
   useEffect(() => {
     if (!isRoomAllotmentVisible) return;
@@ -1167,11 +1169,7 @@ const GuestHouseBooking: React.FC = () => {
     setRoomAllotments((prevAllotments) =>
       guests.reduce<RoomAllotmentsByGuest>((nextAllotments, guest) => {
         const guestId = String(guest.id);
-        nextAllotments[guestId] = createRoomAllotmentData(
-          guestId,
-          guest,
-          prevAllotments[guestId],
-        );
+        nextAllotments[guestId] = createRoomAllotmentData(guestId, guest, prevAllotments[guestId]);
         return nextAllotments;
       }, {}),
     );
@@ -1185,9 +1183,7 @@ const GuestHouseBooking: React.FC = () => {
     );
   }, [foodRows]);
 
-
-
-    useEffect(() => {
+  useEffect(() => {
     const stayDates = buildStayDates(travelDetails.checkInDate, travelDetails.checkOutDate);
 
     if (!stayDates.length) {
@@ -1273,7 +1269,9 @@ const GuestHouseBooking: React.FC = () => {
             ? rows
                 .map((row: any) => ({
                   id: String(row?.id || row?.department_id || row?.entity_id || ''),
-                  name: String(row?.name || row?.label || row?.unit_name || row?.value || '').trim(),
+                  name: String(
+                    row?.name || row?.label || row?.unit_name || row?.value || '',
+                  ).trim(),
                 }))
                 .filter((option) => option.name)
             : [];
@@ -1434,9 +1432,7 @@ const GuestHouseBooking: React.FC = () => {
         ...prevAllotments,
         [guestId]: {
           ...allotment,
-          rows: allotment.rows.map((row) =>
-            row.id === rowId ? { ...row, [field]: value } : row,
-          ),
+          rows: allotment.rows.map((row) => (row.id === rowId ? { ...row, [field]: value } : row)),
         },
       };
     });
@@ -1470,11 +1466,7 @@ const GuestHouseBooking: React.FC = () => {
     });
   };
 
-  const updateAllotmentContact = (
-    guestId: string,
-    field: 'spoc' | 'mobile',
-    value: string,
-  ) => {
+  const updateAllotmentContact = (guestId: string, field: 'spoc' | 'mobile', value: string) => {
     setRoomAllotments((prevAllotments) => {
       const allotment = prevAllotments[guestId];
 
@@ -1492,11 +1484,7 @@ const GuestHouseBooking: React.FC = () => {
     });
   };
 
-  const updateAllotmentAmenity = (
-    guestId: string,
-    amenity: GuestAmenityKey,
-    checked: boolean,
-  ) => {
+  const updateAllotmentAmenity = (guestId: string, amenity: GuestAmenityKey, checked: boolean) => {
     setRoomAllotments((prevAllotments) => {
       const allotment = prevAllotments[guestId];
 
@@ -1519,9 +1507,7 @@ const GuestHouseBooking: React.FC = () => {
 
   const toggleRoomDetails = (guestId: string, rowId: string) => {
     setActiveRoomDetail((previousRoom) =>
-      previousRoom?.guestId === guestId && previousRoom.rowId === rowId
-        ? null
-        : { guestId, rowId },
+      previousRoom?.guestId === guestId && previousRoom.rowId === rowId ? null : { guestId, rowId },
     );
   };
 
@@ -1551,11 +1537,7 @@ const GuestHouseBooking: React.FC = () => {
     setViewingManagedRoomId((currentId) => (currentId === id ? null : currentId));
   };
 
-  const updateCareTaker = (
-    id: number,
-    field: keyof Omit<CareTakerRow, 'id'>,
-    value: string,
-  ) => {
+  const updateCareTaker = (id: number, field: keyof Omit<CareTakerRow, 'id'>, value: string) => {
     setCareTakers((prevCareTakers) =>
       prevCareTakers.map((careTaker) =>
         careTaker.id === id ? { ...careTaker, [field]: value } : careTaker,
@@ -1598,12 +1580,21 @@ const GuestHouseBooking: React.FC = () => {
       return;
     }
 
-    if (!applicantUiDetails.name || !beneficiaryDetails.beneficiaryType || !beneficiaryDetails.staffName) {
+    if (
+      !applicantUiDetails.name ||
+      !beneficiaryDetails.beneficiaryType ||
+      !beneficiaryDetails.staffName
+    ) {
       setSubmitMessage('Applicant and beneficiary details are required.');
       return;
     }
 
-    if (!travelDetails.checkInDate || !travelDetails.checkOutDate || !travelDetails.checkInTime || !travelDetails.checkOutTime) {
+    if (
+      !travelDetails.checkInDate ||
+      !travelDetails.checkOutDate ||
+      !travelDetails.checkInTime ||
+      !travelDetails.checkOutTime
+    ) {
       setSubmitMessage('Check-in and check-out date and time are required.');
       return;
     }
@@ -1635,9 +1626,7 @@ const GuestHouseBooking: React.FC = () => {
     } catch (error: any) {
       console.error('Guesthouse booking submission failed:', error);
       setSubmitMessage(
-        error?.response?.data?.message ||
-          error?.message ||
-          'Unable to submit guesthouse booking.',
+        error?.response?.data?.message || error?.message || 'Unable to submit guesthouse booking.',
       );
     } finally {
       setIsSubmitting(false);
@@ -1818,7 +1807,11 @@ const GuestHouseBooking: React.FC = () => {
             {renderRoomDetailControl('Floor', getRoomFloor(row.roomNumber), true)}
             {renderRoomDetailControl('Block', row.block, true)}
             {renderRoomDetailControl('Status', status, true)}
-            <CircleCheck className="guesthousebooking-room-detail-ready-icon" size={18} aria-hidden="true" />
+            <CircleCheck
+              className="guesthousebooking-room-detail-ready-icon"
+              size={18}
+              aria-hidden="true"
+            />
           </div>
 
           <section className="guesthousebooking-room-detail-section" aria-label="Amenities">
@@ -2145,985 +2138,1089 @@ const GuestHouseBooking: React.FC = () => {
       <div className="guesthousebooking-shell">
         <form onSubmit={handleSubmit}>
           <fieldset disabled={isViewingBooking} style={{ border: 0, padding: 0, margin: 0 }}>
-          <section className="guesthousebooking-card">
-            <button
-              className="guesthousebooking-card-header"
-              type="button"
-              onClick={() => setIsApplicantCardOpen((prev) => !prev)}
-            >
-              <span>Applicant Details</span>
-              {isApplicantCardOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
+            <section className="guesthousebooking-card">
+              <button
+                className="guesthousebooking-card-header"
+                type="button"
+                onClick={() => setIsApplicantCardOpen((prev) => !prev)}
+              >
+                <span>Applicant Details</span>
+                {isApplicantCardOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+              </button>
 
-            {isApplicantCardOpen && (
-              <div className="guesthousebooking-card-body">
-                <div className="guesthousebooking-form-grid">
-                  <div className="guesthousebooking-field" style={{ position: 'relative' }}>
-                    <label className="guesthousebooking-label">Applicant Name</label>
-                    <input
-                      className="guesthousebooking-input"
-                      value={applicantSearchInitialized ? applicantSearch : applicantUiDetails.name}
-                      onChange={(event) => {
-                        setApplicantSearchInitialized(true);
-                        setApplicantSearch(event.target.value);
-                      }}
-                      readOnly={!canOverrideApplicant || isViewingBooking}
-                      placeholder="Search employee by name or ERP ID"
-                    />
-                    {canOverrideApplicant && applicantResults.length > 0 && (
-                      <div className="guesthousebooking-employee-dropdown">
-                        {applicantResults.map((employee, index) => (
-                          <button
-                            type="button"
-                            className="guesthousebooking-employee-option"
-                            key={`${employee.employee_id || employee.id || employee.name}-${index}`}
-                            onClick={() => {
-                              setApplicantProfile(employee);
-                              setApplicantSearch('');
-                              setApplicantSearchInitialized(false);
-                              setApplicantResults([]);
-                            }}
-                          >
-                            <strong>{getTextValue(employee, ['name', 'full_name', 'fullName'])}</strong>
-                            <span>
-                              {getTextValue(employee, ['designation', 'role_name'])} |{' '}
-                              {getTextValue(employee, ['department', 'department_name'])}
-                            </span>
-                          </button>
-                        ))}
-                      </div>
+              {isApplicantCardOpen && (
+                <div className="guesthousebooking-card-body">
+                  <div className="guesthousebooking-form-grid">
+                    <div className="guesthousebooking-field" style={{ position: 'relative' }}>
+                      <label className="guesthousebooking-label">Applicant Name</label>
+                      <input
+                        className="guesthousebooking-input"
+                        value={
+                          applicantSearchInitialized ? applicantSearch : applicantUiDetails.name
+                        }
+                        onChange={(event) => {
+                          setApplicantSearchInitialized(true);
+                          setApplicantSearch(event.target.value);
+                        }}
+                        readOnly={!canOverrideApplicant || isViewingBooking}
+                        placeholder="Search employee by name or ERP ID"
+                      />
+                      {canOverrideApplicant && applicantResults.length > 0 && (
+                        <div className="guesthousebooking-employee-dropdown">
+                          {applicantResults.map((employee, index) => (
+                            <button
+                              type="button"
+                              className="guesthousebooking-employee-option"
+                              key={`${employee.employee_id || employee.id || employee.name}-${index}`}
+                              onClick={() => {
+                                setApplicantProfile(employee);
+                                setApplicantSearch('');
+                                setApplicantSearchInitialized(false);
+                                setApplicantResults([]);
+                              }}
+                            >
+                              <strong>
+                                {getTextValue(employee, ['name', 'full_name', 'fullName'])}
+                              </strong>
+                              <span>
+                                {getTextValue(employee, ['designation', 'role_name'])} |{' '}
+                                {getTextValue(employee, ['department', 'department_name'])}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {renderReadOnlyInput('Date', applicantUiDetails.date, 'date')}
+                    {renderReadOnlyInput('Department', applicantUiDetails.department)}
+                    {renderReadOnlyInput(
+                      'Designation',
+                      applicantUiDetails.designation,
+                      'text',
+                      'e.g., Manager, Staff',
+                    )}
+                    {renderReadOnlyInput('Email', applicantUiDetails.email, 'email')}
+                    {renderReadOnlyInput(
+                      'Mobile',
+                      applicantUiDetails.mobile,
+                      'tel',
+                      '10 digit mobile',
                     )}
                   </div>
-                  {renderReadOnlyInput('Date', applicantUiDetails.date, 'date')}
-                  {renderReadOnlyInput('Department', applicantUiDetails.department)}
-                  {renderReadOnlyInput(
-                    'Designation',
-                    applicantUiDetails.designation,
-                    'text',
-                    'e.g., Manager, Staff',
-                  )}
-                  {renderReadOnlyInput('Email', applicantUiDetails.email, 'email')}
-                  {renderReadOnlyInput(
-                    'Mobile',
-                    applicantUiDetails.mobile,
-                    'tel',
-                    '10 digit mobile',
-                  )}
                 </div>
-              </div>
-            )}
-          </section>
+              )}
+            </section>
 
-          <section className="guesthousebooking-card guesthousebooking-beneficiary-card">
-            <div className="guesthousebooking-beneficiary-grid">
-              <div className="guesthousebooking-beneficiary-field">
-                <label className="guesthousebooking-beneficiary-label">Beneficiary</label>
-                <select
-                  className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
-                  value={beneficiaryDetails.beneficiaryType}
-                  onChange={(event) =>
-                    updateBeneficiaryDetails('beneficiaryType', event.target.value)
-                  }
-                >
-                  {BENEFICIARY_TYPE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="guesthousebooking-beneficiary-field">
-                <label className="guesthousebooking-beneficiary-label">
-                  {['Faculty', 'Staff'].includes(beneficiaryDetails.beneficiaryType)
-                    ? `${beneficiaryDetails.beneficiaryType} Name`
-                    : beneficiaryDetails.beneficiaryType}
-                </label>
-                {['Faculty', 'Staff'].includes(beneficiaryDetails.beneficiaryType) ? (
-                  <>
-                    <input
-                      className="guesthousebooking-beneficiary-control"
-                      value={beneficiaryDetails.staffName}
-                      onChange={(event) => updateBeneficiaryDetails('staffName', event.target.value)}
-                      placeholder={`Search ${beneficiaryDetails.beneficiaryType.toLowerCase()} by name or ERP ID`}
-                      onFocus={() => setBeneficiarySearchOpen(true)}
-                      onBlur={() => window.setTimeout(() => setBeneficiarySearchOpen(false), 200)}
-                    />
-                    {beneficiaryEmployeeOptions.length > 0 && (
-                      <div className="guesthousebooking-employee-dropdown">
-                        {beneficiaryEmployeeOptions.map((employee, index) => (
-                          <button
-                            type="button"
-                            className="guesthousebooking-employee-option"
-                            key={`${employee.employee_id || employee.name || 'employee'}-${index}`}
-                            onClick={() => {
-                              setBeneficiaryDetails((prev) => ({
-                                ...prev,
-                                staffName: employee.name || '',
-                                departmentId: String(
-                                  employee.department_id || employee.departmentId || '',
-                                ),
-                              }));
-                              setBeneficiaryEmployeeOptions([]);
-                              setBeneficiarySearchOpen(false);
-                            }}
-                          >
-                            <strong>{employee.name}</strong>
-                            <span>{employee.department || 'Employee'}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
+            <section className="guesthousebooking-card guesthousebooking-beneficiary-card">
+              <div className="guesthousebooking-beneficiary-grid">
+                <div className="guesthousebooking-beneficiary-field">
+                  <label className="guesthousebooking-beneficiary-label">Beneficiary</label>
                   <select
                     className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
-                    value={beneficiaryDetails.staffName}
-                    onChange={(event) => {
-                      const selectedName = event.target.value;
-                      const selectedOption = (
-                        beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType.toUpperCase()] ||
-                        beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
-                        []
-                      ).find((option) => option.name === selectedName);
-                      setBeneficiaryDetails((prev) => ({
-                        ...prev,
-                        staffName: selectedName,
-                        departmentId:
-                          beneficiaryDetails.beneficiaryType === 'Department'
-                            ? selectedOption?.id || ''
-                            : '',
-                      }));
-                    }}
+                    value={beneficiaryDetails.beneficiaryType}
+                    onChange={(event) =>
+                      updateBeneficiaryDetails('beneficiaryType', event.target.value)
+                    }
                   >
-                    <option value="">Select {beneficiaryDetails.beneficiaryType.toLowerCase()}</option>
-                    {(beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType.toUpperCase()] ||
-                      beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
-                      []).map((option) => (
-                      <option key={`${option.id}-${option.name}`} value={option.name}>
-                        {option.name}
+                    {BENEFICIARY_TYPE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
                       </option>
                     ))}
                   </select>
-                )}
-              </div>
-              <div className="guesthousebooking-beneficiary-field">
-                <label className="guesthousebooking-beneficiary-label">Tag</label>
-                <select
-                  className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
-                  value={beneficiaryDetails.tag}
-                  onChange={(event) => updateBeneficiaryDetails('tag', event.target.value)}
-                >
-                  {BENEFICIARY_TAG_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-          </section>
-
-          <div className="guesthousebooking-guest-list" aria-label="Guest Details">
-            {guests.map((guest, index) => (
-              <section
-                className="guesthousebooking-card guesthousebooking-guest-card"
-                key={guest.id}
-              >
-                <div className="guesthousebooking-guest-block">
-                  <div className="guesthousebooking-section-header guesthousebooking-guest-title-row">
-                    <span className="guesthousebooking-guest-title">Guest {index + 1}</span>
-                    <div className="guesthousebooking-guest-actions">
-                      <button
-                        className="guesthousebooking-icon-button"
-                        type="button"
-                        onClick={addGuest}
-                        aria-label="Add guest"
-                        title="Add guest"
-                      >
-                        <PlusCircle size={18} />
-                      </button>
-                      <button
-                        className="guesthousebooking-icon-button guesthousebooking-icon-button--danger"
-                        type="button"
-                        onClick={() => removeGuest(guest.id)}
-                        aria-label={`Remove guest ${index + 1}`}
-                        title="Remove guest"
-                        disabled={guests.length === 1}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="guesthousebooking-card-body guesthousebooking-guest-grid">
-                    <div className="guesthousebooking-left-column">
-                      <div className="guesthousebooking-details-panel">
-                        <div className="guesthousebooking-details-grid">
-                          <div className="guesthousebooking-field guesthousebooking-field--guest-name">
-                            <label className="guesthousebooking-label">Guest Name</label>
-                            <input
-                              className="guesthousebooking-input"
-                              value={guest.name}
-                              onChange={(event) => updateGuest(guest.id, 'name', event.target.value)}
-                              placeholder="Enter guest name"
-                              required
-                            />
-                          </div>
-
-                          <div className="guesthousebooking-field guesthousebooking-field--gender">
-                            <label className="guesthousebooking-label">Gender</label>
-                            <div className="guesthousebooking-radio-group">
-                              {(['Male', 'Female', 'Others'] as Gender[]).map((gender) => (
-                                <label
-                                  className={`guesthousebooking-radio ${
-                                    guest.gender === gender ? 'guesthousebooking-radio--active' : ''
-                                  }`}
-                                  key={gender}
-                                >
-                                  <input
-                                    type="radio"
-                                    name={`guest-gender-${guest.id}`}
-                                    checked={guest.gender === gender}
-                                    onChange={() => updateGuest(guest.id, 'gender', gender)}
-                                    required
-                                  />
-                                  <span>{gender}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-
-                          <div className="guesthousebooking-field guesthousebooking-field--designation">
-                            <label className="guesthousebooking-label">Designation</label>
-                            <input
-                              className="guesthousebooking-input"
-                              value={guest.designation}
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'designation', event.target.value)
-                              }
-                              placeholder="Enter designation"
-                            />
-                          </div>
-
-                          <div className="guesthousebooking-field guesthousebooking-field--email">
-                            <label className="guesthousebooking-label">Email</label>
-                            <input
-                              className="guesthousebooking-input"
-                              type="email"
-                              value={guest.email || ''}
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'email', event.target.value)
-                              }
-                              placeholder="Enter email"
-                            />
-                          </div>
-
-                          <div className="guesthousebooking-field guesthousebooking-field--organization">
-                            <label className="guesthousebooking-label">Organization</label>
-                            <input
-                              className="guesthousebooking-input"
-                              value={guest.organization}
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'organization', event.target.value)
-                              }
-                              placeholder="Enter organization"
-                            />
-                          </div>
-
-                          <div className="guesthousebooking-field guesthousebooking-field--city">
-                            <label className="guesthousebooking-label">City</label>
-                            <input
-                              className="guesthousebooking-input"
-                              value={guest.city}
-                              onChange={(event) => updateGuest(guest.id, 'city', event.target.value)}
-                              placeholder="Enter city"
-                            />
-                          </div>
-
-                          <div className="guesthousebooking-field guesthousebooking-field--state">
-                            <label className="guesthousebooking-label">State</label>
-                            <input
-                              className="guesthousebooking-input"
-                              value={guest.state}
-                              onChange={(event) => updateGuest(guest.id, 'state', event.target.value)}
-                              placeholder="Enter state"
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="guesthousebooking-option-row guesthousebooking-field--accompanied">
-                        <div className="guesthousebooking-option-heading">
-                          <span className="guesthousebooking-option-icon">
-                            <UsersRound size={20} />
-                          </span>
-                          <span>Accompanied By</span>
-                        </div>
-                        <div className="guesthousebooking-count-row guesthousebooking-count-row--boxed">
-                          <label>
-                            <span>Male</span>
-                            <input
-                              className="guesthousebooking-small-input"
-                              type="number"
-                              min="0"
-                              value={guest.accompaniedMale}
-                              placeholder="0"
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'accompaniedMale', event.target.value)
-                              }
-                            />
-                          </label>
-                          <label>
-                            <span>Female</span>
-                            <input
-                              className="guesthousebooking-small-input"
-                              type="number"
-                              min="0"
-                              value={guest.accompaniedFemale}
-                              placeholder="0"
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'accompaniedFemale', event.target.value)
-                              }
-                            />
-                          </label>
-                          <label>
-                            <span>Children</span>
-                            <input
-                              className="guesthousebooking-small-input"
-                              type="number"
-                              min="0"
-                              value={guest.accompaniedChildren}
-                              placeholder="0"
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'accompaniedChildren', event.target.value)
-                              }
-                            />
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="guesthousebooking-option-row guesthousebooking-field--room">
-                        <div className="guesthousebooking-option-heading">
-                          <span className="guesthousebooking-option-icon">
-                            <BedDouble size={21} />
-                          </span>
-                          <span>Room Requirements</span>
-                        </div>
-                        <div className="guesthousebooking-number-choice-group">
-                          <label className="guesthousebooking-number-choice">
-                            <span>Single</span>
-                            <input
-                              className="guesthousebooking-small-input"
-                              type="number"
-                              min="0"
-                              value={guest.roomSingle}
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'roomSingle', event.target.value)
-                              }
-                              aria-label={`Guest ${index + 1} single room count`}
-                            />
-                          </label>
-                          <label className="guesthousebooking-number-choice">
-                            <span>Double</span>
-                            <input
-                              className="guesthousebooking-small-input"
-                              type="number"
-                              min="0"
-                              value={guest.roomDouble}
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'roomDouble', event.target.value)
-                              }
-                              aria-label={`Guest ${index + 1} double room count`}
-                            />
-                          </label>
-                          <label className="guesthousebooking-number-choice">
-                            <span>Deluxe</span>
-                            <input
-                              className="guesthousebooking-small-input"
-                              type="number"
-                              min="0"
-                              value={guest.roomDeluxe}
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'roomDeluxe', event.target.value)
-                              }
-                              aria-label={`Guest ${index + 1} deluxe room count`}
-                            />
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="guesthousebooking-option-row guesthousebooking-field--remarks">
-                        <div className="guesthousebooking-option-heading">
-                          <span>Remarks</span>
-                        </div>
-                        <input
-                          className="guesthousebooking-input guesthousebooking-remarks-input"
-                          type="text"
-                          value={guest.remarks || ''}
-                          onChange={(event) =>
-                            updateGuest(guest.id, 'remarks', event.target.value)
-                          }
-                          placeholder="Enter remarks (if any)"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="guesthousebooking-right-column">
-                      {renderTravelPanel()}
-
-                      <div className="guesthousebooking-option-row guesthousebooking-field--priority-sidebar">
-                        <div className="guesthousebooking-option-heading">
-                          <span className="guesthousebooking-option-icon">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <path d="M12 2L2 12l10 10 10-10L12 2z" fill="currentColor" />
-                              <path d="M12 8v5M12 16h.01" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                            </svg>
-                          </span>
-                          <span>Priority</span>
-                        </div>
-                        <div className="guesthousebooking-radio-group">
-                          {(['Routine', 'High'] as GuestPriority[]).map((priority) => (
-                            <label
-                              className={`guesthousebooking-radio ${
-                                guest.priority === priority
-                                  ? 'guesthousebooking-radio--active'
-                                  : ''
-                              }`}
-                              key={priority}
+                </div>
+                <div className="guesthousebooking-beneficiary-field">
+                  <label className="guesthousebooking-beneficiary-label">
+                    {['Faculty', 'Staff'].includes(beneficiaryDetails.beneficiaryType)
+                      ? `${beneficiaryDetails.beneficiaryType} Name`
+                      : beneficiaryDetails.beneficiaryType}
+                  </label>
+                  {['Faculty', 'Staff'].includes(beneficiaryDetails.beneficiaryType) ? (
+                    <>
+                      <input
+                        className="guesthousebooking-beneficiary-control"
+                        value={beneficiaryDetails.staffName}
+                        onChange={(event) =>
+                          updateBeneficiaryDetails('staffName', event.target.value)
+                        }
+                        placeholder={`Search ${beneficiaryDetails.beneficiaryType.toLowerCase()} by name or ERP ID`}
+                        onFocus={() => setBeneficiarySearchOpen(true)}
+                        onBlur={() => window.setTimeout(() => setBeneficiarySearchOpen(false), 200)}
+                      />
+                      {beneficiaryEmployeeOptions.length > 0 && (
+                        <div className="guesthousebooking-employee-dropdown">
+                          {beneficiaryEmployeeOptions.map((employee, index) => (
+                            <button
+                              type="button"
+                              className="guesthousebooking-employee-option"
+                              key={`${employee.employee_id || employee.name || 'employee'}-${index}`}
+                              onClick={() => {
+                                setBeneficiaryDetails((prev) => ({
+                                  ...prev,
+                                  staffName: employee.name || '',
+                                  departmentId: String(
+                                    employee.department_id || employee.departmentId || '',
+                                  ),
+                                }));
+                                setBeneficiaryEmployeeOptions([]);
+                                setBeneficiarySearchOpen(false);
+                              }}
                             >
-                              <input
-                                type="radio"
-                                name={`guest-priority-${guest.id}`}
-                                checked={guest.priority === priority}
-                                onChange={() => updateGuest(guest.id, 'priority', priority)}
-                              />
-                              <span>{priority}</span>
-                            </label>
+                              <strong>{employee.name}</strong>
+                              <span>{employee.department || 'Employee'}</span>
+                            </button>
                           ))}
                         </div>
-                      </div>
-
-                      <div className="guesthousebooking-option-row guesthousebooking-field--guest-total">
-                        <div className="guesthousebooking-option-heading">
-                          <span className="guesthousebooking-option-icon">
-                            <UsersRound size={20} />
-                          </span>
-                          <span>Total Number of Guests</span>
-                        </div>
-                        <input
-                          className="guesthousebooking-small-input guesthousebooking-total-input"
-                          type="number"
-                          value={totalGuestCount}
-                          readOnly
-                          aria-label="Total number of guests"
-                        />
-                      </div>
-
-                      <div className="guesthousebooking-option-row guesthousebooking-field--room-total">
-                        <div className="guesthousebooking-option-heading">
-                          <span className="guesthousebooking-option-icon">
-                            <BedDouble size={21} />
-                          </span>
-                          <span>Total Number of Rooms</span>
-                        </div>
-                        <input
-                          className="guesthousebooking-small-input guesthousebooking-total-input"
-                          type="number"
-                          value={
-                            numberOnly(guest.roomSingle) +
-                            numberOnly(guest.roomDouble) +
-                            numberOnly(guest.roomDeluxe)
-                          }
-                          readOnly
-                          aria-label="Total number of rooms"
-                        />
-                      </div>
-
-                      <div className="guesthousebooking-option-row guesthousebooking-field--food">
-                        <div className="guesthousebooking-option-heading">
-                          <span className="guesthousebooking-option-icon">
-                            <Utensils size={20} />
-                          </span>
-                          <span>Food</span>
-                        </div>
-                        <div className="guesthousebooking-food-counts">
-                          <label className="guesthousebooking-food-count-label guesthousebooking-food-count-label--veg">
-                            <span>Veg.</span>
-                            <input
-                              className="guesthousebooking-small-input guesthousebooking-food-count-input guesthousebooking-small-input--veg"
-                              type="number"
-                              min="0"
-                              value={guest.foodVeg}
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'foodVeg', event.target.value)
-                              }
-                              aria-label="Veg food count"
-                            />
-                          </label>
-                          <label className="guesthousebooking-food-count-label guesthousebooking-food-count-label--nonveg">
-                            <span>Non-Veg.</span>
-                            <input
-                              className="guesthousebooking-small-input guesthousebooking-food-count-input guesthousebooking-small-input--nonveg"
-                              type="number"
-                              min="0"
-                              value={guest.foodNonVeg}
-                              onChange={(event) =>
-                                updateGuest(guest.id, 'foodNonVeg', event.target.value)
-                              }
-                              aria-label="Non-veg food count"
-                            />
-                          </label>
-                        </div>
-                      </div>
-
-                    </div>
-                  </div>
+                      )}
+                    </>
+                  ) : (
+                    <select
+                      className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
+                      value={beneficiaryDetails.staffName}
+                      onChange={(event) => {
+                        const selectedName = event.target.value;
+                        const selectedOption = (
+                          beneficiaryEntityOptions[
+                            beneficiaryDetails.beneficiaryType.toUpperCase()
+                          ] ||
+                          beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
+                          []
+                        ).find((option) => option.name === selectedName);
+                        setBeneficiaryDetails((prev) => ({
+                          ...prev,
+                          staffName: selectedName,
+                          departmentId:
+                            beneficiaryDetails.beneficiaryType === 'Department'
+                              ? selectedOption?.id || ''
+                              : '',
+                        }));
+                      }}
+                    >
+                      <option value="">
+                        Select {beneficiaryDetails.beneficiaryType.toLowerCase()}
+                      </option>
+                      {(
+                        beneficiaryEntityOptions[
+                          beneficiaryDetails.beneficiaryType.toUpperCase()
+                        ] ||
+                        beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
+                        []
+                      ).map((option) => (
+                        <option key={`${option.id}-${option.name}`} value={option.name}>
+                          {option.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
-              </section>
-            ))}
-          </div>
-
-          <section className="guesthousebooking-card guesthousebooking-food-card">
-            <div className="guesthousebooking-section-header">
-              <h2>Snacks &amp; Food Requirements</h2>
-              <div className="guesthousebooking-food-legend">
-                <span>
-                  <i className="guesthousebooking-legend-box guesthousebooking-legend-box--veg" />
-                  Veg
-                </span>
-                <span>
-                  <i className="guesthousebooking-legend-box guesthousebooking-legend-box--nonveg" />
-                  Non-Veg
-                </span>
-              </div>
-            </div>
-
-            <div className="guesthousebooking-card-body">
-              <div className="guesthousebooking-table-wrap">
-                <table className="guesthousebooking-food-table">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Morning Refreshment</th>
-                      <th>Breakfast</th>
-                      <th>Lunch</th>
-                      <th>Evening Refreshment</th>
-                      <th>Dinner</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {foodRows.map((row) => (
-                      <tr key={row.id}>
-                        <td>
-                          <span className="guesthousebooking-date-input-wrap guesthousebooking-food-date-wrap">
-                            <input
-                              className="guesthousebooking-food-date"
-                              type="text"
-                              value={foodDateInputs[row.id] ?? formatDateForDisplay(row.date)}
-                              onChange={(event) => updateFoodDateInput(row.id, event.target.value)}
-                              onBlur={() => resetFoodDateInput(row)}
-                              placeholder="dd/mm/yyyy"
-                              inputMode="numeric"
-                              pattern="\d{2}/\d{2}/\d{4}"
-                              title="Enter date as DD/MM/YYYY"
-                              maxLength={10}
-                            />
-                            <input
-                              className="guesthousebooking-native-date-picker guesthousebooking-food-native-date-picker"
-                              type="date"
-                              value={row.date}
-                              onChange={(event) => updateFoodRow(row.id, 'date', event.target.value)}
-                              aria-label="Open food date calendar"
-                              tabIndex={-1}
-                            />
-                          </span>
-                        </td>
-                        <td>
-                          <input
-                            className="guesthousebooking-food-input"
-                            type="number"
-                            min="0"
-                            value={row.morningRefreshment}
-                            onChange={(event) =>
-                              updateFoodRow(row.id, 'morningRefreshment', event.target.value)
-                            }
-                            aria-label="Morning refreshment count"
-                          />
-                        </td>
-                        <td>
-                          {renderFoodPair(row, 'breakfastVeg', 'breakfastNonVeg', 'Breakfast')}
-                        </td>
-                        <td>{renderFoodPair(row, 'lunchVeg', 'lunchNonVeg', 'Lunch')}</td>
-                        <td>
-                          <input
-                            className="guesthousebooking-food-input"
-                            type="number"
-                            min="0"
-                            value={row.eveningRefreshment}
-                            onChange={(event) =>
-                              updateFoodRow(row.id, 'eveningRefreshment', event.target.value)
-                            }
-                            aria-label="Evening refreshment count"
-                          />
-                        </td>
-                        <td>{renderFoodPair(row, 'dinnerVeg', 'dinnerNonVeg', 'Dinner')}</td>
-                        <td>
-                          <div className="guesthousebooking-row-actions">
-                            <button
-                              className="guesthousebooking-icon-button"
-                              type="button"
-                              onClick={addFoodRow}
-                              aria-label="Add food row"
-                              title="Add food row"
-                            >
-                              <PlusCircle size={16} />
-                            </button>
-                            <button
-                              className="guesthousebooking-icon-button guesthousebooking-icon-button--danger"
-                              type="button"
-                              onClick={() => removeFoodRow(row.id)}
-                              aria-label="Remove food row"
-                              title="Remove food row"
-                              disabled={foodRows.length === 1}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                <div className="guesthousebooking-beneficiary-field">
+                  <label className="guesthousebooking-beneficiary-label">Tag</label>
+                  <select
+                    className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
+                    value={beneficiaryDetails.tag}
+                    onChange={(event) => updateBeneficiaryDetails('tag', event.target.value)}
+                  >
+                    {BENEFICIARY_TAG_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
                     ))}
-                  </tbody>
-                </table>
+                  </select>
+                </div>
               </div>
+            </section>
 
-              <div className="guesthousebooking-food-summary">
-                <span>
-                  Stay Dates <strong>{stayDates.length || '-'}</strong>
-                </span>
-                <span>
-                  Refreshment <strong>{foodTotals.refreshment}</strong>
-                </span>
-                <span>
-                  Veg <strong>{foodTotals.veg}</strong>
-                </span>
-                <span>
-                  Non-Veg <strong>{foodTotals.nonVeg}</strong>
-                </span>
-              </div>
-            </div>
-          </section>
-
-          {/* Room Allotment Cards */}
-          {isRoomAllotmentVisible && <div className="guesthousebooking-allotment-list" aria-label="Room Allotment">
-            {guests.map((guest, index) => {
-              const guestId = String(guest.id);
-              const allotment =
-                roomAllotments[guestId] || createRoomAllotmentData(guestId, guest);
-              const counts = getGuestAllotmentCounts(guest);
-              const checkInDate = formatDateForDisplay(travelDetails.checkInDate);
-              const checkInTime = normalizeTravelTimeEntry(travelDetails.checkInTime);
-              const checkOutDate = formatDateForDisplay(travelDetails.checkOutDate);
-              const checkOutTime = normalizeTravelTimeEntry(travelDetails.checkOutTime);
-              const totalRooms =
-                numberOnly(guest.roomSingle) +
-                numberOnly(guest.roomDouble) +
-                numberOnly(guest.roomDeluxe);
-              const priorityStatus = guest.priority || 'Routine';
-              const priorityTone = priorityStatus === 'High' ? 'high' : 'routine';
-              const activeRoomDetailRow =
-                activeRoomDetail?.guestId === guestId
-                  ? allotment.rows.find((row) => row.id === activeRoomDetail.rowId)
-                  : undefined;
-
-              return (
+            <div className="guesthousebooking-guest-list" aria-label="Guest Details">
+              {guests.map((guest, index) => (
                 <section
-                  className="guesthousebooking-card guesthousebooking-allotment-card"
-                  key={`room-allotment-${guest.id}`}
+                  className="guesthousebooking-card guesthousebooking-guest-card"
+                  key={guest.id}
                 >
-                  <div className="guesthousebooking-room-allotment-header">
-                    <span>Room Allotment</span>
-                  </div>
+                  <div className="guesthousebooking-guest-block">
+                    <div className="guesthousebooking-section-header guesthousebooking-guest-title-row">
+                      <span className="guesthousebooking-guest-title">Guest {index + 1}</span>
+                      <div className="guesthousebooking-guest-actions">
+                        <button
+                          className="guesthousebooking-icon-button"
+                          type="button"
+                          onClick={addGuest}
+                          aria-label="Add guest"
+                          title="Add guest"
+                        >
+                          <PlusCircle size={18} />
+                        </button>
+                        <button
+                          className="guesthousebooking-icon-button guesthousebooking-icon-button--danger"
+                          type="button"
+                          onClick={() => removeGuest(guest.id)}
+                          aria-label={`Remove guest ${index + 1}`}
+                          title="Remove guest"
+                          disabled={guests.length === 1}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
 
-                  <div className="guesthousebooking-card-body guesthousebooking-allotment-body">
-                    <div className="guesthousebooking-allotment-entry-card">
-                      <div className="guesthousebooking-allotment-summary-row">
-                        <div className="guesthousebooking-allotment-guest-overview">
-                          <span
-                            className={`guesthousebooking-priority-indicator guesthousebooking-priority-indicator--${priorityTone}`}
-                            aria-label={`${priorityStatus} priority`}
-                            title={`${priorityStatus} priority`}
-                          />
-                          <span className="guesthousebooking-allotment-main-icon">
-                            <UsersRound size={24} />
-                          </span>
-                          <div className="guesthousebooking-allotment-guest-copy">
-                            <div className="guesthousebooking-allotment-guest-name-row">
-                              <strong>{guest.name || `Guest ${index + 1}`}</strong>
+                    <div className="guesthousebooking-card-body guesthousebooking-guest-grid">
+                      <div className="guesthousebooking-left-column">
+                        <div className="guesthousebooking-details-panel">
+                          <div className="guesthousebooking-details-grid">
+                            <div className="guesthousebooking-field guesthousebooking-field--guest-name">
+                              <label className="guesthousebooking-label">Guest Name</label>
+                              <input
+                                className="guesthousebooking-input"
+                                value={guest.name}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'name', event.target.value)
+                                }
+                                placeholder="Enter guest name"
+                                required
+                              />
                             </div>
-                            <span>
-                              {guest.organization || 'Organization'}
-                            </span>
+
+                            <div className="guesthousebooking-field guesthousebooking-field--gender">
+                              <label className="guesthousebooking-label">Gender</label>
+                              <div className="guesthousebooking-radio-group">
+                                {(['Male', 'Female', 'Others'] as Gender[]).map((gender) => (
+                                  <label
+                                    className={`guesthousebooking-radio ${
+                                      guest.gender === gender
+                                        ? 'guesthousebooking-radio--active'
+                                        : ''
+                                    }`}
+                                    key={gender}
+                                  >
+                                    <input
+                                      type="radio"
+                                      name={`guest-gender-${guest.id}`}
+                                      checked={guest.gender === gender}
+                                      onChange={() => updateGuest(guest.id, 'gender', gender)}
+                                      required
+                                    />
+                                    <span>{gender}</span>
+                                  </label>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="guesthousebooking-field guesthousebooking-field--designation">
+                              <label className="guesthousebooking-label">Designation</label>
+                              <input
+                                className="guesthousebooking-input"
+                                value={guest.designation}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'designation', event.target.value)
+                                }
+                                placeholder="Enter designation"
+                              />
+                            </div>
+
+                            <div className="guesthousebooking-field guesthousebooking-field--email">
+                              <label className="guesthousebooking-label">Email</label>
+                              <input
+                                className="guesthousebooking-input"
+                                type="email"
+                                value={guest.email || ''}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'email', event.target.value)
+                                }
+                                placeholder="Enter email"
+                              />
+                            </div>
+
+                            <div className="guesthousebooking-field guesthousebooking-field--organization">
+                              <label className="guesthousebooking-label">Organization</label>
+                              <input
+                                className="guesthousebooking-input"
+                                value={guest.organization}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'organization', event.target.value)
+                                }
+                                placeholder="Enter organization"
+                              />
+                            </div>
+
+                            <div className="guesthousebooking-field guesthousebooking-field--city">
+                              <label className="guesthousebooking-label">City</label>
+                              <input
+                                className="guesthousebooking-input"
+                                value={guest.city}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'city', event.target.value)
+                                }
+                                placeholder="Enter city"
+                              />
+                            </div>
+
+                            <div className="guesthousebooking-field guesthousebooking-field--state">
+                              <label className="guesthousebooking-label">State</label>
+                              <input
+                                className="guesthousebooking-input"
+                                value={guest.state}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'state', event.target.value)
+                                }
+                                placeholder="Enter state"
+                              />
+                            </div>
                           </div>
                         </div>
 
-                        <div className="guesthousebooking-allotment-occupancy-group" aria-label="Guest counts">
-                          <label className="guesthousebooking-allotment-occupancy-item">
-                            <MaleAllotmentIcon />
-                            <input value={counts.male} readOnly aria-label="Number of male guests" />
-                          </label>
-                          <label className="guesthousebooking-allotment-occupancy-item">
-                            <FemaleAllotmentIcon />
-                            <input value={counts.female} readOnly aria-label="Number of female guests" />
-                          </label>
-                          <label className="guesthousebooking-allotment-occupancy-item">
-                            <ChildAllotmentIcon />
-                            <input value={counts.children} readOnly aria-label="Number of children" />
-                          </label>
-                          <label className="guesthousebooking-allotment-occupancy-item">
-                            <House className="guesthousebooking-allotment-person-icon" aria-hidden="true" />
-                            <input value={totalRooms} readOnly aria-label="Number of rooms requested" />
-                          </label>
-                        </div>
-
-                        <div className="guesthousebooking-allotment-date-stack">
-                          <label className="guesthousebooking-allotment-datetime-row">
-                            <span className="guesthousebooking-allotment-datetime-title">Check-in</span>
-                            <input value={checkInDate} readOnly aria-label="Check-in date" />
-
-                            <input value={checkInTime} readOnly aria-label="Check-in time" />
-                            <CircleCheck className="guesthousebooking-allotment-check-icon" size={18} aria-hidden="true" />
-                          </label>
-                          <label className="guesthousebooking-allotment-datetime-row">
-                            <span className="guesthousebooking-allotment-datetime-title">Check-out</span>
-                            <input value={checkOutDate} readOnly aria-label="Check-out date" />
-
-                            <input value={checkOutTime} readOnly aria-label="Check-out time" />
-                            <CircleCheck className="guesthousebooking-allotment-check-icon" size={18} aria-hidden="true" />
-                          </label>
-                        </div>
-                      </div>
-
-                      <div className="guesthousebooking-table-wrap guesthousebooking-allotment-table-wrap">
-                        <table className="guesthousebooking-food-table guesthousebooking-allotment-table">
-                          <thead>
-                            <tr>
-                              <th className="guesthousebooking-allotment-col-sno">S.No.</th>
-                              <th className="guesthousebooking-allotment-col-room-type">Room Type</th>
-                              <th className="guesthousebooking-allotment-col-block">Block</th>
-                              <th className="guesthousebooking-allotment-col-room-number">Room Number</th>
-                              <th className="guesthousebooking-allotment-col-occupants">Occupants</th>
-                              <th className="guesthousebooking-allotment-col-remarks">Remarks</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {allotment.rows.length ? (
-                              allotment.rows.map((row, idx) => {
-                                const roomNumbers = getRoomNumberOptions(row.block, row.roomNumber);
-                                const isRoomDetailActive =
-                                  activeRoomDetail?.guestId === guestId && activeRoomDetail.rowId === row.id;
-
-                                return (
-                                  <tr key={row.id}>
-                                    <td className="centerTd">{idx + 1}</td>
-                                    <td>
-                                      <select
-                                        className="guesthousebooking-food-date guesthousebooking-allotment-compact-control"
-                                        value={row.roomType}
-                                        onChange={(event) =>
-                                          updateAllotmentRow(
-                                            guestId,
-                                            row.id,
-                                            'roomType',
-                                            event.target.value,
-                                          )
-                                        }
-                                      >
-                                        {ROOM_REQUIREMENT_CONFIG.map((option) => (
-                                          <option key={option.roomType} value={option.roomType}>
-                                            {option.roomType}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </td>
-                                    <td>
-                                      <select
-                                        className="guesthousebooking-food-date guesthousebooking-allotment-compact-control"
-                                        value={row.block}
-                                        onChange={(event) =>
-                                          updateAllotmentBlock(guestId, row.id, event.target.value)
-                                        }
-                                      >
-                                        <option value=""></option>
-                                        {roomBlockOptions.map((option) => (
-                                          <option key={option.block} value={option.block}>
-                                            {option.block}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </td>
-                                    <td>
-                                      <div className="guesthousebooking-room-number-cell">
-                                        <select
-                                          className="guesthousebooking-food-date guesthousebooking-allotment-compact-control"
-                                          value={row.roomNumber}
-                                          onChange={(event) =>
-                                            updateAllotmentRow(
-                                              guestId,
-                                              row.id,
-                                              'roomNumber',
-                                              event.target.value,
-                                            )
-                                          }
-                                          disabled={!row.block}
-                                        >
-                                          <option value=""></option>
-                                          {roomNumbers.map((roomNumber) => (
-                                            <option key={roomNumber} value={roomNumber}>
-                                              {roomNumber}
-                                            </option>
-                                          ))}
-                                        </select>
-                                        <button
-                                          className={`guesthousebooking-room-detail-trigger${isRoomDetailActive ? ' guesthousebooking-room-detail-trigger--active' : ''}`}
-                                          type="button"
-                                          onClick={() => toggleRoomDetails(guestId, row.id)}
-                                          aria-label="Open room details"
-                                          aria-expanded={isRoomDetailActive}
-                                          title="Room Details"
-                                        >
-                                          <Info size={12} aria-hidden="true" />
-                                        </button>
-                                      </div>
-                                    </td>
-                                    <td>
-                                      <input
-                                        className="guesthousebooking-food-input guesthousebooking-allotment-occupants-input"
-                                        type="number"
-                                        min="1"
-                                        value={row.occupants}
-                                        onChange={(event) =>
-                                          updateAllotmentRow(
-                                            guestId,
-                                            row.id,
-                                            'occupants',
-                                            event.target.value,
-                                          )
-                                        }
-                                      />
-                                    </td>
-                                    <td>
-                                      <input
-                                        className="guesthousebooking-food-input guesthousebooking-allotment-remarks-input"
-                                        type="text"
-                                        value={row.remarks}
-                                        onChange={(event) =>
-                                          updateAllotmentRow(
-                                            guestId,
-                                            row.id,
-                                            'remarks',
-                                            event.target.value,
-                                          )
-                                        }
-                                      />
-                                    </td>
-                                  </tr>
-                                );
-                              })
-                            ) : (
-                              <tr>
-                                <td className="guesthousebooking-allotment-empty" colSpan={6}>
-                                  No rooms requested
-                                </td>
-                              </tr>
-                            )}
-                          </tbody>
-                        </table>
-                      </div>
-                      <div className="guesthousebooking-allotment-amenities-row" aria-label="Guest amenities">
-                        <div className="guesthousebooking-allotment-amenities-list">
-                          {GUEST_AMENITY_OPTIONS.map((amenity) => (
-                            <label className="guesthousebooking-allotment-amenity" key={amenity.key}>
+                        <div className="guesthousebooking-option-row guesthousebooking-field--accompanied">
+                          <div className="guesthousebooking-option-heading">
+                            <span className="guesthousebooking-option-icon">
+                              <UsersRound size={20} />
+                            </span>
+                            <span>Accompanied By</span>
+                          </div>
+                          <div className="guesthousebooking-count-row guesthousebooking-count-row--boxed">
+                            <label>
+                              <span>Male</span>
                               <input
-                                className="guesthousebooking-checkbox guesthousebooking-amenity-checkbox"
-                                type="checkbox"
-                                checked={Boolean(allotment.amenities[amenity.key])}
+                                className="guesthousebooking-small-input"
+                                type="number"
+                                min="0"
+                                value={guest.accompaniedMale}
+                                placeholder="0"
                                 onChange={(event) =>
-                                  updateAllotmentAmenity(
-                                    guestId,
-                                    amenity.key,
-                                    event.target.checked,
-                                  )
+                                  updateGuest(guest.id, 'accompaniedMale', event.target.value)
                                 }
                               />
-                              <span>{amenity.label}</span>
                             </label>
-                          ))}
+                            <label>
+                              <span>Female</span>
+                              <input
+                                className="guesthousebooking-small-input"
+                                type="number"
+                                min="0"
+                                value={guest.accompaniedFemale}
+                                placeholder="0"
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'accompaniedFemale', event.target.value)
+                                }
+                              />
+                            </label>
+                            <label>
+                              <span>Children</span>
+                              <input
+                                className="guesthousebooking-small-input"
+                                type="number"
+                                min="0"
+                                value={guest.accompaniedChildren}
+                                placeholder="0"
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'accompaniedChildren', event.target.value)
+                                }
+                              />
+                            </label>
+                          </div>
                         </div>
-                        <span className="guesthousebooking-allotment-amenities-title">
-                          Guest Amenities
-                        </span>
-                      </div>
-                    </div>
 
-                    {activeRoomDetailRow && renderRoomDetailsCard(activeRoomDetailRow)}
+                        <div className="guesthousebooking-option-row guesthousebooking-field--room">
+                          <div className="guesthousebooking-option-heading">
+                            <span className="guesthousebooking-option-icon">
+                              <BedDouble size={21} />
+                            </span>
+                            <span>Room Requirements</span>
+                          </div>
+                          <div className="guesthousebooking-number-choice-group">
+                            <label className="guesthousebooking-number-choice">
+                              <span>Single</span>
+                              <input
+                                className="guesthousebooking-small-input"
+                                type="number"
+                                min="0"
+                                value={guest.roomSingle}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'roomSingle', event.target.value)
+                                }
+                                aria-label={`Guest ${index + 1} single room count`}
+                              />
+                            </label>
+                            <label className="guesthousebooking-number-choice">
+                              <span>Double</span>
+                              <input
+                                className="guesthousebooking-small-input"
+                                type="number"
+                                min="0"
+                                value={guest.roomDouble}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'roomDouble', event.target.value)
+                                }
+                                aria-label={`Guest ${index + 1} double room count`}
+                              />
+                            </label>
+                            <label className="guesthousebooking-number-choice">
+                              <span>Deluxe</span>
+                              <input
+                                className="guesthousebooking-small-input"
+                                type="number"
+                                min="0"
+                                value={guest.roomDeluxe}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'roomDeluxe', event.target.value)
+                                }
+                                aria-label={`Guest ${index + 1} deluxe room count`}
+                              />
+                            </label>
+                          </div>
+                        </div>
 
-                    <div className="guesthousebooking-allotment-caretaker-bar">
-                      <span className="guesthousebooking-caretaker-title">Care Taker Details</span>
-                      <div className="guesthousebooking-spoc-field guesthousebooking-caretaker-field">
-                        <span>Care Taker Name</span>
-                        <select
-                          className="guesthousebooking-input guesthousebooking-spoc-control"
-                          value={allotment.spoc}
-                          onChange={(event) =>
-                            updateAllotmentContact(guestId, 'spoc', event.target.value)
-                          }
-                        >
-                          <option value="">Select Care Taker</option>
-                          {spocOptions.map((spoc) => (
-                            <option key={spoc} value={spoc}>
-                              {spoc}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="guesthousebooking-option-row guesthousebooking-field--remarks">
+                          <div className="guesthousebooking-option-heading">
+                            <span>Remarks</span>
+                          </div>
+                          <input
+                            className="guesthousebooking-input guesthousebooking-remarks-input"
+                            type="text"
+                            value={guest.remarks || ''}
+                            onChange={(event) =>
+                              updateGuest(guest.id, 'remarks', event.target.value)
+                            }
+                            placeholder="Enter remarks (if any)"
+                          />
+                        </div>
                       </div>
-                      <div className="guesthousebooking-spoc-field guesthousebooking-caretaker-field">
-                        <span>Mobile Number</span>
-                        <input
-                          type="text"
-                          className="guesthousebooking-input guesthousebooking-spoc-control"
-                          placeholder="Enter mobile number"
-                          value={allotment.mobile}
-                          onChange={(event) =>
-                            updateAllotmentContact(guestId, 'mobile', event.target.value)
-                          }
-                        />
+
+                      <div className="guesthousebooking-right-column">
+                        {renderTravelPanel()}
+
+                        <div className="guesthousebooking-option-row guesthousebooking-field--priority-sidebar">
+                          <div className="guesthousebooking-option-heading">
+                            <span className="guesthousebooking-option-icon">
+                              <svg
+                                width="20"
+                                height="20"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M12 2L2 12l10 10 10-10L12 2z" fill="currentColor" />
+                                <path
+                                  d="M12 8v5M12 16h.01"
+                                  stroke="white"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                />
+                              </svg>
+                            </span>
+                            <span>Priority</span>
+                          </div>
+                          <div className="guesthousebooking-radio-group">
+                            {(['Routine', 'High'] as GuestPriority[]).map((priority) => (
+                              <label
+                                className={`guesthousebooking-radio ${
+                                  guest.priority === priority
+                                    ? 'guesthousebooking-radio--active'
+                                    : ''
+                                }`}
+                                key={priority}
+                              >
+                                <input
+                                  type="radio"
+                                  name={`guest-priority-${guest.id}`}
+                                  checked={guest.priority === priority}
+                                  onChange={() => updateGuest(guest.id, 'priority', priority)}
+                                />
+                                <span>{priority}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="guesthousebooking-option-row guesthousebooking-field--guest-total">
+                          <div className="guesthousebooking-option-heading">
+                            <span className="guesthousebooking-option-icon">
+                              <UsersRound size={20} />
+                            </span>
+                            <span>Total Number of Guests</span>
+                          </div>
+                          <input
+                            className="guesthousebooking-small-input guesthousebooking-total-input"
+                            type="number"
+                            value={totalGuestCount}
+                            readOnly
+                            aria-label="Total number of guests"
+                          />
+                        </div>
+
+                        <div className="guesthousebooking-option-row guesthousebooking-field--room-total">
+                          <div className="guesthousebooking-option-heading">
+                            <span className="guesthousebooking-option-icon">
+                              <BedDouble size={21} />
+                            </span>
+                            <span>Total Number of Rooms</span>
+                          </div>
+                          <input
+                            className="guesthousebooking-small-input guesthousebooking-total-input"
+                            type="number"
+                            value={
+                              numberOnly(guest.roomSingle) +
+                              numberOnly(guest.roomDouble) +
+                              numberOnly(guest.roomDeluxe)
+                            }
+                            readOnly
+                            aria-label="Total number of rooms"
+                          />
+                        </div>
+
+                        <div className="guesthousebooking-option-row guesthousebooking-field--food">
+                          <div className="guesthousebooking-option-heading">
+                            <span className="guesthousebooking-option-icon">
+                              <Utensils size={20} />
+                            </span>
+                            <span>Food</span>
+                          </div>
+                          <div className="guesthousebooking-food-counts">
+                            <label className="guesthousebooking-food-count-label guesthousebooking-food-count-label--veg">
+                              <span>Veg.</span>
+                              <input
+                                className="guesthousebooking-small-input guesthousebooking-food-count-input guesthousebooking-small-input--veg"
+                                type="number"
+                                min="0"
+                                value={guest.foodVeg}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'foodVeg', event.target.value)
+                                }
+                                aria-label="Veg food count"
+                              />
+                            </label>
+                            <label className="guesthousebooking-food-count-label guesthousebooking-food-count-label--nonveg">
+                              <span>Non-Veg.</span>
+                              <input
+                                className="guesthousebooking-small-input guesthousebooking-food-count-input guesthousebooking-small-input--nonveg"
+                                type="number"
+                                min="0"
+                                value={guest.foodNonVeg}
+                                onChange={(event) =>
+                                  updateGuest(guest.id, 'foodNonVeg', event.target.value)
+                                }
+                                aria-label="Non-veg food count"
+                              />
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </section>
-              );
-            })}
-          </div>}
-          <div className="guesthousebooking-actions">
-            {submitMessage && (
-              <span className={submitMessage.includes('successfully') ? 'guesthousebooking-success' : 'guesthousebooking-error'}>
-                {submitMessage}
-              </span>
-            )}
+              ))}
+            </div>
 
-            <button
-              className="guesthousebooking-submit-button"
-              type="submit"
-              disabled={isViewingBooking || isSubmitting}
-            >
-              {isViewingBooking ? 'Viewing Booking' : isEditMode ? 'Preview Edit' : 'Submit Booking'}
-            </button>
-          </div>
-          {canManageGuesthouse &&
-            isGuesthouseManagementVisible &&
-            renderGuesthouseAdminManagement()}
+            <section className="guesthousebooking-card guesthousebooking-food-card">
+              <div className="guesthousebooking-section-header">
+                <h2>Snacks &amp; Food Requirements</h2>
+                <div className="guesthousebooking-food-legend">
+                  <span>
+                    <i className="guesthousebooking-legend-box guesthousebooking-legend-box--veg" />
+                    Veg
+                  </span>
+                  <span>
+                    <i className="guesthousebooking-legend-box guesthousebooking-legend-box--nonveg" />
+                    Non-Veg
+                  </span>
+                </div>
+              </div>
+
+              <div className="guesthousebooking-card-body">
+                <div className="guesthousebooking-table-wrap">
+                  <table className="guesthousebooking-food-table">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Morning Refreshment</th>
+                        <th>Breakfast</th>
+                        <th>Lunch</th>
+                        <th>Evening Refreshment</th>
+                        <th>Dinner</th>
+                        <th>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {foodRows.map((row) => (
+                        <tr key={row.id}>
+                          <td>
+                            <span className="guesthousebooking-date-input-wrap guesthousebooking-food-date-wrap">
+                              <input
+                                className="guesthousebooking-food-date"
+                                type="text"
+                                value={foodDateInputs[row.id] ?? formatDateForDisplay(row.date)}
+                                onChange={(event) =>
+                                  updateFoodDateInput(row.id, event.target.value)
+                                }
+                                onBlur={() => resetFoodDateInput(row)}
+                                placeholder="dd/mm/yyyy"
+                                inputMode="numeric"
+                                pattern="\d{2}/\d{2}/\d{4}"
+                                title="Enter date as DD/MM/YYYY"
+                                maxLength={10}
+                              />
+                              <input
+                                className="guesthousebooking-native-date-picker guesthousebooking-food-native-date-picker"
+                                type="date"
+                                value={row.date}
+                                onChange={(event) =>
+                                  updateFoodRow(row.id, 'date', event.target.value)
+                                }
+                                aria-label="Open food date calendar"
+                                tabIndex={-1}
+                              />
+                            </span>
+                          </td>
+                          <td>
+                            <input
+                              className="guesthousebooking-food-input"
+                              type="number"
+                              min="0"
+                              value={row.morningRefreshment}
+                              onChange={(event) =>
+                                updateFoodRow(row.id, 'morningRefreshment', event.target.value)
+                              }
+                              aria-label="Morning refreshment count"
+                            />
+                          </td>
+                          <td>
+                            {renderFoodPair(row, 'breakfastVeg', 'breakfastNonVeg', 'Breakfast')}
+                          </td>
+                          <td>{renderFoodPair(row, 'lunchVeg', 'lunchNonVeg', 'Lunch')}</td>
+                          <td>
+                            <input
+                              className="guesthousebooking-food-input"
+                              type="number"
+                              min="0"
+                              value={row.eveningRefreshment}
+                              onChange={(event) =>
+                                updateFoodRow(row.id, 'eveningRefreshment', event.target.value)
+                              }
+                              aria-label="Evening refreshment count"
+                            />
+                          </td>
+                          <td>{renderFoodPair(row, 'dinnerVeg', 'dinnerNonVeg', 'Dinner')}</td>
+                          <td>
+                            <div className="guesthousebooking-row-actions">
+                              <button
+                                className="guesthousebooking-icon-button"
+                                type="button"
+                                onClick={addFoodRow}
+                                aria-label="Add food row"
+                                title="Add food row"
+                              >
+                                <PlusCircle size={16} />
+                              </button>
+                              <button
+                                className="guesthousebooking-icon-button guesthousebooking-icon-button--danger"
+                                type="button"
+                                onClick={() => removeFoodRow(row.id)}
+                                aria-label="Remove food row"
+                                title="Remove food row"
+                                disabled={foodRows.length === 1}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="guesthousebooking-food-summary">
+                  <span>
+                    Stay Dates <strong>{stayDates.length || '-'}</strong>
+                  </span>
+                  <span>
+                    Refreshment <strong>{foodTotals.refreshment}</strong>
+                  </span>
+                  <span>
+                    Veg <strong>{foodTotals.veg}</strong>
+                  </span>
+                  <span>
+                    Non-Veg <strong>{foodTotals.nonVeg}</strong>
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            {/* Room Allotment Cards */}
+            {isRoomAllotmentVisible && (
+              <div className="guesthousebooking-allotment-list" aria-label="Room Allotment">
+                {guests.map((guest, index) => {
+                  const guestId = String(guest.id);
+                  const allotment =
+                    roomAllotments[guestId] || createRoomAllotmentData(guestId, guest);
+                  const counts = getGuestAllotmentCounts(guest);
+                  const checkInDate = formatDateForDisplay(travelDetails.checkInDate);
+                  const checkInTime = normalizeTravelTimeEntry(travelDetails.checkInTime);
+                  const checkOutDate = formatDateForDisplay(travelDetails.checkOutDate);
+                  const checkOutTime = normalizeTravelTimeEntry(travelDetails.checkOutTime);
+                  const totalRooms =
+                    numberOnly(guest.roomSingle) +
+                    numberOnly(guest.roomDouble) +
+                    numberOnly(guest.roomDeluxe);
+                  const priorityStatus = guest.priority || 'Routine';
+                  const priorityTone = priorityStatus === 'High' ? 'high' : 'routine';
+                  const activeRoomDetailRow =
+                    activeRoomDetail?.guestId === guestId
+                      ? allotment.rows.find((row) => row.id === activeRoomDetail.rowId)
+                      : undefined;
+
+                  return (
+                    <section
+                      className="guesthousebooking-card guesthousebooking-allotment-card"
+                      key={`room-allotment-${guest.id}`}
+                    >
+                      <div className="guesthousebooking-room-allotment-header">
+                        <span>Room Allotment</span>
+                      </div>
+
+                      <div className="guesthousebooking-card-body guesthousebooking-allotment-body">
+                        <div className="guesthousebooking-allotment-entry-card">
+                          <div className="guesthousebooking-allotment-summary-row">
+                            <div className="guesthousebooking-allotment-guest-overview">
+                              <span
+                                className={`guesthousebooking-priority-indicator guesthousebooking-priority-indicator--${priorityTone}`}
+                                aria-label={`${priorityStatus} priority`}
+                                title={`${priorityStatus} priority`}
+                              />
+                              <span className="guesthousebooking-allotment-main-icon">
+                                <UsersRound size={24} />
+                              </span>
+                              <div className="guesthousebooking-allotment-guest-copy">
+                                <div className="guesthousebooking-allotment-guest-name-row">
+                                  <strong>{guest.name || `Guest ${index + 1}`}</strong>
+                                </div>
+                                <span>{guest.organization || 'Organization'}</span>
+                              </div>
+                            </div>
+
+                            <div
+                              className="guesthousebooking-allotment-occupancy-group"
+                              aria-label="Guest counts"
+                            >
+                              <label className="guesthousebooking-allotment-occupancy-item">
+                                <MaleAllotmentIcon />
+                                <input
+                                  value={counts.male}
+                                  readOnly
+                                  aria-label="Number of male guests"
+                                />
+                              </label>
+                              <label className="guesthousebooking-allotment-occupancy-item">
+                                <FemaleAllotmentIcon />
+                                <input
+                                  value={counts.female}
+                                  readOnly
+                                  aria-label="Number of female guests"
+                                />
+                              </label>
+                              <label className="guesthousebooking-allotment-occupancy-item">
+                                <ChildAllotmentIcon />
+                                <input
+                                  value={counts.children}
+                                  readOnly
+                                  aria-label="Number of children"
+                                />
+                              </label>
+                              <label className="guesthousebooking-allotment-occupancy-item">
+                                <House
+                                  className="guesthousebooking-allotment-person-icon"
+                                  aria-hidden="true"
+                                />
+                                <input
+                                  value={totalRooms}
+                                  readOnly
+                                  aria-label="Number of rooms requested"
+                                />
+                              </label>
+                            </div>
+
+                            <div className="guesthousebooking-allotment-date-stack">
+                              <label className="guesthousebooking-allotment-datetime-row">
+                                <span className="guesthousebooking-allotment-datetime-title">
+                                  Check-in
+                                </span>
+                                <input value={checkInDate} readOnly aria-label="Check-in date" />
+
+                                <input value={checkInTime} readOnly aria-label="Check-in time" />
+                                <CircleCheck
+                                  className="guesthousebooking-allotment-check-icon"
+                                  size={18}
+                                  aria-hidden="true"
+                                />
+                              </label>
+                              <label className="guesthousebooking-allotment-datetime-row">
+                                <span className="guesthousebooking-allotment-datetime-title">
+                                  Check-out
+                                </span>
+                                <input value={checkOutDate} readOnly aria-label="Check-out date" />
+
+                                <input value={checkOutTime} readOnly aria-label="Check-out time" />
+                                <CircleCheck
+                                  className="guesthousebooking-allotment-check-icon"
+                                  size={18}
+                                  aria-hidden="true"
+                                />
+                              </label>
+                            </div>
+                          </div>
+
+                          <div className="guesthousebooking-table-wrap guesthousebooking-allotment-table-wrap">
+                            <table className="guesthousebooking-food-table guesthousebooking-allotment-table">
+                              <thead>
+                                <tr>
+                                  <th className="guesthousebooking-allotment-col-sno">S.No.</th>
+                                  <th className="guesthousebooking-allotment-col-room-type">
+                                    Room Type
+                                  </th>
+                                  <th className="guesthousebooking-allotment-col-block">Block</th>
+                                  <th className="guesthousebooking-allotment-col-room-number">
+                                    Room Number
+                                  </th>
+                                  <th className="guesthousebooking-allotment-col-occupants">
+                                    Occupants
+                                  </th>
+                                  <th className="guesthousebooking-allotment-col-remarks">
+                                    Remarks
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {allotment.rows.length ? (
+                                  allotment.rows.map((row, idx) => {
+                                    const roomNumbers = getRoomNumberOptions(
+                                      row.block,
+                                      row.roomNumber,
+                                    );
+                                    const isRoomDetailActive =
+                                      activeRoomDetail?.guestId === guestId &&
+                                      activeRoomDetail.rowId === row.id;
+
+                                    return (
+                                      <tr key={row.id}>
+                                        <td className="centerTd">{idx + 1}</td>
+                                        <td>
+                                          <select
+                                            className="guesthousebooking-food-date guesthousebooking-allotment-compact-control"
+                                            value={row.roomType}
+                                            onChange={(event) =>
+                                              updateAllotmentRow(
+                                                guestId,
+                                                row.id,
+                                                'roomType',
+                                                event.target.value,
+                                              )
+                                            }
+                                          >
+                                            {ROOM_REQUIREMENT_CONFIG.map((option) => (
+                                              <option key={option.roomType} value={option.roomType}>
+                                                {option.roomType}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </td>
+                                        <td>
+                                          <select
+                                            className="guesthousebooking-food-date guesthousebooking-allotment-compact-control"
+                                            value={row.block}
+                                            onChange={(event) =>
+                                              updateAllotmentBlock(
+                                                guestId,
+                                                row.id,
+                                                event.target.value,
+                                              )
+                                            }
+                                          >
+                                            <option value=""></option>
+                                            {roomBlockOptions.map((option) => (
+                                              <option key={option.block} value={option.block}>
+                                                {option.block}
+                                              </option>
+                                            ))}
+                                          </select>
+                                        </td>
+                                        <td>
+                                          <div className="guesthousebooking-room-number-cell">
+                                            <select
+                                              className="guesthousebooking-food-date guesthousebooking-allotment-compact-control"
+                                              value={row.roomNumber}
+                                              onChange={(event) =>
+                                                updateAllotmentRow(
+                                                  guestId,
+                                                  row.id,
+                                                  'roomNumber',
+                                                  event.target.value,
+                                                )
+                                              }
+                                              disabled={!row.block}
+                                            >
+                                              <option value=""></option>
+                                              {roomNumbers.map((roomNumber) => (
+                                                <option key={roomNumber} value={roomNumber}>
+                                                  {roomNumber}
+                                                </option>
+                                              ))}
+                                            </select>
+                                            <button
+                                              className={`guesthousebooking-room-detail-trigger${isRoomDetailActive ? ' guesthousebooking-room-detail-trigger--active' : ''}`}
+                                              type="button"
+                                              onClick={() => toggleRoomDetails(guestId, row.id)}
+                                              aria-label="Open room details"
+                                              aria-expanded={isRoomDetailActive}
+                                              title="Room Details"
+                                            >
+                                              <Info size={12} aria-hidden="true" />
+                                            </button>
+                                          </div>
+                                        </td>
+                                        <td>
+                                          <input
+                                            className="guesthousebooking-food-input guesthousebooking-allotment-occupants-input"
+                                            type="number"
+                                            min="1"
+                                            value={row.occupants}
+                                            onChange={(event) =>
+                                              updateAllotmentRow(
+                                                guestId,
+                                                row.id,
+                                                'occupants',
+                                                event.target.value,
+                                              )
+                                            }
+                                          />
+                                        </td>
+                                        <td>
+                                          <input
+                                            className="guesthousebooking-food-input guesthousebooking-allotment-remarks-input"
+                                            type="text"
+                                            value={row.remarks}
+                                            onChange={(event) =>
+                                              updateAllotmentRow(
+                                                guestId,
+                                                row.id,
+                                                'remarks',
+                                                event.target.value,
+                                              )
+                                            }
+                                          />
+                                        </td>
+                                      </tr>
+                                    );
+                                  })
+                                ) : (
+                                  <tr>
+                                    <td className="guesthousebooking-allotment-empty" colSpan={6}>
+                                      No rooms requested
+                                    </td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div
+                            className="guesthousebooking-allotment-amenities-row"
+                            aria-label="Guest amenities"
+                          >
+                            <div className="guesthousebooking-allotment-amenities-list">
+                              {GUEST_AMENITY_OPTIONS.map((amenity) => (
+                                <label
+                                  className="guesthousebooking-allotment-amenity"
+                                  key={amenity.key}
+                                >
+                                  <input
+                                    className="guesthousebooking-checkbox guesthousebooking-amenity-checkbox"
+                                    type="checkbox"
+                                    checked={Boolean(allotment.amenities[amenity.key])}
+                                    onChange={(event) =>
+                                      updateAllotmentAmenity(
+                                        guestId,
+                                        amenity.key,
+                                        event.target.checked,
+                                      )
+                                    }
+                                  />
+                                  <span>{amenity.label}</span>
+                                </label>
+                              ))}
+                            </div>
+                            <span className="guesthousebooking-allotment-amenities-title">
+                              Guest Amenities
+                            </span>
+                          </div>
+                        </div>
+
+                        {activeRoomDetailRow && renderRoomDetailsCard(activeRoomDetailRow)}
+
+                        <div className="guesthousebooking-allotment-caretaker-bar">
+                          <span className="guesthousebooking-caretaker-title">
+                            Care Taker Details
+                          </span>
+                          <div className="guesthousebooking-spoc-field guesthousebooking-caretaker-field">
+                            <span>Care Taker Name</span>
+                            <select
+                              className="guesthousebooking-input guesthousebooking-spoc-control"
+                              value={allotment.spoc}
+                              onChange={(event) =>
+                                updateAllotmentContact(guestId, 'spoc', event.target.value)
+                              }
+                            >
+                              <option value="">Select Care Taker</option>
+                              {spocOptions.map((spoc) => (
+                                <option key={spoc} value={spoc}>
+                                  {spoc}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="guesthousebooking-spoc-field guesthousebooking-caretaker-field">
+                            <span>Mobile Number</span>
+                            <input
+                              type="text"
+                              className="guesthousebooking-input guesthousebooking-spoc-control"
+                              placeholder="Enter mobile number"
+                              value={allotment.mobile}
+                              onChange={(event) =>
+                                updateAllotmentContact(guestId, 'mobile', event.target.value)
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            )}
+            <div className="guesthousebooking-actions">
+              {submitMessage && (
+                <span
+                  className={
+                    submitMessage.includes('successfully')
+                      ? 'guesthousebooking-success'
+                      : 'guesthousebooking-error'
+                  }
+                >
+                  {submitMessage}
+                </span>
+              )}
+
+              <button
+                className="guesthousebooking-submit-button"
+                type="submit"
+                disabled={isViewingBooking || isSubmitting}
+              >
+                {isViewingBooking
+                  ? 'Viewing Booking'
+                  : isEditMode
+                    ? 'Preview Edit'
+                    : 'Submit Booking'}
+              </button>
+            </div>
+            {canManageGuesthouse &&
+              isGuesthouseManagementVisible &&
+              renderGuesthouseAdminManagement()}
           </fieldset>
         </form>
       </div>

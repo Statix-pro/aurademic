@@ -1,5 +1,3 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   ChevronLeft,
   ChevronRight,
@@ -14,15 +12,15 @@ import {
   XCircle,
   type LucideIcon,
 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
 import './WorkOrderDashboard.css';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
-
 type WorkOrderPriority = 'High' | 'Medium' | 'Low' | 'Routine';
 type WorkOrderStatus = 'Pending' | 'Completed' | 'Procurement' | 'On Hold' | 'Assigned';
-
-
 
 interface StoredWorkOrderItem {
   id: string | number;
@@ -128,9 +126,7 @@ const formatShortDate = (value: string | undefined) => {
   // Parse these values as local calendar dates to prevent a displayed day shift.
   // Remove after all work-order endpoints return timestamps with an explicit offset or
   // upstream data formats no longer require this compatibility behavior.
-  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
-    ? new Date(`${value}T00:00:00`)
-    : new Date(value);
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value);
   if (isNaN(date.getTime())) return value;
   return date.toLocaleDateString('en-GB', {
     day: '2-digit',
@@ -159,23 +155,21 @@ const normalizePriority = (priority: string): WorkOrderPriority => {
   return 'Medium';
 };
 
-
-
 // LEGACY: category code map used only for converting old work order IDs to the new format.
 // Remove after all stored submissions use the new YYCODENNNN format (no old IDs remain).
 const LEGACY_CATEGORY_CODE_MAP: Record<string, string> = {
-  'Electrical': 'EL',
+  Electrical: 'EL',
   'IT Infrastructure': 'IT',
-  'Plumbing': 'PL',
-  'HVAC': 'AC',
-  'Carpentry': 'CA',
-  'Gardening': 'GA',
-  'Civil': 'CI',
+  Plumbing: 'PL',
+  HVAC: 'AC',
+  Carpentry: 'CA',
+  Gardening: 'GA',
+  Civil: 'CI',
   'Metal Works': 'MW1',
-  'Interior': 'IN',
-  'Labour': 'LA',
-  'Painting': 'PA',
-  'UPS': 'UP',
+  Interior: 'IN',
+  Labour: 'LA',
+  Painting: 'PA',
+  UPS: 'UP',
 };
 
 // LEGACY: format old timestamp-based or #WO-YYYY-XXXX workorder IDs.
@@ -225,7 +219,9 @@ const isReminderStatus = (status: string) => {
 // LEGACY: Normalize old status values ('In Progress', 'Reminder', 'Remainder') to new set.
 // Remove after all stored submissions have been re-saved with new status values.
 const normalizeStatus = (status: string): WorkOrderStatus => {
-  const s = String(status || '').trim().toLowerCase();
+  const s = String(status || '')
+    .trim()
+    .toLowerCase();
   if (s === 'completed') return 'Completed';
   if (s === 'ordered' || s === 'in progress') return 'Procurement';
   if (s === 'on hold' || s === 'reminder' || s === 'remainder') return 'On Hold';
@@ -235,7 +231,11 @@ const normalizeStatus = (status: string): WorkOrderStatus => {
 
 const normalizeApprovalStatus = (submission: StoredWorkOrderSubmission) => {
   const workflowStatus = String(
-    submission.workflow_state?.status || submission.workflow_status || submission.overall_status || submission.status || '',
+    submission.workflow_state?.status ||
+      submission.workflow_status ||
+      submission.overall_status ||
+      submission.status ||
+      '',
   )
     .trim()
     .toLowerCase();
@@ -246,7 +246,6 @@ const normalizeApprovalStatus = (submission: StoredWorkOrderSubmission) => {
   return 'Pending';
 };
 
-
 // LEGACY: map old category names to new short names.
 // Remove after all stored submissions have been re-saved with new category names.
 const LEGACY_CATEGORY_NAME_MAP: Record<string, string> = {
@@ -254,9 +253,9 @@ const LEGACY_CATEGORY_NAME_MAP: Record<string, string> = {
   'IT / Infrastructure': 'IT Infrastructure',
   'AC / HVAC': 'HVAC',
   'Furniture / Door': 'Carpentry',
-  'Furniture': 'Carpentry',
-  'CarpentryGardening': 'Carpentry',
-  'Fabrication': 'Metal Works',
+  Furniture: 'Carpentry',
+  CarpentryGardening: 'Carpentry',
+  Fabrication: 'Metal Works',
   'Civil / Flooring': 'Civil',
 };
 
@@ -267,20 +266,21 @@ const mapSubmissionsToRows = (submissions: StoredWorkOrderSubmission[]): WorkOrd
   return submissions
     .flatMap((submission) =>
       (Array.isArray(submission.workItems) ? submission.workItems : []).map((item) => {
-        const photos = [
-          ...(Array.isArray(item.locationPhotos) ? item.locationPhotos : []),
-        ].map((url: string, index: number) => ({
-          id: `${item.id}-${index}`,
-          name: `Photo ${index + 1}`,
-          preview: url,
-        }));
+        const photos = [...(Array.isArray(item.locationPhotos) ? item.locationPhotos : [])].map(
+          (url: string, index: number) => ({
+            id: `${item.id}-${index}`,
+            name: `Photo ${index + 1}`,
+            preview: url,
+          }),
+        );
         const normalizedCategory = normalizeCategoryName(submission.category);
 
         return {
           id: `${submission.id}-${item.id}`,
           submissionId: String(submission.id),
           itemId: String(item.id),
-          workOrderId: submission.wo_number || formatLegacyWorkOrderId(submission.id, normalizedCategory),
+          workOrderId:
+            submission.wo_number || formatLegacyWorkOrderId(submission.id, normalizedCategory),
           date: submission.date || submission.submittedAt?.slice(0, 10) || '',
           nature: normalizedCategory || item.type || '-',
           subType: item.subType || '',
@@ -292,7 +292,7 @@ const mapSubmissionsToRows = (submissions: StoredWorkOrderSubmission[]): WorkOrd
           priority: normalizePriority(item.priority),
           assignee: {
             name: item.assignedTo || '',
-            role: item.assignedTo ? (item.assignedToRole || 'Staff') : 'Not Assigned',
+            role: item.assignedTo ? item.assignedToRole || 'Staff' : 'Not Assigned',
             initials: getInitials(item.assignedTo || 'NA'),
           },
           status: normalizeStatus(item.status || submission.status || 'Pending'),
@@ -374,13 +374,12 @@ const WorkOrderDashboard: React.FC = () => {
   const [workOrders, setWorkOrders] = useState<WorkOrderItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('legacy-all');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(() =>
-    `legacy-${getCurrentFiscalYear()}`,
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(
+    () => `legacy-${getCurrentFiscalYear()}`,
   );
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(10);
-
 
   // Modals state
   const [showInfoModal, setShowInfoModal] = useState(false);
@@ -418,8 +417,6 @@ const WorkOrderDashboard: React.FC = () => {
     fetchWorkOrders();
   }, []);
 
-
-
   const persistWorkOrderItemDashboard = async (
     itemId: string,
     payload: {
@@ -431,8 +428,6 @@ const WorkOrderDashboard: React.FC = () => {
   ) => {
     await authenticityUtility.patch(`/workorders/items/${itemId}/dashboard`, payload);
   };
-
-
 
   const handleSaveReminderDate = async (
     submissionId: string,
@@ -463,7 +458,11 @@ const WorkOrderDashboard: React.FC = () => {
   const handleSaveReminder = async () => {
     if (selectedItemForInfo) {
       try {
-        await handleSaveReminderDate(selectedItemForInfo.submissionId, selectedItemForInfo.itemId, reminderDateInput);
+        await handleSaveReminderDate(
+          selectedItemForInfo.submissionId,
+          selectedItemForInfo.itemId,
+          reminderDateInput,
+        );
         setShowInfoModal(false);
       } catch (err) {
         console.error('Failed to update work order reminder date:', err);
@@ -476,7 +475,6 @@ const WorkOrderDashboard: React.FC = () => {
     setActivePhotoIndex(0);
     setShowPhotoModal(true);
   };
-
 
   // Derived options and variables
   const currentFiscalYear = getCurrentFiscalYear();
@@ -516,13 +514,16 @@ const WorkOrderDashboard: React.FC = () => {
     [],
   );
 
-
   // Filters setup: FY & Category filter applied to derive stats counts
   const filteredByFYAndCategory = useMemo(() => {
     return workOrders.filter((item) => {
       const itemFY = getItemFiscalYear(item);
-      const strippedFY = selectedFiscalYear.startsWith('legacy-') ? selectedFiscalYear.slice(7) : selectedFiscalYear;
-      const strippedCategory = selectedCategory.startsWith('legacy-') ? selectedCategory.slice(7) : selectedCategory;
+      const strippedFY = selectedFiscalYear.startsWith('legacy-')
+        ? selectedFiscalYear.slice(7)
+        : selectedFiscalYear;
+      const strippedCategory = selectedCategory.startsWith('legacy-')
+        ? selectedCategory.slice(7)
+        : selectedCategory;
       const matchesFY = strippedFY === 'all' || itemFY === strippedFY;
       const matchesCategory = strippedCategory === 'all' || item.nature === strippedCategory;
       return matchesFY && matchesCategory;
@@ -673,13 +674,13 @@ const WorkOrderDashboard: React.FC = () => {
               </div>
 
               <div className="workorderdashboard-actions">
-                  <button
-                    type="button"
-                    className="workorderdashboard-add-btn"
-                    onClick={() => navigate('/workorder/new')}
-                  >
-                    Add +
-                  </button>
+                <button
+                  type="button"
+                  className="workorderdashboard-add-btn"
+                  onClick={() => navigate('/workorder/new')}
+                >
+                  Add +
+                </button>
               </div>
             </div>
           </div>
@@ -707,51 +708,51 @@ const WorkOrderDashboard: React.FC = () => {
           {/* CONTENT */}
           <div className="workorderdashboard-body">
             {isLoading ? (
-              <div className="workorderdashboard-state" style={{ padding: '60px 20px', fontSize: '15px' }}>
+              <div
+                className="workorderdashboard-state"
+                style={{ padding: '60px 20px', fontSize: '15px' }}
+              >
                 <div className="spinner-border text-primary" role="status">
                   <span className="visually-hidden">Loading...</span>
                 </div>
               </div>
             ) : error ? (
-              <div className="workorderdashboard-state text-danger d-flex flex-column align-items-center" style={{ padding: '60px 20px', fontSize: '15px' }}>
+              <div
+                className="workorderdashboard-state text-danger d-flex flex-column align-items-center"
+                style={{ padding: '60px 20px', fontSize: '15px' }}
+              >
                 <div style={{ marginBottom: '15px' }}>{error}</div>
-                <button type="button" className="btn btn-outline-primary btn-sm" onClick={fetchWorkOrders}>
+                <button
+                  type="button"
+                  className="btn btn-outline-primary btn-sm"
+                  onClick={fetchWorkOrders}
+                >
                   Retry
                 </button>
               </div>
             ) : filteredWorkOrders.length === 0 ? (
-              <div className="workorderdashboard-state" style={{ padding: '60px 20px', fontSize: '15px' }}>
+              <div
+                className="workorderdashboard-state"
+                style={{ padding: '60px 20px', fontSize: '15px' }}
+              >
                 No work items found
               </div>
             ) : (
               <div className="workorderdashboard-list-container">
                 {paginatedWorkOrders.map((item) => {
                   return (
-                    <div
-                      key={item.id}
-                      className="workorderdashboard-item-card"
-                    >
+                    <div key={item.id} className="workorderdashboard-item-card">
                       <div className="card-row-top">
                         <div className="card-header-left">
-                          <span 
-                            className="card-id-pill"
-                          >
-                            #{item.workOrderId}
-                          </span>
-                          <span 
-                            className="card-applicant-name"
-                          >
-                            {item.applicant.name}
-                          </span>
+                          <span className="card-id-pill">#{item.workOrderId}</span>
+                          <span className="card-applicant-name">{item.applicant.name}</span>
                           <span className="card-category-tag">{item.nature}</span>
                         </div>
 
                         <div className="card-header-right">
                           <div className="card-amount-box">
                             <span className="amount-label">Target Date</span>
-                            <span className="amount-value">
-                              {formatShortDate(item.targetDate)}
-                            </span>
+                            <span className="amount-value">{formatShortDate(item.targetDate)}</span>
                           </div>
                           <div className="card-actions-main">
                             {item.photos.length > 0 && (
@@ -804,7 +805,10 @@ const WorkOrderDashboard: React.FC = () => {
             {filteredWorkOrders.length > 0 && (
               <div className="workorderdashboard-pagination">
                 <div className="workorderdashboard-pagination-left">
-                  <label className="workorderdashboard-pagination-label" htmlFor="workorderdashboard-page-size">
+                  <label
+                    className="workorderdashboard-pagination-label"
+                    htmlFor="workorderdashboard-page-size"
+                  >
                     Rows per page
                   </label>
                   <select
@@ -854,7 +858,11 @@ const WorkOrderDashboard: React.FC = () => {
       <CustomModal
         show={showInfoModal}
         onHide={() => setShowInfoModal(false)}
-        title={selectedItemForInfo ? `Work order info — ${selectedItemForInfo.workOrderId}` : 'Work Order Info'}
+        title={
+          selectedItemForInfo
+            ? `Work order info — ${selectedItemForInfo.workOrderId}`
+            : 'Work Order Info'
+        }
         size="lg"
         footer={
           <div className="wo-info-modal-footer">
@@ -865,11 +873,7 @@ const WorkOrderDashboard: React.FC = () => {
             >
               Close
             </button>
-            <button
-              type="button"
-              className="wo-info-btn-save"
-              onClick={handleSaveReminder}
-            >
+            <button type="button" className="wo-info-btn-save" onClick={handleSaveReminder}>
               Save changes
             </button>
           </div>
@@ -877,7 +881,6 @@ const WorkOrderDashboard: React.FC = () => {
       >
         {selectedItemForInfo && (
           <div className="wo-info-modal-body">
-
             {/* Applicant Details Section */}
             <div className="wo-info-section">
               <div className="wo-info-section-heading">
@@ -887,23 +890,33 @@ const WorkOrderDashboard: React.FC = () => {
               <div className="wo-info-applicant-card">
                 <div className="wo-info-field">
                   <span className="wo-info-field-label">Name</span>
-                  <span className="wo-info-field-value">{selectedItemForInfo.applicant.name || 'N/A'}</span>
+                  <span className="wo-info-field-value">
+                    {selectedItemForInfo.applicant.name || 'N/A'}
+                  </span>
                 </div>
                 <div className="wo-info-field">
                   <span className="wo-info-field-label">Designation</span>
-                  <span className="wo-info-field-value">{selectedItemForInfo.applicant.designation || 'N/A'}</span>
+                  <span className="wo-info-field-value">
+                    {selectedItemForInfo.applicant.designation || 'N/A'}
+                  </span>
                 </div>
                 <div className="wo-info-field">
                   <span className="wo-info-field-label">Department</span>
-                  <span className="wo-info-field-value">{selectedItemForInfo.applicant.department || 'N/A'}</span>
+                  <span className="wo-info-field-value">
+                    {selectedItemForInfo.applicant.department || 'N/A'}
+                  </span>
                 </div>
                 <div className="wo-info-field">
                   <span className="wo-info-field-label">Email</span>
-                  <span className="wo-info-field-value wo-info-field-value--email">{selectedItemForInfo.applicant.email || 'N/A'}</span>
+                  <span className="wo-info-field-value wo-info-field-value--email">
+                    {selectedItemForInfo.applicant.email || 'N/A'}
+                  </span>
                 </div>
                 <div className="wo-info-field">
                   <span className="wo-info-field-label">Mobile</span>
-                  <span className="wo-info-field-value">{selectedItemForInfo.applicant.mobile || 'N/A'}</span>
+                  <span className="wo-info-field-value">
+                    {selectedItemForInfo.applicant.mobile || 'N/A'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -925,7 +938,9 @@ const WorkOrderDashboard: React.FC = () => {
                     : formatDisplayDate(selectedItemForInfo.date)}
                 </span>
               </div>
-              <div className={`wo-info-date-card wo-info-date-card--reminder ${reminderDateInput ? 'has-date' : 'no-date'}`}>
+              <div
+                className={`wo-info-date-card wo-info-date-card--reminder ${reminderDateInput ? 'has-date' : 'no-date'}`}
+              >
                 <span className="wo-info-date-icon" />
                 <span className="wo-info-date-label">Reminder Date</span>
                 <input
@@ -951,7 +966,6 @@ const WorkOrderDashboard: React.FC = () => {
                 {selectedItemForInfo.description || 'No description provided.'}
               </div>
             </div>
-
           </div>
         )}
       </CustomModal>
@@ -960,7 +974,9 @@ const WorkOrderDashboard: React.FC = () => {
       <CustomModal
         show={showPhotoModal}
         onHide={() => setShowPhotoModal(false)}
-        title={selectedItemForPhotos ? `Photos - ${selectedItemForPhotos.workOrderId}` : 'Photo Viewer'}
+        title={
+          selectedItemForPhotos ? `Photos - ${selectedItemForPhotos.workOrderId}` : 'Photo Viewer'
+        }
         size="lg"
       >
         {selectedItemForPhotos && selectedItemForPhotos.photos.length > 0 ? (
@@ -1002,9 +1018,7 @@ const WorkOrderDashboard: React.FC = () => {
                   type="button"
                   className="photo-nav-btn next"
                   onClick={() =>
-                    setActivePhotoIndex(
-                      (prev) => (prev + 1) % selectedItemForPhotos.photos.length,
-                    )
+                    setActivePhotoIndex((prev) => (prev + 1) % selectedItemForPhotos.photos.length)
                   }
                 >
                   <ChevronRight size={24} />
@@ -1012,7 +1026,14 @@ const WorkOrderDashboard: React.FC = () => {
               )}
             </div>
             <div className="photo-caption">
-              {selectedItemForPhotos.photos[Math.min(Math.max(0, activePhotoIndex), selectedItemForPhotos.photos.length - 1)].name} ({Math.min(Math.max(0, activePhotoIndex), selectedItemForPhotos.photos.length - 1) + 1} of {selectedItemForPhotos.photos.length})
+              {
+                selectedItemForPhotos.photos[
+                  Math.min(Math.max(0, activePhotoIndex), selectedItemForPhotos.photos.length - 1)
+                ].name
+              }{' '}
+              (
+              {Math.min(Math.max(0, activePhotoIndex), selectedItemForPhotos.photos.length - 1) + 1}{' '}
+              of {selectedItemForPhotos.photos.length})
             </div>
             {selectedItemForPhotos.photos.length > 1 && (
               <div className="photo-thumbnails">

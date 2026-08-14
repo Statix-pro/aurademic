@@ -24,6 +24,11 @@ import {
   buildExpenditureFiscalYearCondition,
   collateBudgetText,
 } from '../shared/expenditureFilters.js';
+import {
+  buildFinanceOwnerCondition,
+  buildFinanceOwnerParams,
+  isFinanceRequestOwner,
+} from '../shared/financeOwnership.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
@@ -736,10 +741,20 @@ const hasSettlementRowsForClosure = (rows = []) =>
       hasBudgetLineSelection(row),
   );
 
+// LEGACY: expenditure requests raised before `expenditure_requests.employee_id` existed carry
+// NULL there, so the creating login is the only claimant identity available for them. Remove
+// once every row has employee_id populated.
+const LEGACY_NULL_APPLICANT_CLAIMANT_SQL = '(er.employee_id IS NULL AND er.created_by = ?)';
+
 async function getCumulativeAdvanceSummary(
   connOrDb,
   {
     userId,
+    // The applicant the claim is FOR. A cumulative advance belongs to the applicant, not to
+    // the login that typed it — a shared department account and the applicant's own login can
+    // both raise claims against the same head and both have to count. See
+    // shared/financeOwnership.js for why the two are routinely different people.
+    employeeId = null,
     budgetLineId,
     head,
     subHead,
@@ -834,19 +849,26 @@ async function getCumulativeAdvanceSummary(
       `;
   }
 
-  let targetUid = uid;
+  // Who the prior advances have to belong to, in order of precision:
+  //   1. a finance request pins the card, which is narrower than any person — no person filter.
+  //   2. the applicant employee, when known: every claim raised FOR them counts, whichever
+  //      login typed it. Callers must authorize the applicant first — see
+  //      `canReadApplicantAdvanceTotals`.
+  //   3. otherwise the caller's own identity — creator OR the applicant whose login this is —
+  //      which is the same rule the dashboard and list use.
+  const claimantEmployeeId = toPositiveInt(employeeId);
+  let claimantClause;
+  let claimantParams;
   if (financeId) {
-    const [frOwnerRows] = await source.execute(
-      `SELECT created_by FROM finance_requests WHERE id = ? LIMIT 1`,
-      [financeId],
-    );
-    if (frOwnerRows && frOwnerRows.length > 0) {
-      targetUid = toPositiveInt(frOwnerRows[0].created_by) || uid;
-    }
+    claimantClause = '1 = 1';
+    claimantParams = [];
+  } else if (claimantEmployeeId) {
+    claimantClause = `(er.employee_id = ? OR ${LEGACY_NULL_APPLICANT_CLAIMANT_SQL})`;
+    claimantParams = [claimantEmployeeId, uid];
+  } else {
+    claimantClause = buildFinanceOwnerCondition('er');
+    claimantParams = buildFinanceOwnerParams(uid);
   }
-
-  const creatorClause = financeId ? '1 = 1' : 'er.created_by = ?';
-  const creatorParams = financeId ? [] : [targetUid];
 
   const exclusionClause = excludedExpenditureId ? 'AND er.id <> ?' : '';
   const exclusionParams = excludedExpenditureId ? [excludedExpenditureId] : [];
@@ -938,7 +960,7 @@ async function getCumulativeAdvanceSummary(
          COUNT(DISTINCT er.id)               AS cnt
        FROM expenditure_advance_rows ar
        JOIN expenditure_requests er ON er.id = ar.expenditure_id
-      WHERE ${creatorClause}
+      WHERE ${claimantClause}
         AND er.request_type = 'Advance'
         AND ${activeStatusClause}
         ${scopeClause}
@@ -950,7 +972,7 @@ async function getCumulativeAdvanceSummary(
          COALESCE(SUM(${legacyAmountExpr}), 0) AS total_advanced,
          COUNT(*)                              AS cnt
        FROM expenditure_requests er
-      WHERE ${creatorClause}
+      WHERE ${claimantClause}
         AND er.request_type = 'Advance'
         AND ${activeStatusClause}
         ${scopeClause}
@@ -963,11 +985,11 @@ async function getCumulativeAdvanceSummary(
         )
      ) AS legacy_totals`,
     [
-      ...creatorParams,
+      ...claimantParams,
       ...scopeParams,
       ...exclusionParams,
       ...rowMatchParams,
-      ...creatorParams,
+      ...claimantParams,
       ...scopeParams,
       ...exclusionParams,
       ...legacyMatchParams,
@@ -1417,8 +1439,12 @@ async function getApprovedFinanceRequestOwner(connOrDb, financeRequestId) {
 
   const source = connOrDb || db;
   const [rows] = await source.execute(
-    `SELECT fr.id, fr.created_by
+    // `applicant_user_id` is the login of the applicant the request was raised FOR, which is a
+    // different person from `created_by` whenever a shared department account submitted it.
+    // Both count as the owner — see shared/financeOwnership.js.
+    `SELECT fr.id, fr.created_by, emp_owner.user_id AS applicant_user_id
        FROM finance_requests fr
+       LEFT JOIN master_employees emp_owner ON emp_owner.id = fr.employee_id
       WHERE fr.id = ?
         AND (
           LOWER(TRIM(COALESCE(fr.overall_status, ''))) = 'approved'
@@ -1793,11 +1819,61 @@ export async function getApprovedBudgets({
 // ─── Pre-advance summary ──────────────────────────────────────────────────────
 
 /**
- * Total amount already advanced by this user on a given budget line.
+ * May this login read the cumulative advance total of this applicant?
+ *
+ * The advance-summary endpoint takes its applicant from the query string, and that total is a
+ * money figure, so an arbitrary employee_id must not be honoured — otherwise any authenticated
+ * user could probe any employee's advances. Entitled callers are:
+ *
+ *   - the applicant themselves (their login is `master_employees.user_id`);
+ *   - a login that has already raised a finance or expenditure request FOR that applicant,
+ *     which is the shared department-account case this whole rule exists for.
+ *
+ * Everyone else falls back to their own totals — see `getAdvanceSummary`. Workflow actors and
+ * super admins are allowed by the caller, since they already see every claim.
+ */
+export async function canReadApplicantAdvanceTotals({ userId, employeeId } = {}) {
+  const uid = toPositiveInt(userId);
+  const empId = toPositiveInt(employeeId);
+  if (!uid || !empId) return false;
+
+  const [rows] = await db.execute(
+    `SELECT 1
+       FROM master_employees me
+      WHERE me.id = ?
+        AND (
+          me.user_id = ?
+          OR EXISTS (
+            SELECT 1
+              FROM finance_requests fr
+             WHERE fr.employee_id = me.id
+               AND fr.created_by = ?
+          )
+          OR EXISTS (
+            SELECT 1
+              FROM expenditure_requests er
+             WHERE er.employee_id = me.id
+               AND er.created_by = ?
+          )
+        )
+      LIMIT 1`,
+    [empId, uid, uid, uid],
+  );
+
+  return rows.length > 0;
+}
+
+/**
+ * Total amount already advanced for a given applicant on a given budget line.
  * First-time → preAdvance = 0.
+ *
+ * Pass `employeeId` whenever the caller knows the applicant AND has authorized it via
+ * `canReadApplicantAdvanceTotals`: it is the identity the total belongs to, and without it the
+ * total covers only claims the calling login owns.
  */
 export async function getAdvanceSummary({
   userId,
+  employeeId = null,
   budgetLineId,
   head,
   subHead,
@@ -1811,6 +1887,7 @@ export async function getAdvanceSummary({
 } = {}) {
   return getCumulativeAdvanceSummary(db, {
     userId,
+    employeeId,
     budgetLineId,
     head,
     subHead,
@@ -2198,8 +2275,11 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
   }
 
   const fyStart = toPositiveInt(fiscalYear);
-  const financeParams = [uid];
-  const expenditureParams = [uid];
+  // Two bind values each: the owner predicate matches creator OR applicant. See
+  // shared/financeOwnership.js — a card submitted by a shared department login has to reach
+  // the applicant it was raised for.
+  const financeParams = buildFinanceOwnerParams(uid);
+  const expenditureParams = buildFinanceOwnerParams(uid);
   let financeFySql = '';
   let requestFinanceFySql = '';
 
@@ -2325,7 +2405,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
      LEFT JOIN master_employees emp ON emp.id = fr.employee_id
      LEFT JOIN master_departments dept ON dept.id = emp.department_id
      LEFT JOIN expenditure_requests er ON er.finance_request_id = fr.id
-     WHERE fr.created_by = ?
+     WHERE ${buildFinanceOwnerCondition('fr')}
        AND (
          LOWER(TRIM(COALESCE(fr.overall_status, ''))) = 'approved'
          OR LOWER(TRIM(COALESCE(fr.workflow_status, ''))) IN ('approved', 'completed')
@@ -2408,7 +2488,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
          ) ranked
          WHERE ranked.rn = 1
        ) sample_row ON sample_row.expenditure_id = er.id
-       WHERE er.created_by = ?
+       WHERE ${buildFinanceOwnerCondition('er')}
        AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
        AND (
          LOWER(TRIM(COALESCE(fr_req.overall_status, ''))) = 'approved'
@@ -2500,6 +2580,7 @@ export async function getFinanceRequestContext(financeRequestId) {
        fr.id AS finance_request_id,
        fr.created_by,
        fr.employee_id,
+       emp.user_id AS applicant_user_id,
        COALESCE(frr.request_ref, CONCAT('#F-', fr.id)) AS request_ref,
        COALESCE(
          NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''),
@@ -2550,6 +2631,9 @@ export async function getFinanceRequestContext(financeRequestId) {
     finance_request_id: toPositiveInt(row.finance_request_id),
     created_by: toPositiveInt(row.created_by),
     employee_id: toPositiveInt(row.employee_id),
+    // Consumed by the controller's owner check, so an applicant can open a card a shared
+    // department login submitted for them.
+    applicant_user_id: toPositiveInt(row.applicant_user_id) || null,
     request_ref: normalizeText(row.request_ref),
     applicant_name: normalizeText(row.applicant_name),
     designation: normalizeText(row.designation),
@@ -2765,6 +2849,9 @@ __OPTIONAL_UNPLANNED_HEAD_COLUMNS__
     COALESCE(NULLIF(TRIM(e.email), ''), NULLIF(TRIM(er.email), ''), '') AS email,
     COALESCE(NULLIF(TRIM(e.mobile), ''), NULLIF(TRIM(er.mobile), ''), '') AS mobile,
     e.erp_id,
+    -- The applicant's own login, which is NOT the creator when a shared department account
+    -- submitted the claim. Both count as the owner -- see shared/financeOwnership.js.
+    e.user_id AS applicant_user_id,
     creator_user.email AS created_by_email
   FROM expenditure_requests er
   LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
@@ -2971,8 +3058,11 @@ async function createExpenditureLegacy(data, userId) {
     // NEW: prefer catalog IDs for matching; falls back to text for
     // un-backfilled legacy rows.
     const preAdvanceIds = await resolveCatalogIds(conn, lineRow.head, lineRow.sub_head);
+    const employeeId = toPositiveInt(data.employee_id);
     const { preAdvance } = await getCumulativeAdvanceSummary(conn, {
       userId,
+      // No finance request pins this path, so the applicant is what scopes the running total.
+      employeeId,
       budgetLineId,
       head: lineRow.head,
       subHead: lineRow.sub_head,
@@ -2981,7 +3071,6 @@ async function createExpenditureLegacy(data, userId) {
     });
 
     // ── 4. Resolve department from employee ─────────────────────────────────
-    const employeeId = toPositiveInt(data.employee_id);
     const workflowContext = await resolveExpenditureWorkflowContext(conn, {
       employee_id: data.employee_id,
       beneficiary_type: data.beneficiary_type,
@@ -4552,7 +4641,7 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
     if (!financeOwner) {
       throw new Error('Finance request not found or not approved');
     }
-    if (toPositiveInt(financeOwner.created_by) !== uid) {
+    if (!isFinanceRequestOwner(financeOwner, uid)) {
       throw new Error('Access denied for this finance request');
     }
 
@@ -4968,7 +5057,7 @@ export async function updateExpenditureRequest(
     if (!financeOwner) {
       throw new Error('Finance request not found or not approved');
     }
-    if (!canBypassFinanceOwnerCheck && toPositiveInt(financeOwner.created_by) !== uid) {
+    if (!canBypassFinanceOwnerCheck && !isFinanceRequestOwner(financeOwner, uid)) {
       throw new Error('Access denied for this finance request');
     }
 
@@ -5577,8 +5666,10 @@ export async function listExpenditures({
   const params = [];
 
   if (mine && userId) {
-    conditions.push('er.created_by = ?');
-    params.push(toPositiveInt(userId));
+    // Same rule as the expenditure dashboard, so "my requests" and the dashboard cannot
+    // disagree about which claims belong to the caller. See shared/financeOwnership.js.
+    conditions.push(buildFinanceOwnerCondition('er'));
+    params.push(...buildFinanceOwnerParams(userId));
   }
   if (status) {
     conditions.push('LOWER(TRIM(er.overall_status)) = ?');
