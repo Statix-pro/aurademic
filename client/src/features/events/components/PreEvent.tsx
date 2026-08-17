@@ -11,6 +11,13 @@ interface PreEventProps {
   isSubEvent?: boolean;
 }
 
+interface MainEventOption {
+  id: string | number;
+  title: string;
+  isMultiEvent: boolean | number;
+  parent_id?: number | null;
+}
+
 const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => {
   const [selectedSubEventId, setSelectedSubEventId] = useState('');
   const [mainEvents, setMainEvents] = useState<{ id: string; title: string }[]>([]);
@@ -31,10 +38,16 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
     }
 
     authenticityUtility
-      .get('/pre-events')
-      .then((res: any) => {
-        const events = Array.isArray(res) ? res : res.data || [];
-        setMainEvents(events.filter((e: any) => !e.parent_id && Boolean(e.is_multi_event)));
+      .get<MainEventOption[] | { data: MainEventOption[] }>('/events')
+      .then((res) => {
+        const events = (
+          Array.isArray(res) ? res : (res as { data?: MainEventOption[] }).data || []
+        ) as MainEventOption[];
+        setMainEvents(
+          events
+            .filter((event) => !event.parent_id && Boolean(event.isMultiEvent))
+            .map((event) => ({ id: String(event.id), title: event.title || 'Untitled Event' })),
+        );
       })
       .catch((err) => console.error('Error fetching main events:', err));
   }, [isSubEvent, eventId]);
@@ -113,7 +126,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
         (row) => row.name || row.email || row.department || row.institution,
       ),
       budget: [],
-      parent_id: isSubEvent ? selectedSubEventId : null,
+      parent_id: isSubEvent ? Number(selectedSubEventId) : null,
       is_multi_event: data.isMultiEventEnabled || false,
 
       // --- ADDED MISSING DATA ---
@@ -158,7 +171,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
       if (eventId && eventId !== 'new') {
         await authenticityUtility.put(`/events/${eventId}`, eventSubmitData);
       } else {
-        await authenticityUtility.post('/pre-events', eventSubmitData);
+        await authenticityUtility.post('/events', eventSubmitData);
       }
       setAlertConfig({
         show: true,
@@ -191,15 +204,16 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
         <div className="journal-form-container event-approval-container">
           <div className="event-approval-card form-card">
             <div style={{ marginTop: '16px' }}>
-              <div className="event-approval-section-heading">
-                {EVENT_COPY.selectMainEventError}
-              </div>
+              <label className="event-approval-section-heading" htmlFor="main-event-select">
+                Main Event
+              </label>
               {mainEvents.length === 0 ? (
                 <p style={{ marginTop: '8px', color: '#64748b' }}>
                   {EVENT_COPY.noMainEventsAvailable}
                 </p>
               ) : (
                 <select
+                  id="main-event-select"
                   className={
                     selectedSubEventId
                       ? 'event-approval-select has-value'

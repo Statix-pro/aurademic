@@ -23,6 +23,7 @@ interface PublicApiEvent {
   endDate: string | null;
   venue: string | null;
   isMultiEvent: boolean;
+  documentEnabled: boolean;
   participation: 'Individual' | 'Team';
   minTeamSize: number | null;
   maxTeamSize: number | null;
@@ -32,7 +33,14 @@ interface PublicApiEvent {
   accommodationFee: number;
   registrationClosesAt: string | null;
   registrationOpen: boolean;
-  status: 'Open' | 'Closed';
+  status: 'Open' | 'Closed' | 'Upcoming';
+  coordinators?: {
+    name: string;
+    designation: string;
+    mobile: string;
+    department: string;
+    email: string;
+  }[];
   subEvents?: PublicApiEvent[];
 }
 
@@ -103,7 +111,7 @@ function mapPublicEvent(item: PublicApiEvent): EventItem {
     fees: item.feeRange?.min ?? 0,
     feeRange: item.feeRange,
     feesUnit: item.participation === 'Team' ? 'Team' : 'Participant',
-    status: item.registrationOpen ? 'Open' : 'Closed',
+    status: item.status,
     subEvents: (item.subEvents ?? []).map((sub) => ({
       id: String(sub.id),
       eventName: sub.title,
@@ -111,9 +119,12 @@ function mapPublicEvent(item: PublicApiEvent): EventItem {
       fees: sub.feeRange?.min ?? 0,
       feesUnit: sub.participation === 'Team' ? 'Team' : 'Participant',
       category: resolveCategory(sub),
+      documentEnabled: Boolean(sub.documentEnabled),
     })),
     hasAccommodation: Boolean(item.hasAccommodation),
     hasRegistrationFee: Boolean(item.hasRegistrationFee),
+    documentEnabled: Boolean(item.documentEnabled),
+    coordinators: item.coordinators,
   };
 }
 
@@ -211,6 +222,7 @@ interface EventsContextType {
   clearRegistration: (eventId: string) => void;
   getRegistration: (eventId: string) => EventRegistration | undefined;
   isApiOnline: boolean;
+  isLoading: boolean;
 }
 
 const EventsContext = createContext<EventsContextType | null>(null);
@@ -220,6 +232,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   const storageKey = user ? `ep_registrations_${user.email}` : 'ep_registrations_guest';
 
   const [isApiOnline, setIsApiOnline] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [events, setEvents] = useState<EventItem[]>([]);
 
@@ -248,20 +261,51 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    async function fetchEvents() {
+    async function loadInitialData() {
+      if (!user) {
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
       try {
-        const data = await apiFetch<{ events: PublicApiEvent[] }>('/events/public');
+        const [eventsData, regsData] = await Promise.all([
+          apiFetch<{ events: PublicApiEvent[] }>('/events/public'),
+          apiFetch<{ registrations: any[] }>('/participant/registrations').catch(() => ({
+            registrations: [],
+          })),
+        ]);
 
-        setEvents((data.events ?? []).map(mapPublicEvent));
+        const formattedEvents = (eventsData.events ?? []).map(mapPublicEvent);
+        setEvents(formattedEvents);
+
+        const loadedRegs: Record<string, EventRegistration> = {};
+        for (const r of regsData.registrations ?? []) {
+          loadedRegs[r.eventId] = {
+            eventId: String(r.eventId),
+            teamMembers: r.teamMembers?.map((m: any) => ({
+              id: String(m.id),
+              registeredMailId: m.email,
+              name: m.name,
+              organization: m.organization || '',
+              role: m.role || '',
+            })),
+            formStatus: 'ready',
+            paymentStatus: r.registrationStatus === 'Paid' ? 'paid' : 'unpaid',
+            reviewStatus: r.reviewStatus || 'pending',
+          };
+        }
+        setRegistrations(loadedRegs);
         setIsApiOnline(true);
       } catch (err) {
         console.error(err);
         setIsApiOnline(false);
+      } finally {
+        setIsLoading(false);
       }
     }
 
-    fetchEvents();
-  }, []);
+    loadInitialData();
+  }, [user]);
 
   useEffect(() => {
     try {
@@ -284,7 +328,20 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const startRegistration = useCallback(
-    (eventId: string) => {
+    async (eventId: string) => {
+      let backendId: string | number | undefined;
+      try {
+        const result = await apiFetch<{ registrationId: number }>('/participant/registrations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId }),
+        });
+        backendId = result.registrationId;
+      } catch (err) {
+        console.error('Failed to create registration', err);
+        throw err;
+      }
+
       setRegistrations((prev) => {
         if (prev[eventId]) return prev;
 
@@ -309,14 +366,38 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
             formStatus: 'pending',
             paymentStatus: 'unpaid',
             reviewStatus: 'pending',
-          },
+            backendId, // optionally store it if needed
+          } as EventRegistration,
         };
       });
     },
     [events],
   );
 
-  const updateTeamMembers = useCallback((eventId: string, members: TeamMember[]) => {
+  const updateTeamMembers = useCallback(async (eventId: string, members: TeamMember[]) => {
+    try {
+      const reg = await apiFetch<{ registrations: any[] }>('/participant/registrations');
+      const backendReg = reg.registrations.find((r) => String(r.eventId) === String(eventId));
+
+      if (backendReg) {
+        await apiFetch(`/participant/registrations/${backendReg.id}/team`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            members: members.map((m) => ({
+              email: m.registeredMailId,
+              name: m.name,
+              organization: m.organization,
+              role: m.role,
+            })),
+          }),
+        });
+      }
+    } catch (err) {
+      console.error('Failed to save team members', err);
+      throw err;
+    }
+
     setRegistrations((prev) => ({
       ...prev,
       [eventId]: {
@@ -398,6 +479,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         clearRegistration,
         getRegistration,
         isApiOnline,
+        isLoading,
       }}
     >
       {children}

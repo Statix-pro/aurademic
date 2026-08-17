@@ -280,6 +280,8 @@ export default function EventCard({
         return 'border-rose-100 bg-rose-50 text-rose-500';
       case 'extended':
         return 'border-orange-100 bg-orange-50 text-orange-600';
+      case 'upcoming':
+        return 'border-amber-100 bg-amber-50 text-amber-600';
       default:
         return 'border-slate-100 bg-slate-50 text-slate-600';
     }
@@ -293,6 +295,8 @@ export default function EventCard({
         return 'bg-rose-500';
       case 'extended':
         return 'bg-orange-500';
+      case 'upcoming':
+        return 'bg-amber-400';
       default:
         return 'bg-slate-400';
     }
@@ -311,14 +315,10 @@ export default function EventCard({
 
   const statusPillClass = compact
     ? getStatusPillClass(event.status)
-    : isOpen
-      ? 'border-emerald-100 bg-emerald-50 text-emerald-600'
-      : 'border-rose-100 bg-rose-50 text-rose-500';
+    : getStatusPillClass(event.status);
   const statusDotClass = compact
     ? getStatusDotClass(event.status)
-    : isOpen
-      ? 'bg-emerald-500'
-      : 'bg-rose-500';
+    : getStatusDotClass(event.status);
 
   const isClickable = Boolean(onViewDetails && !actionDisabled);
 

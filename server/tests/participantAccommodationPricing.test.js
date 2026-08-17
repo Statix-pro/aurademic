@@ -13,6 +13,7 @@ vi.mock('../modules/participantRegistration/participantRegistrationModel.js', as
   return {
     ...actual,
     default: {
+      findProfile: vi.fn(),
       findOwnedRegistration: vi.fn(),
       getRegistrationContext: vi.fn(),
       findRoomType: vi.fn(),
@@ -97,6 +98,10 @@ describe('unbuilt endpoints', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    participantRegistrationModel.findProfile.mockResolvedValue({
+      personal_completed_at: '2026-08-01',
+      profession_completed_at: '2026-08-01',
+    });
     res = { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis() };
   });
 

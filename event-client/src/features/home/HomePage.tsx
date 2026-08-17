@@ -15,12 +15,10 @@ export default function HomePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { profileCompletion } = useProfile();
-  const { events, registrations } = useEvents();
+  const { events, registrations, isLoading, isApiOnline } = useEvents();
 
-  const filteredEvents = useMemo(
-    () => events.filter((event) => event.status !== 'Closed'),
-    [events],
-  );
+  // Show all published events (status filtering can be done per category tab if needed)
+  const filteredEvents = events;
 
   const handleViewDetails = (event: EventItem) => {
     navigate('/event-register', { state: { event } });
@@ -177,9 +175,57 @@ export default function HomePage() {
           </div>
 
           <section className="home-page-19">
-            {filteredEvents.length === 0 ? (
+            {isLoading ? (
+              <div
+                className="home-page-20"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '40px 0',
+                }}
+              >
+                <svg
+                  style={{
+                    animation: 'spin 1s linear infinite',
+                    width: 36,
+                    height: 36,
+                    color: '#064675',
+                  }}
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <circle
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeOpacity="0.25"
+                  />
+                  <path
+                    d="M12 2a10 10 0 0 1 10 10"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <p style={{ color: '#6b7280', fontSize: '0.9rem' }}>Loading events…</p>
+                <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              </div>
+            ) : !isApiOnline ? (
+              <div className="home-page-20" style={{ textAlign: 'center', padding: '40px 0' }}>
+                <p style={{ color: '#ef4444', fontWeight: 600, marginBottom: 6 }}>
+                  Unable to reach the events server.
+                </p>
+                <p style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                  Please check your connection and refresh the page.
+                </p>
+              </div>
+            ) : filteredEvents.length === 0 ? (
               <div className="home-page-20">
-                <p className="home-page-21">No events match your search.</p>
+                <p className="home-page-21">No published events yet. Check back soon!</p>
               </div>
             ) : (
               <div className="home-page-22">

@@ -154,15 +154,17 @@ export default function PaymentPage() {
                   Events
                 </span>
               </button>
-              <button
-                onClick={() => navigate('/accommodation', { state: { ...location.state } })}
-                className="payment-page-14"
-              >
-                <span className="payment-page-15">
-                  <Home className="payment-page-16" />
-                  Accommodation
-                </span>
-              </button>
+              {location.state?.event?.hasAccommodation !== false && (
+                <button
+                  onClick={() => navigate('/accommodation', { state: { ...location.state } })}
+                  className="payment-page-14"
+                >
+                  <span className="payment-page-15">
+                    <Home className="payment-page-16" />
+                    Accommodation
+                  </span>
+                </button>
+              )}
               <button className="payment-page-17">
                 <span className="payment-page-18">
                   <CreditCard className="payment-page-19" />

@@ -108,7 +108,7 @@ const normalizeStatus = (status: string): Exclude<DashboardStatusKey, 'all'> => 
   if (value === 'pending') return 'pending';
   if (value === 'return') return 'return';
   if (value === 'rejected') return 'reject';
-  if (value === 'approved') return 'approved';
+  if (value === 'approved' || value === 'completed') return 'approved';
   if (value === 'archived') return 'archive';
   return 'pending';
 };

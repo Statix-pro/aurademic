@@ -20,6 +20,7 @@ import {
   getCategorySolidBgClass,
   getLightLabelClass,
 } from './EventCard';
+import { useAuth } from '../../contexts/AuthContext';
 import {
   useEvents,
   getReviewStateLabel,
@@ -203,12 +204,18 @@ function EventRow({
     }
   };
 
+  const showFees = event.hasRegistrationFee;
+
   return (
     <div
       className={`grid ${
-        compactParticipation
-          ? 'grid-cols-[145px_minmax(0,1fr)_85px_125px]'
-          : 'grid-cols-[180px_minmax(0,1fr)_110px_150px]'
+        showFees
+          ? compactParticipation
+            ? 'grid-cols-[145px_minmax(0,1fr)_85px_125px]'
+            : 'grid-cols-[180px_minmax(0,1fr)_110px_150px]'
+          : compactParticipation
+            ? 'grid-cols-[145px_minmax(0,1fr)_125px]'
+            : 'grid-cols-[180px_minmax(0,1fr)_150px]'
       } items-center rounded-2xl border border-slate-300 bg-white shadow-[0_3px_8px_rgba(15,23,42,0.06)] transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_18px_38px_rgba(15,23,42,0.16)]`}
     >
       <div
@@ -279,15 +286,17 @@ function EventRow({
         )}
       </div>
 
-      <div className={`border-r border-slate-300 py-6 ${compactParticipation ? 'px-3' : 'px-5'}`}>
-        <p className="event-registration-page-10">
-          {event.participation === 'Team' ? 'Team' : 'Participant'}
-        </p>
-        <p className={`mt-1 text-xl font-bold ${colors.icon}`}>
-          {'\u20B9'}
-          {event.fees.toLocaleString()}
-        </p>
-      </div>
+      {showFees && (
+        <div className={`border-r border-slate-300 py-6 ${compactParticipation ? 'px-3' : 'px-5'}`}>
+          <p className="event-registration-page-10">
+            {event.participation === 'Team' ? 'Team' : 'Participant'}
+          </p>
+          <p className={`mt-1 text-xl font-bold ${colors.icon}`}>
+            {'\u20B9'}
+            {event.fees.toLocaleString()}
+          </p>
+        </div>
+      )}
 
       <div className={`py-6 ${compactParticipation ? 'px-3' : 'px-5'}`}>
         <div className="event-registration-page-11">
@@ -325,6 +334,7 @@ function EventRow({
 export default function EventRegistrationPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const { getRegistration, registrations, events, clearRegistration } = useEvents();
   const selectedEvent = location.state?.event as EventItem | undefined;
   const parentEvent = location.state?.parentEvent as EventItem | undefined;
@@ -355,6 +365,10 @@ export default function EventRegistrationPage() {
     !paymentSummaryDismissed && paymentEvents.length > 0 && paymentTotal > 0;
 
   const handleRegister = (event: EventItem) => {
+    if (!user?.personalComplete || !user?.professionComplete) {
+      alert('Please fill in your Personal and Professional Details before registering.');
+      return;
+    }
     const parent = selectedEvent?.category === 'MULTI-EVENTS' ? selectedEvent : parentEvent;
     navigate('/register', { state: { event, label: event.category, parentEvent: parent } });
   };
@@ -431,15 +445,21 @@ export default function EventRegistrationPage() {
             <div
               className={`space-y-4 ${showPaymentSummary ? '' : 'mx-auto w-full xl:max-w-[1320px]'}`}
             >
-              {displayEvents.map((event) => (
-                <EventRow
-                  key={event.id}
-                  event={event}
-                  registration={getRegistration(event.id)}
-                  compactParticipation={showPaymentSummary}
-                  onRegister={handleRegister}
-                />
-              ))}
+              {displayEvents.length === 0 ? (
+                <p className="py-12 text-center text-slate-500">
+                  No events are available for registration yet.
+                </p>
+              ) : (
+                displayEvents.map((event) => (
+                  <EventRow
+                    key={event.id}
+                    event={event}
+                    registration={getRegistration(event.id)}
+                    compactParticipation={showPaymentSummary}
+                    onRegister={handleRegister}
+                  />
+                ))
+              )}
             </div>
 
             {showPaymentSummary && (

@@ -1,18 +1,27 @@
-import { Camera, Upload, User, Calendar, ChevronDown, X } from 'lucide-react';
+import {
+  Camera,
+  Upload,
+  User,
+  Calendar,
+  ChevronDown,
+  X,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+} from 'lucide-react';
 import {
   useCallback,
   useMemo,
   useRef,
   useState,
-  useEffect,
   useId,
+  useEffect,
   type ChangeEvent,
   type ReactNode,
 } from 'react';
 
 import { useAuth } from '../../contexts/AuthContext';
 import { useProfile } from '../../contexts/ProfileContext';
-import { STORES, readScoped, writeScoped } from '../../shared/storage';
 import './ProfilePage.css';
 
 const PROFESSIONS = [
@@ -247,25 +256,22 @@ function IdCardSection({
   idRef,
   disabled = false,
   professionalStatus,
-  onStatusChange,
+  onSave,
+  isSaving = false,
 }: {
   profession: any;
   handleIdChange: (e: ChangeEvent<HTMLInputElement>) => void;
   idRef: React.RefObject<HTMLInputElement>;
   disabled?: boolean;
-  professionalStatus: 'initial' | 'submitted' | 'editing';
-  onStatusChange: (status: 'initial' | 'submitted' | 'editing') => void;
+  professionalStatus: 'initial' | 'submitted';
+  onSave: () => void;
+  isSaving?: boolean;
 }) {
   return (
     <div className="profile-page-20">
       <div className="profile-page-21">ID Card</div>
       <div className="profile-page-22">
-        <button
-          type="button"
-          onClick={() => idRef.current?.click()}
-          disabled={disabled}
-          className="profile-page-23"
-        >
+        <button type="button" onClick={() => idRef.current?.click()} className="profile-page-23">
           <Upload className="profile-page-24" />
           Choose File
         </button>
@@ -281,24 +287,24 @@ function IdCardSection({
           accept="image/*"
           className="profile-page-28"
           onChange={handleIdChange}
-          disabled={disabled}
           aria-label="Upload ID Card"
         />
 
         <button
           type="button"
-          onClick={() => {
-            if (professionalStatus === 'initial') onStatusChange('submitted');
-            else if (professionalStatus === 'submitted') onStatusChange('editing');
-            else onStatusChange('submitted');
-          }}
-          className="profile-page-29"
+          onClick={onSave}
+          disabled={isSaving}
+          className="profile-page-29 flex items-center gap-2"
         >
-          {professionalStatus === 'initial'
-            ? 'Submit'
-            : professionalStatus === 'submitted'
-              ? 'Edit Now'
-              : 'Submit Now'}
+          {isSaving ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+            </>
+          ) : professionalStatus === 'submitted' ? (
+            'Update Professional Details'
+          ) : (
+            'Save Professional Details'
+          )}
         </button>
       </div>
     </div>
@@ -316,10 +322,49 @@ function calculateAge(dateString: string) {
   return String(age);
 }
 
+// ---- Toast helpers -------------------------------------------------------
+type ToastState = { type: 'success' | 'error'; message: string } | null;
+
+function Toast({ toast, onClose }: { toast: NonNullable<ToastState>; onClose: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [onClose]);
+
+  return (
+    <div
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl px-5 py-3 text-sm font-semibold shadow-xl transition-all ${
+        toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-rose-600 text-white'
+      }`}
+    >
+      {toast.type === 'success' ? (
+        <CheckCircle2 className="h-5 w-5 shrink-0" />
+      ) : (
+        <AlertCircle className="h-5 w-5 shrink-0" />
+      )}
+      {toast.message}
+      <button
+        onClick={onClose}
+        className="ml-2 rounded p-0.5 hover:bg-white/20"
+        aria-label="Dismiss"
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
 export default function ProfilePage() {
-  const { personal, profession, updatePersonal, updateProfession } = useProfile();
+  const {
+    personal,
+    profession,
+    updatePersonal,
+    updateProfession,
+    savePersonal,
+    saveProfession,
+    isSaving,
+  } = useProfile();
   const { user } = useAuth();
-  const email = user?.email;
 
   const [institutions, setInstitutions] = useState(INSTITUTION_OPTIONS);
   const [schools, setSchools] = useState(SCHOOL_OPTIONS);
@@ -335,6 +380,11 @@ export default function ProfilePage() {
     state: '',
     website: '',
   });
+  const [toast, setToast] = useState<ToastState>(null);
+
+  const showToast = useCallback((type: 'success' | 'error', message: string) => {
+    setToast({ type, message });
+  }, []);
 
   const handleOpenAddModal = (isSchool: boolean) => {
     setModalIsSchool(isSchool);
@@ -356,7 +406,6 @@ export default function ProfilePage() {
     if (!modalFormData.name.trim()) return;
 
     const newName = modalFormData.name.trim();
-    setProfessionalStatus('editing');
 
     if (modalIsSchool) {
       if (!schools.includes(newName)) {
@@ -390,27 +439,29 @@ export default function ProfilePage() {
   const [showProfessionDetails, setShowProfessionDetails] = useState(
     () => !!profession.professionType,
   );
-  const [personalStatus, setPersonalStatus] = useState<'initial' | 'submitted' | 'editing'>(() => {
-    const stored = readScoped<string | null>(STORES.personalStatus, email, null);
-    if (stored === 'submitted' || stored === 'editing') return stored;
-    return personal.firstName ? 'submitted' : 'initial';
-  });
 
-  const [professionalStatus, setProfessionalStatus] = useState<'initial' | 'submitted' | 'editing'>(
-    () => {
-      const stored = readScoped<string | null>(STORES.professionStatus, email, null);
-      if (stored === 'submitted' || stored === 'editing') return stored;
-      return profession.professionType ? 'submitted' : 'initial';
-    },
-  );
+  // Derived "is this section submitted" from server-authoritative flags on AuthUser.
+  // personalStatus / professionalStatus are now derived, not local state.
+  const personalStatus = user?.personalComplete ? 'submitted' : 'initial';
+  const professionalStatus = user?.professionComplete ? 'submitted' : 'initial';
 
-  useEffect(() => {
-    writeScoped(STORES.personalStatus, email, personalStatus);
-  }, [personalStatus, email]);
+  const handleSavePersonal = useCallback(async () => {
+    const ok = await savePersonal();
+    if (ok) {
+      showToast('success', 'Personal details saved successfully.');
+    } else {
+      showToast('error', 'Could not save personal details. Please try again.');
+    }
+  }, [savePersonal, showToast]);
 
-  useEffect(() => {
-    writeScoped(STORES.professionStatus, email, professionalStatus);
-  }, [professionalStatus, email]);
+  const handleSaveProfession = useCallback(async () => {
+    const ok = await saveProfession();
+    if (ok) {
+      showToast('success', 'Professional details saved successfully.');
+    } else {
+      showToast('error', 'Could not save professional details. Please try again.');
+    }
+  }, [saveProfession, showToast]);
 
   const photoRef = useRef<HTMLInputElement>(null);
   const idRef = useRef<HTMLInputElement>(null);
@@ -537,7 +588,8 @@ export default function ProfilePage() {
               idRef={idRef}
               disabled={isSubmitted}
               professionalStatus={professionalStatus}
-              onStatusChange={setProfessionalStatus}
+              onSave={handleSaveProfession}
+              isSaving={isSaving}
             />
           </div>
         );
@@ -587,7 +639,8 @@ export default function ProfilePage() {
               idRef={idRef}
               disabled={isSubmitted}
               professionalStatus={professionalStatus}
-              onStatusChange={setProfessionalStatus}
+              onSave={handleSaveProfession}
+              isSaving={isSaving}
             />
           </div>
         );
@@ -653,7 +706,8 @@ export default function ProfilePage() {
               idRef={idRef}
               disabled={isSubmitted}
               professionalStatus={professionalStatus}
-              onStatusChange={setProfessionalStatus}
+              onSave={handleSaveProfession}
+              isSaving={isSaving}
             />
           </div>
         );
@@ -710,7 +764,8 @@ export default function ProfilePage() {
               idRef={idRef}
               disabled={isSubmitted}
               professionalStatus={professionalStatus}
-              onStatusChange={setProfessionalStatus}
+              onSave={handleSaveProfession}
+              isSaving={isSaving}
             />
           </div>
         );
@@ -776,7 +831,8 @@ export default function ProfilePage() {
               idRef={idRef}
               disabled={isSubmitted}
               professionalStatus={professionalStatus}
-              onStatusChange={setProfessionalStatus}
+              onSave={handleSaveProfession}
+              isSaving={isSaving}
             />
           </div>
         );
@@ -876,7 +932,8 @@ export default function ProfilePage() {
               idRef={idRef}
               disabled={isSubmitted}
               professionalStatus={professionalStatus}
-              onStatusChange={setProfessionalStatus}
+              onSave={handleSaveProfession}
+              isSaving={isSaving}
             />
           </div>
         );
@@ -938,7 +995,8 @@ export default function ProfilePage() {
               idRef={idRef}
               disabled={isSubmitted}
               professionalStatus={professionalStatus}
-              onStatusChange={setProfessionalStatus}
+              onSave={handleSaveProfession}
+              isSaving={isSaving}
             />
           </div>
         );
@@ -979,7 +1037,8 @@ export default function ProfilePage() {
               idRef={idRef}
               disabled={isSubmitted}
               professionalStatus={professionalStatus}
-              onStatusChange={setProfessionalStatus}
+              onSave={handleSaveProfession}
+              isSaving={isSaving}
             />
           </div>
         );
@@ -1237,7 +1296,6 @@ export default function ProfilePage() {
                   <button
                     type="button"
                     onClick={() => photoRef.current?.click()}
-                    disabled={personalStatus === 'submitted'}
                     className="profile-page-198"
                   >
                     <Upload className="profile-page-199" />
@@ -1246,18 +1304,19 @@ export default function ProfilePage() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      if (personalStatus === 'initial') setPersonalStatus('submitted');
-                      else if (personalStatus === 'submitted') setPersonalStatus('editing');
-                      else setPersonalStatus('submitted');
-                    }}
-                    className="profile-page-200"
+                    onClick={handleSavePersonal}
+                    disabled={isSaving}
+                    className="profile-page-200 flex items-center gap-2"
                   >
-                    {personalStatus === 'initial'
-                      ? 'Submit'
-                      : personalStatus === 'submitted'
-                        ? 'Edit Now'
-                        : 'Submit Now'}
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+                      </>
+                    ) : personalStatus === 'submitted' ? (
+                      'Update Personal Details'
+                    ) : (
+                      'Save Personal Details'
+                    )}
                   </button>
                 </div>
               </div>
@@ -1426,6 +1485,8 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      {toast && <Toast toast={toast} onClose={() => setToast(null)} />}
     </div>
   );
 }

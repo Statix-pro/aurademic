@@ -109,13 +109,21 @@ export interface EventItem {
   /** Fees vary by participant type, so the public list carries a range. */
   feeRange?: { min: number; max: number };
   feesUnit: 'Team' | 'Participant';
-  status: 'Open' | 'Closed';
+  status: 'Open' | 'Closed' | 'Upcoming';
   registrationStatus?: RegistrationStatus;
   subEvents?: SubEventItem[];
   parentEventName?: string;
   deadline?: string;
   hasAccommodation?: boolean;
   hasRegistrationFee?: boolean;
+  documentEnabled?: boolean;
+  coordinators?: {
+    name: string;
+    designation: string;
+    mobile: string;
+    department: string;
+    email: string;
+  }[];
 }
 
 // ─── Registration (per event) ──────────────────────────────────────────────

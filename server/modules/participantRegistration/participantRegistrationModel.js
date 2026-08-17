@@ -14,6 +14,58 @@ export class NotImplementedError extends Error {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Profile completeness helpers
+//
+// Mirror the rules in ProfileContext.tsx so the DB timestamp is set by the
+// same logic the client uses to render "complete" badges. Keeping both in sync
+// prevents a mismatch where the client shows ✓ but the backend gate rejects.
+// ---------------------------------------------------------------------------
+
+function isPersonalComplete(d) {
+  return !!(
+    d.first_name?.trim() &&
+    d.last_name?.trim() &&
+    d.gender?.trim() &&
+    d.date_of_birth?.trim() &&
+    d.mobile_number?.trim() &&
+    d.contact_email?.trim()
+  );
+}
+
+function isProfessionComplete(d) {
+  const type = d.profession_type;
+  if (!type) return false;
+
+  if (
+    [
+      'College Student',
+      'Faculty Members',
+      'School Student',
+      'School Teacher',
+      'Research Scholar',
+    ].includes(type)
+  ) {
+    return !!d.institution?.trim();
+  }
+
+  if (type === 'Alumni') {
+    return !!(d.register_number?.trim() && d.department?.trim() && d.graduation_year?.trim());
+  }
+
+  if (
+    ['Scientist', 'Government Official', 'Industry Professional', 'Other Profession'].includes(type)
+  ) {
+    return !!d.organization?.trim();
+  }
+
+  if (type === 'General Public') {
+    return !!(d.occupation?.trim() && d.city?.trim());
+  }
+
+  return true;
+}
+
 // Data access for participant-owned records.
 //
 // The helpers marked IMPLEMENTED below are the security-critical ones: ownership,
@@ -154,47 +206,313 @@ const participantRegistrationModel = {
     return rows;
   },
 
-  // --- TODO (intern) ---------------------------------------------------------
-  // Each of these is a straightforward query against tables that already exist.
-  // See the module README for the exact columns and the contract each must meet.
+  // --- IMPLEMENTED: profile --------------------------------------------------
 
-  /** TODO: SELECT profile + JSON profession_details for this participant. */
-  async findProfile(_participantId) {
-    throw new NotImplementedError('findProfile');
-  },
+  /**
+   * Returns the profile row for a participant, or null if it has not been
+   * created yet. The returned object uses snake_case DB column names directly;
+   * the controller maps them to camelCase before sending them to the client.
+   */
+  async findProfile(participantId) {
+    const [rows] = await db.query(
+      `SELECT title, first_name, last_name, gender, differently_abled,
+              date_of_birth, mobile_number, whatsapp_number, contact_email,
+              address, city, state, country, pin, photo_path,
+              participant_type_id, profession_type, register_number,
+              institution, department, designation, id_card_path,
+              profession_details,
+              personal_completed_at, profession_completed_at
+         FROM event_participant_profiles
+        WHERE participant_id = ?
+        LIMIT 1`,
+      [participantId],
+    );
 
-  /** TODO: INSERT ... ON DUPLICATE KEY UPDATE on event_participant_profiles. */
-  async upsertPersonalDetails(_participantId, _details) {
-    throw new NotImplementedError('upsertPersonalDetails');
-  },
-
-  /** TODO: as above, writing promoted columns + profession_details JSON. */
-  async upsertProfessionDetails(_participantId, _details) {
-    throw new NotImplementedError('upsertProfessionDetails');
-  },
-
-  /** TODO: UPDATE photo_path / id_card_path after a Multer upload. */
-  async updateProfileFilePath(_participantId, _column, _filePath) {
-    throw new NotImplementedError('updateProfileFilePath');
-  },
-
-  /** TODO: list this participant's registrations with event + payment summary. */
-  async listRegistrations(_participantId) {
-    throw new NotImplementedError('listRegistrations');
+    return rows[0] ?? null;
   },
 
   /**
-   * TODO: INSERT into event_registrations.
-   * Generate registration_ref_no (uq_registrations_ref_no is UNIQUE) and rely on
-   * uq_event_participant to reject a duplicate registration.
+   * Upserts the personal section of a participant's profile.
+   *
+   * Uses INSERT … ON DUPLICATE KEY UPDATE so two concurrent first saves from
+   * the same participant produce exactly one row (uq_profile_participant).
+   *
+   * Sets personal_completed_at when all six required fields are present;
+   * clears it to NULL otherwise, so an incomplete re-save revokes the gate.
+   *
+   * Age is NEVER stored — date_of_birth is kept and age is derived on the client.
    */
-  async createRegistration(_participantId, _eventId) {
-    throw new NotImplementedError('createRegistration');
+  async upsertPersonalDetails(participantId, details) {
+    // Map camelCase client keys to snake_case DB columns.
+    const d = {
+      first_name: details.firstName?.trim() ?? null,
+      last_name: details.lastName?.trim() ?? null,
+      gender: details.gender?.trim() ?? null,
+      differently_abled: details.differentlyAbled ? 1 : 0,
+      date_of_birth: details.dateOfBirth?.trim() || null,
+      mobile_number: details.mobileNumber?.trim() ?? null,
+      whatsapp_number: details.whatsappNumber?.trim() ?? null,
+      contact_email: details.email?.trim() ?? null,
+      address: details.address?.trim() ?? null,
+      city: details.city?.trim() ?? null,
+      state: details.state?.trim() ?? null,
+      country: details.country?.trim() ?? null,
+      pin: details.pin?.trim() ?? null,
+      title: details.title?.trim() ?? null,
+    };
+
+    const completed = isPersonalComplete(d);
+    const completedSql = completed ? 'CURRENT_TIMESTAMP' : 'NULL';
+
+    await db.query(
+      `INSERT INTO event_participant_profiles
+         (participant_id, title, first_name, last_name, gender, differently_abled,
+          date_of_birth, mobile_number, whatsapp_number, contact_email,
+          address, city, state, country, pin, personal_completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${completedSql})
+       ON DUPLICATE KEY UPDATE
+         title                = VALUES(title),
+         first_name           = VALUES(first_name),
+         last_name            = VALUES(last_name),
+         gender               = VALUES(gender),
+         differently_abled    = VALUES(differently_abled),
+         date_of_birth        = VALUES(date_of_birth),
+         mobile_number        = VALUES(mobile_number),
+         whatsapp_number      = VALUES(whatsapp_number),
+         contact_email        = VALUES(contact_email),
+         address              = VALUES(address),
+         city                 = VALUES(city),
+         state                = VALUES(state),
+         country              = VALUES(country),
+         pin                  = VALUES(pin),
+         personal_completed_at = ${completedSql}`,
+      [
+        participantId,
+        d.title,
+        d.first_name,
+        d.last_name,
+        d.gender,
+        d.differently_abled,
+        d.date_of_birth,
+        d.mobile_number,
+        d.whatsapp_number,
+        d.contact_email,
+        d.address,
+        d.city,
+        d.state,
+        d.country,
+        d.pin,
+      ],
+    );
+
+    return { personalComplete: isPersonalComplete(d) };
   },
 
-  /** TODO: replace team rows in a transaction; member_order starts at 1. */
-  async replaceTeamMembers(_registrationId, _members) {
-    throw new NotImplementedError('replaceTeamMembers');
+  /**
+   * Upserts the profession section of a participant's profile.
+   *
+   * Promoted columns (indexed in the DB) are written as real columns.
+   * Everything else, keyed by the frontend's ProfessionDetails field names,
+   * lands in profession_details JSON.
+   */
+  async upsertProfessionDetails(participantId, details) {
+    // Promoted columns.
+    const promoted = {
+      profession_type: details.professionType?.trim() ?? null,
+      register_number: details.registerNumber?.trim() ?? null,
+      institution: details.institution?.trim() ?? null,
+      department: details.department?.trim() ?? null,
+      designation: details.designation?.trim() ?? null,
+    };
+
+    // Completeness check using the same keys the helper reads.
+    const completenessInput = {
+      ...promoted,
+      // Additional fields needed by isProfessionComplete.
+      graduation_year: details.graduationYear?.trim() ?? null,
+      organization: details.organization?.trim() ?? null,
+      occupation: details.occupation?.trim() ?? null,
+      city: details.city?.trim() ?? null,
+    };
+    const profComplete = isProfessionComplete(completenessInput);
+
+    // Everything not promoted goes into profession_details JSON.
+    // Excluded: professionType (promoted), registerNumber (promoted),
+    //   institution (promoted), department (promoted), designation (promoted).
+    const PROMOTED_CLIENT_KEYS = new Set([
+      'professionType',
+      'registerNumber',
+      'institution',
+      'department',
+      'designation',
+    ]);
+    const professionDetails = {};
+    for (const [k, v] of Object.entries(details)) {
+      if (!PROMOTED_CLIENT_KEYS.has(k)) {
+        professionDetails[k] = v;
+      }
+    }
+
+    const detailsJson = JSON.stringify(professionDetails);
+
+    await db.query(
+      `INSERT INTO event_participant_profiles
+         (participant_id, profession_type, register_number, institution,
+          department, designation, profession_details,
+          profession_completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ${profComplete ? 'CURRENT_TIMESTAMP' : 'NULL'})
+       ON DUPLICATE KEY UPDATE
+         profession_type         = VALUES(profession_type),
+         register_number         = VALUES(register_number),
+         institution             = VALUES(institution),
+         department              = VALUES(department),
+         designation             = VALUES(designation),
+         profession_details      = VALUES(profession_details),
+         profession_completed_at = ${profComplete ? 'CURRENT_TIMESTAMP' : 'NULL'}`,
+      [
+        participantId,
+        promoted.profession_type,
+        promoted.register_number,
+        promoted.institution,
+        promoted.department,
+        promoted.designation,
+        detailsJson,
+      ],
+    );
+
+    return { professionComplete: profComplete };
+  },
+
+  /**
+   * Writes a file path column after a Multer upload.
+   *
+   * Only photo_path and id_card_path are allowed — never any other column.
+   * The profile row is created if it does not yet exist (a participant might
+   * upload a photo before filling in any text fields).
+   *
+   * TODO: unlink the previously stored file so replacing a photo does not
+   * leave orphans on disk.
+   */
+  async updateProfileFilePath(participantId, column, filePath) {
+    const ALLOWED = new Set(['photo_path', 'id_card_path']);
+    if (!ALLOWED.has(column)) {
+      throw new Error(`updateProfileFilePath: column '${column}' is not allowed`);
+    }
+
+    await db.query(
+      `INSERT INTO event_participant_profiles (participant_id, ${column})
+       VALUES (?, ?)
+       ON DUPLICATE KEY UPDATE ${column} = VALUES(${column})`,
+      [participantId, filePath],
+    );
+  },
+
+  // --- IMPLEMENTED: registrations --------------------------------------------
+
+  /**
+   * Lists this participant's registrations with a summary of event name and
+   * registration status. Returned in descending creation order.
+   */
+  async listRegistrations(participantId) {
+    const [rows] = await db.query(
+      `SELECT r.id,
+              r.event_id        AS eventId,
+              e.event_title     AS eventName,
+              r.registration_status  AS registrationStatus,
+              r.review_status        AS reviewStatus,
+              r.registration_ref_no  AS refNo,
+              r.is_cancelled,
+              r.created_at,
+              (
+                SELECT JSON_ARRAYAGG(
+                         JSON_OBJECT(
+                           'id', tm.id,
+                           'memberOrder', tm.member_order,
+                           'email', tm.email,
+                           'name', tm.name,
+                           'organization', tm.organization,
+                           'role', tm.role
+                         )
+                       )
+                FROM event_registration_team_members tm
+                WHERE tm.registration_id = r.id AND tm.is_deleted = 0
+              ) AS teamMembers
+         FROM event_registrations r
+         JOIN events e ON e.id = r.event_id
+        WHERE r.participant_id = ? AND r.is_deleted = 0
+        ORDER BY r.created_at DESC`,
+      [participantId],
+    );
+
+    return rows;
+  },
+
+  /**
+   * Creates a registration row for this participant and event.
+   *
+   * Generates a unique ref_no (format: EVT-<eventId>-<timestamp>). The UNIQUE
+   * constraint uq_event_participant means a duplicate registration surfaces as
+   * ER_DUP_ENTRY; the controller translates that into 409.
+   */
+  async createRegistration(participantId, eventId) {
+    const refNo = `EVT-${eventId}-${Date.now()}`;
+
+    const [result] = await db.query(
+      `INSERT INTO event_registrations
+         (participant_id, event_id, registration_status, review_status,
+          registration_ref_no)
+       VALUES (?, ?, 'Pending', 'Pending', ?)`,
+      [participantId, eventId, refNo],
+    );
+
+    return result.insertId;
+  },
+
+  /**
+   * Replaces all team members for a registration in a single transaction.
+   * member_order starts at 1 (1 = team lead).
+   * uq_team_member_email rejects duplicate emails within one registration;
+   * the caller must catch ER_DUP_ENTRY and translate it to 400.
+   */
+  async replaceTeamMembers(registrationId, members) {
+    const connection = await db.getConnection();
+
+    try {
+      await connection.beginTransaction();
+
+      // Soft-delete existing rows first.
+      await connection.query(
+        `UPDATE event_registration_team_members
+            SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
+          WHERE registration_id = ? AND is_deleted = 0`,
+        [registrationId],
+      );
+
+      // Re-insert fresh set.
+      for (let i = 0; i < members.length; i++) {
+        const m = members[i];
+        await connection.query(
+          `INSERT INTO event_registration_team_members
+             (registration_id, member_order, email, name, organization, role)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            registrationId,
+            i + 1,
+            m.email.trim(),
+            m.name.trim(),
+            m.organization?.trim() ?? null,
+            m.role?.trim() ?? null,
+          ],
+        );
+      }
+
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   },
 
   /** TODO: upsert event_registration_accommodation + its room rows. */
@@ -212,9 +530,18 @@ const participantRegistrationModel = {
     throw new NotImplementedError('submitFeedback');
   },
 
-  /** TODO: soft-cancel (is_cancelled = 1), never a hard DELETE. */
-  async cancelRegistration(_registrationId) {
-    throw new NotImplementedError('cancelRegistration');
+  /**
+   * Soft-cancels a registration (is_cancelled = 1).
+   * Hard DELETE is never used — audit trail and FK integrity must be preserved.
+   */
+  async cancelRegistration(registrationId) {
+    await db.query(
+      `UPDATE event_registrations
+          SET is_cancelled = 1,
+              registration_status = 'Cancelled'
+        WHERE id = ? AND is_deleted = 0`,
+      [registrationId],
+    );
   },
 };
 

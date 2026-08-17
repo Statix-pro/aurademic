@@ -1,13 +1,8 @@
 import db from '../../../config/connection.js';
 
-// An event is public once its workflow reaches the terminal 'completed' status.
-// Casing matters: workflowService writes lowercase statuses (in_progress,
-// completed, rejected, archived); 'Draft' is only the pre-submission default of
-// the generated column.
-const PUBLIC_WORKFLOW_STATUS = 'completed';
-
-// Selects the columns the event site needs. Category is two hops away
-// (events -> m_event_type -> m_category) and venue lives on sessions, not events.
+// All active, non-deleted events are returned by the public API.
+// Events appear immediately after being created on the Admin side.
+// Selects all columns the event site needs.
 const PUBLIC_EVENT_SELECT = `
   SELECT
     e.id,
@@ -20,6 +15,10 @@ const PUBLIC_EVENT_SELECT = `
     e.parent_id                                AS parentId,
     e.feedback_enabled                         AS feedbackEnabled,
     e.certificate_enabled                      AS certificateEnabled,
+    EXISTS (
+      SELECT 1 FROM event_document_upload edu
+       WHERE edu.event_id = e.id AND edu.is_active = 1 AND edu.is_deleted = 0
+    )                                          AS documentEnabled,
     et.event_type_name                         AS eventType,
     mc.category_name                           AS category,
     mc.category_code                           AS categoryCode,
@@ -38,6 +37,7 @@ const PUBLIC_EVENT_SELECT = `
     fees.min_fee                               AS minFee,
     fees.max_fee                               AS maxFee,
     venues.venue_names                         AS venue,
+    coords.coordinators                        AS coordinators,
     (SELECT COUNT(*) FROM event_registrations r
       WHERE r.event_id = e.id AND r.is_cancelled = 0 AND r.is_deleted = 0) AS registeredCount
   FROM events e
@@ -45,7 +45,7 @@ const PUBLIC_EVENT_SELECT = `
   LEFT JOIN m_category   mc ON mc.id = et.category_id
   LEFT JOIN m_level      ml ON ml.id = e.level_id
   LEFT JOIN event_registration_settings s
-         ON s.event_id = e.id AND s.is_deleted = 0
+         ON s.event_id = e.id AND s.is_deleted = 0 AND s.is_active = 1
   LEFT JOIN event_accommodation acc
          ON acc.event_id = e.id AND acc.is_deleted = 0 AND acc.is_active = 1
   LEFT JOIN (
@@ -61,7 +61,7 @@ const PUBLIC_EVENT_SELECT = `
            ))                                      AS min_fee,
            MAX(GREATEST(individual_fee, team_fee)) AS max_fee
       FROM event_registration_fees
-     WHERE is_deleted = 0
+     WHERE is_deleted = 0 AND is_active = 1
      GROUP BY event_id
   ) fees ON fees.event_id = e.id
   LEFT JOIN (
@@ -71,19 +71,31 @@ const PUBLIC_EVENT_SELECT = `
      WHERE es.is_deleted = 0
      GROUP BY es.event_id
   ) venues ON venues.event_id = e.id
+  LEFT JOIN (
+    SELECT ec.event_id,
+           JSON_ARRAYAGG(JSON_OBJECT(
+             'name', TRIM(CONCAT(COALESCE(me.title, ''), ' ', me.first_name, ' ', COALESCE(me.last_name, ''))),
+             'designation', me.designation,
+             'mobile', me.mobile,
+             'department', md.name,
+             'email', me.email
+           )) AS coordinators
+      FROM event_coordinators ec
+      JOIN master_employees me ON me.id = ec.employee_id
+      LEFT JOIN master_departments md ON md.id = me.department_id
+     GROUP BY ec.event_id
+  ) coords ON coords.event_id = e.id
 `;
 
 const PUBLIC_EVENT_WHERE = `
   WHERE e.is_active = 1
     AND e.is_deleted = 0
-    AND e.workflow_status = ?
 `;
 
 const publicEventsModel = {
   async listPublicEvents() {
     const [rows] = await db.query(
       `${PUBLIC_EVENT_SELECT} ${PUBLIC_EVENT_WHERE} ORDER BY e.start_date IS NULL, e.start_date ASC, e.id DESC`,
-      [PUBLIC_WORKFLOW_STATUS],
     );
 
     return rows;
@@ -92,7 +104,7 @@ const publicEventsModel = {
   async findPublicEventById(eventId) {
     const [rows] = await db.query(
       `${PUBLIC_EVENT_SELECT} ${PUBLIC_EVENT_WHERE} AND e.id = ? LIMIT 1`,
-      [PUBLIC_WORKFLOW_STATUS, eventId],
+      [eventId],
     );
 
     return rows[0] ?? null;
@@ -137,7 +149,7 @@ const publicEventsModel = {
   async listSubEvents(parentEventId) {
     const [rows] = await db.query(
       `${PUBLIC_EVENT_SELECT} ${PUBLIC_EVENT_WHERE} AND e.parent_id = ? ORDER BY e.event_title ASC`,
-      [PUBLIC_WORKFLOW_STATUS, parentEventId],
+      [parentEventId],
     );
 
     return rows;
