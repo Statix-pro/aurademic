@@ -6,8 +6,7 @@ import {
   removeUploadedFile,
   toPublicUploadPath,
 } from '../../middleware/participantUploadMiddleware.js';
-
-const OPEN_REGISTRATION_STATUSES = new Set(['Ongoing', 'Extended']);
+import participantAuthModel from '../participantAuth/participantAuthModel.js';
 
 /** Sentinel so the caller can map "no such event" to 404 rather than 409. */
 const EVENT_NOT_FOUND = 'Event not found';
@@ -85,11 +84,6 @@ const loadOwnedRegistration = async (req, res) => {
 const assertRegistrationOpen = (context) => {
   if (!context) return EVENT_NOT_FOUND;
   if (context.is_deleted || !context.is_active) return EVENT_NOT_FOUND;
-  if (context.workflow_status !== 'completed') return 'Event is not open to the public';
-  if (!OPEN_REGISTRATION_STATUSES.has(context.registration_status)) {
-    return 'Registration is not open for this event';
-  }
-
   if (context.closes_at && new Date(context.closes_at).getTime() < Date.now()) {
     return 'The registration deadline has passed';
   }
@@ -105,6 +99,20 @@ const assertRegistrationOpen = (context) => {
   return null;
 };
 
+/**
+ * Reads the fresh completion flags from the DB and returns them as the
+ * `personalComplete` / `professionComplete` booleans the client's AuthContext
+ * expects. Used by both profile save handlers so the client can update its
+ * auth state without a separate /me round-trip.
+ */
+const getCompletionFlags = async (participantId) => {
+  const participant = await participantAuthModel.findParticipantWithProfileById(participantId);
+  return {
+    personalComplete: Boolean(participant?.personal_completed_at),
+    professionComplete: Boolean(participant?.profession_completed_at),
+  };
+};
+
 const participantRegistrationController = {
   // ---- Registration lifecycle ----------------------------------------------
 
@@ -114,6 +122,20 @@ const participantRegistrationController = {
 
       if (!eventId) {
         return fail(res, 400, 'eventId is required');
+      }
+
+      // ── Profile completeness gate ────────────────────────────────────────
+      // Both personal and professional details must be saved and marked complete
+      // before a registration can be created. Checking timestamps in the DB
+      // (not the client's local state) prevents bypass by a crafted API request.
+      const profile = await participantRegistrationModel.findProfile(req.participant.id);
+
+      if (!profile?.personal_completed_at || !profile?.profession_completed_at) {
+        return fail(
+          res,
+          422,
+          'Please complete your Personal Details and Professional Details before registering.',
+        );
       }
 
       const context = await participantRegistrationModel.getRegistrationContext(eventId);
@@ -126,13 +148,19 @@ const participantRegistrationController = {
         return fail(res, problem === EVENT_NOT_FOUND ? 404 : 409, problem);
       }
 
-      // TODO(intern): create the registration, then return it.
-      // uq_event_participant makes a duplicate a 409 rather than a second row —
-      // catch ER_DUP_ENTRY and translate it.
-      const registrationId = await participantRegistrationModel.createRegistration(
-        req.participant.id,
-        eventId,
-      );
+      // uq_event_participant makes a duplicate a 409 rather than a second row.
+      let registrationId;
+      try {
+        registrationId = await participantRegistrationModel.createRegistration(
+          req.participant.id,
+          eventId,
+        );
+      } catch (dupError) {
+        if (dupError.code === 'ER_DUP_ENTRY') {
+          return fail(res, 409, 'You are already registered for this event');
+        }
+        throw dupError;
+      }
 
       return ok(res, { registrationId });
     } catch (error) {
@@ -143,10 +171,22 @@ const participantRegistrationController = {
 
   async listRegistrations(req, res) {
     try {
-      // TODO(intern): shape rows to match the event site's RegistrationsPage.
-      const registrations = await participantRegistrationModel.listRegistrations(
+      const registrationsRaw = await participantRegistrationModel.listRegistrations(
         req.participant.id,
       );
+
+      const registrations = registrationsRaw.map((r) => ({
+        ...r,
+        teamMembers: (() => {
+          try {
+            return typeof r.teamMembers === 'string'
+              ? JSON.parse(r.teamMembers)
+              : r.teamMembers || [];
+          } catch (e) {
+            return [];
+          }
+        })(),
+      }));
 
       return ok(res, { registrations });
     } catch (error) {
@@ -209,9 +249,14 @@ const participantRegistrationController = {
         return fail(res, 400, 'Every team member needs a name and an email');
       }
 
-      // TODO(intern): persist. uq_team_member_email rejects duplicate emails
-      // within one registration; translate ER_DUP_ENTRY into a 400.
-      await participantRegistrationModel.replaceTeamMembers(registration.id, members);
+      try {
+        await participantRegistrationModel.replaceTeamMembers(registration.id, members);
+      } catch (dupError) {
+        if (dupError.code === 'ER_DUP_ENTRY') {
+          return fail(res, 400, 'Each team member must have a unique email');
+        }
+        throw dupError;
+      }
 
       return ok(res, { saved: true });
     } catch (error) {
@@ -408,12 +453,66 @@ const participantRegistrationController = {
 
   // ---- Profile -------------------------------------------------------------
 
+  /**
+   * Returns the participant's profile, mapping snake_case DB columns to the
+   * camelCase shape PersonalDetails + ProfessionDetails expect on the client.
+   */
   async getProfile(req, res) {
     try {
-      // TODO(intern): return promoted columns plus the profession_details JSON,
-      // flattened into the shape event-client/src/types PersonalDetails and
-      // ProfessionDetails expect.
-      const profile = await participantRegistrationModel.findProfile(req.participant.id);
+      const row = await participantRegistrationModel.findProfile(req.participant.id);
+
+      if (!row) {
+        // No profile row yet — first-time visitor. Return null so the client
+        // renders a blank form rather than crashing on a missing shape.
+        return ok(res, { profile: null });
+      }
+
+      // Flatten the JSON profession_details back into the top-level object.
+      const profDetails = (() => {
+        try {
+          return typeof row.profession_details === 'string'
+            ? JSON.parse(row.profession_details)
+            : (row.profession_details ?? {});
+        } catch {
+          return {};
+        }
+      })();
+
+      const profile = {
+        // Personal
+        title: row.title ?? '',
+        firstName: row.first_name ?? '',
+        lastName: row.last_name ?? '',
+        gender: row.gender ?? '',
+        differentlyAbled: Boolean(row.differently_abled),
+        dateOfBirth: row.date_of_birth
+          ? new Date(row.date_of_birth).toISOString().slice(0, 10)
+          : '',
+        mobileNumber: row.mobile_number ?? '',
+        whatsappNumber: row.whatsapp_number ?? '',
+        email: row.contact_email ?? '',
+        address: row.address ?? '',
+        city: row.city ?? '',
+        state: row.state ?? '',
+        country: row.country ?? '',
+        pin: row.pin ?? '',
+        photoPath: row.photo_path ?? null,
+
+        // Profession (promoted columns)
+        professionType: row.profession_type ?? '',
+        registerNumber: row.register_number ?? '',
+        institution: row.institution ?? '',
+        department: row.department ?? '',
+        designation: row.designation ?? '',
+        idCardPath: row.id_card_path ?? null,
+
+        // Everything else from the JSON blob
+        ...profDetails,
+
+        // Completion sentinels (used by the client to drive UI indicators)
+        personalComplete: Boolean(row.personal_completed_at),
+        professionComplete: Boolean(row.profession_completed_at),
+      };
 
       return ok(res, { profile });
     } catch (error) {
@@ -422,30 +521,66 @@ const participantRegistrationController = {
     }
   },
 
+  /**
+   * Validates and saves the personal section of the profile.
+   *
+   * Required fields: firstName, lastName, gender, dateOfBirth, mobileNumber, email.
+   * Returns updated completion flags so the client can refresh AuthContext
+   * without a separate /me call.
+   */
   async savePersonalDetails(req, res) {
     try {
-      // TODO(intern): validate required fields, then upsert. Age is derived from
-      // date_of_birth and must not be stored.
-      await participantRegistrationModel.upsertPersonalDetails(req.participant.id, req.body ?? {});
+      const body = req.body ?? {};
 
-      return ok(res, { saved: true });
+      // Server-side validation — these are the same fields isPersonalComplete checks.
+      const required = [
+        ['firstName', body.firstName],
+        ['lastName', body.lastName],
+        ['gender', body.gender],
+        ['dateOfBirth', body.dateOfBirth],
+        ['mobileNumber', body.mobileNumber],
+        ['email', body.email],
+      ];
+
+      const missing = required.filter(([, v]) => !String(v ?? '').trim()).map(([k]) => k);
+
+      if (missing.length) {
+        return fail(res, 400, `Missing required personal fields: ${missing.join(', ')}`);
+      }
+
+      await participantRegistrationModel.upsertPersonalDetails(req.participant.id, body);
+
+      // Return fresh completion flags so the client can update AuthContext.
+      const flags = await getCompletionFlags(req.participant.id);
+
+      return ok(res, { saved: true, ...flags });
     } catch (error) {
       console.error('savePersonalDetails failed:', error);
       return failFromError(res, error, 'Could not save personal details');
     }
   },
 
+  /**
+   * Validates and saves the profession section of the profile.
+   *
+   * Required: professionType. Additional required fields vary by profession type
+   * and are validated by isProfessionComplete inside the model; if incomplete,
+   * profession_completed_at stays NULL and the registration gate will block.
+   */
   async saveProfessionDetails(req, res) {
     try {
-      // TODO(intern): promoted columns (participant_type_id, profession_type,
-      // institution, department, designation, register_number) become columns;
-      // everything else goes into profession_details JSON.
-      await participantRegistrationModel.upsertProfessionDetails(
-        req.participant.id,
-        req.body ?? {},
-      );
+      const body = req.body ?? {};
 
-      return ok(res, { saved: true });
+      if (!String(body.professionType ?? '').trim()) {
+        return fail(res, 400, 'professionType is required');
+      }
+
+      await participantRegistrationModel.upsertProfessionDetails(req.participant.id, body);
+
+      // Return fresh completion flags so the client can update AuthContext.
+      const flags = await getCompletionFlags(req.participant.id);
+
+      return ok(res, { saved: true, ...flags });
     } catch (error) {
       console.error('saveProfessionDetails failed:', error);
       return failFromError(res, error, 'Could not save profession details');

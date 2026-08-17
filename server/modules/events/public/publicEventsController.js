@@ -1,18 +1,38 @@
 import publicEventsModel from './publicEventsModel.js';
 
-const OPEN_REGISTRATION_STATUSES = new Set(['Ongoing', 'Extended']);
-
 const toBool = (value) => Boolean(Number(value));
+
+/**
+ * Derives registration status purely from the event's Last Date (end_date / To Date).
+ *
+ *  - No end date set       →  'Upcoming'  (event dates not yet configured)
+ *  - End date >= today     →  'Open'
+ *  - End date < today      →  'Closed'
+ *
+ * From Date (start_date) is intentionally NOT considered.
+ * Capacity reaching its limit always overrides to 'Closed'.
+ */
+function deriveRegistrationStatus(endDate, capacityReached) {
+  if (capacityReached) return 'Closed';
+  if (!endDate) return 'Upcoming';
+
+  // Compare date-only (ignore time) so "today" is still open until midnight.
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const lastDay = new Date(endDate);
+  lastDay.setHours(0, 0, 0, 0);
+
+  return lastDay >= today ? 'Open' : 'Closed';
+}
 
 // Shapes a DB row into the contract the event site consumes.
 const presentEvent = (row) => {
-  const closesAt = row.registrationClosesAt ? new Date(row.registrationClosesAt) : null;
-  const deadlinePassed = closesAt ? closesAt.getTime() < Date.now() : false;
+  const endDate = row.endDate ? new Date(row.endDate) : null;
   const capacityReached =
     row.maxParticipants != null && Number(row.registeredCount) >= Number(row.maxParticipants);
 
-  const registrationOpen =
-    OPEN_REGISTRATION_STATUSES.has(row.registrationStatus) && !deadlinePassed && !capacityReached;
+  const status = deriveRegistrationStatus(endDate, capacityReached);
+  const registrationOpen = status === 'Open';
 
   const minFee = row.minFee == null ? 0 : Number(row.minFee);
   const maxFee = row.maxFee == null ? 0 : Number(row.maxFee);
@@ -48,7 +68,7 @@ const presentEvent = (row) => {
     registrationStatus: row.registrationStatus ?? null,
     registrationClosesAt: row.registrationClosesAt,
     registrationOpen,
-    status: registrationOpen ? 'Open' : 'Closed',
+    status,
     capacityReached,
     maxParticipants: row.maxParticipants,
     registeredCount: Number(row.registeredCount ?? 0),
@@ -57,6 +77,16 @@ const presentEvent = (row) => {
     openTo: row.openTo ?? 'Any',
     feedbackEnabled: toBool(row.feedbackEnabled),
     certificateEnabled: toBool(row.certificateEnabled),
+    documentEnabled: toBool(row.documentEnabled),
+    coordinators: (() => {
+      try {
+        return typeof row.coordinators === 'string'
+          ? JSON.parse(row.coordinators)
+          : row.coordinators || [];
+      } catch (e) {
+        return [];
+      }
+    })(),
   };
 };
 

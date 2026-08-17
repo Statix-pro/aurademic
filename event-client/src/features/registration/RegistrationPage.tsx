@@ -148,11 +148,13 @@ export default function RegistrationPage() {
 
   const event = location.state?.event as EventItem | undefined;
   const parentEvent = location.state?.parentEvent as EventItem | undefined;
+  const [isLoading, setIsLoading] = useState(false);
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [docType, setDocType] = useState('');
   const [fileName, setFileName] = useState('');
   const [fileDataUrl, setFileDataUrl] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
+  const [submitError, setSubmitError] = useState('');
   const isTeam = event?.participation === 'Team';
   const { min: minMembers, max: maxMembers } = getTeamMemberBounds(event?.teamSize);
 
@@ -170,7 +172,8 @@ export default function RegistrationPage() {
 
   if (!event) return null;
 
-  const maxSteps = isTeam ? 3 : 2;
+  const requiresDocument = Boolean(event.documentEnabled);
+  const maxSteps = 1 + (isTeam ? 1 : 0) + (requiresDocument ? 1 : 0);
   const isTeamValid =
     !isTeam ||
     (members.length >= minMembers &&
@@ -182,7 +185,7 @@ export default function RegistrationPage() {
           m.role !== '',
       ));
 
-  const canProceed = fileName.trim().length > 0 && docType.trim().length > 0;
+  const canProceed = !requiresDocument || (fileName.trim().length > 0 && docType.trim().length > 0);
   const colors = CATEGORY_COLORS[event.category] ?? {
     pill: 'bg-slate-700 text-white',
     bg: 'bg-slate-50',
@@ -219,25 +222,41 @@ export default function RegistrationPage() {
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!canProceed) return;
-    startRegistration(event.id);
-    if (isTeam) updateTeamMembers(event.id, members);
-    markFormReady(event.id, {
-      documentType: docType,
-      fileName,
-      uploadedAt: new Date().toISOString(),
-      dataUrl: fileDataUrl,
-    });
-    navigate('/event-register', {
-      replace: true,
-      state: {
-        event: parentEvent ?? event,
-        parentEvent,
-        showPaymentSummary: true,
-        paymentEventId: event.id,
-      },
-    });
+    setSubmitError('');
+    setIsLoading(true);
+    try {
+      await startRegistration(event.id);
+      if (isTeam) await updateTeamMembers(event.id, members);
+      await markFormReady(
+        event.id,
+        requiresDocument
+          ? {
+              documentType: docType,
+              fileName,
+              uploadedAt: new Date().toISOString(),
+              dataUrl: fileDataUrl,
+            }
+          : undefined,
+      );
+      navigate('/event-register', {
+        replace: true,
+        state: {
+          event: parentEvent ?? event,
+          parentEvent,
+          showPaymentSummary: true,
+          paymentEventId: event.id,
+        },
+      });
+    } catch (err) {
+      console.error('Failed to save registration', err);
+      setSubmitError(
+        err instanceof Error ? err.message : 'Could not submit registration. Please try again.',
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -307,21 +326,22 @@ export default function RegistrationPage() {
             </>
           )}
 
-          {/* Step 3 (or 2) (Document Upload) */}
-          <div
-            className={`flex items-center gap-2 ${currentStep === maxSteps ? 'text-blue-700' : 'text-slate-500'}`}
-          >
-            <span
-              className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold border ${
-                currentStep === maxSteps
-                  ? 'bg-blue-100 text-blue-700 border-blue-200'
-                  : 'bg-slate-100 text-slate-400 border-slate-200'
-              }`}
+          {requiresDocument && (
+            <div
+              className={`flex items-center gap-2 ${currentStep === maxSteps ? 'text-blue-700' : 'text-slate-500'}`}
             >
-              {isTeam ? 3 : 2}
-            </span>
-            <span>Document Upload</span>
-          </div>
+              <span
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold border ${
+                  currentStep === maxSteps
+                    ? 'bg-blue-100 text-blue-700 border-blue-200'
+                    : 'bg-slate-100 text-slate-400 border-slate-200'
+                }`}
+              >
+                {isTeam ? 3 : 2}
+              </span>
+              <span>Document Upload</span>
+            </div>
+          )}
         </div>
 
         <div className="registration-page-25">
@@ -400,7 +420,7 @@ export default function RegistrationPage() {
               </Section>
             )}
 
-            {currentStep === maxSteps && (
+            {requiresDocument && currentStep === maxSteps && (
               <Section title="Document Upload">
                 <div className="registration-page-40">
                   <p className="registration-page-41">
@@ -449,6 +469,7 @@ export default function RegistrationPage() {
         </div>
 
         <div className="registration-page-48">
+          {submitError && <p className="text-sm font-medium text-red-600">{submitError}</p>}
           {currentStep > 1 ? (
             <button
               onClick={() => setCurrentStep((prev) => prev - 1)}

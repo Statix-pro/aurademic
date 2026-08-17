@@ -524,7 +524,10 @@ export const submitForApproval = async (req, res) => {
   const eventId = Number(req.params.eventId);
 
   try {
-    const eventCheck = await query('SELECT id, title, status FROM events WHERE id=?', [eventId]);
+    const eventCheck = await query(
+      'SELECT id, event_title AS title, workflow_status AS status, workflow_state FROM events WHERE id=?',
+      [eventId],
+    );
 
     if (!eventCheck.length) {
       return res.status(404).json({ error: 'Event not found' });
@@ -532,25 +535,35 @@ export const submitForApproval = async (req, res) => {
 
     const event = eventCheck[0];
 
-    if (event.status === 'submitted') {
+    if (event.status === 'completed') {
       return res.status(400).json({
-        error: 'Event has already been submitted for approval',
+        error: 'Event has already been approved and completed',
         currentStatus: event.status,
         eventTitle: event.title,
       });
     }
 
-    if (event.status === 'approved') {
-      return res.status(400).json({
-        error: 'Event has already been approved',
-        currentStatus: event.status,
-        eventTitle: event.title,
-      });
+    let parsedState = {};
+    if (event.workflow_state) {
+      try {
+        parsedState =
+          typeof event.workflow_state === 'string'
+            ? JSON.parse(event.workflow_state)
+            : event.workflow_state;
+      } catch (e) {
+        parsedState = {};
+      }
     }
+
+    const newState = {
+      ...parsedState,
+      status: 'completed',
+      currentStage: '',
+    };
 
     const updateResult = await query(
-      "UPDATE events SET status='submitted', updated_at=CURRENT_TIMESTAMP WHERE id=?",
-      [eventId],
+      'UPDATE events SET workflow_state=?, updated_at=CURRENT_TIMESTAMP WHERE id=?',
+      [JSON.stringify(newState), eventId],
     );
 
     if (updateResult.affectedRows === 0) {
@@ -559,41 +572,17 @@ export const submitForApproval = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Event submitted for approval successfully',
+      message: 'Event submitted for approval and completed successfully',
       eventId,
       eventTitle: event.title,
       previousStatus: event.status,
-      newStatus: 'submitted',
+      newStatus: 'completed',
       submittedAt: new Date().toISOString(),
     });
   } catch (err) {
     console.error('❌ Error in submitForApproval:', err.message);
     console.error('❌ Full error details:', err);
-
-    // Handle case where status column doesn't exist yet
-    if (err.message.includes('Unknown column') || err.message.includes('status')) {
-      try {
-        const updateResult = await query(
-          'UPDATE events SET updated_at=CURRENT_TIMESTAMP WHERE id=?',
-          [eventId],
-        );
-
-        if (updateResult.affectedRows > 0) {
-          res.json({
-            success: true,
-            message: 'Event submitted for approval successfully (legacy mode)',
-            eventId,
-            submittedAt: new Date().toISOString(),
-          });
-        } else {
-          res.status(404).json({ error: 'Event not found' });
-        }
-      } catch (fallbackErr) {
-        res.status(500).json({ error: fallbackErr.message });
-      }
-    } else {
-      res.status(500).json({ error: err.message });
-    }
+    res.status(500).json({ error: err.message });
   }
 };
 

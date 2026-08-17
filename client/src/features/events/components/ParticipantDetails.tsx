@@ -263,7 +263,10 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
     setError(null);
 
     authenticityUtility
-      .get(`/events/${eventId}/participants`)
+      .get(`/events/${encodeURIComponent(eventId)}/participants`, {
+        // Bypass an old cached error/empty response after a participant registers.
+        params: { _: Date.now() },
+      })
       .then((res: any) => {
         if (isActive) {
           setParticipants(Array.isArray(res?.participants) ? res.participants : []);
