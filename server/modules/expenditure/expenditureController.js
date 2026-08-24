@@ -70,6 +70,12 @@ const normalizeBulkTransactionBank = (value) => {
 
 const isExcelOnlyBulkTransactionType = (type) => EXCEL_ONLY_BULK_TRANSACTION_TYPES.has(type);
 
+// Only the bank-routed transfers are filed on a bank's own layout. UPI payouts use a
+// single sheet whatever the debit bank, so they carry no bank code. Mirrors
+// BANK_TEMPLATE_BULK_TRANSACTION_TYPES in expenditureapproval.tsx.
+const BANK_TEMPLATE_BULK_TRANSACTION_TYPES = new Set(['NEFT', 'RTGS']);
+const bulkTransactionTypeNeedsBank = (type) => BANK_TEMPLATE_BULK_TRANSACTION_TYPES.has(type);
+
 const normalizeText = (value) => String(value || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
 
@@ -549,9 +555,7 @@ const normalizeIncomingPayload = (payload = {}) => {
 
   normalized.bulk_transaction_type =
     normalizeBulkTransactionType(normalized.bulk_transaction_type) || DEFAULT_BULK_TRANSACTION_TYPE;
-  normalized.bulk_transaction_bank = isExcelOnlyBulkTransactionType(
-    normalized.bulk_transaction_type,
-  )
+  normalized.bulk_transaction_bank = bulkTransactionTypeNeedsBank(normalized.bulk_transaction_type)
     ? normalizeBulkTransactionBank(normalized.bulk_transaction_bank) ||
       DEFAULT_BULK_TRANSACTION_BANK
     : null;
