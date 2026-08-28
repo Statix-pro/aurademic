@@ -217,7 +217,7 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
                     <div
                       ref={draggable.innerRef}
                       {...draggable.draggableProps}
-                      className={`pf-investigator-row ${snapshot.isDragging ? 'is-dragging' : ''}`.trim()}
+                      className={`pf-investigator-row pf-investigator-row--${row.memberType} ${snapshot.isDragging ? 'is-dragging' : ''}`.trim()}
                     >
                       <span
                         className="pf-drag-handle"
@@ -315,28 +315,24 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
                           {/* An outside collaborator has no directory record, so
                               their department and email are typed in — they are
                               the only way to reach the person later. */}
-                          <div className="pf-investigator-row__extra">
-                            <input
-                              type="text"
-                              className="pf-input"
-                              placeholder="Department / School"
-                              value={row.department}
-                              onChange={(event) =>
-                                update(index, { department: event.target.value })
-                              }
-                              disabled={disabled}
-                              aria-label="External department"
-                            />
-                            <input
-                              type="email"
-                              className={`pf-input ${errors[`investigators[${index}].email`] ? 'is-invalid' : ''}`.trim()}
-                              placeholder="Email"
-                              value={row.email}
-                              onChange={(event) => update(index, { email: event.target.value })}
-                              disabled={disabled}
-                              aria-label="External email"
-                            />
-                          </div>
+                          <input
+                            type="text"
+                            className="pf-input"
+                            placeholder="Department"
+                            value={row.department}
+                            onChange={(event) => update(index, { department: event.target.value })}
+                            disabled={disabled}
+                            aria-label="External department"
+                          />
+                          <input
+                            type="email"
+                            className={`pf-input ${errors[`investigators[${index}].email`] ? 'is-invalid' : ''}`.trim()}
+                            placeholder="Email"
+                            value={row.email}
+                            onChange={(event) => update(index, { email: event.target.value })}
+                            disabled={disabled}
+                            aria-label="External email"
+                          />
                         </>
                       ) : (
                         <>

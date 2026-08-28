@@ -277,7 +277,6 @@ const projectsApi = {
     domain?: string;
     category?: string;
     website?: string;
-    description?: string;
   }): Promise<void> {
     try {
       await authenticityUtility.post('/project-requests', request);

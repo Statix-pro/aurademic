@@ -194,3 +194,20 @@ export function financialYearOptions(yearsBack = 10, yearsAhead = 3): string[] {
   }
   return options;
 }
+
+/**
+ * A stored website is only ever opened as a link, so anything that is not an
+ * http(s) URL is dropped: a `javascript:` value saved through the master-data
+ * screens would otherwise run when someone clicks through to the scheme.
+ */
+export function safeExternalUrl(value: string | null | undefined): string | null {
+  const text = String(value ?? '').trim();
+  if (!text) return null;
+
+  try {
+    const url = new URL(text);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : null;
+  } catch {
+    return null;
+  }
+}

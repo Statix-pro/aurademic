@@ -56,8 +56,12 @@ const SanctionDetailsSection: React.FC<SanctionDetailsSectionProps> = ({
           </div>
         </div>
 
-        <fieldset className="pf-fieldset">
-          <legend className="pf-inline-field__label">Mode</legend>
+        {/* A div rather than a fieldset: a <legend> is laid out outside its
+            fieldset's box, so it cannot sit on the same line as the radios. */}
+        <div className="pf-inline-field" role="radiogroup" aria-labelledby="pf-sanction-mode">
+          <span className="pf-inline-field__label" id="pf-sanction-mode">
+            Mode
+          </span>
           <div className="pf-radio-group">
             {SANCTION_MODE_OPTIONS.map((option) => (
               <label className="pf-radio" key={option.value}>
@@ -73,7 +77,7 @@ const SanctionDetailsSection: React.FC<SanctionDetailsSectionProps> = ({
               </label>
             ))}
           </div>
-        </fieldset>
+        </div>
       </div>
 
       <DocumentSlotField

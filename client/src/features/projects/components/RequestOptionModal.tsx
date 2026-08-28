@@ -36,7 +36,6 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
   const [domain, setDomain] = useState('');
   const [category, setCategory] = useState('');
   const [website, setWebsite] = useState('');
-  const [description, setDescription] = useState('');
   const [status, setStatus] = useState<'idle' | 'saving' | 'sent'>('idle');
   const [error, setError] = useState('');
 
@@ -59,7 +58,6 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
     setDomain('');
     setCategory('');
     setWebsite('');
-    setDescription('');
     setStatus('idle');
     setError('');
   };
@@ -103,7 +101,6 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
         domain: domain.trim(),
         category: category.trim(),
         website: website.trim(),
-        description: description.trim(),
       });
       setStatus('sent');
     } catch (requestError) {
@@ -132,7 +129,7 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
         </div>
       ) : (
         <form onSubmit={submit} className="pf-modal__form">
-          <Field label="What should be added?">
+          <Field label="What should be added?" className="pf-modal__type">
             <div className="pf-radio-group">
               {(
                 [
@@ -210,7 +207,7 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
             </>
           )}
 
-          <div className="pf-grid pf-grid--two">
+          <div className="pf-modal__pair">
             <Field label="Category" htmlFor="pf-request-category">
               <input
                 id="pf-request-category"
@@ -234,16 +231,6 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
               />
             </Field>
           </div>
-
-          <Field label="Anything else the reviewer should know?" htmlFor="pf-request-description">
-            <textarea
-              id="pf-request-description"
-              className="pf-input pf-textarea"
-              rows={3}
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-            />
-          </Field>
 
           {error && <p className="pf-field__error">{error}</p>}
 

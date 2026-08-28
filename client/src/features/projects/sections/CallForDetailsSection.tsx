@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 
 import { Field, ReadOnlyValue, SelectField } from '../components/FormFields';
 import SectionCard from '../components/SectionCard';
+import { safeExternalUrl } from '../constants';
 import { withSelectedOption } from '../selectOptions';
 
 import type { ProjectFormState, ProjectOrganization, ProjectScheme } from '../types';
@@ -64,7 +65,9 @@ const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
   );
 
   const selectedScheme = schemes.find((scheme) => scheme.id === form.schemeId) ?? null;
+  // Shown as typed, but only linked when it is a real http(s) address.
   const website = selectedScheme?.website ?? null;
+  const websiteLink = safeExternalUrl(website);
 
   return (
     <SectionCard
@@ -146,14 +149,20 @@ const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
           <div className="pf-website">
             <ReadOnlyValue value={website} />
             <a
-              className={`pf-icon-btn pf-icon-btn--ghost ${website ? '' : 'is-disabled'}`.trim()}
-              href={website ?? '#'}
+              className={`pf-icon-btn pf-icon-btn--ghost ${websiteLink ? '' : 'is-disabled'}`.trim()}
+              href={websiteLink ?? '#'}
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open the scheme website"
-              title={website ? 'Open the scheme website' : 'No website recorded for this scheme'}
+              title={
+                websiteLink
+                  ? 'Open the scheme website'
+                  : website
+                    ? 'The recorded website is not a valid web address'
+                    : 'No website recorded for this scheme'
+              }
               onClick={(event) => {
-                if (!website) event.preventDefault();
+                if (!websiteLink) event.preventDefault();
               }}
             >
               <ExternalLink size={16} aria-hidden="true" />

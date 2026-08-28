@@ -168,11 +168,36 @@
 
 /* --------------------------------------------------------------- form fields */
 
+/* Proposal Details, Call for Details and the request modal stack their label
+   over the control, as in the design — these are the form's full-width fields. */
 .pf-field {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
+}
+
+/* Everywhere else a field reads as one line: the label sits beside its control
+   and only a hint or an error drops underneath. A grid rather than a flex row
+   because grid columns cannot wrap — a long label can never end up stranded on
+   a line of its own. */
+.pf-inline-field {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr);
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.pf-inline-field > .pf-field__hint,
+.pf-inline-field > .pf-field__error {
+  grid-column: 1 / -1;
+}
+
+/* Controls that carry their own width — the Yes/No pill, a radio row — keep it
+   instead of being stretched across the rest of the line. */
+.pf-yesno,
+.pf-radio-group {
+  justify-self: start;
 }
 
 .pf-field__label,
@@ -305,13 +330,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 14px 22px;
-  align-items: flex-end;
+  align-items: center;
 }
 
 .pf-inline-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
   min-width: 160px;
 }
 
@@ -326,12 +348,6 @@
 
 .pf-inline-field--tight {
   min-width: auto;
-}
-
-.pf-fieldset {
-  margin: 0;
-  padding: 0;
-  border: 0;
 }
 
 .pf-radio-group {
@@ -425,8 +441,7 @@
 
 .pf-yesno {
   display: inline-flex;
-  /* Keeps the pill at its own width inside a stretching flex column. */
-  align-self: flex-start;
+  align-self: center;
   overflow: hidden;
   height: 34px;
   border: 1px solid #d8e2f0;
@@ -609,13 +624,13 @@
   min-width: 0;
 }
 
-/* External members carry two fields more than a row has columns (department and
-   email), so they wrap onto a second line under the row's own content columns. */
-.pf-investigator-row__extra {
-  display: grid;
-  grid-column: 4 / 7;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
+/* An external member carries two fields more than an internal one (department
+   and email are typed in rather than read from the directory), so the row gets
+   its own narrower columns instead of wrapping onto a second line. */
+.pf-investigator-row--external {
+  grid-template-columns:
+    20px 58px 130px minmax(0, 1.15fr) minmax(0, 1.15fr)
+    minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1.15fr) 78px;
 }
 
 .pf-drag-handle {
@@ -818,14 +833,14 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px 18px;
-  align-items: flex-end;
+  align-items: center;
 }
 
 .pf-collaborator__contact {
   display: flex;
   flex-wrap: wrap;
   gap: 12px 18px;
-  align-items: flex-end;
+  align-items: center;
   padding: 12px 14px;
   border-radius: 10px;
   background: #eff5fe;
@@ -1090,10 +1105,58 @@
 
 /* --------------------------------------------------------------------- modal */
 
+/* The shared modal is 80% of the viewport, which leaves this short form adrift
+   on a wide screen. It is a handful of fields, so it gets a reading width. */
+.pf-modal .modal-dialog.modal-lg {
+  width: 100% !important;
+  max-width: 560px !important;
+}
+
+.pf-modal .modal-body {
+  overflow-y: auto;
+  max-height: calc(100vh - 190px);
+  padding: 16px 20px 18px;
+}
+
+.pf-modal .modal-header {
+  padding: 14px 20px 12px;
+}
+
+/* Compact controls: the modal is a quick side-request, not the main form. */
+.pf-modal {
+  --pf-field-height: 38px;
+}
+
+.pf-modal .pf-field__label {
+  font-size: 0.82rem;
+}
+
+.pf-modal .pf-textarea {
+  min-height: 74px;
+}
+
 .pf-modal__form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+}
+
+/* Short fields pair up so the form stays inside one screen. */
+.pf-modal__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+/* The choice of what to request is one short line, not a stacked field. */
+.pf-modal__type {
+  flex-direction: row;
+  gap: 16px;
+  align-items: center;
+}
+
+.pf-modal__actions {
+  padding-top: 2px;
 }
 
 .pf-modal__actions {
@@ -1120,15 +1183,12 @@
 }
 
 @media (width <= 992px) {
-  .pf-investigator-row__extra {
-    grid-column: 3 / 5;
-  }
-
   .pf-outcome {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .pf-investigator-row {
+  .pf-investigator-row,
+  .pf-investigator-row--external {
     grid-template-columns: 20px 58px minmax(0, 1fr) minmax(0, 1fr) 78px;
     row-gap: 8px;
   }
@@ -1159,7 +1219,8 @@
     align-items: flex-start;
   }
 
-  .pf-investigator-row {
+  .pf-investigator-row,
+  .pf-investigator-row--external {
     grid-template-columns: 20px 1fr 78px;
   }
 

@@ -1,5 +1,13 @@
 import formOptionsModel from './formOptionsModel.js';
 
+/**
+ * A model error that carries a statusCode is a rejected request (a website that
+ * is not an http(s) address, a scheme move that would strand projects), not a
+ * server fault, so it is answered with its own status.
+ */
+const respondWithError = (res, error) =>
+  res.status(error.statusCode ?? 500).json({ status: 'error', message: error.message });
+
 const formOptionsController = {
   async getAllOptions(req, res) {
     try {
@@ -105,7 +113,7 @@ const formOptionsController = {
       const organization = await formOptionsModel.addProjectOrganization(req.body);
       return res.status(201).json({ status: 'success', data: organization });
     } catch (error) {
-      return res.status(500).json({ status: 'error', message: error.message });
+      return respondWithError(res, error);
     }
   },
 
@@ -121,7 +129,7 @@ const formOptionsController = {
       }
       return res.json({ status: 'success', message: 'Organization updated successfully' });
     } catch (error) {
-      return res.status(500).json({ status: 'error', message: error.message });
+      return respondWithError(res, error);
     }
   },
 
@@ -138,7 +146,7 @@ const formOptionsController = {
           : 'Organization deleted successfully',
       });
     } catch (error) {
-      return res.status(500).json({ status: 'error', message: error.message });
+      return respondWithError(res, error);
     }
   },
 
@@ -169,7 +177,7 @@ const formOptionsController = {
       const scheme = await formOptionsModel.addProjectScheme(req.body);
       return res.status(201).json({ status: 'success', data: scheme });
     } catch (error) {
-      return res.status(500).json({ status: 'error', message: error.message });
+      return respondWithError(res, error);
     }
   },
 
@@ -187,7 +195,7 @@ const formOptionsController = {
       }
       return res.json({ status: 'success', message: 'Scheme updated successfully' });
     } catch (error) {
-      return res.status(500).json({ status: 'error', message: error.message });
+      return respondWithError(res, error);
     }
   },
 

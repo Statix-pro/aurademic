@@ -1,4 +1,5 @@
 import db from '../../config/connection.js';
+import { toStoredWebsite } from '../shared/webUrl.js';
 
 const formOptionsModel = {
   async addJournalOption(journal) {
@@ -100,13 +101,16 @@ const formOptionsModel = {
           data.city || null,
           data.state || null,
           data.country || 'India',
-          data.website || null,
+          toStoredWebsite(data.website),
           data.is_funding_agency === undefined ? 1 : Number(Boolean(data.is_funding_agency)),
           Number(data.sort_order) || 0,
         ],
       );
       return { id: result.insertId, ...data };
     } catch (error) {
+      // A rejected website carries its own status; keep it instead of masking
+      // a bad request as a server fault.
+      if (error.statusCode) throw error;
       throw new Error(`Error adding project organization: ${error.message}`);
     }
   },
@@ -125,7 +129,7 @@ const formOptionsModel = {
           data.city || null,
           data.state || null,
           data.country || 'India',
-          data.website || null,
+          toStoredWebsite(data.website),
           data.is_funding_agency === undefined ? 1 : Number(Boolean(data.is_funding_agency)),
           data.is_active === undefined ? 1 : Number(Boolean(data.is_active)),
           Number(data.sort_order) || 0,
@@ -134,6 +138,9 @@ const formOptionsModel = {
       );
       return result.affectedRows > 0;
     } catch (error) {
+      // A rejected website carries its own status; keep it instead of masking
+      // a bad request as a server fault.
+      if (error.statusCode) throw error;
       throw new Error(`Error updating project organization: ${error.message}`);
     }
   },
@@ -200,29 +207,63 @@ const formOptionsModel = {
           data.name,
           data.domain || null,
           data.category || null,
-          data.website || null,
+          toStoredWebsite(data.website),
           Number(data.sort_order) || 0,
         ],
       );
       return { id: result.insertId, ...data };
     } catch (error) {
+      // A rejected website carries its own status; keep it instead of masking
+      // a bad request as a server fault.
+      if (error.statusCode) throw error;
       throw new Error(`Error adding project scheme: ${error.message}`);
     }
   },
 
+  /**
+   * Moving a scheme to another funding agency would strand every project that
+   * already points at it: the project keeps its own funding_organization_id, so
+   * its next save fails the "scheme belongs to a different funding agency"
+   * check. The move is refused while such projects exist, in the same spirit as
+   * `deleteProjectScheme` deactivating instead of deleting.
+   */
   async updateProjectScheme(id, data) {
     try {
+      const website = toStoredWebsite(data.website);
+      const organizationId = Number(data.organization_id);
+
+      const [[current]] = await db.query(
+        'SELECT organization_id FROM project_schemes WHERE id = ? LIMIT 1',
+        [id],
+      );
+      if (!current) return false;
+
+      if (Number(current.organization_id) !== organizationId) {
+        const [[usage]] = await db.query(
+          'SELECT COUNT(*) AS references_count FROM research_projects WHERE scheme_id = ?',
+          [id],
+        );
+
+        if (Number(usage.references_count) > 0) {
+          const error = new Error(
+            'This scheme is used by existing projects, so its funding agency cannot be changed. Deactivate it and add the scheme under the new agency instead.',
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
       const [result] = await db.query(
         `UPDATE project_schemes
             SET organization_id = ?, name = ?, domain = ?, category = ?, website = ?,
                 is_active = ?, sort_order = ?
           WHERE id = ?`,
         [
-          data.organization_id,
+          organizationId,
           data.name,
           data.domain || null,
           data.category || null,
-          data.website || null,
+          website,
           data.is_active === undefined ? 1 : Number(Boolean(data.is_active)),
           Number(data.sort_order) || 0,
           id,
@@ -230,6 +271,7 @@ const formOptionsModel = {
       );
       return result.affectedRows > 0;
     } catch (error) {
+      if (error.statusCode) throw error;
       throw new Error(`Error updating project scheme: ${error.message}`);
     }
   },

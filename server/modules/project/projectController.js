@@ -18,10 +18,44 @@ import {
   parseDocumentFieldName,
 } from './projectPayload.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
+import { toStoredWebsite } from '../shared/webUrl.js';
 
 /** The form advertises "PDF (Maximum 5 MB)" on every upload control. */
 const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
 const ALLOWED_DOCUMENT_MIME_TYPES = ['application/pdf'];
+
+/** Every PDF starts with these bytes; the declared mime type is client-supplied. */
+const PDF_SIGNATURE = Buffer.from('%PDF-');
+
+/**
+ * Reads the first bytes off disk and reports whether they are a PDF header.
+ * `uploads/` is served statically, so a file that is really HTML or SVG would
+ * run as a page in a reader's browser however it was declared.
+ */
+async function hasPdfSignature(filePath) {
+  let handle;
+  try {
+    handle = await fs.promises.open(filePath, 'r');
+    const buffer = Buffer.alloc(PDF_SIGNATURE.length);
+    const { bytesRead } = await handle.read(buffer, 0, PDF_SIGNATURE.length, 0);
+    return bytesRead === PDF_SIGNATURE.length && buffer.equals(PDF_SIGNATURE);
+  } catch {
+    return false;
+  } finally {
+    await handle?.close();
+  }
+}
+
+/**
+ * Storage name for an accepted document. The client's own name is kept only in
+ * `original_name` for display: the stored file always ends in `.pdf`, so a
+ * `.html` or `.svg` extension can never reach the static handler.
+ */
+let documentSequence = 0;
+function storedDocumentName(documentType) {
+  documentSequence = (documentSequence + 1) % 1_000_000;
+  return `${documentType}-${Date.now()}-${process.pid}-${documentSequence}.pdf`;
+}
 
 const isAdmin = (user = {}) => Boolean(user.isAdmin ?? user.is_admin);
 
@@ -89,13 +123,18 @@ async function stageDocumentUploads(files = []) {
       errors.push({ field: file.fieldname, message: 'The file must be 5 MB or smaller.' });
       continue;
     }
+    // The declared mime type comes from the client, so the bytes decide.
+    if (!(await hasPdfSignature(file.path))) {
+      errors.push({ field: file.fieldname, message: 'Upload a PDF file.' });
+      continue;
+    }
 
     const directory = DOCUMENT_UPLOAD_DIRS[slot.documentType];
     const targetDirectory = path.join(uploadsRoot(), directory);
     await fs.promises.mkdir(targetDirectory, { recursive: true });
 
-    // Multer already produced a collision-free, sanitized filename.
-    const targetPath = path.join(targetDirectory, file.filename);
+    const storedName = storedDocumentName(slot.documentType);
+    const targetPath = path.join(targetDirectory, storedName);
     await fs.promises.rename(file.path, targetPath).catch(async (renameError) => {
       // A rename across devices fails on some deployments; fall back to a copy.
       if (renameError?.code !== 'EXDEV') throw renameError;
@@ -103,7 +142,7 @@ async function stageDocumentUploads(files = []) {
       await fs.promises.unlink(file.path);
     });
 
-    const relativePath = path.posix.join('uploads', directory, file.filename);
+    const relativePath = path.posix.join('uploads', directory, storedName);
     writtenPaths.push(relativePath);
 
     documents.push({
@@ -397,10 +436,9 @@ const projectController = {
           String(req.body?.category ?? '')
             .trim()
             .slice(0, 150) || null,
-        website:
-          String(req.body?.website ?? '')
-            .trim()
-            .slice(0, 500) || null,
+        // Rejected here rather than at approval time: the requester is the one
+        // who can fix a mistyped address.
+        website: toStoredWebsite(req.body?.website),
         description: String(req.body?.description ?? '').trim() || null,
       });
 
@@ -410,6 +448,9 @@ const projectController = {
         data: request,
       });
     } catch (error) {
+      if (error?.statusCode === 400) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
       console.error('Error creating project request:', error);
       return res.status(500).json({ success: false, message: 'Failed to submit the request.' });
     }

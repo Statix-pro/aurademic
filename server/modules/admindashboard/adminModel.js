@@ -2,6 +2,7 @@
 import db from '../../config/connection.js';
 import { formatProjectDateRows } from '../project/projectDates.js';
 import projectModel from '../project/projectModel.js';
+import { safeStoredWebsite } from '../shared/webUrl.js';
 
 const adminModel = {
   async getAllProjects(page, perPage) {
@@ -15,7 +16,12 @@ const adminModel = {
         `
                 SELECT
                     rp.*,
-                    er.status as edit_request_status,
+                    (SELECT er.status
+                       FROM edit_requests er
+                      WHERE er.entity_id = rp.id
+                        AND er.entity_type = 'research_projects'
+                      ORDER BY er.created_at DESC
+                      LIMIT 1) as edit_request_status,
                     org.name as agency_name,
                     sch.name as scheme_name,
                     sch.category as scheme_category,
@@ -37,10 +43,7 @@ const adminModel = {
                 LEFT JOIN project_schemes sch ON rp.scheme_id = sch.id
                 LEFT JOIN project_investigators pin ON rp.id = pin.project_id
                 LEFT JOIN v_authors va ON pin.author_id = va.author_id
-                LEFT JOIN edit_requests er ON
-                    er.entity_id = rp.id AND
-                    er.entity_type = 'research_projects'
-                GROUP BY rp.id, org.name, sch.name, sch.category, er.status
+                GROUP BY rp.id, org.name, sch.name, sch.category
                 ORDER BY rp.id DESC
                 LIMIT ? OFFSET ?
             `,
@@ -70,8 +73,10 @@ const adminModel = {
   async getProjectById(id) {
     const project = await projectModel.getProjectById(id);
 
+    // The controller turns a null into a 404; throwing here would report a
+    // deleted or unknown id as a server fault instead.
     if (!project) {
-      throw new Error('Project not found');
+      return null;
     }
 
     const [[editRequest]] = await db.query(
@@ -384,7 +389,9 @@ const adminModel = {
         const [result] = await connection.query(
           `INSERT INTO project_organizations (name, category, website)
            VALUES (?, ?, ?)`,
-          [request.name, request.category, request.website],
+          // Requests created before the website check are copied defensively:
+          // anything that is not an http(s) address is dropped, not stored.
+          [request.name, request.category, safeStoredWebsite(request.website)],
         );
         createdId = result.insertId;
       } else if (request.request_type === 'scheme') {
@@ -416,7 +423,13 @@ const adminModel = {
         const [result] = await connection.query(
           `INSERT INTO project_schemes (organization_id, name, domain, category, website)
            VALUES (?, ?, ?, ?, ?)`,
-          [organizationId, request.name, request.domain, request.category, request.website],
+          [
+            organizationId,
+            request.name,
+            request.domain,
+            request.category,
+            safeStoredWebsite(request.website),
+          ],
         );
         createdId = result.insertId;
       } else {
