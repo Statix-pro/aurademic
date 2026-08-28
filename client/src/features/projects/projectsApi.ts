@@ -100,6 +100,7 @@ export function buildProjectPayload(form: ProjectFormState) {
       country: row.country || null,
       email: row.email || null,
       is_principal: row.isPrincipal,
+      is_primary: row.isPrimary,
     })),
 
     collaborators: form.collaborators.map((row) => ({

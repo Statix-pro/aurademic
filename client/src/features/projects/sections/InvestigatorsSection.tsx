@@ -138,45 +138,49 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
     [departments],
   );
 
+  /**
+   * The PI is the row at the top of the list — that flag follows drag order
+   * rather than being picked, so every list change re-derives it. The chosen
+   * corresponding investigator travels with its row, so it only needs a fallback
+   * when the row that held it is gone.
+   */
+  const setRows = (next: InvestigatorRow[]) => {
+    const rebuilt = next.map((row, position) => ({ ...row, isPrincipal: position === 0 }));
+    if (rebuilt.length > 0 && !rebuilt.some((row) => row.isPrimary)) {
+      rebuilt[0] = { ...rebuilt[0], isPrimary: true };
+    }
+    patch({ investigators: rebuilt });
+  };
+
   const update = (index: number, changes: Partial<InvestigatorRow>) =>
-    patch({ investigators: replaceAt(rows, index, changes) });
+    setRows(replaceAt(rows, index, changes));
 
   const changeMemberType = (index: number, memberType: MemberType) => {
-    const wasPrincipal = rows[index].isPrincipal;
-
     // Switching type invalidates the identity and the auto-filled fields, so
-    // the row restarts as a blank row of the new type.
-    patch({
-      investigators: replaceAt(rows, index, {
+    // the row restarts as a blank row of the new type — but the row keeps its
+    // place in the list and its corresponding-investigator flag.
+    setRows(
+      replaceAt(rows, index, {
         ...createInvestigatorRow({ memberType }),
         key: rows[index].key,
-        isPrincipal: wasPrincipal,
+        isPrimary: rows[index].isPrimary,
       }),
-    });
+    );
   };
 
   const addRow = () => {
     if (rows.length >= MAX_INVESTIGATORS) return;
-    patch({ investigators: [...rows, createInvestigatorRow()] });
+    setRows([...rows, createInvestigatorRow()]);
   };
 
-  const removeRow = (index: number) => {
-    const next = removeAt(rows, index);
-    // The PI must survive the removal of the row that held the flag.
-    if (next.length > 0 && !next.some((row) => row.isPrincipal)) {
-      next[0] = { ...next[0], isPrincipal: true };
-    }
-    patch({ investigators: next });
-  };
+  const removeRow = (index: number) => setRows(removeAt(rows, index));
 
-  const setPrincipal = (index: number) =>
-    patch({
-      investigators: rows.map((row, position) => ({ ...row, isPrincipal: position === index })),
-    });
+  const setPrimary = (index: number) =>
+    setRows(rows.map((row, position) => ({ ...row, isPrimary: position === index })));
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
-    patch({ investigators: moveItem(rows, result.source.index, result.destination.index) });
+    setRows(moveItem(rows, result.source.index, result.destination.index));
   };
 
   return (
@@ -228,17 +232,26 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
                         <GripVertical size={16} aria-hidden="true" />
                       </span>
 
-                      <label className="pf-principal" title="Principal Investigator">
+                      {/* One pill carries both facts this column holds: its text
+                          is the role the row's position gives it (top row PI,
+                          the rest Co-PI) and its filled state marks the chosen
+                          corresponding investigator. The radio stays in the
+                          markup — hidden but focusable — so the column is still
+                          a keyboard-navigable radio group. */}
+                      <label
+                        className={`pf-principal ${row.isPrimary ? 'is-selected' : ''} ${disabled ? 'is-disabled' : ''}`.trim()}
+                        title={`${index === 0 ? 'Principal Investigator' : 'Co-Investigator'} — select to make this the corresponding investigator`}
+                      >
                         <input
                           type="radio"
-                          name="principalInvestigator"
-                          checked={row.isPrincipal}
-                          onChange={() => setPrincipal(index)}
+                          name="primaryInvestigator"
+                          checked={row.isPrimary}
+                          onChange={() => setPrimary(index)}
                           disabled={disabled}
+                          aria-label={`Corresponding investigator: ${row.name || `row ${index + 1}`}`}
                         />
-                        <span className="pf-principal__tag">
-                          {row.isPrincipal ? 'PI' : 'Co-PI'}
-                        </span>
+                        <span className="pf-principal__dot" aria-hidden="true" />
+                        <span className="pf-principal__tag">{index === 0 ? 'PI' : 'Co-PI'}</span>
                       </label>
 
                       <SelectField
@@ -292,6 +305,19 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
 
                       {row.memberType === 'external' ? (
                         <>
+                          {/* Department before organization, as on an internal
+                              row, then the organization's country. An outside
+                              collaborator has no directory record, so all of it
+                              — the email included — is typed in. */}
+                          <input
+                            type="text"
+                            className="pf-input"
+                            placeholder="Department"
+                            value={row.department}
+                            onChange={(event) => update(index, { department: event.target.value })}
+                            disabled={disabled}
+                            aria-label="External department"
+                          />
                           <input
                             type="text"
                             className={`pf-input ${errors[`investigators[${index}].organization`] ? 'is-invalid' : ''}`.trim()}
@@ -312,18 +338,6 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
                             disabled={disabled}
                             aria-label="Country"
                           />
-                          {/* An outside collaborator has no directory record, so
-                              their department and email are typed in — they are
-                              the only way to reach the person later. */}
-                          <input
-                            type="text"
-                            className="pf-input"
-                            placeholder="Department"
-                            value={row.department}
-                            onChange={(event) => update(index, { department: event.target.value })}
-                            disabled={disabled}
-                            aria-label="External department"
-                          />
                           <input
                             type="email"
                             className={`pf-input ${errors[`investigators[${index}].email`] ? 'is-invalid' : ''}`.trim()}
@@ -336,15 +350,30 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
                         </>
                       ) : (
                         <>
-                          <SelectField
-                            value={row.department}
-                            onChange={(value) => update(index, { department: value })}
-                            options={departmentOptions}
-                            placeholder="Department"
-                            disabled={disabled}
-                            invalid={Boolean(errors[`investigators[${index}].department`])}
-                            ariaLabel="Department"
-                          />
+                          {/* A faculty row's department comes from the directory
+                              record picked in the name search, so it is shown
+                              read-only — only students choose their own. */}
+                          {row.memberType === 'faculty' ? (
+                            <input
+                              type="text"
+                              className={`pf-input pf-input--readonly ${errors[`investigators[${index}].department`] ? 'is-invalid' : ''}`.trim()}
+                              placeholder="Department"
+                              value={row.department}
+                              readOnly
+                              aria-label="Department"
+                              title={row.department}
+                            />
+                          ) : (
+                            <SelectField
+                              value={row.department}
+                              onChange={(value) => update(index, { department: value })}
+                              options={departmentOptions}
+                              placeholder="Department"
+                              disabled={disabled}
+                              invalid={Boolean(errors[`investigators[${index}].department`])}
+                              ariaLabel="Department"
+                            />
+                          )}
                           {row.memberType === 'student' ? (
                             // The register number keys the student to their
                             // `author_students` record, which is what puts the

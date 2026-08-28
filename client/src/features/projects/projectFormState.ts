@@ -65,6 +65,7 @@ export function createInvestigatorRow(overrides: Partial<InvestigatorRow> = {}):
     country: memberType === 'external' ? '' : DEFAULT_COUNTRY,
     email: '',
     isPrincipal: false,
+    isPrimary: false,
     ...overrides,
   };
 }
@@ -110,7 +111,7 @@ export function createDisbursementRow(): DisbursementRow {
 export function createEmptyProjectForm(): ProjectFormState {
   return {
     drivenBy: 'faculty',
-    investigators: [createInvestigatorRow({ isPrincipal: true })],
+    investigators: [createInvestigatorRow({ isPrincipal: true, isPrimary: true })],
 
     title: '',
     projectCost: '',
@@ -219,7 +220,7 @@ export function projectToFormState(project: any): ProjectFormState {
   const empty = createEmptyProjectForm();
 
   const investigators: InvestigatorRow[] = Array.isArray(project?.investigators)
-    ? project.investigators.map((row: any) =>
+    ? project.investigators.map((row: any, index: number) =>
         createInvestigatorRow({
           memberType: (row.member_type ?? 'faculty') as MemberType,
           identityCode: text(row.identity_code),
@@ -228,10 +229,19 @@ export function projectToFormState(project: any): ProjectFormState {
           organization: text(row.organization),
           country: text(row.country),
           email: text(row.email),
-          isPrincipal: flag(row.is_principal),
+          // The PI is whoever the saved display order puts first, matching the
+          // form where the role follows the row's position.
+          isPrincipal: index === 0,
+          isPrimary: flag(row.is_primary),
         }),
       )
     : [];
+
+  // A project saved before the corresponding-investigator flag existed has no
+  // chosen row, so the PI stands in until someone picks another.
+  if (investigators.length > 0 && !investigators.some((row) => row.isPrimary)) {
+    investigators[0] = { ...investigators[0], isPrimary: true };
+  }
 
   const collaborators: CollaboratorRow[] = Array.isArray(project?.collaborators)
     ? project.collaborators.map((row: any) => ({

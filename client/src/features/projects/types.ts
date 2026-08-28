@@ -65,7 +65,10 @@ export interface InvestigatorRow {
   organization: string;
   country: string;
   email: string;
+  /** Set by the row's position: the top row is the PI, the rest are Co-PIs. */
   isPrincipal: boolean;
+  /** Chosen, not positional: the investigator who corresponds for the project. */
+  isPrimary: boolean;
 }
 
 export interface CollaboratorRow {

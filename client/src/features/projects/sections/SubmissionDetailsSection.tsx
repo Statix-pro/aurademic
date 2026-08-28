@@ -21,7 +21,10 @@ const SubmissionDetailsSection: React.FC<SubmissionDetailsSectionProps> = ({
   disabled,
 }) => (
   <SectionCard title="Submission Details">
-    <div className="pf-inline-grid">
+    {/* One grid rather than two rows: the columns are shared, so "Mode of
+        Submission" and "Date" start at the same x, as do the two trailing
+        fields. */}
+    <div className="pf-submission-grid">
       <div className="pf-inline-field">
         <label className="pf-inline-field__label" htmlFor="pf-submitted-on">
           Submitted on
@@ -36,7 +39,7 @@ const SubmissionDetailsSection: React.FC<SubmissionDetailsSectionProps> = ({
         />
       </div>
 
-      <div className="pf-inline-field">
+      <div className="pf-inline-field pf-inline-field--paired">
         <label className="pf-inline-field__label" htmlFor="pf-submission-mode">
           Mode of Submission
         </label>
@@ -50,7 +53,7 @@ const SubmissionDetailsSection: React.FC<SubmissionDetailsSectionProps> = ({
         />
       </div>
 
-      <div className="pf-inline-field pf-inline-field--grow">
+      <div className="pf-inline-field pf-inline-field--trailing">
         <label className="pf-inline-field__label" htmlFor="pf-reference-number">
           Reference Number
         </label>
@@ -63,9 +66,7 @@ const SubmissionDetailsSection: React.FC<SubmissionDetailsSectionProps> = ({
           disabled={disabled}
         />
       </div>
-    </div>
 
-    <div className="pf-inline-grid">
       <div className="pf-inline-field pf-inline-field--tight">
         <span className="pf-inline-field__label">Submission of full proposal copy to CFRD</span>
         <YesNoSwitch
@@ -83,7 +84,7 @@ const SubmissionDetailsSection: React.FC<SubmissionDetailsSectionProps> = ({
         />
       </div>
 
-      <div className="pf-inline-field">
+      <div className="pf-inline-field pf-inline-field--paired">
         <label className="pf-inline-field__label" htmlFor="pf-cfrd-date">
           Date
         </label>
@@ -97,7 +98,7 @@ const SubmissionDetailsSection: React.FC<SubmissionDetailsSectionProps> = ({
         />
       </div>
 
-      <div className="pf-inline-field pf-inline-field--grow">
+      <div className="pf-inline-field pf-inline-field--trailing">
         <label className="pf-inline-field__label" htmlFor="pf-proposal-status">
           Status
         </label>

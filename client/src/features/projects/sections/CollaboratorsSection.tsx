@@ -80,7 +80,7 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                 />
               </div>
 
-              <div className="pf-inline-field pf-inline-field--grow">
+              <div className="pf-inline-field pf-inline-field--grow pf-inline-field--wide">
                 <span className="pf-inline-field__label">Role</span>
                 <input
                   type="text"
@@ -104,7 +104,7 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
             </div>
 
             <div className="pf-collaborator__org">
-              <div className="pf-inline-field pf-inline-field--grow">
+              <div className="pf-inline-field pf-inline-field--grow pf-inline-field--wide">
                 <span className="pf-inline-field__label">Organization</span>
                 <SelectField
                   value={row.organizationId ? String(row.organizationId) : ''}
@@ -172,7 +172,7 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                 />
               </div>
 
-              <div className="pf-inline-field pf-inline-field--grow">
+              <div className="pf-inline-field pf-inline-field--grow pf-inline-field--wide">
                 <span className="pf-inline-field__label pf-inline-field__label--accent">Email</span>
                 <input
                   type="email"

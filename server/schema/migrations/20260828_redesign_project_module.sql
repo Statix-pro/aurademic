@@ -205,8 +205,9 @@ CREATE TABLE research_projects (
    3. INVESTIGATORS
    ============================================================ */
 
-/* Row order is the form's drag order; exactly one row per project carries
-   is_principal = 1. Faculty and student rows point at `authors` (so the
+/* Row order is the form's drag order; the top row carries is_principal = 1
+   and exactly one row carries is_primary = 1 (the chosen corresponding
+   investigator, which need not be the PI). Faculty and student rows point at `authors` (so the
    dashboards' v_authors joins keep working); external rows are stored
    inline because they have no institutional identity. */
 CREATE TABLE project_investigators (
@@ -219,6 +220,7 @@ CREATE TABLE project_investigators (
   organization VARCHAR(255) DEFAULT NULL,
   country VARCHAR(100) DEFAULT NULL,
   is_principal TINYINT(1) NOT NULL DEFAULT '0' COMMENT '1 = Principal Investigator',
+  is_primary TINYINT(1) NOT NULL DEFAULT '0' COMMENT '1 = primary (corresponding) investigator',
   display_order INT NOT NULL DEFAULT '0',
   created_at TIMESTAMP NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),

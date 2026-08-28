@@ -251,8 +251,8 @@ async function replaceInvestigators(connection, projectId, investigators, author
     await connection.query(
       `INSERT INTO project_investigators
         (project_id, member_type, author_id, name, department, organization, country,
-         is_principal, display_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         is_principal, is_primary, display_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         projectId,
         investigator.member_type,
@@ -262,6 +262,7 @@ async function replaceInvestigators(connection, projectId, investigators, author
         investigator.organization,
         investigator.country,
         investigator.is_principal,
+        investigator.is_primary,
         investigator.display_order,
       ],
     );
@@ -645,7 +646,8 @@ const projectModel = {
     ] = await Promise.all([
       db.query(
         `SELECT
-              pin.id, pin.member_type, pin.author_id, pin.is_principal, pin.display_order,
+              pin.id, pin.member_type, pin.author_id, pin.is_principal, pin.is_primary,
+              pin.display_order,
               COALESCE(NULLIF(pin.name, ''), va.author_name) AS name,
               COALESCE(NULLIF(pin.department, ''), va.department) AS department,
               COALESCE(NULLIF(pin.organization, ''), va.organization) AS organization,

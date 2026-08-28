@@ -499,8 +499,8 @@ const ProjectForm: React.FC = () => {
             </div>
             <div className="pf-card__body">
               <textarea
-                className="pf-input pf-textarea"
-                rows={2}
+                className="pf-input pf-textarea pf-textarea--remarks"
+                rows={1}
                 value={form.remarks}
                 onChange={(event) => patch({ remarks: event.target.value })}
                 disabled={isReadOnly}

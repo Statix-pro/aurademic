@@ -220,6 +220,9 @@ function normalizeInvestigators(raw, errors) {
       country: toNullableString(row?.country, 100),
       email: toNullableString(row?.email, 255),
       is_principal: toBoolean(row?.is_principal ?? row?.isPrincipal),
+      // The chosen corresponding investigator, independent of the PI, which the
+      // row order decides.
+      is_primary: toBoolean(row?.is_primary ?? row?.isPrimary),
       display_order: index,
     };
 
@@ -261,6 +264,13 @@ function normalizeInvestigators(raw, errors) {
   const resolvedPrincipal = principalIndex === -1 ? 0 : principalIndex;
   investigators.forEach((row, index) => {
     row.is_principal = index === resolvedPrincipal ? 1 : 0;
+  });
+
+  // Exactly one corresponding investigator too; unchosen falls back to the PI.
+  const primaryIndex = investigators.findIndex((row) => row.is_primary);
+  const resolvedPrimary = primaryIndex === -1 ? resolvedPrincipal : primaryIndex;
+  investigators.forEach((row, index) => {
+    row.is_primary = index === resolvedPrimary ? 1 : 0;
   });
 
   return investigators;

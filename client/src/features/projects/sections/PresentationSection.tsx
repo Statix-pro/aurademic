@@ -49,7 +49,7 @@ const PresentationSection: React.FC<PresentationSectionProps> = ({
             />
           </div>
 
-          <div className="pf-inline-field pf-inline-field--grow">
+          <div className="pf-inline-field pf-inline-field--grow pf-inline-field--wide">
             <label className="pf-inline-field__label" htmlFor="pf-presentation-venue">
               Venue
             </label>
@@ -64,7 +64,7 @@ const PresentationSection: React.FC<PresentationSectionProps> = ({
           </div>
         </div>
 
-        <div className="pf-inline-field pf-inline-field--grow">
+        <div className="pf-inline-field pf-inline-field--grow pf-inline-field--wide">
           <label className="pf-inline-field__label" htmlFor="pf-panelists">
             Panelists
           </label>
