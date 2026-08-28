@@ -641,9 +641,9 @@ const Dashboard: React.FC = () => {
           parsed.journals.actions.order = 99;
           parsed.journals.actions.show = true;
         }
-        // The project columns were renamed with the redesigned project form, so a
-        // config saved before that has no `proposal_status` key and is replaced
-        // wholesale rather than merged into a mix of old and new column names.
+        // LEGACY: Project column names changed with the redesigned form, so replace
+        // saved configurations that lack `proposal_status` instead of mixing old and new keys.
+        // Remove after all users have loaded and persisted the redesigned column configuration.
         if (parsed?.projects && !parsed.projects.proposal_status) {
           parsed.projects = defaultColumnConfig.projects;
         }
