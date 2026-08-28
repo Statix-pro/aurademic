@@ -151,3 +151,80 @@ export async function getOrgUnitEmails(orgUnitId) {
 
   return rows;
 }
+
+// =====================================================
+// ENTITY LEVEL-1 ASSIGNEE FALLBACK
+// =====================================================
+
+/**
+ * FALLBACK: entities whose Level-1 approver was assigned only through Access
+ * Control (user_entity_roles) have no master_entity_contacts row, so the
+ * contact-based Level-1 resolver returns null and approvals are blocked even
+ * though the assignee already sees the proposal in their queue (the list
+ * queries OR user_entity_roles).
+ *
+ * Resolves the entity's assigned approver from user_entity_roles instead.
+ * Remove once every entity is guaranteed a master_entity_contacts row at
+ * creation/assignment time.
+ */
+export async function resolveEntityLevel1AssigneeFallback(entityId, conn = db) {
+  const parsedEntityId = Number(entityId);
+
+  if (!Number.isInteger(parsedEntityId) || parsedEntityId <= 0) {
+    return null;
+  }
+
+  const fallbackMap = await resolveEntityLevel1AssigneeFallbackMap([parsedEntityId], conn);
+
+  return fallbackMap.get(parsedEntityId) || null;
+}
+
+/**
+ * FALLBACK: batch variant of resolveEntityLevel1AssigneeFallback. Returns a
+ * Map<entityId, { id, role, email, is_primary }> shaped like a
+ * master_entity_contacts row so callers can treat both sources alike.
+ */
+export async function resolveEntityLevel1AssigneeFallbackMap(entityIds = [], conn = db) {
+  const uniqueEntityIds = [
+    ...new Set(
+      (Array.isArray(entityIds) ? entityIds : [])
+        .map((entityId) => Number(entityId))
+        .filter((entityId) => Number.isInteger(entityId) && entityId > 0),
+    ),
+  ];
+
+  const fallbackMap = new Map();
+
+  if (!uniqueEntityIds.length) {
+    return fallbackMap;
+  }
+
+  const [rows] = await conn.query(
+    `SELECT uer.entity_id, uer.id AS assignment_id, r.role_code, u.email
+       FROM user_entity_roles uer
+       JOIN users u ON u.id = uer.user_id
+       LEFT JOIN roles r ON r.id = uer.role_id
+       WHERE uer.entity_id IN (?)
+         AND u.email IS NOT NULL
+         AND TRIM(u.email) <> ''
+       ORDER BY uer.entity_id ASC, uer.id ASC`,
+    [uniqueEntityIds],
+  );
+
+  for (const row of rows) {
+    const entityId = Number(row.entity_id);
+
+    if (fallbackMap.has(entityId)) {
+      continue;
+    }
+
+    fallbackMap.set(entityId, {
+      id: Number(row.assignment_id),
+      role: normalizeText(row.role_code).toLowerCase() || 'coordinator',
+      email: normalizeText(row.email).toLowerCase(),
+      is_primary: false,
+    });
+  }
+
+  return fallbackMap;
+}

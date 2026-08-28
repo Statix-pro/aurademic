@@ -267,7 +267,10 @@ export async function resolveEntityLevel1Assignee(entityId, conn = db) {
   const selectedContact = pickEntityLevel1Contact(rows);
 
   if (!selectedContact) {
-    return null;
+    // FALLBACK: entity has no master_entity_contacts row (Level-1 approver was
+    // assigned only via Access Control). Remove once entity creation always
+    // writes a contact row.
+    return orgUnitQueries.resolveEntityLevel1AssigneeFallback(parsedEntityId, conn);
   }
 
   return {
@@ -319,6 +322,22 @@ async function resolveEntityAssigneeMap(entityIds = [], conn = db) {
     const selectedContact = pickEntityLevel1Contact(contacts);
     if (selectedContact) {
       assigneeMap.set(entityId, selectedContact);
+    }
+  }
+
+  // FALLBACK: entities with no usable master_entity_contacts row fall back to
+  // their Access Control assignment (user_entity_roles). Remove once entity
+  // creation always writes a contact row.
+  const unresolvedEntityIds = uniqueEntityIds.filter((entityId) => !assigneeMap.has(entityId));
+
+  if (unresolvedEntityIds.length) {
+    const fallbackMap = await orgUnitQueries.resolveEntityLevel1AssigneeFallbackMap(
+      unresolvedEntityIds,
+      conn,
+    );
+
+    for (const [entityId, assignee] of fallbackMap.entries()) {
+      assigneeMap.set(entityId, assignee);
     }
   }
 
