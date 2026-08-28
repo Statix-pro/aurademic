@@ -1,7 +1,9 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import projectsApi from '../../projects/projectsApi';
 import '../../user-dashboard/userdashboard.css';
 import './ProjectsPage.css';
 
@@ -10,14 +12,36 @@ interface Project {
   title: string;
   team_members: string;
   agency_name?: string;
-  category: string;
-  sanction_order_amount?: string | number;
+  scheme_name?: string;
+  scheme_category?: string;
+  project_cost?: string | number;
   duration_years?: number;
   duration_months?: number;
   duration_days?: number;
-  submission_status: string;
-  date_of_submission: string;
+  proposal_status: string;
+  project_status?: string | null;
+  submitted_on: string;
 }
+
+/** Human labels for the stored proposal/project status values. */
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  submitted: 'Submitted',
+  accepted_for_evaluation: 'Accepted for Evaluation',
+  shortlisted: 'Shortlisted',
+  shortlisted_for_presentation: 'Shortlisted for Presentation',
+  result_announced: 'Result Announced',
+  ongoing: 'Ongoing',
+  completed: 'Completed',
+  closed: 'Closed',
+};
+
+/**
+ * A sanctioned project reports where it is in delivery; anything earlier
+ * reports where its proposal is.
+ */
+const displayStatus = (project: Project): string =>
+  project.project_status || project.proposal_status || 'draft';
 
 interface ProjectsResponse {
   data: Project[];
@@ -44,6 +68,9 @@ const ProjectsPage: React.FC = () => {
     pending: 0,
     total: 0,
   });
+  const [alert, setAlert] = useState<{ type: AlertType; message: string } | null>(null);
+  // Set while a delete is awaiting confirmation; the modal reads the title from it.
+  const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
 
   useEffect(() => {
     fetchProjects(currentPage, itemsPerPage);
@@ -86,25 +113,12 @@ const ProjectsPage: React.FC = () => {
 
       if (response && Array.isArray(response.data)) {
         const kpis: KpiData = {
-          ongoing: response.data.filter(
-            (item) =>
-              item.submission_status === 'approved' ||
-              item.submission_status === 'ongoing' ||
-              item.submission_status === 'active',
+          ongoing: response.data.filter((item) => item.project_status === 'ongoing').length,
+          completed: response.data.filter((item) =>
+            ['completed', 'closed'].includes(item.project_status ?? ''),
           ).length,
-          completed: response.data.filter(
-            (item) =>
-              item.submission_status === 'completed' ||
-              item.submission_status === 'finished' ||
-              item.submission_status === 'closed',
-          ).length,
-          pending: response.data.filter(
-            (item) =>
-              item.submission_status === 'waiting' ||
-              item.submission_status === 'pending' ||
-              item.submission_status === 'draft' ||
-              item.submission_status === 'under_review',
-          ).length,
+          // Everything still with the funding agency: no delivery status yet.
+          pending: response.data.filter((item) => !item.project_status).length,
           total: response.data.length,
         };
         setKpiData(kpis);
@@ -126,6 +140,44 @@ const ProjectsPage: React.FC = () => {
 
   const handleView = (projectId: number) => {
     navigate(`/project/${projectId}?mode=view`);
+  };
+
+  const handleEdit = (projectId: number) => {
+    navigate(`/project/${projectId}`);
+  };
+
+  /** Copies a deep link to the project so it can be pasted into a mail or chat. */
+  const handleShare = async (projectId: number) => {
+    const link = `${window.location.origin}/project/${projectId}?mode=view`;
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setAlert({ type: 'success', message: 'Project link copied to the clipboard.' });
+    } catch {
+      // Clipboard access is denied outside a secure context, so show the link
+      // instead of failing silently.
+      setAlert({ type: 'info', message: `Copy this link: ${link}` });
+    }
+  };
+
+  /**
+   * Only the principal investigator, the person who filed the project and
+   * admins may delete one; the API decides, and its message is shown as-is.
+   */
+  const handleDelete = async (project: Project) => {
+    setPendingDelete(null);
+
+    try {
+      await projectsApi.deleteProject(project.id);
+      setAlert({ type: 'success', message: 'Project deleted.' });
+      await Promise.all([fetchProjects(currentPage, itemsPerPage), fetchKpiData()]);
+    } catch (err: unknown) {
+      const response = (err as { response?: { data?: { message?: string } } })?.response;
+      setAlert({
+        type: 'error',
+        message: response?.data?.message || 'The project could not be deleted.',
+      });
+    }
   };
 
   const handleAdd = () => {
@@ -239,14 +291,16 @@ const ProjectsPage: React.FC = () => {
                             </span>
                             <span className="detail-separator">•</span>
                             <span className="detail-item">
-                              <span className="detail-label">Category:</span>
-                              <span className="detail-value">{project.category}</span>
+                              <span className="detail-label">Scheme:</span>
+                              <span className="detail-value">
+                                {project.scheme_name || 'Not specified'}
+                              </span>
                             </span>
                             <span className="detail-separator">•</span>
                             <span className="detail-item">
                               <span className="detail-label">Amount:</span>
                               <span className="detail-value">
-                                {project.sanction_order_amount || 'Not set'}
+                                {project.project_cost || 'Not set'}
                               </span>
                             </span>
                             <span className="detail-separator">•</span>
@@ -293,13 +347,15 @@ const ProjectsPage: React.FC = () => {
                             </button>
                             <button
                               className="action-btn share-btn"
-                              title="Share project"
+                              onClick={() => handleShare(project.id)}
+                              title="Copy a link to this project"
                               aria-label="Share project"
                             >
                               <i className="fas fa-link" aria-hidden="true"></i>
                             </button>
                             <button
                               className="action-btn edit-btn"
+                              onClick={() => handleEdit(project.id)}
                               title="Edit project"
                               aria-label="Edit project"
                             >
@@ -307,6 +363,7 @@ const ProjectsPage: React.FC = () => {
                             </button>
                             <button
                               className="action-btn delete-btn"
+                              onClick={() => setPendingDelete(project)}
                               title="Delete project"
                               aria-label="Delete project"
                             >
@@ -317,12 +374,12 @@ const ProjectsPage: React.FC = () => {
                           {/* Status and Date - Stacked */}
                           <div className="d-flex flex-column align-items-end gap-1">
                             <span
-                              className={`status-badge status-${project.submission_status?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                              className={`status-badge status-${displayStatus(project).replace(/[^a-z0-9]/g, '-')}`}
                             >
-                              {project.submission_status}
+                              {STATUS_LABELS[displayStatus(project)] ?? displayStatus(project)}
                             </span>
                             <span className="text-muted" style={{ fontSize: '0.75rem' }}>
-                              Submitted: {formatDate(project.date_of_submission)}
+                              Submitted: {formatDate(project.submitted_on)}
                             </span>
                           </div>
                         </div>
@@ -361,6 +418,24 @@ const ProjectsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <AlertModal
+        show={Boolean(pendingDelete)}
+        onHide={() => setPendingDelete(null)}
+        type="warning"
+        title="Delete project"
+        message={`Delete "${pendingDelete?.title ?? ''}"? Its investigators, finance rows and uploaded documents are removed with it.`}
+        showCancel
+        confirmText="Delete"
+        onConfirm={() => pendingDelete && handleDelete(pendingDelete)}
+      />
+
+      <AlertModal
+        show={Boolean(alert)}
+        onHide={() => setAlert(null)}
+        type={alert?.type ?? 'info'}
+        message={alert?.message ?? ''}
+      />
     </div>
   );
 };

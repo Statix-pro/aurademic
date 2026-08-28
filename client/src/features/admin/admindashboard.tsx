@@ -28,16 +28,47 @@ interface ColumnConfig {
   journals: Record<string, ColumnConfigItem>;
 }
 
+/** Rupee amounts, shared by the project table and the detail panel. */
+const formatCurrency = (amount: string | number): string => {
+  const cleanAmount = typeof amount === 'string' ? amount.replace(/,/g, '') : amount;
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0,
+  }).format(Number(cleanAmount) || 0);
+};
+
+/** Labels for the stored proposal- and project-status values. */
+const PROJECT_STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  submitted: 'Submitted',
+  accepted_for_evaluation: 'Accepted for Evaluation',
+  shortlisted: 'Shortlisted',
+  shortlisted_for_presentation: 'Shortlisted for Presentation',
+  result_announced: 'Result Announced',
+  ongoing: 'Ongoing',
+  completed: 'Completed',
+  closed: 'Closed',
+};
+
+/** A financial-contribution or finance-sharing row as the API returns it. */
+interface FinanceRowView {
+  organization_label?: string;
+  amount?: string | number;
+  heads?: { budget_head_name?: string | null }[];
+}
+
 interface Project {
   id: number;
   title: string;
-  project_category?: string;
+  driven_by?: string;
   agency?: string;
   scheme?: string;
-  submission_status?: string;
-  date_of_submission?: string;
+  proposal_status?: string;
+  project_status?: string | null;
+  submitted_on?: string;
   edit_request_status?: string;
-  is_collaboration_enabled?: boolean | number;
+  collaborators_enabled?: boolean | number;
   [key: string]: unknown;
 }
 
@@ -74,8 +105,14 @@ interface JournalRequest {
 interface ProjectRequest {
   id: number;
   user_name?: string;
+  /** 'organization' (a funding agency) or 'scheme'. */
   request_type: string;
   name: string;
+  parent_organization_name?: string | null;
+  organization_name?: string | null;
+  domain?: string | null;
+  category?: string | null;
+  website?: string | null;
   description?: string;
   status: string;
   created_at: string;
@@ -108,32 +145,39 @@ type TabType =
 const defaultColumnConfig: ColumnConfig = {
   projects: {
     title: { show: true, order: 0, label: 'Title', group: 'Essential' },
-    project_category: { show: true, order: 1, label: 'Category', group: 'Essential' },
-    agency: { show: true, order: 2, label: 'Agency', group: 'Essential' },
+    driven_by: { show: true, order: 1, label: 'Driven By', group: 'Essential' },
+    agency: { show: true, order: 2, label: 'Funding Agency', group: 'Essential' },
     scheme: { show: true, order: 3, label: 'Scheme', group: 'Essential' },
-    submission_status: {
+    proposal_status: {
       show: true,
       order: 98,
       label: 'Status',
       group: 'Essential',
       hideFromConfig: true,
     },
-    date_of_submission: { show: false, order: 5, label: 'Submission Date', group: 'Details' },
-    project_type: { show: false, order: 6, label: 'Project Type', group: 'Details' },
+    submitted_on: { show: false, order: 5, label: 'Submission Date', group: 'Details' },
+    project_status: { show: false, order: 6, label: 'Project Status', group: 'Details' },
     project_duration: { show: false, order: 7, label: 'Duration', group: 'Details' },
-    sanctioned_amount: {
+    project_cost: { show: false, order: 8, label: 'Project Cost (₹)', group: 'Financial' },
+    disbursed_amount: {
       show: false,
       order: 9,
-      label: 'Sanctioned Amount (₹)',
+      label: 'Disbursed Amount (₹)',
       group: 'Financial',
     },
-    start_date: { show: false, order: 11, label: 'Start Date', group: 'Timeline' },
-    end_date: { show: false, order: 12, label: 'End Date', group: 'Timeline' },
+    sanction_reference_no: {
+      show: false,
+      order: 10,
+      label: 'Sanction Ref. No.',
+      group: 'Financial',
+    },
+    project_start_date: { show: false, order: 11, label: 'Start Date', group: 'Timeline' },
+    project_closing_date: { show: false, order: 12, label: 'Closing Date', group: 'Timeline' },
     investigators: { show: false, order: 13, label: 'Investigators', group: 'Team' },
-    collaborating_institute: {
+    collaborators_enabled: {
       show: false,
       order: 14,
-      label: 'Collaborating Institute',
+      label: 'Has Collaborators',
       group: 'Team',
     },
     edit_request_status: { show: true, order: 18, label: 'Edit Request', group: 'Essential' },
@@ -597,19 +641,25 @@ const Dashboard: React.FC = () => {
           parsed.journals.actions.order = 99;
           parsed.journals.actions.show = true;
         }
-        if (parsed?.projects?.submission_status) {
-          parsed.projects.submission_status.hideFromConfig = true;
-          parsed.projects.submission_status.order = 98;
-          parsed.projects.submission_status.show = true;
+        // The project columns were renamed with the redesigned project form, so a
+        // config saved before that has no `proposal_status` key and is replaced
+        // wholesale rather than merged into a mix of old and new column names.
+        if (parsed?.projects && !parsed.projects.proposal_status) {
+          parsed.projects = defaultColumnConfig.projects;
+        }
+        if (parsed?.projects?.proposal_status) {
+          parsed.projects.proposal_status.hideFromConfig = true;
+          parsed.projects.proposal_status.order = 98;
+          parsed.projects.proposal_status.show = true;
         }
         if (parsed?.projects?.actions) {
           parsed.projects.actions.hideFromConfig = true;
           parsed.projects.actions.order = 99;
           parsed.projects.actions.show = true;
         }
-        if (parsed?.projects?.date_of_submission) {
-          parsed.projects.date_of_submission.group = 'Details';
-          parsed.projects.date_of_submission.show = false;
+        if (parsed?.projects?.submitted_on) {
+          parsed.projects.submitted_on.group = 'Details';
+          parsed.projects.submitted_on.show = false;
         }
 
         return parsed;
@@ -969,15 +1019,6 @@ const Dashboard: React.FC = () => {
     column: VisibleColumn,
     item: Project | Journal,
   ): React.ReactNode => {
-    const formatCurrency = (amount: string | number): string => {
-      const cleanAmount = typeof amount === 'string' ? amount.replace(/,/g, '') : amount;
-      return new Intl.NumberFormat('en-IN', {
-        style: 'currency',
-        currency: 'INR',
-        maximumFractionDigits: 0,
-      }).format(Number(cleanAmount) || 0);
-    };
-
     const formatDateLocal = (dateString: string | undefined): string => {
       if (!dateString) return '-';
       try {
@@ -1007,10 +1048,18 @@ const Dashboard: React.FC = () => {
       }
 
       case 'submission_date':
-      case 'date_of_submission':
-        return projectItem.date_of_submission
-          ? formatDateLocal(projectItem.date_of_submission as string)
-          : '-';
+      case 'submitted_on':
+        return projectItem.submitted_on ? formatDateLocal(projectItem.submitted_on as string) : '-';
+
+      case 'proposal_status':
+      case 'project_status': {
+        const value = (projectItem[column.key] as string) || '';
+        if (!value) return '-';
+        return <span className={`badge ${value}`}>{PROJECT_STATUS_LABELS[value] ?? value}</span>;
+      }
+
+      case 'driven_by':
+        return projectItem.driven_by === 'student' ? 'Student' : 'Faculty';
 
       case 'submission_approval_status': {
         const rawStatus = (journalItem.admin_approval_status as string) || 'pending';
@@ -1094,16 +1143,17 @@ const Dashboard: React.FC = () => {
       case 'citation_score':
         return (projectItem.cite_score as string) || (projectItem.citation_score as string) || '-';
 
-      case 'sanctioned_amount': {
-        const amount = (projectItem.sanction_order_amount as string | number) || '0';
-        return formatCurrency(amount);
-      }
+      case 'project_cost':
+        return formatCurrency((projectItem.project_cost as string | number) || '0');
 
-      case 'start_date':
-        return formatDateLocal(projectItem.project_duration_start_date as string);
+      case 'disbursed_amount':
+        return formatCurrency((projectItem.disbursed_amount as string | number) || '0');
 
-      case 'end_date':
-        return formatDateLocal(projectItem.project_duration_end_date as string);
+      case 'project_start_date':
+        return formatDateLocal(projectItem.project_start_date as string);
+
+      case 'project_closing_date':
+        return formatDateLocal(projectItem.project_closing_date as string);
 
       case 'investigators': {
         const teamMembers = projectItem.team_members as { name?: string }[] | undefined;
@@ -1114,8 +1164,8 @@ const Dashboard: React.FC = () => {
           .join(', ');
       }
 
-      case 'collaborating_institute':
-        return projectItem.is_collaboration_enabled ? 'Yes' : 'No';
+      case 'collaborators_enabled':
+        return projectItem.collaborators_enabled ? 'Yes' : 'No';
 
       case 'project_duration': {
         const duration: string[] = [];
@@ -1136,9 +1186,6 @@ const Dashboard: React.FC = () => {
         }
         return duration.length > 0 ? duration.join(', ') : '-';
       }
-
-      case 'project_type':
-        return (projectItem.project_category as string) || '-';
 
       case 'edit_request_status':
         return (
@@ -1450,13 +1497,96 @@ const Dashboard: React.FC = () => {
   const renderProjectDetails = () => {
     if (!selectedItem) return null;
     const project = selectedItem as Project & Record<string, unknown>;
-    const financialContributions = (project.financial_contributions as unknown[]) || [];
-    const collaboratingPartners = (project.collaborating_partners as unknown[]) || [];
-    const documents = (project.documents as { document_type?: string; file_path?: string }[]) || [];
-    const teamMembers =
-      (project.team_members as { name?: string; is_principal?: boolean; is_primary?: boolean }[]) ||
-      [];
-    const grantDisbursements = (project.grant_disbursements as unknown[]) || [];
+
+    const investigators =
+      (project.investigators as {
+        name?: string;
+        member_type?: string;
+        department?: string;
+        organization?: string;
+        is_principal?: boolean | number;
+      }[]) || [];
+    const contributions = (project.financial_contributions as FinanceRowView[]) || [];
+    const financeSharing = (project.finance_sharing as FinanceRowView[]) || [];
+    const collaborators =
+      (project.collaborators as {
+        category?: string;
+        role?: string;
+        organization_label?: string;
+        city?: string;
+        has_active_mou?: boolean | number;
+        contact_name?: string;
+        contact_email?: string;
+      }[]) || [];
+    const disbursements =
+      (project.disbursements as {
+        financial_year?: string;
+        organization_label?: string;
+        amount?: string;
+        disbursement_date?: string;
+        documents?: Record<string, { file_path?: string }>;
+      }[]) || [];
+    const documents =
+      (project.documents as Record<string, { file_path?: string; original_name?: string }>) || {};
+    const nationalInitiatives = (project.national_initiatives as string[]) || [];
+    const sdgs = (project.sdgs as string[]) || [];
+
+    const outcomes = [
+      { label: 'Journal Articles', value: project.outcome_journal_articles },
+      { label: 'Conferences', value: project.outcome_conferences },
+      { label: 'IPRs', value: project.outcome_iprs },
+      { label: 'Products', value: project.outcome_products },
+      { label: 'Tech Transfers', value: project.outcome_tech_transfers },
+      { label: 'Start-ups', value: project.outcome_startups },
+    ].filter((outcome) => Number(outcome.value) > 0);
+
+    const documentLabel = (key: string) =>
+      ({
+        presentation: 'Presentation',
+        sanction_order: 'Sanction Order',
+        project_report: 'Project Report',
+        utilization_certificate_soe: 'Utilization Certificate & SoE',
+        bill_copies: 'Bill Copies',
+        bank_statement: 'Bank Statement',
+      })[key] ?? key;
+
+    const renderFinanceTable = (rows: FinanceRowView[], caption: string) => (
+      <div className="detail-section">
+        <h4>{caption}</h4>
+        <div className="table-responsive">
+          <table className="table table-bordered">
+            <thead>
+              <tr>
+                <th>Organization</th>
+                <th>Budget Head(s)</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row, index) => (
+                <tr key={index}>
+                  <td>{row.organization_label || '-'}</td>
+                  <td>
+                    {(row.heads ?? [])
+                      .map((head) => head.budget_head_name)
+                      .filter(Boolean)
+                      .join(', ') || '-'}
+                  </td>
+                  <td>{formatCurrency(row.amount ?? 0)}</td>
+                </tr>
+              ))}
+              {rows.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="text-center">
+                    No rows recorded
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
 
     return (
       <div className="project-details">
@@ -1467,158 +1597,182 @@ const Dashboard: React.FC = () => {
           <div className="row">
             <div className="col-md-6">
               <p>
-                <strong>Project Category:</strong> {project.project_category}
+                <strong>Driven by:</strong>{' '}
+                {project.driven_by === 'student' ? 'Student' : 'Faculty'}
               </p>
               <p>
-                <strong>Agency:</strong> {project.agency}
+                <strong>Funding Agency:</strong>{' '}
+                {(project.funding_organization_name as string) || '-'}
               </p>
               <p>
-                <strong>Scheme:</strong> {project.scheme}
+                <strong>Scheme:</strong> {(project.scheme_name as string) || '-'}
               </p>
               <p>
-                <strong>Category:</strong> {project.category as string}
+                <strong>Domain:</strong> {(project.scheme_domain as string) || '-'}
+              </p>
+              <p>
+                <strong>Category:</strong> {(project.scheme_category as string) || '-'}
               </p>
             </div>
             <div className="col-md-6">
               <p>
-                <strong>Duration:</strong> {project.duration_years as number} years,{' '}
-                {project.duration_months as number} months, {project.duration_days as number} days
+                <strong>Project Cost:</strong>{' '}
+                {formatCurrency((project.project_cost as string) ?? 0)}
               </p>
               <p>
-                <strong>Application Number:</strong> {project.application_number as string}
+                <strong>Duration:</strong> {(project.duration_years as number) || 0} years,{' '}
+                {(project.duration_months as number) || 0} months,{' '}
+                {(project.duration_days as number) || 0} days
               </p>
               <p>
-                <strong>Submission Status:</strong> {project.submission_status}
+                <strong>Reference Number:</strong> {(project.reference_number as string) || '-'}
               </p>
               <p>
-                <strong>Date of Submission:</strong> {formatDate(project.date_of_submission)}
+                <strong>Proposal Status:</strong>{' '}
+                {PROJECT_STATUS_LABELS[project.proposal_status ?? ''] ??
+                  project.proposal_status ??
+                  '-'}
               </p>
               <p>
-                <strong>Outcomes:</strong>{' '}
-                {(project.outcome_type as string)
-                  ?.split(',')
-                  .map((outcome: string) => outcome.trim())
-                  .join(', ')}
+                <strong>Submitted On:</strong> {formatDate(project.submitted_on)}
               </p>
             </div>
           </div>
+
+          {(nationalInitiatives.length > 0 || sdgs.length > 0) && (
+            <div className="row">
+              {nationalInitiatives.length > 0 && (
+                <div className="col-md-6">
+                  <p>
+                    <strong>National Initiatives:</strong> {nationalInitiatives.join(', ')}
+                  </p>
+                </div>
+              )}
+              {sdgs.length > 0 && (
+                <div className="col-md-6">
+                  <p>
+                    <strong>SDGs:</strong> {sdgs.join(', ')}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="detail-section">
-          <h4>Project Timeline</h4>
-          <div className="row">
-            <div className="col-md-6">
-              <p>
-                <strong>Date of Presentation:</strong>{' '}
-                {formatDate(project.date_of_presentation as string)}
-              </p>
-              <p>
-                <strong>Date of Result Announcement:</strong>{' '}
-                {formatDate(project.date_of_result_announcement as string)}
-              </p>
-              <p>
-                <strong>Sanction Order Amount:</strong> ₹{project.sanction_order_amount as string}
-              </p>
-            </div>
-            <div className="col-md-6">
-              <p>
-                <strong>Sanction Order Date:</strong>{' '}
-                {formatDate(project.sanction_order_date as string)}
-              </p>
-              <p>
-                <strong>Project Start Date:</strong>{' '}
-                {formatDate(project.project_duration_start_date as string)}
-              </p>
-              <p>
-                <strong>Project End Date:</strong>{' '}
-                {formatDate(project.project_duration_end_date as string)}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="detail-section">
-          <h4>Team Members</h4>
+          <h4>Investigators</h4>
           <div className="table-responsive">
             <table className="table table-bordered">
               <thead>
                 <tr>
                   <th>Name</th>
                   <th>Role</th>
+                  <th>Type</th>
+                  <th>Department</th>
+                  <th>Organization</th>
                 </tr>
               </thead>
               <tbody>
-                {teamMembers.map((member, index) => (
+                {investigators.map((investigator, index) => (
                   <tr key={index}>
-                    <td>{member.name}</td>
+                    <td>{investigator.name}</td>
                     <td>
-                      {member.is_principal
-                        ? 'Principal Investigator'
-                        : member.is_primary
-                          ? 'Primary Investigator'
-                          : 'Co-Investigator'}
+                      {investigator.is_principal ? 'Principal Investigator' : 'Co-Investigator'}
                     </td>
+                    <td className="text-capitalize">{investigator.member_type}</td>
+                    <td>{investigator.department || '-'}</td>
+                    <td>{investigator.organization || '-'}</td>
                   </tr>
                 ))}
+                {investigators.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center">
+                      No investigators recorded
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </div>
 
         <div className="detail-section">
-          <h4>Financial Contributions</h4>
-          <div className="table-responsive">
-            <table className="table table-bordered">
-              <thead>
-                <tr>
-                  <th>Agency Type</th>
-                  <th>Agency</th>
-                  <th>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(
-                  financialContributions as {
-                    agency_type?: string;
-                    agency?: string;
-                    amount?: string;
-                  }[]
-                ).map((contribution, index) => (
-                  <tr key={index}>
-                    <td>{contribution.agency_type}</td>
-                    <td>{contribution.agency}</td>
-                    <td>₹{contribution.amount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <h4>Timeline</h4>
+          <div className="row">
+            <div className="col-md-6">
+              <p>
+                <strong>Presentation Date:</strong>{' '}
+                {formatDate(project.presentation_date as string)}
+              </p>
+              <p>
+                <strong>Result Announced:</strong> {formatDate(project.result_date as string)}
+              </p>
+              <p>
+                <strong>Final Result:</strong>{' '}
+                {project.final_result === 'selected'
+                  ? 'Selected'
+                  : project.final_result === 'not_selected'
+                    ? 'Not Selected'
+                    : '-'}
+              </p>
+            </div>
+            <div className="col-md-6">
+              <p>
+                <strong>Sanction Date:</strong> {formatDate(project.sanction_date as string)}
+              </p>
+              <p>
+                <strong>Sanction Ref. No.:</strong>{' '}
+                {(project.sanction_reference_no as string) || '-'}
+              </p>
+              <p>
+                <strong>Project Start:</strong> {formatDate(project.project_start_date as string)}
+              </p>
+              <p>
+                <strong>Project Closing:</strong>{' '}
+                {formatDate(project.project_closing_date as string)}
+              </p>
+              <p>
+                <strong>Project Status:</strong>{' '}
+                {PROJECT_STATUS_LABELS[(project.project_status as string) ?? ''] ??
+                  project.project_status ??
+                  '-'}
+              </p>
+            </div>
           </div>
         </div>
 
-        {!!project.is_collaboration_enabled && collaboratingPartners.length > 0 && (
+        {!!project.financial_contribution_enabled &&
+          renderFinanceTable(contributions, 'Financial Contribution')}
+        {!!project.finance_sharing_enabled && renderFinanceTable(financeSharing, 'Finance Sharing')}
+
+        {!!project.collaborators_enabled && collaborators.length > 0 && (
           <div className="detail-section">
-            <h4>Collaborations</h4>
+            <h4>Collaborators</h4>
             <div className="table-responsive">
               <table className="table table-bordered">
                 <thead>
                   <tr>
-                    <th>Partner</th>
-                    <th>Address</th>
-                    <th>Support Type</th>
+                    <th>Organization</th>
+                    <th>Category</th>
+                    <th>Role</th>
+                    <th>City</th>
+                    <th>Active MoU</th>
+                    <th>Contact</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(
-                    collaboratingPartners as {
-                      partner?: string;
-                      address?: string;
-                      support?: string;
-                    }[]
-                  ).map((collab, index) => (
+                  {collaborators.map((collaborator, index) => (
                     <tr key={index}>
-                      <td>{collab.partner}</td>
-                      <td>{collab.address}</td>
-                      <td>{collab.support}</td>
+                      <td>{collaborator.organization_label || '-'}</td>
+                      <td>{collaborator.category || '-'}</td>
+                      <td>{collaborator.role || '-'}</td>
+                      <td>{collaborator.city || '-'}</td>
+                      <td>{collaborator.has_active_mou ? 'Yes' : 'No'}</td>
+                      <td>
+                        {[collaborator.contact_name, collaborator.contact_email]
+                          .filter(Boolean)
+                          .join(' · ') || '-'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1627,24 +1781,83 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {documents.length > 0 && (
+        <div className="detail-section">
+          <h4>Grant Disbursements</h4>
+          <div className="table-responsive">
+            <table className="table table-bordered">
+              <thead>
+                <tr>
+                  <th>Financial Year</th>
+                  <th>Organization</th>
+                  <th>Amount</th>
+                  <th>Date</th>
+                  <th>Sanction</th>
+                  <th>UC &amp; SoE</th>
+                  <th>Report</th>
+                </tr>
+              </thead>
+              <tbody>
+                {disbursements.map((disbursement, index) => (
+                  <tr key={index}>
+                    <td>{disbursement.financial_year || '-'}</td>
+                    <td>{disbursement.organization_label || '-'}</td>
+                    <td>{formatCurrency(disbursement.amount ?? 0)}</td>
+                    <td>{formatDate(disbursement.disbursement_date)}</td>
+                    {['sanction', 'uc_soe', 'report'].map((slot) => (
+                      <td key={slot}>
+                        {disbursement.documents?.[slot]?.file_path ? (
+                          <a
+                            href={getFileUrl(disbursement.documents[slot].file_path as string)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-sm btn-outline-secondary"
+                          >
+                            View
+                          </a>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {disbursements.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="text-center">
+                      No grant disbursements found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {outcomes.length > 0 && (
+          <div className="detail-section">
+            <h4>Outcomes</h4>
+            <p>{outcomes.map((outcome) => `${outcome.label}: ${outcome.value}`).join('  ·  ')}</p>
+          </div>
+        )}
+
+        {Object.keys(documents).length > 0 && (
           <div className="detail-section">
             <h4>Documents</h4>
             <div className="table-responsive">
               <table className="table table-bordered">
                 <thead>
                   <tr>
-                    <th>Document Type</th>
+                    <th>Document</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {documents.map((doc, index) => (
-                    <tr key={index}>
-                      <td>{doc.document_type}</td>
+                  {Object.entries(documents).map(([key, document]) => (
+                    <tr key={key}>
+                      <td>{documentLabel(key)}</td>
                       <td>
                         <a
-                          href={getFileUrl(doc.file_path)}
+                          href={getFileUrl(document.file_path)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="btn btn-sm btn-primary"
@@ -1660,95 +1873,12 @@ const Dashboard: React.FC = () => {
           </div>
         )}
 
-        {(project.file_path as string) && (
+        {!!(project.remarks as string) && (
           <div className="detail-section">
-            <h4>Journal Article</h4>
-            <div className="row">
-              <div className="col-md-4 mb-2">
-                <a
-                  href={getFileUrl(project.file_path as string)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-primary btn-sm w-100"
-                >
-                  View Journal Article
-                </a>
-              </div>
-            </div>
+            <h4>Remarks</h4>
+            <p>{project.remarks as string}</p>
           </div>
         )}
-
-        <div className="detail-section">
-          <h4>Grant Disbursements</h4>
-          <div className="table-responsive">
-            <table className="table table-bordered">
-              <thead>
-                <tr>
-                  <th>Fiscal Year</th>
-                  <th>Agency</th>
-                  <th>Amount</th>
-                  <th>Disbursement Date</th>
-                  <th>Sanction Letter</th>
-                  <th>UC/SoE</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(
-                  grantDisbursements as {
-                    fiscal_year?: string;
-                    agency?: string;
-                    amount?: string;
-                    disbursement_date?: string;
-                    sanction_letter_path?: string;
-                    uc_soe_path?: string;
-                  }[]
-                ).map((disbursement, index) => (
-                  <tr key={index}>
-                    <td>{disbursement.fiscal_year}</td>
-                    <td>{disbursement.agency}</td>
-                    <td>₹{disbursement.amount}</td>
-                    <td>{formatDate(disbursement.disbursement_date)}</td>
-                    <td>
-                      {disbursement.sanction_letter_path ? (
-                        <a
-                          href={getFileUrl(disbursement.sanction_letter_path)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-sm btn-outline-secondary"
-                        >
-                          View
-                        </a>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                    <td>
-                      {disbursement.uc_soe_path ? (
-                        <a
-                          href={getFileUrl(disbursement.uc_soe_path)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-sm btn-outline-secondary"
-                        >
-                          View
-                        </a>
-                      ) : (
-                        '-'
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                {grantDisbursements.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="text-center">
-                      No grant disbursements found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
 
         <div className="detail-section">
           <h4>Edit Request Information</h4>
@@ -2024,9 +2154,9 @@ const Dashboard: React.FC = () => {
                 <td>{request.user_name || 'Unknown User'}</td>
                 <td>
                   <span
-                    className={`badge bg-${request.request_type === 'agency' ? 'primary' : request.request_type === 'scheme' ? 'success' : request.request_type === 'agency_type' ? 'info' : 'secondary'}`}
+                    className={`badge bg-${request.request_type === 'organization' ? 'primary' : request.request_type === 'scheme' ? 'success' : 'secondary'}`}
                   >
-                    {request.request_type.replace('_', ' ').toUpperCase()}
+                    {request.request_type === 'organization' ? 'FUNDING AGENCY' : 'SCHEME'}
                   </span>
                 </td>
                 <td>{request.name}</td>

@@ -125,7 +125,7 @@ Key prefixes: `/api/auth`, `/api/admin`, `/api/dashboard`, `/api/form-options`, 
 
 ### File uploads
 
-Multer saves files to `server/uploads/[category]/` and Express serves the directory statically at `/uploads`. Upload categories include `sanctionOrder`, `sanctionLetter`, `ucAndSoE`, `utilizationCertificate`, `statementOfExpenditure`, `projectReport`, `bankStatement`, `journal-article`, `finance-principal-documents`.
+Multer saves files to `server/uploads/[category]/` and Express serves the directory statically at `/uploads`. Upload categories include `sanctionOrder`, `sanctionLetter`, `ucAndSoE`, `utilizationCertificate`, `statementOfExpenditure`, `projectReport`, `bankStatement`, `project-presentation`, `project-bill-copies`, `journal-article`, `finance-principal-documents`.
 
 ## Environment configuration
 
@@ -159,16 +159,17 @@ MySQL 8.x. Schema files live in `server/schema/` (includes `migrations/`, `scrip
 
 Key table groups:
 
-| Group       | Tables                                                                                                                                          |
-| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth & RBAC | `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `user_entity_roles`                                                          |
-| Master data | `master_departments`, `master_employees`, `master_entities`, `master_entity_types`, `master_entity_contacts`                                    |
-| Budget      | `budget_proposals`, `budget_proposal_lines`, `budget_catalog`, `budget_sub_catalog`                                                             |
-| Finance     | `finance_requests`, `finance_request_budget_rows`, `finance_request_income_rows`, `finance_request_annexures`, `finance_request_status_updates` |
-| Expenditure | `expenditure_requests`, `expenditure_advance_rows`, `expenditure_line_rows`, `expenditure_settlement_rows`, `expenditure_request_refs`          |
-| Research    | `journals`, `projects`, `journal_authors`, `project_investigators`                                                                              |
-| Events      | `events`, `pre_events`, `event_finance`                                                                                                         |
-| Workflow    | `workflow_instances`, `workflow_stage_logs`                                                                                                     |
+| Group       | Tables                                                                                                                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth & RBAC | `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `user_entity_roles`                                                                                                                                            |
+| Master data | `master_departments`, `master_employees`, `master_entities`, `master_entity_types`, `master_entity_contacts`                                                                                                                      |
+| Budget      | `budget_proposals`, `budget_proposal_lines`, `budget_catalog`, `budget_sub_catalog`                                                                                                                                               |
+| Finance     | `finance_requests`, `finance_request_budget_rows`, `finance_request_income_rows`, `finance_request_annexures`, `finance_request_status_updates`                                                                                   |
+| Expenditure | `expenditure_requests`, `expenditure_advance_rows`, `expenditure_line_rows`, `expenditure_settlement_rows`, `expenditure_request_refs`                                                                                            |
+| Research    | `journals`, `journal_authors`, `authors`, `author_students`                                                                                                                                                                       |
+| Projects    | `research_projects`, `project_investigators`, `project_tags`, `project_collaborators`, `project_finance_rows`, `project_grant_disbursements`, `project_documents`, `project_organizations`, `project_schemes`, `project_requests` |
+| Events      | `events`, `pre_events`, `event_finance`                                                                                                                                                                                           |
+| Workflow    | `workflow_instances`, `workflow_stage_logs`                                                                                                                                                                                       |
 
 All queries use parameterized statements (`mysql2`). Typical usage in a model:
 

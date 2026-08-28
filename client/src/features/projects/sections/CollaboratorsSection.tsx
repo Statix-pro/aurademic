@@ -1,0 +1,198 @@
+import React, { useMemo } from 'react';
+
+import { SelectField } from '../components/FormFields';
+import RowActions from '../components/RowActions';
+import SectionCard from '../components/SectionCard';
+import YesNoSwitch from '../components/YesNoSwitch';
+import { COLLABORATOR_CATEGORIES, MAX_COLLABORATORS } from '../constants';
+import { createCollaboratorRow, removeAt, replaceAt } from '../projectFormState';
+import { withSelectedOption } from '../selectOptions';
+
+import type { CollaboratorRow, ProjectFormState, ProjectOrganization } from '../types';
+
+interface CollaboratorsSectionProps {
+  form: ProjectFormState;
+  patch: (changes: Partial<ProjectFormState>) => void;
+  organizations: ProjectOrganization[];
+  errors: Record<string, string>;
+  disabled: boolean;
+}
+
+const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
+  form,
+  patch,
+  organizations,
+  errors,
+  disabled,
+}) => {
+  const rows = form.collaborators;
+
+  const organizationOptions = useMemo(
+    () =>
+      organizations
+        .filter((organization) => organization.is_internal !== 1)
+        .map((organization) => ({ value: String(organization.id), label: organization.name })),
+    [organizations],
+  );
+
+  const update = (index: number, changes: Partial<CollaboratorRow>) =>
+    patch({ collaborators: replaceAt(rows, index, changes) });
+
+  const selectOrganization = (index: number, value: string) => {
+    const organization = organizations.find((item) => String(item.id) === value);
+
+    update(index, {
+      organizationId: organization?.id ?? null,
+      organizationName: organization?.name ?? '',
+      // The master list knows where the organization is, so the city follows
+      // the pick unless the user has already typed one.
+      city: organization?.city && !rows[index].city ? organization.city : rows[index].city,
+    });
+  };
+
+  return (
+    <SectionCard
+      title="Collaborator(s)"
+      error={errors.collaborators}
+      toggle={{
+        checked: form.collaboratorsEnabled,
+        onChange: (checked) => patch({ collaboratorsEnabled: checked }),
+        label: 'Enable collaborators',
+        disabled,
+      }}
+    >
+      <div className="pf-rows">
+        {rows.map((row, index) => (
+          <div className="pf-collaborator" key={row.key}>
+            <div className="pf-collaborator__main">
+              <div className="pf-inline-field">
+                <span className="pf-inline-field__label">Category</span>
+                <SelectField
+                  value={row.category}
+                  onChange={(value) => update(index, { category: value })}
+                  options={COLLABORATOR_CATEGORIES.map((category) => ({
+                    value: category,
+                    label: category,
+                  }))}
+                  placeholder="Select"
+                  disabled={disabled}
+                  ariaLabel="Collaborator category"
+                />
+              </div>
+
+              <div className="pf-inline-field pf-inline-field--grow">
+                <span className="pf-inline-field__label">Role</span>
+                <input
+                  type="text"
+                  className="pf-input"
+                  value={row.role}
+                  onChange={(event) => update(index, { role: event.target.value })}
+                  disabled={disabled}
+                  aria-label="Collaborator role"
+                />
+              </div>
+
+              <RowActions
+                itemLabel="collaborator"
+                onAdd={() => patch({ collaborators: [...rows, createCollaboratorRow()] })}
+                showAdd={index === rows.length - 1}
+                addDisabled={rows.length >= MAX_COLLABORATORS}
+                onRemove={() => patch({ collaborators: removeAt(rows, index) })}
+                canRemove={rows.length > 1}
+                disabled={disabled}
+              />
+            </div>
+
+            <div className="pf-collaborator__org">
+              <div className="pf-inline-field pf-inline-field--grow">
+                <span className="pf-inline-field__label">Organization</span>
+                <SelectField
+                  value={row.organizationId ? String(row.organizationId) : ''}
+                  onChange={(value) => selectOrganization(index, value)}
+                  options={withSelectedOption(
+                    organizationOptions,
+                    row.organizationId ? String(row.organizationId) : '',
+                    row.organizationName,
+                  )}
+                  placeholder="Select Organization"
+                  disabled={disabled}
+                  invalid={Boolean(errors[`collaborators[${index}].organization`])}
+                  ariaLabel="Collaborating organization"
+                />
+              </div>
+
+              <div className="pf-inline-field">
+                <span className="pf-inline-field__label">City</span>
+                <input
+                  type="text"
+                  className="pf-input"
+                  value={row.city}
+                  onChange={(event) => update(index, { city: event.target.value })}
+                  disabled={disabled}
+                  aria-label="City"
+                />
+              </div>
+
+              <div className="pf-inline-field pf-inline-field--tight">
+                <span className="pf-inline-field__label">Active MoU</span>
+                <YesNoSwitch
+                  name={`mou-${row.key}`}
+                  value={row.hasActiveMou}
+                  onChange={(value) => update(index, { hasActiveMou: value })}
+                  disabled={disabled}
+                  label="Active MoU"
+                />
+              </div>
+            </div>
+
+            <div className="pf-collaborator__contact">
+              <div className="pf-inline-field">
+                <span className="pf-inline-field__label pf-inline-field__label--accent">Name</span>
+                <input
+                  type="text"
+                  className="pf-input"
+                  value={row.contactName}
+                  onChange={(event) => update(index, { contactName: event.target.value })}
+                  disabled={disabled}
+                  aria-label="Contact name"
+                />
+              </div>
+
+              <div className="pf-inline-field">
+                <span className="pf-inline-field__label pf-inline-field__label--accent">
+                  Designation
+                </span>
+                <input
+                  type="text"
+                  className="pf-input"
+                  value={row.contactDesignation}
+                  onChange={(event) => update(index, { contactDesignation: event.target.value })}
+                  disabled={disabled}
+                  aria-label="Contact designation"
+                />
+              </div>
+
+              <div className="pf-inline-field pf-inline-field--grow">
+                <span className="pf-inline-field__label pf-inline-field__label--accent">Email</span>
+                <input
+                  type="email"
+                  className={`pf-input ${errors[`collaborators[${index}].contact_email`] ? 'is-invalid' : ''}`.trim()}
+                  value={row.contactEmail}
+                  onChange={(event) => update(index, { contactEmail: event.target.value })}
+                  disabled={disabled}
+                  aria-label="Contact email"
+                />
+              </div>
+            </div>
+
+            {errors[`collaborators[${index}].contact_email`] && (
+              <p className="pf-field__error">{errors[`collaborators[${index}].contact_email`]}</p>
+            )}
+          </div>
+        ))}
+      </div>
+    </SectionCard>
+  );
+};
+
+export default CollaboratorsSection;

@@ -1,84 +1,58 @@
 // adminModel.js
 import db from '../../config/connection.js';
+import { formatProjectDateRows } from '../project/projectDates.js';
+import projectModel from '../project/projectModel.js';
 
 const adminModel = {
   async getAllProjects(page, perPage) {
     try {
-      // Get total count
       const [countResult] = await db.query('SELECT COUNT(*) as total FROM research_projects');
       const total = countResult[0].total;
 
-      // Calculate offset
       const offset = (page - 1) * perPage;
 
-      // Get paginated results with related data
       const [rows] = await db.query(
         `
-                SELECT 
+                SELECT
                     rp.*,
                     er.status as edit_request_status,
-                    pao.name as agency_name,
-                    pso.name as scheme_name,
-                    pd.sanction_order_amount,
-                    pd.project_duration_start_date,
-                    pd.project_duration_end_date,
-                    GROUP_CONCAT(DISTINCT 
+                    org.name as agency_name,
+                    sch.name as scheme_name,
+                    sch.category as scheme_category,
+                    (SELECT SUM(pgd.amount)
+                       FROM project_grant_disbursements pgd
+                      WHERE pgd.project_id = rp.id) as disbursed_amount,
+                    GROUP_CONCAT(DISTINCT
                         CONCAT(
-                            va.author_name,
-                            CASE WHEN va.erp_id IS NOT NULL 
-                                 THEN CONCAT(' [', va.erp_id, ']') 
-                                 ELSE '' 
+                            COALESCE(NULLIF(pin.name, ''), va.author_name),
+                            CASE WHEN va.erp_id IS NOT NULL
+                                 THEN CONCAT(' [', va.erp_id, ']')
+                                 ELSE ''
                             END
                         )
-                    ) as team_members_names,
-                    GROUP_CONCAT(DISTINCT 
-                        CONCAT(
-                            pgd.fiscal_year, ':', 
-                            pgd.agency, ':', 
-                            pgd.amount, ':',
-                            pgd.disbursement_date
-                        )
-                    ) as grant_disbursements_data
+                        ORDER BY pin.is_principal DESC, pin.display_order
+                    ) as team_members_names
                 FROM research_projects rp
-                LEFT JOIN project_agency_options pao ON rp.agency_id = pao.id
-                LEFT JOIN project_scheme_options pso ON rp.scheme_id = pso.id
-                LEFT JOIN project_details pd ON rp.id = pd.project_id
-                LEFT JOIN author_project ap ON rp.id = ap.project_id
-                LEFT JOIN v_authors va ON ap.author_id = va.author_id
-                LEFT JOIN edit_requests er ON 
-                    er.entity_id = rp.id AND 
+                LEFT JOIN project_organizations org ON rp.funding_organization_id = org.id
+                LEFT JOIN project_schemes sch ON rp.scheme_id = sch.id
+                LEFT JOIN project_investigators pin ON rp.id = pin.project_id
+                LEFT JOIN v_authors va ON pin.author_id = va.author_id
+                LEFT JOIN edit_requests er ON
+                    er.entity_id = rp.id AND
                     er.entity_type = 'research_projects'
-                LEFT JOIN project_grant_disbursements pgd ON rp.id = pgd.project_id
-                GROUP BY rp.id, rp.project_category, rp.title, pao.name, pso.name,
-                         rp.duration_years, rp.duration_months, rp.duration_days,
-                         rp.category, rp.is_collaboration_enabled, rp.date_of_submission,
-                         rp.submission_status,
-                         pd.sanction_order_amount, pd.project_duration_start_date,
-                         pd.project_duration_end_date, er.status
+                GROUP BY rp.id, org.name, sch.name, sch.category, er.status
                 ORDER BY rp.id DESC
                 LIMIT ? OFFSET ?
             `,
         [perPage, offset],
       );
 
-      // Transform the results to include team_members array and grant_disbursements
-      const transformedRows = rows.map((row) => ({
+      const transformedRows = formatProjectDateRows(rows).map((row) => ({
         ...row,
-        agency: row.agency_name, // Map agency_name to agency for backwards compatibility
-        scheme: row.scheme_name, // Map scheme_name to scheme for backwards compatibility
+        agency: row.agency_name,
+        scheme: row.scheme_name,
         team_members: row.team_members_names
           ? row.team_members_names.split(',').map((name) => ({ name: name.trim() }))
-          : [],
-        grant_disbursements: row.grant_disbursements_data
-          ? row.grant_disbursements_data.split(',').map((gd) => {
-              const [fiscal_year, agency, amount, disbursement_date] = gd.split(':');
-              return {
-                fiscal_year,
-                agency,
-                amount: parseFloat(amount),
-                disbursement_date,
-              };
-            })
           : [],
       }));
 
@@ -88,159 +62,38 @@ const adminModel = {
     }
   },
 
+  /**
+   * Admin view of one project. The aggregate itself is loaded by the project
+   * module so the admin screen and the form never disagree about its shape;
+   * only the admin-only edit-request status is added here.
+   */
   async getProjectById(id) {
-    try {
-      // Updated query to include agency and scheme names
-      const [projectDetails] = await db.query(
-        `
-            SELECT 
-                rp.*,
-                pd.date_of_presentation,
-                pd.date_of_result_announcement,
-                pd.sanction_order_amount,
-                pd.sanction_order_date,
-                pd.project_duration_start_date,
-                pd.project_duration_end_date,
-                pd.outcome_type,
-                pao.name as agency,    
-                pso.name as scheme,
-                  er.status as edit_request_status,
-                  er.created_at as edit_request_date    
-            FROM research_projects rp
-            LEFT JOIN project_details pd ON rp.id = pd.project_id
-            LEFT JOIN project_agency_options pao ON rp.agency_id = pao.id  
-            LEFT JOIN project_scheme_options pso ON rp.scheme_id = pso.id  
-            LEFT JOIN edit_requests er ON rp.id = er.entity_id AND er.entity_type = 'research_projects'
-            WHERE rp.id = ?
-        `,
-        [id],
-      );
+    const project = await projectModel.getProjectById(id);
 
-      if (!projectDetails[0]) {
-        throw new Error('Project not found');
-      }
-
-      // Get team members with their roles and employee details
-      const [teamMembers] = await db.query(
-        `
-            SELECT 
-                va.author_id as id,
-                va.author_name as name,
-                va.erp_id,
-                va.designation,
-                va.department,
-                va.author_type,
-                ap.is_principal,
-                ap.is_primary
-            FROM v_authors va
-            JOIN author_project ap ON va.author_id = ap.author_id
-            WHERE ap.project_id = ?
-            ORDER BY ap.is_principal DESC, ap.is_primary DESC, va.author_name
-        `,
-        [id],
-      );
-
-      // Get grant disbursements
-      const [grantDisbursements] = await db.query(
-        `
-            SELECT 
-                fiscal_year,
-                agency,
-                amount,
-                disbursement_date,
-                sanction_letter_path,
-                uc_and_soe_path
-            FROM project_grant_disbursements
-            WHERE project_id = ?
-            ORDER BY disbursement_date DESC
-        `,
-        [id],
-      );
-
-      // Get collaborating partners
-      const [partners] = await db.query(
-        `
-            SELECT 
-                partner,
-                address,
-                support
-            FROM project_collaborations
-            WHERE project_id = ?
-        `,
-        [id],
-      );
-
-      // Get project documents
-      const [projectDocuments] = await db.query(
-        `
-            SELECT 
-                document_type,
-                file_path
-            FROM project_documents
-            WHERE project_id = ?
-        `,
-        [id],
-      );
-
-      // Get financial contributions with agency type names
-      const [financialContributions] = await db.query(
-        `
-            SELECT 
-                pfc.agency_type_id,
-                pato.name as agency_type,
-                pfc.agency,
-                pfc.amount
-            FROM project_financial_contributions pfc
-            LEFT JOIN project_agency_type_options pato ON pfc.agency_type_id = pato.id
-            WHERE pfc.project_id = ?
-        `,
-        [id],
-      );
-
-      // Combine all the data
-      const result = {
-        ...projectDetails[0],
-        team_members: teamMembers.map((member) => ({
-          id: member.id,
-          name: member.name,
-          erp_id: member.erp_id,
-          designation: member.designation,
-          department: member.department,
-          author_type: member.author_type,
-          is_principal: member.is_principal,
-          is_primary: member.is_primary,
-        })),
-        principal_investigators: teamMembers
-          .filter((member) => member.is_principal)
-          .map((pi) => pi.name),
-        collaborating_partners: partners.map((p) => ({
-          partner: p.partner,
-          address: p.address,
-          support: p.support,
-        })),
-        grant_disbursements: grantDisbursements.map((gd) => ({
-          fiscal_year: gd.fiscal_year,
-          agency: gd.agency,
-          amount: gd.amount,
-          disbursement_date: gd.disbursement_date,
-          sanction_letter_path: gd.sanction_letter_path,
-          uc_and_soe_path: gd.uc_and_soe_path,
-        })),
-        documents: projectDocuments.map((doc) => ({
-          document_type: doc.document_type,
-          file_path: doc.file_path,
-        })),
-        financial_contributions: financialContributions.map((fc) => ({
-          agency_type: fc.agency_type,
-          agency: fc.agency,
-          amount: fc.amount,
-        })),
-      };
-
-      return result;
-    } catch (error) {
-      throw new Error(`Error retrieving project details: ${error.message}`);
+    if (!project) {
+      throw new Error('Project not found');
     }
+
+    const [[editRequest]] = await db.query(
+      `SELECT status, created_at
+         FROM edit_requests
+        WHERE entity_id = ? AND entity_type = 'research_projects'
+        ORDER BY created_at DESC
+        LIMIT 1`,
+      [id],
+    );
+
+    return {
+      ...project,
+      agency: project.funding_organization_name,
+      scheme: project.scheme_name,
+      team_members: project.investigators,
+      principal_investigators: project.investigators
+        .filter((investigator) => investigator.is_principal)
+        .map((investigator) => investigator.name),
+      edit_request_status: editRequest?.status ?? null,
+      edit_request_date: editRequest?.created_at ?? null,
+    };
   },
 
   async getAllJournals(page, perPage) {
@@ -382,8 +235,8 @@ const adminModel = {
       const [projectStats] = await db.query(`
                 SELECT
                     COUNT(*) as total_projects,
-                    COUNT(CASE WHEN submission_status = 'approved' THEN 1 END) as approved_projects,
-                    COUNT(CASE WHEN submission_status = 'pending' THEN 1 END) as pending_projects
+                    COUNT(CASE WHEN final_result = 'selected' THEN 1 END) as approved_projects,
+                    COUNT(CASE WHEN proposal_status <> 'result_announced' THEN 1 END) as pending_projects
                 FROM research_projects
             `);
 
@@ -504,60 +357,101 @@ const adminModel = {
     }
   },
 
-  async approveProjectRequest(requestId, adminComment) {
-    try {
-      // Get the project request
-      const [requestRows] = await db.query('SELECT * FROM project_requests WHERE id = ?', [
-        requestId,
-      ]);
+  /**
+   * Approving a request copies it into the master table the form reads. Both
+   * writes share a transaction so a request is never marked approved without
+   * the master row existing.
+   */
+  async approveProjectRequest(requestId, adminComment, adminUserId = null) {
+    const connection = await db.getConnection();
 
-      if (requestRows.length === 0) {
+    try {
+      await connection.beginTransaction();
+
+      const [[request]] = await connection.query(
+        "SELECT * FROM project_requests WHERE id = ? AND status = 'pending'",
+        [requestId],
+      );
+
+      if (!request) {
+        await connection.rollback();
         return null;
       }
 
-      const request = requestRows[0];
+      let createdId;
 
-      let result;
-      // Add to appropriate options table based on request type
-      switch (request.request_type) {
-        case 'agency':
-          [result] = await db.query('INSERT INTO project_agency_options (name) VALUES (?)', [
-            request.name,
-          ]);
-          break;
-        case 'scheme':
-          [result] = await db.query('INSERT INTO project_scheme_options (name) VALUES (?)', [
-            request.name,
-          ]);
-          break;
-        case 'agency_type':
-          [result] = await db.query('INSERT INTO project_agency_type_options (name) VALUES (?)', [
-            request.name,
-          ]);
-          break;
-        default:
-          throw new Error('Invalid request type');
+      if (request.request_type === 'organization') {
+        const [result] = await connection.query(
+          `INSERT INTO project_organizations (name, category, website)
+           VALUES (?, ?, ?)`,
+          [request.name, request.category, request.website],
+        );
+        createdId = result.insertId;
+      } else if (request.request_type === 'scheme') {
+        let organizationId = request.organization_id;
+
+        // A requester may name an agency that is not in the master yet; create
+        // it alongside the scheme so the approval does not need a second pass.
+        if (!organizationId) {
+          if (!request.organization_name) {
+            throw new Error('The scheme request does not name a funding agency');
+          }
+
+          const [[existing]] = await connection.query(
+            'SELECT id FROM project_organizations WHERE name = ? LIMIT 1',
+            [request.organization_name],
+          );
+
+          if (existing) {
+            organizationId = existing.id;
+          } else {
+            const [created] = await connection.query(
+              'INSERT INTO project_organizations (name) VALUES (?)',
+              [request.organization_name],
+            );
+            organizationId = created.insertId;
+          }
+        }
+
+        const [result] = await connection.query(
+          `INSERT INTO project_schemes (organization_id, name, domain, category, website)
+           VALUES (?, ?, ?, ?, ?)`,
+          [organizationId, request.name, request.domain, request.category, request.website],
+        );
+        createdId = result.insertId;
+      } else {
+        throw new Error('Invalid request type');
       }
 
-      // Update the request status
-      await db.query(
-        `UPDATE project_requests 
-                     SET status = 'approved', admin_comment = ?, updated_at = CURRENT_TIMESTAMP
-                     WHERE id = ?`,
+      await connection.query(
+        `UPDATE project_requests
+            SET status = 'approved',
+                admin_comment = ?,
+                approved_record_id = ?,
+                reviewed_by = ?,
+                reviewed_at = CURRENT_TIMESTAMP
+          WHERE id = ?`,
         [
-          adminComment || `${request.request_type.replace('_', ' ')} approved and added to options`,
+          adminComment || `${request.request_type} approved and added to the master list`,
+          createdId,
+          adminUserId,
           requestId,
         ],
       );
 
+      await connection.commit();
+
       return {
-        id: result.insertId,
+        id: createdId,
         name: request.name,
         request_type: request.request_type,
         status: 'approved',
       };
     } catch (error) {
+      await connection.rollback();
       throw new Error(`Error approving project request: ${error.message}`);
+    } finally {
+      connection.release();
     }
   },
 

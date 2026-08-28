@@ -1,1084 +1,1174 @@
-/* Project-specific styles only. Shared blue theme lives in styles/forms.css */
+/* ==========================================================================
+   Research project form
+   Scoped to .pf-page so it cannot leak into the rest of the app. Colours come
+   from shared/styles/variables.css; only spacing and layout live here.
+   ========================================================================== */
 
-/* Category toggle shared in forms.css */
+.pf-page {
+  --pf-radius: 14px;
+  --pf-gap: 18px;
+  --pf-field-height: 42px;
 
-/* Cards, titles, layout shared in forms.css */
-
-/* Input base styles shared in forms.css */
-
-/* Card spacing to match journal form */
-.form-card,
-.form-card-dashed {
-  padding: 1.25rem;
-  margin-bottom: 1rem;
+  min-height: 100%;
+  padding: 24px 20px 96px;
+  background: var(--bg-light, #f0f6ff);
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.95rem;
 }
 
-/* Custom Tooltip Styles */
-.custom-tooltip {
-  position: relative;
-  display: inline-block;
+.pf-page__inner {
+  max-width: 1320px;
+  margin: 0 auto;
 }
 
-.custom-tooltip .tooltip-text {
-  visibility: hidden;
-  background-color: #015b93;
-  color: #fff;
-  text-align: center;
-  border-radius: 4px;
-  padding: 6px 10px;
-  position: absolute;
-  z-index: 1001;
-  bottom: 125%;
-  left: 50%;
-  transform: translateX(-50%);
-  opacity: 0;
-  transition: opacity 0.1s;
-  font-size: 11px;
-  font-weight: 500;
-  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.3);
-  white-space: nowrap;
-  min-width: fit-content;
-  max-width: 200px;
-}
-
-.custom-tooltip .tooltip-text::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  margin-left: -4px;
-  border-width: 4px;
-  border-style: solid;
-  border-color: #0069ab transparent transparent transparent;
-}
-
-.custom-tooltip:hover .tooltip-text {
-  visibility: visible;
-  opacity: 1;
-  transition-delay: 0s;
-}
-
-/* Radio Group Styles (matching journal form) */
-.radio-group {
+.pf-page--centered {
   display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
+  flex-direction: column;
+  gap: 12px;
   align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: var(--text-muted, #6c757d);
 }
 
-.radio-item {
+.pf-spinner {
+  color: var(--primary-color, #0069ab);
+  animation: pf-spin 1s linear infinite;
+}
+
+@keyframes pf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ----------------------------------------------------------------- page bar */
+
+/* The form has no page heading; this bar only appears to confirm a save or to
+   offer the way out of view mode. */
+.pf-page__header {
   display: flex;
+  gap: 12px;
   align-items: center;
+  justify-content: flex-end;
+  margin-bottom: var(--pf-gap);
 }
 
-.radio-item input[type='radio'] {
-  display: none;
-}
-
-.radio-item label {
-  margin-left: 0.5rem;
-  margin-bottom: 0;
-  cursor: pointer;
-  position: relative;
-  padding-left: 28px;
-  color: #5d6b8a;
-}
-
-.radio-item label::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 20px;
-  height: 20px;
-  border: 2px solid;
-  border-radius: 50%;
-  background-color: #fff;
-}
-
-.radio-item label::after {
-  content: '';
-  position: absolute;
-  left: 5px;
-  top: 50%;
-  transform: translateY(-50%) scale(0);
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #0069ab;
-  transition: transform 0.2s ease-in-out;
-}
-
-.radio-item input[type='radio']:checked + label::before {
-  border-color: #0069ab;
-}
-
-.radio-item input[type='radio']:checked + label::after {
-  transform: translateY(-50%) scale(1);
-}
-
-/* Check input base styles shared in forms.css */
-
-/* Form switch sizing retained for project */
-.form-switch .form-check-input {
-  width: 2.5em;
-  height: 1.4em;
-  background-color: #ccc;
-  border: 1px solid #ccc;
-}
-
-.form-switch .form-check-input:checked {
-  background-color: #0069ab;
-  border-color: #0069ab;
-}
-
-/* Button Styling (project-specific elements use blue) */
-.btn-add {
-  background-color: #0069ab;
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  padding: 8px 18px;
-  font-weight: 500;
-  transition: background-color 0.2s;
-}
-
-.btn-add:hover {
-  background-color: #005492;
-}
-
-.btn.btn-primary.btn-add {
-  background-color: #0069ab !important;
-  color: #fff !important;
-  border: none !important;
-}
-
-.btn.btn-primary.btn-add:hover {
-  background-color: #005492 !important;
-}
-
-.btn-upload {
-  background-color: #0069ab;
-  color: white;
-  border: none;
-  padding: 10px 20px;
-  font-size: 1rem;
-  border-radius: 12px;
-  cursor: pointer;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.btn-upload:hover {
-  background-color: #005492;
-}
-
-.btn-upload-sm {
-  background-color: #0069ab;
-  color: white;
-  border: none;
-  padding: 8px 15px;
-  font-size: 0.85rem;
-  border-radius: 12px;
-  cursor: pointer;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.btn-upload-sm:hover {
-  background-color: #005492;
-}
-
-/* Two-card upload row adjustments */
-.journal-submission-row {
-  margin-bottom: 2rem;
-}
-
-/* Cards match shared form-card styling from forms.css */
-.journal-submission-row .form-card {
-  min-height: 120px;
-}
-
-.journal-submission-row .btn-upload {
-  font-size: 0.95rem;
-  padding: 8px 18px !important;
-  border-radius: 8px !important;
-}
-
-.journal-submission-row .file-name-display {
-  margin-left: 10px;
-  color: gray;
-  font-weight: 500;
-  font-size: 0.95rem;
-}
-
-.journal-submission-row .btn-link {
-  margin-left: 10px;
-  color: #0069ab;
-  font-weight: 500;
-  text-decoration: underline;
-  font-size: 0.95rem;
-  padding: 0;
-  background: none;
-  border: none;
-}
-
-.journal-submission-row .form-check-input {
-  margin-top: 0;
-}
-
-.journal-submission-row input[type='date'],
-.journal-submission-row input[type='text'],
-.journal-submission-row select {
-  font-size: 0.95rem;
-  height: 36px;
-  padding: 4px 10px;
-}
-
-.agency-type-input-wrapper {
-  position: relative;
-}
-
-.dropdown-menu.show {
-  display: block;
-  position: absolute;
-  z-index: 1000;
-  width: 100%;
-}
-
-.investigator-row .col,
-.investigator-row .col-auto {
-  padding-left: 5px;
-  padding-right: 5px;
-}
-
-.file-name-display {
-  font-size: 12px;
-  color: #6c757d;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 150px;
-}
-
-hr {
-  margin: 2rem 0;
-  border-color: #e9ecef;
-}
-
-/* Radio styles shared in forms.css */
-
-/* Date of Submission Card Customization */
-.date-submission-card .form-label {
-  color: #0069ab;
+.pf-page__saved {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #e6f6ed;
+  color: var(--success-color, #198754);
   font-weight: 600;
-  font-size: 15px;
+  font-size: 0.82rem;
 }
 
-.date-submission-card .form-check-input {
-  margin-top: 0;
-}
+/* --------------------------------------------------------------------- cards */
 
-.date-submission-card input[type='date'],
-.date-submission-card select {
-  font-size: 0.98rem;
-  height: 36px;
-  padding: 4px 10px;
-  background: #f8f7fd;
-  border: 1px solid #e0e0f5;
-}
-
-.date-submission-card input[type='text'] {
-  font-size: 0.98rem;
-  height: 36px;
-  padding: 4px 10px;
-  background: #f8f7fd;
-  border: 1px solid #e0e0f5;
-}
-
-.date-submission-card .form-control:disabled,
-.date-submission-card .form-select:disabled {
-  background: #f3f3fa;
-}
-
-/* Form-card dashed base shared in forms.css */
-
-/* Submit button shared in forms.css */
-
-/* Base form element styling shared in forms.css */
-
-/* Radio and Checkbox Styling */
-.investigator-row {
+.pf-form {
   display: flex;
-  align-items: center;
-  /* This vertically centers everything in the row */
-  gap: 0.75rem;
-  /* This creates consistent space between all elements */
+  flex-direction: column;
+  gap: var(--pf-gap);
 }
 
-.investigator-input-group {
+.pf-card {
+  padding: 20px 22px;
+  border-radius: var(--pf-radius);
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 6px 22px rgb(0 62 105 / 6%);
+}
+
+.pf-card__header {
   display: flex;
-  gap: 0.75rem;
-  flex-grow: 1;
-  /* Allows this group to take up available space */
-  flex-wrap: nowrap;
-  /* Prevents wrapping - keeps all inputs on same line */
-}
-
-.investigator-input-group .form-control {
-  flex: 1;
-  /* All inputs in this group will try to take equal space */
-  min-width: 100px;
-  /* Reduced min-width to fit more inputs on one line */
-  max-width: 200px;
-  /* Added max-width to prevent inputs from becoming too wide */
-}
-
-/* Specific styles for readOnly fields to ensure consistent appearance */
-.investigator-input-group .form-control[readOnly],
-.investigator-row .form-control[readOnly] {
-  background-color: #e9ecef !important;
-  color: #495057;
-}
-
-.designation-select {
-  flex: 0 0 auto;
-  /* Prevents the dropdown from growing or shrinking */
-  width: 120px;
-  /* Set a fixed width for the dropdown */
-  min-width: 120px;
-  /* Ensure minimum width */
-  max-width: 120px;
-  /* Ensure maximum width */
-}
-
-.investigator-search-container {
-  position: relative;
-  /* This is the anchor for the suggestions dropdown */
-  flex: 1;
-  /* Makes it expand to fill space */
-  min-width: 150px;
-  /* Ensure search has a decent min width */
-  max-width: 200px;
-  /* Limit the search input width like other fields */
-}
-
-.investigator-suggestions-list {
-  position: absolute;
-  top: 100%;
-  /* Position it right below the search input */
-  left: 0;
-  right: 0;
-  background-color: white;
-  border: 1px solid #ddd;
-  border-top: none;
-  /* Looks cleaner */
-  border-radius: 0 0 8px 8px;
-  /* Match the input's corners */
-  max-height: 200px;
-  overflow-y: auto;
-  z-index: 1000;
-  /* Ensure it appears on top of other content */
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  padding: 0;
-  margin: 0;
-  list-style: none;
-  /* Remove default bullet points */
-}
-
-/* Optional but recommended: Add a hover state for better UX */
-.investigator-suggestions-list .list-group-item-action:hover {
-  background-color: #f8f9fa;
-  cursor: pointer;
-}
-
-.investigator-row-radio {
-  -webkit-appearance: none;
-  appearance: none;
-  margin: 0;
-  width: 20px;
-  height: 20px;
-  border: 2px solid #ced4da;
-  /* A standard gray border */
-  border-radius: 50%;
-  cursor: pointer;
-  position: relative;
-  flex-shrink: 0;
-  /* Prevents the radio button from shrinking */
-}
-
-.investigator-row-radio:checked {
-  border-color: #0d6efd;
-  /* A standard blue color for the selected state */
-}
-
-.investigator-row-radio::after {
-  content: '';
-  display: block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background-color: #0d6efd;
-  /* The inner blue dot */
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%) scale(0);
-  transition: transform 0.15s ease-in-out;
-}
-
-.investigator-row-radio:checked::after {
-  transform: translate(-50%, -50%) scale(1);
-}
-
-.investigator-row .form-control {
-  background-color: #fcfcff !important;
-  /* Revert to original background */
-}
-
-.investigator-number {
-  flex-shrink: 0;
-  width: 38px;
-  height: 38px;
-  background-color: #6a5acd;
-  color: #fff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-}
-
-.btn-delete-investigator {
-  color: #dc3545;
-  background: #f8d7da !important;
-  /* Light red background */
-  border-radius: 8px !important;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none !important;
-  flex-shrink: 0;
-  /* Prevents the button from shrinking */
-}
-
-/* Action buttons for investigator rows */
-.investigator-action-buttons {
-  display: flex;
-  flex-direction: row;
-  gap: 0.5rem;
-  align-items: center;
-  width: 72px;
-  flex-shrink: 0;
-  justify-content: center;
-}
-
-.btn-add-author {
-  background-color: #0069ab;
-  color: #fff;
-  border: none;
-  border-radius: 8px !important;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 500;
-  transition: background-color 0.2s;
-  flex-shrink: 0;
-  padding: 0;
-}
-
-.btn-add-author:hover {
-  background-color: #0069ab !important;
-  color: #fff !important;
-}
-
-.btn-delete-author {
-  color: #dc3545;
-  background: #f8d7da !important;
-  border-radius: 8px !important;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none !important;
-  flex-shrink: 0;
-  padding: 0;
-}
-
-.btn-delete-author:hover {
-  background: #f8d7da !important;
-  color: #dc3545 !important;
-}
-
-/* Custom radio styles shared in forms.css */
-
-/* Checkbox visuals shared in forms.css */
-
-/* Custom Toggle Switch */
-.toggle-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-}
-
-.toggle-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.toggle-switch .slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #ccc;
-  transition: 0.4s;
-  border-radius: 34px;
-}
-
-.toggle-switch .slider:before {
-  position: absolute;
-  content: '';
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: 0.4s;
-  border-radius: 50%;
-}
-
-.toggle-switch input:checked + .slider {
-  background-color: #6a5acd;
-}
-
-.toggle-switch input:checked + .slider:before {
-  transform: translateX(20px);
-}
-
-/* Project form layout — scoped here so the shared Journal form remains unchanged. */
-.journal-form-body {
-  min-height: 100vh;
-  background: #eef5fc;
-}
-
-.journal-form-container {
-  max-width: 1540px;
-  padding: 2rem clamp(1rem, 3vw, 4rem) 3.5rem;
-}
-
-.research-form {
-  display: grid;
-  gap: 1.5rem;
-}
-
-.research-form .form-card {
-  margin-bottom: 0;
-}
-
-.project-section {
-  padding: clamp(1.25rem, 2.2vw, 2rem);
-  border: 1px solid rgba(211, 224, 237, 0.82);
-  border-radius: 22px;
-  box-shadow: 0 12px 32px rgba(42, 83, 125, 0.09);
-}
-
-.project-section-header,
-.project-section-heading {
-  display: flex;
+  gap: 16px;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  min-height: 38px;
-  padding-bottom: 0.85rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid #cfd8e2;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8eef7;
 }
 
-.project-section-header .form-section-title,
-.project-section-heading,
-.project-column-title {
-  margin: 0;
-  color: #0965a6 !important;
-  font-size: 1.08rem;
-  font-weight: 700;
+/* Inline sections (Result Announcement, Project Status, Outcome, Remarks) keep
+   the heading on the same row as the fields, as in the design. */
+.pf-card--inline {
+  padding: 14px 22px;
 }
 
-.project-section .form-label {
-  color: #3c4249;
-  font-size: 0.94rem;
-  font-weight: 650;
+.pf-card--inline .pf-card__header--inline {
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
-.project-section .form-control,
-.project-section .form-select {
-  min-height: 48px;
-  border-color: #c7ced6;
-  border-radius: 13px !important;
-  background-color: #fff;
-  font-size: 0.96rem;
-}
-
-.project-section .form-control::placeholder {
-  color: #a2a8b0;
-  opacity: 1;
-}
-
-.project-section .btn-add {
-  border-radius: 9px;
-  padding: 0.45rem 0.85rem;
-  font-size: 0.88rem;
-}
-
-/* Investigator rows */
-.investigator-card .project-section-header {
-  margin-bottom: 1.25rem;
-}
-
-.investigator-card .project-section-header > div:last-child {
-  gap: 0.6rem;
-}
-
-.investigator-card .radio-group {
-  gap: 1.25rem;
-}
-
-.investigator-row {
-  display: grid;
-  grid-template-columns: 24px 188px minmax(0, 1fr) 76px;
-  align-items: center;
-  gap: 0.9rem;
-  margin-bottom: 0.85rem !important;
-}
-
-.investigator-input-group {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(120px, 1fr));
-  gap: 0.75rem;
-  min-width: 0;
-}
-
-.investigator-input-group .form-control,
-.investigator-search-container {
-  min-width: 0;
-  max-width: none;
-  width: 100%;
-}
-
-.investigator-search-container {
-  position: relative;
-}
-
-.designation-select {
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-}
-
-.investigator-row-radio {
-  width: 20px;
-  height: 20px;
-  border-color: #7e8790;
-}
-
-.investigator-row-radio:checked {
-  border-color: #178b69;
-}
-
-.investigator-row-radio::after {
-  background-color: #178b69;
-}
-
-.investigator-action-buttons {
-  width: auto;
-  justify-content: flex-end;
-}
-
-.btn-add-author,
-.btn-delete-author {
-  width: 34px;
-  height: 34px;
-  border-radius: 50% !important;
-}
-
-.btn-delete-author,
-.btn-delete-author:hover {
-  color: #f33e3e !important;
-  background: transparent !important;
-}
-
-/* Proposal and call details */
-.proposal-details-grid {
-  --bs-gutter-x: 2rem;
-}
-
-.proposal-details-grid > [class*='col-'] + [class*='col-'] {
-  border-left: 1px solid #dbe2e9;
-}
-
-.project-column-title {
-  padding-bottom: 0.8rem;
-  margin-bottom: 1.1rem;
-  border-bottom: 1px solid #d2dbe4;
-}
-
-.proposal-details-card .radio-group {
-  gap: 0.7rem 1.35rem;
-}
-
-.proposal-details-card .radio-item label {
-  color: #4c535b;
-  font-size: 0.9rem;
-}
-
-.proposal-details-card .row.g-2 {
-  --bs-gutter-x: 0.75rem;
-}
-
-/* Table-like collection rows */
-.project-table-head,
-.project-table-row {
-  display: grid;
-  align-items: center;
-  column-gap: 0.9rem;
-}
-
-.project-table-head {
-  min-height: 46px;
-  margin-bottom: 0.55rem;
-  padding: 0.6rem 0.8rem;
-  color: #0965a6;
-  background: #e5f1fc;
-  border: 1px solid #c2d3e5;
-  font-size: 0.9rem;
-  font-weight: 700;
-}
-
-.project-table-row {
-  min-height: 68px;
-  margin: 0 !important;
-  padding: 0.7rem 0.8rem;
-  border: 1px solid #d5dde5;
-  border-top: 0;
-  background: #fff;
-}
-
-.project-table-row > [class*='col'] {
-  width: auto;
-  padding: 0;
-}
-
-.financial-table-head,
-.financial-contribution-card .project-table-row {
-  grid-template-columns: 48px minmax(220px, 1.3fr) minmax(180px, 1fr) minmax(120px, 0.55fr) 38px;
-}
-
-.collaboration-table-head,
-.collaboration-card .project-table-row {
-  grid-template-columns: 48px minmax(210px, 1.25fr) minmax(180px, 1fr) minmax(150px, 0.7fr) 38px;
-}
-
-.project-table-row .btn-delete-author {
-  margin-left: auto;
-}
-
-.agency-type-input-wrapper .dropdown-menu {
-  max-height: 230px;
-  overflow-y: auto;
-}
-
-/* Submission and project outcome areas */
-.project-dual-section {
-  --bs-gutter-x: 1.5rem;
-  margin: 0 !important;
-}
-
-.project-upload-card .custom-input-group,
-.project-details-card .custom-input-group {
-  margin: 0;
-}
-
-.date-submission-card > div:first-child {
-  display: grid !important;
-  grid-template-columns: auto auto minmax(130px, 1fr) minmax(145px, 1fr);
-  gap: 0.65rem;
-  align-items: center;
-}
-
-.date-submission-card > div:first-child .me-2,
-.date-submission-card > div:first-child .me-3 {
-  margin: 0 !important;
-}
-
-.date-submission-card input[type='date'],
-.date-submission-card select {
-  width: 100% !important;
-}
-
-.project-details-card hr {
-  margin: 1.4rem 0;
-  border-color: #d4dce5;
-}
-
-.project-details-grid {
-  --bs-gutter-x: 1.25rem;
-  --bs-gutter-y: 0.85rem;
-}
-
-.project-detail-field {
-  display: grid !important;
-  grid-template-columns: minmax(180px, 1fr) auto minmax(160px, 0.9fr);
-  gap: 0.75rem;
-}
-
-.project-detail-field .me-auto,
-.project-detail-field .me-2 {
-  margin: 0 !important;
-}
-
-.project-detail-field .form-label {
-  min-width: 0 !important;
-  margin: 0;
-}
-
-.grant-table-head,
-.grant-disbursement-row {
-  grid-template-columns:
-    minmax(100px, 0.55fr) minmax(130px, 0.9fr) minmax(100px, 0.5fr) minmax(120px, 0.6fr)
-    minmax(110px, 0.65fr) minmax(110px, 0.65fr) 38px;
-}
-
-.grant-disbursement-row > :nth-child(5),
-.grant-disbursement-row > :nth-child(6) {
-  display: inline-flex;
-  min-width: 0;
-}
-
-.grant-disbursement-row .custom-input-group .d-flex {
-  gap: 0.35rem !important;
-}
-
-.grant-disbursement-row .custom-input-group .text-muted.small {
-  display: none;
-}
-
-.grant-disbursement-row .custom-input-group .btn {
-  padding: 0.45rem 0.65rem !important;
-  border-radius: 8px !important;
-  font-size: 0.78rem;
-}
-
-.project-outcome-row {
+.pf-card--inline {
   display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
   align-items: center;
-  gap: 1.5rem;
 }
 
-.project-outcome-row .form-section-title {
+.pf-card--inline .pf-card__header--inline {
+  flex: 0 0 auto;
+}
+
+.pf-card--inline .pf-card__body {
+  flex: 1 1 480px;
+  margin-top: 0;
+}
+
+.pf-card__title {
   margin: 0;
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  font-size: 1.02rem;
   white-space: nowrap;
 }
 
-.project-outcome-row .checkbox-group {
+.pf-card__header-right {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem 1.4rem;
+  gap: 14px;
+  align-items: center;
 }
 
-.project-documents-grid {
-  --bs-gutter-x: 1.25rem;
-  --bs-gutter-y: 1.25rem;
+.pf-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
 }
 
-.project-document-item {
-  min-height: 88px;
-  padding: 0.85rem;
-  border: 1px solid #cad4df;
-  border-radius: 13px;
-  background: #fff;
-}
-
-.project-document-item > .form-label {
-  min-width: 0 !important;
-  flex: 1;
-}
-
-.project-document-item .custom-input-group .d-flex {
-  gap: 0.5rem !important;
-}
-
-.project-document-item .custom-input-group .text-muted.small {
-  display: none;
-}
-
-.project-document-item .custom-input-group .btn {
-  padding: 0.5rem 0.75rem !important;
-  border-radius: 8px !important;
+.pf-card__error {
+  margin: 12px 0 0;
+  color: var(--error-color, #dc3545);
   font-size: 0.84rem;
 }
 
-@media (max-width: 1199.98px) {
-  .investigator-row {
-    grid-template-columns: 24px 160px minmax(0, 1fr) 72px;
-  }
+.pf-switch.form-check.form-switch {
+  min-height: auto;
+  margin: 0;
+  padding-left: 3em;
+}
 
-  .investigator-input-group {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
-  }
+.pf-switch .form-check-input {
+  height: 1.45em;
+  width: 2.9em;
+  margin-left: -3em;
+  cursor: pointer;
+}
 
-  .grant-table-head,
-  .grant-disbursement-row {
-    grid-template-columns:
-      minmax(90px, 0.55fr) minmax(110px, 0.9fr) minmax(90px, 0.5fr) minmax(105px, 0.6fr)
-      minmax(95px, 0.65fr) minmax(95px, 0.65fr) 38px;
+.pf-switch .form-check-input:checked {
+  border-color: var(--primary-color, #0069ab);
+  background-color: var(--primary-color, #0069ab);
+}
+
+/* Two-column band: Proposal Details next to Call for Details. */
+.pf-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: var(--pf-gap);
+}
+
+/* --------------------------------------------------------------- form fields */
+
+.pf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pf-field__label,
+.pf-inline-field__label {
+  color: #3f4a5f;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.pf-inline-field__label--accent {
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-field__hint {
+  color: var(--text-muted, #6c757d);
+  font-size: 0.78rem;
+}
+
+.pf-field__error {
+  margin: 0;
+  color: var(--error-color, #dc3545);
+  font-size: 0.78rem;
+}
+
+.pf-input {
+  width: 100%;
+  height: var(--pf-field-height);
+  padding: 0 12px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.92rem;
+  font-family: inherit;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.pf-input::placeholder {
+  color: #a9b3c4;
+}
+
+.pf-input:focus {
+  border-color: var(--border-focus, #0069ab);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(0 105 171 / 12%);
+}
+
+.pf-input:disabled,
+.pf-input--readonly,
+.pf-input[readonly] {
+  background: #f1f3f7;
+  color: #6d7891;
+  cursor: default;
+}
+
+.pf-input.is-invalid {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-input--compact {
+  min-width: 78px;
+}
+
+.pf-input--count {
+  width: 78px;
+  text-align: center;
+}
+
+.pf-input--amount {
+  text-align: right;
+}
+
+.pf-textarea {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.pf-readonly {
+  display: block;
+  min-height: var(--pf-field-height);
+  padding: 10px 12px;
+  border: 1px solid #e6eaf1;
+  border-radius: 10px;
+  background: #eceff4;
+  color: #56607a;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.pf-readonly__empty {
+  color: #a9b3c4;
+}
+
+.pf-website {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pf-website .pf-readonly {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pf-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.pf-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pf-grid--budget {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+}
+
+.pf-duration {
+  display: flex;
+  gap: 8px;
+}
+
+/* Rows of label-beside-control fields (submission, presentation, sanction). */
+.pf-inline-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  align-items: flex-end;
+}
+
+.pf-inline-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 160px;
+}
+
+/* Only meaningful inside a row: in a column container a flex-basis of 220px
+   would be read as a height and stretch the field into a tall empty box. */
+.pf-inline-grid > .pf-inline-field--grow,
+.pf-collaborator__main > .pf-inline-field--grow,
+.pf-collaborator__org > .pf-inline-field--grow,
+.pf-collaborator__contact > .pf-inline-field--grow {
+  flex: 1 1 220px;
+}
+
+.pf-inline-field--tight {
+  min-width: auto;
+}
+
+.pf-fieldset {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pf-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin-top: 8px;
+}
+
+.pf-radio {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  color: #3f4a5f;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.pf-radio input[type='radio'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary-color, #0069ab);
+  cursor: pointer;
+}
+
+.pf-driven-by {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.pf-driven-by__label {
+  color: #3f4a5f;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.pf-driven-by .pf-radio span {
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------ native selects */
+
+.pf-select {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-select__control {
+  width: 100%;
+  height: var(--pf-field-height);
+  padding: 0 32px 0 12px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.92rem;
+  font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+
+.pf-select__control:focus {
+  border-color: var(--border-focus, #0069ab);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(0 105 171 / 12%);
+}
+
+.pf-select__control:disabled {
+  background: #f1f3f7;
+  color: #8a93a6;
+  cursor: default;
+}
+
+.pf-select__control.is-invalid {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-select__chevron {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  color: #7d879b;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------- yes/no pill */
+
+.pf-yesno {
+  display: inline-flex;
+  /* Keeps the pill at its own width inside a stretching flex column. */
+  align-self: flex-start;
+  overflow: hidden;
+  height: 34px;
+  border: 1px solid #d8e2f0;
+  border-radius: 8px;
+  background: #eaf1fb;
+}
+
+.pf-yesno__option {
+  min-width: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.pf-yesno__option.is-selected {
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-yesno__option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------- buttons */
+
+.pf-btn {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.pf-btn--primary {
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-btn--primary:hover:not(:disabled) {
+  background: var(--primary-hover, #005492);
+}
+
+.pf-btn--ghost {
+  border-color: #d5deeb;
+  background: #fff;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-btn--ghost:hover:not(:disabled) {
+  background: #f2f7ff;
+}
+
+.pf-btn--sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.82rem;
+}
+
+.pf-btn--lg {
+  height: 44px;
+  padding: 0 30px;
+  font-size: 0.95rem;
+}
+
+.pf-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pf-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: #eef4fd;
+  color: var(--primary-color, #0069ab);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.pf-icon-btn:hover:not(:disabled):not(.is-disabled) {
+  background: #dfeaf9;
+}
+
+.pf-icon-btn:disabled,
+.pf-icon-btn.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.pf-icon-btn--add {
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-icon-btn--add:hover:not(:disabled) {
+  background: var(--primary-hover, #005492);
+}
+
+.pf-icon-btn--remove,
+.pf-icon-btn--danger {
+  background: #fdecec;
+  color: var(--error-color, #dc3545);
+}
+
+.pf-icon-btn--remove:hover:not(:disabled),
+.pf-icon-btn--danger:hover:not(:disabled) {
+  background: #fadcdc;
+}
+
+.pf-icon-btn--success {
+  background: #e6f6ed;
+  color: var(--success-color, #198754);
+}
+
+.pf-icon-btn--ghost {
+  background: #eef4fd;
+}
+
+.pf-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-visually-hidden {
+  position: absolute;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  width: 1px;
+  height: 1px;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- investigators */
+
+.pf-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pf-investigator-row {
+  display: grid;
+  grid-template-columns: 20px 58px 150px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.1fr) 78px;
+  gap: 10px;
+  align-items: center;
+}
+
+.pf-investigator-row.is-dragging {
+  border-radius: 10px;
+  background: #f6faff;
+  box-shadow: 0 8px 22px rgb(0 62 105 / 12%);
+}
+
+.pf-investigator-row__country {
+  min-width: 0;
+}
+
+/* External members carry two fields more than a row has columns (department and
+   email), so they wrap onto a second line under the row's own content columns. */
+.pf-investigator-row__extra {
+  display: grid;
+  grid-column: 4 / 7;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.pf-drag-handle {
+  display: inline-flex;
+  color: #b6bfd0;
+  cursor: grab;
+}
+
+.pf-principal {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.pf-principal input[type='radio'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary-color, #0069ab);
+  cursor: pointer;
+}
+
+.pf-principal__tag {
+  color: var(--text-muted, #6c757d);
+  font-weight: 600;
+  font-size: 0.65rem;
+  letter-spacing: 0.02em;
+}
+
+/* ------------------------------------------------------------- search fields */
+
+.pf-search {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-search__clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: #eef4fd;
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+  font-size: 0.72rem;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.pf-search__menu,
+.pf-tags__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 30;
+  overflow-y: auto;
+  max-height: 240px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fff;
+  list-style: none;
+  box-shadow: 0 10px 26px rgb(0 62 105 / 12%);
+}
+
+.pf-search__option,
+.pf-tags__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pf-search__option:hover,
+.pf-tags__option:hover {
+  background: #f2f7ff;
+}
+
+.pf-search__name {
+  font-weight: 600;
+}
+
+.pf-search__meta {
+  color: var(--text-muted, #6c757d);
+  font-size: 0.78rem;
+}
+
+.pf-tags__empty {
+  padding: 10px;
+  color: var(--text-muted, #6c757d);
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- tag select */
+
+.pf-tags {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-tags__control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: var(--pf-field-height);
+  padding: 6px 30px 6px 10px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fbfcfe;
+  cursor: text;
+}
+
+.pf-tags--invalid .pf-tags__control {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-tags--compact .pf-tags__control {
+  min-height: 38px;
+  padding-right: 10px;
+}
+
+.pf-tags__input {
+  flex: 1 1 120px;
+  min-width: 90px;
+  border: 0;
+  background: transparent;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.pf-tags__input:focus {
+  outline: none;
+}
+
+.pf-tags__input::placeholder {
+  color: #a9b3c4;
+}
+
+.pf-tags__chevron {
+  position: absolute;
+  top: 20px;
+  right: 11px;
+  color: #7d879b;
+  pointer-events: none;
+}
+
+.pf-chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e7f0fc;
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.pf-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------- collaborators */
+
+.pf-collaborator {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #eef2f8;
+  border-radius: 12px;
+  background: #fcfdff;
+}
+
+.pf-collaborator__main,
+.pf-collaborator__org {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: flex-end;
+}
+
+.pf-collaborator__contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: flex-end;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #eff5fe;
+}
+
+.pf-collaborator .pf-inline-field {
+  min-width: 150px;
+}
+
+/* --------------------------------------------------------------------- tables */
+
+.pf-table-wrap {
+  overflow-x: auto;
+}
+
+.pf-table {
+  width: 100%;
+  border: 1px solid #e5eaf2;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.pf-table th,
+.pf-table td {
+  padding: 10px 12px;
+  border: 1px solid #e5eaf2;
+  vertical-align: middle;
+}
+
+.pf-table thead tr {
+  background: #eff5fe;
+}
+
+.pf-table th {
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.pf-table__sno {
+  width: 62px;
+  text-align: center;
+}
+
+.pf-table__amount {
+  width: 140px;
+}
+
+.pf-table__slot {
+  width: 88px;
+  text-align: center;
+}
+
+.pf-table__actions {
+  width: 96px;
+  text-align: center;
+}
+
+.pf-table tfoot td {
+  background: #f7faff;
+  font-weight: 700;
+}
+
+.pf-table__total-label {
+  color: var(--primary-color, #0069ab);
+  text-align: right;
+}
+
+.pf-table__total-value {
+  color: var(--primary-color, #0069ab);
+  text-align: right;
+}
+
+.pf-slot-button {
+  position: relative;
+  display: inline-flex;
+}
+
+.pf-slot-button__clear {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: var(--error-color, #dc3545);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ documents */
+
+.pf-document {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-width: 280px;
+  padding: 14px 16px;
+  border: 1px solid #e6ecf6;
+  border-radius: 12px;
+  background: #fcfdff;
+}
+
+.pf-document--invalid {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-document__icon {
+  flex: 0 0 auto;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-document__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pf-document__label {
+  color: #3b4457;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.pf-document__meta {
+  overflow: hidden;
+  color: var(--text-muted, #6c757d);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pf-document__link {
+  color: var(--primary-color, #0069ab);
+  text-decoration: underline;
+}
+
+.pf-document__error {
+  color: var(--error-color, #dc3545);
+  font-size: 0.76rem;
+}
+
+.pf-document__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Two per row, as the design pairs the four final documents. */
+.pf-document-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.pf-presentation,
+.pf-sanction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 18px;
+  align-items: start;
+}
+
+.pf-presentation__fields,
+.pf-sanction__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* -------------------------------------------------------------------- outcome */
+
+/* Even columns so every label/input pair sits on the same rhythm and the
+   inputs line up in a straight row. */
+.pf-outcome {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px 18px;
+  align-items: center;
+}
+
+.pf-outcome__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 78px;
+  gap: 8px;
+  align-items: center;
+}
+
+/* line-height matches the input height so label text and box share one
+   vertical centre across the whole row. */
+.pf-outcome__item .pf-inline-field__label {
+  line-height: var(--pf-field-height);
+  white-space: nowrap;
+}
+
+.pf-outcome__item .pf-input--count {
+  width: 100%;
+}
+
+/* --------------------------------------------------------------- stage notes */
+
+/* Explains why the later sections are not on screen yet, so a hidden section
+   reads as "not applicable yet" rather than as something broken. */
+.pf-stage-note {
+  margin: -4px 0 0;
+  padding: 12px 18px;
+  border: 1px dashed #cfdcf0;
+  border-radius: var(--pf-radius);
+  color: var(--text-muted, #6c757d);
+  font-size: 0.86rem;
+}
+
+.pf-stage-note strong {
+  color: var(--primary-color, #0069ab);
+}
+
+/* -------------------------------------------------------------------- banners */
+
+.pf-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: var(--pf-gap);
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+
+.pf-banner--error {
+  background: #fdecec;
+  color: #9e2530;
+}
+
+.pf-banner--info {
+  background: #e7f0fc;
+  color: #14548a;
+}
+
+.pf-banner__list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* -------------------------------------------------------------------- actions */
+
+.pf-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 8px 0 0;
+}
+
+/* --------------------------------------------------------------------- modal */
+
+.pf-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pf-modal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.pf-modal__done {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (width <= 1200px) {
+  .pf-columns,
+  .pf-presentation,
+  .pf-sanction {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
-@media (max-width: 767.98px) {
-  .journal-form-container {
-    padding: 1rem 0.75rem 2.5rem;
+@media (width <= 992px) {
+  .pf-investigator-row__extra {
+    grid-column: 3 / 5;
   }
 
-  .research-form {
-    gap: 1rem;
+  .pf-outcome {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .project-section {
-    padding: 1rem;
-    border-radius: 16px;
+  .pf-investigator-row {
+    grid-template-columns: 20px 58px minmax(0, 1fr) minmax(0, 1fr) 78px;
+    row-gap: 8px;
   }
 
-  .project-section-header {
+  .pf-investigator-row__type {
+    grid-column: span 3;
+  }
+}
+
+@media (width <= 768px) {
+  .pf-outcome {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pf-document-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-page {
+    padding: 16px 12px 80px;
+  }
+
+  .pf-card {
+    padding: 16px 14px;
+  }
+
+  .pf-card--inline {
     align-items: flex-start;
-    flex-wrap: wrap;
   }
 
-  .proposal-details-grid > [class*='col-'] + [class*='col-'] {
-    margin-top: 1.25rem;
-    padding-top: 1.25rem;
-    border-top: 1px solid #dbe2e9;
-    border-left: 0;
+  .pf-investigator-row {
+    grid-template-columns: 20px 1fr 78px;
   }
 
-  .investigator-row {
-    grid-template-columns: 24px minmax(0, 1fr) 36px;
+  .pf-investigator-row > *:not(.pf-drag-handle):not(.pf-row-actions):not(.pf-principal) {
+    grid-column: 2 / 3;
   }
 
-  .investigator-row > :nth-child(2) {
-    grid-column: 2;
-  }
-
-  .investigator-input-group {
-    grid-column: 2 / -1;
-    grid-template-columns: 1fr;
-  }
-
-  .investigator-action-buttons {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  .project-table-head {
-    display: none;
-  }
-
-  .project-table-row,
-  .financial-contribution-card .project-table-row,
-  .collaboration-card .project-table-row,
-  .grant-disbursement-row {
-    grid-template-columns: 1fr;
-    gap: 0.75rem;
-    margin-top: 0.75rem !important;
-    border-top: 1px solid #d5dde5;
-  }
-
-  .project-table-row > [class*='col']::before {
-    display: block;
-    margin-bottom: 0.3rem;
-    color: #0965a6;
-    font-size: 0.75rem;
-    font-weight: 700;
-  }
-
-  .financial-contribution-card .project-table-row > :nth-child(1)::before,
-  .collaboration-card .project-table-row > :nth-child(1)::before {
-    content: 'S.No.';
-  }
-
-  .financial-contribution-card .project-table-row > :nth-child(2)::before {
-    content: 'Agency Type';
-  }
-
-  .financial-contribution-card .project-table-row > :nth-child(3)::before {
-    content: 'Agency';
-  }
-
-  .financial-contribution-card .project-table-row > :nth-child(4)::before {
-    content: 'Amount';
-  }
-
-  .collaboration-card .project-table-row > :nth-child(2)::before {
-    content: 'Partner';
-  }
-
-  .collaboration-card .project-table-row > :nth-child(3)::before {
-    content: 'Address';
-  }
-
-  .collaboration-card .project-table-row > :nth-child(4)::before {
-    content: 'Support';
-  }
-
-  .grant-disbursement-row > :nth-child(1)::before {
-    content: 'Financial Year';
-  }
-  .grant-disbursement-row > :nth-child(2)::before {
-    content: 'Agency';
-  }
-  .grant-disbursement-row > :nth-child(3)::before {
-    content: 'Amount';
-  }
-  .grant-disbursement-row > :nth-child(4)::before {
-    content: 'Date';
-  }
-  .grant-disbursement-row > :nth-child(5)::before {
-    content: 'Sanction Letter';
-  }
-  .grant-disbursement-row > :nth-child(6)::before {
-    content: 'UC & SoE';
-  }
-
-  .date-submission-card > div:first-child,
-  .project-detail-field {
-    grid-template-columns: 1fr;
-  }
-
-  .project-detail-field .form-check {
-    justify-self: start;
-  }
-
-  .project-outcome-row {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .project-document-item {
-    align-items: flex-start !important;
-    flex-wrap: wrap;
-  }
-
-  .project-document-item > .form-label {
-    width: 70%;
+  .pf-grid--two,
+  .pf-grid--budget {
+    grid-template-columns: minmax(0, 1fr);
   }
 }

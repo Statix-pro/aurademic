@@ -1,1129 +1,446 @@
+/**
+ * HTTP layer for the research-project module.
+ *
+ * The redesigned form posts the whole project as one request: a `payload` JSON
+ * part plus one file part per document slot. Handlers here parse and authorize
+ * that request, move accepted files out of `uploads/temp`, hand the normalized
+ * aggregate to the model, and clean up files on every exit path — a rejected
+ * save must not leave an orphan in `uploads/`.
+ */
+
 import fs from 'fs';
 import path from 'path';
-import util from 'util';
 
-import researchProjectModel from './projectModel.js';
+import projectModel, { ProjectValidationError } from './projectModel.js';
+import {
+  DOCUMENT_UPLOAD_DIRS,
+  normalizeProjectPayload,
+  parseDocumentFieldName,
+} from './projectPayload.js';
+import { deleteUploadedFile } from '../shared/uploadPaths.js';
 
-const rename = util.promisify(fs.rename);
+/** The form advertises "PDF (Maximum 5 MB)" on every upload control. */
+const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
+const ALLOWED_DOCUMENT_MIME_TYPES = ['application/pdf'];
 
-const researchProjectController = {
-  async createProject(req, res) {
+const isAdmin = (user = {}) => Boolean(user.isAdmin ?? user.is_admin);
+
+const uploadsRoot = () => path.join(process.cwd(), 'uploads');
+
+const respondWithValidationErrors = (res, errors) =>
+  res.status(400).json({
+    success: false,
+    message: 'Please correct the highlighted fields.',
+    errors,
+  });
+
+/**
+ * Reads the aggregate out of the request. Multipart requests carry it as a
+ * `payload` JSON string (a form cannot nest objects in field names); JSON
+ * requests are the body itself.
+ */
+function readPayload(req) {
+  const raw = req.body?.payload;
+  if (typeof raw !== 'string') return req.body ?? {};
+
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    throw new ProjectValidationError([
+      { field: 'payload', message: 'The submitted form data could not be read.' },
+    ]);
+  }
+}
+
+/** Removes every multipart part still sitting in `uploads/temp`. */
+function discardUploads(files = []) {
+  files.forEach((file) => deleteUploadedFile(file.path));
+}
+
+function removeStoredFiles(relativePaths = []) {
+  relativePaths.filter(Boolean).forEach((relativePath) => {
+    deleteUploadedFile(path.join(process.cwd(), relativePath));
+  });
+}
+
+/**
+ * Maps the multipart parts onto document slots and moves each accepted file
+ * into its category directory. Returns the slot descriptors the model stores,
+ * the paths that were written (so they can be rolled back), and any rejections.
+ */
+async function stageDocumentUploads(files = []) {
+  const documents = [];
+  const writtenPaths = [];
+  const errors = [];
+
+  for (const file of files) {
+    const slot = parseDocumentFieldName(file.fieldname);
+
+    if (!slot) {
+      errors.push({ field: file.fieldname, message: 'Unexpected file upload.' });
+      continue;
+    }
+    if (!ALLOWED_DOCUMENT_MIME_TYPES.includes(file.mimetype)) {
+      errors.push({ field: file.fieldname, message: 'Upload a PDF file.' });
+      continue;
+    }
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      errors.push({ field: file.fieldname, message: 'The file must be 5 MB or smaller.' });
+      continue;
+    }
+
+    const directory = DOCUMENT_UPLOAD_DIRS[slot.documentType];
+    const targetDirectory = path.join(uploadsRoot(), directory);
+    await fs.promises.mkdir(targetDirectory, { recursive: true });
+
+    // Multer already produced a collision-free, sanitized filename.
+    const targetPath = path.join(targetDirectory, file.filename);
+    await fs.promises.rename(file.path, targetPath).catch(async (renameError) => {
+      // A rename across devices fails on some deployments; fall back to a copy.
+      if (renameError?.code !== 'EXDEV') throw renameError;
+      await fs.promises.copyFile(file.path, targetPath);
+      await fs.promises.unlink(file.path);
+    });
+
+    const relativePath = path.posix.join('uploads', directory, file.filename);
+    writtenPaths.push(relativePath);
+
+    documents.push({
+      scope: slot.scope,
+      documentType: slot.documentType,
+      rowKey: slot.rowKey ?? null,
+      file_path: relativePath,
+      original_name: file.originalname,
+      file_size: file.size,
+      mime_type: file.mimetype,
+    });
+  }
+
+  return { documents, writtenPaths, errors };
+}
+
+/**
+ * Writes are limited to the people responsible for the project: an admin, the
+ * creator, or the principal investigator. Co-investigators can read it but not
+ * change it, which matches how the form has always presented itself.
+ */
+async function authorizeWrite(req, res, projectId) {
+  const access = await projectModel.getProjectAccess(projectId, {
+    userId: req.user.id,
+    email: req.user.email,
+  });
+
+  if (!access) {
+    res.status(404).json({ success: false, message: 'Project not found.' });
+    return null;
+  }
+
+  if (!isAdmin(req.user) && !access.isOwner && !access.isPrincipalInvestigator) {
+    res.status(403).json({
+      success: false,
+      message: 'Only the principal investigator or an administrator can change this project.',
+    });
+    return null;
+  }
+
+  return access;
+}
+
+const projectController = {
+  /** GET /project-lookups — dropdown data for the form, in one round trip. */
+  async getFormLookups(req, res) {
     try {
-      const projectData = req.body;
-      // console.log("Received project data:", projectData);
-
-      // Look up or create agency ID
-      let agencyId;
-      if (projectData.agency) {
-        const [existingAgency] = await researchProjectModel.getAgencyByName(projectData.agency);
-        if (existingAgency) {
-          agencyId = existingAgency.id;
-        } else {
-          const newAgency = await researchProjectModel.createAgency(projectData.agency);
-          agencyId = newAgency.insertId;
-        }
-      }
-
-      // Look up or create scheme ID
-      let schemeId;
-      if (projectData.scheme) {
-        const [existingScheme] = await researchProjectModel.getSchemeByName(projectData.scheme);
-        if (existingScheme) {
-          schemeId = existingScheme.id;
-        } else {
-          const newScheme = await researchProjectModel.createScheme(projectData.scheme);
-          schemeId = newScheme.insertId;
-        }
-      }
-
-      // Parse financial contributions and handle agency types
-      let financialContributions = [];
-      if (projectData.financial_contributions) {
-        financialContributions = JSON.parse(projectData.financial_contributions);
-        for (let contribution of financialContributions) {
-          if (contribution.agencyType) {
-            const [existingAgencyType] = await researchProjectModel.getAgencyTypeByName(
-              contribution.agencyType,
-            );
-            contribution.agency_type_id = existingAgencyType
-              ? existingAgencyType.id
-              : (await researchProjectModel.createAgencyType(contribution.agencyType)).insertId;
-          }
-        }
-      }
-
-      // Parse `documents` and `grant_disbursements` if provided as JSON strings
-      let { documents, grant_disbursements, collaborations, project_details, outcome } =
-        projectData;
-
-      // Parse project_details if it's a string
-      if (typeof project_details === 'string') {
-        try {
-          project_details = JSON.parse(project_details);
-        } catch (error) {
-          console.error('Error parsing project_details JSON:', error);
-          return res.status(400).json({ message: 'Invalid format for project_details field' });
-        }
-      }
-
-      // Parse outcome if it's a string
-      if (typeof outcome === 'string') {
-        try {
-          outcome = JSON.parse(outcome);
-          // Add outcome to project_details
-          project_details = {
-            ...project_details,
-            outcome: outcome,
-          };
-        } catch (error) {
-          console.error('Error parsing outcome JSON:', error);
-          return res.status(400).json({ message: 'Invalid format for outcome field' });
-        }
-      }
-      if (typeof documents === 'string') {
-        try {
-          documents = JSON.parse(documents);
-        } catch (error) {
-          console.error('Error parsing documents JSON:', error);
-          return res.status(400).json({ message: 'Invalid format for documents field' });
-        }
-      }
-
-      if (typeof grant_disbursements === 'string') {
-        try {
-          grant_disbursements = JSON.parse(grant_disbursements);
-        } catch (error) {
-          console.error('Error parsing grant disbursements JSON:', error);
-          return res.status(400).json({ message: 'Invalid format for grant disbursements field' });
-        }
-      }
-
-      // changed
-      if (typeof financialContributions === 'string') {
-        try {
-          financialContributions = JSON.parse(financialContributions);
-        } catch (error) {
-          console.error('Error parsing financial contributions JSON:', error);
-          return res.status(400).json({
-            message: 'Invalid format for financial contributions field',
-          });
-        }
-      }
-
-      if (typeof collaborations === 'string') {
-        try {
-          collaborations = JSON.parse(collaborations);
-        } catch (error) {
-          console.error('Error parsing collaborations JSON:', error);
-          return res.status(400).json({ message: 'Invalid format for collaborations field' });
-        }
-      }
-
-      // Extract data for different tables
-      const {
-        project_category,
-        category,
-        title,
-        duration_years,
-        duration_months,
-        duration_days,
-        date_of_submission,
-        submission_status,
-        is_collaboration_enabled,
-        file_path,
-        application_number,
-        ...otherData
-      } = projectData;
-
-      // Prepare the modified project data
-      const modifiedProjectData = {
-        project_category,
-        category,
-        title,
-        agency_id: agencyId,
-        scheme_id: schemeId,
-        duration_years,
-        duration_months,
-        duration_days,
-        date_of_submission,
-        submission_status: submission_status || 'waiting',
-        is_collaboration_enabled,
-        file_path,
-        application_number: application_number,
-        financial_contributions: JSON.stringify(financialContributions),
-      };
-
-      // Create the project with the modified data
-      const result = await researchProjectModel.create(modifiedProjectData);
-      const projectId = result.insertId;
-
-      // 2. Insert financial contributions if any
-      if (financialContributions) {
-        const contributions = Array.isArray(financialContributions)
-          ? financialContributions
-          : [financialContributions];
-
-        for (const contribution of contributions) {
-          if (contribution && typeof contribution === 'object') {
-            try {
-              const formattedContribution = {
-                agency_type_id: contribution.agency_type_id || null, // Allow null
-                agency: contribution.agency,
-                amount: parseFloat(contribution.amount),
-              };
-
-              // Removed the check for agency_type_id
-              await researchProjectModel.addFinancialContribution(projectId, formattedContribution);
-            } catch (error) {
-              console.error('Error adding financial contribution:', error);
-            }
-          }
-        }
-      }
-
-      // 3. Insert collaborations if any
-      if (collaborations) {
-        for (const collab of collaborations) {
-          if (collab && typeof collab === 'object') {
-            try {
-              await researchProjectModel.addCollaboration(projectId, collab);
-            } catch (error) {
-              console.error('Error adding collaboration:', error);
-            }
-          }
-        }
-      }
-
-      // 4. Insert project details if any
-      if (project_details) {
-        try {
-          await researchProjectModel.addProjectDetails(projectId, project_details);
-        } catch (error) {
-          console.error('Error adding project details:', error);
-        }
-      }
-
-      // 5. Insert grant disbursements if any
-      if (grant_disbursements) {
-        const disbursements = Array.isArray(grant_disbursements)
-          ? grant_disbursements
-          : [grant_disbursements];
-        for (const disbursement of disbursements) {
-          if (disbursement && typeof disbursement === 'object') {
-            const disbursementData = {
-              project_id: projectId,
-              fiscal_year: disbursement.fy || null,
-              agency: disbursement.agency || null,
-              amount: disbursement.amount || null,
-              disbursement_date: disbursement.date || null,
-              sanction_letter_path: disbursement.sanctionLetter?.enabled
-                ? disbursement.sanctionLetter.filePath
-                : null,
-              uc_and_soe_path: disbursement.ucAndSoE?.enabled
-                ? disbursement.ucAndSoE.filePath
-                : null,
-            };
-
-            try {
-              await researchProjectModel.addGrantDisbursement(projectId, disbursementData);
-            } catch (error) {
-              console.error(`Error adding grant disbursement:`, error);
-            }
-          }
-        }
-      }
-
-      // 6. Insert documents if any
-      if (documents) {
-        for (const [docType, docData] of Object.entries(documents)) {
-          if (docData.enabled && docData.filePath) {
-            try {
-              await researchProjectModel.addDocument(projectId, {
-                document_type: docType,
-                file_path: docData.filePath,
-              });
-            } catch (error) {
-              console.error('Error adding document:', error);
-            }
-          }
-        }
-      }
-
-      res.status(201).json({
-        message: 'Research project created successfully',
-        id: projectId,
-      });
+      const lookups = await projectModel.getFormLookups();
+      res.json({ success: true, data: lookups });
     } catch (error) {
-      console.error('Error creating research project:', error);
-      res.status(500).json({
-        message: 'Error creating research project',
-        error: error.message,
-      });
+      console.error('Error loading project form lookups:', error);
+      res.status(500).json({ success: false, message: 'Failed to load form options.' });
     }
   },
 
+  /** GET /project-options/organizations */
+  async searchOrganizations(req, res) {
+    try {
+      const organizations = await projectModel.searchOrganizations(
+        String(req.query.query ?? '').trim(),
+        {
+          fundingOnly: String(req.query.fundingOnly ?? '').toLowerCase() === 'true',
+        },
+      );
+      res.json({ success: true, data: organizations });
+    } catch (error) {
+      console.error('Error searching project organizations:', error);
+      res.status(500).json({ success: false, message: 'Failed to search organizations.' });
+    }
+  },
+
+  /** GET /project-options/schemes */
+  async listSchemes(req, res) {
+    try {
+      const schemes = await projectModel.listSchemes({
+        organizationId: Number(req.query.organizationId) || null,
+        query: String(req.query.query ?? '').trim(),
+      });
+      res.json({ success: true, data: schemes });
+    } catch (error) {
+      console.error('Error listing project schemes:', error);
+      res.status(500).json({ success: false, message: 'Failed to load schemes.' });
+    }
+  },
+
+  /** POST /projects */
+  async createProject(req, res) {
+    await projectController.saveProject(req, res, { projectId: null });
+  },
+
+  /** PUT /projects/:id */
+  async updateProject(req, res) {
+    const projectId = Number(req.params.id);
+    if (!Number.isInteger(projectId) || projectId <= 0) {
+      discardUploads(req.files);
+      return res.status(400).json({ success: false, message: 'Invalid project id.' });
+    }
+
+    let access;
+    try {
+      access = await authorizeWrite(req, res, projectId);
+    } catch (error) {
+      // Express 4 does not catch a rejected async handler, so an access-check
+      // failure would otherwise hang the request and strand the staged uploads.
+      discardUploads(req.files);
+      console.error('Error authorizing research project update:', error);
+      return res.status(500).json({ success: false, message: 'Failed to save the project.' });
+    }
+
+    if (!access) {
+      discardUploads(req.files);
+      return undefined;
+    }
+
+    return projectController.saveProject(req, res, { projectId });
+  },
+
+  /**
+   * Shared create/update path. Files are moved before the transaction opens and
+   * removed again if anything downstream fails, so `uploads/` never holds a file
+   * the database does not know about.
+   */
+  async saveProject(req, res, { projectId }) {
+    let stagedPaths = [];
+
+    try {
+      const payload = readPayload(req);
+
+      // Files are staged first so the normalizer knows which disbursement rows
+      // carry one: a tranche whose only content is an uploaded document is a
+      // real row, and dropping it as blank would strand the file.
+      const staged = await stageDocumentUploads(req.files);
+      stagedPaths = staged.writtenPaths;
+
+      const { aggregate, errors } = normalizeProjectPayload(payload, {
+        rowKeysWithDocuments: staged.documents
+          .filter((document) => document.scope === 'disbursement' && document.rowKey)
+          .map((document) => document.rowKey),
+      });
+
+      const allErrors = [...errors, ...staged.errors];
+      if (allErrors.length > 0) {
+        discardUploads(req.files);
+        removeStoredFiles(stagedPaths);
+        return respondWithValidationErrors(res, allErrors);
+      }
+
+      const { projectId: savedId, staleFilePaths } = await projectModel.saveProject({
+        projectId,
+        aggregate,
+        documents: staged.documents,
+        userId: req.user.id,
+      });
+
+      // Only now that the transaction has committed are the replaced files
+      // genuinely unreferenced.
+      removeStoredFiles(staleFilePaths);
+
+      // The staged files are referenced by committed rows from here on, so the
+      // rollback below must not delete them if reading the project back fails.
+      stagedPaths = [];
+
+      const project = await projectModel.getProjectById(savedId);
+      return res.status(projectId ? 200 : 201).json({ success: true, data: project });
+    } catch (error) {
+      discardUploads(req.files);
+      removeStoredFiles(stagedPaths);
+
+      if (error instanceof ProjectValidationError) {
+        return respondWithValidationErrors(res, error.errors);
+      }
+      if (error?.statusCode === 404) {
+        return res.status(404).json({ success: false, message: 'Project not found.' });
+      }
+
+      console.error('Error saving research project:', error);
+      return res.status(500).json({ success: false, message: 'Failed to save the project.' });
+    }
+  },
+
+  /** GET /projects/:id */
   async getProject(req, res) {
     try {
-      const id = req.params.id;
-      const project = await researchProjectModel.getById(id);
-      if (project) {
-        res.status(200).json(project);
-      } else {
-        res.status(404).json({ message: 'Research project not found' });
+      const projectId = Number(req.params.id);
+      if (!Number.isInteger(projectId) || projectId <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid project id.' });
       }
-    } catch (error) {
-      res.status(500).json({
-        message: 'Error retrieving research project',
-        error: error.message,
+
+      const project = await projectModel.getProjectById(projectId);
+      if (!project) {
+        return res.status(404).json({ success: false, message: 'Project not found.' });
+      }
+
+      const access = await projectModel.getProjectAccess(projectId, {
+        userId: req.user.id,
+        email: req.user.email,
       });
+
+      // A project carries agency references, budgets and contact details, so it
+      // is readable only by the people on it (co-investigators included, who
+      // then get the read-only layout) plus whoever filed it and admins.
+      if (!isAdmin(req.user) && !access.isOwner && !access.isInvestigator) {
+        return res.status(403).json({
+          success: false,
+          message: 'You do not have access to this project.',
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          ...project,
+          access: {
+            ...access,
+            // The form uses this to decide between the read-only and editable
+            // layouts without a second request.
+            canEdit: isAdmin(req.user) || access.isOwner || access.isPrincipalInvestigator,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Error loading research project:', error);
+      return res.status(500).json({ success: false, message: 'Failed to load the project.' });
     }
   },
 
-  async updateProject(req, res) {
-    try {
-      const { id: projectId } = req.params;
-      const newData = req.body;
-
-      // Fetch the existing project data
-      const existingProject = await researchProjectModel.getById(projectId);
-      if (!existingProject) {
-        return res.status(404).json({ message: 'Research project not found' });
-      }
-
-      // Define allowed fields to update
-      const allowedFields = [
-        'project_category',
-        'category',
-        'title',
-        'agency',
-        'scheme',
-        'duration_years',
-        'duration_months',
-        'duration_days',
-        'date_of_submission',
-        'submission_status',
-        'is_collaboration_enabled',
-        'application_number',
-        'file_path',
-      ];
-
-      // Build diff: only update fields that have changed
-      const changedData = {};
-      allowedFields.forEach((field) => {
-        if (newData[field] !== undefined && newData[field] !== existingProject[field]) {
-          changedData[field] = newData[field];
-        }
-      });
-
-      if (Object.keys(changedData).length === 0) {
-        return res.status(200).json({ message: 'No changes detected' });
-      }
-
-      // Call model to update only changed data
-      const result = await researchProjectModel.updateProject(projectId, changedData);
-      if (result.affectedRows > 0) {
-        res.status(200).json({ message: 'Research project updated successfully' });
-      } else {
-        res.status(404).json({ message: 'Research project not found' });
-      }
-    } catch (error) {
-      console.error('Error during project update:', {
-        message: error.message,
-        stack: error.stack,
-        requestData: req.body,
-      });
-      res.status(500).json({
-        message: 'Error updating research project',
-        error: error.message,
-        details: error.stack,
-      });
-    }
-  },
-
+  /** DELETE /projects/:id */
   async deleteProject(req, res) {
     try {
-      const id = req.params.id;
-      const result = await researchProjectModel.delete(id);
-      if (result.affectedRows > 0) {
-        res.status(200).json({ message: 'Research project deleted successfully' });
-      } else {
-        res.status(404).json({ message: 'Research project not found' });
+      const projectId = Number(req.params.id);
+      if (!Number.isInteger(projectId) || projectId <= 0) {
+        return res.status(400).json({ success: false, message: 'Invalid project id.' });
       }
+
+      const access = await authorizeWrite(req, res, projectId);
+      if (!access) return undefined;
+
+      const { deleted, staleFilePaths } = await projectModel.deleteProject(projectId);
+      if (!deleted) {
+        return res.status(404).json({ success: false, message: 'Project not found.' });
+      }
+
+      removeStoredFiles(staleFilePaths);
+      return res.json({ success: true, message: 'Project deleted.' });
     } catch (error) {
-      res.status(500).json({
-        message: 'Error deleting research project',
-        error: error.message,
-      });
+      console.error('Error deleting research project:', error);
+      return res.status(500).json({ success: false, message: 'Failed to delete the project.' });
     }
   },
 
-  async addAuthor(req, res) {
-    try {
-      const { id: projectId } = req.params;
-      const authorData = req.body;
-
-      if (!authorData.author_id) {
-        return res.status(400).json({
-          message: 'Author ID is required',
-          debug: { received: authorData },
-        });
-      }
-
-      const result = await researchProjectModel.addAuthorToProject(projectId, authorData);
-
-      res.status(201).json({
-        message: 'Author added successfully to project',
-        id: result.authorId,
-      });
-    } catch (error) {
-      console.error('Error in addAuthor:', error);
-      res.status(500).json({
-        message: 'Error adding author to project',
-        error: error.message,
-      });
-    }
-  },
-
-  async getAuthors(req, res) {
-    try {
-      const { id: projectId } = req.params;
-      const authors = await researchProjectModel.getAuthorsForProject(projectId);
-      res.status(200).json(authors);
-    } catch (error) {
-      res.status(500).json({
-        message: 'Error retrieving authors for project',
-        error: error.message,
-      });
-    }
-  },
-
-  async removeAuthor(req, res) {
-    try {
-      const { id: projectId } = req.params;
-      const { author_id } = req.body;
-
-      if (!author_id) {
-        return res.status(400).json({ message: 'Author ID is required to remove author' });
-      }
-
-      const result = await researchProjectModel.removeAuthorFromProject(projectId, author_id);
-      res.status(200).json({
-        message: 'Author removed from project',
-        affectedRows: result.affectedRows,
-      });
-    } catch (error) {
-      res.status(500).json({
-        message: 'Error removing author from project',
-        error: error.message,
-      });
-    }
-  },
-
-  async addFinancialContribution(req, res) {
-    try {
-      const { id: projectId } = req.params;
-      const { agency, agencyType, amount } = req.body;
-
-      // Directly create contribution with the provided data
-      const contributionData = {
-        project_id: projectId,
-        agency_type: agencyType, // Use the agency type name directly
-        agency: agency,
-        amount: parseFloat(amount),
-      };
-
-      const result = await researchProjectModel.addFinancialContribution(
-        projectId,
-        contributionData,
-      );
-      res.status(201).json({
-        message: 'Financial contribution added successfully',
-        data: result,
-      });
-    } catch (error) {
-      console.error('Error in addFinancialContribution:', error);
-      res.status(500).json({
-        message: 'Error adding financial contribution',
-        error: error.message,
-      });
-    }
-  },
-
-  async getFinancialContributions(req, res) {
-    try {
-      const { id: projectId } = req.params;
-      const contributions = await researchProjectModel.getFinancialContributions(projectId);
-      res.status(200).json(contributions);
-    } catch (error) {
-      res.status(500).json({
-        message: 'Error retrieving financial contributions',
-        error: error.message,
-      });
-    }
-  },
-
-  async deleteFinancialContribution(req, res) {
-    try {
-      const { contributionId } = req.params;
-      // Validate contribution ID
-      if (!contributionId || isNaN(contributionId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid financial contribution ID',
-        });
-      }
-
-      const result = await researchProjectModel.deleteFinancialContribution(contributionId);
-      if (result.affectedRows === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Financial contribution not found',
-        });
-      }
-      res.json({
-        success: true,
-        message: 'Financial contribution deleted successfully!',
-      });
-    } catch (error) {
-      console.error('Error deleting financial contribution:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error deleting financial contribution',
-        error: error.message,
-      });
-    }
-  },
-
-  async addCollaboration(req, res) {
-    try {
-      const { id: projectId } = req.params; // Get projectId from request params
-      const collaborationData = req.body; // Get data from request body
-
-      // Call the MODEL's method, not direct database queries
-      const result = await researchProjectModel.addCollaboration(projectId, collaborationData);
-
-      res.status(201).json({
-        // Send a success response
-        message: 'Collaboration added successfully',
-        data: result,
-      });
-    } catch (error) {
-      console.error('Error in addCollaboration:', error);
-      res.status(500).json({
-        message: 'Error adding collaboration',
-        error: error.message,
-      });
-    }
-  },
-
-  async updateCollaboration(req, res) {
-    try {
-      const { id: projectId, collabId } = req.params;
-      const collaborationData = req.body;
-      const result = await researchProjectModel.updateCollaboration(collabId, collaborationData);
-      res.json({
-        success: true,
-        message: 'Collaboration updated successfully!',
-        result,
-      });
-    } catch (error) {
-      console.error('Error updating collaboration:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error updating collaboration',
-        error: error.message,
-      });
-    }
-  },
-
-  async getCollaborations(req, res) {
-    try {
-      const projectId = req.params.id;
-      const collaborations = await researchProjectModel.getCollaborations(projectId);
-      res.status(200).json({ data: collaborations });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  async deleteCollaboration(req, res) {
-    try {
-      const { collabId } = req.params;
-      // Validate collaboration ID
-      if (!collabId || isNaN(collabId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid collaboration ID',
-        });
-      }
-
-      const result = await researchProjectModel.deleteCollaboration(collabId);
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ success: false, message: 'Collaboration not found' });
-      }
-      res.json({
-        success: true,
-        message: 'Collaboration deleted successfully!',
-      });
-    } catch (error) {
-      console.error('Error deleting collaboration:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error deleting collaboration',
-        error: error.message,
-      });
-    }
-  },
-
-  async addProjectDetails(req, res) {
-    try {
-      const projectId = req.params.id;
-      const detailsData = req.body;
-      const result = await researchProjectModel.addProjectDetails(projectId, detailsData);
-      res.status(201).json({ message: 'Project details added successfully', data: result });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  async getProjectDetailsTable(req, res) {
-    try {
-      const projectId = req.params.id;
-      if (isNaN(projectId)) {
-        return res.status(400).json({
-          message: 'Invalid project ID format',
-          details: `Received: ${req.params.id}`,
-        });
-      }
-      const projectDetails = await researchProjectModel.getProjectDetailsTable(projectId);
-      res.status(200).json({ data: projectDetails });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  async addGrantDisbursement(req, res) {
-    try {
-      const projectId = req.params.id;
-      const disbursementData = req.body;
-
-      // Map client-side field names to server-side field names
-      const formattedData = {
-        project_id: projectId,
-        fiscal_year: disbursementData.fy,
-        agency: disbursementData.agency,
-        amount: disbursementData.amount,
-        disbursement_date: disbursementData.date,
-        // Use optional chaining here
-        sanction_letter_path: disbursementData.sanctionLetter?.filePath,
-        uc_and_soe_path: disbursementData.ucAndSoE?.filePath,
-      };
-      // Validate required fields (optional, but good practice)
-      if (!formattedData.project_id) {
-        return res.status(400).json({ message: 'Missing project_id' });
-      }
-
-      const result = await researchProjectModel.addGrantDisbursement(projectId, formattedData);
-      res.status(201).json({
-        message: 'Grant disbursement added successfully',
-        data: result,
-      });
-    } catch (error) {
-      console.error('Error in addGrantDisbursement:', error);
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  async getGrantDisbursements(req, res) {
-    try {
-      const projectId = req.params.id;
-      const disbursements = await researchProjectModel.getGrantDisbursements(projectId);
-      res.status(200).json({ data: disbursements });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  async updateGrantDisbursement(req, res) {
-    try {
-      const { disbursementId } = req.params;
-      const disbursementData = req.body;
-
-      const result = await researchProjectModel.updateGrantDisbursement(
-        disbursementId,
-        disbursementData,
-      );
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({ message: 'Grant disbursement not found' });
-      }
-
-      res.json({
-        message: 'Grant disbursement updated successfully',
-        data: result,
-      });
-    } catch (error) {
-      console.error('Error updating grant disbursement:', error);
-      res.status(500).json({
-        message: 'Error updating grant disbursement',
-        error: error.message,
-      });
-    }
-  },
-
-  async deleteGrantDisbursement(req, res) {
-    try {
-      const { disbursementId } = req.params;
-
-      if (!disbursementId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Missing disbursement ID',
-        });
-      }
-
-      const result = await researchProjectModel.deleteGrantDisbursement(disbursementId);
-
-      if (result.affectedRows > 0) {
-        res.status(200).json({
-          success: true,
-          message: 'Grant disbursement deleted successfully',
-        });
-      } else {
-        res.status(404).json({ success: false, message: 'Grant disbursement not found' });
-      }
-    } catch (error) {
-      console.error('Error deleting grant disbursement:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error deleting grant disbursement',
-        error: error.message,
-      });
-    }
-  },
-
-  async uploadFile(req, res) {
-    try {
-      const { id: projectId } = req.params;
-      const { document_type: document_typeFromRequest } = req.body;
-
-      if (!req.file) {
-        return res.status(400).json({ message: 'No file was uploaded.' });
-      }
-      if (!document_typeFromRequest) {
-        return res.status(400).json({ message: 'document_type is required.' });
-      }
-      // if (!document_type) {
-      //     return res.status(400).json({ message: 'document_type is required.' });
-      // }
-      const document_type_path_safe = document_typeFromRequest.replace(/\s+/g, '');
-
-      const file = req.file;
-      const uploadDir = path.join(process.cwd(), 'uploads', document_type_path_safe);
-
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-
-      // Use the filename PROVIDED BY MULTER
-      const finalPath = path.join(uploadDir, file.filename);
-
-      try {
-        // Rename (move) the file.  Keep the multer-generated name.
-        await fs.promises.rename(file.path, finalPath);
-      } catch (moveError) {
-        console.error('Error moving file (rename failed):', moveError);
-
-        try {
-          await fs.promises.copyFile(file.path, finalPath);
-          await fs.promises.unlink(file.path);
-        } catch (copyError) {
-          console.error('Error copying/deleting file:', copyError);
-          return res.status(500).json({
-            message: 'Error saving file (copy/delete failed)',
-            error: copyError.message,
-            stack: process.env.NODE_ENV === 'development' ? copyError.stack : undefined,
-          });
-        }
-      }
-
-      // Construct the database path using the MULTER-GENERATED filename
-      const dbFilePath = path
-        .join('uploads', document_type_path_safe, file.filename)
-        .replace(/\\/g, '/');
-
-      // --- MODIFICATION START ---
-      if (document_type_path_safe === 'journal-article') {
-        // Compare with path-safe version
-        await researchProjectModel.update(projectId, { file_path: dbFilePath });
-      } else {
-        // Use the ORIGINAL type from request for ENUM validation
-        // FIX: Use camelCase to match incoming request data
-        const allowedDocTypes = [
-          'sanctionOrder',
-          'utilizationCertificate',
-          'statementOfExpenditure',
-          'projectReport',
-          'bankStatement',
-          'sanctionLetter',
-          'ucAndSoE',
-        ];
-        if (!allowedDocTypes.includes(document_typeFromRequest)) {
-          // Now this comparison will work
-          console.error(
-            `Invalid document_type '${document_typeFromRequest}' for project_documents table.`,
-          );
-          // ... cleanup and error response ...
-          try {
-            await fs.promises.unlink(finalPath);
-          } catch (unlinkErr) {
-            console.error('Error deleting orphaned file:', unlinkErr);
-          }
-          return res.status(400).json({
-            message: `Invalid document type specified: ${document_typeFromRequest}`,
-          });
-        }
-
-        // Insert into project_documents table for standard document types
-        await researchProjectModel.addDocument(projectId, {
-          document_type: document_typeFromRequest, // Use ORIGINAL type for ENUM column
-          file_path: dbFilePath, // Use PATH-SAFE version for the path column
-        });
-      }
-
-      res.json({
-        message: 'File uploaded successfully!',
-        filePath: dbFilePath,
-      });
-    } catch (error) {
-      console.error('File upload error (outer catch):', error);
-      res.status(500).json({
-        message: 'Error uploading file',
-        error: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      });
-    }
-  },
-
-  async uploadDisbursementSanctionLetter(req, res) {
-    try {
-      const { projectId, disbursementId } = req.params; // disbursementId is a string here
-      // In both upload functions, at the very start:
-      console.log('Upload request received for Sanction Letter:', req.file?.originalname);
-      console.log('Request params (Sanction Letter):', req.params);
-      console.log('File object (Sanction Letter):', req.file);
-
-      if (!req.file) {
-        return res.status(400).json({ message: 'No file was uploaded for Sanction Letter.' });
-      }
-      // Convert disbursementId to integer for database operations if it's a number column
-      const numericDisbursementId = parseInt(disbursementId, 10);
-      if (isNaN(numericDisbursementId)) {
-        console.error('Invalid disbursement ID (Sanction Letter):', disbursementId);
-        return res.status(400).json({
-          message: 'Invalid disbursement ID format for Sanction Letter.',
-        });
-      }
-
-      const file = req.file;
-      const multerFilename = file.filename;
-      console.log('Using filename (Sanction Letter):', multerFilename);
-
-      const uploadDir = path.join(process.cwd(), 'uploads', 'sanctionLetter');
-      const finalPath = path.join(uploadDir, multerFilename);
-
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-
-      try {
-        await fs.promises.rename(file.path, finalPath);
-      } catch (moveError) {
-        console.error('Error moving file (Sanction Letter), attempting copy/delete:', moveError);
-        try {
-          await fs.promises.copyFile(file.path, finalPath);
-          await fs.promises.unlink(file.path);
-        } catch (copyError) {
-          console.error('Error in copy/delete fallback (Sanction Letter):', copyError);
-          // It's important to return or throw here to stop execution
-          return res.status(500).json({
-            message: 'Failed to save file (Sanction Letter).',
-            error: copyError.message,
-          });
-        }
-      }
-
-      const dbFilePath = `/uploads/sanctionLetter/${multerFilename}`; // Make sure this path is what you intend to store
-
-      console.log(
-        'About to update DB for Sanction Letter with disbursementId:',
-        numericDisbursementId,
-        'and path:',
-        dbFilePath,
-      );
-      // Ensure the model function is called with the correct disbursementId
-      const updateResult = await researchProjectModel.updateGrantDisbursement(
-        numericDisbursementId,
-        {
-          sanction_letter_path: dbFilePath,
-        },
-      );
-      console.log('DB update result (Sanction Letter):', updateResult);
-
-      if (updateResult.affectedRows === 0) {
-        console.warn(
-          'DB update for Sanction Letter had no affected rows. Disbursement ID might not exist:',
-          numericDisbursementId,
-        );
-        // Optionally, you might want to delete the uploaded file if the DB update fails
-        // try { await fs.promises.unlink(finalPath); } catch (e) { console.error('Failed to delete orphaned file:', finalPath, e); }
-        // return res.status(404).json({ message: 'Grant disbursement record not found for Sanction Letter.' });
-      }
-
-      res.json({
-        message: 'Sanction Letter uploaded successfully!',
-        filePath: dbFilePath,
-      });
-    } catch (error) {
-      console.error('Disbursement Sanction Letter upload error:', error);
-      res.status(500).json({
-        message: 'Error uploading Sanction Letter',
-        error: error.message,
-      });
-    }
-  },
-
-  async uploadDisbursementUcAndSoe(req, res) {
-    try {
-      const { projectId, disbursementId } = req.params; // disbursementId is a string here
-      console.log('Upload request received for UC & SoE:', req.file?.originalname);
-      console.log('Request params (UC & SoE):', req.params);
-      console.log('File object (UC & SoE):', req.file);
-
-      if (!req.file) {
-        return res.status(400).json({ message: 'No file was uploaded for UC & SoE.' });
-      }
-      // Convert disbursementId to integer
-      const numericDisbursementId = parseInt(disbursementId, 10);
-      if (isNaN(numericDisbursementId)) {
-        console.error('Invalid disbursement ID (UC & SoE):', disbursementId);
-        return res.status(400).json({ message: 'Invalid disbursement ID format for UC & SoE.' });
-      }
-
-      const file = req.file;
-      const multerFilename = file.filename;
-      console.log('Using filename (UC & SoE):', multerFilename);
-
-      const uploadDir = path.join(process.cwd(), 'uploads', 'ucAndSoE');
-      const finalPath = path.join(uploadDir, multerFilename);
-
-      if (!fs.existsSync(uploadDir)) {
-        fs.mkdirSync(uploadDir, { recursive: true });
-      }
-
-      try {
-        await fs.promises.rename(file.path, finalPath);
-      } catch (moveError) {
-        console.error('Error moving file (UC & SoE), attempting copy/delete:', moveError);
-        try {
-          await fs.promises.copyFile(file.path, finalPath);
-          await fs.promises.unlink(file.path);
-        } catch (copyError) {
-          console.error('Error in copy/delete fallback (UC & SoE):', copyError);
-          return res.status(500).json({
-            message: 'Failed to save file (UC & SoE).',
-            error: copyError.message,
-          });
-        }
-      }
-
-      const dbFilePath = `/uploads/ucAndSoE/${multerFilename}`; // Make sure this path is what you intend to store
-
-      console.log(
-        'About to update DB for UC & SoE with disbursementId:',
-        numericDisbursementId,
-        'and path:',
-        dbFilePath,
-      );
-      const updateResult = await researchProjectModel.updateGrantDisbursement(
-        numericDisbursementId,
-        {
-          uc_and_soe_path: dbFilePath,
-        },
-      );
-      console.log('DB update result (UC & SoE):', updateResult);
-
-      if (updateResult.affectedRows === 0) {
-        console.warn(
-          'DB update for UC & SoE had no affected rows. Disbursement ID might not exist:',
-          numericDisbursementId,
-        );
-        // Optionally, you might want to delete the uploaded file if the DB update fails
-        // try { await fs.promises.unlink(finalPath); } catch (e) { console.error('Failed to delete orphaned file:', finalPath, e); }
-        // return res.status(404).json({ message: 'Grant disbursement record not found for UC & SoE.' });
-      }
-
-      res.json({
-        message: 'UC & SoE uploaded successfully!',
-        filePath: dbFilePath,
-      });
-    } catch (error) {
-      console.error('Disbursement UC & SoE upload error:', error);
-      res.status(500).json({
-        message: 'Error uploading UC & SoE',
-        error: error.message,
-      });
-    }
-  },
-
-  async searchAgencies(req, res) {
-    try {
-      const { query } = req.query;
-      const agencies = await researchProjectModel.searchAgencies(query);
-      res.json(agencies);
-    } catch (error) {
-      console.error('Error searching agencies:', error);
-      res.status(500).json({ error: 'Error searching agencies' });
-    }
-  },
-
-  async searchSchemes(req, res) {
-    try {
-      const { query } = req.query;
-      const schemes = await researchProjectModel.searchSchemes(query);
-      res.json(schemes);
-    } catch (error) {
-      console.error('Error searching schemes:', error);
-      res.status(500).json({ error: 'Error searching schemes' });
-    }
-  },
-
-  async searchAgencyTypes(req, res) {
-    try {
-      const { query } = req.query;
-      const agencyTypes = await researchProjectModel.searchAgencyTypes(query);
-      res.json(agencyTypes);
-    } catch (error) {
-      console.error('Error searching agency types:', error);
-      res.status(500).json({ error: 'Error searching agency types' });
-    }
-  },
-
-  // Project Request methods
+  /** POST /project-requests — "Add Scheme" / new funding agency. */
   async createProjectRequest(req, res) {
     try {
-      const { request_type, name, description } = req.body;
-      const userId = req.user.id;
+      const requestType = String(req.body?.request_type ?? '').trim();
+      const name = String(req.body?.name ?? '').trim();
 
-      // Validate required fields
-      if (!request_type || !name || name.trim().length === 0) {
+      if (!['organization', 'scheme'].includes(requestType)) {
+        return res
+          .status(400)
+          .json({ success: false, message: 'Request type must be organization or scheme.' });
+      }
+      if (!name) {
+        return res.status(400).json({ success: false, message: 'A name is required.' });
+      }
+
+      const organizationId = Number(req.body?.organization_id) || null;
+      if (
+        requestType === 'scheme' &&
+        !organizationId &&
+        !String(req.body?.organization_name ?? '').trim()
+      ) {
         return res.status(400).json({
-          status: 'error',
-          message: 'Request type and name are required',
+          success: false,
+          message: 'Tell us which funding agency offers the scheme.',
         });
       }
 
-      // Validate request type
-      if (!['agency', 'scheme', 'agency_type'].includes(request_type)) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'Invalid request type. Must be agency, scheme, or agency_type',
-        });
-      }
-
-      const request = await researchProjectModel.createProjectRequest({
-        user_id: userId,
-        request_type: request_type,
-        name: name.trim(),
-        description: description?.trim() || '',
+      const request = await projectModel.createRequest(req.user.id, {
+        request_type: requestType,
+        name: name.slice(0, 255),
+        organization_id: organizationId,
+        organization_name:
+          String(req.body?.organization_name ?? '')
+            .trim()
+            .slice(0, 255) || null,
+        domain:
+          String(req.body?.domain ?? '')
+            .trim()
+            .slice(0, 255) || null,
+        category:
+          String(req.body?.category ?? '')
+            .trim()
+            .slice(0, 150) || null,
+        website:
+          String(req.body?.website ?? '')
+            .trim()
+            .slice(0, 500) || null,
+        description: String(req.body?.description ?? '').trim() || null,
       });
 
-      res.status(201).json({
-        status: 'success',
-        message: `${request_type.replace('_', ' ')} request submitted successfully. It will be reviewed by an administrator.`,
+      return res.status(201).json({
+        success: true,
+        message: 'Request submitted. An administrator will review it shortly.',
         data: request,
       });
     } catch (error) {
-      console.error('Error in createProjectRequest:', error);
-      res.status(500).json({
-        status: 'error',
-        message: error.message,
-      });
+      console.error('Error creating project request:', error);
+      return res.status(500).json({ success: false, message: 'Failed to submit the request.' });
     }
   },
 
+  /** GET /project-requests */
   async getUserProjectRequests(req, res) {
     try {
-      const userId = req.user.id;
-      const requests = await researchProjectModel.getUserProjectRequests(userId);
-
-      res.json({
-        status: 'success',
-        data: requests,
-      });
+      const requests = await projectModel.listUserRequests(req.user.id);
+      res.json({ success: true, data: requests });
     } catch (error) {
-      console.error('Error in getUserProjectRequests:', error);
-      res.status(500).json({
-        status: 'error',
-        message: error.message,
-      });
+      console.error('Error listing project requests:', error);
+      res.status(500).json({ success: false, message: 'Failed to load your requests.' });
     }
   },
 
+  /** GET /project-requests/:id */
   async getProjectRequest(req, res) {
     try {
-      const { id } = req.params;
-      const userId = req.user.id;
+      const request = await projectModel.getRequest(Number(req.params.id));
 
-      const request = await researchProjectModel.getProjectRequest(id, userId);
-
-      if (!request) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Project request not found',
-        });
+      if (!request || (!isAdmin(req.user) && request.user_id !== req.user.id)) {
+        return res.status(404).json({ success: false, message: 'Request not found.' });
       }
 
-      res.json({
-        status: 'success',
-        data: request,
-      });
+      return res.json({ success: true, data: request });
     } catch (error) {
-      console.error('Error in getProjectRequest:', error);
-      res.status(500).json({
-        status: 'error',
-        message: error.message,
-      });
-    }
-  },
-
-  async getProjectDetails(req, res) {
-    try {
-      const projectId = parseInt(req.params.id);
-      const project = await researchProjectModel.getProjectDetails(req.user.id, projectId);
-
-      // Log the full project data for debugging
-      // console.log('Project Data:', project);
-
-      if (!project) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Project not found',
-        });
-      }
-
-      res.json({
-        status: 'success',
-        data: project,
-      });
-    } catch (error) {
-      console.error('Error getting project details:', error);
-      res.status(500).json({
-        status: 'error',
-        message: 'Failed to fetch project details',
-      });
+      console.error('Error loading project request:', error);
+      return res.status(500).json({ success: false, message: 'Failed to load the request.' });
     }
   },
 };
 
-export default researchProjectController;
+export default projectController;
