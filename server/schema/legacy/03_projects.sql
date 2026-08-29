@@ -1,4 +1,20 @@
 /* ============================================================
+   SUPERSEDED — DO NOT RUN
+   ------------------------------------------------------------
+   This file describes the research-project schema as it stood
+   before the project-form redesign. It is kept only as a record
+   of the old shape.
+
+   The current schema is created by
+     schema/migrations/20260828_redesign_project_module.sql
+
+   Tables below that no longer exist:
+     author_project, project_details, project_collaborations,
+     project_financial_contributions, project_agency_options,
+     project_scheme_options, project_agency_type_options
+   ============================================================ */
+
+/* ============================================================
    03_projects.sql
    MODULE: Research Projects & Grants
    PURPOSE: Defines tables for funded projects, proposals,

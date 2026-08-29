@@ -1,4 +1,5 @@
 import db from '../../config/connection.js';
+import { toStoredWebsite } from '../shared/webUrl.js';
 
 const formOptionsModel = {
   async addJournalOption(journal) {
@@ -69,129 +70,231 @@ const formOptionsModel = {
     }
   },
 
-  // Project Agency Options
-  async getProjectAgencyOptions() {
+  // ==========================================================================
+  // Project organizations (funding agencies, collaborating institutes)
+  // ==========================================================================
+
+  async getProjectOrganizations() {
     try {
-      const [rows] = await db.query('SELECT * FROM project_agency_options ORDER BY name');
+      const [rows] = await db.query(
+        `SELECT id, name, short_name, category, city, state, country, website,
+                is_funding_agency, is_internal, is_active, sort_order
+           FROM project_organizations
+          ORDER BY is_internal DESC, sort_order, name`,
+      );
       return rows;
     } catch (error) {
-      throw new Error(`Error getting project agency options: ${error.message}`);
+      throw new Error(`Error getting project organizations: ${error.message}`);
     }
   },
 
-  async addProjectAgencyOption(data) {
-    try {
-      const [result] = await db.query('INSERT INTO project_agency_options (name) VALUES (?)', [
-        data.name,
-      ]);
-      return { id: result.insertId, name: data.name };
-    } catch (error) {
-      throw new Error(`Error adding project agency option: ${error.message}`);
-    }
-  },
-
-  async updateProjectAgencyOption(id, data) {
-    try {
-      const [result] = await db.query('UPDATE project_agency_options SET name = ? WHERE id = ?', [
-        data.name,
-        id,
-      ]);
-      return result.affectedRows > 0;
-    } catch (error) {
-      throw new Error(`Error updating project agency option: ${error.message}`);
-    }
-  },
-
-  async deleteProjectAgencyOption(id) {
-    try {
-      const [result] = await db.query('DELETE FROM project_agency_options WHERE id = ?', [id]);
-      return result.affectedRows > 0;
-    } catch (error) {
-      throw new Error(`Error deleting project agency option: ${error.message}`);
-    }
-  },
-
-  // Project Scheme Options
-  async getProjectSchemeOptions() {
-    try {
-      const [rows] = await db.query('SELECT * FROM project_scheme_options ORDER BY name');
-      return rows;
-    } catch (error) {
-      throw new Error(`Error getting project scheme options: ${error.message}`);
-    }
-  },
-
-  async addProjectSchemeOption(data) {
-    try {
-      const [result] = await db.query('INSERT INTO project_scheme_options (name) VALUES (?)', [
-        data.name,
-      ]);
-      return { id: result.insertId, name: data.name };
-    } catch (error) {
-      throw new Error(`Error adding project scheme option: ${error.message}`);
-    }
-  },
-
-  async updateProjectSchemeOption(id, data) {
-    try {
-      const [result] = await db.query('UPDATE project_scheme_options SET name = ? WHERE id = ?', [
-        data.name,
-        id,
-      ]);
-      return result.affectedRows > 0;
-    } catch (error) {
-      throw new Error(`Error updating project scheme option: ${error.message}`);
-    }
-  },
-
-  async deleteProjectSchemeOption(id) {
-    try {
-      const [result] = await db.query('DELETE FROM project_scheme_options WHERE id = ?', [id]);
-      return result.affectedRows > 0;
-    } catch (error) {
-      throw new Error(`Error deleting project scheme option: ${error.message}`);
-    }
-  },
-
-  // Project Agency Type Options
-  async getProjectAgencyTypeOptions() {
-    try {
-      const [rows] = await db.query('SELECT * FROM project_agency_type_options ORDER BY name');
-      return rows;
-    } catch (error) {
-      throw new Error(`Error getting project agency type options: ${error.message}`);
-    }
-  },
-
-  async addProjectAgencyTypeOption(data) {
-    try {
-      const [result] = await db.query('INSERT INTO project_agency_type_options (name) VALUES (?)', [
-        data.name,
-      ]);
-      return { id: result.insertId, name: data.name };
-    } catch (error) {
-      throw new Error(`Error adding project agency type option: ${error.message}`);
-    }
-  },
-
-  async updateProjectAgencyTypeOption(id, data) {
+  async addProjectOrganization(data) {
     try {
       const [result] = await db.query(
-        'UPDATE project_agency_type_options SET name = ? WHERE id = ?',
-        [data.name, id],
+        `INSERT INTO project_organizations
+          (name, short_name, category, city, state, country, website, is_funding_agency, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          data.name,
+          data.short_name || null,
+          data.category || null,
+          data.city || null,
+          data.state || null,
+          data.country || 'India',
+          toStoredWebsite(data.website),
+          data.is_funding_agency === undefined ? 1 : Number(Boolean(data.is_funding_agency)),
+          Number(data.sort_order) || 0,
+        ],
+      );
+      return { id: result.insertId, ...data };
+    } catch (error) {
+      // A rejected website carries its own status; keep it instead of masking
+      // a bad request as a server fault.
+      if (error.statusCode) throw error;
+      throw new Error(`Error adding project organization: ${error.message}`);
+    }
+  },
+
+  async updateProjectOrganization(id, data) {
+    try {
+      const [result] = await db.query(
+        `UPDATE project_organizations
+            SET name = ?, short_name = ?, category = ?, city = ?, state = ?, country = ?,
+                website = ?, is_funding_agency = ?, is_active = ?, sort_order = ?
+          WHERE id = ?`,
+        [
+          data.name,
+          data.short_name || null,
+          data.category || null,
+          data.city || null,
+          data.state || null,
+          data.country || 'India',
+          toStoredWebsite(data.website),
+          data.is_funding_agency === undefined ? 1 : Number(Boolean(data.is_funding_agency)),
+          data.is_active === undefined ? 1 : Number(Boolean(data.is_active)),
+          Number(data.sort_order) || 0,
+          id,
+        ],
       );
       return result.affectedRows > 0;
     } catch (error) {
-      throw new Error(`Error updating project agency type option: ${error.message}`);
+      // A rejected website carries its own status; keep it instead of masking
+      // a bad request as a server fault.
+      if (error.statusCode) throw error;
+      throw new Error(`Error updating project organization: ${error.message}`);
     }
   },
 
-  async deleteProjectAgencyTypeOption(id) {
+  /**
+   * Deactivates instead of deleting once an organization is referenced: a
+   * project keeps pointing at the agency that funded it, so removing the row
+   * would erase that history.
+   */
+  async deleteProjectOrganization(id) {
     try {
-      const [result] = await db.query('DELETE FROM project_agency_type_options WHERE id = ?', [id]);
+      const [[usage]] = await db.query(
+        `SELECT
+            (SELECT COUNT(*) FROM research_projects WHERE funding_organization_id = ?) +
+            (SELECT COUNT(*) FROM project_schemes WHERE organization_id = ?) +
+            (SELECT COUNT(*) FROM project_collaborators WHERE organization_id = ?) +
+            (SELECT COUNT(*) FROM project_finance_rows WHERE organization_id = ?) +
+            (SELECT COUNT(*) FROM project_grant_disbursements WHERE organization_id = ?)
+            AS references_count`,
+        [id, id, id, id, id],
+      );
+
+      if (Number(usage.references_count) > 0) {
+        const [result] = await db.query(
+          'UPDATE project_organizations SET is_active = 0 WHERE id = ?',
+          [id],
+        );
+        return result.affectedRows > 0 ? { deactivated: true } : false;
+      }
+
+      const [result] = await db.query('DELETE FROM project_organizations WHERE id = ?', [id]);
       return result.affectedRows > 0;
     } catch (error) {
-      throw new Error(`Error deleting project agency type option: ${error.message}`);
+      throw new Error(`Error deleting project organization: ${error.message}`);
+    }
+  },
+
+  // ==========================================================================
+  // Project schemes
+  // ==========================================================================
+
+  async getProjectSchemes() {
+    try {
+      const [rows] = await db.query(
+        `SELECT ps.id, ps.organization_id, ps.name, ps.domain, ps.category, ps.website,
+                ps.is_active, ps.sort_order, org.name AS organization_name
+           FROM project_schemes ps
+           JOIN project_organizations org ON ps.organization_id = org.id
+          ORDER BY org.name, ps.sort_order, ps.name`,
+      );
+      return rows;
+    } catch (error) {
+      throw new Error(`Error getting project schemes: ${error.message}`);
+    }
+  },
+
+  async addProjectScheme(data) {
+    try {
+      const [result] = await db.query(
+        `INSERT INTO project_schemes (organization_id, name, domain, category, website, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          data.organization_id,
+          data.name,
+          data.domain || null,
+          data.category || null,
+          toStoredWebsite(data.website),
+          Number(data.sort_order) || 0,
+        ],
+      );
+      return { id: result.insertId, ...data };
+    } catch (error) {
+      // A rejected website carries its own status; keep it instead of masking
+      // a bad request as a server fault.
+      if (error.statusCode) throw error;
+      throw new Error(`Error adding project scheme: ${error.message}`);
+    }
+  },
+
+  /**
+   * Moving a scheme to another funding agency would strand every project that
+   * already points at it: the project keeps its own funding_organization_id, so
+   * its next save fails the "scheme belongs to a different funding agency"
+   * check. The move is refused while such projects exist, in the same spirit as
+   * `deleteProjectScheme` deactivating instead of deleting.
+   */
+  async updateProjectScheme(id, data) {
+    try {
+      const website = toStoredWebsite(data.website);
+      const organizationId = Number(data.organization_id);
+
+      const [[current]] = await db.query(
+        'SELECT organization_id FROM project_schemes WHERE id = ? LIMIT 1',
+        [id],
+      );
+      if (!current) return false;
+
+      if (Number(current.organization_id) !== organizationId) {
+        const [[usage]] = await db.query(
+          'SELECT COUNT(*) AS references_count FROM research_projects WHERE scheme_id = ?',
+          [id],
+        );
+
+        if (Number(usage.references_count) > 0) {
+          const error = new Error(
+            'This scheme is used by existing projects, so its funding agency cannot be changed. Deactivate it and add the scheme under the new agency instead.',
+          );
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
+      const [result] = await db.query(
+        `UPDATE project_schemes
+            SET organization_id = ?, name = ?, domain = ?, category = ?, website = ?,
+                is_active = ?, sort_order = ?
+          WHERE id = ?`,
+        [
+          organizationId,
+          data.name,
+          data.domain || null,
+          data.category || null,
+          website,
+          data.is_active === undefined ? 1 : Number(Boolean(data.is_active)),
+          Number(data.sort_order) || 0,
+          id,
+        ],
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      if (error.statusCode) throw error;
+      throw new Error(`Error updating project scheme: ${error.message}`);
+    }
+  },
+
+  /** Deactivates a scheme that projects already reference; see above. */
+  async deleteProjectScheme(id) {
+    try {
+      const [[usage]] = await db.query(
+        'SELECT COUNT(*) AS references_count FROM research_projects WHERE scheme_id = ?',
+        [id],
+      );
+
+      if (Number(usage.references_count) > 0) {
+        const [result] = await db.query('UPDATE project_schemes SET is_active = 0 WHERE id = ?', [
+          id,
+        ]);
+        return result.affectedRows > 0 ? { deactivated: true } : false;
+      }
+
+      const [result] = await db.query('DELETE FROM project_schemes WHERE id = ?', [id]);
+      return result.affectedRows > 0;
+    } catch (error) {
+      throw new Error(`Error deleting project scheme: ${error.message}`);
     }
   },
 };

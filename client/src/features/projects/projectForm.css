@@ -1,0 +1,1387 @@
+/* ==========================================================================
+   Research project form
+   Scoped to .pf-page so it cannot leak into the rest of the app. Colours come
+   from shared/styles/variables.css; only spacing and layout live here.
+   ========================================================================== */
+
+.pf-page {
+  --pf-radius: 14px;
+  --pf-gap: 18px;
+  --pf-field-height: 42px;
+
+  min-height: 100%;
+  padding: 32px 32px 28px;
+  background: var(--bg-light, #f0f6ff);
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.95rem;
+}
+
+/* Held to a reading width and centred, like the journal form, so the cards do
+   not run to the edges of a wide screen. */
+.pf-page__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pf-page--centered {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: var(--text-muted, #6c757d);
+}
+
+.pf-spinner {
+  color: var(--primary-color, #0069ab);
+  animation: pf-spin 1s linear infinite;
+}
+
+@keyframes pf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ----------------------------------------------------------------- page bar */
+
+/* The form has no page heading; this bar only appears to confirm a save or to
+   offer the way out of view mode. */
+.pf-page__header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: var(--pf-gap);
+}
+
+.pf-page__saved {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #e6f6ed;
+  color: var(--success-color, #198754);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+/* --------------------------------------------------------------------- cards */
+
+.pf-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-gap);
+}
+
+.pf-card {
+  padding: 20px 22px;
+  border-radius: var(--pf-radius);
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 6px 22px rgb(0 62 105 / 6%);
+}
+
+.pf-card__header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8eef7;
+}
+
+/* Inline sections (Result Announcement, Project Status, Outcome, Remarks) keep
+   the heading on the same row as the fields, as in the design. */
+.pf-card--inline {
+  padding: 14px 22px;
+}
+
+.pf-card--inline .pf-card__header--inline {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.pf-card--inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+}
+
+.pf-card--inline .pf-card__header--inline {
+  flex: 0 0 auto;
+}
+
+.pf-card--inline .pf-card__body {
+  flex: 1 1 480px;
+  margin-top: 0;
+}
+
+.pf-card__title {
+  margin: 0;
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  font-size: 1.02rem;
+  white-space: nowrap;
+}
+
+.pf-card__header-right {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.pf-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.pf-card__error {
+  margin: 12px 0 0;
+  color: var(--error-color, #dc3545);
+  font-size: 0.84rem;
+}
+
+.pf-switch.form-check.form-switch {
+  display: flex;
+  align-items: center;
+  min-height: auto;
+  margin: 0;
+  padding-left: 3em;
+}
+
+.pf-switch .form-check-input {
+  height: 1.45em;
+  width: 2.9em;
+  /* Bootstrap adds margin-top: 0.25em, which drops the switch below the
+     heading's optical centre in the card header. */
+  margin-top: 0;
+  margin-left: -3em;
+  cursor: pointer;
+}
+
+.pf-switch .form-check-input:checked {
+  border-color: var(--primary-color, #0069ab);
+  background-color: var(--primary-color, #0069ab);
+}
+
+/* Two-column band: Proposal Details next to Call for Details. */
+.pf-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: var(--pf-gap);
+}
+
+/* --------------------------------------------------------------- form fields */
+
+/* Proposal Details, Call for Details and the request modal stack their label
+   over the control, as in the design — these are the form's full-width fields. */
+.pf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Everywhere else a field reads as one line: the label sits beside its control
+   and only a hint or an error drops underneath. A grid rather than a flex row
+   because grid columns cannot wrap — a long label can never end up stranded on
+   a line of its own. */
+.pf-inline-field {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr);
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.pf-inline-field > .pf-field__hint,
+.pf-inline-field > .pf-field__error {
+  grid-column: 1 / -1;
+}
+
+/* Controls that carry their own width — the Yes/No pill, a radio row — keep it
+   instead of being stretched across the rest of the line. */
+.pf-yesno,
+.pf-radio-group {
+  justify-self: start;
+}
+
+/* A label never wraps onto a second line: it names a control sitting beside it,
+   and a wrapped label breaks the row's rhythm. */
+.pf-inline-field__label {
+  white-space: nowrap;
+}
+
+.pf-field__label,
+.pf-inline-field__label {
+  /* Bootstrap gives every <label> an 8px bottom margin. Centring a field's row
+     centres that margin too, which left the text sitting 4px above its box. */
+  margin: 0;
+  color: #3f4a5f;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.pf-inline-field__label--accent {
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-field__hint {
+  color: var(--text-muted, #6c757d);
+  font-size: 0.78rem;
+}
+
+.pf-field__error {
+  margin: 0;
+  color: var(--error-color, #dc3545);
+  font-size: 0.78rem;
+}
+
+.pf-input {
+  width: 100%;
+  height: var(--pf-field-height);
+  padding: 0 12px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.92rem;
+  font-family: inherit;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.pf-input::placeholder {
+  color: #a9b3c4;
+}
+
+.pf-input:focus {
+  border-color: var(--border-focus, #0069ab);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(0 105 171 / 12%);
+}
+
+.pf-input:disabled,
+.pf-input--readonly,
+.pf-input[readonly] {
+  background: #f1f3f7;
+  color: #6d7891;
+  cursor: default;
+}
+
+.pf-input.is-invalid {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-input--compact {
+  min-width: 78px;
+}
+
+.pf-input--count {
+  width: 78px;
+  text-align: center;
+}
+
+.pf-input--amount {
+  text-align: right;
+}
+
+.pf-textarea {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+/* Remarks is usually a line or two, so it starts at the standard field height
+   and is dragged taller when there is more to say. */
+.pf-textarea--remarks {
+  min-height: var(--pf-field-height);
+}
+
+.pf-readonly {
+  display: block;
+  min-height: var(--pf-field-height);
+  padding: 10px 12px;
+  border: 1px solid #e6eaf1;
+  border-radius: 10px;
+  background: #eceff4;
+  color: #56607a;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.pf-readonly__empty {
+  color: #a9b3c4;
+}
+
+.pf-website {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pf-website .pf-readonly {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pf-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.pf-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pf-grid--budget {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+}
+
+.pf-duration {
+  display: flex;
+  gap: 8px;
+}
+
+/* Rows of label-beside-control fields (submission, presentation, sanction). */
+.pf-inline-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 26px;
+  align-items: center;
+}
+
+.pf-inline-field {
+  min-width: 160px;
+}
+
+/* Only meaningful inside a row: in a column container a flex-basis of 220px
+   would be read as a height and stretch the field into a tall empty box. The
+   cap stops a lone field on a row — a reference number, a status — from
+   stretching to the full card width, which reads as a mistake next to the
+   fixed-width fields beside it. */
+.pf-inline-grid > .pf-inline-field--grow,
+.pf-collaborator__main > .pf-inline-field--grow,
+.pf-collaborator__org > .pf-inline-field--grow,
+.pf-collaborator__contact > .pf-inline-field--grow {
+  flex: 1 1 220px;
+  max-width: 440px;
+}
+
+/* The fields a row is built around — a panelist list, a collaborating
+   organization, a contact email — still take what is left of the line. Written
+   as a compound selector so it outranks the capped rule above. */
+.pf-inline-field--grow.pf-inline-field--wide {
+  max-width: none;
+}
+
+.pf-inline-field--tight {
+  min-width: auto;
+}
+
+/* Submission Details: two rows of three fields that share their columns, so the
+   middle field starts at the same x on both rows and the trailing ones line up
+   on the right. */
+.pf-submission-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px 22px;
+  align-items: center;
+}
+
+/* "Submitted on" only needs room for a date, and every pixel it gives back goes
+   to the trailing field, which carries the longest label on the card. */
+.pf-submission-grid > .pf-inline-field:first-child {
+  grid-template-columns: auto 160px;
+  /* Column 1 is as wide as the CFRD question below it; without this the date
+     would be pushed to the far end of that column, against the next label. */
+  justify-self: start;
+}
+
+/* The middle field of each row: pushed to the end of its column with a control
+   of fixed width, so "Mode of Submission" and "Date" share both edges instead
+   of leaving a hole before the trailing field. */
+.pf-inline-field--paired {
+  /* A fixed track, not a max: a select is only as wide as its longest option,
+     so `minmax(0, 190px)` would leave the two controls different widths. */
+  grid-template-columns: auto 190px;
+  justify-self: end;
+}
+
+/* Closes a row on the right. Both rows of Submission Details end in one of
+   these, and the fixed control width plus the push to the edge is what makes
+   the Reference Number and Status boxes share their left and right edges. */
+.pf-inline-field--trailing {
+  grid-template-columns: auto minmax(0, 300px);
+  margin-left: auto;
+}
+
+.pf-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  /* No top margin: the group sits beside its label now, and the margin would
+     drop the radios below the label's centre line. */
+  margin: 0;
+}
+
+.pf-radio {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  /* Same Bootstrap label margin as above: it would push the radio row's centre
+     away from the group's own label. */
+  margin: 0;
+  color: #3f4a5f;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.pf-radio input[type='radio'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary-color, #0069ab);
+  cursor: pointer;
+}
+
+.pf-driven-by {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.pf-driven-by__label {
+  color: #3f4a5f;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.pf-driven-by .pf-radio span {
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------ native selects */
+
+.pf-select {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-select__control {
+  width: 100%;
+  height: var(--pf-field-height);
+  padding: 0 32px 0 12px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.92rem;
+  font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+
+.pf-select__control:focus {
+  border-color: var(--border-focus, #0069ab);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(0 105 171 / 12%);
+}
+
+.pf-select__control:disabled {
+  background: #f1f3f7;
+  color: #8a93a6;
+  cursor: default;
+}
+
+.pf-select__control.is-invalid {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-select__chevron {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  color: #7d879b;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------- yes/no pill */
+
+.pf-yesno {
+  display: inline-flex;
+  /* Sits a touch clear of its label: the pill has no border-radius gap of its
+     own, so at the field's 10px column gap it reads as glued to the text. */
+  margin-left: 6px;
+  align-self: center;
+  overflow: hidden;
+  height: 34px;
+  border: 1px solid #d8e2f0;
+  border-radius: 8px;
+  background: #eaf1fb;
+}
+
+.pf-yesno__option {
+  min-width: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.pf-yesno__option.is-selected {
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-yesno__option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------- buttons */
+
+.pf-btn {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.pf-btn--primary {
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-btn--primary:hover:not(:disabled) {
+  background: var(--primary-hover, #005492);
+}
+
+.pf-btn--ghost {
+  border-color: #d5deeb;
+  background: #fff;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-btn--ghost:hover:not(:disabled) {
+  background: #f2f7ff;
+}
+
+.pf-btn--sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.82rem;
+}
+
+.pf-btn--lg {
+  height: 44px;
+  padding: 0 30px;
+  font-size: 0.95rem;
+}
+
+.pf-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pf-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: #eef4fd;
+  color: var(--primary-color, #0069ab);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.pf-icon-btn:hover:not(:disabled):not(.is-disabled) {
+  background: #dfeaf9;
+}
+
+.pf-icon-btn:disabled,
+.pf-icon-btn.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.pf-icon-btn--add {
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-icon-btn--add:hover:not(:disabled):not(.is-disabled) {
+  background: var(--primary-hover, #005492);
+}
+
+.pf-icon-btn--remove,
+.pf-icon-btn--danger {
+  background: #fdecec;
+  color: var(--error-color, #dc3545);
+}
+
+.pf-icon-btn--remove:hover:not(:disabled):not(.is-disabled),
+.pf-icon-btn--danger:hover:not(:disabled):not(.is-disabled) {
+  background: #fadcdc;
+}
+
+.pf-icon-btn--success {
+  background: #e6f6ed;
+  color: var(--success-color, #198754);
+}
+
+.pf-icon-btn--ghost {
+  background: #eef4fd;
+}
+
+.pf-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-visually-hidden {
+  position: absolute;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  width: 1px;
+  height: 1px;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- investigators */
+
+.pf-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pf-investigator-row {
+  display: grid;
+  grid-template-columns: 20px 66px 150px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.1fr) 78px;
+  gap: 10px;
+  align-items: center;
+}
+
+.pf-investigator-row.is-dragging {
+  border-radius: 10px;
+  background: #f6faff;
+  box-shadow: 0 8px 22px rgb(0 62 105 / 12%);
+}
+
+.pf-investigator-row__country {
+  min-width: 0;
+}
+
+/* An external member carries two fields more than an internal one (department
+   and email are typed in rather than read from the directory), so the row gets
+   its own narrower columns instead of wrapping onto a second line. Tracks read
+   left to right: handle, role, type, name, department, organization, country,
+   email, actions. */
+.pf-investigator-row--external {
+  grid-template-columns:
+    20px 66px 130px minmax(0, 1.15fr) minmax(0, 1fr)
+    minmax(0, 1.15fr) minmax(0, 0.7fr) minmax(0, 1.15fr) 78px;
+}
+
+.pf-drag-handle {
+  display: inline-flex;
+  color: #b6bfd0;
+  cursor: grab;
+}
+
+/* The role pill doubles as the control: its text is the role the row's position
+   gives it, and filling it marks the chosen corresponding investigator. The
+   radio itself is hidden rather than removed, so the column stays a radio group
+   for the keyboard. */
+.pf-principal {
+  position: relative;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+
+  /* Bootstrap gives every <label> a 0.5rem bottom margin. The row centres the
+     margin box, so that margin floated the pill half its height above the
+     fields beside it. */
+  margin: 0;
+  padding: 5px 6px;
+  border: 1px solid #dbe3ee;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-muted, #6c757d);
+  font-weight: 700;
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.pf-principal:hover:not(.is-disabled):not(.is-selected) {
+  border-color: #b9cfe8;
+  background: #f4f8fd;
+}
+
+/* The selected pill darkens on hover instead of falling back to the unselected
+   tint — a plain :hover rule outranks .is-selected and would wash it out. */
+.pf-principal.is-selected:hover:not(.is-disabled) {
+  border-color: var(--primary-hover, #005492);
+  background: var(--primary-hover, #005492);
+}
+
+.pf-principal input[type='radio'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.pf-principal__dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid #c3cddc;
+  border-radius: 50%;
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.pf-principal.is-selected {
+  border-color: var(--primary-color, #0069ab);
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-principal.is-selected .pf-principal__dot {
+  border-color: #fff;
+  background: #fff;
+}
+
+/* Keyboard focus has to show on the pill, since the radio itself is hidden. */
+.pf-principal:focus-within {
+  box-shadow: 0 0 0 3px rgb(0 105 171 / 20%);
+}
+
+.pf-principal.is-disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+/* ------------------------------------------------------------- search fields */
+
+.pf-search {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-search__clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: #eef4fd;
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+  font-size: 0.72rem;
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.pf-search__menu,
+.pf-tags__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 30;
+  overflow-y: auto;
+  max-height: 240px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fff;
+  list-style: none;
+  box-shadow: 0 10px 26px rgb(0 62 105 / 12%);
+}
+
+.pf-search__option,
+.pf-tags__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pf-search__option:hover,
+.pf-tags__option:hover {
+  background: #f2f7ff;
+}
+
+.pf-search__name {
+  font-weight: 600;
+}
+
+.pf-search__meta {
+  color: var(--text-muted, #6c757d);
+  font-size: 0.78rem;
+}
+
+.pf-tags__empty {
+  padding: 10px;
+  color: var(--text-muted, #6c757d);
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- tag select */
+
+.pf-tags {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-tags__control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: var(--pf-field-height);
+  padding: 6px 30px 6px 10px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fbfcfe;
+  cursor: text;
+}
+
+.pf-tags--invalid .pf-tags__control {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-tags--compact .pf-tags__control {
+  min-height: 38px;
+  padding-right: 10px;
+}
+
+.pf-tags__input {
+  flex: 1 1 120px;
+  min-width: 90px;
+  border: 0;
+  background: transparent;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.pf-tags__input:focus {
+  outline: none;
+}
+
+.pf-tags__input::placeholder {
+  color: #a9b3c4;
+}
+
+.pf-tags__chevron {
+  position: absolute;
+  top: 20px;
+  right: 11px;
+  color: #7d879b;
+  pointer-events: none;
+}
+
+.pf-chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e7f0fc;
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.pf-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------- collaborators */
+
+.pf-collaborator {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #eef2f8;
+  border-radius: 12px;
+  background: #fcfdff;
+}
+
+.pf-collaborator__main,
+.pf-collaborator__org {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: center;
+}
+
+.pf-collaborator__contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #eff5fe;
+}
+
+.pf-collaborator .pf-inline-field {
+  min-width: 150px;
+}
+
+/* --------------------------------------------------------------------- tables */
+
+.pf-table-wrap {
+  overflow-x: auto;
+}
+
+.pf-table {
+  width: 100%;
+  border: 1px solid #e5eaf2;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.pf-table th,
+.pf-table td {
+  padding: 10px 12px;
+  border: 1px solid #e5eaf2;
+  vertical-align: middle;
+}
+
+.pf-table thead tr {
+  background: #eff5fe;
+}
+
+.pf-table th {
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.pf-table__sno {
+  width: 62px;
+  text-align: center;
+}
+
+.pf-table__amount {
+  width: 140px;
+}
+
+.pf-table__slot {
+  width: 88px;
+  text-align: center;
+}
+
+.pf-table__actions {
+  width: 96px;
+  text-align: center;
+}
+
+.pf-table tfoot td {
+  background: #f7faff;
+  font-weight: 700;
+}
+
+.pf-table__total-label {
+  color: var(--primary-color, #0069ab);
+  text-align: right;
+}
+
+.pf-table__total-value {
+  color: var(--primary-color, #0069ab);
+  text-align: right;
+}
+
+.pf-slot-button {
+  position: relative;
+  display: inline-flex;
+}
+
+.pf-slot-button__clear {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: var(--error-color, #dc3545);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ documents */
+
+.pf-document {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-width: 280px;
+  padding: 14px 16px;
+  border: 1px solid #e6ecf6;
+  border-radius: 12px;
+  background: #fcfdff;
+}
+
+.pf-document--invalid {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-document__icon {
+  flex: 0 0 auto;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-document__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pf-document__label {
+  color: #3b4457;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.pf-document__meta {
+  overflow: hidden;
+  color: var(--text-muted, #6c757d);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pf-document__link {
+  color: var(--primary-color, #0069ab);
+  text-decoration: underline;
+}
+
+.pf-document__error {
+  color: var(--error-color, #dc3545);
+  font-size: 0.76rem;
+}
+
+.pf-document__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Two per row, as the design pairs the four final documents. */
+.pf-document-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.pf-presentation,
+.pf-sanction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 18px;
+  align-items: start;
+}
+
+.pf-presentation__fields,
+.pf-sanction__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* -------------------------------------------------------------------- outcome */
+
+/* Even columns so every label/input pair sits on the same rhythm and the
+   inputs line up in a straight row. */
+.pf-outcome {
+  display: grid;
+  /* max-content floor so a long label ("Tech Transfer") is never clipped when
+     the page is held to its reading width. */
+  grid-template-columns: repeat(6, minmax(max-content, 1fr));
+  gap: 12px 18px;
+  align-items: center;
+}
+
+.pf-outcome__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 78px;
+  gap: 8px;
+  align-items: center;
+}
+
+/* line-height matches the input height so label text and box share one
+   vertical centre across the whole row. */
+.pf-outcome__item .pf-inline-field__label {
+  line-height: var(--pf-field-height);
+  white-space: nowrap;
+}
+
+.pf-outcome__item .pf-input--count {
+  width: 100%;
+}
+
+/* --------------------------------------------------------------- stage notes */
+
+/* Explains why the later sections are not on screen yet, so a hidden section
+   reads as "not applicable yet" rather than as something broken. */
+.pf-stage-note {
+  margin: -4px 0 0;
+  padding: 12px 18px;
+  border: 1px dashed #cfdcf0;
+  border-radius: var(--pf-radius);
+  color: var(--text-muted, #6c757d);
+  font-size: 0.86rem;
+}
+
+.pf-stage-note strong {
+  color: var(--primary-color, #0069ab);
+}
+
+/* -------------------------------------------------------------------- banners */
+
+.pf-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: var(--pf-gap);
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+
+.pf-banner--error {
+  background: #fdecec;
+  color: #9e2530;
+}
+
+.pf-banner--info {
+  background: #e7f0fc;
+  color: #14548a;
+}
+
+.pf-banner__list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* -------------------------------------------------------------------- actions */
+
+.pf-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 8px 0 0;
+}
+
+/* --------------------------------------------------------------------- modal */
+
+/* The shared modal is 80% of the viewport, which leaves this short form adrift
+   on a wide screen. It is a handful of fields, so it gets a reading width. */
+.pf-modal .modal-dialog.modal-lg {
+  width: 100% !important;
+  max-width: 560px !important;
+}
+
+.pf-modal .modal-body {
+  overflow-y: auto;
+  max-height: calc(100vh - 190px);
+  padding: 16px 20px 18px;
+}
+
+.pf-modal .modal-header {
+  padding: 14px 20px 12px;
+}
+
+/* Compact controls: the modal is a quick side-request, not the main form. */
+.pf-modal {
+  --pf-field-height: 38px;
+}
+
+.pf-modal .pf-field__label {
+  font-size: 0.82rem;
+}
+
+.pf-modal .pf-textarea {
+  min-height: 74px;
+}
+
+.pf-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Short fields pair up so the form stays inside one screen. */
+.pf-modal__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+/* The choice of what to request is one short line, not a stacked field. */
+.pf-modal__type {
+  flex-direction: row;
+  gap: 16px;
+  align-items: center;
+}
+
+.pf-modal__actions {
+  padding-top: 2px;
+}
+
+.pf-modal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.pf-modal__done {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (width <= 1200px) {
+  .pf-columns,
+  .pf-presentation,
+  .pf-sanction {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (width <= 992px) {
+  .pf-submission-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-inline-field--trailing,
+  .pf-inline-field--paired,
+  .pf-submission-grid > .pf-inline-field:first-child {
+    grid-template-columns: auto minmax(120px, 1fr);
+    justify-self: stretch;
+    margin-left: 0;
+  }
+
+  .pf-outcome {
+    grid-template-columns: repeat(3, minmax(max-content, 1fr));
+  }
+
+  .pf-investigator-row,
+  .pf-investigator-row--external {
+    grid-template-columns: 20px 66px minmax(0, 1fr) minmax(0, 1fr) 78px;
+    row-gap: 8px;
+  }
+
+  .pf-investigator-row__type {
+    grid-column: span 3;
+  }
+}
+
+@media (width <= 768px) {
+  .pf-outcome {
+    grid-template-columns: repeat(2, minmax(max-content, 1fr));
+  }
+
+  .pf-document-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-page {
+    padding: 20px 14px 24px;
+  }
+
+  .pf-card {
+    padding: 16px 14px;
+  }
+
+  .pf-card--inline {
+    align-items: flex-start;
+  }
+
+  .pf-investigator-row,
+  .pf-investigator-row--external {
+    grid-template-columns: 20px 1fr 78px;
+  }
+
+  .pf-investigator-row > *:not(.pf-drag-handle):not(.pf-row-actions):not(.pf-principal) {
+    grid-column: 2 / 3;
+  }
+
+  .pf-grid--two,
+  .pf-grid--budget {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -224,7 +224,7 @@ const adminController = {
       const requestId = parseInt(req.params.id);
       const { admin_comment } = req.body;
 
-      const result = await adminModel.approveProjectRequest(requestId, admin_comment);
+      const result = await adminModel.approveProjectRequest(requestId, admin_comment, req.user?.id);
 
       if (!result) {
         return res.status(404).json({

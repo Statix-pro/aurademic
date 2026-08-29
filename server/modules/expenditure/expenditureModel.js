@@ -918,14 +918,22 @@ async function getCumulativeAdvanceSummary(
       legacyMatchParams = [lineId, normalizedHead, normalizedSubHead];
     }
   } else if (!lineId) {
-    // NEW: prefer ID match; fall back to text for un-backfilled rows.
+    // NEW: the ID match catches rows whose head/sub was renamed in the catalog. The text match
+    // runs beside it — never instead of it — for two reasons:
+    //   LEGACY: rows pre-dating the catalog, which carry snapshot text and no IDs. Remove this
+    //     reason once every advance row is backfilled:
+    //       SELECT COUNT(*) FROM expenditure_advance_rows WHERE budget_head_id IS NULL;
+    //   Rows pointing at a DUPLICATE catalog entry of the same name. No backfill fixes those,
+    //     so this reason stands until duplicates are merged out of the catalog.
+    // Both arms must count, whatever the other one holds — callers that resolve IDs (settlement
+    // validation) and callers that don't (the advance-summary endpoint the form reads) have to
+    // arrive at the same total or the form's figure gets rejected.
     if (headIdVal && subIdVal) {
       rowMatchClause = `
         (
           (ar.budget_head_id = ? AND ar.budget_sub_head_id = ?)
           OR (
-            ar.budget_head_id IS NULL
-            AND LOWER(TRIM(ar.budget_head)) = ?
+            LOWER(TRIM(ar.budget_head)) = ?
             AND LOWER(TRIM(ar.sub_head)) = ?
           )
         )
@@ -1885,14 +1893,24 @@ export async function getAdvanceSummary({
   dashboardRowId = null,
   workflowRowRef = null,
 } = {}) {
+  // Resolve the catalog IDs the settlement validation resolves too, so the total the form
+  // reads here and the total the submission is checked against come from the same matching.
+  const resolvedIds =
+    toPositiveInt(budgetHeadId) || toPositiveInt(budgetSubHeadId)
+      ? {
+          budget_head_id: toPositiveInt(budgetHeadId),
+          budget_sub_head_id: toPositiveInt(budgetSubHeadId),
+        }
+      : await resolveCatalogIds(db, head, subHead);
+
   return getCumulativeAdvanceSummary(db, {
     userId,
     employeeId,
     budgetLineId,
     head,
     subHead,
-    budgetHeadId,
-    budgetSubHeadId,
+    budgetHeadId: resolvedIds?.budget_head_id ?? null,
+    budgetSubHeadId: resolvedIds?.budget_sub_head_id ?? null,
     financeRequestId,
     rowIndex,
     sourceRequestId,
@@ -3568,8 +3586,20 @@ async function insertSettlementRows(
   } = {},
 ) {
   const validRows = Array.isArray(rows) ? rows : [];
+  // Same per-head/sub allocation the submitted totals were validated against, so the stored
+  // advance_amount of the rows adds up to the advance the settlement was checked against.
+  const advanceAllocations = await allocateSettlementAdvances(conn, validRows, {
+    userId,
+    financeRequestId,
+    rowIndex,
+    sourceRequestId,
+    dashboardRowId,
+    workflowRowRef,
+    excludeExpenditureId,
+  });
   let sortOrder = 0;
-  for (const row of validRows) {
+  for (let rowPosition = 0; rowPosition < validRows.length; rowPosition += 1) {
+    const row = validRows[rowPosition];
     const budgetHead = sanitizeRowValue(row.budgetHead || row.budget_head);
     const subHead = sanitizeRowValue(row.subHead || row.sub_head);
     const budgetAmount = moneyOrNull(row.budget);
@@ -3584,25 +3614,13 @@ async function insertSettlementRows(
         budgetHead,
         subHead,
       }));
-    const settlementAmount = toMoney(row.settlement || row.settlement_amount);
-    if (!budgetHead && !subHead && settlementAmount === 0) continue;
+    const settlementAmount = getSettlementRowSettlementAmount(row);
+    // Same rule `allocateSettlementAdvances` skipped by, so the allocation stays aligned.
+    if (isEmptySettlementRow(row)) continue;
 
     // NEW: catalog IDs alongside snapshot text.
     const setIds = await resolveCatalogIds(conn, budgetHead, subHead);
-    const advanceAmount = await getSettlementAdvanceAmount(conn, row, {
-      userId,
-      financeRequestId,
-      rowIndex,
-      sourceRequestId,
-      dashboardRowId,
-      workflowRowRef,
-      excludeExpenditureId,
-      budgetHead,
-      subHead,
-      budgetLineId,
-      budgetHeadId: setIds.budget_head_id,
-      budgetSubHeadId: setIds.budget_sub_head_id,
-    });
+    const advanceAmount = toMoney(advanceAllocations[rowPosition]);
 
     await conn.execute(
       `INSERT INTO expenditure_settlement_rows
@@ -3649,6 +3667,9 @@ async function getSettlementAdvanceAmount(
     budgetLineId = null,
     budgetHeadId = null,
     budgetSubHeadId = null,
+    // Narrow the lookup to the row's own budget line instead of the whole head/sub. Only the
+    // per-line split inside `allocateSettlementAdvances` wants this; validation never does.
+    matchByBudgetLine = false,
   } = {},
 ) {
   const uid = toPositiveInt(userId);
@@ -3670,23 +3691,18 @@ async function getSettlementAdvanceAmount(
         }
       : await resolveCatalogIds(conn, resolvedBudgetHead, resolvedSubHead);
 
-  // For a carry-forward settlement the original advance sits on the SOURCE-year
-  // budget line while the settlement uses the TARGET-year line — so an exact
-  // budget_line_id match never finds the advance (advanceTotal = 0). When this
-  // finance request has an active carry-forward, match the advance by head/sub
-  // instead; the row-identity scope (finance + dashboard row) already pins the
-  // correct card, and head/sub is stable across the year boundary.
-  let advanceMatchLineId = resolvedBudgetLineId;
-  if (advanceMatchLineId && toPositiveInt(financeRequestId)) {
-    const [cfRows] = await conn.execute(
-      `SELECT 1 FROM finance_carry_forward_allocations
-        WHERE finance_request_id = ?
-          AND LOWER(TRIM(COALESCE(status, 'active'))) = 'active'
-        LIMIT 1`,
-      [toPositiveInt(financeRequestId)],
-    );
-    if (cfRows.length) advanceMatchLineId = null;
-  }
+  // Match the advance by head/sub across every budget line, never by a single
+  // budget_line_id, because that is exactly what the settlement form did when it
+  // showed the user the advance to adjust: it groups all budget lines sharing a
+  // head/sub into one option and calls /expenditure/advance-summary once WITHOUT a
+  // budget_line_id. An advance booked across two lines of the same head/sub (or on
+  // the SOURCE-year line of a carry-forward, while the settlement uses the
+  // TARGET-year line) would otherwise be counted here only in part, and the
+  // settlement the form showed as fully adjusted gets rejected as a mismatch.
+  // The row-identity scope (finance request + dashboard row) already pins the card,
+  // so widening from line to head/sub cannot pull in another card's advance.
+  const advanceMatchLineId =
+    resolvedBudgetHead && resolvedSubHead && !matchByBudgetLine ? null : resolvedBudgetLineId;
 
   const summary = await getCumulativeAdvanceSummary(conn, {
     userId: uid,
@@ -3706,40 +3722,103 @@ async function getSettlementAdvanceAmount(
   return toMoney(summary.preAdvance);
 }
 
-async function getSettlementAdvanceTotal(
-  conn,
-  rows = [],
-  {
-    userId = null,
-    financeRequestId = null,
-    rowIndex = null,
-    sourceRequestId = null,
-    dashboardRowId = null,
-    workflowRowRef = null,
-    excludeExpenditureId = null,
-  } = {},
-) {
+const getSettlementRowSettlementAmount = (row = {}) =>
+  toMoney(row.settlement || row.settlement_amount);
+
+const getSettlementRowBudgetLineId = (row = {}) =>
+  toPositiveInt(row.budgetLineId || row.budget_line_id);
+
+const isEmptySettlementRow = (row = {}) =>
+  !sanitizeRowValue(row.budgetHead || row.budget_head) &&
+  !sanitizeRowValue(row.subHead || row.sub_head) &&
+  getSettlementRowSettlementAmount(row) === 0;
+
+const getSettlementAdvanceGroupKey = (row = {}) => {
+  const head = normalizeText(sanitizeRowValue(row.budgetHead || row.budget_head)).toLowerCase();
+  const subHead = normalizeText(sanitizeRowValue(row.subHead || row.sub_head)).toLowerCase();
+  if (head && subHead) return `head::${head}::${subHead}`;
+  return `line::${getSettlementRowBudgetLineId(row)}`;
+};
+
+/**
+ * The advance each settlement row discharges, aligned index-for-index with `rows`.
+ *
+ * The advance is looked up per head/sub GROUP, because that is the unit the settlement form
+ * works in: it collapses every budget line sharing a head/sub into one option and reads the
+ * advance for the group. Looking it up per row instead would report the group's whole advance
+ * on each row of the group and double it.
+ *
+ * Inside a group the total is then split back out per budget line, so `advance_amount` keeps
+ * saying WHICH advance each row discharged — `resolveAdvanceUsageAmount` reads it back to tell
+ * a settled advance from one still outstanding, and it reads it per row.
+ */
+async function allocateSettlementAdvances(conn, rows = [], options = {}) {
   const validRows = Array.isArray(rows) ? rows : [];
-  let total = 0;
+  const allocations = new Array(validRows.length).fill(0);
+  const groupPositions = new Map();
 
-  for (const row of validRows) {
-    const settlementAmount = toMoney(row.settlement || row.settlement_amount);
-    const budgetHead = sanitizeRowValue(row.budgetHead || row.budget_head);
-    const subHead = sanitizeRowValue(row.subHead || row.sub_head);
-    if (!budgetHead && !subHead && settlementAmount === 0) continue;
-
-    total += await getSettlementAdvanceAmount(conn, row, {
-      userId,
-      financeRequestId,
-      rowIndex,
-      sourceRequestId,
-      dashboardRowId,
-      workflowRowRef,
-      excludeExpenditureId,
-    });
+  for (let index = 0; index < validRows.length; index += 1) {
+    if (isEmptySettlementRow(validRows[index])) continue;
+    const groupKey = getSettlementAdvanceGroupKey(validRows[index]);
+    const positions = groupPositions.get(groupKey) || [];
+    positions.push(index);
+    groupPositions.set(groupKey, positions);
   }
 
-  return toMoney(total);
+  for (const positions of groupPositions.values()) {
+    // The group's whole advance, across every budget line under this head/sub — the same
+    // figure the form showed the user and validated the payee amounts against.
+    let unallocated = await getSettlementAdvanceAmount(conn, validRows[positions[0]], options);
+    const seenBudgetLineIds = new Set();
+
+    for (const position of positions) {
+      if (unallocated <= 0) break;
+      // A row recording no spend cannot hold any of the advance: `buildSettledAdvanceExpr`
+      // counts advance_amount only where settlement_amount > 0, so an advance parked here
+      // would be reported as still outstanding after the settlement that discharged it. Its
+      // line's advance stays unallocated and reaches a spend-bearing row as the remainder
+      // below. Skipped before `seenBudgetLineIds`, so a later row that does record spend on
+      // the same budget line still gets that line's share.
+      if (getSettlementRowSettlementAmount(validRows[position]) <= 0) continue;
+      const budgetLineId = getSettlementRowBudgetLineId(validRows[position]);
+      // Two rows on one budget line share that line's advance; it is allocated once.
+      if (!budgetLineId || seenBudgetLineIds.has(budgetLineId)) continue;
+      seenBudgetLineIds.add(budgetLineId);
+
+      const lineAdvance = await getSettlementAdvanceAmount(conn, validRows[position], {
+        ...options,
+        matchByBudgetLine: true,
+      });
+      // Capped by what is left, so a row that also matches line-less legacy advances by
+      // head/sub text cannot claim more of the group than the group holds.
+      const share = toMoney(Math.min(lineAdvance, unallocated));
+      if (share <= 0) continue;
+      allocations[position] = toMoney(allocations[position] + share);
+      unallocated = toMoney(unallocated - share);
+    }
+
+    // Advance sitting on budget lines this settlement has no spend row for is still discharged
+    // by it, so it has to land somewhere. It goes on a row that records spend, because the claim
+    // accounting (`buildSettledAdvanceExpr`) only counts advance_amount where
+    // settlement_amount > 0 — parking it on a zero-spend row would report the advance as still
+    // outstanding.
+    if (unallocated > 0) {
+      const carrier =
+        positions.find((position) => getSettlementRowSettlementAmount(validRows[position]) > 0) ??
+        positions[0];
+      allocations[carrier] = toMoney(allocations[carrier] + unallocated);
+    }
+  }
+
+  return allocations;
+}
+
+// Exported for tests: the per-row split is the part with the interesting edge cases.
+export const allocateSettlementAdvancesForTest = allocateSettlementAdvances;
+
+export async function getSettlementAdvanceTotal(conn, rows = [], options = {}) {
+  const allocations = await allocateSettlementAdvances(conn, rows, options);
+  return toMoney(allocations.reduce((sum, amount) => sum + toMoney(amount), 0));
 }
 
 const formatMoney = (value) =>

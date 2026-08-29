@@ -1,6 +1,7 @@
 import express from 'express';
+import multer from 'multer';
 
-import researchProjectController from './projectController.js';
+import projectController from './projectController.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import upload from '../../middleware/uploadMiddleware.js';
 
@@ -8,83 +9,55 @@ const router = express.Router();
 
 router.use(authMiddleware);
 
-// Add these new routes before the existing project routes
-router.get('/project-options/agencies/search', researchProjectController.searchAgencies);
-router.get('/project-options/schemes/search', researchProjectController.searchSchemes);
-router.get('/project-options/agency-types/search', researchProjectController.searchAgencyTypes);
+/**
+ * The project form posts a `payload` JSON part plus one file part per document
+ * slot, and the slot names are dynamic (a tranche's fields include its row
+ * key), so the parts cannot be declared up front — `any()` accepts them and
+ * `parseDocumentFieldName` validates each name.
+ */
+const acceptProjectUpload = upload.any();
 
-// Project Request routes
-router.post('/project-requests', researchProjectController.createProjectRequest);
-router.get('/project-requests', researchProjectController.getUserProjectRequests);
-router.get('/project-requests/:id', researchProjectController.getProjectRequest);
+/** Turns multer's own rejections (size, mime) into the API's error envelope. */
+const handleUploadErrors = (req, res, next) =>
+  acceptProjectUpload(req, res, (error) => {
+    if (!error) return next();
 
-// Research Project CRUD operations
-router.post('/projects', researchProjectController.createProject);
-router.get('/projects/:id', researchProjectController.getProjectDetails);
-router.put('/projects/:id', researchProjectController.updateProject);
-router.delete('/projects/:id', researchProjectController.deleteProject);
+    const isKnownUploadError =
+      error instanceof multer.MulterError || /Invalid file type/i.test(error.message ?? '');
 
-// Author operations
-router.post('/projects/:id/authors', researchProjectController.addAuthor);
-router.get('/projects/:id/authors', researchProjectController.getAuthors);
-// Route to remove an author from a project
-router.delete('/projects/:id/authors', researchProjectController.removeAuthor);
+    if (isKnownUploadError) {
+      return res.status(400).json({
+        success: false,
+        message:
+          error.code === 'LIMIT_FILE_SIZE'
+            ? 'One of the uploaded files is too large.'
+            : error.message,
+      });
+    }
 
-// Financial contribution operations
-router.post('/projects/:id/contributions', researchProjectController.addFinancialContribution);
-router.get('/projects/:id/contributions', researchProjectController.getFinancialContributions);
-router.delete(
-  '/projects/:id/contributions/:contributionId',
-  researchProjectController.deleteFinancialContribution,
-);
+    return next(error);
+  });
 
-// Grant disbursement operations
-router.post('/projects/:id/grant-disbursements', researchProjectController.addGrantDisbursement);
-router.get('/projects/:id/grant-disbursements', researchProjectController.getGrantDisbursements);
-router.put(
-  '/projects/:id/grant-disbursements/:disbursementId',
-  researchProjectController.updateGrantDisbursement,
-);
-router.delete(
-  '/projects/:id/grant-disbursements/:disbursementId',
-  researchProjectController.deleteGrantDisbursement,
-);
-// Project details operations
-router.post('/projects/:id/details', researchProjectController.addProjectDetails);
-router.get('/projects/:id/details', researchProjectController.getProjectDetailsTable);
+// ---------------------------------------------------------------------------
+// Form lookups
+// ---------------------------------------------------------------------------
+router.get('/project-lookups', projectController.getFormLookups);
+router.get('/project-options/organizations', projectController.searchOrganizations);
+router.get('/project-options/schemes', projectController.listSchemes);
 
-// Collaboration operations
-router.post('/projects/:id/collaborations', researchProjectController.addCollaboration);
-router.get('/projects/:id/collaborations', researchProjectController.getCollaborations);
-router.put('/projects/:id/collaborations/:collabId', researchProjectController.updateCollaboration);
-router.delete(
-  '/projects/:id/collaborations/:collabId',
-  researchProjectController.deleteCollaboration,
-);
-// File upload
-router.post('/projects/:id/upload', upload.single('file'), researchProjectController.uploadFile);
-// Journal article upload route
-router.post(
-  '/projects/:id/upload-journal',
-  upload.single('file'),
-  researchProjectController.uploadFile,
-);
-// router.post('/projects/:id/jousrnal-article/upload', upload.single('file'), );
+// ---------------------------------------------------------------------------
+// Master-data add requests
+// ---------------------------------------------------------------------------
+router.post('/project-requests', projectController.createProjectRequest);
+router.get('/project-requests', projectController.getUserProjectRequests);
+router.get('/project-requests/:id', projectController.getProjectRequest);
 
-//  Grant Disbursement File Uploads
-router.post(
-  '/projects/:projectId/grant-disbursements/:disbursementId/upload-sanction',
-  upload.single('file'),
-  researchProjectController.uploadDisbursementSanctionLetter,
-);
-router.post(
-  '/projects/:projectId/grant-disbursements/:disbursementId/upload-ucsoe',
-  upload.single('file'),
-  researchProjectController.uploadDisbursementUcAndSoe,
-);
-// router.post('/projects/:id/upload',
-//     upload.single('file'),
-//     multerErrorHandler,
-//     researchProjectController.uploadFile
-// );
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+router.post('/projects', handleUploadErrors, projectController.createProject);
+router.get('/projects/:id', projectController.getProject);
+router.put('/projects/:id', handleUploadErrors, projectController.updateProject);
+router.delete('/projects/:id', projectController.deleteProject);
+
 export default router;
