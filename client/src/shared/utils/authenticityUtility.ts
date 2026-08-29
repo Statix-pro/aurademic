@@ -1,6 +1,8 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 
+import { applyEventMockAdapter } from './eventMockStore.js';
+
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export interface DownloadedFile {
@@ -44,6 +46,8 @@ const authenticityUtility = axios.create({
     Accept: 'application/json',
   },
 }) as AuthenticityUtility;
+
+applyEventMockAdapter(authenticityUtility);
 
 authenticityUtility.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {

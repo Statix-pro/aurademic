@@ -24,10 +24,7 @@ import budgetRoutes from './modules/budget/budgetRoutes.js';
 import budgetCatalogRoutes from './modules/budgetCatalog/budgetCatalogRoutes.js';
 import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
 import documentsRoutes from './modules/events/documents/documentsRoutes.js';
-import eventRoutes from './modules/events/events/eventRoutes.js';
-import financeRoutes from './modules/events/finance/financeRoutes.js';
-import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
-import publicEventsRoutes from './modules/events/public/publicEventsRoutes.js';
+import eventsRoutes from './modules/events/eventsRoutes.js';
 import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
 import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
@@ -42,6 +39,8 @@ import participantAuthRoutes from './modules/participantAuth/participantAuthRout
 import participantRegistrationRoutes from './modules/participantRegistration/participantRegistrationRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
+
+// Event Module routes
 
 // FinanceCard routes
 // import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
@@ -135,6 +134,9 @@ const createUploadDirectories = () => {
     'uploads/bankStatement',
     'uploads/journal-article',
     'uploads/finance-principal-documents',
+    // Event Module upload directories
+    'uploads/event-documents',
+    'uploads/event-updates',
   ];
 
   directories.forEach((dir) => {
@@ -164,8 +166,6 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 // Public event participants sign in here (any Google account, not just @ksrct.ac.in).
 app.use('/api/participant-auth', participantAuthRoutes);
-// What the participant-facing event site reads.
-app.use('/api/events/public', publicEventsRoutes);
 // Participant-owned writes (registrations, profile, payments). Authenticated by
 // participantAuthMiddleware inside the router, not by authMiddleware.
 app.use('/api/participant', participantRegistrationRoutes);
@@ -173,14 +173,14 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', userDashboardRoutes);
 app.use('/api/form-options', formOptionsRoutes);
 
+// Event Module
+app.use('/api', eventsRoutes);
+app.use('/api', documentsRoutes);
+app.use('/api', updatesRoutes);
+
 app.use('/api', journalRoutes);
 app.use('/api', projectRoutes);
 app.use('/api', editRequestRoutes);
-
-// Events
-app.use('/api/events', eventRoutes);
-app.use('/api/pre-events', preEventRoutes);
-app.use('/api/finance', financeRoutes);
 
 // Existing finance page
 app.use('/api/finance-requests', financePageRoutes);
@@ -198,8 +198,6 @@ app.use('/api/expenditure-report', expenditureReportRoutes);
 // app.use('/api/guesthouse', guesthouseRoutes);
 
 // Updates & documents
-app.use('/api/updates', updatesRoutes);
-app.use('/api/documents', documentsRoutes);
 app.use('/api/access-control', accessControlRoutes);
 app.use('/api/master-data', masterDataRoutes);
 app.use('/api/budget-catalog', budgetCatalogRoutes);

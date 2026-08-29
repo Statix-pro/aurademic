@@ -152,7 +152,7 @@ export default function RegistrationPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [docType, setDocType] = useState('');
   const [fileName, setFileName] = useState('');
-  const [fileDataUrl, setFileDataUrl] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [submitError, setSubmitError] = useState('');
   const isTeam = event?.participation === 'Team';
@@ -231,14 +231,8 @@ export default function RegistrationPage() {
       if (isTeam) await updateTeamMembers(event.id, members);
       await markFormReady(
         event.id,
-        requiresDocument
-          ? {
-              documentType: docType,
-              fileName,
-              uploadedAt: new Date().toISOString(),
-              dataUrl: fileDataUrl,
-            }
-          : undefined,
+        requiresDocument ? docType : undefined,
+        requiresDocument ? selectedFile : undefined,
       );
       navigate('/event-register', {
         replace: true,
@@ -448,14 +442,10 @@ export default function RegistrationPage() {
                           const file = e.target.files?.[0];
                           if (file) {
                             setFileName(file.name);
-                            const reader = new FileReader();
-                            reader.onload = (ev) => {
-                              setFileDataUrl(ev.target?.result as string);
-                            };
-                            reader.readAsDataURL(file);
+                            setSelectedFile(file);
                           } else {
                             setFileName('');
-                            setFileDataUrl('');
+                            setSelectedFile(null);
                           }
                         }}
                       />

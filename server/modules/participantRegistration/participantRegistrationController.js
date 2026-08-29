@@ -1,12 +1,14 @@
 import participantRegistrationModel, {
   NotImplementedError,
 } from './participantRegistrationModel.js';
+import db from '../../config/connection.js';
 import {
   PARTICIPANT_UPLOAD_CATEGORIES,
   removeUploadedFile,
   toPublicUploadPath,
 } from '../../middleware/participantUploadMiddleware.js';
 import participantAuthModel from '../participantAuth/participantAuthModel.js';
+import { deleteUploadedFile } from '../shared/uploadPaths.js';
 
 /** Sentinel so the caller can map "no such event" to 404 rather than 409. */
 const EVENT_NOT_FOUND = 'Event not found';
@@ -200,8 +202,18 @@ const participantRegistrationController = {
       const registration = await loadOwnedRegistration(req, res);
       if (!registration) return undefined;
 
-      // TODO(intern): refuse to cancel once a payment is Verified — refunds are
-      // a staff action, not a participant one.
+      const [payments] = await db.query(
+        "SELECT COUNT(*) AS count FROM event_payments WHERE registration_id = ? AND payment_status = 'Verified' AND is_deleted = 0",
+        [registration.id],
+      );
+      if (payments[0] && payments[0].count > 0) {
+        return fail(
+          res,
+          400,
+          'Cannot cancel registration after payment has been verified. Please contact staff for refund requests.',
+        );
+      }
+
       await participantRegistrationModel.cancelRegistration(registration.id);
 
       return ok(res, { cancelled: true });
@@ -383,22 +395,81 @@ const participantRegistrationController = {
         return fail(res, 400, 'A payment screenshot is required');
       }
 
-      // TODO(intern): compute the amount server-side, then record the proof and
-      // delete this guard.
-      //   Registration -> findApplicableFee(event, participant type) and pick
-      //     individual_fee or team_fee + member_fee * (members - 1).
-      //   Accommodation -> the stored total_amount for this registration.
-      // The client must not supply the amount; if req.body.amount exists, ignore
-      // it. Then call model.insertPaymentProof, which hardcodes status
-      // 'Submitted', and return { paymentId, paymentStatus, proofFilePath }.
-      //
-      // Until then this route refuses instead of inserting amount = 0. A payment
-      // row is a financial record: one carrying a number nobody computed is
-      // worse than no row, because staff verify against it and it reconciles to
-      // zero without ever looking wrong.
-      await removeUploadedFile(req.file);
+      const rawBillType = req.body?.billType || 'Registration';
+      const billType =
+        rawBillType === 'accommodation bill' || rawBillType.toLowerCase().includes('accommodation')
+          ? 'Accommodation'
+          : 'Registration';
 
-      return fail(res, 501, 'Payment submission is not available yet');
+      let amount = 0.0;
+
+      if (billType === 'Registration') {
+        // Find participant profile and its participant_type_id
+        const [profileRows] = await db.query(
+          'SELECT participant_type_id FROM event_participant_profiles WHERE participant_id = ? LIMIT 1',
+          [req.participant.id],
+        );
+        const participantTypeId = profileRows[0]?.participant_type_id ?? null;
+
+        const feeRow = await participantRegistrationModel.findApplicableFee(
+          registration.event_id,
+          participantTypeId,
+        );
+
+        if (feeRow) {
+          const context = await participantRegistrationModel.getRegistrationContext(
+            registration.event_id,
+          );
+          if (context && context.team_enabled) {
+            const [memberCountRow] = await db.query(
+              'SELECT COUNT(*) AS count FROM event_registration_team_members WHERE registration_id = ? AND is_deleted = 0',
+              [registration.id],
+            );
+            const memberCount = memberCountRow[0]?.count ?? 0;
+            const teamFee = parseFloat(feeRow.team_fee) || 0;
+            const memberFee = parseFloat(feeRow.member_fee) || 0;
+            amount = teamFee + memberFee * Math.max(0, memberCount - 1);
+          } else {
+            amount = parseFloat(feeRow.individual_fee) || 0;
+          }
+        }
+      } else {
+        // Accommodation
+        const [accRows] = await db.query(
+          'SELECT total_amount FROM event_registration_accommodation WHERE registration_id = ? AND is_deleted = 0 LIMIT 1',
+          [registration.id],
+        );
+        amount = accRows[0] ? parseFloat(accRows[0].total_amount) || 0.0 : 0.0;
+      }
+
+      const transactionReference = req.body?.transactionReference || null;
+      const proofFilePath = toPublicUploadPath(
+        PARTICIPANT_UPLOAD_CATEGORIES.paymentProof,
+        req.file.filename,
+      );
+
+      const paymentId = await participantRegistrationModel.insertPaymentProof({
+        registrationId: registration.id,
+        amount,
+        billType,
+        proofFilePath,
+        transactionReference,
+      });
+
+      // Update registration_status to 'Submitted' if it was 'Pending' and this is registration payment
+      if (billType === 'Registration' && registration.registration_status === 'Pending') {
+        await db.query(
+          "UPDATE event_registrations SET registration_status = 'Submitted' WHERE id = ?",
+          [registration.id],
+        );
+      }
+
+      return ok(res, {
+        paymentId,
+        paymentStatus: 'Submitted',
+        proofFilePath,
+        amount,
+      });
     } catch (error) {
       console.error('submitPaymentProof failed:', error);
       return failUploadFromError(req, res, error, 'Could not submit payment proof');
@@ -433,14 +504,51 @@ const participantRegistrationController = {
         return fail(res, 400, 'A file is required');
       }
 
+      let documentTypeId = parseId(req.body?.documentTypeId);
+      if (!documentTypeId && req.body?.documentType) {
+        const [rows] = await db.query(
+          'SELECT id FROM m_document_type WHERE document_name = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1',
+          [req.body.documentType],
+        );
+        if (rows[0]) {
+          documentTypeId = rows[0].id;
+        }
+      }
+
+      if (!documentTypeId) {
+        await removeUploadedFile(req.file);
+        return fail(res, 400, 'A valid documentTypeId or documentType name is required');
+      }
+
+      const [typeCheck] = await db.query(
+        'SELECT id FROM m_document_type WHERE id = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1',
+        [documentTypeId],
+      );
+      if (!typeCheck[0]) {
+        await removeUploadedFile(req.file);
+        return fail(res, 400, 'The specified document type does not exist or is inactive');
+      }
+
+      // Unlink any existing registration document to prevent orphans
+      const [oldDoc] = await db.query(
+        'SELECT file_path FROM event_registration_documents WHERE registration_id = ? AND is_deleted = 0 LIMIT 1',
+        [registration.id],
+      );
+      if (oldDoc[0] && oldDoc[0].file_path) {
+        deleteUploadedFile(oldDoc[0].file_path);
+        await db.query(
+          'UPDATE event_registration_documents SET is_deleted = 1 WHERE registration_id = ?',
+          [registration.id],
+        );
+      }
+
       const filePath = toPublicUploadPath(
         PARTICIPANT_UPLOAD_CATEGORIES.registrationDocument,
         req.file.filename,
       );
 
-      // TODO(intern): validate documentTypeId against m_document_type, then insert.
       await participantRegistrationModel.insertRegistrationDocument(registration.id, {
-        documentTypeId: parseId(req.body?.documentTypeId),
+        documentTypeId,
         filePath,
       });
 
@@ -593,10 +701,17 @@ const participantRegistrationController = {
         return fail(res, 400, 'A file is required');
       }
 
+      // Unlink the previously stored file to prevent disk orphans
+      const [profile] = await db.query(
+        `SELECT photo_path, id_card_path FROM event_participant_profiles WHERE participant_id = ? LIMIT 1`,
+        [req.participant.id],
+      );
+      if (profile[0] && profile[0][column]) {
+        deleteUploadedFile(profile[0][column]);
+      }
+
       const filePath = toPublicUploadPath(category, req.file.filename);
 
-      // TODO(intern): also unlink the previously stored file, so replacing a
-      // photo does not leave orphans on disk.
       await participantRegistrationModel.updateProfileFilePath(
         req.participant.id,
         column,

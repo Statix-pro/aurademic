@@ -2,23 +2,12 @@ import { Star, ArrowLeft, MessageSquare, CheckCircle } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useAuth } from '../../contexts/AuthContext';
 import { useEvents } from '../../contexts/EventsContext';
-import { STORES, readScoped, writeScoped } from '../../shared/storage';
 import './FeedbackPage.css';
-
-interface FeedbackEntry {
-  eventId: string;
-  rating: number;
-  comment: string;
-  submittedAt: string;
-}
 
 export default function FeedbackPage() {
   const navigate = useNavigate();
-  const { events, registrations } = useEvents();
-  const { user } = useAuth();
-  const email = user?.email;
+  const { events, registrations, submitFeedback } = useEvents();
 
   // Get registered events
   const registeredEvents = useMemo(() => {
@@ -31,44 +20,25 @@ export default function FeedbackPage() {
   const [comment, setComment] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Get current feedbacks. `success` is an intentional cache-buster: localStorage
-  // is not reactive, so this must re-read after a submit. Goes away once feedback
-  // is served by the API.
-  const feedbacks: FeedbackEntry[] = useMemo(() => {
-    void success;
-    return readScoped<FeedbackEntry[]>(STORES.feedbacks, email, []);
-  }, [success, email]);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedEventId) return;
 
-    const newFeedback: FeedbackEntry = {
-      eventId: selectedEventId,
-      rating,
-      comment,
-      submittedAt: new Date().toISOString(),
-    };
-
-    const current = readScoped<FeedbackEntry[]>(STORES.feedbacks, email, []);
-    // Update or insert
-    const index = current.findIndex((f) => f.eventId === selectedEventId);
-    if (index > -1) {
-      current[index] = newFeedback;
-    } else {
-      current.push(newFeedback);
+    try {
+      await submitFeedback(selectedEventId, rating, comment);
+      setSuccess(true);
+      setComment('');
+      setTimeout(() => {
+        setSuccess(false);
+        setSelectedEventId('');
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to submit feedback:', err);
     }
-    writeScoped(STORES.feedbacks, email, current);
-
-    setSuccess(true);
-    setComment('');
-    setTimeout(() => {
-      setSuccess(false);
-      setSelectedEventId('');
-    }, 2000);
   };
 
-  const selectedEventFeedback = feedbacks.find((f) => f.eventId === selectedEventId);
+  const registration = registrations[selectedEventId];
+  const hasFeedback = registration?.hasFeedback;
 
   return (
     <div className="feedback-page-1">
@@ -109,14 +79,8 @@ export default function FeedbackPage() {
                   value={selectedEventId}
                   onChange={(e) => {
                     setSelectedEventId(e.target.value);
-                    const fb = feedbacks.find((f) => f.eventId === e.target.value);
-                    if (fb) {
-                      setRating(fb.rating);
-                      setComment(fb.comment);
-                    } else {
-                      setRating(5);
-                      setComment('');
-                    }
+                    setRating(5);
+                    setComment('');
                   }}
                   className="feedback-page-20"
                 >
@@ -168,7 +132,7 @@ export default function FeedbackPage() {
                   </div>
 
                   <button type="submit" className="feedback-page-27">
-                    {selectedEventFeedback ? 'Update Feedback' : 'Submit Feedback'}
+                    {hasFeedback ? 'Update Feedback' : 'Submit Feedback'}
                   </button>
                 </>
               )}

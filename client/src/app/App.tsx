@@ -14,8 +14,7 @@ import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-app
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
-import EventDashboard from '../features/events/components/EventDashboard';
-import EventPage from '../features/events/components/EventPage';
+import { EventDashboard, EventPage } from '../features/events/events';
 import ExpenditureReport from '../features/expenditure/expenditure-report/expenditurereport';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';

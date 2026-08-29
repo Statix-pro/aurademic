@@ -3,9 +3,9 @@ import QRCode from 'qrcode';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { apiFetch } from '../../config/api';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEvents } from '../../contexts/EventsContext';
-import { writeScoped } from '../../shared/storage';
 
 import type { EventItem, PaymentBillType, PaymentProof, SelectedAccommodation } from '../../types';
 
@@ -14,7 +14,7 @@ import './PaymentPage.css';
 export default function PaymentPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { markPaymentDone } = useEvents();
+  const { markPaymentDone, registrations } = useEvents();
   const { user } = useAuth();
   const {
     selectedEvents = [],
@@ -69,11 +69,9 @@ export default function PaymentPage() {
     return `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(upiName)}&am=${encodeURIComponent(amount)}&cu=INR&tn=${encodeURIComponent(upiNote)}`;
   }, [payableTotal, upiNote]);
 
-  // Rendered in the browser rather than fetched from an image service. A QR that
-  // stands between a participant and a payment must not depend on a third party
-  // being up, and the payee VPA and amount are not theirs to receive.
   const [qrUrl, setQrUrl] = useState('');
   const [qrError, setQrError] = useState(false);
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,9 +96,11 @@ export default function PaymentPage() {
     if (!file) {
       setScreenshotName('');
       setScreenshotDataUrl('');
+      setScreenshotFile(null);
       return;
     }
 
+    setScreenshotFile(file);
     const reader = new FileReader();
     reader.onload = () => {
       setScreenshotName(file.name);
@@ -109,20 +109,56 @@ export default function PaymentPage() {
     reader.readAsDataURL(file);
   };
 
-  const handleCompletePayment = () => {
-    const proof: PaymentProof | null = screenshotDataUrl
-      ? {
-          billType,
-          screenshotName,
-          screenshotDataUrl,
-          uploadedAt: new Date().toISOString(),
+  const handleCompletePayment = async () => {
+    if (screenshotFile) {
+      if (billType === 'event registration bill') {
+        for (const event of selectedEvents) {
+          const reg = registrations[event.id];
+          if (reg?.backendId) {
+            try {
+              const formData = new FormData();
+              formData.append('file', screenshotFile);
+              formData.append('billType', 'Registration');
+              await apiFetch(`/participant/registrations/${reg.backendId}/payments`, {
+                method: 'POST',
+                body: formData,
+              });
+              markPaymentDone(event.id, {
+                billType,
+                screenshotName,
+                screenshotDataUrl,
+                uploadedAt: new Date().toISOString(),
+              });
+            } catch (err) {
+              console.error('Failed to upload payment proof for event', event.id, err);
+            }
+          }
         }
-      : null;
-
-    if (billType === 'event registration bill' && proof) {
-      selectedEvents.forEach((event) => markPaymentDone(event.id, proof));
-    } else if (billType === 'accommodation bill' && proof) {
-      writeScoped('accommodation_payment_proof', user?.email, proof);
+      } else if (billType === 'accommodation bill' && selectedEvents.length > 0) {
+        const reg = registrations[selectedEvents[0].id];
+        if (reg?.backendId) {
+          try {
+            const formData = new FormData();
+            formData.append('file', screenshotFile);
+            formData.append('billType', 'Accommodation');
+            await apiFetch(`/participant/registrations/${reg.backendId}/payments`, {
+              method: 'POST',
+              body: formData,
+            });
+            // Update context state
+            selectedEvents.forEach((event) =>
+              markPaymentDone(event.id, {
+                billType,
+                screenshotName,
+                screenshotDataUrl,
+                uploadedAt: new Date().toISOString(),
+              }),
+            );
+          } catch (err) {
+            console.error('Failed to upload accommodation payment proof', err);
+          }
+        }
+      }
     }
 
     navigate(selectedEvents.length > 0 ? '/registrations' : '/home', { replace: true });
