@@ -918,11 +918,16 @@ async function getCumulativeAdvanceSummary(
       legacyMatchParams = [lineId, normalizedHead, normalizedSubHead];
     }
   } else if (!lineId) {
-    // NEW: ID match catches rows whose head/sub was renamed in the catalog; the text match
-    // catches rows the catalog never got IDs for, and rows pointing at a duplicate catalog
-    // entry with the same name. Both must count, whatever the other one holds — callers that
-    // resolve IDs (settlement validation) and callers that don't (the advance-summary endpoint
-    // the form reads) have to arrive at the same total or the form's figure gets rejected.
+    // NEW: the ID match catches rows whose head/sub was renamed in the catalog. The text match
+    // runs beside it — never instead of it — for two reasons:
+    //   LEGACY: rows pre-dating the catalog, which carry snapshot text and no IDs. Remove this
+    //     reason once every advance row is backfilled:
+    //       SELECT COUNT(*) FROM expenditure_advance_rows WHERE budget_head_id IS NULL;
+    //   Rows pointing at a DUPLICATE catalog entry of the same name. No backfill fixes those,
+    //     so this reason stands until duplicates are merged out of the catalog.
+    // Both arms must count, whatever the other one holds — callers that resolve IDs (settlement
+    // validation) and callers that don't (the advance-summary endpoint the form reads) have to
+    // arrive at the same total or the form's figure gets rejected.
     if (headIdVal && subIdVal) {
       rowMatchClause = `
         (
@@ -3768,6 +3773,13 @@ async function allocateSettlementAdvances(conn, rows = [], options = {}) {
 
     for (const position of positions) {
       if (unallocated <= 0) break;
+      // A row recording no spend cannot hold any of the advance: `buildSettledAdvanceExpr`
+      // counts advance_amount only where settlement_amount > 0, so an advance parked here
+      // would be reported as still outstanding after the settlement that discharged it. Its
+      // line's advance stays unallocated and reaches a spend-bearing row as the remainder
+      // below. Skipped before `seenBudgetLineIds`, so a later row that does record spend on
+      // the same budget line still gets that line's share.
+      if (getSettlementRowSettlementAmount(validRows[position]) <= 0) continue;
       const budgetLineId = getSettlementRowBudgetLineId(validRows[position]);
       // Two rows on one budget line share that line's advance; it is allocated once.
       if (!budgetLineId || seenBudgetLineIds.has(budgetLineId)) continue;
@@ -3785,8 +3797,8 @@ async function allocateSettlementAdvances(conn, rows = [], options = {}) {
       unallocated = toMoney(unallocated - share);
     }
 
-    // Advance sitting on budget lines this settlement has no row for is still discharged by
-    // it, so it has to land somewhere. It goes on a row that records spend, because the claim
+    // Advance sitting on budget lines this settlement has no spend row for is still discharged
+    // by it, so it has to land somewhere. It goes on a row that records spend, because the claim
     // accounting (`buildSettledAdvanceExpr`) only counts advance_amount where
     // settlement_amount > 0 — parking it on a zero-spend row would report the advance as still
     // outstanding.

@@ -103,8 +103,10 @@ describe('settlement advance matching', () => {
   });
 
   // The claim accounting reads advance_amount only from rows with settlement_amount > 0
-  // (buildSettledAdvanceExpr), so a zero-spend row must not be handed the remainder.
-  it('never parks the remainder on a row that records no spend', async () => {
+  // (buildSettledAdvanceExpr), so a zero-spend row must hold none of the advance — not its own
+  // budget line's share either. Anything left on it would be reported as still outstanding
+  // after the settlement that discharged it, inflating what the card counts as claimed.
+  it('gives a row that records no spend none of the advance', async () => {
     const conn = makeConn();
 
     const allocations = await allocateSettlementAdvancesForTest(
@@ -113,9 +115,23 @@ describe('settlement advance matching', () => {
       context,
     );
 
-    expect(allocations[0]).toBe(50011);
-    expect(allocations[1]).toBe(GROUP_ADVANCE - 50011);
-    expect(allocations[0] + allocations[1]).toBe(GROUP_ADVANCE);
+    expect(allocations[0]).toBe(0);
+    expect(allocations[1]).toBe(GROUP_ADVANCE);
+  });
+
+  // The zero-spend row's own budget line is not consumed by it: a later row that does record
+  // spend on that line still receives the line's advance.
+  it('leaves a zero-spend row budget line free for a later spending row', async () => {
+    const conn = makeConn();
+
+    const allocations = await allocateSettlementAdvancesForTest(
+      conn,
+      [settlementRow(2859, 0), settlementRow(2859, 475011)],
+      context,
+    );
+
+    expect(allocations[0]).toBe(0);
+    expect(allocations[1]).toBe(GROUP_ADVANCE);
   });
 
   it('allocates a budget line once when two rows share it', async () => {
