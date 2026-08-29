@@ -1,40 +1,34 @@
-import fs from 'fs';
-import path from 'path';
-
 import express from 'express';
-import multer from 'multer';
 
-import * as updatesController from './updatesController.js';
+import updatesController, { updateUpload } from './updatesController.js';
+import { authMiddleware } from '../../../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
-if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+router.use(authMiddleware);
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, UPLOAD_DIR),
-  filename: (req, file, cb) => {
-    const stamp = Date.now();
-    const safe = file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_.-]/g, '');
-    cb(null, `${stamp}_${safe}`);
-  },
-});
-const upload = multer({ storage });
+// ── File upload (publicity attachments) ───────────────────
+router.post(
+  '/updates/events/:id/uploads',
+  updateUpload.single('file'),
+  updatesController.uploadFile,
+);
 
-// Event updates
-router.get('/events/:id', updatesController.getEventDetails);
-router.put('/events/:id/publicity', updatesController.updatePublicity);
+// ── Publicity ─────────────────────────────────────────────
+router.put('/updates/events/:id/publicity', updatesController.savePublicity);
 
-// Resource persons
-router.post('/events/:id/resource_persons', updatesController.addResourcePerson);
-router.put('/events/:id/resource_persons/:pid', updatesController.updateResourcePerson);
-router.delete('/events/:id/resource_persons/:pid', updatesController.deleteResourcePerson);
+// ── Participants update ───────────────────────────────────
+router.post('/updates/events/:id/participants', updatesController.saveParticipants);
 
-// Letters
-router.put('/events/:id/letters', updatesController.upsertLetter);
+// ── Letters ───────────────────────────────────────────────
+router.put('/updates/events/:id/letters', updatesController.saveLetters);
 
-// Uploads
-router.post('/events/:id/uploads', upload.single('file'), updatesController.handleUpload);
-router.delete('/uploads/:uid', updatesController.deleteUpload);
+// ── Documents checklist ───────────────────────────────────
+router.put('/updates/events/:id/documents', updatesController.saveDocuments);
+
+// ── Resource Persons ──────────────────────────────────────
+router.post('/updates/events/:id/resource_persons', updatesController.addResourcePerson);
+router.put('/updates/events/:id/resource_persons/:pid', updatesController.updateResourcePerson);
+router.delete('/updates/events/:id/resource_persons/:pid', updatesController.deleteResourcePerson);
 
 export default router;

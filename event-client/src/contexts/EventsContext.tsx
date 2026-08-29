@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 import { useAuth } from './AuthContext';
-import { apiFetch } from '../config/api';
+import { apiFetch, API_BASE_URL } from '../config/api';
 
 import type {
   EventItem,
@@ -207,6 +207,8 @@ function normalizeRegistration(
     paymentProof: registration.paymentProof ?? null,
     document: registration.document ?? null,
     reviewStatus: registration.reviewStatus ?? 'pending',
+    backendId: registration.backendId,
+    hasFeedback: registration.hasFeedback,
   };
 }
 
@@ -214,10 +216,11 @@ interface EventsContextType {
   events: EventItem[];
   registrations: Record<string, EventRegistration>;
   addEvent: (event: Omit<EventItem, 'id'>) => void;
-  startRegistration: (eventId: string) => void;
-  updateTeamMembers: (eventId: string, members: TeamMember[]) => void;
-  markFormReady: (eventId: string, document?: RegistrationDocument) => void;
+  startRegistration: (eventId: string) => Promise<number | undefined>;
+  updateTeamMembers: (eventId: string, members: TeamMember[]) => Promise<void>;
+  markFormReady: (eventId: string, documentType?: string, file?: File | null) => Promise<void>;
   markPaymentDone: (eventId: string, paymentProof?: PaymentProof | null) => void;
+  submitFeedback: (eventId: string, rating: number, comment: string) => Promise<void>;
   updateReviewStatus: (eventId: string, reviewStatus: EventRegistration['reviewStatus']) => void;
   clearRegistration: (eventId: string) => void;
   getRegistration: (eventId: string) => EventRegistration | undefined;
@@ -290,8 +293,31 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
               role: m.role || '',
             })),
             formStatus: 'ready',
-            paymentStatus: r.registrationStatus === 'Paid' ? 'paid' : 'unpaid',
+            paymentStatus: r.hasVerifiedPayment
+              ? 'paid'
+              : r.hasSubmittedPayment
+                ? 'processing'
+                : 'unpaid',
             reviewStatus: r.reviewStatus || 'pending',
+            backendId: r.id,
+            paymentProof: r.paymentProofPath
+              ? {
+                  billType: r.paymentProofPath.includes('Accommodation')
+                    ? 'accommodation bill'
+                    : 'event registration bill',
+                  screenshotName: r.paymentProofPath.split('/').pop() || 'screenshot',
+                  screenshotDataUrl: API_BASE_URL.replace(/\/api\/?$/, '') + r.paymentProofPath,
+                  uploadedAt: r.paymentProofUploadedAt || r.created_at,
+                }
+              : null,
+            document: r.documentPath
+              ? {
+                  documentType: r.documentTypeName || 'Document',
+                  fileName: r.documentPath.split('/').pop() || 'document',
+                  uploadedAt: r.documentUploadedAt || r.created_at,
+                }
+              : null,
+            hasFeedback: Boolean(r.hasFeedback),
           };
         }
         setRegistrations(loadedRegs);
@@ -326,10 +352,9 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
       },
     ]);
   }, []);
-
   const startRegistration = useCallback(
     async (eventId: string) => {
-      let backendId: string | number | undefined;
+      let backendId: number | undefined;
       try {
         const result = await apiFetch<{ registrationId: number }>('/participant/registrations', {
           method: 'POST',
@@ -366,57 +391,98 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
             formStatus: 'pending',
             paymentStatus: 'unpaid',
             reviewStatus: 'pending',
-            backendId, // optionally store it if needed
+            backendId,
           } as EventRegistration,
         };
       });
+      return backendId;
     },
     [events],
   );
 
-  const updateTeamMembers = useCallback(async (eventId: string, members: TeamMember[]) => {
-    try {
-      const reg = await apiFetch<{ registrations: any[] }>('/participant/registrations');
-      const backendReg = reg.registrations.find((r) => String(r.eventId) === String(eventId));
+  const updateTeamMembers = useCallback(
+    async (eventId: string, members: TeamMember[]) => {
+      try {
+        const reg = registrations[eventId];
+        let backendRegId = reg?.backendId;
 
-      if (backendReg) {
-        await apiFetch(`/participant/registrations/${backendReg.id}/team`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            members: members.map((m) => ({
-              email: m.registeredMailId,
-              name: m.name,
-              organization: m.organization,
-              role: m.role,
-            })),
-          }),
-        });
+        if (!backendRegId) {
+          const result = await apiFetch<{ registrations: any[] }>('/participant/registrations');
+          const backendReg = result.registrations.find(
+            (r) => String(r.eventId) === String(eventId),
+          );
+          if (backendReg) {
+            backendRegId = backendReg.id;
+          }
+        }
+
+        if (backendRegId) {
+          await apiFetch(`/participant/registrations/${backendRegId}/team`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              members: members.map((m) => ({
+                email: m.registeredMailId,
+                name: m.name,
+                organization: m.organization,
+                role: m.role,
+              })),
+            }),
+          });
+        }
+      } catch (err) {
+        console.error('Failed to save team members', err);
+        throw err;
       }
-    } catch (err) {
-      console.error('Failed to save team members', err);
-      throw err;
-    }
 
-    setRegistrations((prev) => ({
-      ...prev,
-      [eventId]: {
-        ...prev[eventId],
-        teamMembers: members,
-      },
-    }));
-  }, []);
+      setRegistrations((prev) => ({
+        ...prev,
+        [eventId]: {
+          ...prev[eventId],
+          teamMembers: members,
+        },
+      }));
+    },
+    [registrations],
+  );
 
-  const markFormReady = useCallback((eventId: string, document?: RegistrationDocument) => {
-    setRegistrations((prev) => ({
-      ...prev,
-      [eventId]: {
-        ...prev[eventId],
-        formStatus: 'ready',
-        document: document ?? null,
-      },
-    }));
-  }, []);
+  const markFormReady = useCallback(
+    async (eventId: string, documentType?: string, file?: File | null) => {
+      const reg = registrations[eventId];
+
+      if (reg && reg.backendId && file && documentType) {
+        try {
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('documentType', documentType);
+          await apiFetch(`/participant/registrations/${reg.backendId}/documents`, {
+            method: 'POST',
+            body: formData,
+          });
+        } catch (err) {
+          console.error('Failed to upload document', err);
+          throw err;
+        }
+      }
+
+      setRegistrations((prev) => ({
+        ...prev,
+        [eventId]: {
+          ...prev[eventId],
+          formStatus: 'ready',
+          document:
+            file && documentType
+              ? {
+                  documentType,
+                  fileName: file.name,
+                  uploadedAt: new Date().toISOString(),
+                }
+              : prev[eventId]?.document || null,
+        },
+      }));
+    },
+    [registrations],
+  );
 
   const markPaymentDone = useCallback(
     (eventId: string, paymentProof: PaymentProof | null = null) => {
@@ -424,14 +490,34 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         [eventId]: {
           ...prev[eventId],
-          paymentStatus: 'paid',
+          paymentStatus: 'processing',
           paymentProof,
-          // reviewStatus is deliberately untouched: paying is not being
-          // shortlisted, and only staff can make that call.
         },
       }));
     },
     [],
+  );
+
+  const submitFeedback = useCallback(
+    async (eventId: string, rating: number, comment: string) => {
+      const reg = registrations[eventId];
+      if (!reg || !reg.backendId) throw new Error('No registration found');
+
+      await apiFetch(`/participant/registrations/${reg.backendId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, comment }),
+      });
+
+      setRegistrations((prev) => ({
+        ...prev,
+        [eventId]: {
+          ...prev[eventId],
+          hasFeedback: true,
+        },
+      }));
+    },
+    [registrations],
   );
 
   const updateReviewStatus = useCallback(
@@ -465,6 +551,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
     },
     [registrations],
   );
+
   return (
     <EventsContext.Provider
       value={{
@@ -475,6 +562,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         updateTeamMembers,
         markFormReady,
         markPaymentDone,
+        submitFeedback,
         updateReviewStatus,
         clearRegistration,
         getRegistration,

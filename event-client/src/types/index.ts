@@ -147,6 +147,8 @@ export interface EventRegistration {
   document?: RegistrationDocument | null;
   /** review status shown on the event card */
   reviewStatus: ReviewStatus;
+  backendId?: number;
+  hasFeedback?: boolean;
 }
 
 // ─── Accommodation ─────────────────────────────────────────────────────────
