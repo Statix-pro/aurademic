@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useEvents, isPayableEvent, flattenEvents } from '../../contexts/EventsContext';
 
+import type { EventItem } from '../../types';
+
 import './Accommodation.css';
 
 type RoomRow = {
@@ -145,6 +147,11 @@ export default function Accommodation() {
   const [rooms, setRooms] = useState<RoomRow[]>([createRoom('1')]);
   const [checkIn, setCheckIn] = useState({ date: '', time: '' });
   const [checkOut, setCheckOut] = useState({ date: '', time: '' });
+
+  const selectedEvent = location.state?.event as EventItem | undefined;
+  const isAccommodationAvailable = selectedEvent
+    ? Boolean(selectedEvent.hasAccommodation)
+    : events.some((e) => e.hasAccommodation);
 
   const allDisplayEvents = useMemo(() => flattenEvents(events), [events]);
   const paymentEvents = useMemo(
@@ -290,7 +297,25 @@ export default function Accommodation() {
             </div>
           </div>
 
-          {requireAccommodation !== 'yes' ? (
+          {!isAccommodationAvailable ? (
+            <div className="accommodation-26">
+              <div
+                className="accommodation-27"
+                style={{ textAlign: 'center', padding: '40px 20px' }}
+              >
+                <h2 className="accommodation-28">Accommodation Not Available</h2>
+                <p className="accommodation-29" style={{ marginBottom: '24px' }}>
+                  Accommodation is not required or enabled for this event.
+                </p>
+                <button
+                  onClick={() => navigate('/event-register', { state: { ...location.state } })}
+                  className="rounded-xl bg-[#064675] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[#05375c]"
+                >
+                  Back to Event Details
+                </button>
+              </div>
+            </div>
+          ) : requireAccommodation !== 'yes' ? (
             <div className="accommodation-26">
               <div className="accommodation-27">
                 <h2 className="accommodation-28">Accommodation Requirement</h2>

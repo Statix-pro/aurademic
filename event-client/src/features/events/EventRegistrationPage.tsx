@@ -87,6 +87,8 @@ function getRegisterState(
   registration: EventRegistration | undefined,
   isOpen: boolean,
 ) {
+  const isFreeEvent = !event.hasRegistrationFee || Number(event.fees || 0) === 0;
+
   // A staff review decision, when one exists, outranks the ordinary
   // register/pay progression for any event. Before staff rule on a registration
   // its reviewStatus is 'pending' and the normal flow below applies.
@@ -100,7 +102,7 @@ function getRegisterState(
   }
 
   if (registration?.reviewStatus === 'selected') {
-    if (registration.paymentStatus === 'paid') {
+    if (registration.paymentStatus === 'paid' || isFreeEvent) {
       return {
         label: 'Selected',
         className: 'bg-emerald-600 text-white cursor-default',
@@ -141,6 +143,14 @@ function getRegisterState(
   }
 
   if (registration.formStatus === 'ready') {
+    if (isFreeEvent) {
+      return {
+        label: 'Registered',
+        className: 'bg-emerald-600 text-white cursor-default',
+        disabled: true,
+        kind: 'register' as const,
+      };
+    }
     return {
       label: 'Pay Now',
       className: getPayNowButtonClass(event.category),
@@ -406,7 +416,11 @@ export default function EventRegistrationPage() {
                   Events
                 </span>
               </button>
-              {(!selectedEvent || selectedEvent.hasAccommodation !== false) && (
+              {Boolean(
+                selectedEvent
+                  ? selectedEvent.hasAccommodation
+                  : events.some((e) => e.hasAccommodation),
+              ) && (
                 <button
                   onClick={() => navigate('/accommodation', { state: { ...location.state } })}
                   className="event-registration-page-28"
@@ -417,7 +431,11 @@ export default function EventRegistrationPage() {
                   </span>
                 </button>
               )}
-              {(!selectedEvent || selectedEvent.hasRegistrationFee !== false) && (
+              {Boolean(
+                selectedEvent
+                  ? selectedEvent.hasRegistrationFee
+                  : events.some((e) => e.hasRegistrationFee),
+              ) && (
                 <button
                   onClick={() =>
                     navigate('/payment', {

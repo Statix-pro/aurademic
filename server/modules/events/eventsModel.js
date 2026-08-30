@@ -1,5 +1,47 @@
 import db from '../../config/connection.js';
 
+let isErsTableChecked = false;
+async function ensureErsTable() {
+  if (isErsTableChecked) return;
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS \`event_registration_settings\` (
+        \`id\`                          int          NOT NULL AUTO_INCREMENT,
+        \`event_id\`                    int          NOT NULL,
+        \`enabled\`                     tinyint(1)   NOT NULL DEFAULT '0',
+        \`eligible_participants\`       varchar(255) DEFAULT NULL,
+        \`open_to\`                     varchar(50)  NOT NULL DEFAULT 'Any',
+        \`gender_restriction\`          varchar(50)  NOT NULL DEFAULT 'Any',
+        \`min_age\`                     int          DEFAULT NULL,
+        \`max_age\`                     int          DEFAULT NULL,
+        \`registration_status\`         varchar(50)  NOT NULL DEFAULT 'Open',
+        \`last_date\`                   datetime     DEFAULT NULL,
+        \`extension_enabled\`           tinyint(1)   NOT NULL DEFAULT '0',
+        \`extended_date\`               datetime     DEFAULT NULL,
+        \`shortlisting_required\`       tinyint(1)   NOT NULL DEFAULT '0',
+        \`selection_intimation\`        varchar(255) DEFAULT NULL,
+        \`team_enabled\`                tinyint(1)   NOT NULL DEFAULT '0',
+        \`min_team_size\`               int          DEFAULT NULL,
+        \`max_team_size\`               int          DEFAULT NULL,
+        \`document_enabled\`            tinyint(1)   NOT NULL DEFAULT '0',
+        \`document_name\`               varchar(255) DEFAULT NULL,
+        \`document_type\`               varchar(100) DEFAULT NULL,
+        \`document_size\`               varchar(50)  DEFAULT NULL,
+        \`document_text_field_enabled\` tinyint(1)   NOT NULL DEFAULT '0',
+        \`created_by\`                  int          DEFAULT NULL,
+        \`updated_by\`                  int          DEFAULT NULL,
+        \`created_at\`                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\`                  timestamp    NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        UNIQUE KEY \`uq_ers_event\` (\`event_id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `);
+    isErsTableChecked = true;
+  } catch (err) {
+    console.warn('[eventsModel] ensureErsTable warning:', err.message);
+  }
+}
+
 const eventsModel = {
   // ─────────────────────────────────────────────────────────
   // LIST – GET /events
@@ -213,7 +255,9 @@ const eventsModel = {
         [
           eventId,
           rs.enabled ? 1 : 0,
-          rs.eligibleParticipants || null,
+          Array.isArray(rs.eligibleParticipants)
+            ? rs.eligibleParticipants.join(', ')
+            : rs.eligibleParticipants || null,
           rs.openTo || 'Any',
           rs.genderRestriction || 'Any',
           rs.minAge ? parseInt(rs.minAge) : null,
@@ -248,53 +292,85 @@ const eventsModel = {
   },
 
   async findById(id) {
-    const [rows] = await db.query(
-      `SELECT
-         e.id,
-         e.event_ref_no AS refNo,
-         e.event_title AS title,
-         e.description,
-         e.category_name AS category,
-         e.event_type_name AS event_type,
-         e.level_name AS level,
-         e.start_date,
-         e.end_date,
-         e.is_multi_event,
-         e.parent_id,
-         e.feedback_enabled,
-         e.certificate_enabled,
-         e.registration_settings,
-         e.accommodation_settings,
-         e.coordinators,
-         e.themes,
-         e.sdgs,
-         ers.id            AS reg_settings_id,
-         ers.enabled       AS reg_enabled,
-         ers.eligible_participants,
-         ers.open_to,
-         ers.gender_restriction,
-         ers.min_age,
-         ers.max_age,
-         ers.registration_status AS reg_status,
-         ers.last_date,
-         ers.extension_enabled,
-         ers.extended_date,
-         ers.shortlisting_required,
-         ers.selection_intimation,
-         ers.team_enabled,
-         ers.min_team_size,
-         ers.max_team_size,
-         ers.document_enabled,
-         ers.document_name,
-         ers.document_type,
-         ers.document_size,
-         ers.document_text_field_enabled
-       FROM events e
-       LEFT JOIN event_registration_settings ers ON ers.event_id = e.id
-       WHERE e.id = ? AND e.is_deleted = 0`,
-      [id],
-    );
-    return rows[0] || null;
+    const numId = Number(id);
+    if (!id || isNaN(numId) || numId <= 0) return null;
+    await ensureErsTable();
+    try {
+      const [rows] = await db.query(
+        `SELECT
+           e.id,
+           e.event_ref_no AS refNo,
+           e.event_title AS title,
+           e.description,
+           e.category_name AS category,
+           e.event_type_name AS event_type,
+           e.level_name AS level,
+           e.start_date,
+           e.end_date,
+           e.is_multi_event,
+           e.parent_id,
+           e.feedback_enabled,
+           e.certificate_enabled,
+           e.registration_settings,
+           e.accommodation_settings,
+           e.coordinators,
+           e.themes,
+           e.sdgs,
+           ers.id            AS reg_settings_id,
+           ers.enabled       AS reg_enabled,
+           ers.eligible_participants,
+           ers.open_to,
+           ers.gender_restriction,
+           ers.min_age,
+           ers.max_age,
+           ers.registration_status AS reg_status,
+           ers.last_date,
+           ers.extension_enabled,
+           ers.extended_date,
+           ers.shortlisting_required,
+           ers.selection_intimation,
+           ers.team_enabled,
+           ers.min_team_size,
+           ers.max_team_size,
+           ers.document_enabled,
+           ers.document_name,
+           ers.document_type,
+           ers.document_size,
+           ers.document_text_field_enabled
+         FROM events e
+         LEFT JOIN event_registration_settings ers ON ers.event_id = e.id
+         WHERE e.id = ? AND e.is_deleted = 0`,
+        [numId],
+      );
+      return rows[0] || null;
+    } catch (err) {
+      console.warn('[eventsModel] Fallback query for findById:', err.message);
+      const [rows] = await db.query(
+        `SELECT
+           e.id,
+           e.event_ref_no AS refNo,
+           e.event_title AS title,
+           e.description,
+           e.category_name AS category,
+           e.event_type_name AS event_type,
+           e.level_name AS level,
+           e.start_date,
+           e.end_date,
+           e.is_multi_event,
+           e.parent_id,
+           e.feedback_enabled,
+           e.certificate_enabled,
+           e.registration_settings,
+           e.accommodation_settings,
+           e.coordinators,
+           e.themes,
+           e.sdgs
+         FROM events e
+         WHERE e.id = ? AND e.is_deleted = 0`,
+        [numId],
+      );
+      return rows[0] || null;
+    }
   },
 
   // ─────────────────────────────────────────────────────────
@@ -561,31 +637,37 @@ const eventsModel = {
   // Returns registrations joined with participant profile
   // ─────────────────────────────────────────────────────────
   async getParticipants(eventId) {
+    const numId = Number(eventId);
+    if (!eventId || isNaN(numId) || numId <= 0) {
+      return [];
+    }
     const [rows] = await db.query(
       `SELECT
          er.id,
-         COALESCE(epp.first_name, ep.name, ep.email) AS name,
-         COALESCE(epp.institution, 'N/A')             AS institution,
-         COALESCE(epp.participant_type, 'N/A')        AS category,
-         er.registration_status                       AS status,
-         er.team_members IS NOT NULL                  AS hasTeam,
+         COALESCE(NULLIF(epp.first_name, ''), ep.name, ep.email, 'Participant') AS name,
+         COALESCE(NULLIF(epp.institution, ''), 'N/A')             AS institution,
+         COALESCE(NULLIF(epp.participant_type, ''), 'N/A')        AS category,
+         COALESCE(er.registration_status, 'Registered')             AS status,
+         (er.team_members IS NOT NULL
+          AND JSON_LENGTH(er.team_members) > 0)       AS hasTeam,
+         COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.team_members, '$[0].name')), 'N/A') AS \`group\`,
          (er.documents IS NOT NULL
           AND JSON_LENGTH(er.documents) > 0)          AS hasDoc,
          NULL                                         AS documentUrl,
-         0                                            AS accommodation_required,
-         'Pending'                                    AS hostel,
-         0                                            AS fees,
-         'Pending'                                    AS fee_status,
+         CASE WHEN er.accommodation_details IS NOT NULL AND JSON_EXTRACT(er.accommodation_details, '$.required') = true THEN 1 ELSE 0 END AS accommodation_required,
+         CASE WHEN er.accommodation_details IS NOT NULL AND JSON_EXTRACT(er.accommodation_details, '$.required') = true THEN 'YES' ELSE 'NO' END AS hostel,
+         COALESCE((SELECT amount FROM event_payments WHERE registration_id = er.id LIMIT 1), 0) AS fees,
+         COALESCE((SELECT payment_status FROM event_payments WHERE registration_id = er.id LIMIT 1), 'Pending') AS fee_status,
          FALSE                                        AS action1,
          FALSE                                        AS action2,
          JSON_OBJECT('active', false)                 AS action3
        FROM event_registrations er
-       JOIN event_participants ep ON ep.id = er.participant_id
+       LEFT JOIN event_participants ep ON ep.id = er.participant_id
        LEFT JOIN event_participant_profiles epp ON epp.participant_id = ep.id
        WHERE er.event_id = ?
          AND er.is_deleted = 0
        ORDER BY er.created_at DESC`,
-      [eventId],
+      [numId],
     );
     return rows;
   },
@@ -655,61 +737,162 @@ const eventsModel = {
   // PUBLIC ENDPOINTS METHODS
   // ─────────────────────────────────────────────────────────
   async listPublicEvents() {
-    const [rows] = await db.query(
-      `SELECT
-         e.id,
-         e.event_ref_no   AS refNo,
-         e.event_title   AS title,
-         e.description,
-         e.category_name AS category,
-         e.event_type_name AS eventType,
-         e.level_name    AS level,
-         e.start_date    AS startDate,
-         e.end_date      AS endDate,
-         e.is_multi_event  AS isMultiEvent,
-         e.parent_id     AS parentId,
-         e.feedback_enabled AS feedbackEnabled,
-         e.certificate_enabled AS certificateEnabled,
-         e.registration_settings AS registrationSettings,
-         e.accommodation_settings AS accommodationSettings,
-         e.coordinators,
-         (SELECT COUNT(*) FROM event_registrations r
-           WHERE r.event_id = e.id AND r.is_cancelled = 0 AND r.is_deleted = 0) AS registeredCount
-       FROM events e
-       WHERE e.is_deleted = 0
-         AND e.is_active  = 1
-       ORDER BY e.start_date IS NULL, e.start_date ASC, e.id DESC`,
-    );
-    return rows;
+    await ensureErsTable();
+    try {
+      const [rows] = await db.query(
+        `SELECT
+           e.id,
+           e.event_ref_no   AS refNo,
+           e.event_title   AS title,
+           e.description,
+           e.category_name AS category,
+           e.event_type_name AS eventType,
+           e.level_name    AS level,
+           e.start_date    AS startDate,
+           e.end_date      AS endDate,
+           e.is_multi_event  AS isMultiEvent,
+           e.parent_id     AS parentId,
+           e.feedback_enabled AS feedbackEnabled,
+           e.certificate_enabled AS certificateEnabled,
+           e.registration_settings AS registrationSettings,
+           e.accommodation_settings AS accommodationSettings,
+           e.coordinators,
+           ers.id          AS ersId,
+           ers.enabled     AS ersEnabled,
+           ers.team_enabled AS ersTeamEnabled,
+           ers.min_team_size AS ersMinTeamSize,
+           ers.max_team_size AS ersMaxTeamSize,
+           ers.document_enabled AS ersDocumentEnabled,
+           ers.document_name AS ersDocumentName,
+           ers.document_type AS ersDocumentType,
+           ers.document_size AS ersDocumentSize,
+           ers.registration_status AS ersRegistrationStatus,
+           ers.last_date   AS ersLastDate,
+           ers.extension_enabled AS ersExtensionEnabled,
+           ers.extended_date AS ersExtendedDate,
+           (SELECT COUNT(*) FROM event_registrations r
+             WHERE r.event_id = e.id AND r.is_cancelled = 0 AND r.is_deleted = 0) AS registeredCount
+         FROM events e
+         LEFT JOIN event_registration_settings ers ON ers.event_id = e.id
+         WHERE e.is_deleted = 0
+           AND e.is_active  = 1
+           AND (
+             (ers.id IS NOT NULL AND ers.enabled = 1)
+             OR (ers.id IS NULL AND (
+               JSON_EXTRACT(e.registration_settings, '$.enabled') = true
+               OR JSON_EXTRACT(e.registration_settings, '$.enabled') = 1
+               OR JSON_UNQUOTE(JSON_EXTRACT(e.registration_settings, '$.enabled')) = 'true'
+             ))
+             OR e.parent_id IS NOT NULL
+           )
+         ORDER BY e.start_date IS NULL, e.start_date ASC, e.id DESC`,
+      );
+      return rows;
+    } catch (err) {
+      console.warn('[eventsModel] Fallback query for listPublicEvents:', err.message);
+      const [rows] = await db.query(
+        `SELECT
+           e.id,
+           e.event_ref_no   AS refNo,
+           e.event_title   AS title,
+           e.description,
+           e.category_name AS category,
+           e.event_type_name AS eventType,
+           e.level_name    AS level,
+           e.start_date    AS startDate,
+           e.end_date      AS endDate,
+           e.is_multi_event  AS isMultiEvent,
+           e.parent_id     AS parentId,
+           e.feedback_enabled AS feedbackEnabled,
+           e.certificate_enabled AS certificateEnabled,
+           e.registration_settings AS registrationSettings,
+           e.accommodation_settings AS accommodationSettings,
+           e.coordinators,
+           (SELECT COUNT(*) FROM event_registrations r
+             WHERE r.event_id = e.id AND r.is_cancelled = 0 AND r.is_deleted = 0) AS registeredCount
+         FROM events e
+         WHERE e.is_deleted = 0
+           AND e.is_active  = 1
+         ORDER BY e.start_date IS NULL, e.start_date ASC, e.id DESC`,
+      );
+      return rows;
+    }
   },
 
   async findPublicEventById(eventId) {
-    const [rows] = await db.query(
-      `SELECT
-         e.id,
-         e.event_ref_no   AS refNo,
-         e.event_title   AS title,
-         e.description,
-         e.category_name AS category,
-         e.event_type_name AS eventType,
-         e.level_name    AS level,
-         e.start_date    AS startDate,
-         e.end_date      AS endDate,
-         e.is_multi_event  AS isMultiEvent,
-         e.parent_id     AS parentId,
-         e.feedback_enabled AS feedbackEnabled,
-         e.certificate_enabled AS certificateEnabled,
-         e.registration_settings AS registrationSettings,
-         e.accommodation_settings AS accommodationSettings,
-         e.coordinators,
-         (SELECT COUNT(*) FROM event_registrations r
-           WHERE r.event_id = e.id AND r.is_cancelled = 0 AND r.is_deleted = 0) AS registeredCount
-       FROM events e
-       WHERE e.id = ? AND e.is_deleted = 0 AND e.is_active = 1
-       LIMIT 1`,
-      [eventId],
-    );
-    return rows[0] ?? null;
+    const numId = Number(eventId);
+    if (!eventId || isNaN(numId) || numId <= 0) return null;
+    await ensureErsTable();
+    try {
+      const [rows] = await db.query(
+        `SELECT
+           e.id,
+           e.event_ref_no   AS refNo,
+           e.event_title   AS title,
+           e.description,
+           e.category_name AS category,
+           e.event_type_name AS eventType,
+           e.level_name    AS level,
+           e.start_date    AS startDate,
+           e.end_date      AS endDate,
+           e.is_multi_event  AS isMultiEvent,
+           e.parent_id     AS parentId,
+           e.feedback_enabled AS feedbackEnabled,
+           e.certificate_enabled AS certificateEnabled,
+           e.registration_settings AS registrationSettings,
+           e.accommodation_settings AS accommodationSettings,
+           e.coordinators,
+           ers.id          AS ersId,
+           ers.enabled     AS ersEnabled,
+           ers.team_enabled AS ersTeamEnabled,
+           ers.min_team_size AS ersMinTeamSize,
+           ers.max_team_size AS ersMaxTeamSize,
+           ers.document_enabled AS ersDocumentEnabled,
+           ers.document_name AS ersDocumentName,
+           ers.document_type AS ersDocumentType,
+           ers.document_size AS ersDocumentSize,
+           ers.registration_status AS ersRegistrationStatus,
+           ers.last_date   AS ersLastDate,
+           ers.extension_enabled AS ersExtensionEnabled,
+           ers.extended_date AS ersExtendedDate,
+           (SELECT COUNT(*) FROM event_registrations r
+             WHERE r.event_id = e.id AND r.is_cancelled = 0 AND r.is_deleted = 0) AS registeredCount
+         FROM events e
+         LEFT JOIN event_registration_settings ers ON ers.event_id = e.id
+         WHERE e.id = ? AND e.is_deleted = 0 AND e.is_active = 1
+         LIMIT 1`,
+        [numId],
+      );
+      return rows[0] ?? null;
+    } catch (err) {
+      console.warn('[eventsModel] Fallback query for findPublicEventById:', err.message);
+      const [rows] = await db.query(
+        `SELECT
+           e.id,
+           e.event_ref_no   AS refNo,
+           e.event_title   AS title,
+           e.description,
+           e.category_name AS category,
+           e.event_type_name AS eventType,
+           e.level_name    AS level,
+           e.start_date    AS startDate,
+           e.end_date      AS endDate,
+           e.is_multi_event  AS isMultiEvent,
+           e.parent_id     AS parentId,
+           e.feedback_enabled AS feedbackEnabled,
+           e.certificate_enabled AS certificateEnabled,
+           e.registration_settings AS registrationSettings,
+           e.accommodation_settings AS accommodationSettings,
+           e.coordinators,
+           (SELECT COUNT(*) FROM event_registrations r
+             WHERE r.event_id = e.id AND r.is_cancelled = 0 AND r.is_deleted = 0) AS registeredCount
+         FROM events e
+         WHERE e.id = ? AND e.is_deleted = 0 AND e.is_active = 1
+         LIMIT 1`,
+        [numId],
+      );
+      return rows[0] ?? null;
+    }
   },
 
   async listEventFees(eventId) {
@@ -875,7 +1058,9 @@ const eventsModel = {
       [
         eventId,
         enabled ? 1 : 0,
-        eligibleParticipants || null,
+        Array.isArray(eligibleParticipants)
+          ? eligibleParticipants.join(', ')
+          : eligibleParticipants || null,
         openTo || 'Any',
         genderRestriction || 'Any',
         minAge ? parseInt(minAge) : null,

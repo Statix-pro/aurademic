@@ -234,13 +234,15 @@ export default function RegistrationPage() {
         requiresDocument ? docType : undefined,
         requiresDocument ? selectedFile : undefined,
       );
+      const isFreeEvent = !event.hasRegistrationFee || Number(event.fees || 0) === 0;
+
       navigate('/event-register', {
         replace: true,
         state: {
           event: parentEvent ?? event,
           parentEvent,
-          showPaymentSummary: true,
-          paymentEventId: event.id,
+          showPaymentSummary: !isFreeEvent,
+          paymentEventId: isFreeEvent ? undefined : event.id,
         },
       });
     } catch (err) {
@@ -349,23 +351,35 @@ export default function RegistrationPage() {
                     <ReadField label="Date" value={event.date} />
                     <ReadField label="Venue" value={event.venue} />
                     <ReadField label="Participation" value={event.participation} />
-                    <ReadField label="Fees" value={`₹${event.fees} / ${event.feesUnit}`} />
+                    <ReadField
+                      label="Fees"
+                      value={
+                        event.hasRegistrationFee ? `₹${event.fees} / ${event.feesUnit}` : 'Free'
+                      }
+                    />
                   </div>
                 </Section>
 
-                <Section title="Coordinator Details">
-                  <div className="registration-page-28">
-                    <ReadField label="Coordinator Name" value="Dr. Anitha R" />
-                    <ReadField label="Designation" value="Assistant Professor" />
-                    <ReadField label="Mobile" value="+91 98765 43210" />
-                    <ReadField
-                      label="Department"
-                      value="Computer Science & Engineering"
-                      className="registration-page-29"
-                    />
-                    <ReadField label="Email" value="anitha.r@ksrct.ac.in" />
-                  </div>
-                </Section>
+                {event.coordinators && event.coordinators.length > 0 ? (
+                  <Section title="Coordinator Details">
+                    <div className="registration-page-28">
+                      <ReadField
+                        label="Coordinator Name"
+                        value={event.coordinators[0].name || '-'}
+                      />
+                      <ReadField
+                        label="Designation"
+                        value={event.coordinators[0].designation || '-'}
+                      />
+                      <ReadField
+                        label="Department"
+                        value={event.coordinators[0].department || '-'}
+                        className="registration-page-29"
+                      />
+                      <ReadField label="Email" value={event.coordinators[0].email || '-'} />
+                    </div>
+                  </Section>
+                ) : null}
               </>
             )}
 

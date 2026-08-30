@@ -117,6 +117,8 @@ export interface EventItem {
   hasAccommodation?: boolean;
   hasRegistrationFee?: boolean;
   documentEnabled?: boolean;
+  feedbackEnabled?: boolean;
+  certificateEnabled?: boolean;
   coordinators?: {
     name: string;
     designation: string;

@@ -2,16 +2,18 @@ import { Star, ArrowLeft, MessageSquare, CheckCircle } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { useEvents } from '../../contexts/EventsContext';
+import { useEvents, flattenEvents } from '../../contexts/EventsContext';
 import './FeedbackPage.css';
 
 export default function FeedbackPage() {
   const navigate = useNavigate();
   const { events, registrations, submitFeedback } = useEvents();
 
-  // Get registered events
+  // Get registered events with feedback enabled
   const registeredEvents = useMemo(() => {
-    return events.filter((e) => registrations[e.id] && registrations[e.id].formStatus === 'ready');
+    return flattenEvents(events).filter(
+      (e) => e.feedbackEnabled && registrations[e.id] && registrations[e.id].formStatus === 'ready',
+    );
   }, [events, registrations]);
 
   const [selectedEventId, setSelectedEventId] = useState('');
