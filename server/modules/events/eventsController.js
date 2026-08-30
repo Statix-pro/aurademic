@@ -1,4 +1,5 @@
 import eventsModel from './eventsModel.js';
+import { searchApplicant } from '../shared/budget/userResolvers.js';
 
 const eventsController = {
   // GET /api/events
@@ -29,12 +30,35 @@ const eventsController = {
     }
   },
 
+  // GET /api/events/:id
+  async getEventById(req, res) {
+    try {
+      const { id } = req.params;
+      const numericId = Number(id);
+      if (!id || isNaN(numericId) || numericId <= 0) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      const event = await eventsModel.findById(numericId);
+      if (!event) return res.status(404).json({ error: 'Event not found' });
+      return res.json(event);
+    } catch (err) {
+      console.error('[eventsController] getEventById error:', err);
+      return res
+        .status(err.status || 500)
+        .json({ error: 'Failed to fetch event details', details: err.message });
+    }
+  },
+
   // PUT /api/events/:id
   async updateEvent(req, res) {
     try {
       const userId = req.user?.id;
       const { id } = req.params;
-      const result = await eventsModel.update(Number(id), req.body, userId);
+      const numericId = Number(id);
+      if (!id || isNaN(numericId) || numericId <= 0) {
+        return res.status(400).json({ error: 'Invalid event ID' });
+      }
+      const result = await eventsModel.update(numericId, req.body, userId);
       return res.json(result);
     } catch (err) {
       console.error('[eventsController] updateEvent error:', err);
@@ -49,7 +73,11 @@ const eventsController = {
     try {
       const userId = req.user?.id;
       const { id } = req.params;
-      const result = await eventsModel.softDelete(Number(id), userId);
+      const numericId = Number(id);
+      if (!id || isNaN(numericId) || numericId <= 0) {
+        return res.status(400).json({ error: 'Invalid event ID' });
+      }
+      const result = await eventsModel.softDelete(numericId, userId);
       return res.json(result);
     } catch (err) {
       console.error('[eventsController] deleteEvent error:', err);
@@ -59,11 +87,27 @@ const eventsController = {
     }
   },
 
+  // GET /api/events/search-employee
+  async searchEmployee(req, res) {
+    try {
+      const { q } = req.query;
+      const results = await searchApplicant(q || '');
+      return res.json({ success: true, status: 'success', data: results });
+    } catch (err) {
+      console.error('[eventsController] searchEmployee error:', err);
+      return res.status(500).json({ error: 'Failed to search employee' });
+    }
+  },
+
   // GET /api/events/:id/summary
   async getEventSummary(req, res) {
     try {
       const { id } = req.params;
-      const summary = await eventsModel.getSummary(Number(id));
+      const numericId = Number(id);
+      if (!id || isNaN(numericId) || numericId <= 0) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      const summary = await eventsModel.getSummary(numericId);
       return res.json(summary);
     } catch (err) {
       console.error('[eventsController] getEventSummary error:', err);
@@ -77,8 +121,12 @@ const eventsController = {
   async getParticipants(req, res) {
     try {
       const { id } = req.params;
-      const participants = await eventsModel.getParticipants(Number(id));
-      return res.json({ participants });
+      const numericId = Number(id);
+      if (!id || isNaN(numericId) || numericId <= 0) {
+        return res.json({ participants: [] });
+      }
+      const participants = await eventsModel.getParticipants(numericId);
+      return res.json({ participants: participants || [] });
     } catch (err) {
       console.error('[eventsController] getParticipants error:', err);
       return res
@@ -91,7 +139,12 @@ const eventsController = {
   async updateParticipant(req, res) {
     try {
       const { id, pid } = req.params;
-      const result = await eventsModel.updateParticipant(Number(id), Number(pid), req.body);
+      const numericId = Number(id);
+      const numericPid = Number(pid);
+      if (!id || isNaN(numericId) || numericId <= 0 || isNaN(numericPid) || numericPid <= 0) {
+        return res.status(400).json({ error: 'Invalid parameters' });
+      }
+      const result = await eventsModel.updateParticipant(numericId, numericPid, req.body);
       return res.json(result);
     } catch (err) {
       console.error('[eventsController] updateParticipant error:', err);
@@ -105,8 +158,12 @@ const eventsController = {
   async submitFeedback(req, res) {
     try {
       const { id } = req.params;
+      const numericId = Number(id);
+      if (!id || isNaN(numericId) || numericId <= 0) {
+        return res.status(400).json({ error: 'Invalid event ID' });
+      }
       const userId = req.user?.id;
-      const result = await eventsModel.submitFeedback(Number(id), userId, req.body);
+      const result = await eventsModel.submitFeedback(numericId, userId, req.body);
       return res.json(result);
     } catch (err) {
       console.error('[eventsController] submitFeedback error:', err);
@@ -166,7 +223,11 @@ const eventsController = {
   async getPublicEvent(req, res) {
     try {
       const { id } = req.params;
-      const row = await eventsModel.findPublicEventById(Number(id));
+      const numericId = Number(id);
+      if (!id || isNaN(numericId) || numericId <= 0) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      const row = await eventsModel.findPublicEventById(numericId);
       if (!row) {
         return res.status(404).json({ error: 'Event not found' });
       }
@@ -195,7 +256,11 @@ const eventsController = {
   async getRegistrationSettings(req, res) {
     try {
       const { id } = req.params;
-      const settings = await eventsModel.getRegistrationSettings(Number(id));
+      const numericId = Number(id);
+      if (!id || isNaN(numericId) || numericId <= 0) {
+        return res.json({ success: true, data: null });
+      }
+      const settings = await eventsModel.getRegistrationSettings(numericId);
       return res.json({ success: true, data: settings });
     } catch (err) {
       console.error('[eventsController] getRegistrationSettings error:', err);
@@ -209,8 +274,12 @@ const eventsController = {
   async saveRegistrationSettings(req, res) {
     try {
       const { id } = req.params;
+      const numericId = Number(id);
+      if (!id || isNaN(numericId) || numericId <= 0) {
+        return res.status(400).json({ error: 'Invalid event ID' });
+      }
       const userId = req.user?.id;
-      const result = await eventsModel.saveRegistrationSettings(Number(id), req.body, userId);
+      const result = await eventsModel.saveRegistrationSettings(numericId, req.body, userId);
       return res.json(result);
     } catch (err) {
       console.error('[eventsController] saveRegistrationSettings error:', err);
@@ -249,7 +318,11 @@ function formatPublicEvent(row) {
   const maxFee = allFees.length ? Math.max(...allFees) : 0;
 
   // Registration close date
-  const closesAt = regSettings.closes_at || regSettings.registrationDeadline || null;
+  const closesAt = row.ersId
+    ? row.ersExtensionEnabled && row.ersExtendedDate
+      ? row.ersExtendedDate
+      : row.ersLastDate
+    : regSettings.closes_at || regSettings.registrationDeadline || null;
 
   // Determine status
   const now = new Date();
@@ -260,9 +333,30 @@ function formatPublicEvent(row) {
     status = 'Upcoming';
   }
 
-  // Participation type
-  const participation =
-    regSettings.participation_type || regSettings.participationType || 'Individual';
+  // Participation type & Team bounds
+  const isTeam = row.ersId
+    ? Boolean(row.ersTeamEnabled)
+    : Boolean(
+        regSettings.team_enabled ||
+        regSettings.participation_type === 'Team' ||
+        regSettings.participationType === 'Team',
+      );
+  const participation = isTeam ? 'Team' : 'Individual';
+  const minTeamSize = row.ersId
+    ? row.ersMinTeamSize
+    : parseInt(regSettings.min_team_size || regSettings.minTeamSize) || null;
+  const maxTeamSize = row.ersId
+    ? row.ersMaxTeamSize
+    : parseInt(regSettings.max_team_size || regSettings.maxTeamSize) || null;
+
+  // Document requirement
+  const documentEnabled = row.ersId
+    ? Boolean(row.ersDocumentEnabled)
+    : Boolean(
+        regSettings.document_enabled ||
+        regSettings.document_required ||
+        regSettings.documentEnabled,
+      );
 
   return {
     id: String(row.id),
@@ -275,10 +369,13 @@ function formatPublicEvent(row) {
     endDate: row.endDate || null,
     venue: regSettings.venue || null,
     isMultiEvent: Boolean(row.isMultiEvent),
-    documentEnabled: Boolean(regSettings.document_required),
+    documentEnabled,
+    documentName: row.ersDocumentName || regSettings.document_name || null,
+    documentType: row.ersDocumentType || regSettings.document_type || null,
+    documentSize: row.ersDocumentSize || regSettings.document_size || null,
     participation,
-    minTeamSize: parseInt(regSettings.min_team_size || regSettings.minTeamSize) || null,
-    maxTeamSize: parseInt(regSettings.max_team_size || regSettings.maxTeamSize) || null,
+    minTeamSize: isTeam ? minTeamSize : null,
+    maxTeamSize: isTeam ? maxTeamSize : null,
     hasRegistrationFee: maxFee > 0,
     feeRange: { min: minFee, max: maxFee },
     hasAccommodation: Boolean(accSettings.enabled),

@@ -34,6 +34,8 @@ interface PublicApiEvent {
   registrationClosesAt: string | null;
   registrationOpen: boolean;
   status: 'Open' | 'Closed' | 'Upcoming';
+  feedbackEnabled?: boolean;
+  certificateEnabled?: boolean;
   coordinators?: {
     name: string;
     designation: string;
@@ -124,6 +126,8 @@ function mapPublicEvent(item: PublicApiEvent): EventItem {
     hasAccommodation: Boolean(item.hasAccommodation),
     hasRegistrationFee: Boolean(item.hasRegistrationFee),
     documentEnabled: Boolean(item.documentEnabled),
+    feedbackEnabled: Boolean(item.feedbackEnabled),
+    certificateEnabled: Boolean(item.certificateEnabled),
     coordinators: item.coordinators,
   };
 }
@@ -184,7 +188,7 @@ export function isPayableEvent(
   registration: EventRegistration,
   paymentEventId?: string,
 ) {
-  if (!event.hasRegistrationFee) return false;
+  if (!event.hasRegistrationFee || Number(event.fees || 0) === 0) return false;
   if (registration.paymentStatus === 'paid') return false;
   // A rejected registration is never payable. A selected one is payable straight
   // away — being shortlisted is what the participant was waiting on.

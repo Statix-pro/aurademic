@@ -14,6 +14,8 @@ router.use(authMiddleware);
 
 // ── Core CRUD ──────────────────────────────────────────────
 router.get('/events', eventsController.listEvents);
+router.get('/events/search-employee', eventsController.searchEmployee);
+router.get('/events/:id', eventsController.getEventById);
 router.post('/events', eventsController.createEvent);
 router.put('/events/:id', eventsController.updateEvent);
 router.delete('/events/:id', eventsController.deleteEvent);

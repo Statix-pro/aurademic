@@ -109,16 +109,21 @@ const participantRegistrationModel = {
               e.is_deleted,
               s.registration_status,
               s.team_enabled,
-              s.minimum_team_size,
-              s.maximum_team_size,
-              s.max_participants,
-              s.waiting_list_enabled,
+              s.min_team_size AS minimum_team_size,
+              s.max_team_size AS maximum_team_size,
+              NULL AS max_participants,
+              0 AS waiting_list_enabled,
               s.open_to,
-              COALESCE(s.extended_date, s.last_date, s.registration_deadline) AS closes_at,
+              COALESCE(
+                IF(s.extension_enabled = 1, s.extended_date, NULL),
+                s.last_date,
+                JSON_UNQUOTE(JSON_EXTRACT(e.registration_settings, '$.closes_at')),
+                JSON_UNQUOTE(JSON_EXTRACT(e.registration_settings, '$.registrationDeadline'))
+              ) AS closes_at,
               (SELECT COUNT(*) FROM event_registrations r
                 WHERE r.event_id = e.id AND r.is_cancelled = 0 AND r.is_deleted = 0) AS registered_count
          FROM events e
-         LEFT JOIN event_registration_settings s ON s.event_id = e.id AND s.is_deleted = 0
+         LEFT JOIN event_registration_settings s ON s.event_id = e.id
         WHERE e.id = ?
         LIMIT 1`,
       [eventId],

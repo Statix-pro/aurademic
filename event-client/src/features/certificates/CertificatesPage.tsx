@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../contexts/AuthContext';
-import { useEvents } from '../../contexts/EventsContext';
+import { useEvents, flattenEvents } from '../../contexts/EventsContext';
 import { useProfile } from '../../contexts/ProfileContext';
 import './CertificatesPage.css';
 
@@ -21,10 +21,14 @@ export default function CertificatesPage() {
     return fromProfile || user?.name || '';
   }, [personal.firstName, personal.lastName, user?.name]);
 
-  // Get events with paid registrations
+  // Get events with certificate enabled and confirmed registration
   const certifiedEvents = useMemo(() => {
-    return events.filter(
-      (e) => registrations[e.id] && registrations[e.id].paymentStatus === 'paid',
+    return flattenEvents(events).filter(
+      (e) =>
+        e.certificateEnabled &&
+        registrations[e.id] &&
+        (registrations[e.id].paymentStatus === 'paid' ||
+          (!e.hasRegistrationFee && registrations[e.id].formStatus === 'ready')),
     );
   }, [events, registrations]);
 

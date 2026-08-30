@@ -57,12 +57,14 @@ import {
   AlertCircle,
   Check,
   ArrowDown,
+  Printer,
 } from 'lucide-react';
 import React, { useState, useEffect, ChangeEvent, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLocation, useParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 
+import { useAuth } from '../../contexts/AuthContext';
 import { useAbility } from '../../shared/casl/AbilityContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import CustomModal from '../../shared/components/ui/CustomModal';
@@ -198,6 +200,7 @@ export const EVENT_PAGE_TABS = [
   { id: 'updates', label: 'Event Updates' },
   { id: 'participants', label: 'Participants' },
   { id: 'feedback', label: 'Feedback' },
+  { id: 'certificate', label: 'Certificate' },
 ] as const;
 
 export const EVENT_FEEDBACK_TOGGLES = [
@@ -715,7 +718,7 @@ export interface EventApprovalFormData {
   session: string;
   venue: string;
   meetingLink: string;
-  eligibleParticipants: string;
+  eligibleParticipants: string | string[];
   openTo: string;
   genderRestriction: string;
   minAge: string;
@@ -781,6 +784,7 @@ interface CollaboratorRow {
 
 interface CoordinatorRow {
   id: string;
+  employee_id: number | null;
   name: string;
   department: string;
   email: string;
@@ -801,7 +805,6 @@ type EventApprovalTextField = keyof Pick<
   | 'session'
   | 'venue'
   | 'meetingLink'
-  | 'eligibleParticipants'
   | 'openTo'
   | 'genderRestriction'
   | 'minAge'
@@ -864,6 +867,7 @@ const createCollaborator = (): CollaboratorRow => ({
 
 const createCoordinator = (): CoordinatorRow => ({
   id: makeId(),
+  employee_id: null,
   name: '',
   department: '',
   email: '',
@@ -885,7 +889,7 @@ const createInitialFormData = (): EventApprovalFormData => ({
   session: 'FN',
   venue: '',
   meetingLink: '',
-  eligibleParticipants: '',
+  eligibleParticipants: [],
   openTo: 'Any',
   genderRestriction: 'Any',
   minAge: '',
@@ -944,15 +948,61 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   onAddEvent,
   onSubmit,
 }) => {
+  const { user } = useAuth();
+  const currentUserName = useMemo(() => {
+    return (user?.name || user?.email || 'Admin').trim();
+  }, [user]);
+
   const [formData, setFormData] = useState<EventApprovalFormData>(createInitialFormData);
   const [additionalEvents, setAdditionalEvents] = useState(0);
   const [isMultiEvent, setIsMultiEvent] = useState(false);
   const [multiEventsList, setMultiEventsList] = useState<
-    { id: string; name: string; type: string }[]
-  >([{ id: makeId(), name: '', type: '' }]);
+    { id: string; name: string; type: string; createdBy?: string }[]
+  >([]);
+  const [editingSubEventId, setEditingSubEventId] = useState<string | null>(null);
+  const [editSubEventData, setEditSubEventData] = useState<{ name: string; type: string }>({
+    name: '',
+    type: '',
+  });
+  const [viewingSubEvent, setViewingSubEvent] = useState<{
+    id: string;
+    name: string;
+    type: string;
+    createdBy: string;
+  } | null>(null);
+
+  const handleAddSubEventRow = () => {
+    setMultiEventsList((prev) => [
+      ...prev,
+      { id: makeId(), name: '', type: '', createdBy: currentUserName },
+    ]);
+  };
+
+  const handleDeleteSubEvent = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this sub-event?')) {
+      setMultiEventsList((prev) => prev.filter((item) => item.id !== id));
+    }
+  };
+
+  const handleSaveEditSubEvent = (id: string) => {
+    if (!editSubEventData.name.trim()) {
+      alert('Sub-event name cannot be empty');
+      return;
+    }
+    setMultiEventsList((prev) =>
+      prev.map((item) =>
+        item.id === id
+          ? { ...item, name: editSubEventData.name.trim(), type: editSubEventData.type }
+          : item,
+      ),
+    );
+    setEditingSubEventId(null);
+  };
+
   const [submitting, setSubmitting] = useState(false);
   const [themeSearchQuery, setThemeSearchQuery] = useState('');
   const [sdgSearchQuery, setSdgSearchQuery] = useState('');
+  const [eligibleParticipantsSearchQuery, setEligibleParticipantsSearchQuery] = useState('');
   const [selectedCollaboratorId, setSelectedCollaboratorId] = useState('');
   const [selectedCoordinatorId, setSelectedCoordinatorId] = useState('');
   const [eventExpanded, setEventExpanded] = useState(true);
@@ -960,15 +1010,54 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   const minAgeInputRef = useRef<HTMLInputElement | null>(null);
   const maxAgeInputRef = useRef<HTMLInputElement | null>(null);
 
-  const numberOfDays = useMemo(() => {
-    if (!formData.dateFrom || !formData.dateTo) return formData.numberOfDays;
-    const start = new Date(formData.dateFrom);
-    const end = new Date(formData.dateTo);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start) {
-      return formData.numberOfDays;
+  // Coordinator Search State
+  const [coordinatorSearchResults, setCoordinatorSearchResults] = useState<any[]>([]);
+  const [activeCoordinatorRowId, setActiveCoordinatorRowId] = useState<string | null>(null);
+
+  const handleCoordinatorSearch = async (query: string, rowId: string) => {
+    updateRow<CoordinatorRow>('coordinators', rowId, 'name', query);
+
+    if (query.trim().length === 0) {
+      setCoordinatorSearchResults([]);
+      setActiveCoordinatorRowId(null);
+      return;
     }
-    return String(Math.floor((end.getTime() - start.getTime()) / 86400000) + 1);
-  }, [formData.dateFrom, formData.dateTo, formData.numberOfDays]);
+
+    setActiveCoordinatorRowId(rowId);
+    try {
+      let response = (await authenticityUtility
+        .get(`/events/search-employee?q=${encodeURIComponent(query)}`)
+        .catch(() => null)) as any;
+
+      if (!response) {
+        response = (await authenticityUtility
+          .get(`/budget/search-applicant?q=${encodeURIComponent(query)}`)
+          .catch(() => null)) as any;
+      }
+
+      if (response && (response.success || response.status === 'success')) {
+        setCoordinatorSearchResults(Array.isArray(response.data) ? response.data : []);
+      } else if (Array.isArray(response)) {
+        setCoordinatorSearchResults(response);
+      } else {
+        setCoordinatorSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching coordinator:', error);
+      setCoordinatorSearchResults([]);
+    }
+  };
+
+  const handleSelectCoordinator = (rowId: string, emp: any) => {
+    updateRow<CoordinatorRow>('coordinators', rowId, 'employee_id', emp.employee_id);
+    updateRow<CoordinatorRow>('coordinators', rowId, 'name', (emp.name || '').trim());
+    updateRow<CoordinatorRow>('coordinators', rowId, 'department', emp.department || '');
+    updateRow<CoordinatorRow>('coordinators', rowId, 'email', emp.email || '');
+    updateRow<CoordinatorRow>('coordinators', rowId, 'institution', emp.entity || '');
+
+    setActiveCoordinatorRowId(null);
+    setCoordinatorSearchResults([]);
+  };
 
   const setField = <K extends keyof EventApprovalFormData>(
     field: K,
@@ -1088,7 +1177,6 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
     try {
       await onSubmit({
         ...formData,
-        numberOfDays,
         isMultiEventEnabled: isMultiEvent,
         multiEventsList,
       });
@@ -1172,7 +1260,9 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                 <input
                   placeholder="Expected Participants"
                   value={formData.expectedParticipants}
-                  onChange={(event) => setField('expectedParticipants', event.target.value)}
+                  onChange={(event) =>
+                    setField('expectedParticipants', event.target.value.replace(/[^0-9]/g, ''))
+                  }
                 />
               </label>
             </div>
@@ -1241,7 +1331,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                 <span className="schedule-field-title">No. of Days</span>
                 <input
                   placeholder="No. of Days"
-                  value={numberOfDays}
+                  value={formData.numberOfDays}
                   onChange={(event) => setField('numberOfDays', event.target.value)}
                 />
               </div>
@@ -1294,8 +1384,47 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
             {formData.registrationSettingsEnabled && (
               <>
                 <div className="event-approval-registration-top">
-                  <label>
-                    Eligible Participants{select('eligibleParticipants', options.participants)}
+                  <label className="w-100">
+                    Eligible Participants
+                    <CustomTagInput
+                      name="eligibleParticipants"
+                      value={
+                        Array.isArray(formData.eligibleParticipants)
+                          ? formData.eligibleParticipants
+                          : formData.eligibleParticipants
+                            ? formData.eligibleParticipants
+                                .split(',')
+                                .map((s) => s.trim())
+                                .filter(Boolean)
+                            : []
+                      }
+                      onChange={(values) => setField('eligibleParticipants', values)}
+                      suggestions={options.participants.filter(
+                        (p) =>
+                          p.toLowerCase().includes(eligibleParticipantsSearchQuery.toLowerCase()) &&
+                          !(
+                            Array.isArray(formData.eligibleParticipants)
+                              ? formData.eligibleParticipants
+                              : formData.eligibleParticipants
+                                ? formData.eligibleParticipants
+                                    .split(',')
+                                    .map((s) => s.trim())
+                                    .filter(Boolean)
+                                : []
+                          ).includes(p),
+                      )}
+                      onSearch={setEligibleParticipantsSearchQuery}
+                      placeholder={
+                        (Array.isArray(formData.eligibleParticipants)
+                          ? formData.eligibleParticipants.length
+                          : formData.eligibleParticipants
+                            ? 1
+                            : 0) === 0
+                          ? 'Type to search and select eligible participants'
+                          : ''
+                      }
+                      className="mb-0 mt-1"
+                    />
                   </label>
                 </div>
                 <div className="event-approval-controls-row">
@@ -1327,35 +1456,28 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                       </button>
                       <div
                         className={`event-approval-age-option ${ageRestrictionType === 'Range' ? 'active' : ''}`}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => {
-                          setAgeRestrictionType('Range');
-                          minAgeInputRef.current?.focus();
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            setAgeRestrictionType('Range');
-                            minAgeInputRef.current?.focus();
-                          }
-                        }}
                       >
                         <span>Minimum</span>
                         <input
                           ref={minAgeInputRef}
                           placeholder=""
                           value={formData.minAge}
-                          onChange={(event) => setField('minAge', event.target.value)}
-                          disabled={ageRestrictionType !== 'Range'}
+                          onChange={(event) => {
+                            const val = event.target.value.replace(/[^0-9]/g, '');
+                            setField('minAge', val);
+                            setAgeRestrictionType('Range');
+                          }}
                         />
                         <span>Maximum</span>
                         <input
                           ref={maxAgeInputRef}
                           placeholder=""
                           value={formData.maxAge}
-                          onChange={(event) => setField('maxAge', event.target.value)}
-                          disabled={ageRestrictionType !== 'Range'}
+                          onChange={(event) => {
+                            const val = event.target.value.replace(/[^0-9]/g, '');
+                            setField('maxAge', val);
+                            setAgeRestrictionType('Range');
+                          }}
                         />
                       </div>
                     </div>
@@ -1384,9 +1506,14 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                     <TogglePair
                       label="Extension"
                       value={formData.extension}
-                      onChange={(value) => setField('extension', value)}
+                      onChange={(value) => {
+                        setField('extension', value);
+                        if (!value) {
+                          setField('extendedDate', '');
+                        }
+                      }}
                     />
-                    <label>
+                    <label className={!formData.extension ? 'is-disabled' : ''}>
                       Extended Date
                       <input
                         className={formData.extendedDate ? 'has-value' : 'is-placeholder'}
@@ -1394,6 +1521,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                         placeholder="DD/MM/YYYY"
                         value={formData.extendedDate}
                         onChange={(event) => setField('extendedDate', event.target.value)}
+                        disabled={!formData.extension}
                       />
                     </label>
                   </div>
@@ -1401,9 +1529,14 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                     <TogglePair
                       label="Shortlisting required"
                       value={formData.shortlistingRequired}
-                      onChange={(value) => setField('shortlistingRequired', value)}
+                      onChange={(value) => {
+                        setField('shortlistingRequired', value);
+                        if (!value) {
+                          setField('selectionIntimation', '');
+                        }
+                      }}
                     />
-                    <label>
+                    <label className={!formData.shortlistingRequired ? 'is-disabled' : ''}>
                       Selection Intimation
                       <input
                         className={formData.selectionIntimation ? 'has-value' : 'is-placeholder'}
@@ -1411,6 +1544,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                         placeholder="DD/MM/YYYY"
                         value={formData.selectionIntimation}
                         onChange={(event) => setField('selectionIntimation', event.target.value)}
+                        disabled={!formData.shortlistingRequired}
                       />
                     </label>
                   </div>
@@ -1543,7 +1677,12 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                             disabled={!formData.registrationFeeEnabled}
                             value={row.individual}
                             onChange={(event) =>
-                              updateRow<FeeRow>('feeRows', row.id, 'individual', event.target.value)
+                              updateRow<FeeRow>(
+                                'feeRows',
+                                row.id,
+                                'individual',
+                                event.target.value.replace(/[^0-9]/g, ''),
+                              )
                             }
                           />
                         </td>
@@ -1554,7 +1693,12 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                             disabled={!formData.registrationFeeEnabled}
                             value={row.team}
                             onChange={(event) =>
-                              updateRow<FeeRow>('feeRows', row.id, 'team', event.target.value)
+                              updateRow<FeeRow>(
+                                'feeRows',
+                                row.id,
+                                'team',
+                                event.target.value.replace(/[^0-9]/g, ''),
+                              )
                             }
                           />
                         </td>
@@ -1565,7 +1709,12 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                             disabled={!formData.registrationFeeEnabled}
                             value={row.members}
                             onChange={(event) =>
-                              updateRow<FeeRow>('feeRows', row.id, 'members', event.target.value)
+                              updateRow<FeeRow>(
+                                'feeRows',
+                                row.id,
+                                'members',
+                                event.target.value.replace(/[^0-9]/g, ''),
+                              )
                             }
                           />
                         </td>
@@ -1580,7 +1729,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                                 'feeRows',
                                 row.id,
                                 'additionalMember',
-                                event.target.value,
+                                event.target.value.replace(/[^0-9]/g, ''),
                               )
                             }
                           />
@@ -1702,18 +1851,69 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                   aria-label="Select coordinator row"
                 />
                 <div className="event-approval-grid two">
-                  <select
-                    className={getSelectClassName(row.name)}
-                    value={row.name}
-                    onChange={(event) =>
-                      updateRow<CoordinatorRow>('coordinators', row.id, 'name', event.target.value)
-                    }
-                  >
-                    <option value="">Select</option>
-                    {options.coordinator.map((option) => (
-                      <option key={option}>{option}</option>
-                    ))}
-                  </select>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      placeholder="Search employee by name or ERP ID"
+                      value={row.name}
+                      onChange={(e) => handleCoordinatorSearch(e.target.value, row.id)}
+                      onFocus={(e) => {
+                        e.currentTarget.style.borderColor = '#0069ab';
+                        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0, 105, 171, 0.15)';
+                        setActiveCoordinatorRowId(row.id);
+                        if (row.name.trim().length > 0) {
+                          void handleCoordinatorSearch(row.name, row.id);
+                        }
+                      }}
+                      onBlur={(e) => {
+                        e.currentTarget.style.borderColor = '#e0e0e0';
+                        e.currentTarget.style.boxShadow = 'none';
+                        setTimeout(() => setActiveCoordinatorRowId(null), 200);
+                      }}
+                    />
+                    {activeCoordinatorRowId === row.id && coordinatorSearchResults.length > 0 && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          backgroundColor: '#fff',
+                          border: '1px solid #e0e0e0',
+                          borderRadius: '12px',
+                          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.12)',
+                          zIndex: 1000,
+                          maxHeight: '250px',
+                          overflowY: 'auto',
+                          marginTop: '4px',
+                        }}
+                      >
+                        {coordinatorSearchResults.map((emp: any) => (
+                          <div
+                            key={emp.employee_id}
+                            onMouseDown={(evt) => {
+                              evt.preventDefault();
+                              handleSelectCoordinator(row.id, emp);
+                            }}
+                            style={{
+                              padding: '10px 15px',
+                              cursor: 'pointer',
+                              borderBottom: '1px solid #f0f0f0',
+                              transition: 'background-color 0.2s',
+                            }}
+                            onMouseEnter={(e) =>
+                              (e.currentTarget.style.backgroundColor = '#f8f9fa')
+                            }
+                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#fff')}
+                          >
+                            <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
+                            <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                              {emp.designation} | {emp.department}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                   <input
                     placeholder="Department"
                     value={row.department}
@@ -1822,7 +2022,10 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                         disabled={!formData.accommodationEnabled}
                         value={formData.gentsAccommodationLimit}
                         onChange={(event) =>
-                          setField('gentsAccommodationLimit', event.target.value)
+                          setField(
+                            'gentsAccommodationLimit',
+                            event.target.value.replace(/[^0-9]/g, ''),
+                          )
                         }
                       />
                     </label>
@@ -1833,7 +2036,10 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                         disabled={!formData.accommodationEnabled}
                         value={formData.ladiesAccommodationLimit}
                         onChange={(event) =>
-                          setField('ladiesAccommodationLimit', event.target.value)
+                          setField(
+                            'ladiesAccommodationLimit',
+                            event.target.value.replace(/[^0-9]/g, ''),
+                          )
                         }
                       />
                     </label>
@@ -1852,80 +2058,221 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                   onChange={(value) => {
                     setIsMultiEvent(value);
                     if (value && multiEventsList.length === 0) {
-                      setMultiEventsList([{ id: makeId(), name: '', type: '' }]);
+                      setMultiEventsList([
+                        { id: makeId(), name: '', type: '', createdBy: currentUserName },
+                      ]);
                     }
                   }}
                 />
               </div>
               {isMultiEvent && (
-                <div className="event-approval-table-wrap event-approval-multi-event-table-wrap">
-                  <table className="budgetEntryTable event-approval-multi-event-table">
-                    <thead>
-                      <tr>
-                        <th className="event-approval-multi-event-index">S.No</th>
-                        <th>Event Name</th>
-                        <th>Event Type</th>
-                        <th className="event-approval-multi-event-action">Create</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {multiEventsList.map((row, index) => (
-                        <tr key={row.id}>
-                          <td className="event-approval-multi-event-index">{index + 1}</td>
-                          <td>
-                            <input
-                              className="tableInput"
-                              placeholder="Event Name"
-                              value={row.name}
-                              onChange={(e) =>
-                                setMultiEventsList((curr) =>
-                                  curr.map((r) =>
-                                    r.id === row.id ? { ...r, name: e.target.value } : r,
-                                  ),
-                                )
-                              }
-                            />
-                          </td>
-                          <td>
-                            <select
-                              className="tableSelect"
-                              value={row.type}
-                              onChange={(e) =>
-                                setMultiEventsList((curr) =>
-                                  curr.map((r) =>
-                                    r.id === row.id ? { ...r, type: e.target.value } : r,
-                                  ),
-                                )
-                              }
-                            >
-                              <option value="">Select</option>
-                              {options.types.map((t) => (
-                                <option key={t}>{t}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="event-approval-multi-event-action">
-                            {index === multiEventsList.length - 1 ? (
-                              <button
-                                type="button"
-                                className="event-dashboard-add-btn"
-                                onClick={() => {
-                                  setMultiEventsList((curr) => [
-                                    ...curr,
-                                    { id: makeId(), name: '', type: '' },
-                                  ]);
-                                }}
-                              >
-                                Add +
-                              </button>
-                            ) : (
-                              <span className="event-approval-multi-event-saved">Saved</span>
-                            )}
-                          </td>
+                <div className="event-approval-multi-event-container" style={{ marginTop: '14px' }}>
+                  {/* Sub Events Table */}
+                  <div className="event-approval-table-wrap event-approval-multi-event-table-wrap">
+                    <table className="budgetEntryTable event-approval-multi-event-table">
+                      <thead>
+                        <tr>
+                          <th>Event Type</th>
+                          <th>Event Name</th>
+                          <th>Created By</th>
+                          <th style={{ textAlign: 'center', width: '70px' }}>View</th>
+                          <th style={{ textAlign: 'center', width: '70px' }}>Edit</th>
+                          <th style={{ textAlign: 'center', width: '70px' }}>Delete</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {multiEventsList.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={6}
+                              style={{ textAlign: 'center', color: '#64748b', padding: '16px' }}
+                            >
+                              No sub-events added yet. Click "+ Add Sub Event" below to add a
+                              sub-event.
+                            </td>
+                          </tr>
+                        ) : (
+                          multiEventsList.map((row) => (
+                            <tr key={row.id}>
+                              {editingSubEventId === row.id ? (
+                                <>
+                                  <td>
+                                    <select
+                                      className="tableSelect"
+                                      value={editSubEventData.type}
+                                      onChange={(e) =>
+                                        setEditSubEventData((prev) => ({
+                                          ...prev,
+                                          type: e.target.value,
+                                        }))
+                                      }
+                                    >
+                                      <option value="">Select Type</option>
+                                      {options.types.map((t) => (
+                                        <option key={t} value={t}>
+                                          {t}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td>
+                                    <input
+                                      className="tableInput"
+                                      placeholder="Event Name"
+                                      value={editSubEventData.name}
+                                      onChange={(e) =>
+                                        setEditSubEventData((prev) => ({
+                                          ...prev,
+                                          name: e.target.value,
+                                        }))
+                                      }
+                                    />
+                                  </td>
+                                  <td>{row.createdBy || currentUserName}</td>
+                                  <td colSpan={3} style={{ textAlign: 'center' }}>
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-primary"
+                                      onClick={() => handleSaveEditSubEvent(row.id)}
+                                      style={{
+                                        marginRight: '6px',
+                                        padding: '2px 8px',
+                                        fontSize: '12px',
+                                      }}
+                                    >
+                                      Save
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="btn btn-sm btn-secondary"
+                                      onClick={() => setEditingSubEventId(null)}
+                                      style={{ padding: '2px 8px', fontSize: '12px' }}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </td>
+                                </>
+                              ) : (
+                                <>
+                                  <td>
+                                    <select
+                                      className="tableSelect"
+                                      value={row.type}
+                                      onChange={(e) =>
+                                        setMultiEventsList((curr) =>
+                                          curr.map((r) =>
+                                            r.id === row.id ? { ...r, type: e.target.value } : r,
+                                          ),
+                                        )
+                                      }
+                                    >
+                                      <option value="">Select Type</option>
+                                      {options.types.map((t) => (
+                                        <option key={t} value={t}>
+                                          {t}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td>
+                                    <input
+                                      className="tableInput"
+                                      placeholder="Event Name"
+                                      value={row.name}
+                                      onChange={(e) =>
+                                        setMultiEventsList((curr) =>
+                                          curr.map((r) =>
+                                            r.id === row.id ? { ...r, name: e.target.value } : r,
+                                          ),
+                                        )
+                                      }
+                                    />
+                                  </td>
+                                  <td>{row.createdBy || currentUserName}</td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <button
+                                      type="button"
+                                      title="View sub-event details"
+                                      onClick={() =>
+                                        setViewingSubEvent({
+                                          id: row.id,
+                                          name: row.name,
+                                          type: row.type,
+                                          createdBy: row.createdBy || currentUserName,
+                                        })
+                                      }
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#0284c7',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <Eye size={18} />
+                                    </button>
+                                  </td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <button
+                                      type="button"
+                                      title="Edit sub-event"
+                                      onClick={() => {
+                                        setEditingSubEventId(row.id);
+                                        setEditSubEventData({ name: row.name, type: row.type });
+                                      }}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#d97706',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <Pencil size={18} />
+                                    </button>
+                                  </td>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <button
+                                      type="button"
+                                      title="Delete sub-event"
+                                      onClick={() => handleDeleteSubEvent(row.id)}
+                                      style={{
+                                        background: 'none',
+                                        border: 'none',
+                                        color: '#dc2626',
+                                        cursor: 'pointer',
+                                      }}
+                                    >
+                                      <Trash2 size={18} />
+                                    </button>
+                                  </td>
+                                </>
+                              )}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="event-dashboard-add-btn"
+                      onClick={handleAddSubEventRow}
+                      style={{
+                        height: '34px',
+                        padding: '0 16px',
+                        backgroundColor: '#0069ab',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        fontSize: '13px',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                      }}
+                    >
+                      + Add Sub Event
+                    </button>
+                  </div>
                 </div>
               )}
             </section>
@@ -1940,6 +2287,48 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
             {submitting ? 'Submitting...' : submitLabel}
           </button>
         </div>
+      )}
+
+      {viewingSubEvent && (
+        <CustomModal
+          show={Boolean(viewingSubEvent)}
+          onHide={() => setViewingSubEvent(null)}
+          title="Sub-Event Details"
+          size="lg"
+        >
+          <div style={{ padding: '12px 4px' }}>
+            <div style={{ marginBottom: '16px' }}>
+              <span
+                style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block' }}
+              >
+                Event Name
+              </span>
+              <span style={{ fontSize: '16px', fontWeight: 700, color: '#0f172a' }}>
+                {viewingSubEvent.name}
+              </span>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <span
+                style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block' }}
+              >
+                Event Type
+              </span>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#0284c7' }}>
+                {viewingSubEvent.type}
+              </span>
+            </div>
+            <div style={{ marginBottom: '16px' }}>
+              <span
+                style={{ fontSize: '12px', fontWeight: 600, color: '#64748b', display: 'block' }}
+              >
+                Created By
+              </span>
+              <span style={{ fontSize: '14px', fontWeight: 600, color: '#16a34a' }}>
+                {viewingSubEvent.createdBy}
+              </span>
+            </div>
+          </div>
+        </CustomModal>
       )}
     </>
   );
@@ -3292,7 +3681,7 @@ export { EventDetailsPopup };
 // EventPage.tsx
 // =========================================
 
-const SUB_EVENT_TAB_IDS = ['pre-event', 'participants', 'feedback'] as const;
+const SUB_EVENT_TAB_IDS = ['pre-event', 'participants', 'feedback', 'certificate'] as const;
 
 interface EventSummary {
   title: string;
@@ -3331,7 +3720,14 @@ const EventPage: React.FC = () => {
     const params = new URLSearchParams(location.search);
     const requestedTabParam = params.get('tab');
 
-    let allowedTabs = new Set(['pre-event', 'finance', 'updates', 'participants', 'feedback']);
+    let allowedTabs = new Set([
+      'pre-event',
+      'finance',
+      'updates',
+      'participants',
+      'feedback',
+      'certificate',
+    ]);
 
     if (isSubEvent) {
       allowedTabs = new Set(SUB_EVENT_TAB_IDS);
@@ -3364,7 +3760,9 @@ const EventPage: React.FC = () => {
             ? EventUpdates
             : tab.id === 'participants'
               ? ParticipantDetails
-              : Feedback,
+              : tab.id === 'feedback'
+                ? Feedback
+                : EventCertificate,
   }));
 
   const renderContent = () => {
@@ -5763,6 +6161,279 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
 export { Feedback };
 
 // =========================================
+// EventCertificate.tsx
+// =========================================
+
+interface EventCertificateProps {
+  eventId?: string;
+  summary?: any;
+  isSubEvent?: boolean;
+  goToTab?: (tab: string) => void;
+}
+
+const EventCertificate: React.FC<EventCertificateProps> = ({ eventId, summary }) => {
+  const [eventData, setEventData] = useState<any>(null);
+  const [participants, setParticipants] = useState<any[]>([]);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string>('default');
+  const [customParticipantName, setCustomParticipantName] = useState<string>('');
+  const [customCertNo, setCustomCertNo] = useState<string>('');
+  const [issuedDate, setIssuedDate] = useState<string>('');
+
+  useEffect(() => {
+    const today = new Date();
+    const formattedToday = `${String(today.getDate()).padStart(2, '0')}.${String(today.getMonth() + 1).padStart(2, '0')}.${today.getFullYear()}`;
+    setIssuedDate(formattedToday);
+
+    if (!eventId || eventId === 'new') return;
+
+    authenticityUtility
+      .get(`/events/${eventId}`)
+      .then((res: any) => {
+        if (res) setEventData(res);
+      })
+      .catch((err) => {
+        console.warn('Could not load full event details, using summary fallback', err);
+      });
+
+    authenticityUtility
+      .get(`/events/${eventId}/participants`)
+      .then((res: any) => {
+        if (res && Array.isArray(res.participants)) {
+          setParticipants(res.participants);
+          if (res.participants.length > 0) {
+            setSelectedParticipantId(String(res.participants[0].id));
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not load participants list', err);
+      });
+  }, [eventId]);
+
+  const selectedParticipant = participants.find((p) => String(p.id) === selectedParticipantId);
+
+  const participantName =
+    customParticipantName.trim() || selectedParticipant?.name || 'Dr. R. KOWSALYA';
+
+  const eventTitle = eventData?.title || summary?.title || 'Robotics Using Arduino / Raspberry Pi';
+
+  const levelName = eventData?.level || 'National';
+  const eventTypeName = eventData?.event_type || 'Workshop';
+  const departmentName =
+    eventData?.department || eventData?.department_name || 'DEPARTMENT OF MECHATRONICS ENGINEERING';
+
+  let numberOfDaysText = 'two-Days';
+  if (eventData?.numberOfDays) {
+    const num = parseInt(eventData.numberOfDays);
+    if (!isNaN(num)) {
+      numberOfDaysText =
+        num === 1 ? 'one-Day' : num === 2 ? 'two-Days' : num === 3 ? 'three-Days' : `${num}-Days`;
+    }
+  } else if (eventData?.start_date && eventData?.end_date) {
+    const start = new Date(eventData.start_date);
+    const end = new Date(eventData.end_date);
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+      const diff = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1;
+      numberOfDaysText =
+        diff === 1
+          ? 'one-Day'
+          : diff === 2
+            ? 'two-Days'
+            : diff === 3
+              ? 'three-Days'
+              : `${diff}-Days`;
+    }
+  }
+
+  let datesString = 'July 29-30, 2026';
+  if (eventData?.start_date) {
+    const sDate = new Date(eventData.start_date);
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    if (eventData?.end_date) {
+      const eDate = new Date(eventData.end_date);
+      if (sDate.getMonth() === eDate.getMonth() && sDate.getFullYear() === eDate.getFullYear()) {
+        datesString = `${months[sDate.getMonth()]} ${sDate.getDate()}-${eDate.getDate()}, ${sDate.getFullYear()}`;
+      } else {
+        datesString = `${months[sDate.getMonth()]} ${sDate.getDate()} - ${months[eDate.getMonth()]} ${eDate.getDate()}, ${eDate.getFullYear()}`;
+      }
+    } else {
+      datesString = `${months[sDate.getMonth()]} ${sDate.getDate()}, ${sDate.getFullYear()}`;
+    }
+  }
+
+  const certificateNo =
+    customCertNo.trim() ||
+    `KSRCT/MECH/${new Date().getFullYear()}/${String(eventId || '101').padStart(3, '0')}-${String(selectedParticipantId || '001').padStart(3, '0')}`;
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="event-certificate-tab-wrapper">
+      {/* Printable High-Fidelity Certificate Canvas */}
+      <div className="cert-print-area">
+        <div className="ksrct-certificate-card">
+          {/* Top Right Corner Fold */}
+          <div className="cert-corner-tr-gold"></div>
+          <div className="cert-corner-tr-navy"></div>
+
+          {/* Bottom Left Corner Fold */}
+          <div className="cert-corner-bl-navy"></div>
+          <div className="cert-corner-bl-gold"></div>
+
+          {/* Outer & Inner Ornamental Frame */}
+          <div className="cert-inner-frame">
+            {/* Top Logos Header Row */}
+            <div className="cert-logos-row">
+              <div className="cert-logo-item">
+                <span className="cert-badge-ksrct4">
+                  KSRC<span className="gold-num">7</span>
+                  <sub>4.0</sub>
+                </span>
+                <span className="cert-badge-sub">Feature the Future</span>
+              </div>
+
+              <div className="cert-logo-item">
+                <div className="cert-badge-32">
+                  <span className="num-32">32</span>
+                  <span className="text-32">
+                    Excellence in
+                    <br />
+                    TECHNICAL
+                    <br />
+                    EDUCATION
+                  </span>
+                </div>
+              </div>
+
+              <div className="cert-logo-item">
+                <div className="cert-badge-aicte">
+                  <span className="aicte-ring"></span>
+                  <span className="aicte-label">AICTE / IDEALab</span>
+                </div>
+              </div>
+
+              <div className="cert-logo-item main-crest">
+                <div className="college-crest-shield">
+                  <div className="crest-top">K.S. RANGASAMY COLLEGE OF TECHNOLOGY</div>
+                  <div className="crest-center">
+                    <svg viewBox="0 0 100 100" className="crest-svg">
+                      <polygon
+                        points="50,5 95,30 95,70 50,95 5,70 5,30"
+                        fill="#0069ab"
+                        stroke="#f59e0b"
+                        strokeWidth="3"
+                      />
+                      <path d="M 50 15 L 85 80 L 15 80 Z" fill="#ffffff" />
+                      <circle cx="50" cy="50" r="15" fill="#f59e0b" />
+                    </svg>
+                  </div>
+                  <div className="crest-banner">BE BOLD BE BRAVE</div>
+                </div>
+              </div>
+
+              <div className="cert-logo-item">
+                <div className="cert-badge-naac">
+                  <span className="naac-eye"></span>
+                  <span className="naac-grade">A++</span>
+                  <span className="naac-sub">GRADE</span>
+                </div>
+              </div>
+
+              <div className="cert-logo-item">
+                <div className="cert-badge-nba">
+                  <span className="nba-title">NBA</span>
+                  <span className="nba-sub">NATIONAL BOARD OF ACCREDITATION</span>
+                </div>
+              </div>
+
+              <div className="cert-logo-item sdg-box sdg-4">
+                <span className="sdg-num">4</span>
+                <span className="sdg-txt">QUALITY EDUCATION</span>
+              </div>
+
+              <div className="cert-logo-item sdg-box sdg-9">
+                <span className="sdg-num">9</span>
+                <span className="sdg-txt">INDUSTRY, INNOVATION AND INFRASTRUCTURE</span>
+              </div>
+            </div>
+
+            {/* College Header */}
+            <div className="cert-college-header">
+              <h1 className="cert-college-title">K.S.RANGASAMY COLLEGE OF TECHNOLOGY</h1>
+              <div className="cert-college-sub">(Autonomous)</div>
+              <div className="cert-college-address">
+                Tiruchengode - 637 215. Namakkal Dt. Tamil Nadu
+              </div>
+              <h2 className="cert-dept-title">{departmentName}</h2>
+            </div>
+
+            {/* Certificate Title */}
+            <div className="cert-title-block">
+              <h3 className="cert-calligraphy-title">Certificate of Participation</h3>
+              <div className="cert-title-line"></div>
+              <div className="cert-presented-txt">presented to</div>
+            </div>
+
+            {/* Participant Name */}
+            <div className="cert-participant-block">
+              <div className="cert-participant-name">{participantName}</div>
+              <div className="cert-participant-dashed-line"></div>
+            </div>
+
+            {/* Body Text */}
+            <div className="cert-description-block">
+              <p className="cert-desc-text">
+                for participating in the {numberOfDaysText} {levelName} level {eventTypeName} on
+              </p>
+              <div className="cert-event-title-highlight">“{eventTitle}”</div>
+              <div className="cert-event-date-range">during {datesString}</div>
+            </div>
+
+            {/* Footer Row */}
+            <div className="cert-footer-row">
+              <div className="cert-meta-left">
+                <div className="cert-meta-item">
+                  <span className="meta-lbl">Date:</span> {issuedDate}
+                </div>
+                <div className="cert-meta-item">
+                  <span className="meta-lbl">Certificate No. :</span> {certificateNo}
+                </div>
+              </div>
+
+              <div className="cert-signatures-right">
+                <div className="cert-sig-item">Co-ordinator</div>
+                <div className="cert-sig-item">HoD</div>
+                <div className="cert-sig-item">Principal</div>
+              </div>
+            </div>
+
+            {/* Website URL */}
+            <div className="cert-url-footer">www.ksrct.ac.in</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export { EventCertificate };
+
+// =========================================
 // FinanceSection.tsx
 // =========================================
 
@@ -6949,33 +7620,44 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
 
     let isActive = true;
 
-    setLoading(true);
-    setError(null);
+    const fetchParticipants = (isInitial = false) => {
+      if (isInitial) setLoading(true);
 
-    authenticityUtility
-      .get(`/events/${encodeURIComponent(eventId)}/participants`, {
-        // Bypass an old cached error/empty response after a participant registers.
-        params: { _: Date.now() },
-      })
-      .then((res: any) => {
-        if (isActive) {
-          setParticipants(Array.isArray(res?.participants) ? res.participants : []);
-        }
-      })
-      .catch((err) => {
-        if (isActive) {
-          console.error('Failed to fetch participants:', err);
-          setError('Failed to load participants. Please try again later.');
-        }
-      })
-      .finally(() => {
-        if (isActive) {
-          setLoading(false);
-        }
-      });
+      authenticityUtility
+        .get(`/events/${encodeURIComponent(eventId)}/participants`, {
+          params: { _: Date.now() },
+        })
+        .then((res: any) => {
+          if (isActive) {
+            setParticipants(Array.isArray(res?.participants) ? res.participants : []);
+            setError(null);
+          }
+        })
+        .catch((err) => {
+          if (isActive) {
+            console.error('Failed to fetch participants:', err);
+            if (isInitial) {
+              setError('Failed to load participants. Please try again later.');
+            }
+          }
+        })
+        .finally(() => {
+          if (isActive && isInitial) {
+            setLoading(false);
+          }
+        });
+    };
+
+    fetchParticipants(true);
+
+    // Auto-update participants list when a new user registers on the User Website
+    const intervalId = setInterval(() => {
+      fetchParticipants(false);
+    }, 3000);
 
     return () => {
       isActive = false;
+      clearInterval(intervalId);
     };
   }, [eventId]);
 
@@ -7462,7 +8144,9 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
       // --- ADDED MISSING DATA ---
       registrationSettings: {
         enabled: data.registrationSettingsEnabled,
-        eligibleParticipants: data.eligibleParticipants,
+        eligibleParticipants: Array.isArray(data.eligibleParticipants)
+          ? data.eligibleParticipants.join(', ')
+          : data.eligibleParticipants,
         openTo: data.openTo,
         genderRestriction: data.genderRestriction,
         minAge: data.minAge,
