@@ -34,6 +34,8 @@ export const Field: React.FC<FieldProps> = ({
 export interface SelectOption {
   value: string;
   label: string;
+  /** Optional heading to file the option under; see `SelectField` below. */
+  group?: string;
 }
 
 interface SelectFieldProps {
@@ -49,8 +51,28 @@ interface SelectFieldProps {
 }
 
 /**
+ * Files options under their `group` heading, keeping the order each heading
+ * first appears in. Options with no group stay together under `''`.
+ */
+function groupOptions(options: SelectOption[]): Array<[string, SelectOption[]]> {
+  const groups = new Map<string, SelectOption[]>();
+
+  options.forEach((option) => {
+    const heading = option.group ?? '';
+    const existing = groups.get(heading);
+    if (existing) existing.push(option);
+    else groups.set(heading, [option]);
+  });
+
+  return [...groups.entries()];
+}
+
+/**
  * Native select with the design's chevron. Native is deliberate: these are
  * short single-choice lists, and it keeps keyboard and mobile behaviour free.
+ *
+ * Options carrying a `group` render as `<optgroup>`s: the budget-head lists are
+ * long enough that the catalog's own headings are what make them findable.
  */
 export const SelectField: React.FC<SelectFieldProps> = ({
   id,
@@ -73,11 +95,21 @@ export const SelectField: React.FC<SelectFieldProps> = ({
       aria-label={ariaLabel}
     >
       <option value="">{placeholder}</option>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
+      {groupOptions(options).map(([heading, groupedOptions]) => {
+        const renderedOptions = groupedOptions.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ));
+
+        return heading ? (
+          <optgroup key={heading} label={heading}>
+            {renderedOptions}
+          </optgroup>
+        ) : (
+          <React.Fragment key="ungrouped">{renderedOptions}</React.Fragment>
+        );
+      })}
     </select>
     <ChevronDown className="pf-select__chevron" size={14} aria-hidden="true" />
   </div>

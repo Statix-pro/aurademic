@@ -1054,6 +1054,174 @@
   text-align: right;
 }
 
+/* --------------------------------------------------------------------------
+   Tabs
+   -------------------------------------------------------------------------- */
+
+/* The journal form's pill toggle (`.category-toggle-container`), sized to its
+   labels rather than to the page: that one splits a fixed 350px between two
+   buttons, which three labels of unequal length cannot share evenly. */
+.pf-tabs {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto var(--pf-gap);
+  padding: 5px;
+  border-radius: 50px;
+  background: #e1f0ff;
+}
+
+.pf-tabs__tab {
+  padding: 8px 24px;
+  border: none;
+  border-radius: 50px;
+  background-color: transparent;
+  color: #5d6b8a;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.pf-tabs__tab.is-active {
+  background-color: var(--primary-color, #0069ab);
+  color: #fff;
+  box-shadow: 0 4px 10px rgb(0 105 171 / 30%);
+}
+
+/* Hidden panels stay mounted, so a tab keeps its scroll position and the
+   summary keeps its year filter while the user works on another tab. */
+.pf-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-gap);
+}
+
+.pf-panel[hidden] {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Budget allotment matrix
+   -------------------------------------------------------------------------- */
+
+.pf-matrix__head {
+  width: 240px;
+}
+
+.pf-matrix__year {
+  width: 200px;
+}
+
+/* The year column's own header is a control, not a label, so it needs the
+   normal cell padding rather than the header row's tight, centred text. */
+.pf-matrix__year-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pf-matrix__year-header .pf-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-matrix thead .pf-row-actions {
+  flex: 0 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   Transaction summary
+   -------------------------------------------------------------------------- */
+
+.pf-summary__filter {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  padding: 10px 18px;
+  border-radius: 10px;
+  background: #f2f5f9;
+}
+
+.pf-summary__filter-label {
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pf-summary__filter .pf-select {
+  min-width: 190px;
+}
+
+.pf-summary td {
+  text-align: left;
+}
+
+.pf-summary .pf-table__amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-summary__total td {
+  background: #eff5fe;
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+}
+
+.pf-summary__balance td {
+  background: #e3eefc;
+}
+
+.pf-summary__empty {
+  color: var(--text-muted, #8a8aa3);
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Transaction ledger
+   -------------------------------------------------------------------------- */
+
+.pf-account {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.pf-account__label {
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pf-account__select {
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-ledger {
+  min-width: 1100px;
+}
+
+.pf-ledger__particulars {
+  min-width: 220px;
+}
+
+.pf-ledger .pf-table__amount {
+  width: 120px;
+}
+
+/* Derived, so it is shown rather than typed — but keeps the shape of the
+   credit and debit fields beside it. */
+.pf-ledger__balance {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
 .pf-slot-button {
   position: relative;
   display: inline-flex;

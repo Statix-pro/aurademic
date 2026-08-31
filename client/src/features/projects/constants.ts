@@ -15,6 +15,19 @@ export const MAX_INVESTIGATORS = 15;
 export const MAX_COLLABORATORS = 20;
 export const MAX_FINANCE_ROWS = 30;
 export const MAX_DISBURSEMENTS = 30;
+export const MAX_BUDGET_YEARS = 15;
+export const MAX_BUDGET_HEAD_ROWS = 40;
+export const MAX_TRANSACTION_ACCOUNTS = 10;
+export const MAX_TRANSACTIONS_PER_ACCOUNT = 500;
+
+/**
+ * The income side of the transaction ledger. Expenditure heads come from the
+ * shared budget catalog; income has no catalog, and these are the standard ways
+ * money reaches a project account rather than institution data — so, like the
+ * SDG list below, they live in code. Mirrored by `PROJECT_INCOME_HEADS` in
+ * `server/modules/project/projectPayload.js`, which validates them.
+ */
+export const PROJECT_INCOME_HEADS = ['Deposit', 'Interest', 'Grant Received', 'Other Income'];
 
 /** Matches the server-side document check advertised on every upload control. */
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
@@ -194,6 +207,28 @@ export function financialYearOptions(yearsBack = 10, yearsAhead = 3): string[] {
   }
   return options;
 }
+
+/**
+ * The financial year an ISO date falls in, as `2026-27`. Mirrors
+ * `financialYearForDate` on the server, which fills the same column when a
+ * ledger row arrives dated but not yeared.
+ */
+export function financialYearForDate(isoDate: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(isoDate)) return '';
+
+  const [year, month] = isoDate.split('-').map(Number);
+  const start = month >= 4 ? year : year - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+}
+
+/** The tabs across the top of the project form, in order. */
+export const PROJECT_FORM_TABS = [
+  { id: 'details', label: 'Project Details' },
+  { id: 'budget', label: 'Budget' },
+  { id: 'transaction', label: 'Transaction' },
+] as const;
+
+export type ProjectFormTab = (typeof PROJECT_FORM_TABS)[number]['id'];
 
 /**
  * A stored website is only ever opened as a link, so anything that is not an

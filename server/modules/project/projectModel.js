@@ -338,6 +338,100 @@ async function replaceFinanceRows(connection, projectId, financeRows) {
 }
 
 /**
+ * Rewrites the Budget Allotment matrix.
+ *
+ * Nothing hangs off these rows the way documents hang off a disbursement, so
+ * the whole matrix is replaced rather than matched row by row. The cells arrive
+ * addressed by the client's row/column keys, which are resolved here to the ids
+ * the two header inserts produced.
+ */
+async function replaceBudgetAllotment(connection, projectId, budget) {
+  // The cells cascade off both header tables, so deleting those clears all three.
+  await connection.query('DELETE FROM project_budget_years WHERE project_id = ?', [projectId]);
+  await connection.query('DELETE FROM project_budget_heads WHERE project_id = ?', [projectId]);
+
+  const yearIdByKey = new Map();
+  for (const row of budget.years) {
+    const [inserted] = await connection.query(
+      'INSERT INTO project_budget_years (project_id, financial_year, display_order) VALUES (?, ?, ?)',
+      [projectId, row.financial_year, row.display_order],
+    );
+    yearIdByKey.set(row.key, inserted.insertId);
+  }
+
+  const headIdByKey = new Map();
+  for (const row of budget.heads) {
+    const [inserted] = await connection.query(
+      `INSERT INTO project_budget_heads
+        (project_id, budget_head_id, budget_head_name, display_order)
+       VALUES (?, ?, ?, ?)`,
+      [projectId, row.budget_head_id, row.budget_head_name, row.display_order],
+    );
+    headIdByKey.set(row.key, inserted.insertId);
+  }
+
+  const cells = budget.allotments
+    .map((cell) => [
+      projectId,
+      headIdByKey.get(cell.head_key),
+      yearIdByKey.get(cell.year_key),
+      cell.amount,
+    ])
+    .filter(([, headRowId, yearId]) => headRowId && yearId);
+
+  if (cells.length === 0) return;
+
+  await connection.query(
+    `INSERT INTO project_budget_allotments
+      (project_id, budget_head_row_id, budget_year_id, amount)
+     VALUES ?`,
+    [cells],
+  );
+}
+
+/** Rewrites the transaction accounts and every ledger row under them. */
+async function replaceTransactionAccounts(connection, projectId, accounts) {
+  // `project_transactions.account_id` cascades, so this clears both tables.
+  await connection.query('DELETE FROM project_transaction_accounts WHERE project_id = ?', [
+    projectId,
+  ]);
+
+  for (const account of accounts) {
+    const [inserted] = await connection.query(
+      `INSERT INTO project_transaction_accounts
+        (project_id, account_option_id, account_name, display_order)
+       VALUES (?, ?, ?, ?)`,
+      [projectId, account.account_option_id, account.account_name, account.display_order],
+    );
+
+    if (account.transactions.length === 0) continue;
+
+    await connection.query(
+      `INSERT INTO project_transactions
+        (project_id, account_id, financial_year, transaction_date, head_kind, budget_head_id,
+         head_name, particulars, reference_no, credit, debit, display_order)
+       VALUES ?`,
+      [
+        account.transactions.map((row) => [
+          projectId,
+          inserted.insertId,
+          row.financial_year,
+          row.transaction_date,
+          row.head_kind,
+          row.budget_head_id,
+          row.head_name,
+          row.particulars,
+          row.reference_no,
+          row.credit,
+          row.debit,
+          row.display_order,
+        ]),
+      ],
+    );
+  }
+}
+
+/**
  * Disbursements are matched by id rather than replaced, so the document rows
  * that hang off a tranche survive an edit to its amount or date.
  * Returns a map from the client's row key to the stored row id, plus the paths
@@ -539,6 +633,8 @@ const projectModel = {
       await replaceTags(connection, savedId, aggregate.tags);
       await replaceCollaborators(connection, savedId, aggregate.collaborators);
       await replaceFinanceRows(connection, savedId, aggregate.financeRows);
+      await replaceBudgetAllotment(connection, savedId, aggregate.budget);
+      await replaceTransactionAccounts(connection, savedId, aggregate.transactionAccounts);
 
       const { rowIdByKey, staleFilePaths: disbursementStale } = await upsertDisbursements(
         connection,
@@ -643,6 +739,11 @@ const projectModel = {
       financeHeads,
       disbursements,
       documents,
+      budgetYears,
+      budgetHeads,
+      budgetAllotments,
+      transactionAccounts,
+      transactions,
     ] = await Promise.all([
       db.query(
         `SELECT
@@ -708,6 +809,48 @@ const projectModel = {
             ORDER BY id`,
         [projectId],
       ),
+      db.query(
+        `SELECT id, financial_year, display_order
+             FROM project_budget_years
+            WHERE project_id = ?
+            ORDER BY display_order, id`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT pbh.id, pbh.budget_head_id, pbh.display_order,
+                  COALESCE(NULLIF(pbh.budget_head_name, ''), bh.name) AS budget_head_name
+             FROM project_budget_heads pbh
+             LEFT JOIN budget_heads bh ON pbh.budget_head_id = bh.id
+            WHERE pbh.project_id = ?
+            ORDER BY pbh.display_order, pbh.id`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT budget_head_row_id, budget_year_id, amount
+             FROM project_budget_allotments
+            WHERE project_id = ?`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT pta.id, pta.account_option_id, pta.display_order,
+                  COALESCE(NULLIF(pta.account_name, ''), ao.account_name) AS account_name
+             FROM project_transaction_accounts pta
+             LEFT JOIN account_options ao ON pta.account_option_id = ao.id
+            WHERE pta.project_id = ?
+            ORDER BY pta.display_order, pta.id`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT pt.id, pt.account_id, pt.financial_year, pt.head_kind, pt.budget_head_id,
+                  pt.particulars, pt.reference_no, pt.credit, pt.debit, pt.display_order,
+                  DATE_FORMAT(pt.transaction_date, '%Y-%m-%d') AS transaction_date,
+                  COALESCE(NULLIF(pt.head_name, ''), bh.name) AS head_name
+             FROM project_transactions pt
+             LEFT JOIN budget_heads bh ON pt.budget_head_id = bh.id
+            WHERE pt.project_id = ?
+            ORDER BY pt.display_order, pt.id`,
+        [projectId],
+      ),
     ]);
 
     const headsByRow = financeHeads[0].reduce((map, head) => {
@@ -755,6 +898,17 @@ const projectModel = {
           }, {}),
       })),
       documents: projectDocuments,
+      budget: {
+        years: budgetYears[0],
+        heads: budgetHeads[0],
+        // Cells are addressed by the two header ids; the form rebuilds its own
+        // row/column keys from them on load.
+        allotments: budgetAllotments[0],
+      },
+      transaction_accounts: transactionAccounts[0].map((account) => ({
+        ...account,
+        transactions: transactions[0].filter((row) => row.account_id === account.id),
+      })),
     };
   },
 
@@ -834,7 +988,7 @@ const projectModel = {
    * latency to the form's first paint.
    */
   async getFormLookups() {
-    const [organizations, schemes, departments] = await Promise.all([
+    const [organizations, schemes, departments, accounts] = await Promise.all([
       db.query(
         `SELECT id, name, short_name, category, city, state, country, website,
                 is_funding_agency, is_internal
@@ -851,12 +1005,21 @@ const projectModel = {
       db.query(
         `SELECT id, name, code FROM master_departments WHERE is_active = 1 ORDER BY sort_order, name`,
       ),
+      // The Transaction tab's account dropdown, from the same list the finance
+      // and expenditure screens use.
+      db.query(
+        `SELECT id, account_name AS name
+           FROM account_options
+          WHERE is_active = 1 AND is_deleted = 0
+          ORDER BY sort_order, account_name`,
+      ),
     ]);
 
     return {
       organizations: organizations[0],
       schemes: schemes[0],
       departments: departments[0],
+      accounts: accounts[0],
     };
   },
 
