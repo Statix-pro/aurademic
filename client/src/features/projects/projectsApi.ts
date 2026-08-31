@@ -8,7 +8,7 @@
  */
 
 import { DISBURSEMENT_SLOTS } from './constants';
-import { PROJECT_DOCUMENT_TYPES } from './projectFormState';
+import { PROJECT_DOCUMENT_TYPES, allotmentKey } from './projectFormState';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 import type {
@@ -159,6 +159,49 @@ export function buildProjectPayload(form: ProjectFormState) {
     outcome_tech_transfers: count(form.outcome.techTransfers),
     outcome_startups: count(form.outcome.startups),
 
+    // The allotment matrix travels as its three parts — columns, rows and the
+    // amounts between them — stitched together by the form's own row keys,
+    // which the server swaps for the ids it inserts.
+    budget: {
+      // Blank rows and columns are sent as they stand rather than filtered out
+      // here: the server drops them itself, and sending the form's own indices
+      // is what lets a validation error come back pointing at the right cell.
+      years: form.budgetYears.map((column) => ({
+        key: column.key,
+        financial_year: column.financialYear || null,
+      })),
+      heads: form.budgetRows.map((row) => ({
+        key: row.key,
+        budget_head_id: row.budgetHeadId,
+        budget_head_name: row.budgetHeadName || null,
+      })),
+      allotments: form.budgetRows
+        .flatMap((row) =>
+          form.budgetYears.map((column) => ({
+            head_key: row.key,
+            year_key: column.key,
+            amount: nullableNumber(form.budgetAllotments[allotmentKey(row.key, column.key)] ?? ''),
+          })),
+        )
+        .filter((cell) => cell.amount !== null),
+    },
+
+    transaction_accounts: form.transactionAccounts.map((account) => ({
+      account_option_id: account.accountOptionId,
+      account_name: account.accountName || null,
+      transactions: account.transactions.map((row) => ({
+        financial_year: row.financialYear || null,
+        transaction_date: row.transactionDate || null,
+        head_kind: row.headKind,
+        budget_head_id: row.budgetHeadId,
+        head_name: row.headName || null,
+        particulars: row.particulars || null,
+        reference_no: row.referenceNo || null,
+        credit: nullableNumber(row.credit),
+        debit: nullableNumber(row.debit),
+      })),
+    })),
+
     removed_documents: clearedSlots(form.documents, PROJECT_DOCUMENT_TYPES),
 
     remarks: form.remarks || null,
@@ -205,6 +248,7 @@ const projectsApi = {
       organizations: response.data?.organizations ?? [],
       schemes: response.data?.schemes ?? [],
       departments: response.data?.departments ?? [],
+      accounts: response.data?.accounts ?? [],
     };
   },
 

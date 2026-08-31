@@ -8,6 +8,9 @@
 import { DEFAULT_COUNTRY, DISBURSEMENT_SLOTS, HOST_ORGANIZATION_NAME } from './constants';
 
 import type {
+  BudgetAllotmentMap,
+  BudgetAllotmentRow,
+  BudgetYearColumn,
   CollaboratorRow,
   DisbursementRow,
   DisbursementSlot,
@@ -17,6 +20,9 @@ import type {
   MemberType,
   ProjectDocumentType,
   ProjectFormState,
+  TransactionAccount,
+  TransactionHeadKind,
+  TransactionRow,
 } from './types';
 
 const PROJECT_DOCUMENT_TYPES: ProjectDocumentType[] = [
@@ -95,6 +101,43 @@ export function createFinanceRow(): FinanceRow {
   };
 }
 
+export function createBudgetYearColumn(): BudgetYearColumn {
+  return { key: nextRowKey('budget-year'), financialYear: '' };
+}
+
+export function createBudgetAllotmentRow(): BudgetAllotmentRow {
+  return { key: nextRowKey('budget-row'), budgetHeadId: null, budgetHeadName: '' };
+}
+
+/** Address of one cell in the allotment matrix. */
+export function allotmentKey(rowKey: string, columnKey: string): string {
+  return `${rowKey}|${columnKey}`;
+}
+
+export function createTransactionRow(): TransactionRow {
+  return {
+    key: nextRowKey('transaction'),
+    financialYear: '',
+    transactionDate: '',
+    headKind: 'expenditure',
+    budgetHeadId: null,
+    headName: '',
+    particulars: '',
+    referenceNo: '',
+    credit: '',
+    debit: '',
+  };
+}
+
+export function createTransactionAccount(): TransactionAccount {
+  return {
+    key: nextRowKey('account'),
+    accountOptionId: null,
+    accountName: '',
+    transactions: [createTransactionRow()],
+  };
+}
+
 export function createDisbursementRow(): DisbursementRow {
   return {
     key: nextRowKey('disbursement'),
@@ -168,6 +211,14 @@ export function createEmptyProjectForm(): ProjectFormState {
       techTransfers: '',
       startups: '',
     },
+
+    // One empty row and column so the matrix has something to type into, as
+    // every other repeatable section of the form does.
+    budgetYears: [createBudgetYearColumn()],
+    budgetRows: [createBudgetAllotmentRow()],
+    budgetAllotments: {},
+
+    transactionAccounts: [createTransactionAccount()],
 
     documents: emptyDocumentMap(PROJECT_DOCUMENT_TYPES),
 
@@ -274,6 +325,77 @@ export function projectToFormState(project: any): ProjectFormState {
         }))
       : [];
 
+  // The matrix comes back addressed by the two header tables' ids; the form
+  // works in its own keys, so each header gets a fresh key and the cells are
+  // rewritten against them.
+  const budgetYears: BudgetYearColumn[] = Array.isArray(project?.budget?.years)
+    ? project.budget.years.map((row: any) => ({
+        ...createBudgetYearColumn(),
+        financialYear: text(row.financial_year),
+      }))
+    : [];
+  const yearKeyById = new Map<number, string>(
+    (project?.budget?.years ?? []).map((row: any, index: number) => [
+      row.id,
+      budgetYears[index].key,
+    ]),
+  );
+
+  const budgetRows: BudgetAllotmentRow[] = Array.isArray(project?.budget?.heads)
+    ? project.budget.heads.map((row: any) => ({
+        ...createBudgetAllotmentRow(),
+        budgetHeadId: row.budget_head_id ?? null,
+        budgetHeadName: text(row.budget_head_name),
+      }))
+    : [];
+  const rowKeyById = new Map<number, string>(
+    (project?.budget?.heads ?? []).map((row: any, index: number) => [
+      row.id,
+      budgetRows[index].key,
+    ]),
+  );
+
+  const budgetAllotments: BudgetAllotmentMap = (project?.budget?.allotments ?? []).reduce(
+    (map: BudgetAllotmentMap, cell: any) => {
+      const rowKey = rowKeyById.get(cell.budget_head_row_id);
+      const columnKey = yearKeyById.get(cell.budget_year_id);
+      const amount = amountInput(cell.amount);
+      if (rowKey && columnKey && amount) map[allotmentKey(rowKey, columnKey)] = amount;
+      return map;
+    },
+    {},
+  );
+
+  const transactionAccounts: TransactionAccount[] = Array.isArray(project?.transaction_accounts)
+    ? project.transaction_accounts.map((account: any) => {
+        const transactions: TransactionRow[] = (
+          Array.isArray(account.transactions) ? account.transactions : []
+        ).map((row: any) => ({
+          ...createTransactionRow(),
+          financialYear: text(row.financial_year),
+          transactionDate: dateInput(row.transaction_date),
+          headKind: (row.head_kind === 'income' ? 'income' : 'expenditure') as TransactionHeadKind,
+          budgetHeadId: row.budget_head_id ?? null,
+          headName: text(row.head_name),
+          particulars: text(row.particulars),
+          referenceNo: text(row.reference_no),
+          credit: amountInput(row.credit),
+          debit: amountInput(row.debit),
+        }));
+
+        return {
+          ...createTransactionAccount(),
+          accountOptionId: account.account_option_id ?? null,
+          accountName: text(account.account_name),
+          // An account saved with no rows still needs somewhere to type. The
+          // server stores the ledger in date order, but sorting again here
+          // keeps the running balance right for anything saved before it did.
+          transactions:
+            transactions.length > 0 ? sortTransactions(transactions) : [createTransactionRow()],
+        };
+      })
+    : [];
+
   const disbursements: DisbursementRow[] = Array.isArray(project?.disbursements)
     ? project.disbursements.map((row: any) => ({
         ...createDisbursementRow(),
@@ -365,6 +487,13 @@ export function projectToFormState(project: any): ProjectFormState {
       startups: countInput(project?.outcome_startups),
     },
 
+    budgetYears: budgetYears.length > 0 ? budgetYears : empty.budgetYears,
+    budgetRows: budgetRows.length > 0 ? budgetRows : empty.budgetRows,
+    budgetAllotments,
+
+    transactionAccounts:
+      transactionAccounts.length > 0 ? transactionAccounts : empty.transactionAccounts,
+
     documents: PROJECT_DOCUMENT_TYPES.reduce(
       (map, type) => {
         map[type] = storedDocumentSlot(project?.documents?.[type]);
@@ -398,6 +527,42 @@ export function moveItem<T>(rows: T[], from: number, to: number): T[] {
   const [moved] = next.splice(from, 1);
   next.splice(to, 0, moved);
   return next;
+}
+
+/**
+ * Ledger order: by date, oldest first.
+ *
+ * A running balance says what is in the account *after* a transaction, which is
+ * only true when every earlier-dated row sits above it — so the ledger keeps
+ * itself in date order rather than the order rows happened to be typed in.
+ * Rows with no date yet are still being filled in and stay at the bottom, where
+ * the "add row" button is. `sort` is stable, so two transactions on the same day
+ * keep the order the user put them in, which is a real decision only they can
+ * make.
+ */
+export function sortTransactions(rows: TransactionRow[]): TransactionRow[] {
+  return [...rows].sort((left, right) => {
+    if (!left.transactionDate) return right.transactionDate ? 1 : 0;
+    if (!right.transactionDate) return -1;
+    return left.transactionDate.localeCompare(right.transactionDate);
+  });
+}
+
+/**
+ * Drops allotment amounts whose row or column has just been removed, so a head
+ * or year deleted and then re-added does not come back carrying the old
+ * figures.
+ */
+export function pruneAllotments(
+  allotments: BudgetAllotmentMap,
+  rows: BudgetAllotmentRow[],
+  columns: BudgetYearColumn[],
+): BudgetAllotmentMap {
+  const live = new Set(
+    rows.flatMap((row) => columns.map((column) => allotmentKey(row.key, column.key))),
+  );
+
+  return Object.fromEntries(Object.entries(allotments).filter(([key]) => live.has(key)));
 }
 
 /** Sums the amount column of a finance table, ignoring blank rows. */

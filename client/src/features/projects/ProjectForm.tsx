@@ -3,7 +3,12 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import RequestOptionModal from './components/RequestOptionModal';
-import { DOCUMENT_ACCEPT, MAX_DOCUMENT_BYTES, hasReachedProposalStage } from './constants';
+import {
+  DOCUMENT_ACCEPT,
+  MAX_DOCUMENT_BYTES,
+  PROJECT_FORM_TABS,
+  hasReachedProposalStage,
+} from './constants';
 import {
   createEmptyProjectForm,
   emptyDocumentSlot,
@@ -11,6 +16,7 @@ import {
   replaceAt,
 } from './projectFormState';
 import projectsApi, { ProjectSaveError } from './projectsApi';
+import BudgetAllotmentSection from './sections/BudgetAllotmentSection';
 import CallForDetailsSection from './sections/CallForDetailsSection';
 import CollaboratorsSection from './sections/CollaboratorsSection';
 import FinalDocumentsSection from './sections/FinalDocumentsSection';
@@ -24,8 +30,11 @@ import ProposalDetailsSection from './sections/ProposalDetailsSection';
 import ResultAnnouncementSection from './sections/ResultAnnouncementSection';
 import SanctionDetailsSection from './sections/SanctionDetailsSection';
 import SubmissionDetailsSection from './sections/SubmissionDetailsSection';
+import TransactionAccountsSection from './sections/TransactionAccountsSection';
+import TransactionSummarySection from './sections/TransactionSummarySection';
 import { useBudgetCatalog } from '../../shared/hooks/useBudgetCatalog';
 
+import type { ProjectFormTab } from './constants';
 import type {
   DisbursementSlot,
   ProjectAccess,
@@ -35,7 +44,23 @@ import type {
 } from './types';
 import './projectForm.css';
 
-const emptyLookups: ProjectLookups = { organizations: [], schemes: [], departments: [] };
+const emptyLookups: ProjectLookups = {
+  organizations: [],
+  schemes: [],
+  departments: [],
+  accounts: [],
+};
+
+/**
+ * The tab an error belongs to, so a failed save can open the tab holding the
+ * first problem rather than leaving the user on one that looks fine. Field
+ * paths come from the server (and are mirrored by `validate` below).
+ */
+function tabForField(field: string): ProjectFormTab {
+  if (field.startsWith('budget.')) return 'budget';
+  if (field.startsWith('transaction_accounts')) return 'transaction';
+  return 'details';
+}
 
 /**
  * Client-side mirror of the server's blocking rules, so an obvious omission is
@@ -72,6 +97,41 @@ function validate(form: ProjectFormState): Record<string, string> {
     errors.project_closing_date = 'Closing date cannot be before the start date.';
   }
 
+  form.transactionAccounts.forEach((account, blockIndex) => {
+    const filledRows = account.transactions.filter(
+      (row) =>
+        row.transactionDate ||
+        row.budgetHeadId ||
+        row.headName ||
+        row.particulars ||
+        row.referenceNo ||
+        row.credit ||
+        row.debit,
+    );
+
+    if (!account.accountOptionId && filledRows.length > 0) {
+      errors[`transaction_accounts[${blockIndex}].account`] =
+        'Select the account these transactions belong to.';
+    }
+
+    account.transactions.forEach((row, rowIndex) => {
+      if (!filledRows.includes(row)) return;
+      const field = `transaction_accounts[${blockIndex}].transactions[${rowIndex}]`;
+
+      if (!row.transactionDate) errors[`${field}.transaction_date`] = 'Enter the date.';
+      if (!row.budgetHeadId && !row.headName) errors[`${field}.head`] = 'Select a budget head.';
+
+      const credit = Number(row.credit.replace(/,/g, '')) || 0;
+      const debit = Number(row.debit.replace(/,/g, '')) || 0;
+      if (credit > 0 === debit > 0) {
+        errors[`${field}.amount`] =
+          credit > 0
+            ? 'A transaction is either a credit or a debit, not both.'
+            : 'Enter a credit or a debit amount.';
+      }
+    });
+  });
+
   return errors;
 }
 
@@ -89,6 +149,7 @@ const ProjectForm: React.FC = () => {
   const [loadError, setLoadError] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<ProjectFormTab>('details');
 
   const isExisting = Boolean(routeProjectId);
   // A saved project the viewer may change; a new project always may be.
@@ -245,7 +306,9 @@ const ProjectForm: React.FC = () => {
     const validationErrors = validate(form);
     setErrors(validationErrors);
 
-    if (Object.keys(validationErrors).length > 0) {
+    const [firstField] = Object.keys(validationErrors);
+    if (firstField) {
+      setActiveTab(tabForField(firstField));
       window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
@@ -273,6 +336,7 @@ const ProjectForm: React.FC = () => {
             return map;
           }, {}),
         );
+        setActiveTab(tabForField(error.fieldErrors[0].field));
       }
 
       setLoadError('');
@@ -351,163 +415,227 @@ const ProjectForm: React.FC = () => {
           </div>
         )}
 
+        {/* One form across all three tabs: switching tab only changes what is
+            on screen, and the single Save below writes the whole project. */}
+        <div className="pf-tabs" role="tablist" aria-label="Project form sections">
+          {PROJECT_FORM_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              id={`pf-tab-${tab.id}`}
+              aria-selected={activeTab === tab.id}
+              aria-controls={`pf-panel-${tab.id}`}
+              className={`pf-tabs__tab ${activeTab === tab.id ? 'is-active' : ''}`.trim()}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         <form onSubmit={handleSubmit} className="pf-form" noValidate>
-          <InvestigatorsSection
-            form={form}
-            patch={patch}
-            departments={lookups.departments}
-            errors={errors}
-            disabled={isReadOnly}
-          />
-
-          <div className="pf-columns">
-            <ProposalDetailsSection
+          <div
+            role="tabpanel"
+            id="pf-panel-details"
+            aria-labelledby="pf-tab-details"
+            hidden={activeTab !== 'details'}
+            className="pf-panel"
+          >
+            <InvestigatorsSection
               form={form}
               patch={patch}
+              departments={lookups.departments}
               errors={errors}
               disabled={isReadOnly}
             />
-            <CallForDetailsSection
-              form={form}
-              patch={patch}
-              organizations={lookups.organizations}
-              schemes={lookups.schemes}
-              errors={errors}
-              disabled={isReadOnly}
-              onRequestOption={() => setShowRequestModal(true)}
-            />
-          </div>
 
-          <CollaboratorsSection
-            form={form}
-            patch={patch}
-            organizations={lookups.organizations}
-            errors={errors}
-            disabled={isReadOnly}
-          />
-
-          <FinanceRowsSection
-            title="Financial Contribution"
-            errorPrefix="contribution_rows"
-            rows={form.financialContributions}
-            onChange={(rows) => patch({ financialContributions: rows })}
-            enabled={form.financialContributionEnabled}
-            onToggle={(enabled) => patch({ financialContributionEnabled: enabled })}
-            organizations={lookups.organizations}
-            budgetHeads={catalog?.heads ?? []}
-            errors={errors}
-            disabled={isReadOnly}
-          />
-
-          <FinanceRowsSection
-            title="Finance Sharing"
-            errorPrefix="sharing_rows"
-            rows={form.financeSharing}
-            onChange={(rows) => patch({ financeSharing: rows })}
-            enabled={form.financeSharingEnabled}
-            onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
-            organizations={lookups.organizations}
-            budgetHeads={catalog?.heads ?? []}
-            errors={errors}
-            disabled={isReadOnly}
-          />
-
-          <SubmissionDetailsSection
-            form={form}
-            patch={patch}
-            errors={errors}
-            disabled={isReadOnly}
-          />
-
-          {!showPresentation && (
-            <p className="pf-stage-note">
-              Set the status to <strong>Shortlisted for Presentation</strong> to record the
-              presentation, and to <strong>Result Announced</strong> for the sanction,
-              disbursements, outcomes and final documents.
-            </p>
-          )}
-
-          {showPresentation && (
-            <PresentationSection
-              form={form}
-              patch={patch}
-              onSelectDocument={selectDocument}
-              onClearDocument={clearDocument}
-              errors={errors}
-              disabled={isReadOnly}
-            />
-          )}
-
-          {showPresentation && !showOutcome && (
-            <p className="pf-stage-note">
-              Set the status to <strong>Result Announced</strong> to record the sanction,
-              disbursements, outcomes and final documents.
-            </p>
-          )}
-
-          {showOutcome && (
-            <>
-              <ResultAnnouncementSection
+            <div className="pf-columns">
+              <ProposalDetailsSection
                 form={form}
                 patch={patch}
                 errors={errors}
                 disabled={isReadOnly}
               />
-
-              <SanctionDetailsSection
-                form={form}
-                patch={patch}
-                onSelectDocument={selectDocument}
-                onClearDocument={clearDocument}
-                errors={errors}
-                disabled={isReadOnly}
-              />
-
-              <GrantDisbursementSection
+              <CallForDetailsSection
                 form={form}
                 patch={patch}
                 organizations={lookups.organizations}
-                onSelectDocument={selectDisbursementDocument}
-                onClearDocument={clearDisbursementDocument}
+                schemes={lookups.schemes}
                 errors={errors}
                 disabled={isReadOnly}
+                onRequestOption={() => setShowRequestModal(true)}
               />
+            </div>
 
-              <ProjectStatusSection
+            <CollaboratorsSection
+              form={form}
+              patch={patch}
+              organizations={lookups.organizations}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+
+            <FinanceRowsSection
+              title="Financial Contribution"
+              errorPrefix="contribution_rows"
+              rows={form.financialContributions}
+              onChange={(rows) => patch({ financialContributions: rows })}
+              enabled={form.financialContributionEnabled}
+              onToggle={(enabled) => patch({ financialContributionEnabled: enabled })}
+              organizations={lookups.organizations}
+              budgetHeads={catalog?.heads ?? []}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+
+            <FinanceRowsSection
+              title="Finance Sharing"
+              errorPrefix="sharing_rows"
+              rows={form.financeSharing}
+              onChange={(rows) => patch({ financeSharing: rows })}
+              enabled={form.financeSharingEnabled}
+              onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
+              organizations={lookups.organizations}
+              budgetHeads={catalog?.heads ?? []}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+
+            <SubmissionDetailsSection
+              form={form}
+              patch={patch}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+
+            {!showPresentation && (
+              <p className="pf-stage-note">
+                Set the status to <strong>Shortlisted for Presentation</strong> to record the
+                presentation, and to <strong>Result Announced</strong> for the sanction,
+                disbursements, outcomes and final documents.
+              </p>
+            )}
+
+            {showPresentation && (
+              <PresentationSection
                 form={form}
                 patch={patch}
-                errors={errors}
-                disabled={isReadOnly}
-              />
-
-              <OutcomeSection form={form} patch={patch} disabled={isReadOnly} />
-
-              <FinalDocumentsSection
-                form={form}
                 onSelectDocument={selectDocument}
                 onClearDocument={clearDocument}
                 errors={errors}
                 disabled={isReadOnly}
               />
-            </>
-          )}
+            )}
 
-          <section className="pf-card pf-card--inline">
-            <div className="pf-card__header pf-card__header--inline">
-              <h2 className="pf-card__title">Remarks</h2>
-              <div className="pf-card__header-right" />
-            </div>
-            <div className="pf-card__body">
-              <textarea
-                className="pf-input pf-textarea pf-textarea--remarks"
-                rows={1}
-                value={form.remarks}
-                onChange={(event) => patch({ remarks: event.target.value })}
-                disabled={isReadOnly}
-                aria-label="Remarks"
-              />
-            </div>
-          </section>
+            {showPresentation && !showOutcome && (
+              <p className="pf-stage-note">
+                Set the status to <strong>Result Announced</strong> to record the sanction,
+                disbursements, outcomes and final documents.
+              </p>
+            )}
+
+            {showOutcome && (
+              <>
+                <ResultAnnouncementSection
+                  form={form}
+                  patch={patch}
+                  errors={errors}
+                  disabled={isReadOnly}
+                />
+
+                <SanctionDetailsSection
+                  form={form}
+                  patch={patch}
+                  onSelectDocument={selectDocument}
+                  onClearDocument={clearDocument}
+                  errors={errors}
+                  disabled={isReadOnly}
+                />
+
+                <GrantDisbursementSection
+                  form={form}
+                  patch={patch}
+                  organizations={lookups.organizations}
+                  onSelectDocument={selectDisbursementDocument}
+                  onClearDocument={clearDisbursementDocument}
+                  errors={errors}
+                  disabled={isReadOnly}
+                />
+
+                <ProjectStatusSection
+                  form={form}
+                  patch={patch}
+                  errors={errors}
+                  disabled={isReadOnly}
+                />
+
+                <OutcomeSection form={form} patch={patch} disabled={isReadOnly} />
+
+                <FinalDocumentsSection
+                  form={form}
+                  onSelectDocument={selectDocument}
+                  onClearDocument={clearDocument}
+                  errors={errors}
+                  disabled={isReadOnly}
+                />
+              </>
+            )}
+
+            <section className="pf-card pf-card--inline">
+              <div className="pf-card__header pf-card__header--inline">
+                <h2 className="pf-card__title">Remarks</h2>
+                <div className="pf-card__header-right" />
+              </div>
+              <div className="pf-card__body">
+                <textarea
+                  className="pf-input pf-textarea pf-textarea--remarks"
+                  rows={1}
+                  value={form.remarks}
+                  onChange={(event) => patch({ remarks: event.target.value })}
+                  disabled={isReadOnly}
+                  aria-label="Remarks"
+                />
+              </div>
+            </section>
+          </div>
+
+          <div
+            role="tabpanel"
+            id="pf-panel-budget"
+            aria-labelledby="pf-tab-budget"
+            hidden={activeTab !== 'budget'}
+            className="pf-panel"
+          >
+            <BudgetAllotmentSection
+              form={form}
+              patch={patch}
+              budgetHeads={catalog?.heads ?? []}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+
+            {/* Reads the ledger on the next tab, so it lives here where the
+                budget it is measured against is. */}
+            <TransactionSummarySection form={form} />
+          </div>
+
+          <div
+            role="tabpanel"
+            id="pf-panel-transaction"
+            aria-labelledby="pf-tab-transaction"
+            hidden={activeTab !== 'transaction'}
+            className="pf-panel"
+          >
+            <TransactionAccountsSection
+              form={form}
+              patch={patch}
+              accounts={lookups.accounts}
+              budgetHeads={catalog?.heads ?? []}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+          </div>
 
           {!isReadOnly && (
             <div className="pf-actions">

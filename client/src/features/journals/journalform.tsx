@@ -227,7 +227,9 @@ const JournalForm: React.FC = () => {
   const [journalId, setJournalId] = useState<string | undefined>(urlJournalId);
   const justAddedAuthorRef = useRef<boolean>(false); // Track if author was just added
   const isLoadingJournalDataRef = useRef<boolean>(false); // Track if journal data is being loaded programmatically
-  const suppressAuthorAutoSearchRef = useRef<boolean>(false); // Prevent suggestion popup from programmatic prefill
+  const activeAuthorSearchIndexRef = useRef<number | null>(null); // Row whose search input currently has focus
+  const authorSearchTokenRef = useRef<number[]>([]); // Latest request token per row, to drop stale responses
+  const authorSearchTimerRef = useRef<Array<ReturnType<typeof setTimeout> | null>>([]); // Per-row debounce timers
   const [isInternational, setIsInternational] = useState<boolean>(false);
   const [editMode, setEditMode] = useState<boolean>(() => {
     const searchParams = new URLSearchParams(window.location.search);
@@ -501,22 +503,6 @@ const JournalForm: React.FC = () => {
   }, [editMode, journalId]);
 
   useEffect(() => {
-    if (suppressAuthorAutoSearchRef.current) {
-      return;
-    }
-
-    const delayDebounceFn = searchQueries.map((query, index) => {
-      const authorJustSelected = authors[index]?.author_id === query;
-      if (query.length > 0 && !isViewMode && !authorJustSelected) {
-        return setTimeout(() => searchAuthor(query, index), 300);
-      }
-      return null;
-    });
-
-    return () => delayDebounceFn.forEach((timeout) => timeout && clearTimeout(timeout));
-  }, [searchQueries, authors, isViewMode]);
-
-  useEffect(() => {
     // Skip search if journal data is being loaded programmatically (not user input)
     if (isLoadingJournalDataRef.current) {
       isLoadingJournalDataRef.current = false;
@@ -646,10 +632,15 @@ const JournalForm: React.FC = () => {
 
   const searchAuthor = async (query: string, index: number) => {
     // Allow empty query to show initial list on focus
+    const requestToken = (authorSearchTokenRef.current[index] || 0) + 1;
+    authorSearchTokenRef.current[index] = requestToken;
     try {
       const authors = (await authenticityUtility.get(
         `/authors/search?query=${encodeURIComponent(query)}&designation=${encodeURIComponent(authorDesignations[index])}&_=${Date.now()}`,
       )) as any;
+
+      // Drop responses that arrived after a newer search on this row started.
+      if (authorSearchTokenRef.current[index] !== requestToken) return;
 
       if (authors && Array.isArray(authors)) {
         setSearchResults((prevResults) => {
@@ -659,10 +650,13 @@ const JournalForm: React.FC = () => {
           return newResults;
         });
 
+        // Only the focused row may open its dropdown, and only one row at a time,
+        // otherwise slow responses stack overlapping popups on top of each other.
+        const isRowFocused = activeAuthorSearchIndexRef.current === index;
         setShowSuggestions((prev) => {
           const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
-          const newShow = [...prevArray];
-          newShow[index] = authors.length > 0;
+          const newShow = isRowFocused ? prevArray.map(() => false) : [...prevArray];
+          newShow[index] = isRowFocused && authors.length > 0;
           return newShow;
         });
       } else {
@@ -1228,7 +1222,6 @@ const JournalForm: React.FC = () => {
         });
 
         // Update search queries for authors
-        suppressAuthorAutoSearchRef.current = true;
         setSearchQueries((prevQueries) => {
           const prevArray = Array.isArray(prevQueries) ? prevQueries : Array(MAX_AUTHORS).fill('');
           const newQueries = [...prevArray];
@@ -1251,9 +1244,6 @@ const JournalForm: React.FC = () => {
           });
           return newDesignations.slice(0, fetchedAuthors.length);
         });
-        setTimeout(() => {
-          suppressAuthorAutoSearchRef.current = false;
-        }, 250);
       }
 
       // Append external.external_details JSON
@@ -1674,8 +1664,13 @@ const JournalForm: React.FC = () => {
       return next;
     });
 
-    const debouncedSearch = debounce(() => searchAuthor(newValue, index), 300);
-    debouncedSearch();
+    if (authorSearchTimerRef.current[index]) {
+      clearTimeout(authorSearchTimerRef.current[index] as ReturnType<typeof setTimeout>);
+    }
+    authorSearchTimerRef.current[index] = setTimeout(() => {
+      authorSearchTimerRef.current[index] = null;
+      searchAuthor(newValue, index);
+    }, 300);
   };
 
   const handleAuthorSelect = (selectedAuthor: any, index: number) => {
@@ -1822,6 +1817,13 @@ const JournalForm: React.FC = () => {
               value={author.name || searchQueries[index] || ''}
               onChange={(e) => handleSearchInputChange(e, index)}
               onFocus={() => {
+                activeAuthorSearchIndexRef.current = index;
+                // Close any dropdown left open on another row
+                setShowSuggestions((prev) => {
+                  const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
+                  if (!prevArray.some((isOpen, i) => isOpen && i !== index)) return prevArray;
+                  return prevArray.map((isOpen, i) => (i === index ? isOpen : false));
+                });
                 // Skip if author was just added to prevent auto-dropdown
                 if (justAddedAuthorRef.current) return;
                 const selectedAuthor = authors[index];
@@ -1911,6 +1913,15 @@ const JournalForm: React.FC = () => {
   };
 
   const handleAuthorSearchBlur = (index: number) => {
+    if (activeAuthorSearchIndexRef.current === index) {
+      activeAuthorSearchIndexRef.current = null;
+    }
+    // Cancel a debounced search so it cannot reopen the dropdown after blur
+    if (authorSearchTimerRef.current[index]) {
+      clearTimeout(authorSearchTimerRef.current[index] as ReturnType<typeof setTimeout>);
+      authorSearchTimerRef.current[index] = null;
+    }
+    authorSearchTokenRef.current[index] = (authorSearchTokenRef.current[index] || 0) + 1;
     setTimeout(() => {
       setShowSuggestions((prev) => {
         const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);

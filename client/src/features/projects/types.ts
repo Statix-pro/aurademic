@@ -104,6 +104,53 @@ export interface DisbursementRow {
   documents: Record<DisbursementSlot, DocumentSlotState>;
 }
 
+/** Which side of the Transaction Summary a ledger row is counted on. */
+export type TransactionHeadKind = 'expenditure' | 'income';
+
+/** One financial-year column of the Budget Allotment matrix. */
+export interface BudgetYearColumn {
+  key: string;
+  financialYear: string;
+}
+
+/** One budget-head row of the Budget Allotment matrix. */
+export interface BudgetAllotmentRow {
+  key: string;
+  budgetHeadId: number | null;
+  budgetHeadName: string;
+}
+
+/**
+ * The amounts inside the matrix, keyed `${rowKey}|${columnKey}`. A flat map
+ * rather than a nested array so adding or removing a row or a column never has
+ * to reshape the amounts alongside it.
+ */
+export type BudgetAllotmentMap = Record<string, string>;
+
+/** One ledger line under a transaction account. */
+export interface TransactionRow {
+  key: string;
+  financialYear: string;
+  transactionDate: string;
+  /** Follows the head that was picked; decides which summary section counts it. */
+  headKind: TransactionHeadKind;
+  /** Set for expenditure heads, which come from the shared budget catalog. */
+  budgetHeadId: number | null;
+  headName: string;
+  particulars: string;
+  referenceNo: string;
+  credit: string;
+  debit: string;
+}
+
+/** A bank account the project's money moves through, with its own ledger. */
+export interface TransactionAccount {
+  key: string;
+  accountOptionId: number | null;
+  accountName: string;
+  transactions: TransactionRow[];
+}
+
 export interface OutcomeCounts {
   journalArticles: string;
   conferences: string;
@@ -181,6 +228,14 @@ export interface ProjectFormState {
 
   outcome: OutcomeCounts;
 
+  // Budget tab
+  budgetYears: BudgetYearColumn[];
+  budgetRows: BudgetAllotmentRow[];
+  budgetAllotments: BudgetAllotmentMap;
+
+  // Transaction tab
+  transactionAccounts: TransactionAccount[];
+
   documents: Record<ProjectDocumentType, DocumentSlotState>;
 
   remarks: string;
@@ -218,10 +273,17 @@ export interface DepartmentOption {
   code: string | null;
 }
 
+/** A bank account from the shared `account_options` list. */
+export interface AccountOption {
+  id: number;
+  name: string;
+}
+
 export interface ProjectLookups {
   organizations: ProjectOrganization[];
   schemes: ProjectScheme[];
   departments: DepartmentOption[];
+  accounts: AccountOption[];
 }
 
 export interface EmployeeSearchResult {

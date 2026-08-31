@@ -79,10 +79,25 @@ export const DOCUMENT_UPLOAD_DIRS = {
   disbursement_report: 'projectReport',
 };
 
+/** Which side of the Transaction Summary a ledger row is counted on. */
+export const TRANSACTION_HEAD_KINDS = ['expenditure', 'income'];
+
+/**
+ * The income side of the ledger, which has no catalog to point at the way
+ * expenditure has `budget_heads`. These are the standard ways money reaches a
+ * project account rather than institution data, so — as with the SDG list on
+ * the client — they live in code instead of a master table nobody would curate.
+ */
+export const PROJECT_INCOME_HEADS = ['Deposit', 'Interest', 'Grant Received', 'Other Income'];
+
 export const MAX_INVESTIGATORS = 15;
 export const MAX_COLLABORATORS = 20;
 export const MAX_FINANCE_ROWS = 30;
 export const MAX_DISBURSEMENTS = 30;
+export const MAX_BUDGET_YEARS = 15;
+export const MAX_BUDGET_HEAD_ROWS = 40;
+export const MAX_TRANSACTION_ACCOUNTS = 10;
+export const MAX_TRANSACTIONS_PER_ACCOUNT = 500;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -170,6 +185,20 @@ export function toEnum(value, allowed, field, errors, { fallback = null } = {}) 
     return fallback;
   }
   return text;
+}
+
+/**
+ * The Indian financial year (April–March) an ISO date falls in, as `2026-27`.
+ * Used to fill a ledger row's year when the form left the column blank, so the
+ * Transaction Summary can still group the row.
+ */
+export function financialYearForDate(isoDate) {
+  const text = trimmed(isoDate);
+  if (!ISO_DATE.test(text)) return null;
+
+  const [year, month] = text.split('-').map(Number);
+  const start = month >= 4 ? year : year - 1;
+  return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
 }
 
 function toStringArray(value) {
@@ -453,6 +482,285 @@ function normalizeDisbursements(raw, errors, keysWithDocuments = new Set()) {
 }
 
 /**
+ * The Budget Allotment matrix: financial-year columns, budget-head rows, and
+ * the allotted amount at each intersection.
+ *
+ * Columns and rows are stored even when nothing has been typed under them,
+ * because both are editor state the form has to reload; an empty *cell*, by
+ * contrast, is dropped, since a missing cell and a blank one mean the same
+ * thing. The three lists are stitched together by client-supplied `key`s, which
+ * the model swaps for the ids it inserts.
+ */
+function normalizeBudgetAllotment(raw, errors) {
+  const source = raw && typeof raw === 'object' ? raw : {};
+
+  const yearRows = Array.isArray(source.years) ? source.years : [];
+  if (yearRows.length > MAX_BUDGET_YEARS) {
+    errors.push({
+      field: 'budget.years',
+      message: `At most ${MAX_BUDGET_YEARS} financial year columns are supported.`,
+    });
+  }
+
+  const seenYears = new Set();
+  const years = yearRows
+    .slice(0, MAX_BUDGET_YEARS)
+    .map((row, index) => ({
+      key: toNullableString(row?.key, 64) || `year-${index}`,
+      financial_year: toNullableString(row?.financial_year ?? row?.financialYear, 9),
+      sourceIndex: index,
+    }))
+    // A column whose year has not been picked yet cannot be stored — there is
+    // nothing to identify it by.
+    .filter((row) => row.financial_year)
+    .map(({ sourceIndex, ...row }) => {
+      if (!FINANCIAL_YEAR.test(row.financial_year)) {
+        errors.push({ field: `budget.years[${sourceIndex}]`, message: 'Use the 2025-26 format.' });
+      }
+      // A repeated year would collide on uq_project_budget_years, and its
+      // amounts would be indistinguishable from the first column's.
+      if (seenYears.has(row.financial_year)) {
+        errors.push({
+          field: `budget.years[${sourceIndex}]`,
+          message: 'This financial year already has a column.',
+        });
+      }
+      seenYears.add(row.financial_year);
+      return row;
+    })
+    .map((row, index) => ({ ...row, display_order: index }));
+
+  const headRows = Array.isArray(source.heads) ? source.heads : [];
+  if (headRows.length > MAX_BUDGET_HEAD_ROWS) {
+    errors.push({
+      field: 'budget.heads',
+      message: `At most ${MAX_BUDGET_HEAD_ROWS} budget head rows are supported.`,
+    });
+  }
+
+  const seenHeads = new Set();
+  const heads = headRows
+    .slice(0, MAX_BUDGET_HEAD_ROWS)
+    .map((row, index) => ({
+      key: toNullableString(row?.key, 64) || `head-${index}`,
+      budget_head_id: toId(row?.budget_head_id ?? row?.budgetHeadId),
+      budget_head_name: toNullableString(row?.budget_head_name ?? row?.budgetHeadName, 255),
+      sourceIndex: index,
+    }))
+    .filter((row) => row.budget_head_id || row.budget_head_name)
+    .map(({ sourceIndex, ...row }) => {
+      const identity = row.budget_head_id
+        ? `id:${row.budget_head_id}`
+        : `name:${row.budget_head_name.toLowerCase()}`;
+      if (seenHeads.has(identity)) {
+        errors.push({
+          field: `budget.heads[${sourceIndex}]`,
+          message: 'This budget head already has a row.',
+        });
+      }
+      seenHeads.add(identity);
+      return row;
+    })
+    .map((row, index) => ({ ...row, display_order: index }));
+
+  const yearKeys = new Set(years.map((row) => row.key));
+  const headKeys = new Set(heads.map((row) => row.key));
+  const seenCells = new Set();
+
+  const allotments = (Array.isArray(source.allotments) ? source.allotments : [])
+    .map((cell, index) => ({
+      head_key: toNullableString(cell?.head_key ?? cell?.headKey, 64),
+      year_key: toNullableString(cell?.year_key ?? cell?.yearKey, 64),
+      amount: toAmount(cell?.amount, `budget.allotments[${index}].amount`, errors),
+    }))
+    // Cells left blank, and cells whose row or column was removed in the same
+    // edit, have nothing to attach to.
+    .filter(
+      (cell) => cell.amount !== null && headKeys.has(cell.head_key) && yearKeys.has(cell.year_key),
+    )
+    .filter((cell) => {
+      const identity = `${cell.head_key}|${cell.year_key}`;
+      if (seenCells.has(identity)) return false;
+      seenCells.add(identity);
+      return true;
+    });
+
+  return { years, heads, allotments };
+}
+
+/**
+ * One account's ledger rows. Both directions are accepted against either kind
+ * of head — a returned advance is a credit against an expenditure head — so the
+ * only rule here is that a row is a credit *or* a debit, never both and never
+ * neither.
+ */
+function normalizeTransactions(raw, fieldPrefix, errors) {
+  const rows = Array.isArray(raw) ? raw : [];
+  if (rows.length > MAX_TRANSACTIONS_PER_ACCOUNT) {
+    errors.push({
+      field: `${fieldPrefix}.transactions`,
+      message: `At most ${MAX_TRANSACTIONS_PER_ACCOUNT} transactions per account are supported.`,
+    });
+  }
+
+  return (
+    rows
+      .slice(0, MAX_TRANSACTIONS_PER_ACCOUNT)
+      .map((row, index) => {
+        const field = `${fieldPrefix}.transactions[${index}]`;
+
+        const headKind = toEnum(
+          row?.head_kind ?? row?.headKind,
+          TRANSACTION_HEAD_KINDS,
+          `${field}.head_kind`,
+          errors,
+          { fallback: 'expenditure' },
+        );
+        const transactionDate = toDate(
+          row?.transaction_date ?? row?.transactionDate,
+          `${field}.transaction_date`,
+          errors,
+        );
+
+        let financialYear = toNullableString(row?.financial_year ?? row?.financialYear, 9);
+        if (financialYear && !FINANCIAL_YEAR.test(financialYear)) {
+          errors.push({ field: `${field}.financial_year`, message: 'Use the 2025-26 format.' });
+          financialYear = null;
+        }
+        // The summary groups by year, so a row that was dated but not yeared
+        // still lands in the right column.
+        if (!financialYear) financialYear = financialYearForDate(transactionDate);
+
+        return {
+          financial_year: financialYear,
+          transaction_date: transactionDate,
+          head_kind: headKind,
+          // Income heads are a fixed vocabulary rather than catalog rows, so only
+          // expenditure rows carry a `budget_heads` id.
+          budget_head_id:
+            headKind === 'expenditure' ? toId(row?.budget_head_id ?? row?.budgetHeadId) : null,
+          head_name: toNullableString(row?.head_name ?? row?.headName, 255),
+          particulars: toNullableString(row?.particulars, 500),
+          reference_no: toNullableString(row?.reference_no ?? row?.referenceNo, 150),
+          credit: toAmount(row?.credit, `${field}.credit`, errors),
+          debit: toAmount(row?.debit, `${field}.debit`, errors),
+          sourceIndex: index,
+        };
+      })
+      .filter(
+        (row) =>
+          row.transaction_date ||
+          row.budget_head_id ||
+          row.head_name ||
+          row.particulars ||
+          row.reference_no ||
+          row.credit !== null ||
+          row.debit !== null,
+      )
+      // `display_order` is the ledger's order, and the running balance the form
+      // draws from it only means anything read oldest-first — so the stored order
+      // is chronological whatever order the rows arrived in. `sort` is stable, so
+      // two transactions on the same day keep the order the user chose, and
+      // `sourceIndex` below still points errors back at the row they came from.
+      .sort((left, right) => {
+        if (!left.transaction_date) return right.transaction_date ? 1 : 0;
+        if (!right.transaction_date) return -1;
+        return left.transaction_date.localeCompare(right.transaction_date);
+      })
+      .map(({ sourceIndex, ...row }, index) => {
+        const field = `${fieldPrefix}.transactions[${sourceIndex}]`;
+
+        if (!row.transaction_date) {
+          errors.push({ field: `${field}.transaction_date`, message: 'Enter the date.' });
+        }
+        if (!row.budget_head_id && !row.head_name) {
+          errors.push({ field: `${field}.head`, message: 'Select a budget head.' });
+        }
+        if (
+          row.head_kind === 'income' &&
+          row.head_name &&
+          !PROJECT_INCOME_HEADS.includes(row.head_name)
+        ) {
+          errors.push({ field: `${field}.head`, message: 'Select an income head from the list.' });
+        }
+
+        // Zero is the same as nothing in these columns, so it must not satisfy
+        // the either/or rule below or survive into the stored row.
+        const hasCredit = row.credit !== null && row.credit > 0;
+        const hasDebit = row.debit !== null && row.debit > 0;
+        if (hasCredit === hasDebit) {
+          errors.push({
+            field: `${field}.amount`,
+            message: hasCredit
+              ? 'A transaction is either a credit or a debit, not both.'
+              : 'Enter a credit or a debit amount.',
+          });
+        }
+
+        return {
+          ...row,
+          credit: hasCredit ? row.credit : null,
+          debit: hasDebit ? row.debit : null,
+          display_order: index,
+        };
+      })
+  );
+}
+
+/** One "Transaction Account" block: the account itself plus its ledger. */
+function normalizeTransactionAccounts(raw, errors) {
+  const accountRows = Array.isArray(raw) ? raw : [];
+  if (accountRows.length > MAX_TRANSACTION_ACCOUNTS) {
+    errors.push({
+      field: 'transaction_accounts',
+      message: `At most ${MAX_TRANSACTION_ACCOUNTS} transaction accounts are supported.`,
+    });
+  }
+
+  const seenAccounts = new Set();
+
+  return (
+    accountRows
+      .slice(0, MAX_TRANSACTION_ACCOUNTS)
+      .map((account, index) => ({
+        account_option_id: toId(account?.account_option_id ?? account?.accountOptionId),
+        account_name: toNullableString(account?.account_name ?? account?.accountName, 255),
+        transactions: normalizeTransactions(
+          account?.transactions,
+          `transaction_accounts[${index}]`,
+          errors,
+        ),
+        sourceIndex: index,
+      }))
+      // The untouched block the form always keeps on screen is not something to
+      // store.
+      .filter(
+        (account) =>
+          account.account_option_id || account.account_name || account.transactions.length > 0,
+      )
+      .map(({ sourceIndex, ...account }, index) => {
+        if (!account.account_option_id) {
+          errors.push({
+            field: `transaction_accounts[${sourceIndex}].account`,
+            message: 'Select a transaction account.',
+          });
+        } else if (seenAccounts.has(account.account_option_id)) {
+          // Two blocks on one account would split a single ledger into two
+          // running balances, and collide on uq_project_transaction_accounts.
+          errors.push({
+            field: `transaction_accounts[${sourceIndex}].account`,
+            message: 'This account already has a ledger on this project.',
+          });
+        } else {
+          seenAccounts.add(account.account_option_id);
+        }
+
+        return { ...account, display_order: index };
+      })
+  );
+}
+
+/**
  * Turns the request body into `{ project, investigators, tags, ... }` plus the
  * list of validation errors. `project` maps 1:1 onto `research_projects`
  * columns so the model can insert it without further translation.
@@ -656,6 +964,11 @@ export function normalizeProjectPayload(input = {}, { rowKeysWithDocuments = [] 
       body.disbursements,
       errors,
       new Set(rowKeysWithDocuments),
+    ),
+    budget: normalizeBudgetAllotment(body.budget, errors),
+    transactionAccounts: normalizeTransactionAccounts(
+      body.transaction_accounts ?? body.transactionAccounts,
+      errors,
     ),
     // Project-level document slots the user cleared. Files themselves arrive as
     // multipart parts and are handled by the controller. Slots that are neither

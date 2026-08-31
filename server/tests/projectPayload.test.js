@@ -458,3 +458,386 @@ describe('presentation documents follow the section toggle', () => {
     expect(aggregate.removedDocuments).not.toContain('presentation');
   });
 });
+
+describe('budget allotment matrix', () => {
+  const matrix = (overrides = {}) =>
+    validPayload({
+      budget: {
+        years: [
+          { key: 'y1', financial_year: '2025-26' },
+          { key: 'y2', financial_year: '2026-27' },
+        ],
+        heads: [
+          { key: 'h1', budget_head_id: 12, budget_head_name: 'Consumables' },
+          { key: 'h2', budget_head_id: 57, budget_head_name: 'Salary' },
+        ],
+        allotments: [
+          { head_key: 'h1', year_key: 'y1', amount: '2,50,000' },
+          { head_key: 'h2', year_key: 'y2', amount: '400000' },
+        ],
+        ...overrides,
+      },
+    });
+
+  it('keeps rows and columns in order and parses the cells between them', () => {
+    const { aggregate, errors } = normalizeProjectPayload(matrix());
+
+    expect(errors).toEqual([]);
+    expect(aggregate.budget.years).toEqual([
+      { key: 'y1', financial_year: '2025-26', display_order: 0 },
+      { key: 'y2', financial_year: '2026-27', display_order: 1 },
+    ]);
+    expect(aggregate.budget.heads.map((row) => row.budget_head_id)).toEqual([12, 57]);
+    expect(aggregate.budget.allotments).toEqual([
+      { head_key: 'h1', year_key: 'y1', amount: 250000 },
+      { head_key: 'h2', year_key: 'y2', amount: 400000 },
+    ]);
+  });
+
+  it('keeps a year column and a head row that have no amounts yet', () => {
+    const { aggregate } = normalizeProjectPayload(matrix({ allotments: [] }));
+
+    expect(aggregate.budget.years).toHaveLength(2);
+    expect(aggregate.budget.heads).toHaveLength(2);
+    expect(aggregate.budget.allotments).toEqual([]);
+  });
+
+  it('drops a column that has no year picked, and the cells under it', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      matrix({
+        years: [{ key: 'y1', financial_year: '' }],
+        allotments: [{ head_key: 'h1', year_key: 'y1', amount: '1000' }],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.budget.years).toEqual([]);
+    expect(aggregate.budget.allotments).toEqual([]);
+  });
+
+  it('drops blank cells rather than storing them as zero', () => {
+    const { aggregate } = normalizeProjectPayload(
+      matrix({ allotments: [{ head_key: 'h1', year_key: 'y1', amount: '' }] }),
+    );
+
+    expect(aggregate.budget.allotments).toEqual([]);
+  });
+
+  it('rejects a repeated year column and a repeated head row', () => {
+    const { errors } = normalizeProjectPayload(
+      matrix({
+        years: [
+          { key: 'y1', financial_year: '2025-26' },
+          { key: 'y2', financial_year: '2025-26' },
+        ],
+        heads: [
+          { key: 'h1', budget_head_id: 12, budget_head_name: 'Consumables' },
+          { key: 'h2', budget_head_id: 12, budget_head_name: 'Consumables' },
+        ],
+      }),
+    );
+
+    expect(errorFields(errors)).toEqual(
+      expect.arrayContaining(['budget.years[1]', 'budget.heads[1]']),
+    );
+  });
+
+  it('rejects a malformed financial year', () => {
+    const { errors } = normalizeProjectPayload(
+      matrix({ years: [{ key: 'y1', financial_year: '2025' }] }),
+    );
+
+    expect(errorFields(errors)).toContain('budget.years[0]');
+  });
+
+  it('is empty when the form sends no budget at all', () => {
+    const { aggregate, errors } = normalizeProjectPayload(validPayload());
+
+    expect(errors).toEqual([]);
+    expect(aggregate.budget).toEqual({ years: [], heads: [], allotments: [] });
+  });
+});
+
+describe('transaction accounts', () => {
+  const ledgerRow = (overrides = {}) => ({
+    transaction_date: '2026-05-10',
+    head_kind: 'expenditure',
+    budget_head_id: 12,
+    head_name: 'Consumables',
+    debit: '5000',
+    ...overrides,
+  });
+
+  const withLedger = (rows, accountOverrides = {}) =>
+    validPayload({
+      transaction_accounts: [
+        {
+          account_option_id: 17,
+          account_name: 'KSRCT RPS AICTE',
+          transactions: rows,
+          ...accountOverrides,
+        },
+      ],
+    });
+
+  it('normalizes a ledger row and orders it', () => {
+    const { aggregate, errors } = normalizeProjectPayload(withLedger([ledgerRow()]));
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts).toHaveLength(1);
+    expect(aggregate.transactionAccounts[0]).toMatchObject({
+      account_option_id: 17,
+      display_order: 0,
+    });
+    expect(aggregate.transactionAccounts[0].transactions[0]).toMatchObject({
+      transaction_date: '2026-05-10',
+      head_kind: 'expenditure',
+      budget_head_id: 12,
+      credit: null,
+      debit: 5000,
+      display_order: 0,
+    });
+  });
+
+  it('fills the financial year from the date when the column was left blank', () => {
+    const { aggregate } = normalizeProjectPayload(
+      withLedger([ledgerRow({ transaction_date: '2026-03-31' }), ledgerRow()]),
+    );
+
+    const [beforeApril, afterApril] = aggregate.transactionAccounts[0].transactions;
+    expect(beforeApril.financial_year).toBe('2025-26');
+    expect(afterApril.financial_year).toBe('2026-27');
+  });
+
+  it('keeps an explicit financial year over the one the date implies', () => {
+    const { aggregate } = normalizeProjectPayload(
+      withLedger([ledgerRow({ financial_year: '2024-25' })]),
+    );
+
+    expect(aggregate.transactionAccounts[0].transactions[0].financial_year).toBe('2024-25');
+  });
+
+  it('requires a row to be a credit or a debit, never both and never neither', () => {
+    const { errors } = normalizeProjectPayload(
+      withLedger([
+        ledgerRow({ credit: '100', debit: '200' }),
+        ledgerRow({ debit: '', credit: '' }),
+        ledgerRow({ debit: '0' }),
+      ]),
+    );
+
+    expect(errorFields(errors)).toEqual(
+      expect.arrayContaining([
+        'transaction_accounts[0].transactions[0].amount',
+        'transaction_accounts[0].transactions[1].amount',
+        'transaction_accounts[0].transactions[2].amount',
+      ]),
+    );
+  });
+
+  it('allows a credit against an expenditure head, for a returned advance', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow({ debit: '', credit: '1200' })]),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0]).toMatchObject({
+      head_kind: 'expenditure',
+      credit: 1200,
+      debit: null,
+    });
+  });
+
+  it('never lets an income row carry a catalog head id', () => {
+    const { aggregate } = normalizeProjectPayload(
+      withLedger([
+        ledgerRow({
+          head_kind: 'income',
+          budget_head_id: 12,
+          head_name: 'Deposit',
+          debit: '',
+          credit: '90000',
+        }),
+      ]),
+    );
+
+    expect(aggregate.transactionAccounts[0].transactions[0]).toMatchObject({
+      head_kind: 'income',
+      budget_head_id: null,
+      head_name: 'Deposit',
+    });
+  });
+
+  it('rejects an income head that is not in the vocabulary', () => {
+    const { errors } = normalizeProjectPayload(
+      withLedger([
+        ledgerRow({
+          head_kind: 'income',
+          budget_head_id: null,
+          head_name: 'Bake sale',
+          debit: '',
+          credit: '500',
+        }),
+      ]),
+    );
+
+    expect(errorFields(errors)).toContain('transaction_accounts[0].transactions[0].head');
+  });
+
+  it('requires a date and a head on a row that carries anything', () => {
+    const { errors } = normalizeProjectPayload(withLedger([{ debit: '5000' }]));
+
+    expect(errorFields(errors)).toEqual(
+      expect.arrayContaining([
+        'transaction_accounts[0].transactions[0].transaction_date',
+        'transaction_accounts[0].transactions[0].head',
+      ]),
+    );
+  });
+
+  it('drops the untouched block the form keeps on screen', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        transaction_accounts: [{ account_option_id: null, account_name: null, transactions: [{}] }],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts).toEqual([]);
+  });
+
+  it('requires an account once the block has transactions', () => {
+    const { errors } = normalizeProjectPayload(
+      withLedger([ledgerRow()], { account_option_id: null, account_name: null }),
+    );
+
+    expect(errorFields(errors)).toContain('transaction_accounts[0].account');
+  });
+
+  it('rejects the same account being given two ledgers', () => {
+    const { errors } = normalizeProjectPayload(
+      validPayload({
+        transaction_accounts: [
+          { account_option_id: 17, transactions: [ledgerRow()] },
+          { account_option_id: 17, transactions: [ledgerRow()] },
+        ],
+      }),
+    );
+
+    expect(errorFields(errors)).toContain('transaction_accounts[1].account');
+  });
+});
+
+describe('budget error indices survive blank rows and columns', () => {
+  // The form sends its rows and columns unfiltered, blanks included, so that
+  // the index in an error path is the index of the cell the user is looking at.
+  it('reports the submitted index, not the index after blanks are dropped', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        budget: {
+          years: [
+            { key: 'y0', financial_year: null },
+            { key: 'y1', financial_year: '2025-26' },
+            { key: 'y2', financial_year: '2025-26' },
+          ],
+          heads: [
+            { key: 'h0', budget_head_id: null, budget_head_name: null },
+            { key: 'h1', budget_head_id: 12, budget_head_name: 'Consumables' },
+            { key: 'h2', budget_head_id: 12, budget_head_name: 'Consumables' },
+          ],
+          allotments: [],
+        },
+      }),
+    );
+
+    // The duplicates sit at index 2 of what was submitted; after the blank at
+    // index 0 is dropped they are at index 1, which is what a re-indexed error
+    // would wrongly report.
+    expect(errorFields(errors)).toEqual(
+      expect.arrayContaining(['budget.years[2]', 'budget.heads[2]']),
+    );
+    expect(errorFields(errors)).not.toEqual(
+      expect.arrayContaining(['budget.years[1]', 'budget.heads[1]']),
+    );
+
+    // The blanks themselves are still dropped from what gets stored.
+    expect(aggregate.budget.years.map((row) => row.key)).toEqual(['y1', 'y2']);
+    expect(aggregate.budget.heads.map((row) => row.key)).toEqual(['h1', 'h2']);
+  });
+
+  it('drops an amount whose head row is blank, so the cell has nowhere to go', () => {
+    const { aggregate } = normalizeProjectPayload(
+      validPayload({
+        budget: {
+          years: [{ key: 'y1', financial_year: '2025-26' }],
+          heads: [{ key: 'h0', budget_head_id: null, budget_head_name: null }],
+          allotments: [{ head_key: 'h0', year_key: 'y1', amount: '5000' }],
+        },
+      }),
+    );
+
+    expect(aggregate.budget.heads).toEqual([]);
+    expect(aggregate.budget.allotments).toEqual([]);
+  });
+});
+
+describe('the ledger is stored in date order', () => {
+  const row = (transaction_date, debit, extra = {}) => ({
+    transaction_date,
+    head_kind: 'expenditure',
+    budget_head_id: 12,
+    head_name: 'Consumables',
+    debit,
+    ...extra,
+  });
+
+  const ledger = (rows) =>
+    normalizeProjectPayload(
+      validPayload({ transaction_accounts: [{ account_option_id: 17, transactions: rows }] }),
+    );
+
+  it('reorders rows entered out of sequence, because the running balance reads oldest-first', () => {
+    const { aggregate, errors } = ledger([
+      row('2026-05-15', '180000'),
+      row('2025-06-10', '500'),
+      row('2025-12-01', '900'),
+    ]);
+
+    expect(errors).toEqual([]);
+    expect(
+      aggregate.transactionAccounts[0].transactions.map((t) => [
+        t.transaction_date,
+        t.display_order,
+      ]),
+    ).toEqual([
+      ['2025-06-10', 0],
+      ['2025-12-01', 1],
+      ['2026-05-15', 2],
+    ]);
+  });
+
+  it('keeps same-day transactions in the order the user put them in', () => {
+    const { aggregate } = ledger([
+      row('2025-06-10', '100', { reference_no: 'first' }),
+      row('2025-06-10', '200', { reference_no: 'second' }),
+      row('2025-06-10', '300', { reference_no: 'third' }),
+    ]);
+
+    expect(aggregate.transactionAccounts[0].transactions.map((t) => t.reference_no)).toEqual([
+      'first',
+      'second',
+      'third',
+    ]);
+  });
+
+  it('still points a validation error at the row the user submitted', () => {
+    // The offending row is submitted second but sorts first.
+    const { errors } = ledger([
+      row('2026-05-15', '180000'),
+      row('2025-06-10', '100', { credit: '50' }),
+    ]);
+
+    expect(errorFields(errors)).toContain('transaction_accounts[0].transactions[1].amount');
+    expect(errorFields(errors)).not.toContain('transaction_accounts[0].transactions[0].amount');
+  });
+});
