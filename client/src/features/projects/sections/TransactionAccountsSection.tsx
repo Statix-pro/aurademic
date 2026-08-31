@@ -106,7 +106,11 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                   block.accountOptionId ? String(block.accountOptionId) : '',
                   block.accountName,
                 )}
-                placeholder="Select"
+                // A block whose account option was removed keeps only the name
+                // snapshot, and there is no id left to select it by — so the
+                // name shows here rather than leaving the ledger looking
+                // unattributed. Picking a live account re-links the block.
+                placeholder={block.accountName || 'Select'}
                 disabled={disabled}
                 invalid={Boolean(accountError)}
                 ariaLabel="Transaction account"

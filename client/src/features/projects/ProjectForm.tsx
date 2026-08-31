@@ -9,6 +9,7 @@ import {
   PROJECT_FORM_TABS,
   hasReachedProposalStage,
 } from './constants';
+import { toAmount } from './projectBudgetSummary';
 import {
   createEmptyProjectForm,
   emptyDocumentSlot,
@@ -109,7 +110,10 @@ function validate(form: ProjectFormState): Record<string, string> {
         row.debit,
     );
 
-    if (!account.accountOptionId && filledRows.length > 0) {
+    // An account option that was removed leaves the block holding only its
+    // name snapshot, which `normalizeTransactionAccounts` accepts — so blocking
+    // the save here would strand the ledger.
+    if (!account.accountOptionId && !account.accountName && filledRows.length > 0) {
       errors[`transaction_accounts[${blockIndex}].account`] =
         'Select the account these transactions belong to.';
     }
@@ -121,8 +125,8 @@ function validate(form: ProjectFormState): Record<string, string> {
       if (!row.transactionDate) errors[`${field}.transaction_date`] = 'Enter the date.';
       if (!row.budgetHeadId && !row.headName) errors[`${field}.head`] = 'Select a budget head.';
 
-      const credit = Number(row.credit.replace(/,/g, '')) || 0;
-      const debit = Number(row.debit.replace(/,/g, '')) || 0;
+      const credit = toAmount(row.credit);
+      const debit = toAmount(row.debit);
       if (credit > 0 === debit > 0) {
         errors[`${field}.amount`] =
           credit > 0
@@ -150,6 +154,28 @@ const ProjectForm: React.FC = () => {
   const [saveMessage, setSaveMessage] = useState('');
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [activeTab, setActiveTab] = useState<ProjectFormTab>('details');
+
+  /**
+   * Arrow, Home and End move between the tabs and select the one they land on;
+   * the roving `tabIndex` keeps the selected tab as the tablist's only tab
+   * stop, so focus follows the selection rather than trailing behind it.
+   */
+  const moveTabFocus = (event: React.KeyboardEvent<HTMLButtonElement>, fromIndex: number) => {
+    const lastIndex = PROJECT_FORM_TABS.length - 1;
+    const nextIndex = {
+      ArrowRight: fromIndex === lastIndex ? 0 : fromIndex + 1,
+      ArrowLeft: fromIndex === 0 ? lastIndex : fromIndex - 1,
+      Home: 0,
+      End: lastIndex,
+    }[event.key];
+
+    if (nextIndex === undefined) return;
+
+    event.preventDefault();
+    setActiveTab(PROJECT_FORM_TABS[nextIndex].id);
+    const nextTab = event.currentTarget.parentElement?.children[nextIndex];
+    if (nextTab instanceof HTMLElement) nextTab.focus();
+  };
 
   const isExisting = Boolean(routeProjectId);
   // A saved project the viewer may change; a new project always may be.
@@ -418,7 +444,7 @@ const ProjectForm: React.FC = () => {
         {/* One form across all three tabs: switching tab only changes what is
             on screen, and the single Save below writes the whole project. */}
         <div className="pf-tabs" role="tablist" aria-label="Project form sections">
-          {PROJECT_FORM_TABS.map((tab) => (
+          {PROJECT_FORM_TABS.map((tab, tabIndex) => (
             <button
               key={tab.id}
               type="button"
@@ -426,8 +452,13 @@ const ProjectForm: React.FC = () => {
               id={`pf-tab-${tab.id}`}
               aria-selected={activeTab === tab.id}
               aria-controls={`pf-panel-${tab.id}`}
+              // The tablist is one stop in the tab sequence, and the arrow keys
+              // move within it — what the `tab` role tells a screen reader to
+              // expect.
+              tabIndex={activeTab === tab.id ? 0 : -1}
               className={`pf-tabs__tab ${activeTab === tab.id ? 'is-active' : ''}`.trim()}
               onClick={() => setActiveTab(tab.id)}
+              onKeyDown={(event) => moveTabFocus(event, tabIndex)}
             >
               {tab.label}
             </button>

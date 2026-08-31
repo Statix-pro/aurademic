@@ -672,6 +672,11 @@ const JournalForm: React.FC = () => {
         stack: error.stack,
       });
 
+      // A failure belonging to a query the user has already moved past says
+      // nothing about the current one, so it must not clear its results or
+      // raise an error over them.
+      if (authorSearchTokenRef.current[index] !== requestToken) return;
+
       setError(
         error.response?.data?.message ||
           error.message ||
@@ -1506,8 +1511,28 @@ const JournalForm: React.FC = () => {
     }
   };
 
+  // Every per-row array here — queries, results, suggestions, designations —
+  // is keyed by index, and delete/reorder splice all of them. A lookup still in
+  // flight would then land its results in whichever row moved into its index,
+  // so both boundaries invalidate every pending lookup rather than trying to
+  // remap it onto the new order.
+  const cancelPendingAuthorSearches = () => {
+    activeAuthorSearchIndexRef.current = null;
+    authorSearchTimerRef.current.forEach((timer, timerIndex) => {
+      if (timer) clearTimeout(timer);
+      authorSearchTimerRef.current[timerIndex] = null;
+    });
+    authorSearchTokenRef.current = authorSearchTokenRef.current.map((token) => (token || 0) + 1);
+    setShowSuggestions((prev) => {
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
+      return prevArray.some(Boolean) ? prevArray.map(() => false) : prevArray;
+    });
+  };
+
   const deleteAuthor = (id: number) => {
     if (id === 1) return;
+
+    cancelPendingAuthorSearches();
 
     // Remove the author and keep parallel arrays in sync
     setAuthors((prevAuthors) => {
@@ -1583,6 +1608,8 @@ const JournalForm: React.FC = () => {
     const dragIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
 
     if (dragIndex === dropIndex) return;
+
+    cancelPendingAuthorSearches();
 
     // Reorder authors
     setAuthors((prevAuthors) => {
@@ -1667,6 +1694,10 @@ const JournalForm: React.FC = () => {
     if (authorSearchTimerRef.current[index]) {
       clearTimeout(authorSearchTimerRef.current[index] as ReturnType<typeof setTimeout>);
     }
+    // Retire the request already in flight here rather than when the timer
+    // fires: for the next 300ms its answer belongs to a query the user has
+    // already typed past, and showing that list would be showing stale names.
+    authorSearchTokenRef.current[index] = (authorSearchTokenRef.current[index] || 0) + 1;
     authorSearchTimerRef.current[index] = setTimeout(() => {
       authorSearchTimerRef.current[index] = null;
       searchAuthor(newValue, index);

@@ -739,20 +739,31 @@ function normalizeTransactionAccounts(raw, errors) {
           account.account_option_id || account.account_name || account.transactions.length > 0,
       )
       .map(({ sourceIndex, ...account }, index) => {
-        if (!account.account_option_id) {
+        // An account is identified by its option id, or — once that option has
+        // been removed and `ON DELETE SET NULL` has cleared the id — by the
+        // name snapshot the block kept. Demanding the id would make a ledger
+        // whose account is gone unsavable, blocking every later edit to the
+        // project, so a named block stands on its own name here just as a
+        // budget head row does in `normalizeBudgetAllotment`.
+        if (!account.account_option_id && !account.account_name) {
           errors.push({
             field: `transaction_accounts[${sourceIndex}].account`,
             message: 'Select a transaction account.',
           });
-        } else if (seenAccounts.has(account.account_option_id)) {
+        } else {
           // Two blocks on one account would split a single ledger into two
           // running balances, and collide on uq_project_transaction_accounts.
-          errors.push({
-            field: `transaction_accounts[${sourceIndex}].account`,
-            message: 'This account already has a ledger on this project.',
-          });
-        } else {
-          seenAccounts.add(account.account_option_id);
+          const identity = account.account_option_id
+            ? `id:${account.account_option_id}`
+            : `name:${account.account_name.toLowerCase()}`;
+          if (seenAccounts.has(identity)) {
+            errors.push({
+              field: `transaction_accounts[${sourceIndex}].account`,
+              message: 'This account already has a ledger on this project.',
+            });
+          } else {
+            seenAccounts.add(identity);
+          }
         }
 
         return { ...account, display_order: index };

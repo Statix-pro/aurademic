@@ -714,6 +714,35 @@ describe('transaction accounts', () => {
     expect(errorFields(errors)).toContain('transaction_accounts[0].account');
   });
 
+  it('keeps a ledger whose account option was removed, on its name alone', () => {
+    // `account_options` rows are removed with ON DELETE SET NULL behind them,
+    // which leaves the block holding only its name snapshot. Rejecting that
+    // would block every later save of the project.
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow()], { account_option_id: null, account_name: 'Retired SBI account' }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts).toHaveLength(1);
+    expect(aggregate.transactionAccounts[0]).toMatchObject({
+      account_option_id: null,
+      account_name: 'Retired SBI account',
+    });
+  });
+
+  it('rejects two name-only ledgers on the same removed account', () => {
+    const { errors } = normalizeProjectPayload(
+      validPayload({
+        transaction_accounts: [
+          { account_option_id: null, account_name: 'Retired SBI', transactions: [ledgerRow()] },
+          { account_option_id: null, account_name: 'retired sbi', transactions: [ledgerRow()] },
+        ],
+      }),
+    );
+
+    expect(errorFields(errors)).toContain('transaction_accounts[1].account');
+  });
+
   it('rejects the same account being given two ledgers', () => {
     const { errors } = normalizeProjectPayload(
       validPayload({
