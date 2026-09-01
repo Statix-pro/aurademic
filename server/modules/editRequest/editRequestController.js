@@ -217,16 +217,24 @@ const editRequestController = {
       });
     }
 
+    // The dashboard row carries the requester's id (`edit_request_user_id`). It is
+    // optional so older clients keep working, but when present the decision is pinned to
+    // that user's request instead of whichever row is newest for the entity.
+    const requestedUserId = Number(req.body?.userId);
+    const userId =
+      Number.isInteger(requestedUserId) && requestedUserId > 0 ? requestedUserId : null;
+
     const result = await editRequestModel.updateLatestEditRequestStatus(
       entityId,
       entityType,
       status,
+      userId,
     );
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Edit request not found.',
+        message: 'No pending edit request found for this publication.',
       });
     }
 

@@ -68,7 +68,8 @@ describe('journalModel.create', () => {
     const seen = [];
     const connection = createFakeConnection((sql, params) => {
       seen.push({ sql, params });
-      if (sql.includes('SELECT id FROM journal_options WHERE id = ?')) return [[{ id: 7 }]];
+      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
+        return [[{ id: 7, is_placeholder: 0 }]];
       if (sql.includes('SELECT category FROM journal_options'))
         return [[{ category: 'International' }]];
       if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 42 }];
@@ -89,7 +90,8 @@ describe('journalModel.create', () => {
 
   it('takes the level from the registry, not from the submitted form', async () => {
     const connection = createFakeConnection((sql) => {
-      if (sql.includes('SELECT id FROM journal_options WHERE id = ?')) return [[{ id: 7 }]];
+      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
+        return [[{ id: 7, is_placeholder: 0 }]];
       if (sql.includes('SELECT category FROM journal_options'))
         return [[{ category: 'International' }]];
       if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 42 }];
@@ -104,6 +106,53 @@ describe('journalModel.create', () => {
       String(sql).startsWith('INSERT INTO journals SET'),
     );
     expect(insert[1][0].category).toBe('International');
+  });
+
+  it('ignores an option id whose row does not suit the publication type', async () => {
+    // A crafted or stale id must not pull a book's stand-in row (or an unrelated
+    // journal's publisher, ISSNs and level) onto an Article.
+    const connection = createFakeConnection((sql) => {
+      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
+        return [[{ id: 99, is_placeholder: 1 }]];
+      if (sql.includes('WHERE journal_name = ?')) return [[{ id: 1 }]];
+      if (sql.includes('SELECT category FROM journal_options')) return [[{ category: 'National' }]];
+      if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 45 }];
+      if (sql.includes('FROM journals j')) return [[{ id: 45 }]];
+      return [[]];
+    });
+    db.getConnection.mockResolvedValue(connection);
+
+    await journalModel.create({ ...baseJournal, journal_options_id: 99 });
+
+    const insert = connection.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith('INSERT INTO journals SET'),
+    );
+    expect(insert[1][0].journal_options_id).toBe(1);
+  });
+
+  it('ignores a real journal id submitted for a book', async () => {
+    const connection = createFakeConnection((sql) => {
+      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
+        return [[{ id: 7, is_placeholder: 0 }]];
+      if (sql.includes('is_placeholder = 1')) return [[{ id: 21 }]];
+      if (sql.includes('SELECT category FROM journal_options')) return [[{ category: null }]];
+      if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 46 }];
+      if (sql.includes('FROM journals j')) return [[{ id: 46 }]];
+      return [[]];
+    });
+    db.getConnection.mockResolvedValue(connection);
+
+    await journalModel.create({
+      ...baseJournal,
+      type: 'Book',
+      journal_name: 'My Book',
+      journal_options_id: 7,
+    });
+
+    const insert = connection.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith('INSERT INTO journals SET'),
+    );
+    expect(insert[1][0].journal_options_id).toBe(21);
   });
 
   it('falls back to a deterministic name match when no id is supplied', async () => {
@@ -187,7 +236,8 @@ describe('journalModel.updateJournalAndOptions', () => {
   it('prefers the submitted journal_options_id over the name', async () => {
     const connection = createFakeConnection((sql) => {
       if (sql.includes('FROM journals j LEFT JOIN journal_options')) return linkedRow;
-      if (sql.includes('SELECT id FROM journal_options WHERE id = ?')) return [[{ id: 11 }]];
+      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
+        return [[{ id: 11, is_placeholder: 0 }]];
       if (sql.includes('SELECT category FROM journal_options'))
         return [[{ category: 'International' }]];
       return [{ affectedRows: 1 }];
@@ -334,12 +384,40 @@ describe('editRequestModel.updateLatestEditRequestStatus', () => {
 
     const [lookupSql, updateSql] = collectSql();
     expect(lookupSql).toContain('WHERE entity_id = ? AND entity_type = ?');
+    expect(lookupSql).toContain("status = 'pending'");
     expect(lookupSql).toContain('ORDER BY id DESC LIMIT 1');
     expect(db.query.mock.calls[0][1]).toEqual([4, 'journals']);
 
-    expect(updateSql).toBe('UPDATE edit_requests SET status = ? WHERE id = ?');
+    // Re-deciding is refused at the write as well, so a stale click cannot flip a row
+    // that was decided between the lookup and the update.
+    expect(updateSql).toBe(
+      "UPDATE edit_requests SET status = ? WHERE id = ? AND status = 'pending'",
+    );
     expect(db.query.mock.calls[1][1]).toEqual(['approved', 13]);
     expect(result.affectedRows).toBe(1);
+  });
+
+  it('pins the decision to the requesting user when one is named', async () => {
+    // Two users can have open requests on the same publication; approving from user A's
+    // row must not grant edit access to user B.
+    db.query.mockResolvedValueOnce([[{ id: 21 }]]).mockResolvedValueOnce([{ affectedRows: 1 }]);
+
+    await editRequestModel.updateLatestEditRequestStatus(4, 'journals', 'approved', 77);
+
+    const [lookupSql] = collectSql();
+    expect(lookupSql).toContain('AND user_id = ?');
+    expect(db.query.mock.calls[0][1]).toEqual([4, 'journals', 77]);
+    expect(db.query.mock.calls[1][1]).toEqual(['approved', 21]);
+  });
+
+  it('leaves an already decided request alone', async () => {
+    // The lookup only considers pending rows, so a repeated click finds nothing to decide.
+    db.query.mockResolvedValueOnce([[]]);
+
+    const result = await editRequestModel.updateLatestEditRequestStatus(4, 'journals', 'approved');
+
+    expect(result).toEqual({ affectedRows: 0 });
+    expect(db.query).toHaveBeenCalledTimes(1);
   });
 
   it('reports nothing updated when the entity has no request of that type', async () => {
@@ -468,7 +546,8 @@ describe('journal author payload identifies students', () => {
 describe('journal ownership', () => {
   it('records who submitted the publication', async () => {
     const connection = createFakeConnection((sql) => {
-      if (sql.includes('SELECT id FROM journal_options WHERE id = ?')) return [[{ id: 3 }]];
+      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
+        return [[{ id: 3, is_placeholder: 0 }]];
       if (sql.includes('SELECT category FROM journal_options')) return [[{ category: 'National' }]];
       if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 90 }];
       if (sql.includes('FROM journals j')) return [[{ id: 90 }]];

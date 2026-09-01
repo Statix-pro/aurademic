@@ -3,6 +3,19 @@ import path from 'path';
 
 import journalModel from './journalModel.js';
 
+/**
+ * Multer writes uploads into uploads/temp under a sanitized name, but `req.file.path`
+ * still traces back to client-supplied input as far as static analysis is concerned.
+ * Every filesystem call below goes through this, so a path that does not resolve inside
+ * the temp directory is refused rather than acted on.
+ */
+const TEMP_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'temp');
+
+const resolveTempUploadPath = (candidate) => {
+  const resolved = path.resolve(String(candidate || ''));
+  return resolved.startsWith(TEMP_UPLOAD_DIR + path.sep) ? resolved : null;
+};
+
 const isRequesterAdmin = (requestUser = {}) => Boolean(requestUser.isAdmin ?? requestUser.is_admin);
 
 const isRequesterSuperAdmin = (requestUser = {}) => {
@@ -21,6 +34,61 @@ const isRequesterSuperAdmin = (requestUser = {}) => {
 
 const hasAdminOverride = (requestUser = {}) =>
   isRequesterAdmin(requestUser) || isRequesterSuperAdmin(requestUser);
+
+/**
+ * Resolves the requester's access to one publication. Every mutation route shares this so
+ * an authenticated user cannot reach another owner's publication through a route that
+ * happens to check less than `updateJournal` does.
+ *
+ * Returns `{ workflowAccess }`, or `{ error }` describing the response to send.
+ */
+const resolveJournalAccess = async (req, journalId) => {
+  const workflowAccess = await journalModel.getJournalWorkflowAccess(
+    journalId,
+    req.user.id,
+    req.user.email,
+  );
+
+  if (!workflowAccess) {
+    return { error: { status: 404, body: { status: 'error', message: 'Journal not found' } } };
+  }
+
+  if (!hasAdminOverride(req.user) && !workflowAccess.can_manage) {
+    return {
+      error: {
+        status: 403,
+        body: { status: 'error', message: 'You are not authorized to edit this journal' },
+      },
+    };
+  }
+
+  return { workflowAccess };
+};
+
+/**
+ * An approved publication is frozen until an edit request is granted. Content routes
+ * (authors, indexes, the article file) enforce this alongside `updateJournal` — editing
+ * the parts was otherwise a way around the freeze on the whole.
+ */
+const journalEditIsFrozen = (req, workflowAccess) => {
+  if (hasAdminOverride(req.user)) {
+    return false;
+  }
+
+  const approvalStatus = workflowAccess.admin_approval_status || 'pending';
+  const editRequestStatus = workflowAccess.edit_request_status || 'none';
+  const canDirectEdit =
+    approvalStatus === 'pending' ||
+    approvalStatus === 'rejected' ||
+    (approvalStatus === 'approved' && editRequestStatus === 'approved');
+
+  return !canDirectEdit;
+};
+
+const FROZEN_EDIT_RESPONSE = {
+  status: 'error',
+  message: 'Direct edit is disabled for approved publications. Please request edit access.',
+};
 
 const journalController = {
   async createJournal(req, res) {
@@ -361,21 +429,13 @@ const journalController = {
       const journalId = req.params.id;
       const dbAuthorId = req.params.dbAuthorId;
 
-      const workflowAccess = await journalModel.getJournalWorkflowAccess(
-        journalId,
-        req.user.id,
-        req.user.email,
-      );
-
-      if (!workflowAccess) {
-        return res.status(404).json({ status: 'error', message: 'Journal not found' });
+      const { workflowAccess, error } = await resolveJournalAccess(req, journalId);
+      if (error) {
+        return res.status(error.status).json(error.body);
       }
 
-      if (!hasAdminOverride(req.user) && !workflowAccess.can_manage) {
-        return res.status(403).json({
-          status: 'error',
-          message: 'You are not authorized to edit this journal',
-        });
+      if (journalEditIsFrozen(req, workflowAccess)) {
+        return res.status(403).json(FROZEN_EDIT_RESPONSE);
       }
 
       const result = await journalModel.deleteAuthorFromJournal(journalId, dbAuthorId);
@@ -403,21 +463,13 @@ const journalController = {
         });
       }
 
-      const workflowAccess = await journalModel.getJournalWorkflowAccess(
-        journalId,
-        req.user.id,
-        req.user.email,
-      );
-
-      if (!workflowAccess) {
-        return res.status(404).json({ status: 'error', message: 'Journal not found' });
+      const { workflowAccess, error } = await resolveJournalAccess(req, journalId);
+      if (error) {
+        return res.status(error.status).json(error.body);
       }
 
-      if (!hasAdminOverride(req.user) && !workflowAccess.can_manage) {
-        return res.status(403).json({
-          status: 'error',
-          message: 'You are not authorized to edit this journal',
-        });
+      if (journalEditIsFrozen(req, workflowAccess)) {
+        return res.status(403).json(FROZEN_EDIT_RESPONSE);
       }
 
       const savedIndexes = await journalModel.replaceIndexes(journalId, indexes);
@@ -595,7 +647,25 @@ const journalController = {
         });
       }
 
+      const { workflowAccess, error } = await resolveJournalAccess(req, journalId);
+      if (error) {
+        await fs.promises.unlink(resolveTempUploadPath(req.file.path) || '').catch(() => {});
+        return res.status(error.status).json(error.body);
+      }
+
+      if (journalEditIsFrozen(req, workflowAccess)) {
+        await fs.promises.unlink(resolveTempUploadPath(req.file.path) || '').catch(() => {});
+        return res.status(403).json(FROZEN_EDIT_RESPONSE);
+      }
+
       const file = req.file;
+      const tempPath = resolveTempUploadPath(file.path);
+      if (!tempPath) {
+        return res.status(400).json({
+          success: false,
+          message: 'Upload could not be processed.',
+        });
+      }
 
       // The published article is PDF-only and capped at 5 MB. The shared upload
       // middleware is deliberately looser (it serves every module), so the stricter
@@ -603,7 +673,7 @@ const journalController = {
       const isPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname || '');
       const maxArticleBytes = 5 * 1024 * 1024;
       if (!isPdf || file.size > maxArticleBytes) {
-        await fs.promises.unlink(file.path).catch(() => {});
+        await fs.promises.unlink(tempPath).catch(() => {});
         return res.status(400).json({
           success: false,
           message: !isPdf
@@ -628,11 +698,11 @@ const journalController = {
 
       try {
         // Move file from temp to final location
-        await fs.promises.rename(file.path, finalPath);
+        await fs.promises.rename(tempPath, finalPath);
       } catch (moveError) {
         // Fallback to copy if rename fails (might happen across devices)
-        await fs.promises.copyFile(file.path, finalPath);
-        await fs.promises.unlink(file.path);
+        await fs.promises.copyFile(tempPath, finalPath);
+        await fs.promises.unlink(tempPath);
       }
 
       // Save the file path in the database (use forward slashes for consistency)
@@ -782,13 +852,13 @@ const journalController = {
         });
       }
 
-      // Check if journal exists and user has access
-      const journalExists = await journalModel.doesJournalExist(journalId);
-      if (!journalExists) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Journal not found',
-        });
+      // Posting a progress update is only for people who manage this publication — the
+      // route previously checked that the journal existed and nothing else. The approval
+      // freeze deliberately does not apply here: status updates exist to report on a
+      // publication after it has been approved.
+      const { error } = await resolveJournalAccess(req, journalId);
+      if (error) {
+        return res.status(error.status).json(error.body);
       }
 
       const statusUpdateId = await journalModel.createStatusUpdate(journalId, userId, {

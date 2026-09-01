@@ -6,6 +6,11 @@ const formOptionsModel = {
    * Two entries with the same name make the publication form's journal picker ambiguous —
    * and because each holds its own National/International value, a publication could be
    * saved against the copy the user did not pick. Names are therefore kept unique here.
+   *
+   * Returns the trimmed name so callers store exactly what was checked: MySQL ignores
+   * trailing spaces when comparing but not leading ones, so storing ' Nature' untrimmed
+   * would let a later 'Nature' pass this guard and create the near-duplicate it exists
+   * to prevent.
    */
   async assertJournalNameIsFree(journalName, excludeId = null) {
     const name = String(journalName || '').trim();
@@ -28,16 +33,18 @@ const formOptionsModel = {
       error.statusCode = 409;
       throw error;
     }
+
+    return name;
   },
 
   async addJournalOption(journal) {
     try {
-      await formOptionsModel.assertJournalNameIsFree(journal.journal_name);
+      const journalName = await formOptionsModel.assertJournalNameIsFree(journal.journal_name);
       const [result] = await db.query(
         `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category) 
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          journal.journal_name,
+          journalName,
           journal.publisher || '',
           journal.website || '',
           journal.print_issn || '',
@@ -47,7 +54,7 @@ const formOptionsModel = {
           journal.category || 'National',
         ],
       );
-      return { id: result.insertId, ...journal };
+      return { id: result.insertId, ...journal, journal_name: journalName };
     } catch (error) {
       // A rejected request (duplicate name, missing name) keeps its own status instead of
       // being reported as a server fault.
@@ -69,13 +76,16 @@ const formOptionsModel = {
 
   async updateJournalOption(id, updatedData) {
     try {
-      await formOptionsModel.assertJournalNameIsFree(updatedData.journal_name, id);
+      const journalName = await formOptionsModel.assertJournalNameIsFree(
+        updatedData.journal_name,
+        id,
+      );
       const [result] = await db.query(
         `UPDATE journal_options 
                  SET journal_name = ?, publisher = ?, website = ?, print_issn = ?, online_issn = ?, impact_factor = ?, cite_score = ?, category = ? 
                  WHERE id = ?`,
         [
-          updatedData.journal_name,
+          journalName,
           updatedData.publisher || '',
           updatedData.website || '',
           updatedData.print_issn || '',

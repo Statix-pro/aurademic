@@ -49,6 +49,35 @@ const resolvePlaceholderOptionId = async (executor, name) => {
   return inserted.insertId;
 };
 
+/**
+ * Accepts the picker's `journal_options_id` only when the row it points at belongs to the
+ * kind of publication being saved: a placeholder type (Book/Chapter/Conference) must land
+ * on a placeholder row, and a Journal must land on a curated one. A stale or crafted id
+ * would otherwise pull an unrelated entry's publisher, ISSNs and National/International
+ * value onto the publication. Returning null falls back to resolution by name.
+ */
+const resolveRequestedOptionId = async (executor, rawId, publicationType) => {
+  const requestedOptionId = Number(rawId);
+  if (!Number.isInteger(requestedOptionId) || requestedOptionId <= 0) {
+    return null;
+  }
+
+  const [rows] = await executor.query(
+    'SELECT id, is_placeholder FROM journal_options WHERE id = ?',
+    [requestedOptionId],
+  );
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const isPlaceholderRow = Boolean(rows[0].is_placeholder);
+  if (isPlaceholderRow !== usesPlaceholderOption(publicationType)) {
+    return null;
+  }
+
+  return rows[0].id;
+};
+
 const resolveOptionCategory = async (executor, journalOptionsId, submittedCategory) => {
   if (!journalOptionsId) {
     return normalizeCategory(submittedCategory);
@@ -72,25 +101,20 @@ const journalModel = {
       // First, get or create journal option with upsert logic
       // For Conference, Book Chapter, and Book, journal_name might be empty
       // In that case, we'll create a placeholder entry or use a default
-      let journalOptionsId;
 
       // Check if this is a type that uses publication_details instead of journal_options
       const usesPublicationDetails = usesPlaceholderOption(journalData.type);
 
-      // The picker knows exactly which registry entry the user chose, so trust its id.
-      // Resolving by name alone silently swapped in a different entry whenever two share
-      // a name — and since each copy carries its own National/International value, the
-      // publication came out on the wrong level.
-      const requestedOptionId = Number(journalData.journal_options_id);
-      if (Number.isInteger(requestedOptionId) && requestedOptionId > 0) {
-        const [requestedOption] = await connection.query(
-          'SELECT id FROM journal_options WHERE id = ?',
-          [requestedOptionId],
-        );
-        if (requestedOption.length > 0) {
-          journalOptionsId = requestedOption[0].id;
-        }
-      }
+      // The picker knows exactly which registry entry the user chose, so prefer its id
+      // once the row is confirmed to suit this publication type. Resolving by name alone
+      // silently swapped in a different entry whenever two share a name — and since each
+      // copy carries its own National/International value, the publication came out on
+      // the wrong level.
+      let journalOptionsId = await resolveRequestedOptionId(
+        connection,
+        journalData.journal_options_id,
+        journalData.type,
+      );
 
       if (journalOptionsId) {
         // Already resolved by id; nothing to look up by name.
@@ -293,26 +317,24 @@ const journalModel = {
           ? journalOptionsData.journal_name.trim()
           : '';
 
-      // Prefer the id the picker sent, for the same reason create() does: two entries can
-      // share a name but carry different National/International values.
-      const requestedOptionId = Number(journalOptionsData.journal_options_id);
-      let resolvedById = false;
-      if (Number.isInteger(requestedOptionId) && requestedOptionId > 0) {
-        const [requestedOption] = await connection.query(
-          'SELECT id FROM journal_options WHERE id = ?',
-          [requestedOptionId],
-        );
-        if (requestedOption.length > 0) {
-          journalOptionsId = requestedOption[0].id;
-          resolvedById = true;
-        }
-      }
-
       // An empty name means the form had nothing to say about the journal (Book and
       // Book Chapter always do), not that the link should be dropped.
       // The type on the record wins over anything the form claims, so a rename cannot
       // turn a book's stand-in row into a real journal or vice versa.
       const publicationType = journalData.type || journalRows[0].type;
+
+      // Prefer the id the picker sent, for the same reason create() does: two entries can
+      // share a name but carry different National/International values. The id is only
+      // honoured when the row suits `publicationType`.
+      const resolvedOptionId = await resolveRequestedOptionId(
+        connection,
+        journalOptionsData.journal_options_id,
+        publicationType,
+      );
+      const resolvedById = resolvedOptionId !== null;
+      if (resolvedById) {
+        journalOptionsId = resolvedOptionId;
+      }
 
       if (!resolvedById && submittedName && submittedName !== currentName) {
         if (usesPlaceholderOption(publicationType)) {

@@ -42,24 +42,36 @@ const editRequestModel = {
    * belonging to the project (or the other user) that happened to share that id, and left
    * unrelated older rows for the same entity marked approved.
    */
-  async updateLatestEditRequestStatus(entityId, entityType, status) {
+  /**
+   * Decides one pending edit request.
+   *
+   * Only pending rows are eligible, so a repeated or stale click cannot re-decide a
+   * request that was already approved or rejected. `userId` names whose request is being
+   * decided: two users can have open requests on the same entity, and without it the
+   * decision landed on whichever row happened to be newest rather than on the row the
+   * admin acted on in the list.
+   */
+  async updateLatestEditRequestStatus(entityId, entityType, status, userId = null) {
     try {
-      const [rows] = await db.query(
-        `SELECT id FROM edit_requests
-          WHERE entity_id = ? AND entity_type = ?
-       ORDER BY id DESC
-          LIMIT 1`,
-        [entityId, entityType],
-      );
+      const params = [entityId, entityType];
+      let sql = `SELECT id FROM edit_requests
+          WHERE entity_id = ? AND entity_type = ? AND status = 'pending'`;
+      if (userId != null) {
+        sql += ' AND user_id = ?';
+        params.push(userId);
+      }
+      sql += ' ORDER BY id DESC LIMIT 1';
+
+      const [rows] = await db.query(sql, params);
 
       if (rows.length === 0) {
         return { affectedRows: 0 };
       }
 
-      const [result] = await db.query('UPDATE edit_requests SET status = ? WHERE id = ?', [
-        status,
-        rows[0].id,
-      ]);
+      const [result] = await db.query(
+        "UPDATE edit_requests SET status = ? WHERE id = ? AND status = 'pending'",
+        [status, rows[0].id],
+      );
       return result;
     } catch (error) {
       console.error('Error in updateLatestEditRequestStatus:', error);
