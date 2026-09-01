@@ -68,8 +68,8 @@ describe('journalModel.create', () => {
     const seen = [];
     const connection = createFakeConnection((sql, params) => {
       seen.push({ sql, params });
-      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
-        return [[{ id: 7, is_placeholder: 0 }]];
+      if (sql.includes('SELECT id, journal_name, is_placeholder FROM journal_options'))
+        return [[{ id: 7, journal_name: 'Shared Name', is_placeholder: 0 }]];
       if (sql.includes('SELECT category FROM journal_options'))
         return [[{ category: 'International' }]];
       if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 42 }];
@@ -90,8 +90,8 @@ describe('journalModel.create', () => {
 
   it('takes the level from the registry, not from the submitted form', async () => {
     const connection = createFakeConnection((sql) => {
-      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
-        return [[{ id: 7, is_placeholder: 0 }]];
+      if (sql.includes('SELECT id, journal_name, is_placeholder FROM journal_options'))
+        return [[{ id: 7, journal_name: 'Shared Name', is_placeholder: 0 }]];
       if (sql.includes('SELECT category FROM journal_options'))
         return [[{ category: 'International' }]];
       if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 42 }];
@@ -112,8 +112,8 @@ describe('journalModel.create', () => {
     // A crafted or stale id must not pull a book's stand-in row (or an unrelated
     // journal's publisher, ISSNs and level) onto an Article.
     const connection = createFakeConnection((sql) => {
-      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
-        return [[{ id: 99, is_placeholder: 1 }]];
+      if (sql.includes('SELECT id, journal_name, is_placeholder FROM journal_options'))
+        return [[{ id: 99, journal_name: 'Shared Name', is_placeholder: 1 }]];
       if (sql.includes('WHERE journal_name = ?')) return [[{ id: 1 }]];
       if (sql.includes('SELECT category FROM journal_options')) return [[{ category: 'National' }]];
       if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 45 }];
@@ -130,10 +130,33 @@ describe('journalModel.create', () => {
     expect(insert[1][0].journal_options_id).toBe(1);
   });
 
+  it('ignores an option id that names a different journal', async () => {
+    // The picker fills the name field from the entry it sent the id for, so a row naming
+    // some other journal means a stale or crafted id — honouring it would publish that
+    // journal's metadata and level on this publication.
+    const connection = createFakeConnection((sql) => {
+      if (sql.includes('SELECT id, journal_name, is_placeholder FROM journal_options'))
+        return [[{ id: 55, journal_name: 'An Unrelated Journal', is_placeholder: 0 }]];
+      if (sql.includes('WHERE journal_name = ?')) return [[{ id: 2 }]];
+      if (sql.includes('SELECT category FROM journal_options')) return [[{ category: 'National' }]];
+      if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 47 }];
+      if (sql.includes('FROM journals j')) return [[{ id: 47 }]];
+      return [[]];
+    });
+    db.getConnection.mockResolvedValue(connection);
+
+    await journalModel.create({ ...baseJournal, journal_options_id: 55 });
+
+    const insert = connection.query.mock.calls.find(([sql]) =>
+      String(sql).startsWith('INSERT INTO journals SET'),
+    );
+    expect(insert[1][0].journal_options_id).toBe(2);
+  });
+
   it('ignores a real journal id submitted for a book', async () => {
     const connection = createFakeConnection((sql) => {
-      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
-        return [[{ id: 7, is_placeholder: 0 }]];
+      if (sql.includes('SELECT id, journal_name, is_placeholder FROM journal_options'))
+        return [[{ id: 7, journal_name: 'Shared Name', is_placeholder: 0 }]];
       if (sql.includes('is_placeholder = 1')) return [[{ id: 21 }]];
       if (sql.includes('SELECT category FROM journal_options')) return [[{ category: null }]];
       if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 46 }];
@@ -236,8 +259,8 @@ describe('journalModel.updateJournalAndOptions', () => {
   it('prefers the submitted journal_options_id over the name', async () => {
     const connection = createFakeConnection((sql) => {
       if (sql.includes('FROM journals j LEFT JOIN journal_options')) return linkedRow;
-      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
-        return [[{ id: 11, is_placeholder: 0 }]];
+      if (sql.includes('SELECT id, journal_name, is_placeholder FROM journal_options'))
+        return [[{ id: 11, journal_name: 'Some Other Name', is_placeholder: 0 }]];
       if (sql.includes('SELECT category FROM journal_options'))
         return [[{ category: 'International' }]];
       return [{ affectedRows: 1 }];
@@ -546,8 +569,8 @@ describe('journal author payload identifies students', () => {
 describe('journal ownership', () => {
   it('records who submitted the publication', async () => {
     const connection = createFakeConnection((sql) => {
-      if (sql.includes('SELECT id, is_placeholder FROM journal_options WHERE id = ?'))
-        return [[{ id: 3, is_placeholder: 0 }]];
+      if (sql.includes('SELECT id, journal_name, is_placeholder FROM journal_options'))
+        return [[{ id: 3, journal_name: 'Shared Name', is_placeholder: 0 }]];
       if (sql.includes('SELECT category FROM journal_options')) return [[{ category: 'National' }]];
       if (sql.startsWith('INSERT INTO journals SET')) return [{ insertId: 90 }];
       if (sql.includes('FROM journals j')) return [[{ id: 90 }]];

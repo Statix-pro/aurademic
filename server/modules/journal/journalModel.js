@@ -50,20 +50,29 @@ const resolvePlaceholderOptionId = async (executor, name) => {
 };
 
 /**
- * Accepts the picker's `journal_options_id` only when the row it points at belongs to the
- * kind of publication being saved: a placeholder type (Book/Chapter/Conference) must land
- * on a placeholder row, and a Journal must land on a curated one. A stale or crafted id
- * would otherwise pull an unrelated entry's publisher, ISSNs and National/International
- * value onto the publication. Returning null falls back to resolution by name.
+ * Accepts the picker's `journal_options_id` only when the row it points at agrees with the
+ * rest of the submission. Two things have to hold:
+ *
+ *  - the row suits the publication type: a placeholder type (Book/Chapter/Conference) must
+ *    land on a placeholder row, and a Journal on a curated one;
+ *  - the row's name is the name that was submitted, since the picker fills that field from
+ *    the entry the user chose. An id that names a different journal is a stale or crafted
+ *    one, and honouring it would publish that journal's publisher, ISSNs and
+ *    National/International value on this publication.
+ *
+ * Two entries can legitimately share a name, so the check does not defeat the reason the
+ * id is preferred over the name in the first place. A submission that carries no name has
+ * nothing to contradict the id (Book and Book Chapter submit an empty name), so only a
+ * non-empty name is compared. Returning null falls back to resolution by name.
  */
-const resolveRequestedOptionId = async (executor, rawId, publicationType) => {
+const resolveRequestedOptionId = async (executor, rawId, publicationType, submittedName = '') => {
   const requestedOptionId = Number(rawId);
   if (!Number.isInteger(requestedOptionId) || requestedOptionId <= 0) {
     return null;
   }
 
   const [rows] = await executor.query(
-    'SELECT id, is_placeholder FROM journal_options WHERE id = ?',
+    'SELECT id, journal_name, is_placeholder FROM journal_options WHERE id = ?',
     [requestedOptionId],
   );
   if (rows.length === 0) {
@@ -72,6 +81,15 @@ const resolveRequestedOptionId = async (executor, rawId, publicationType) => {
 
   const isPlaceholderRow = Boolean(rows[0].is_placeholder);
   if (isPlaceholderRow !== usesPlaceholderOption(publicationType)) {
+    return null;
+  }
+
+  const normalize = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase();
+  const requestedName = normalize(submittedName);
+  if (requestedName && normalize(rows[0].journal_name) !== requestedName) {
     return null;
   }
 
@@ -114,6 +132,7 @@ const journalModel = {
         connection,
         journalData.journal_options_id,
         journalData.type,
+        journalData.journal_name,
       );
 
       if (journalOptionsId) {
@@ -330,6 +349,7 @@ const journalModel = {
         connection,
         journalOptionsData.journal_options_id,
         publicationType,
+        submittedName,
       );
       const resolvedById = resolvedOptionId !== null;
       if (resolvedById) {
