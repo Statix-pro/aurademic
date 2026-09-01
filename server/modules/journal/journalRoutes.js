@@ -22,10 +22,12 @@ router.delete('/journals/:id', journalController.deleteJournal);
 // Author operations
 router.post('/journals/:id/authors', journalController.addAuthor);
 router.put('/journals/:id/authors/:dbAuthorId', journalController.updateAuthor);
+router.delete('/journals/:id/authors/:dbAuthorId', journalController.deleteAuthor);
 router.get('/journals/:id/authors', journalController.getAuthors);
 
 // Index operations
 router.post('/journals/:id/indexes', journalController.addIndex);
+router.put('/journals/:id/indexes', journalController.replaceIndexes);
 router.get('/journals/:id/indexes', journalController.getIndexes);
 
 // Status Update operations

@@ -17,23 +17,52 @@ const editRequestModel = {
   //     return rows[0];
   // },
 
+  /**
+   * The newest request wins. Without the ordering MySQL was free to hand back an older
+   * row, so a user who re-requested after a rejection kept seeing "rejected" while a
+   * pending row existed — and the journal workflow query, which already selects MAX(id),
+   * disagreed with this one.
+   */
   async findEditRequest(entityId, userId, entityType) {
     const [rows] = await db.query(
-      `SELECT * FROM edit_requests 
-            WHERE entity_id = ? AND user_id = ? AND entity_type = ? 
+      `SELECT * FROM edit_requests
+            WHERE entity_id = ? AND user_id = ? AND entity_type = ?
+         ORDER BY id DESC
             LIMIT 1`,
       [entityId, userId, entityType],
     );
     return rows.length > 0 ? rows[0] : null;
   },
 
-  async updateEditRequestStatus(requestId, status) {
+  /**
+   * Admin decision on the newest request for one entity.
+   *
+   * The previous version matched on `entity_id` alone while being handed what the route
+   * still calls a "requestId", so approving a journal's request also flipped the request
+   * belonging to the project (or the other user) that happened to share that id, and left
+   * unrelated older rows for the same entity marked approved.
+   */
+  async updateLatestEditRequestStatus(entityId, entityType, status) {
     try {
-      const query = 'UPDATE edit_requests SET status = ? WHERE entity_id = ?'; // Add this line
-      const [result] = await db.query(query, [status, requestId]);
+      const [rows] = await db.query(
+        `SELECT id FROM edit_requests
+          WHERE entity_id = ? AND entity_type = ?
+       ORDER BY id DESC
+          LIMIT 1`,
+        [entityId, entityType],
+      );
+
+      if (rows.length === 0) {
+        return { affectedRows: 0 };
+      }
+
+      const [result] = await db.query('UPDATE edit_requests SET status = ? WHERE id = ?', [
+        status,
+        rows[0].id,
+      ]);
       return result;
     } catch (error) {
-      console.error('Error in updateEditRequestStatus:', error);
+      console.error('Error in updateLatestEditRequestStatus:', error);
       throw error;
     }
   },

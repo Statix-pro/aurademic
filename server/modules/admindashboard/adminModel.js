@@ -292,20 +292,53 @@ const adminModel = {
 
       const request = requestRows[0];
 
-      // Add to journal_options table
-      const [result] = await db.query(
-        `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          request.journal_name,
-          request.publisher,
-          request.website,
-          request.print_issn,
-          request.online_issn,
-          request.impact_factor || null,
-          request.cite_score || null,
-        ],
+      // Reuse an entry that already carries this journal name rather than adding a second
+      // one: duplicates make the publication form's journal picker ambiguous, and each copy
+      // can hold a different National/International value.
+      const [existingOptions] = await db.query(
+        'SELECT id FROM journal_options WHERE journal_name = ? ORDER BY id LIMIT 1',
+        [request.journal_name],
       );
+
+      let journalOptionId;
+
+      if (existingOptions.length > 0) {
+        journalOptionId = existingOptions[0].id;
+        await db.query(
+          `UPDATE journal_options
+              SET publisher = ?, website = ?, print_issn = ?, online_issn = ?,
+                  impact_factor = ?, cite_score = ?, category = ?
+            WHERE id = ?`,
+          [
+            request.publisher,
+            request.website,
+            request.print_issn,
+            request.online_issn,
+            request.impact_factor || null,
+            request.cite_score || null,
+            request.category || 'National',
+            journalOptionId,
+          ],
+        );
+      } else {
+        // `category` must be carried over: leaving it out meant every approved request
+        // landed on the column default and an International journal came back as National.
+        const [result] = await db.query(
+          `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            request.journal_name,
+            request.publisher,
+            request.website,
+            request.print_issn,
+            request.online_issn,
+            request.impact_factor || null,
+            request.cite_score || null,
+            request.category || 'National',
+          ],
+        );
+        journalOptionId = result.insertId;
+      }
 
       // Update the request status
       await db.query(
@@ -316,8 +349,9 @@ const adminModel = {
       );
 
       return {
-        id: result.insertId,
+        id: journalOptionId,
         journal_name: request.journal_name,
+        category: request.category || 'National',
         status: 'approved',
       };
     } catch (error) {

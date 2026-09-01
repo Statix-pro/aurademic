@@ -160,8 +160,8 @@ const userDashboardModel = {
       // Build status filter condition
       const statusCondition = status ? 'AND j.status = ?' : '';
       const queryParams = status
-        ? [userId, userId, user.email, status, perPage, offset]
-        : [userId, userId, user.email, perPage, offset];
+        ? [userId, userId, userId, user.email, status, perPage, offset]
+        : [userId, userId, userId, user.email, perPage, offset];
 
       // Validate and sanitize sortBy to prevent SQL injection
       const allowedSortColumns = [
@@ -223,10 +223,13 @@ const userDashboardModel = {
                     WHERE er1.entity_type = 'journals'
                       AND er1.user_id = ?
                 ) uer ON uer.entity_id = j.id
-                WHERE EXISTS (
-                    SELECT 1 FROM v_authors va2 
-                    INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id 
-                    WHERE aj2.journal_id = j.id AND va2.email = ?
+                WHERE (
+                    j.created_by = ?
+                    OR EXISTS (
+                        SELECT 1 FROM v_authors va2
+                        INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id
+                        WHERE aj2.journal_id = j.id AND va2.email = ?
+                    )
                 ) ${statusCondition}
                 GROUP BY j.id, jo.journal_name, jo.publisher, j.admin_approval_status, j.admin_approval_comment, uer.status
                 ORDER BY ${orderByColumn} DESC
@@ -236,13 +239,20 @@ const userDashboardModel = {
       const [journals] = await db.query(query, queryParams);
 
       // Get total count with status filter
-      const countParams = status ? [user.email, status] : [user.email];
+      // The count has to use the same ownership rule as the list above, or the pager
+      // disagrees with what it is paging over.
+      const countParams = status ? [userId, user.email, status] : [userId, user.email];
       const countQuery = `
-                SELECT COUNT(DISTINCT j.id) as total 
+                SELECT COUNT(DISTINCT j.id) as total
                 FROM journals j
-                INNER JOIN author_journal aj ON j.id = aj.journal_id
-                INNER JOIN v_authors va ON aj.author_id = va.author_id
-                WHERE va.email = ? ${statusCondition}
+                WHERE (
+                    j.created_by = ?
+                    OR EXISTS (
+                        SELECT 1 FROM v_authors va2
+                        INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id
+                        WHERE aj2.journal_id = j.id AND va2.email = ?
+                    )
+                ) ${statusCondition}
             `;
 
       const [[countResult]] = await db.query(countQuery, countParams);
@@ -359,16 +369,19 @@ const userDashboardModel = {
               AND er1.user_id = ?
           ) uer ON uer.entity_id = j.id
           WHERE j.id = ?
-            AND EXISTS (
-              SELECT 1
-              FROM v_authors va2
-              INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id
-              WHERE aj2.journal_id = j.id
-                AND va2.email = ?
+            AND (
+              j.created_by = ?
+              OR EXISTS (
+                SELECT 1
+                FROM v_authors va2
+                INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id
+                WHERE aj2.journal_id = j.id
+                  AND va2.email = ?
+              )
             )
           GROUP BY j.id, jo.journal_name, jo.publisher, jo.website, jo.print_issn, jo.online_issn, j.admin_approval_status, j.admin_approval_comment, uer.status
         `,
-        [userId, userId, journalId, user.email],
+        [userId, userId, journalId, userId, user.email],
       );
 
       if (!rows[0]) {
@@ -410,17 +423,20 @@ const userDashboardModel = {
             COALESCE(j.admin_approval_status, 'pending') AS admin_approval_status
           FROM journals j
           WHERE j.id = ?
-            AND EXISTS (
-              SELECT 1
-              FROM v_authors va2
-              INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id
-              WHERE aj2.journal_id = j.id
-                AND va2.email = ?
+            AND (
+              j.created_by = ?
+              OR EXISTS (
+                SELECT 1
+                FROM v_authors va2
+                INNER JOIN author_journal aj2 ON va2.author_id = aj2.author_id
+                WHERE aj2.journal_id = j.id
+                  AND va2.email = ?
+              )
             )
           LIMIT 1
           FOR UPDATE
         `,
-        [journalId, user.email],
+        [journalId, userId, user.email],
       );
 
       if (!journalRows.length) {

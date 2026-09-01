@@ -4,6 +4,11 @@ import projectModel from '../project/projectModel.js';
 
 const isRequesterAdmin = (requestUser = {}) => Boolean(requestUser.isAdmin ?? requestUser.is_admin);
 
+const SUPPORTED_ENTITY_TYPES = ['journals', 'research_projects'];
+
+const normalizeEntityType = (value) =>
+  SUPPORTED_ENTITY_TYPES.includes(String(value || '').trim()) ? String(value).trim() : null;
+
 const editRequestController = {
   async createEditRequest(req, res) {
     try {
@@ -52,7 +57,7 @@ const editRequestController = {
       }
 
       if (entityType === 'journals') {
-        if (!isRequesterAdmin(req.user) && !workflowAccess.is_author) {
+        if (!isRequesterAdmin(req.user) && !workflowAccess.can_manage) {
           return res.status(403).json({
             success: false,
             message: 'You are not authorized to request edit for this journal.',
@@ -145,7 +150,11 @@ const editRequestController = {
   async updateEditRequestStatus(req, res) {
     try {
       const { entityType, entityId } = req.params;
-      const { status, userId } = req.body;
+      const { status } = req.body;
+      // The row to clear is always the caller's own. Taking the id from the body let a
+      // client target another user's request, and a client that omitted it silently
+      // matched nothing — leaving an approved request open for unlimited further edits.
+      const userId = req.user.id;
 
       // Validate entityType
       if (!['journals', 'research_projects'].includes(entityType)) {
@@ -192,21 +201,44 @@ const editRequestController = {
     }
   },
 
+  /**
+   * The admin dashboard lists entities, not edit requests, so `:requestId` on these routes
+   * has always carried the journal/project id. The entity type has to come with it —
+   * without it a journal decision could land on a project's request of the same id.
+   */
+  async decideEditRequest(req, res, status) {
+    const { requestId: entityId } = req.params;
+    const entityType = normalizeEntityType(req.body?.entityType);
+
+    if (!entityType) {
+      return res.status(400).json({
+        success: false,
+        message: 'entityType is required and must be journals or research_projects.',
+      });
+    }
+
+    const result = await editRequestModel.updateLatestEditRequestStatus(
+      entityId,
+      entityType,
+      status,
+    );
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Edit request not found.',
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Edit request ${status}.`,
+    });
+  },
+
   async approveEditRequest(req, res) {
     try {
-      const { requestId } = req.params;
-      const result = await editRequestModel.updateEditRequestStatus(requestId, 'approved');
-      if (result.affectedRows === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Edit request not found.',
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        message: 'Edit request approved.',
-      });
+      return await editRequestController.decideEditRequest(req, res, 'approved');
     } catch (error) {
       console.error('Error approving edit request:', error);
       res.status(500).json({
@@ -218,20 +250,7 @@ const editRequestController = {
 
   async rejectEditRequest(req, res) {
     try {
-      const { requestId } = req.params;
-      const result = await editRequestModel.updateEditRequestStatus(requestId, 'rejected');
-
-      if (result.affectedRows === 0) {
-        return res.status(404).json({
-          success: false,
-          message: 'Edit request not found.',
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        message: 'Edit request rejected.',
-      });
+      return await editRequestController.decideEditRequest(req, res, 'rejected');
     } catch (error) {
       console.error('Error rejecting edit request:', error);
       res.status(500).json({

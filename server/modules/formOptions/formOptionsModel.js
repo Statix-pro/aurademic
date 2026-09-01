@@ -2,8 +2,37 @@ import db from '../../config/connection.js';
 import { toStoredWebsite } from '../shared/webUrl.js';
 
 const formOptionsModel = {
+  /**
+   * Two entries with the same name make the publication form's journal picker ambiguous —
+   * and because each holds its own National/International value, a publication could be
+   * saved against the copy the user did not pick. Names are therefore kept unique here.
+   */
+  async assertJournalNameIsFree(journalName, excludeId = null) {
+    const name = String(journalName || '').trim();
+    if (!name) {
+      const error = new Error('Journal name is required.');
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const params = [name];
+    let sql = 'SELECT id FROM journal_options WHERE journal_name = ?';
+    if (excludeId) {
+      sql += ' AND id <> ?';
+      params.push(excludeId);
+    }
+
+    const [rows] = await db.query(sql, params);
+    if (rows.length > 0) {
+      const error = new Error(`A journal named "${name}" already exists.`);
+      error.statusCode = 409;
+      throw error;
+    }
+  },
+
   async addJournalOption(journal) {
     try {
+      await formOptionsModel.assertJournalNameIsFree(journal.journal_name);
       const [result] = await db.query(
         `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category) 
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -20,6 +49,9 @@ const formOptionsModel = {
       );
       return { id: result.insertId, ...journal };
     } catch (error) {
+      // A rejected request (duplicate name, missing name) keeps its own status instead of
+      // being reported as a server fault.
+      if (error.statusCode) throw error;
       console.error('Database error in addJournalOption:', error);
       throw new Error(`Error adding journal option: ${error.message}`);
     }
@@ -37,6 +69,7 @@ const formOptionsModel = {
 
   async updateJournalOption(id, updatedData) {
     try {
+      await formOptionsModel.assertJournalNameIsFree(updatedData.journal_name, id);
       const [result] = await db.query(
         `UPDATE journal_options 
                  SET journal_name = ?, publisher = ?, website = ?, print_issn = ?, online_issn = ?, impact_factor = ?, cite_score = ?, category = ? 
@@ -55,6 +88,7 @@ const formOptionsModel = {
       );
       return result.affectedRows > 0;
     } catch (error) {
+      if (error.statusCode) throw error;
       console.error('Database error in updateJournalOption:', error);
       throw new Error(`Error updating journal option: ${error.message}`);
     }

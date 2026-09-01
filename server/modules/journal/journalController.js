@@ -1,10 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import util from 'util';
 
 import journalModel from './journalModel.js';
 
-const rename = util.promisify(fs.rename);
 const isRequesterAdmin = (requestUser = {}) => Boolean(requestUser.isAdmin ?? requestUser.is_admin);
 
 const isRequesterSuperAdmin = (requestUser = {}) => {
@@ -80,8 +78,12 @@ const journalController = {
       // For non-Journal types, make these fields optional instead of required
       // (they can still be provided but won't cause validation errors if missing)
 
-      // Create the journal entry
-      const journal = await journalModel.create(journalData);
+      // Create the journal entry, recording who filed it so they keep access to it
+      // even when the paper credits other people.
+      const journal = await journalModel.create({
+        ...journalData,
+        created_by: req.user?.id || null,
+      });
 
       // Handle file upload if present
       if (req.files && req.files.file) {
@@ -159,7 +161,7 @@ const journalController = {
         return res.status(404).json({ message: 'Journal not found' });
       }
 
-      if (!requesterHasAdminOverride && !workflowAccess.is_author) {
+      if (!requesterHasAdminOverride && !workflowAccess.can_manage) {
         return res.status(403).json({
           message: 'You are not authorized to edit this journal',
         });
@@ -227,23 +229,22 @@ const journalController = {
         'available_online_date',
         'file_path',
         'publication_details',
+        'scopus_id',
+        'scie_id',
+        'open_access',
+        'year',
+        'wos_id',
+        'pubmed_pmid',
       ];
 
-      const journalOptionsFields = [
-        'journal_name',
-        'publisher',
-        'website',
-        'print_issn',
-        'online_issn',
-      ];
+      // Only the journal name is read from the submission, and only to decide which
+      // registry entry this publication points at. Publisher/website/ISSN belong to the
+      // admin-curated registry (or to publication_details for books and conferences), so
+      // the publication form must not write them back.
+      const journalOptionsFields = ['journal_name', 'journal_options_id'];
 
-      // Handle potential ISBN fields for non-Journal types
-      if (journalData.print_isbn !== undefined) {
-        journalData.print_issn = journalData.print_isbn;
-      }
-      if (journalData.online_isbn !== undefined) {
-        journalData.online_issn = journalData.online_isbn;
-      }
+      // ISBNs for Conference/Book/Book Chapter are persisted inside publication_details,
+      // so they need no mapping onto the journal_options ISSN columns here.
 
       // Filter data for each table
       const journalUpdateData = Object.fromEntries(
@@ -355,6 +356,83 @@ const journalController = {
     }
   },
 
+  async deleteAuthor(req, res) {
+    try {
+      const journalId = req.params.id;
+      const dbAuthorId = req.params.dbAuthorId;
+
+      const workflowAccess = await journalModel.getJournalWorkflowAccess(
+        journalId,
+        req.user.id,
+        req.user.email,
+      );
+
+      if (!workflowAccess) {
+        return res.status(404).json({ status: 'error', message: 'Journal not found' });
+      }
+
+      if (!hasAdminOverride(req.user) && !workflowAccess.can_manage) {
+        return res.status(403).json({
+          status: 'error',
+          message: 'You are not authorized to edit this journal',
+        });
+      }
+
+      const result = await journalModel.deleteAuthorFromJournal(journalId, dbAuthorId);
+
+      if (result.affectedRows > 0) {
+        res.status(200).json({ status: 'success', message: 'Author removed successfully' });
+      } else {
+        res.status(404).json({ status: 'error', message: 'Author not found on this journal' });
+      }
+    } catch (error) {
+      console.error('Error in deleteAuthor:', error);
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  },
+
+  async replaceIndexes(req, res) {
+    try {
+      const journalId = req.params.id;
+      const { indexes } = req.body;
+
+      if (!Array.isArray(indexes)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'indexes must be an array of index names',
+        });
+      }
+
+      const workflowAccess = await journalModel.getJournalWorkflowAccess(
+        journalId,
+        req.user.id,
+        req.user.email,
+      );
+
+      if (!workflowAccess) {
+        return res.status(404).json({ status: 'error', message: 'Journal not found' });
+      }
+
+      if (!hasAdminOverride(req.user) && !workflowAccess.can_manage) {
+        return res.status(403).json({
+          status: 'error',
+          message: 'You are not authorized to edit this journal',
+        });
+      }
+
+      const savedIndexes = await journalModel.replaceIndexes(journalId, indexes);
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Indexes updated successfully',
+        data: savedIndexes,
+      });
+    } catch (error) {
+      console.error('Error in replaceIndexes:', error);
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  },
+
   async deleteJournal(req, res) {
     try {
       const id = req.params.id;
@@ -370,7 +448,7 @@ const journalController = {
         return res.status(404).json({ message: 'Journal not found' });
       }
 
-      if (!requesterHasAdminOverride && !workflowAccess.is_author) {
+      if (!requesterHasAdminOverride && !workflowAccess.can_manage) {
         return res.status(403).json({
           message: 'You are not authorized to delete this journal',
         });
