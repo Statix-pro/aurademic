@@ -68,6 +68,7 @@ interface Project {
   project_status?: string | null;
   submitted_on?: string;
   edit_request_status?: string;
+  edit_request_user_id?: number;
   collaborators_enabled?: boolean | number;
   [key: string]: unknown;
 }
@@ -83,6 +84,7 @@ interface Journal {
   author_names?: string[];
   index_names?: string[];
   edit_request_status?: string;
+  edit_request_user_id?: number;
   status?: string;
   [key: string]: unknown;
 }
@@ -986,7 +988,11 @@ const Dashboard: React.FC = () => {
     return `${authenticityUtility.getBaseURL()}${sanitizedPath}`;
   };
 
-  const handleEditRequestStatus = async (itemId: number, newStatus: string) => {
+  const handleEditRequestStatus = async (
+    itemId: number,
+    newStatus: string,
+    editRequestUserId?: number,
+  ) => {
     try {
       // itemId is the journal/project id, not the edit_requests row id, so the entity type
       // has to travel with it — otherwise the server cannot tell a journal's request from
@@ -1003,6 +1009,9 @@ const Dashboard: React.FC = () => {
       const response = (await authenticityUtility.patch(endpoint, {
         status: newStatus,
         entityType,
+        // Names whose request is being decided: two users can have open requests on the
+        // same publication, and the server would otherwise decide the newest row.
+        userId: editRequestUserId,
       })) as {
         success?: boolean;
         message?: string;
@@ -1206,7 +1215,9 @@ const Dashboard: React.FC = () => {
         return (
           <EditRequestActions
             status={(item.edit_request_status as string) || 'no_request'}
-            onUpdateStatus={(newStatus) => handleEditRequestStatus(item.id, newStatus)}
+            onUpdateStatus={(newStatus) =>
+              handleEditRequestStatus(item.id, newStatus, item.edit_request_user_id)
+            }
             itemId={item.id}
           />
         );

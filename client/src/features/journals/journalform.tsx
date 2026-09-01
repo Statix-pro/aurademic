@@ -803,11 +803,28 @@ const JournalForm: React.FC<JournalFormProps> = ({
       return;
     }
 
+    // noValidate turns off the browser's own url check, so the shape of the website is
+    // verified here — an unparseable value would otherwise be stored on the registry
+    // entry an admin later approves.
+    const websiteValue = journalRequest.website.trim();
+    const normalizedWebsite = /^https?:\/\//i.test(websiteValue)
+      ? websiteValue
+      : `https://${websiteValue}`;
+    try {
+      new URL(normalizedWebsite);
+    } catch {
+      setJournalRequestError('Website must be a valid URL, for example https://example.com.');
+      return;
+    }
+
     try {
       setJournalRequestLoading(true);
       setJournalRequestError('');
 
-      const response = (await authenticityUtility.post('/journal-requests', journalRequest)) as any;
+      const response = (await authenticityUtility.post('/journal-requests', {
+        ...journalRequest,
+        website: normalizedWebsite,
+      })) as any;
 
       if (response.status === 'success') {
         showAlert(
@@ -1170,7 +1187,9 @@ const JournalForm: React.FC<JournalFormProps> = ({
             try {
               sdgsData = JSON.parse(sdgsData);
             } catch {
-              // Not JSON — an older row stored a single SDG as a plain string.
+              // LEGACY: rows written before SDGs became a multi-select stored a single
+              // SDG as a plain string rather than a JSON array.
+              // Remove once every journals.sdgs value parses as JSON.
               sdgsData = [sdgsData];
             }
           }
@@ -1424,8 +1443,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
     }
 
     // National/International belongs to the journal, not to this publication: it comes
-    // from the registry entry the admin curated in Journal Management. A missing value
-    // means the entry predates the column, so National is the documented default.
+    // from the registry entry the admin curated in Journal Management.
+    // FALLBACK: an entry that predates journal_options.category has no value, so it
+    // reads as National (the documented default).
+    // Remove after every journal_options row has a curated category.
     setIsInternational(journal.category === 'International');
   };
 
@@ -2831,8 +2852,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
               ></button>
             </div>
           )}
-          {/* New Toggle for Form/Status Tracking */}
-          <div className="category-toggle-container">
+          {/* New Toggle for Form/Status Tracking.
+              An embedded form is a read-only record inside a page that supplies its own
+              controls (admin review), so it offers no way to post status updates. */}
+          <div className={`category-toggle-container${embedded ? ' d-none' : ''}`}>
             <button
               type="button"
               className={activeTab === 'form' ? 'active' : ''}

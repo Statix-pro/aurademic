@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Form } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
 
+import { useAbility } from '../../shared/casl/AbilityContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import JournalForm from '../journals/journalform';
@@ -37,6 +38,13 @@ interface ReviewedJournal {
 const PublicationReview: React.FC = () => {
   const { journalId } = useParams<{ journalId: string }>();
   const navigate = useNavigate();
+  const ability = useAbility();
+
+  // Mirrors the server gate on PATCH /admin/journals/:id/submission-approval, which
+  // requires admin_dashboard.approve or admin_dashboard.manage. AdminRoute alone lets in
+  // any admin, including ones who may read the dashboard but not decide on submissions.
+  const canDecide =
+    ability.can('approve', 'AdminDashboard') || ability.can('manage', 'AdminDashboard');
 
   const [journal, setJournal] = useState<ReviewedJournal | null>(null);
   const [loading, setLoading] = useState(true);
@@ -184,6 +192,10 @@ const PublicationReview: React.FC = () => {
               {journal.admin_approval_comment
                 ? `“${journal.admin_approval_comment}”`
                 : 'No comment was left.'}
+            </span>
+          ) : !canDecide ? (
+            <span className="small text-muted journal-review-decision">
+              You do not have permission to approve or reject submissions.
             </span>
           ) : (
             <>
