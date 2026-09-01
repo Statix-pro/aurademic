@@ -1,0 +1,256 @@
+/* ==========================================================================
+   Publication review
+   A publication opens as its own submission form in view mode, with the
+   approval decision pinned above it so the reviewer can act while scrolling
+   through what the author actually submitted.
+   ========================================================================== */
+
+.journal-review {
+  width: 100%;
+  padding: 1rem 1.25rem 0;
+}
+
+/* One row: identity on the left, the decision on the right. It stays pinned while the
+   reviewer scrolls the record, so its height is kept to a minimum. */
+.journal-review-bar {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 3;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+  background-color: #ffffff;
+  border: 1px solid #dce4f0;
+  border-radius: 10px;
+  box-shadow:
+    0 1px 2px rgba(16, 40, 70, 0.04),
+    0 4px 12px rgba(0, 105, 171, 0.06);
+}
+
+.journal-review-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+/* Back button: a quiet square that only picks up the brand colour on hover, so it never
+   competes with the approve/reject decision on the other side of the bar. */
+.journal-review-back.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0 !important;
+  flex-shrink: 0;
+  color: #0069ab;
+  background-color: #f0f6ff;
+  border: 1px solid #cfe1f5;
+  border-radius: 8px;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.journal-review-back.btn:hover,
+.journal-review-back.btn:focus-visible {
+  color: #ffffff;
+  background-color: #0069ab;
+  border-color: #0069ab;
+}
+
+.journal-review-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #1b2a41;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.journal-review-subtitle {
+  font-size: 0.74rem;
+  line-height: 1.25;
+  color: #7c8798;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status pill: tinted rather than saturated, so "Awaiting Approval" reads as information
+   and the two decision buttons stay the loudest thing in the bar. */
+.journal-review-status {
+  flex-shrink: 0;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0.32em 0.7em;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.journal-review-status.is-pending {
+  color: #8a5b00;
+  background-color: #fff6e0;
+  border-color: #f5e0b0;
+}
+
+.journal-review-status.is-approved {
+  color: #14663c;
+  background-color: #e6f6ed;
+  border-color: #b8e3cb;
+}
+
+.journal-review-status.is-rejected {
+  color: #a12633;
+  background-color: #fdecee;
+  border-color: #f3c6cc;
+}
+
+.journal-review-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.4rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.journal-review-comment.form-control {
+  width: 260px;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+  color: #1b2a41;
+  background-color: #fbfcfe;
+  border: 1px solid #dce4f0;
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.journal-review-comment.form-control::placeholder {
+  color: #9aa5b4;
+}
+
+.journal-review-comment.form-control:focus {
+  background-color: #ffffff;
+  border-color: #0069ab;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
+}
+
+/* Decision buttons. `!important` on padding for the same reason as the journal form's
+   icon buttons: a bare global `.btn { padding: 8px 15px }` leaks out of
+   features/events/styles/EventForm.css and would otherwise win here. */
+.journal-review-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.34rem 0.75rem !important;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border: none;
+  border-radius: 8px;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.journal-review-actions .btn svg {
+  flex: 0 0 auto;
+}
+
+.journal-review-actions .btn-success {
+  background-color: #17864f !important;
+  color: #ffffff !important;
+}
+
+.journal-review-actions .btn-success:hover:not(:disabled) {
+  background-color: #126b3f !important;
+  box-shadow: 0 2px 8px rgba(23, 134, 79, 0.25);
+}
+
+.journal-review-actions .btn-danger {
+  background-color: #c4303f !important;
+  color: #ffffff !important;
+}
+
+.journal-review-actions .btn-danger:hover:not(:disabled) {
+  background-color: #a52734 !important;
+  box-shadow: 0 2px 8px rgba(196, 48, 63, 0.25);
+}
+
+.journal-review-actions .btn:disabled {
+  opacity: 0.6;
+}
+
+/* The recorded outcome, shown once a decision exists in place of the buttons. */
+.journal-review-decision {
+  max-width: 460px;
+  font-size: 0.78rem;
+  color: #6b7686;
+  font-style: italic;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The embedded form paints its own page background; inside the review it should read as
+   a continuation of this page rather than a second one. */
+.journal-review .journal-form-body {
+  background-color: transparent;
+}
+
+.journal-review .journal-form-container {
+  padding-top: 0;
+  max-width: 100%;
+}
+
+/* The form's own Form/Updates switch sits directly under the review bar here, so it is
+   scaled down to a secondary control — its track and colours are left alone so it still
+   reads as the same component users know from the form's own page. */
+.journal-review .category-toggle-container {
+  margin-bottom: 1rem;
+}
+
+.journal-review .category-toggle-container button {
+  padding: 0.3rem 1.4rem;
+  font-size: 0.82rem;
+}
+
+/* Lets a flex child with long text actually shrink and ellipsize. */
+.min-w-0 {
+  min-width: 0;
+}
+
+@media (max-width: 992px) {
+  .journal-review {
+    padding: 0.75rem 0.75rem 0;
+  }
+
+  .journal-review-bar {
+    position: static;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+  }
+
+  .journal-review-actions {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .journal-review-comment.form-control {
+    width: 100%;
+  }
+
+  .journal-review-decision {
+    max-width: 100%;
+    white-space: normal;
+  }
+}

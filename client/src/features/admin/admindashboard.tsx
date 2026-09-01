@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback, ChangeEvent, useRef } from 're
 
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
-import { Pencil, Trash2, Eye, Check, X, Settings, MoreVertical, History } from 'lucide-react';
-import { Modal, Button, Dropdown } from 'react-bootstrap';
+import { Pencil, Trash2, Eye, Check, X, Settings, History } from 'lucide-react';
+import { Modal, Button } from 'react-bootstrap';
 
 import './admindashboard.css';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import JournalStatusDetails from './components/JournalStatusDetails';
 import JournalStatusUpdates from './components/JournalStatusUpdates';
@@ -541,6 +541,7 @@ const EditRequestActions: React.FC<EditRequestActionsProps> = ({ status, onUpdat
 
 const Dashboard: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TabType>('journals');
 
   // Handle URL pathname for initial tab selection and subsequent changes
@@ -826,6 +827,14 @@ const Dashboard: React.FC = () => {
   };
 
   const handleViewDetails = async (id: number) => {
+    // A publication gets its own page: the reviewer needs the whole submission, and a
+    // record under review should be linkable and survive a refresh. Projects still open
+    // in the summary dialog.
+    if (activeTab === 'journals') {
+      navigate(`/admin/publications/${id}`);
+      return;
+    }
+
     try {
       const response = (await authenticityUtility.get(`/admin/${activeTab}/${id}`)) as {
         data: Project | Journal;
@@ -979,16 +988,22 @@ const Dashboard: React.FC = () => {
 
   const handleEditRequestStatus = async (itemId: number, newStatus: string) => {
     try {
+      // itemId is the journal/project id, not the edit_requests row id, so the entity type
+      // has to travel with it — otherwise the server cannot tell a journal's request from
+      // a project's request that shares the same id.
+      const entityType = activeTab.startsWith('project') ? 'research_projects' : 'journals';
       let endpoint = '';
       if (newStatus === 'approved') {
         endpoint = `/admin/edit-requests/${itemId}/approve`;
       } else if (newStatus === 'rejected') {
         endpoint = `/admin/edit-requests/${itemId}/reject`;
       } else {
-        const entityType = activeTab === 'projects' ? 'research_projects' : activeTab;
         endpoint = `/admin/edit-requests/${entityType}/${itemId}`;
       }
-      const response = (await authenticityUtility.patch(endpoint, { status: newStatus })) as {
+      const response = (await authenticityUtility.patch(endpoint, {
+        status: newStatus,
+        entityType,
+      })) as {
         success?: boolean;
         message?: string;
       };
@@ -1904,188 +1919,11 @@ const Dashboard: React.FC = () => {
     );
   };
 
-  const renderJournalDetails = () => {
-    if (!selectedItem) return null;
-    const journal = selectedItem as Journal & Record<string, unknown>;
-
-    let acknowledgements: string[] = [];
-    try {
-      if (journal.acknowledgement) {
-        const ackData =
-          typeof journal.acknowledgement === 'string'
-            ? JSON.parse(journal.acknowledgement as string)
-            : journal.acknowledgement;
-        acknowledgements = Object.entries(ackData as Record<string, boolean>)
-          .filter(([, value]) => value)
-          .map(([key]) => key);
-      }
-    } catch {
-      console.error('Error parsing acknowledgement');
-    }
-
-    return (
-      <div className="project-details">
-        <h3 className="mb-2">{journal.title}</h3>
-
-        <div className="detail-section">
-          <h4>Basic Information</h4>
-          <div className="row">
-            <div className="col-md-6">
-              <p>
-                <strong>Journal Name:</strong> {journal.journal_name || 'N/A'}
-              </p>
-              <p>
-                <strong>Category:</strong> {(journal.category as string) || 'N/A'}
-              </p>
-              <p>
-                <strong>Publisher:</strong> {(journal.publisher as string) || 'N/A'}
-              </p>
-            </div>
-            <div className="col-md-6">
-              <p>
-                <strong>Impact Factor:</strong> {(journal.impact_factor as string) || 'N/A'}
-              </p>
-              <p>
-                <strong>Indexes:</strong>{' '}
-                {journal.index_names ? journal.index_names.join(', ') : 'N/A'}
-              </p>
-              <p>
-                <strong>Print:</strong> {(journal.print_issn as string) || 'N/A'}
-              </p>
-              <p>
-                <strong>Online:</strong> {(journal.online_issn as string) || 'N/A'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="detail-section">
-          <h4>Publication Details</h4>
-          <div className="row">
-            <div className="col-md-6">
-              <p>
-                <strong>Volume:</strong> {(journal.volume as string) || 'N/A'}
-              </p>
-              <p>
-                <strong>Issue:</strong> {(journal.issue as string) || 'N/A'}
-              </p>
-              <p>
-                <strong>Page Range:</strong>{' '}
-                {(journal.pages_from as string) && (journal.pages_to as string)
-                  ? `${journal.pages_from}-${journal.pages_to}`
-                  : 'N/A'}
-              </p>
-            </div>
-            <div className="col-md-6">
-              <p>
-                <strong>DOI:</strong> {(journal.doi as string) || 'N/A'}
-              </p>
-              <p>
-                <strong>Publication Date:</strong>{' '}
-                {formatDate(journal.available_online_date as string) || 'N/A'}
-              </p>
-              <p>
-                <strong>Publication Status:</strong> {(journal.status as string) || 'N/A'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="detail-section">
-          <h4>Authors & Acknowledgements</h4>
-          <div className="row">
-            <div className="col-md-6">
-              <p>
-                <strong>Authors:</strong>
-              </p>
-              <ul className="list-unstyled">
-                {journal.author_names ? (
-                  journal.author_names.map((author, index) => {
-                    const trimmed = author.trim();
-                    const hasAsterisk = trimmed.includes('*');
-                    if (hasAsterisk) {
-                      const parts = trimmed.split('*');
-                      return (
-                        <li key={index}>
-                          {parts[0]}
-                          <span style={{ color: 'red', fontWeight: 'bold' }}>*</span>
-                          {parts.slice(1).join('*')}
-                        </li>
-                      );
-                    }
-                    return <li key={index}>{trimmed}</li>;
-                  })
-                ) : (
-                  <li>N/A</li>
-                )}
-              </ul>
-            </div>
-            <div className="col-md-6">
-              <p>
-                <strong>Acknowledgements:</strong>
-              </p>
-              {acknowledgements.length > 0 ? (
-                <ul className="list-unstyled">
-                  {acknowledgements.map((ack, index) => (
-                    <li key={index} className="badge bg-success me-2 mb-2">
-                      {ack}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p>N/A</p>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="detail-section">
-          <h4>Documents</h4>
-          <div className="row">
-            {(journal.file_path as string) && (
-              <div className="col-md-4 mb-2">
-                <a
-                  href={getFileUrl(journal.file_path as string)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="btn btn-primary btn-sm w-100"
-                >
-                  View Document
-                </a>
-              </div>
-            )}
-            {!(journal.file_path as string) && (
-              <div className="col-12">
-                <p className="text-muted mb-0">No documents attached.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="detail-section">
-          <h4>Edit Request Information</h4>
-          <div className="row">
-            <div className="col-md-6">
-              <p>
-                <strong>Status:</strong> {journal.edit_request_status || 'No Request'}
-              </p>
-              {(journal.edit_request_comment as string) && (
-                <p>
-                  <strong>Comment:</strong> {journal.edit_request_comment as string}
-                </p>
-              )}
-              {(journal.edit_request_date as string) && (
-                <p>
-                  <strong>Request Date:</strong> {formatDate(journal.edit_request_date as string)}
-                </p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
+  /**
+   * A publication under review: the submission form exactly as the author sees it, in
+   * view mode, with the approval decision and its comment box alongside. Replaces the
+   * old summary dialog, which showed only a subset of the record.
+   */
   const renderTableRow = (item: Project | Journal) => (
     <tr key={item.id}>
       {getVisibleColumns().map((column) => {
@@ -2332,14 +2170,11 @@ const Dashboard: React.FC = () => {
           size="lg"
           className="details-modal"
         >
+          {/* Projects only: a publication opens on its own review page instead. */}
           <Modal.Header closeButton>
-            <Modal.Title>
-              {activeTab === 'projects' ? 'Project Details' : 'Publication Details'}
-            </Modal.Title>
+            <Modal.Title>Project Details</Modal.Title>
           </Modal.Header>
-          <Modal.Body className="modal-body-scroll">
-            {activeTab === 'projects' ? renderProjectDetails() : renderJournalDetails()}
-          </Modal.Body>
+          <Modal.Body className="modal-body-scroll">{renderProjectDetails()}</Modal.Body>
         </Modal>
       </div>
 
