@@ -2098,9 +2098,29 @@ const JournalForm: React.FC<JournalFormProps> = ({
     }
   };
 
+  // The published article is always a PDF, and the server caps it at 5 MB. Both are
+  // checked here so a wrong pick is reported immediately instead of at submit time.
+  const MAX_ARTICLE_FILE_BYTES = 5 * 1024 * 1024;
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event?.target?.files;
+    const input = event.target;
+    const files = input?.files;
     const file = files && files.length > 0 ? files[0] : null;
+
+    if (file) {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (!isPdf) {
+        input.value = '';
+        showAlert('Only PDF files are allowed for the published article.', 'error');
+        return;
+      }
+      if (file.size > MAX_ARTICLE_FILE_BYTES) {
+        input.value = '';
+        showAlert('The published article must be 5 MB or smaller.', 'error');
+        return;
+      }
+    }
+
     setSelectedFile(file);
     if (file) {
       setUploadedFile({
@@ -3552,6 +3572,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             className="modal fade show"
                             style={{ display: 'block' }}
                             tabIndex={-1}
+                            onClick={(e) => {
+                              // Click on the scroll area outside the dialog dismisses it;
+                              // the currentTarget check keeps clicks inside the dialog alive.
+                              if (e.target === e.currentTarget) setShowJournalRequestModal(false);
+                            }}
                           >
                             <div className="modal-dialog">
                               <div className="modal-content">
@@ -3694,7 +3719,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                         />
                                       </div>
                                     </div>
-                                    <div className="d-flex justify-content-end">
+                                    <div className="d-flex justify-content-end journal-request-actions">
                                       <button
                                         type="button"
                                         className="btn btn-secondary me-2"
@@ -4160,7 +4185,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               <div className="pub-upload-title-modern">Published Article</div>
                               <div className="pub-upload-subtitle-modern">PDF (Maximum 5 MB)</div>
                               {(selectedFile || uploadedFile) && !(isViewMode && !editMode) && (
-                                <div className="mt-1" style={{ fontSize: '12px' }}>
+                                <div className="pub-upload-file-row">
                                   <a
                                     href={
                                       selectedFile
@@ -4169,13 +4194,15 @@ const JournalForm: React.FC<JournalFormProps> = ({
                                     }
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                    className="pub-upload-file-name"
+                                    title={selectedFile ? selectedFile.name : uploadedFile!.name}
                                   >
                                     {selectedFile ? selectedFile.name : uploadedFile!.name}
                                   </a>
                                   {editMode && (
                                     <button
                                       type="button"
-                                      className="btn btn-link text-danger p-0 ms-2"
+                                      className="pub-upload-file-delete"
                                       onClick={handleFileDelete}
                                       title="Delete file"
                                     >
@@ -4209,6 +4236,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               <input
                                 id="file-upload"
                                 type="file"
+                                accept="application/pdf,.pdf"
                                 onChange={handleFileSelect}
                                 disabled={!editMode}
                                 style={{ display: 'none' }}

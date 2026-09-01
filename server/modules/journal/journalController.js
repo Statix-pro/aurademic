@@ -596,6 +596,22 @@ const journalController = {
       }
 
       const file = req.file;
+
+      // The published article is PDF-only and capped at 5 MB. The shared upload
+      // middleware is deliberately looser (it serves every module), so the stricter
+      // rule this endpoint advertises is enforced here and the temp file discarded.
+      const isPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname || '');
+      const maxArticleBytes = 5 * 1024 * 1024;
+      if (!isPdf || file.size > maxArticleBytes) {
+        await fs.promises.unlink(file.path).catch(() => {});
+        return res.status(400).json({
+          success: false,
+          message: !isPdf
+            ? 'Only PDF files are allowed for the published article.'
+            : 'The published article must be 5 MB or smaller.',
+        });
+      }
+
       const uploadDir = path.join(process.cwd(), 'uploads', 'journalform-articles');
 
       // Ensure the final upload directory exists

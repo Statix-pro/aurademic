@@ -1345,7 +1345,10 @@ input[type='checkbox'],
   width: 18px;
   height: 18px;
   padding: 0;
-  margin: 0;
+  /* margin-left:auto keeps the X pinned to the right edge of the header;
+     a bare `margin: 0` would kill Bootstrap's own auto margin. */
+  margin: 0 0 0 auto;
+  flex-shrink: 0;
 }
 
 .modal-header .btn-close:hover {
@@ -1556,6 +1559,41 @@ input[type='checkbox'],
   display: flex;
   align-items: center;
   gap: 12px;
+  /* min-width:0 lets the filename below truncate instead of stretching the box */
+  min-width: 0;
+}
+
+.pub-upload-info-modern > div {
+  min-width: 0;
+}
+
+/* Selected-file row: name truncates, the delete button stays on the same line */
+.pub-upload-file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.pub-upload-file-name {
+  font-size: 12px;
+  color: #0069ab;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.pub-upload-file-delete {
+  background: none;
+  border: none;
+  padding: 0;
+  line-height: 1;
+  color: #dc3545;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .pub-upload-icon-modern {
@@ -1574,10 +1612,10 @@ input[type='checkbox'],
 }
 
 .btn-upload-modern {
-  background-color: #0d6efd;
+  background-color: #0069ab;
   color: #fff;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 6px 12px;
   font-size: 14px;
   display: flex;
@@ -1585,10 +1623,14 @@ input[type='checkbox'],
   gap: 6px;
   cursor: pointer;
   text-decoration: none;
+  /* Never wrap "Change File" onto two lines, and never let a long filename
+     squeeze the button. */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-upload-modern:hover {
-  background-color: #0b5ed7;
+  background-color: #005492;
   color: #fff;
 }
 
@@ -1609,16 +1651,31 @@ input[type='checkbox'],
 
 .pub-id-prefix-link {
   font-size: 14px;
-  color: #0d6efd;
+  color: #0069ab;
   text-decoration: underline;
   font-weight: 500;
   min-width: 140px;
 }
 
 .pub-id-icon-link {
-  color: #0d6efd;
+  color: #0069ab;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 8px;
+}
+
+/* Journal request modal action row — match the 8px radius used by the
+   form controls and the submit button instead of Bootstrap's 6px. */
+.journal-request-actions .btn {
+  border-radius: 8px !important;
+  padding: 0.4rem 1rem !important;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Bootstrap's .text-primary (#0d6efd) is a brighter blue than the theme's
+   #0069ab — bring the form's inline labels back onto the palette. */
+.journal-form-body .text-primary {
+  color: #0069ab !important;
 }
