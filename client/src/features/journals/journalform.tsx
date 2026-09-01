@@ -181,6 +181,10 @@ const dedupeTagsCaseInsensitive = (values: string[] = []): string[] => {
   return deduped;
 };
 
+// Every internal (faculty/student) author belongs to the host institution; the
+// author search hardcodes the same string server-side.
+const DEFAULT_ORGANIZATION = 'K.S.Rangasamy College of Technology';
+
 const JournalForm: React.FC = () => {
   const { journalId: urlJournalId } = useParams<{ journalId?: string }>();
   const navigate = useNavigate();
@@ -280,6 +284,27 @@ const JournalForm: React.FC = () => {
     if (a.designation === 'external') return 'external';
     return (a.designation || 'faculty').toLowerCase();
   };
+
+  // A student row shows Organization as an editable field but it is always the
+  // host institution, so seed it in state rather than only in the input's
+  // display value -- validation reads state, and a default it cannot see reads
+  // to the user as "All author fields must be filled" over a filled-looking box.
+  useEffect(() => {
+    setAuthors((prevAuthors) => {
+      let changed = false;
+      const next = prevAuthors.map((author, index) => {
+        const designation = (
+          authorDesignations[index] ||
+          author.designation ||
+          'faculty'
+        ).toLowerCase();
+        if (designation !== 'student' || author.organization) return author;
+        changed = true;
+        return { ...author, organization: DEFAULT_ORGANIZATION };
+      });
+      return changed ? next : prevAuthors;
+    });
+  }, [authors, authorDesignations]);
 
   // For check box
   const [acknowledgements, setAcknowledgements] = useState<Acknowledgements>({
@@ -1205,7 +1230,7 @@ const JournalForm: React.FC = () => {
             department: author.department,
             organization:
               normalizedDesignation === 'student' && !author.organization
-                ? 'K.S.Rangasamy College of Technology'
+                ? DEFAULT_ORGANIZATION
                 : author.organization,
             country: author.country,
             state: author.state || '',
@@ -1416,7 +1441,7 @@ const JournalForm: React.FC = () => {
         register_no: '',
         name: '',
         department: '',
-        organization: designation === 'student' ? 'K.S.Rangasamy College of Technology' : '',
+        organization: designation === 'student' ? DEFAULT_ORGANIZATION : '',
         country: '',
         state: '',
         designation: designation as 'faculty' | 'student' | 'external', // Set the new designation
@@ -1772,6 +1797,17 @@ const JournalForm: React.FC = () => {
             <input
               type="text"
               className="form-control"
+              placeholder="Register No."
+              name="register_no"
+              value={author.register_no || ''}
+              onChange={(e) =>
+                handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
+              }
+              disabled={!editMode && isViewMode}
+            />
+            <input
+              type="text"
+              className="form-control"
               placeholder="Department"
               name="department"
               value={author.department || ''}
@@ -1785,7 +1821,7 @@ const JournalForm: React.FC = () => {
               className="form-control"
               placeholder="Organization"
               name="organization"
-              value={author.organization || 'K.S.Rangasamy College of Technology'}
+              value={author.organization || ''}
               onChange={(e) =>
                 handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
               }
@@ -1923,7 +1959,9 @@ const JournalForm: React.FC = () => {
               </div>
             )}
           </div>
-          {/* These readOnly fields will display the data after a faculty member is selected */}
+          {/* These readOnly fields will display the data after a faculty member is selected.
+              Faculty details always come from the master record -- never typed here -- so a
+              blank one means the employee record needs fixing; validateAuthors says so. */}
           <input
             type="text"
             className="form-control"
@@ -2180,8 +2218,25 @@ const JournalForm: React.FC = () => {
 
     for (const author of authors) {
       const designation = (author.designation || '').toLowerCase();
+
+      // A faculty row is filled entirely from the master employee record and
+      // its Department/Organization are read-only, so a blank one is a gap in
+      // that record, not something the user left empty. Say so, or the generic
+      // message below sends them hunting for a field they cannot type into.
+      if (designation === 'faculty' && author.name) {
+        if (!author.department || !author.organization) {
+          const missingField = !author.department ? 'department' : 'organization';
+          return `No ${missingField} on the employee record for "${author.name}". Please ask an admin to update the master data, then re-select the author.`;
+        }
+      }
+
+      // External authors have no Department input in the form, so only
+      // name/organization are required for them (country is checked below).
       const baseMissing =
-        !author.name || !author.designation || !author.department || !author.organization;
+        !author.name ||
+        !author.designation ||
+        !author.organization ||
+        (designation !== 'external' && !author.department);
       if (baseMissing) return 'All author fields must be filled';
 
       if (designation === 'student') {
