@@ -89,12 +89,12 @@ const AlertModal: React.FC<AlertModalProps> = ({
         </div>
       }
     >
-      <div className="d-flex align-items-center p-3">
-        <div className="me-3">{getIcon()}</div>
-        <div className="flex-grow-1">
-          <p className="mb-0 fw-medium" style={{ fontSize: '0.95rem' }}>
-            {message}
-          </p>
+      <div className="d-flex align-items-start p-3">
+        <div className="me-3 flex-shrink-0">{getIcon()}</div>
+        {/* A div, not a p: messages carry lists (a form's validation errors, for one),
+            and a ul inside a p is invalid markup the browser silently reshuffles. */}
+        <div className="flex-grow-1 mb-0 fw-medium" style={{ fontSize: '0.95rem' }}>
+          {message}
         </div>
       </div>
     </CustomModal>

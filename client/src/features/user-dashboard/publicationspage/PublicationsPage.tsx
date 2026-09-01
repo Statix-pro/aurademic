@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import '../../user-dashboard/userdashboard.css';
 import './PublicationsPage.css';
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 import DeleteConfirmationModal from '../../../shared/components/ui/DeleteConfirmationModal';
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected';
@@ -56,6 +57,21 @@ const normalizeApprovalStatus = (value: string | null | undefined): ApprovalStat
 
 const PublicationsPage: React.FC = () => {
   const navigate = useNavigate();
+
+  // Feedback uses the app's own modal instead of window.alert, so it matches the rest of
+  // the product and does not announce the browser origin.
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+  }>({ show: false, message: '', type: 'info' });
+
+  const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
+
+  const showAlert = (message: React.ReactNode, type: AlertType = 'info', title?: string) => {
+    setAlertConfig({ show: true, message, type, title });
+  };
   const [journals, setJournals] = useState<Journal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -253,13 +269,17 @@ const PublicationsPage: React.FC = () => {
       )) as any;
 
       if (response && response.success === true) {
-        alert(response.message || 'Edit request sent to admin for approval');
+        showAlert(
+          response.message || 'Edit request sent to admin for approval.',
+          'success',
+          'Request Sent',
+        );
       } else {
-        alert(response.message || 'Failed to send edit request');
+        showAlert(response.message || 'Failed to send edit request.', 'error');
       }
     } catch (error: any) {
       console.error('Error sending edit request:', error);
-      alert(error.response?.data?.message || 'Failed to send edit request');
+      showAlert(error.response?.data?.message || 'Failed to send edit request.', 'error');
     } finally {
       setShowEditRequestModal(false);
       setSelectedJournalForEditRequest(null);
@@ -781,6 +801,14 @@ const PublicationsPage: React.FC = () => {
           onConfirm={confirmDelete}
           itemName={journalToDelete?.title}
           isDeleting={isDeleting}
+        />
+
+        <AlertModal
+          show={alertConfig.show}
+          onHide={closeAlert}
+          message={alertConfig.message}
+          type={alertConfig.type}
+          title={alertConfig.title}
         />
       </div>
     </div>
