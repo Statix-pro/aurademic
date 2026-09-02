@@ -22,6 +22,12 @@ const adminModel = {
                         AND er.entity_type = 'research_projects'
                       ORDER BY er.created_at DESC
                       LIMIT 1) as edit_request_status,
+                    (SELECT er.user_id
+                       FROM edit_requests er
+                      WHERE er.entity_id = rp.id
+                        AND er.entity_type = 'research_projects'
+                      ORDER BY er.created_at DESC
+                      LIMIT 1) as edit_request_user_id,
                     org.name as agency_name,
                     sch.name as scheme_name,
                     sch.category as scheme_category,
@@ -292,20 +298,65 @@ const adminModel = {
 
       const request = requestRows[0];
 
-      // Add to journal_options table
-      const [result] = await db.query(
-        `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score) 
-                     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          request.journal_name,
-          request.publisher,
-          request.website,
-          request.print_issn,
-          request.online_issn,
-          request.impact_factor || null,
-          request.cite_score || null,
-        ],
+      // Reuse an entry that already carries this journal name rather than adding a second
+      // one: duplicates make the publication form's journal picker ambiguous, and each copy
+      // can hold a different National/International value.
+      const [existingOptions] = await db.query(
+        'SELECT id FROM journal_options WHERE journal_name = ? ORDER BY id LIMIT 1',
+        [request.journal_name],
       );
+
+      let journalOptionId;
+
+      if (existingOptions.length > 0) {
+        journalOptionId = existingOptions[0].id;
+
+        // Fill registry gaps from the request, but never blank a value an admin already
+        // curated: journal_requests defaults these columns to '' when the requester left
+        // them out, and this row is shared by every publication citing the journal, so an
+        // empty string means "not supplied", not "clear it". Same rule as
+        // journalModel.create's fillIfProvided.
+        const registryUpdate = {};
+        for (const field of ['publisher', 'website', 'print_issn', 'online_issn']) {
+          const value = request[field];
+          if (typeof value === 'string' && value.trim() !== '') {
+            registryUpdate[field] = value.trim();
+          } else if (value != null && typeof value !== 'string') {
+            registryUpdate[field] = value;
+          }
+        }
+        if (request.impact_factor != null && request.impact_factor !== '') {
+          registryUpdate.impact_factor = request.impact_factor;
+        }
+        if (request.cite_score != null && request.cite_score !== '') {
+          registryUpdate.cite_score = request.cite_score;
+        }
+        // The level is a decision the approval itself carries, so it is always written.
+        registryUpdate.category = request.category || 'National';
+
+        await db.query('UPDATE journal_options SET ? WHERE id = ?', [
+          registryUpdate,
+          journalOptionId,
+        ]);
+      } else {
+        // `category` must be carried over: leaving it out meant every approved request
+        // landed on the column default and an International journal came back as National.
+        const [result] = await db.query(
+          `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            request.journal_name,
+            request.publisher,
+            request.website,
+            request.print_issn,
+            request.online_issn,
+            request.impact_factor || null,
+            request.cite_score || null,
+            request.category || 'National',
+          ],
+        );
+        journalOptionId = result.insertId;
+      }
 
       // Update the request status
       await db.query(
@@ -316,8 +367,9 @@ const adminModel = {
       );
 
       return {
-        id: result.insertId,
+        id: journalOptionId,
         journal_name: request.journal_name,
+        category: request.category || 'National',
         status: 'approved',
       };
     } catch (error) {

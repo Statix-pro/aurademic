@@ -327,7 +327,10 @@ input[type='checkbox'],
   width: 18px;
   height: 18px;
   padding: 0;
-  margin: 0;
+  /* margin-left:auto keeps the X pinned to the right edge of the header;
+     a bare `margin: 0` would kill Bootstrap's own auto margin. */
+  margin: 0 0 0 auto;
+  flex-shrink: 0;
 }
 
 .modal-header .btn-close:hover {

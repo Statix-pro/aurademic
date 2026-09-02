@@ -11,6 +11,7 @@ import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
+import PublicationReview from '../features/admin/PublicationReview';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
 import EventDashboard from '../features/events/components/EventDashboard';
@@ -324,6 +325,16 @@ function App() {
                     element={
                       <AdminRoute>
                         <JournalManagement />
+                      </AdminRoute>
+                    }
+                  />
+                  {/* One publication under review, on its own page, so it can be linked
+                      to, refreshed and left with the browser's Back button. */}
+                  <Route
+                    path="/admin/publications/:journalId"
+                    element={
+                      <AdminRoute>
+                        <PublicationReview />
                       </AdminRoute>
                     }
                   />

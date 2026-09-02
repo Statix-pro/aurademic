@@ -34,10 +34,7 @@ const formOptionsController = {
       });
     } catch (error) {
       console.error('Error in addOption:', error);
-      res.status(500).json({
-        status: 'error',
-        message: error.message,
-      });
+      respondWithError(res, error);
     }
   },
 
@@ -59,10 +56,7 @@ const formOptionsController = {
       }
     } catch (error) {
       console.error('Error in updateOption:', error);
-      res.status(500).json({
-        status: 'error',
-        message: error.message,
-      });
+      respondWithError(res, error);
     }
   },
 

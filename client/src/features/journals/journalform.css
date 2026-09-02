@@ -69,12 +69,12 @@
 .category-toggle-container {
   display: flex;
   justify-content: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
   background-color: #e1f0ff;
   /* Light blue background */
   border-radius: 50px;
-  padding: 5px;
-  width: 250px;
+  padding: 3px;
+  width: 176px;
   margin-left: auto;
   margin-right: auto;
 }
@@ -84,8 +84,9 @@
   background-color: transparent;
   color: #5d6b8a;
   /* Darker blue-gray text */
-  padding: 8px 20px;
+  padding: 5px 12px;
   border-radius: 50px;
+  font-size: 0.8125rem;
   font-weight: 500;
   width: 50%;
   transition: all 0.3s ease;
@@ -95,7 +96,7 @@
   background-color: #0069ab;
   /* Primary blue */
   color: #fff;
-  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+  box-shadow: 0 2px 6px rgba(0, 105, 171, 0.25);
 }
 
 /* Card Styling */
@@ -153,15 +154,26 @@
 }
 
 /* Author Section */
+/* Author rows are a repeating list, so they are kept tight: a publication with eight
+   authors should still fit on screen without the card dominating the form. */
 .author-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem !important;
+}
+
+.author-row .form-control,
+.author-row .form-select {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+  min-height: 32px;
+  height: 32px;
 }
 
 .author-input-group {
   display: flex;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-grow: 1;
   flex-wrap: nowrap;
 }
@@ -215,8 +227,8 @@
   -webkit-appearance: none;
   appearance: none;
   margin: 0;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   border: 2px solid #ced4da;
   border-radius: 50%;
   cursor: pointer;
@@ -232,8 +244,8 @@
 .author-row-radio::after {
   content: '';
   display: block;
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background-color: #0069ab;
   /* Primary blue */
@@ -289,21 +301,36 @@
   justify-content: center;
 }
 
-.btn-add-author {
-  background-color: #0069ab;
-  /* Primary blue */
-  color: #fff;
-  border: none;
-  border-radius: 8px !important;
-  width: 32px;
-  height: 32px;
+/* The icon buttons are fixed squares sized to their glyph, so the padding has to be
+   zero. `padding: 0` alone lost to a bare global `.btn { padding: 8px 15px }` that leaks
+   out of features/events/styles/EventForm.css — with border-box that left a 2px content
+   box and squashed the 16px icon into an invisible sliver. */
+.btn-add-author,
+.btn-delete-author {
+  padding: 0 !important;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-shrink: 0;
+  border-radius: 6px !important;
+  line-height: 1;
+}
+
+/* An svg is a flex item too, and would otherwise shrink to fit whatever space is left. */
+.btn-add-author svg,
+.btn-delete-author svg {
+  flex: 0 0 auto;
+}
+
+.btn-add-author {
+  background-color: #0069ab;
+  /* Primary blue */
+  color: #fff !important;
+  border: none;
   font-weight: 500;
   transition: background-color 0.2s;
-  flex-shrink: 0;
-  padding: 0;
 }
 
 .btn-add-author:hover {
@@ -314,17 +341,11 @@
 }
 
 .btn-delete-author {
-  color: #dc3545;
+  /* !important for the same reason as the padding above: the leaked global `.btn` sets
+     `color: white`, which turned the trash glyph white on a pale pink square. */
+  color: #dc3545 !important;
   background: #f8d7da !important;
-  border-radius: 8px !important;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   border: none !important;
-  flex-shrink: 0;
-  padding: 0;
 }
 
 .btn-delete-author:hover {
@@ -801,18 +822,18 @@
   /* Primary blue */
   color: white;
   border: none;
-  padding: 12px 40px;
-  font-size: 1.1rem;
-  border-radius: 15px;
+  padding: 8px 22px;
+  font-size: 0.875rem;
+  border-radius: 8px;
   cursor: pointer;
   font-weight: 600;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(0, 105, 171, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.25);
 }
 
 .btn-submit-approval:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 105, 171, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(0, 105, 171, 0.4);
   background-color: #005492;
   /* Darker blue on hover */
 }
@@ -1324,7 +1345,10 @@ input[type='checkbox'],
   width: 18px;
   height: 18px;
   padding: 0;
-  margin: 0;
+  /* margin-left:auto keeps the X pinned to the right edge of the header;
+     a bare `margin: 0` would kill Bootstrap's own auto margin. */
+  margin: 0 0 0 auto;
+  flex-shrink: 0;
 }
 
 .modal-header .btn-close:hover {
@@ -1501,8 +1525,8 @@ input[type='checkbox'],
 
   .btn-add-author,
   .btn-delete-author {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
   }
 }
 
@@ -1535,6 +1559,41 @@ input[type='checkbox'],
   display: flex;
   align-items: center;
   gap: 12px;
+  /* min-width:0 lets the filename below truncate instead of stretching the box */
+  min-width: 0;
+}
+
+.pub-upload-info-modern > div {
+  min-width: 0;
+}
+
+/* Selected-file row: name truncates, the delete button stays on the same line */
+.pub-upload-file-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+.pub-upload-file-name {
+  font-size: 12px;
+  color: #0069ab;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+.pub-upload-file-delete {
+  background: none;
+  border: none;
+  padding: 0;
+  line-height: 1;
+  color: #dc3545;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 .pub-upload-icon-modern {
@@ -1553,10 +1612,10 @@ input[type='checkbox'],
 }
 
 .btn-upload-modern {
-  background-color: #0d6efd;
+  background-color: #0069ab;
   color: #fff;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   padding: 6px 12px;
   font-size: 14px;
   display: flex;
@@ -1564,10 +1623,14 @@ input[type='checkbox'],
   gap: 6px;
   cursor: pointer;
   text-decoration: none;
+  /* Never wrap "Change File" onto two lines, and never let a long filename
+     squeeze the button. */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-upload-modern:hover {
-  background-color: #0b5ed7;
+  background-color: #005492;
   color: #fff;
 }
 
@@ -1588,16 +1651,31 @@ input[type='checkbox'],
 
 .pub-id-prefix-link {
   font-size: 14px;
-  color: #0d6efd;
+  color: #0069ab;
   text-decoration: underline;
   font-weight: 500;
   min-width: 140px;
 }
 
 .pub-id-icon-link {
-  color: #0d6efd;
+  color: #0069ab;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 8px;
+}
+
+/* Journal request modal action row — match the 8px radius used by the
+   form controls and the submit button instead of Bootstrap's 6px. */
+.journal-request-actions .btn {
+  border-radius: 8px !important;
+  padding: 0.4rem 1rem !important;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* Bootstrap's .text-primary (#0d6efd) is a brighter blue than the theme's
+   #0069ab — bring the form's inline labels back onto the palette. */
+.journal-form-body .text-primary {
+  color: #0069ab !important;
 }
