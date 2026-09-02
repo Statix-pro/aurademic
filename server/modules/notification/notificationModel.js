@@ -102,6 +102,10 @@ const notificationModel = {
    * Returns rows abandoned mid-flight — a process killed between claiming and
    * finishing — to the pending pool. Without this a restart would strand them
    * in `processing` forever.
+   *
+   * A live-but-slow worker can be caught by this too, which is why the workers
+   * restamp their lease per event (`renewClaim`) and fence their terminal
+   * writes on `locked_by`: whoever picks the row up next owns it outright.
    */
   async releaseStaleClaims({ staleMinutes = 5 } = {}) {
     const [result] = await db.query(
@@ -115,17 +119,44 @@ const notificationModel = {
     return result.affectedRows || 0;
   },
 
-  async markEventDone(eventId) {
-    await db.query(
+  /**
+   * Extends this instance's lease on a claimed event.
+   *
+   * Called before each event is processed so the stale threshold measures how
+   * long one event has been in flight, not how long the whole batch has taken.
+   * Returns false when the lease is gone — the reaper handed the event to
+   * someone else — which is the caller's signal to leave it alone.
+   */
+  async renewClaim(eventId, { lockedBy } = {}) {
+    const id = toPositiveInt(eventId);
+    if (!id || !lockedBy) return false;
+
+    const [result] = await db.query(
       `UPDATE notification_events
-       SET status = 'done', locked_by = NULL, locked_at = NULL, last_error = NULL
-       WHERE id = ?`,
-      [toPositiveInt(eventId)],
+       SET locked_at = NOW()
+       WHERE id = ? AND status = 'processing' AND locked_by = ?`,
+      [id, String(lockedBy).slice(0, 64)],
     );
+    return (result.affectedRows || 0) > 0;
   },
 
-  async markEventForRetry(eventId, { error = '', delaySeconds = 60 } = {}) {
-    await db.query(
+  /**
+   * Terminal transitions are fenced on `locked_by`: a worker whose lease the
+   * reaper revoked must not overwrite the state of whoever holds it now. All
+   * three return false when the write did not apply.
+   */
+  async markEventDone(eventId, { lockedBy = null } = {}) {
+    const [result] = await db.query(
+      `UPDATE notification_events
+       SET status = 'done', locked_by = NULL, locked_at = NULL, last_error = NULL
+       WHERE id = ?${lockedBy ? ' AND locked_by = ?' : ''}`,
+      lockedBy ? [toPositiveInt(eventId), String(lockedBy).slice(0, 64)] : [toPositiveInt(eventId)],
+    );
+    return (result.affectedRows || 0) > 0;
+  },
+
+  async markEventForRetry(eventId, { error = '', delaySeconds = 60, lockedBy = null } = {}) {
+    const [result] = await db.query(
       `UPDATE notification_events
        SET status = 'pending',
            attempts = attempts + 1,
@@ -133,22 +164,33 @@ const notificationModel = {
            locked_by = NULL,
            locked_at = NULL,
            last_error = ?
-       WHERE id = ?`,
-      [secondsFromNow(delaySeconds), String(error).slice(0, 2000), toPositiveInt(eventId)],
+       WHERE id = ?${lockedBy ? ' AND locked_by = ?' : ''}`,
+      [
+        secondsFromNow(delaySeconds),
+        String(error).slice(0, 2000),
+        toPositiveInt(eventId),
+        ...(lockedBy ? [String(lockedBy).slice(0, 64)] : []),
+      ],
     );
+    return (result.affectedRows || 0) > 0;
   },
 
-  async markEventFailed(eventId, { error = '' } = {}) {
-    await db.query(
+  async markEventFailed(eventId, { error = '', lockedBy = null } = {}) {
+    const [result] = await db.query(
       `UPDATE notification_events
        SET status = 'failed',
            attempts = attempts + 1,
            locked_by = NULL,
            locked_at = NULL,
            last_error = ?
-       WHERE id = ?`,
-      [String(error).slice(0, 2000), toPositiveInt(eventId)],
+       WHERE id = ?${lockedBy ? ' AND locked_by = ?' : ''}`,
+      [
+        String(error).slice(0, 2000),
+        toPositiveInt(eventId),
+        ...(lockedBy ? [String(lockedBy).slice(0, 64)] : []),
+      ],
     );
+    return (result.affectedRows || 0) > 0;
   },
 
   /* ================= FAN-OUT ================= */

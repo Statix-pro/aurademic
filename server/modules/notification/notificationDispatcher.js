@@ -125,6 +125,7 @@ async function processEvent(event) {
     // is no way to render it, and retrying will never help.
     await notificationModel.markEventFailed(event.id, {
       error: `Unknown notification type: ${event.event_type}`,
+      lockedBy: INSTANCE_ID,
     });
     return;
   }
@@ -138,7 +139,7 @@ async function processEvent(event) {
     // Nobody to tell is a legitimate outcome — a department with no HOD
     // assigned, or an event whose only recipient was the actor.
     if (errors.length) throw new Error(`No recipients resolved: ${errors.join('; ')}`);
-    await notificationModel.markEventDone(event.id);
+    await notificationModel.markEventDone(event.id, { lockedBy: INSTANCE_ID });
     return;
   }
 
@@ -272,7 +273,7 @@ async function processEvent(event) {
     );
   }
 
-  await notificationModel.markEventDone(event.id);
+  await notificationModel.markEventDone(event.id, { lockedBy: INSTANCE_ID });
 }
 
 /**
@@ -299,6 +300,19 @@ export async function runOnce() {
     });
 
     for (const event of events) {
+      // A batch is processed one event at a time, so the last event of a slow
+      // batch could sit claimed for longer than the stale threshold and be
+      // reaped out from under this worker. Restamping the lease as each event
+      // starts keeps the threshold measuring one event's runtime.
+      const held = await notificationModel.renewClaim(event.id, { lockedBy: INSTANCE_ID });
+      if (!held) {
+        console.warn(
+          `Notification event ${event.id} (${event.event_type}) lost its claim before ` +
+            'processing; leaving it to the worker that holds it now',
+        );
+        continue;
+      }
+
       try {
         await processEvent(event);
       } catch (error) {
@@ -309,7 +323,10 @@ export async function runOnce() {
           console.error(
             `Notification event ${event.id} (${event.event_type}) failed permanently: ${message}`,
           );
-          await notificationModel.markEventFailed(event.id, { error: message });
+          await notificationModel.markEventFailed(event.id, {
+            error: message,
+            lockedBy: INSTANCE_ID,
+          });
         } else {
           const delay = RETRY_DELAYS_SECONDS[attempts] ?? RETRY_DELAYS_SECONDS.at(-1);
           console.warn(
@@ -319,6 +336,7 @@ export async function runOnce() {
           await notificationModel.markEventForRetry(event.id, {
             error: message,
             delaySeconds: delay,
+            lockedBy: INSTANCE_ID,
           });
         }
       }

@@ -20,6 +20,7 @@ vi.mock('../modules/notification/notificationModel.js', () => ({
   default: {
     claimPendingEvents: vi.fn(),
     releaseStaleClaims: vi.fn(),
+    renewClaim: vi.fn(),
     markEventDone: vi.fn(),
     markEventForRetry: vi.fn(),
     markEventFailed: vi.fn(),
@@ -74,6 +75,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   __testing.resetSweepState();
   notificationModel.releaseStaleClaims.mockResolvedValue(0);
+  notificationModel.renewClaim.mockResolvedValue(true);
   notificationModel.claimPendingEvents.mockResolvedValue([]);
   notificationModel.insertNotifications.mockResolvedValue([makeNotification()]);
   notificationModel.insertDeliveries.mockResolvedValue(undefined);
@@ -109,7 +111,9 @@ describe('notificationDispatcher.runOnce', () => {
         link: '/workflow/finance',
       }),
     ]);
-    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100);
+    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100, {
+      lockedBy: expect.any(String),
+    });
     expect(notificationModel.markEventFailed).not.toHaveBeenCalled();
   });
 
@@ -122,7 +126,9 @@ describe('notificationDispatcher.runOnce', () => {
     await runOnce();
 
     expect(notificationModel.insertNotifications).not.toHaveBeenCalled();
-    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100);
+    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100, {
+      lockedBy: expect.any(String),
+    });
     expect(notificationModel.markEventForRetry).not.toHaveBeenCalled();
   });
 
@@ -210,7 +216,9 @@ describe('notificationDispatcher.runOnce', () => {
 
     expect(await runOnce()).toBe(2);
     expect(notificationModel.markEventFailed).toHaveBeenCalledWith(100, expect.anything());
-    expect(notificationModel.markEventDone).toHaveBeenCalledWith(101);
+    expect(notificationModel.markEventDone).toHaveBeenCalledWith(101, {
+      lockedBy: expect.any(String),
+    });
   });
 
   it('fills in the actor name so the body reads as a sentence', async () => {
@@ -257,7 +265,9 @@ describe('notificationDispatcher.runOnce', () => {
     await runOnce();
 
     expect(notificationModel.insertNotifications).toHaveBeenCalled();
-    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100);
+    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100, {
+      lockedBy: expect.any(String),
+    });
   });
 
   it('renders once per recipient role, not once per person', async () => {
@@ -334,7 +344,9 @@ describe('notificationDispatcher.runOnce', () => {
       'web_push',
       expect.objectContaining({ status: expect.stringMatching(/skipped|failed/) }),
     );
-    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100);
+    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100, {
+      lockedBy: expect.any(String),
+    });
   });
 
   it('retries an event whose delivery failed transiently instead of closing it', async () => {
@@ -400,7 +412,9 @@ describe('notificationDispatcher.runOnce', () => {
     await runOnce();
 
     expect(notificationModel.markEventForRetry).not.toHaveBeenCalled();
-    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100);
+    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100, {
+      lockedBy: expect.any(String),
+    });
   });
 
   it('stops retrying failed deliveries once the ladder is exhausted', async () => {
@@ -462,7 +476,9 @@ describe('notificationDispatcher.runOnce', () => {
 
     await runOnce();
 
-    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100);
+    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100, {
+      lockedBy: expect.any(String),
+    });
   });
 
   it('never throws out of a sweep, even when claiming fails', async () => {
@@ -473,6 +489,28 @@ describe('notificationDispatcher.runOnce', () => {
   it('reaps stale claims so a killed process does not strand its batch', async () => {
     await runOnce();
     expect(notificationModel.releaseStaleClaims).toHaveBeenCalledWith({ staleMinutes: 5 });
+  });
+
+  it('renews its lease per event so a slow batch is not reaped mid-flight', async () => {
+    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+
+    await runOnce();
+
+    expect(notificationModel.renewClaim).toHaveBeenCalledWith(100, {
+      lockedBy: expect.any(String),
+    });
+  });
+
+  it('skips an event whose claim was revoked rather than double-sending it', async () => {
+    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    notificationModel.renewClaim.mockResolvedValue(false);
+
+    await runOnce();
+
+    expect(resolveRecipients).not.toHaveBeenCalled();
+    expect(notificationModel.insertNotifications).not.toHaveBeenCalled();
+    expect(notificationModel.markEventDone).not.toHaveBeenCalled();
+    expect(notificationModel.markEventForRetry).not.toHaveBeenCalled();
   });
 });
 
