@@ -462,18 +462,34 @@ async function findUserIdsWithoutUnitAssignment(conn, { isDepartment, roleCodes 
   return new Set(rows.map((row) => toPositiveInt(row.user_id)).filter(Boolean));
 }
 
-/** Inverse of `loadPrimaryEmployeeContext`: who works in this org unit? */
+/**
+ * Inverse of `loadPrimaryEmployeeContext`: whose PRIMARY employee row sits in
+ * this org unit?
+ *
+ * The primary qualifier is the whole point. `loadPrimaryEmployeeContext` — the
+ * forward path, and therefore what `assertRecordScopeAccess` enforces — reads
+ * one row per user, the lowest-id active one. Matching any active row here
+ * would make the notification audience a superset of who can actually open the
+ * record: a user with employee rows in two departments would be told about the
+ * second department's records and then be refused when they clicked through.
+ * The MIN(id) join pins each user to the same single row the forward path picks.
+ */
 async function findUserIdsByPrimaryEmployeeUnit(conn, { entityId, isDepartment }) {
   const normalizedEntityId = toPositiveInt(entityId);
   if (!normalizedEntityId) return new Set();
 
   const column = isDepartment ? 'department_id' : 'entity_id';
   const [rows] = await conn.query(
-    `SELECT DISTINCT user_id
-     FROM master_employees
-     WHERE ${column} = ?
-       AND status = 'Active'
-       AND user_id IS NOT NULL`,
+    `SELECT DISTINCT e.user_id
+     FROM master_employees e
+     JOIN (
+       SELECT user_id, MIN(id) AS primary_id
+       FROM master_employees
+       WHERE status = 'Active'
+         AND user_id IS NOT NULL
+       GROUP BY user_id
+     ) primary_row ON primary_row.primary_id = e.id
+     WHERE e.${column} = ?`,
     [normalizedEntityId],
   );
 

@@ -439,17 +439,32 @@ const notificationModel = {
     return rows;
   },
 
+  /**
+   * `category` is stored only on a wildcard row, where it is what scopes the
+   * row to a category. An exact row is looked up by (user_id, event_type,
+   * channel) alone — every reader ignores its category — but the table's unique
+   * key includes the column, so stamping the catalog's current category onto an
+   * exact row makes that key drift the moment a type is recategorised: the
+   * upsert misses the existing row, a second one appears for the same switch,
+   * and which of the two the resolver honours is arbitrary. Exact rows
+   * therefore carry the empty category, which keeps the unique key and the
+   * lookup key the same thing.
+   */
   async upsertPreferences(userId, rows = []) {
     const normalizedUserId = toPositiveInt(userId);
     if (!normalizedUserId || !rows.length) return 0;
 
-    const values = rows.map((row) => [
-      normalizedUserId,
-      String(row.eventType).slice(0, 100),
-      String(row.category || 'general').slice(0, 50),
-      String(row.channel).slice(0, 32),
-      row.isEnabled ? 1 : 0,
-    ]);
+    const values = rows.map((row) => {
+      const eventType = String(row.eventType).slice(0, 100);
+
+      return [
+        normalizedUserId,
+        eventType,
+        eventType === '*' ? String(row.category || 'general').slice(0, 50) : '',
+        String(row.channel).slice(0, 32),
+        row.isEnabled ? 1 : 0,
+      ];
+    });
 
     const [result] = await db.query(
       `INSERT INTO notification_preferences (user_id, event_type, category, channel, is_enabled)

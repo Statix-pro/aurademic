@@ -40,8 +40,10 @@
 
    SAFETY
      All five tables are new. Nothing existing is altered or dropped.
-     Idempotent: every statement is CREATE TABLE IF NOT EXISTS, so the
-     file is safe to run more than once.
+     Idempotent, and safe to run more than once: the tables are
+     CREATE TABLE IF NOT EXISTS, the workflow_stage_policies seed is
+     ON DUPLICATE KEY UPDATE, and the preference normalisation in 4.2
+     finds nothing left to do on a second run.
    ============================================================ */
 
 /* ============================================================
@@ -158,7 +160,7 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
   id INT NOT NULL AUTO_INCREMENT,
   user_id INT NOT NULL,
   event_type VARCHAR(100) NOT NULL COMMENT 'Exact catalog key, or * to cover every type in the category',
-  category VARCHAR(50) NOT NULL DEFAULT 'general' COMMENT 'Scopes a wildcard row; ignored when event_type is exact',
+  category VARCHAR(50) NOT NULL DEFAULT 'general' COMMENT 'Scopes a wildcard row; empty on an exact row, which is looked up by event_type alone',
   channel VARCHAR(32) NOT NULL COMMENT 'in_app / web_push',
   is_enabled TINYINT(1) NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -169,6 +171,33 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
   CONSTRAINT fk_notification_preferences_user
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+/* 4.2 `category` belongs to a wildcard row and nothing else: it is what scopes
+   '*' to one category. An exact row is matched on (user_id, event_type,
+   channel) by every reader, but the unique key above includes `category`, so an
+   exact row stamped with the catalog's category of the day starts drifting the
+   moment that type is recategorised — the upsert misses, a second row appears
+   for the same switch, and which one the resolver honours is arbitrary. Exact
+   rows carry the empty category so the unique key and the lookup key are the
+   same thing (see notificationModel.upsertPreferences).
+
+   Collapse anything written before that rule existed, newest save winning, then
+   clear the column. Idempotent: a second run finds no duplicates and no
+   non-empty categories left to clear. */
+DELETE p FROM notification_preferences p
+JOIN (
+  SELECT user_id, event_type, channel, MAX(id) AS keep_id
+  FROM notification_preferences
+  WHERE event_type <> '*'
+  GROUP BY user_id, event_type, channel
+) newest
+  ON newest.user_id = p.user_id
+  AND newest.event_type = p.event_type
+  AND newest.channel = p.channel
+WHERE p.event_type <> '*'
+  AND p.id <> newest.keep_id;
+
+UPDATE notification_preferences SET category = '' WHERE event_type <> '*' AND category <> '';
 
 /* ============================================================
    5. WEB PUSH SUBSCRIPTIONS

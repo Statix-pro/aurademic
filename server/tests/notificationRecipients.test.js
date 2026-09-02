@@ -151,6 +151,46 @@ describe('resolveStageRecipients', () => {
     expect(recipients).toEqual([41]);
   });
 
+  it('asks only for the primary employee row, as the forward path does', async () => {
+    // `loadPrimaryEmployeeContext` — the forward path, and therefore what
+    // `assertRecordScopeAccess` enforces — reads one row per user, the
+    // lowest-id active one. Matching any active row here would invite a user
+    // with employee rows in two departments to open a record the forward check
+    // then refuses, so the SQL has to pin the same single row. Asserted against
+    // the query text because the narrowing lives in SQL, not in JavaScript.
+    const conn = makeConn([
+      [
+        STAGE_POLICY_SQL,
+        [
+          {
+            module_key: 'finance',
+            stage_key: 'level1',
+            scope_type: 'department',
+            meta: { requireAssignment: false, assignmentRoleCodes: ['hod'] },
+          },
+        ],
+      ],
+      [BY_ROLE_SQL, [{ user_id: 41 }]],
+      [ASSIGNED_SQL, []],
+      [EMPLOYEE_SQL, [{ user_id: 41 }]],
+    ]);
+
+    await resolveStageRecipients({
+      conn,
+      moduleKey: 'finance',
+      stageKey: 'level1',
+      recordContext: { departmentId: 5, beneficiaryType: 'department' },
+    });
+
+    const employeeQuery = conn.query.mock.calls.find(
+      ([sql]) => sql.includes(EMPLOYEE_SQL) && sql.includes('department_id'),
+    );
+
+    expect(employeeQuery).toBeDefined();
+    expect(employeeQuery[0]).toMatch(/MIN\(id\)\s+AS\s+primary_id/i);
+    expect(employeeQuery[0]).toMatch(/GROUP BY user_id/i);
+  });
+
   it('does not fall back for a user assigned elsewhere', async () => {
     // The case that makes this inversion tricky. User 51 is the HOD of
     // department 9 by explicit assignment, but their employee row still says
