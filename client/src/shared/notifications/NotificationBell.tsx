@@ -21,19 +21,8 @@ const NotificationBell: React.FC = () => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const {
-    items,
-    unreadCount,
-    loading,
-    error,
-    loaded,
-    nextCursor,
-    load,
-    loadMore,
-    markRead,
-    markAllRead,
-    archive,
-  } = useNotifications();
+  const { items, unreadCount, loading, error, loaded, load, markRead, markAllRead, archive } =
+    useNotifications();
 
   // Fetch on open rather than on mount: a user who never opens the bell pays
   // only for the summary poll, not for a list they will not read.
@@ -125,20 +114,10 @@ const NotificationBell: React.FC = () => {
             ) : null}
 
             {loading && items.length === 0 ? <div className="notif-empty">Loading…</div> : null}
-
-            {nextCursor ? (
-              <div className="notif-panel-foot">
-                <button
-                  type="button"
-                  className="notif-link-btn"
-                  onClick={() => void loadMore()}
-                  disabled={loading}
-                >
-                  {loading ? 'Loading…' : 'Load more'}
-                </button>
-              </div>
-            ) : null}
           </div>
+
+          {/* No paging here on purpose: the panel is for triage of what just
+              happened, and "See all notifications" below is the way deeper. */}
 
           <div className="notif-panel-foot">
             <button

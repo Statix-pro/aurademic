@@ -51,9 +51,13 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onOpe
         <span className={`notif-sev notif-sev--${notification.severity}`}>
           {notification.category.replace(/_/g, ' ')}
         </span>
-        <span>{relativeTime(notification.createdAt)}</span>
       </div>
     </div>
+
+    {/* Its own column beside the body rather than trailing the module badge:
+        on the full-width inbox that keeps it aligned under the dismiss button
+        instead of stranded in the middle of a very wide row. */}
+    <span className="notif-item-time">{relativeTime(notification.createdAt)}</span>
 
     <button
       type="button"

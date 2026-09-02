@@ -103,10 +103,36 @@
   text-decoration: none;
 }
 
+/* Scrolls in both the bell panel and the inbox card.
+   The scrollbar is kept rather than hidden — it is the only cue that there is
+   more below — but slimmed to a 4px thumb inset from the edge, so it reads as
+   part of the panel instead of an OS gutter bolted onto it. */
 .notif-list {
   flex: 1;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #d5dce6 transparent;
+}
+
+.notif-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.notif-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.notif-list::-webkit-scrollbar-thumb {
+  background: #dbe1ea;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  border-radius: 4px;
+}
+
+.notif-list:hover::-webkit-scrollbar-thumb {
+  background: #c1cbd9;
+  background-clip: content-box;
 }
 
 /* ─── Item ─── */
@@ -186,6 +212,27 @@
   color: #98a2b3;
 }
 
+.notif-item-time {
+  flex-shrink: 0;
+  align-self: flex-start;
+  margin-top: 1px;
+  font-size: 11px;
+  color: #98a2b3;
+  white-space: nowrap;
+}
+
+/* Wide rows centre their trailing column; in the narrow bell panel the title
+   can run to two or three lines, so there the time stays at the top. */
+.notif-page .notif-item {
+  align-items: center;
+}
+
+.notif-page .notif-item-time,
+.notif-page .notif-dismiss {
+  align-self: center;
+  margin-top: 0;
+}
+
 .notif-sev {
   display: inline-block;
   padding: 1px 6px;
@@ -259,142 +306,702 @@
   background: #fcfdfe;
 }
 
-/* ─── Full inbox page ─── */
-.notif-page {
-  max-width: 860px;
-  margin: 0 auto;
-  padding: 20px 16px 40px;
-}
-
-.notif-page-head {
-  display: flex;
+/* ─── Buttons ───
+   Own classes rather than Bootstrap's: an unscoped `.btn { color: white;
+   border: none }` in features/events/styles/EventForm.css leaks into every
+   bundled stylesheet and silently erases outline buttons, so this module
+   stays clear of `.btn` entirely. */
+.notif-btn {
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 14px;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 7px;
+  border: 1px solid #dce2ec;
+  background: #fff;
+  color: #344054;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  white-space: nowrap;
 }
 
-.notif-page-head h1 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
+.notif-btn:hover:not(:disabled) {
+  background: #f5f8fc;
+  border-color: #b6c2d4;
   color: #1f2937;
 }
 
-.notif-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-bottom: 12px;
+.notif-btn:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 1px;
 }
 
-.notif-chip {
-  padding: 5px 11px;
-  border: 1px solid #dce2ec;
-  border-radius: 16px;
-  background: #fff;
-  color: #475467;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
+.notif-btn:disabled {
+  color: #98a2b3;
+  background: #f8fafc;
+  border-color: #e7ebf2;
+  cursor: not-allowed;
 }
 
-.notif-chip:hover {
-  border-color: #b6c2d4;
-}
-
-.notif-chip.is-active {
+.notif-btn--primary {
   background: #0069ab;
   border-color: #0069ab;
   color: #fff;
 }
 
+.notif-btn--primary:hover:not(:disabled) {
+  background: #005492;
+  border-color: #005492;
+  color: #fff;
+}
+
+.notif-btn--primary:disabled {
+  background: #a9c8dd;
+  border-color: #a9c8dd;
+  color: #fff;
+}
+
+/* ─── Full inbox page ─── */
+/* Capped and centred. Filling the full width was tried and rejected: a
+   notification row is a short line of text, and stretching it across a wide
+   monitor puts the timestamp a screen away from the title it belongs to.
+
+   Fixed to the height of the scroll area, not taller: a long history scrolls
+   inside the list card, so the heading, the actions and the module rail stay
+   put instead of sliding off the top. */
+.notif-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 22px 16px 24px;
+  overflow: hidden;
+}
+
+.notif-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.notif-page-head h1 {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.notif-page-sub {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: #667085;
+}
+
+.notif-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Rail beside the list, not chips above it: eight modules wrap into two rows
+   of chips, and the counts have nowhere to live. */
+.notif-page-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 212px minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.notif-rail {
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+}
+
+.notif-rail-heading {
+  margin: 10px 8px 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #98a2b3;
+}
+
+.notif-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: #475467;
+  font-size: 12.5px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notif-rail-item:hover {
+  background: #f5f8fc;
+  color: #1f2937;
+}
+
+.notif-rail-item.is-active {
+  background: #eaf4fc;
+  color: #0b5ea8;
+  font-weight: 600;
+}
+
+.notif-rail-item svg {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
+.notif-rail-item.is-active svg {
+  opacity: 1;
+}
+
+.notif-rail-spacer {
+  width: 15px;
+  flex-shrink: 0;
+}
+
+.notif-rail-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-rail-count {
+  flex-shrink: 0;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #eef1f6;
+  color: #667085;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+
+.notif-rail-count.is-accent {
+  background: #0069ab;
+  color: #fff;
+}
+
 .notif-card {
+  display: flex;
+  flex-direction: column;
+  /* Fills the body row and never exceeds it; `.notif-list` inside takes the
+     overflow. min-height: 0 is what lets a flex child actually shrink. */
+  height: 100%;
+  min-height: 0;
   background: #fff;
   border: 1px solid #e3e8ef;
   border-radius: 10px;
   overflow: hidden;
 }
 
-/* ─── Preferences ─── */
-.notif-prefs-group {
-  margin-bottom: 22px;
+/* Centres in whatever height is left, so an empty inbox reads as a designed
+   state rather than a short box with a tall gap under it. */
+.notif-page-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 40px 24px;
+  text-align: center;
 }
 
-.notif-prefs-group h3 {
-  margin: 0 0 4px;
-  font-size: 14px;
+.notif-page-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  /* Auto side margins so it also centres in the zero panel, which lays its
+     children out in normal flow rather than as a centred flex column. */
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  background: #f2f6fb;
+  color: #9fb3c8;
+}
+
+.notif-page-empty h2 {
+  margin: 0;
+  font-size: 15px;
   font-weight: 700;
-  color: #1f2937;
-  text-transform: capitalize;
+  color: #344054;
 }
 
-.notif-prefs-table {
-  width: 100%;
-  border-collapse: collapse;
+.notif-page-empty p {
+  margin: 0 0 12px;
+  max-width: 380px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #98a2b3;
+}
+
+.notif-page-empty-text {
+  font-size: 12.5px;
+  color: #98a2b3;
+}
+
+@media (max-width: 820px) {
+  .notif-page-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .notif-rail {
+    position: static;
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 7px 8px;
+    /* The row is short and obviously swipeable; a permanent scrollbar under
+       eight chips reads as broken layout. */
+    scrollbar-width: none;
+  }
+
+  .notif-rail::-webkit-scrollbar {
+    display: none;
+  }
+
+  .notif-rail-heading,
+  .notif-rail-spacer {
+    display: none;
+  }
+
+  .notif-rail-item {
+    width: auto;
+    flex-shrink: 0;
+  }
+}
+
+/* ─── Toggle (preference cells) ─── */
+.notif-toggle {
+  position: relative;
+  display: inline-block;
+  width: 42px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid #cdd5e0;
+  border-radius: 12px;
+  background: #e7ebf2;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+  vertical-align: middle;
+}
+
+.notif-toggle:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+}
+
+.notif-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.notif-toggle[data-state='on'] {
+  background: #0069ab;
+  border-color: #0069ab;
+}
+
+.notif-toggle[data-state='on'] .notif-toggle-knob {
+  transform: translateX(18px);
+}
+
+/* Mixed sits the knob in the middle — a module whose types disagree must not
+   look identical to one that is uniformly on or off. */
+.notif-toggle[data-state='mixed'] {
+  background: #9dc6e3;
+  border-color: #7fb3d8;
+}
+
+.notif-toggle[data-state='mixed'] .notif-toggle-knob {
+  transform: translateX(9px);
+}
+
+.notif-toggle:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Preferences ─── */
+.notif-prefs {
+  /* A row of label-plus-two-switches stops being readable once the switches
+     drift half a screen from the label, so the panel stops well short of the
+     full page width and is centred in whatever is left. */
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-bottom: 8px;
+}
+
+/* Room for the floating save bar to settle over empty space rather than over
+   the last preference row — only while there is a bar to make room for. */
+.notif-prefs:has(.notif-savebar) {
+  padding-bottom: 76px;
+}
+
+/* Settings read at a slightly larger size than the bell panel does: a panel
+   glanced at for two seconds and a page you sit and configure are not the same
+   reading task. Scoped here so the compact bell and inbox buttons stay put. */
+.notif-prefs .notif-btn {
+  padding: 8px 15px;
+  font-size: 13.5px;
+}
+
+.notif-push-card {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  margin-bottom: 24px;
+  padding: 14px 16px;
   background: #fff;
   border: 1px solid #e3e8ef;
-  border-radius: 8px;
-  overflow: hidden;
+  border-radius: 10px;
 }
 
-.notif-prefs-table th,
-.notif-prefs-table td {
-  padding: 9px 12px;
-  border-bottom: 1px solid #f0f3f8;
-  font-size: 12.5px;
-  text-align: left;
-  vertical-align: top;
+.notif-push-card.is-subscribed {
+  border-color: #bfe3cd;
+  background: #f6fcf8;
 }
 
-.notif-prefs-table th {
-  background: #f8fafc;
-  font-weight: 600;
-  color: #475467;
-  font-size: 11.5px;
+.notif-push-card.is-denied {
+  border-color: #f3d0d4;
+  background: #fdf7f8;
+}
+
+.notif-push-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #eaf4fc;
+  color: #0069ab;
+}
+
+.notif-push-card.is-subscribed .notif-push-icon {
+  background: #e6f5ec;
+  color: #14713c;
+}
+
+.notif-push-card.is-denied .notif-push-icon {
+  background: #fdeaec;
+  color: #a4161f;
+}
+
+.notif-push-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-push-copy h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 3px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.notif-push-state {
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: #eef1f6;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
 
-.notif-prefs-table th.notif-prefs-channel,
-.notif-prefs-table td.notif-prefs-channel {
-  width: 110px;
-  text-align: center;
+.notif-push-card.is-subscribed .notif-push-state {
+  background: #e6f5ec;
+  color: #14713c;
 }
 
-.notif-prefs-table tr:last-child td {
-  border-bottom: none;
+.notif-push-card.is-denied .notif-push-state {
+  background: #fdeaec;
+  color: #a4161f;
 }
 
-.notif-prefs-label {
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.notif-prefs-desc {
-  margin-top: 2px;
+.notif-push-copy p {
+  margin: 0;
+  font-size: 13.5px;
   color: #667085;
-  font-size: 11.5px;
 }
 
-.notif-push-panel {
-  margin-bottom: 22px;
-  padding: 13px 15px;
-  background: #f8fafc;
-  border: 1px solid #e3e8ef;
-  border-radius: 8px;
+.notif-prefs-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
 }
 
-.notif-push-panel h3 {
-  margin: 0 0 3px;
-  font-size: 14px;
+.notif-prefs-head h3 {
+  margin: 0 0 4px;
+  font-size: 15.5px;
   font-weight: 700;
   color: #1f2937;
 }
 
-.notif-push-panel p {
-  margin: 0 0 10px;
-  font-size: 12.5px;
+.notif-prefs-head p {
+  margin: 0;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.5;
   color: #667085;
+}
+
+/* Column headings for the switch cells, aligned by sharing .notif-cell's width. */
+.notif-prefs-legend {
+  display: flex;
+  flex-shrink: 0;
+  padding-right: 15px;
+}
+
+.notif-prefs-legend span {
+  width: 96px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #98a2b3;
+  text-align: center;
+}
+
+.notif-prefs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notif-acc {
+  background: #fff;
+  border: 1px solid #e3e8ef;
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.notif-acc.is-open {
+  border-color: #cfdcea;
+  box-shadow: 0 2px 8px rgba(16, 24, 40, 0.05);
+}
+
+.notif-acc-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 15px;
+}
+
+.notif-acc-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 14px 6px 14px 13px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notif-acc-chevron {
+  flex-shrink: 0;
+  color: #98a2b3;
+  transition: transform 0.15s ease;
+}
+
+.notif-acc.is-open .notif-acc-chevron {
+  transform: rotate(90deg);
+}
+
+.notif-acc-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #f2f6fb;
+  color: #5b7994;
+}
+
+.notif-acc-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: #1f2937;
+  white-space: nowrap;
+}
+
+.notif-acc-meta {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  color: #98a2b3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-acc-switches {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.notif-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+}
+
+.notif-acc-body {
+  border-top: 1px solid #eef1f6;
+  background: #fcfdfe;
+}
+
+.notif-pref-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 15px 12px 53px;
+  border-bottom: 1px solid #f1f4f9;
+}
+
+.notif-pref-row:last-child {
+  border-bottom: none;
+}
+
+.notif-pref-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-pref-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #344054;
+}
+
+.notif-pref-desc {
+  margin-top: 2px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #8894a7;
+}
+
+/* Sticky so a change made at the bottom of eight modules is still savable
+   without scrolling back up. Only as wide as its contents and centred: full
+   width and white, it read as one more row of the module card it floats over.
+   Surface, border, radius and shadow come from the app's own card idiom
+   (shared/styles/variables.css) so it does not look like a different product. */
+.notif-savebar {
+  position: sticky;
+  bottom: 18px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  margin: 20px auto 0;
+  padding: 10px 12px 10px 18px;
+  background: var(--bg-surface, #fff);
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: var(--border-radius-md, 12px);
+  /* Heavier than --shadow-md on purpose: this one has to read as sitting above
+     the card behind it, not as part of it. */
+  box-shadow: 0 8px 26px rgba(0, 105, 171, 0.18);
+}
+
+.notif-savebar-text {
+  flex-shrink: 0;
+  margin-right: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main, #4f4f6e);
+}
+
+@media (max-width: 620px) {
+  .notif-prefs-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .notif-prefs-legend {
+    padding-right: 0;
+    justify-content: flex-end;
+  }
+
+  .notif-push-card {
+    flex-wrap: wrap;
+  }
+
+  .notif-acc-meta {
+    display: none;
+  }
+
+  .notif-pref-row {
+    padding-left: 15px;
+  }
+
+  .notif-cell,
+  .notif-prefs-legend span {
+    width: 68px;
+  }
+
+  .notif-savebar {
+    width: auto;
+    padding: 10px 12px;
+  }
+
+  .notif-savebar-text {
+    flex: 1;
+  }
 }

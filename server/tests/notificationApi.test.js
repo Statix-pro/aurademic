@@ -33,8 +33,25 @@ vi.mock('../config/connection.js', () => ({
   default: { getConnection: vi.fn(), query: vi.fn() },
 }));
 
+// GET /preferences re-reads the caller's roles so it can filter the switch
+// list; every other route here trusts the JWT and never touches this.
+vi.mock('../modules/accessControl/accessControlModel.js', () => ({
+  default: { getUserAuthorizationSnapshot: vi.fn() },
+}));
+
+import accessControlModel from '../modules/accessControl/accessControlModel.js';
 import notificationModel from '../modules/notification/notificationModel.js';
 import app from '../server.js';
+
+/** The live roles the preferences route will see. */
+const grantAuthorization = ({ roles = [], permissions = [] } = {}) => {
+  accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+    roles,
+    permissions,
+    isAdmin: false,
+    isSuperAdmin: false,
+  });
+};
 
 const USER_ID = 42;
 let token;
@@ -43,6 +60,8 @@ const auth = (req) => req.set('Authorization', `Bearer ${token}`);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // A plain submitter unless a test says otherwise.
+  grantAuthorization({ roles: ['user'] });
   token = jwt.sign(
     { userId: USER_ID, email: 'user@ksrct.ac.in', name: 'Test User', roles: ['faculty'] },
     process.env.JWT_SECRET,
@@ -266,6 +285,56 @@ describe('GET /api/notifications/preferences', () => {
     // Other categories are untouched.
     const budget = response.body.data.types.find((row) => row.category === 'budget');
     expect(budget.channels.in_app).toBe(true);
+  });
+
+  it('offers only the types the caller can actually receive', async () => {
+    // A faculty token holds no stage role and no workflow permission, so the
+    // approval-queue types can never reach them and must not appear as
+    // switches they could pointlessly toggle.
+    notificationModel.getPreferences.mockResolvedValue([]);
+
+    const response = await auth(request(app).get('/api/notifications/preferences'));
+    const offered = new Set(response.body.data.types.map((row) => row.eventType));
+
+    expect(offered.has('finance.approved')).toBe(true);
+    expect(offered.has('finance.submitted')).toBe(false);
+    expect(offered.has('journal.request_submitted')).toBe(false);
+    expect(offered.has('payee.submitted')).toBe(false);
+  });
+
+  it('offers the approval-queue types to an approver', async () => {
+    notificationModel.getPreferences.mockResolvedValue([]);
+    grantAuthorization({ roles: ['hod'] });
+
+    const response = await auth(request(app).get('/api/notifications/preferences'));
+
+    const offered = new Set(response.body.data.types.map((row) => row.eventType));
+
+    expect(offered.has('finance.submitted')).toBe(true);
+    expect(offered.has('budget.resubmitted')).toBe(true);
+    // Still not a publication reviewer, and still not the payee curator.
+    expect(offered.has('journal.request_submitted')).toBe(false);
+    expect(offered.has('payee.submitted')).toBe(false);
+  });
+
+  it('trusts the database over the token when they disagree', async () => {
+    // The JWT is a 24-hour snapshot. Someone who was an approver at login and
+    // is not one now must not still be offered approval-queue switches, and
+    // vice versa — so the token's roles must not reach this decision.
+    notificationModel.getPreferences.mockResolvedValue([]);
+    grantAuthorization({ roles: ['user'] });
+
+    const staleApproverToken = jwt.sign(
+      { userId: USER_ID, email: 'user@ksrct.ac.in', name: 'Test User', roles: ['hod'] },
+      process.env.JWT_SECRET,
+    );
+
+    const response = await request(app)
+      .get('/api/notifications/preferences')
+      .set('Authorization', `Bearer ${staleApproverToken}`);
+
+    const offered = new Set(response.body.data.types.map((row) => row.eventType));
+    expect(offered.has('finance.submitted')).toBe(false);
   });
 
   it('is not shadowed by the /:id routes', async () => {

@@ -157,9 +157,33 @@ const applicantAndAmount = (d) => {
  * own older engine — reuses the same wording rather than inventing a parallel
  * vocabulary.
  */
+/**
+ * Who a notification can ever reach, used to keep the preferences screen
+ * honest: a faculty member who never approves anything should not be offered a
+ * switch for "a new request has entered your approval queue".
+ *
+ * `anyone` covers every entry addressed to the person who raised, owns or is
+ * the subject of the record — everybody submits things, so everybody can
+ * receive those. The rest name a capability, and `notificationEligibility.js`
+ * decides who holds it.
+ *
+ * Absent means `anyone`. Erring towards showing a switch is the safe
+ * direction: an extra row is clutter, but a missing row would hide a
+ * notification the user is actually being sent.
+ */
+export const RECIPIENT_ANYONE = 'anyone';
+export const RECIPIENT_REVIEWER = 'reviewer';
+export const RECIPIENT_PAYEE_VERIFIER = 'payee_verifier';
+/** `approver:<moduleKey>` — an approver on that module's workflow. */
+export const recipientApprover = (moduleKey) => `approver:${moduleKey}`;
+
+const ANYONE = Object.freeze([RECIPIENT_ANYONE]);
+const REVIEWERS = Object.freeze([RECIPIENT_REVIEWER]);
+
 const workflowEntries = (moduleKey, category) => ({
   [`${moduleKey}.submitted`]: {
     category,
+    recipients: [recipientApprover(moduleKey)],
     label: 'Submitted for approval',
     description: 'A new request has entered your approval queue.',
     severity: 'info',
@@ -171,6 +195,7 @@ const workflowEntries = (moduleKey, category) => ({
 
   [`${moduleKey}.stage_advanced`]: {
     category,
+    recipients: ANYONE,
     label: 'Moved to the next stage',
     description: 'A request you submitted or must approve moved forward a stage.',
     severity: 'info',
@@ -188,6 +213,7 @@ const workflowEntries = (moduleKey, category) => ({
 
   [`${moduleKey}.approved`]: {
     category,
+    recipients: ANYONE,
     label: 'Fully approved',
     description: 'A request you submitted cleared its final approval stage.',
     severity: 'success',
@@ -199,6 +225,7 @@ const workflowEntries = (moduleKey, category) => ({
 
   [`${moduleKey}.rejected`]: {
     category,
+    recipients: ANYONE,
     label: 'Rejected',
     description: 'A request you submitted was rejected.',
     severity: 'error',
@@ -210,6 +237,7 @@ const workflowEntries = (moduleKey, category) => ({
 
   [`${moduleKey}.returned`]: {
     category,
+    recipients: ANYONE,
     label: 'Returned for changes',
     description: 'A request you submitted was sent back for edits.',
     severity: 'warning',
@@ -221,6 +249,7 @@ const workflowEntries = (moduleKey, category) => ({
 
   [`${moduleKey}.resubmitted`]: {
     category,
+    recipients: [recipientApprover(moduleKey)],
     label: 'Resubmitted after changes',
     description: 'An applicant resubmitted a request waiting on you.',
     severity: 'info',
@@ -239,6 +268,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   /* ---- budget-only transitions, which the generic engine has no analogue for ---- */
 
   'budget.amounts_updated': {
+    recipients: ANYONE,
     category: 'budget',
     label: 'Approved amounts changed',
     description: 'An approver changed the amounts sanctioned on your proposal.',
@@ -250,6 +280,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'budget.archived': {
+    recipients: ANYONE,
     category: 'budget',
     label: 'Archived or restored',
     description: 'Your proposal was archived or brought back out of the archive.',
@@ -264,6 +295,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'budget.deleted': {
+    recipients: ANYONE,
     category: 'budget',
     label: 'Deleted',
     description: 'Your proposal was deleted.',
@@ -280,6 +312,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
      stage transitions but not deletion, which is not a stage decision. */
 
   'finance.deleted': {
+    recipients: ANYONE,
     category: 'finance',
     label: 'Deleted',
     description: 'A finance request you submitted was deleted.',
@@ -291,6 +324,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'expenditure.deleted': {
+    recipients: ANYONE,
     category: 'expenditure',
     label: 'Deleted',
     description: 'An expenditure request you submitted was deleted.',
@@ -308,6 +342,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
      category so muting that domain mutes these too. */
 
   'payee.submitted': {
+    recipients: [RECIPIENT_PAYEE_VERIFIER],
     category: 'expenditure',
     label: 'Payee awaiting verification',
     description: 'Someone added or edited payee bank details that need vetting.',
@@ -319,6 +354,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'payee.approved': {
+    recipients: ANYONE,
     category: 'expenditure',
     label: 'Payee verified',
     description: 'Payee details you submitted were verified.',
@@ -330,6 +366,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'payee.rejected': {
+    recipients: ANYONE,
     category: 'expenditure',
     label: 'Payee rejected',
     description: 'Payee details you submitted were rejected.',
@@ -345,6 +382,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   /* ---- publications ---- */
 
   'journal.submitted': {
+    recipients: REVIEWERS,
     category: 'publications',
     label: 'Publication submitted for review',
     description: 'A publication was submitted and is waiting for review.',
@@ -357,6 +395,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'journal.resubmitted': {
+    recipients: REVIEWERS,
     category: 'publications',
     label: 'Publication resubmitted',
     description: 'A publication was edited and re-entered review.',
@@ -369,6 +408,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'journal.approved': {
+    recipients: ANYONE,
     category: 'publications',
     label: 'Publication approved',
     description: 'Your publication was approved.',
@@ -380,6 +420,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'journal.rejected': {
+    recipients: ANYONE,
     category: 'publications',
     label: 'Publication rejected',
     description: 'Your publication was rejected.',
@@ -391,6 +432,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'journal.request_submitted': {
+    recipients: REVIEWERS,
     category: 'publications',
     label: 'New-journal request submitted',
     description: 'Someone asked for a journal to be added to the master list.',
@@ -402,6 +444,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'journal.request_approved': {
+    recipients: ANYONE,
     category: 'publications',
     label: 'New-journal request approved',
     description: 'A journal you asked for was added to the master list.',
@@ -413,6 +456,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'journal.request_rejected': {
+    recipients: ANYONE,
     category: 'publications',
     label: 'New-journal request rejected',
     description: 'A journal you asked for was not added.',
@@ -424,6 +468,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'journal.status_update_posted': {
+    recipients: REVIEWERS,
     category: 'publications',
     label: 'Publication progress update posted',
     description: 'An author posted a progress update on their publication.',
@@ -435,6 +480,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'journal.status_update_replied': {
+    recipients: ANYONE,
     category: 'publications',
     label: 'Reply to your progress update',
     description: 'An administrator replied to a progress update you posted.',
@@ -448,6 +494,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   /* ---- project master-data requests ---- */
 
   'project.request_submitted': {
+    recipients: REVIEWERS,
     category: 'projects',
     label: 'Project option request submitted',
     description: 'Someone asked for a new agency or scheme to be added.',
@@ -460,6 +507,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'project.request_approved': {
+    recipients: ANYONE,
     category: 'projects',
     label: 'Project option request approved',
     description: 'An option you asked for was added.',
@@ -471,6 +519,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'project.request_rejected': {
+    recipients: ANYONE,
     category: 'projects',
     label: 'Project option request rejected',
     description: 'An option you asked for was not added.',
@@ -484,6 +533,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   /* ---- edit requests (unfreezing an approved record) ---- */
 
   'edit_request.submitted': {
+    recipients: REVIEWERS,
     category: 'edit_requests',
     label: 'Edit access requested',
     description: 'Someone asked to unlock an approved record for editing.',
@@ -498,6 +548,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'edit_request.approved': {
+    recipients: ANYONE,
     category: 'edit_requests',
     label: 'Edit access granted',
     description: 'Your request to edit an approved record was granted.',
@@ -512,6 +563,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'edit_request.rejected': {
+    recipients: ANYONE,
     category: 'edit_requests',
     label: 'Edit access refused',
     description: 'Your request to edit an approved record was refused.',
@@ -528,6 +580,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   /* ---- events ---- */
 
   'event.submitted': {
+    recipients: REVIEWERS,
     category: 'events',
     label: 'Event submitted for approval',
     description: 'An event was submitted for approval.',
@@ -541,6 +594,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   /* ---- access control ---- */
 
   'access.roles_updated': {
+    recipients: ANYONE,
     category: 'access',
     label: 'Your roles changed',
     description: 'An administrator changed which roles you hold.',
@@ -557,6 +611,7 @@ export const NOTIFICATION_TYPES = Object.freeze({
   },
 
   'access.super_admin_changed': {
+    recipients: ANYONE,
     category: 'access',
     label: 'Super-admin access changed',
     description: 'Super-admin access was granted to or removed from your account.',
@@ -622,6 +677,7 @@ export const listCatalogForPreferences = () =>
     description: entry.description,
     severity: entry.severity || 'info',
     defaultChannels: entry.defaultChannels || IN_APP_ONLY,
+    recipients: entry.recipients || ANYONE,
   }));
 
 export default NOTIFICATION_TYPES;

@@ -8,6 +8,7 @@
  */
 
 import { CHANNELS, listCatalogForPreferences } from './notificationCatalog.js';
+import { canReceiveNotificationType, userCapabilities } from './notificationEligibility.js';
 import notificationModel from './notificationModel.js';
 
 const toPositiveInt = (value) => {
@@ -155,27 +156,37 @@ const notificationController = {
     try {
       const overrides = await notificationModel.getPreferences(req.user.id);
 
-      const types = listCatalogForPreferences().map((entry) => {
-        const channels = {};
+      // Only what this person can actually be sent: an approver-queue switch is
+      // noise on the screen of someone who never approves anything. The route
+      // adds `authorizationSnapshotMiddleware` so these roles are the live ones
+      // rather than the JWT's, which can be a day stale.
+      const capabilities = userCapabilities(req.user);
 
-        for (const channel of CHANNELS) {
-          const exact = overrides.find(
-            (row) => row.event_type === entry.eventType && row.channel === channel,
-          );
-          const wildcard = overrides.find(
-            (row) =>
-              row.event_type === '*' && row.category === entry.category && row.channel === channel,
-          );
+      const types = listCatalogForPreferences()
+        .filter((entry) => canReceiveNotificationType(entry, capabilities))
+        .map((entry) => {
+          const channels = {};
 
-          channels[channel] = exact
-            ? Boolean(exact.is_enabled)
-            : wildcard
-              ? Boolean(wildcard.is_enabled)
-              : entry.defaultChannels.includes(channel);
-        }
+          for (const channel of CHANNELS) {
+            const exact = overrides.find(
+              (row) => row.event_type === entry.eventType && row.channel === channel,
+            );
+            const wildcard = overrides.find(
+              (row) =>
+                row.event_type === '*' &&
+                row.category === entry.category &&
+                row.channel === channel,
+            );
 
-        return { ...entry, channels };
-      });
+            channels[channel] = exact
+              ? Boolean(exact.is_enabled)
+              : wildcard
+                ? Boolean(wildcard.is_enabled)
+                : entry.defaultChannels.includes(channel);
+          }
+
+          return { ...entry, channels };
+        });
 
       return res.status(200).json({
         success: true,

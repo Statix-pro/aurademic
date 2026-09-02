@@ -1,7 +1,10 @@
 import express from 'express';
 
 import notificationController from './notificationController.js';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
+import {
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+} from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
 
@@ -19,7 +22,16 @@ router.get('/', notificationController.list);
 router.post('/mark-all-read', notificationController.markAllRead);
 
 // Preferences — declared before /:id so "preferences" is not read as an id.
-router.get('/preferences', notificationController.getPreferences);
+/**
+ * This one route re-reads the caller's roles from the database, because it is
+ * the only handler whose *output* depends on them: the list of switches is
+ * filtered to the notifications those roles can receive. `authMiddleware`
+ * alone trusts the JWT, which is a 24-hour-old snapshot, so a user promoted to
+ * approver this morning would be shown no approval-queue switches while
+ * already being sent those notifications. The extra query is fine here and
+ * deliberately not applied to `/summary`, which the client polls.
+ */
+router.get('/preferences', authorizationSnapshotMiddleware, notificationController.getPreferences);
 router.put('/preferences', notificationController.updatePreferences);
 
 // Web push
