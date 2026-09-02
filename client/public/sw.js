@@ -25,7 +25,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('push', (event) => {
   let payload = {};
   try {
-    payload = event.data ? event.data.json() : {};
+    const parsed = event.data ? event.data.json() : null;
+    // `json()` only throws on text that is not JSON. A payload of `null`, a
+    // number or a string parses cleanly and would then throw on `.title`
+    // below, which is the one thing this handler must never do.
+    if (parsed && typeof parsed === 'object') payload = parsed;
   } catch {
     // A malformed payload still deserves a notification: the browser has
     // already promised the user that a push will show something.

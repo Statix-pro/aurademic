@@ -394,6 +394,8 @@ export default function MasterDataPage() {
       if (data.success) {
         showAlert('Department reactivated', 'success');
         fetchDepartments();
+      } else {
+        showAlert(data.message || 'Failed to reactivate department', 'error');
       }
     } catch (error) {
       showAlert(apiMessage(error, 'Failed to reactivate department'), 'error');
@@ -544,6 +546,8 @@ export default function MasterDataPage() {
       if (data.success) {
         showAlert('Entity reactivated', 'success');
         fetchEntities();
+      } else {
+        showAlert(data.message || 'Failed to reactivate entity', 'error');
       }
     } catch (error) {
       showAlert(apiMessage(error, 'Failed to reactivate entity'), 'error');
@@ -779,6 +783,8 @@ export default function MasterDataPage() {
       if (data.success) {
         showAlert('Employee reactivated', 'success');
         fetchEmployees();
+      } else {
+        showAlert(data.message || 'Failed to reactivate employee', 'error');
       }
     } catch (error) {
       showAlert(apiMessage(error, 'Failed to reactivate employee'), 'error');

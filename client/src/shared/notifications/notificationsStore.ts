@@ -51,6 +51,17 @@ let lastSeenId = 0;
  * *after* it.
  */
 let primed = false;
+/**
+ * Which login this state belongs to.
+ *
+ * A request already in flight when the session ends still resolves, and its
+ * `.then` would write the previous user's notifications into a store the next
+ * user is looking at. `stopNotifications` bumps this; every write checks the
+ * generation it started under and drops the result if it has moved on. Cheaper
+ * and less error-prone than threading an AbortController through every call,
+ * and it covers the rollback paths too, where the write happens in a `catch`.
+ */
+let generation = 0;
 
 const emit = () => {
   listeners.forEach((listener) => {
@@ -65,6 +76,18 @@ const emit = () => {
 const setState = (patch: Partial<NotificationsState>) => {
   state = { ...state, ...patch };
   emit();
+};
+
+/** A writer bound to the session that was current when the request started. */
+const sessionWriter = () => {
+  const startedIn = generation;
+  return {
+    /** False once the session has ended — the caller must not write anything. */
+    isCurrent: () => startedIn === generation,
+    set: (patch: Partial<NotificationsState>) => {
+      if (startedIn === generation) setState(patch);
+    },
+  };
 };
 
 export const getNotificationsState = (): NotificationsState => state;
@@ -103,10 +126,13 @@ export function loadNotifications(force = false): Promise<void> {
 
   setState({ loading: true, error: null });
 
+  const writer = sessionWriter();
+
   pendingList = notificationsApi
     .list({ limit: 15 })
     .then((page) => {
-      setState({
+      if (!writer.isCurrent()) return;
+      writer.set({
         items: page.items,
         nextCursor: page.nextCursor,
         loading: false,
@@ -118,10 +144,10 @@ export function loadNotifications(force = false): Promise<void> {
       }
     })
     .catch((error) => {
-      setState({ loading: false, error: errorMessage(error) });
+      writer.set({ loading: false, error: errorMessage(error) });
     })
     .finally(() => {
-      pendingList = null;
+      if (writer.isCurrent()) pendingList = null;
     });
 
   return pendingList;
@@ -133,15 +159,17 @@ export async function loadMoreNotifications(): Promise<void> {
 
   setState({ loading: true });
 
+  const writer = sessionWriter();
+
   try {
     const page = await notificationsApi.list({ limit: 15, cursor: state.nextCursor });
-    setState({
+    writer.set({
       items: [...state.items, ...page.items],
       nextCursor: page.nextCursor,
       loading: false,
     });
   } catch (error) {
-    setState({ loading: false, error: errorMessage(error) });
+    writer.set({ loading: false, error: errorMessage(error) });
   }
 }
 
@@ -159,10 +187,12 @@ export async function markNotificationRead(id: number): Promise<void> {
     unreadCount: Math.max(0, state.unreadCount - 1),
   });
 
+  const writer = sessionWriter();
+
   try {
     await notificationsApi.markRead(id);
   } catch (error) {
-    setState({
+    writer.set({
       items: state.items.map((item) => (item.id === id ? { ...item, isRead: false } : item)),
       unreadCount: state.unreadCount + 1,
       error: errorMessage(error),
@@ -181,13 +211,15 @@ export async function markAllNotificationsRead(category?: string | null): Promis
     unreadCount: category ? previousCount : 0,
   });
 
+  const writer = sessionWriter();
+
   try {
     await notificationsApi.markAllRead(category ?? null);
     // The count after a category-scoped clear is not derivable locally (unread
     // items may sit outside the loaded page), so ask the server.
-    transport?.refreshNow();
+    if (writer.isCurrent()) transport?.refreshNow();
   } catch (error) {
-    setState({ items: previousItems, unreadCount: previousCount, error: errorMessage(error) });
+    writer.set({ items: previousItems, unreadCount: previousCount, error: errorMessage(error) });
   }
 }
 
@@ -203,10 +235,12 @@ export async function archiveNotification(id: number): Promise<void> {
     unreadCount: target.isRead ? state.unreadCount : Math.max(0, state.unreadCount - 1),
   });
 
+  const writer = sessionWriter();
+
   try {
     await notificationsApi.archive(id);
   } catch (error) {
-    setState({ items: previousItems, unreadCount: previousCount, error: errorMessage(error) });
+    writer.set({ items: previousItems, unreadCount: previousCount, error: errorMessage(error) });
   }
 }
 
@@ -232,9 +266,12 @@ const handleSummary = (summary: NotificationSummary) => {
   // opens the bell only ever pays for the summary poll.
   if (!state.loaded && !onArrival) return;
 
+  const writer = sessionWriter();
+
   void notificationsApi
     .list({ limit: 15 })
     .then((page) => {
+      if (!writer.isCurrent()) return;
       const arrivals = page.items.filter((item) => item.id > previousLastSeen);
 
       // A background refresh must not undo "Load older". Assigning `page.items`
@@ -273,6 +310,9 @@ export function startNotifications(): void {
  * in the same tab.
  */
 export function stopNotifications(): void {
+  // Before anything else: this invalidates every request already in flight, so
+  // none of them can write the departing user's data back into the store.
+  generation += 1;
   transport?.stop();
   transport = null;
   pendingList = null;

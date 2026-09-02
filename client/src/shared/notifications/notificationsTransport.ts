@@ -39,6 +39,17 @@ export function startTransport(onSummary: SummaryListener): TransportHandle {
   let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
   let failures = 0;
+  /**
+   * Whether a poll is already awaiting a response.
+   *
+   * `refreshNow` fires on both focus and visibilitychange, which arrive
+   * together when a tab comes forward. Without this, two summaries would be in
+   * flight at once and the older one could resolve last — the store would then
+   * apply a stale `unreadCount` and discard the newer `latestId` it had already
+   * recorded, leaving the badge wrong until the next poll. A poll in flight is
+   * already the fresh read `refreshNow` wanted.
+   */
+  let polling = false;
 
   const clear = () => {
     if (timer) {
@@ -62,7 +73,8 @@ export function startTransport(onSummary: SummaryListener): TransportHandle {
   };
 
   const poll = async () => {
-    if (stopped) return;
+    if (stopped || polling) return;
+    polling = true;
 
     try {
       const summary = await notificationsApi.getSummary();
@@ -74,12 +86,13 @@ export function startTransport(onSummary: SummaryListener): TransportHandle {
       // background poll is never worth surfacing to the user.
       failures += 1;
     } finally {
+      polling = false;
       schedule();
     }
   };
 
   const refreshNow = () => {
-    if (stopped) return;
+    if (stopped || polling) return;
     failures = 0;
     clear();
     void poll();

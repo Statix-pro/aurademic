@@ -63,10 +63,18 @@ export async function getPushStatus(): Promise<PushStatus> {
 
   if (Notification.permission === 'denied') return 'denied';
 
-  const registration = await navigator.serviceWorker.getRegistration(SERVICE_WORKER_URL);
-  const existing = await registration?.pushManager.getSubscription();
+  // Both of these reject in the wild — a browser with site data blocked, a
+  // worker in a bad state. Reporting 'unsupported' is honest and, unlike
+  // 'default', does not offer the user an Enable button that cannot work.
+  try {
+    const registration = await navigator.serviceWorker.getRegistration(SERVICE_WORKER_URL);
+    const existing = await registration?.pushManager.getSubscription();
 
-  return existing ? 'subscribed' : 'default';
+    return existing ? 'subscribed' : 'default';
+  } catch (error) {
+    console.warn('Could not read the push subscription state.', error);
+    return 'unsupported';
+  }
 }
 
 /**
@@ -79,12 +87,15 @@ export async function enablePush(): Promise<string | null> {
     return 'This browser does not support push notifications.';
   }
 
-  const { publicKey, enabled } = await notificationsApi.getPushPublicKey();
+  const { publicKey, enabled } = await notificationsApi.getPushPublicKey().catch(() => ({
+    publicKey: null,
+    enabled: false,
+  }));
   if (!enabled || !publicKey) {
     return 'Push notifications are not configured on the server yet.';
   }
 
-  const permission = await Notification.requestPermission();
+  const permission = await Notification.requestPermission().catch(() => 'denied');
   if (permission !== 'granted') {
     return permission === 'denied'
       ? 'Notifications are blocked for this site. Enable them in your browser settings.'
@@ -122,8 +133,14 @@ export async function enablePush(): Promise<string | null> {
 export async function disablePush(): Promise<string | null> {
   if (!isPushSupported()) return null;
 
-  const registration = await navigator.serviceWorker.getRegistration(SERVICE_WORKER_URL);
-  const subscription = await registration?.pushManager.getSubscription();
+  let subscription: PushSubscription | null | undefined;
+  try {
+    const registration = await navigator.serviceWorker.getRegistration(SERVICE_WORKER_URL);
+    subscription = await registration?.pushManager.getSubscription();
+  } catch (error) {
+    console.warn('Could not read the push subscription state.', error);
+    return 'Could not reach the background service for push notifications.';
+  }
   if (!subscription) return null;
 
   try {

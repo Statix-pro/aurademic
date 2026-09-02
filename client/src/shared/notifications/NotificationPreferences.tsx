@@ -81,9 +81,16 @@ const NotificationPreferencesPanel: React.FC = () => {
       }
     })();
 
-    void getPushStatus().then((status) => {
-      if (!cancelled) setPushStatus(status);
-    });
+    void getPushStatus()
+      .then((status) => {
+        if (!cancelled) setPushStatus(status);
+      })
+      .catch((statusError) => {
+        // Leaving the default in place would offer "Enable on this browser" on
+        // a browser we could not even read the state of.
+        console.warn('Could not determine the push notification status.', statusError);
+        if (!cancelled) setPushStatus('unsupported');
+      });
 
     return () => {
       cancelled = true;
@@ -181,6 +188,12 @@ const NotificationPreferencesPanel: React.FC = () => {
         );
       }
       setPushStatus(await getPushStatus());
+    } catch (toggleError) {
+      // These helpers report expected failures by returning a message, so
+      // landing here means something unexpected. The user pressed a button and
+      // is owed an answer either way.
+      console.error('Push notification toggle failed', toggleError);
+      toast.error('Push notifications', 'Could not change the push setting for this browser.');
     } finally {
       setPushBusy(false);
     }

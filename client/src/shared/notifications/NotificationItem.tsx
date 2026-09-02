@@ -69,6 +69,13 @@ const NotificationItem: React.FC<NotificationItemProps> = ({ notification, onOpe
         event.stopPropagation();
         onDismiss(notification.id);
       }}
+      // The row is a keyboard target too, and its handler calls
+      // preventDefault. Reaching it from the focused button would open the
+      // notification on Enter and swallow the button's own Space activation,
+      // leaving no way to dismiss anything without a mouse.
+      onKeyDown={(event) => {
+        event.stopPropagation();
+      }}
     >
       <X size={14} />
     </button>
