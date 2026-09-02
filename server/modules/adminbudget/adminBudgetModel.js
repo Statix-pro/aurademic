@@ -941,7 +941,7 @@ export async function updateApprovedAmounts(
 
     // Only worth telling the applicant when something actually changed — an
     // idempotent save must not generate a notification.
-    if (changedRows > 0) {
+    if (changedRows.length > 0) {
       await budgetNotifications.notifyBudgetAmountsUpdated({
         proposal,
         actorUserId: editorUserId,
