@@ -26,11 +26,19 @@
  * the real work afterwards. A rolled-back approval takes its notification down
  * with it, which is exactly right and is not achievable any other way.
  *
- * WHY IT NEVER THROWS
+ * WHY IT ALMOST NEVER THROWS
  *
  * The worst outcome here is an approval failing because notifications are
  * broken. Every failure is logged and swallowed; `emit` returns the event id on
  * success and null on any failure, and callers are free to ignore the result.
+ *
+ * The one exception is a failure that has already killed the caller's
+ * transaction — a deadlock, or a lost connection. Swallowing those would be
+ * worse than throwing: the approval's own writes are gone too, and the caller
+ * would go on to COMMIT a dead transaction and report success for a change that
+ * never happened. Those propagate, so the caller fails honestly and rolls back.
+ * The test is deliberately narrow, and only applies when a transaction handle
+ * was actually passed in.
  */
 
 import { isKnownNotificationType } from './notificationCatalog.js';
@@ -41,6 +49,37 @@ const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
+
+/**
+ * Failures that leave the surrounding transaction unusable rather than just
+ * failing one statement. A deadlock makes InnoDB roll the whole transaction
+ * back, and a dropped connection takes it with it. Lock-wait timeouts are
+ * deliberately absent: with the default `innodb_rollback_on_timeout=OFF` they
+ * roll back only the statement, so the caller's work survives and the
+ * notification is the only casualty.
+ */
+const TRANSACTION_FATAL_CODES = new Set([
+  'ER_LOCK_DEADLOCK',
+  'ER_QUERY_INTERRUPTED',
+  'PROTOCOL_CONNECTION_LOST',
+  'POOL_CLOSED',
+  'ECONNRESET',
+  'EPIPE',
+]);
+
+/** mysql2 flags connection-level errors as fatal; those end the transaction. */
+const isTransactionFatal = (error) =>
+  error?.fatal === true || TRANSACTION_FATAL_CODES.has(error?.code);
+
+/**
+ * True for a single pooled connection (which may be mid-transaction), false for
+ * the pool itself. Callers that pass `tx: pool` are not in a transaction, so
+ * nothing of theirs is at risk and the error stays swallowed.
+ */
+const isConnectionHandle = (handle) =>
+  Boolean(handle) &&
+  typeof handle.query === 'function' &&
+  typeof handle.getConnection !== 'function';
 
 /**
  * @returns {Promise<number|null>} the outbox row id, or null when nothing was
@@ -116,6 +155,11 @@ export async function emit({
     // Deliberately swallowed. See the header: a broken notification must never
     // take down the business operation that triggered it.
     console.error(`notificationService.emit failed for type "${type}":`, error);
+
+    // ...unless the caller's transaction is already dead, in which case letting
+    // them commit would report success for a change that was rolled back.
+    if (isConnectionHandle(tx) && isTransactionFatal(error)) throw error;
+
     return null;
   }
 }

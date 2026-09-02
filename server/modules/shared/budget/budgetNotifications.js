@@ -13,8 +13,11 @@
  * `processApproval` implementations from drifting into two different
  * vocabularies for the same event.
  *
- * Every function here is fire-and-forget. `notificationService.emit` never
- * throws, and a budget approval must never fail because of a notification.
+ * Every function here is fire-and-forget. `notificationService.emit` swallows
+ * its own failures, so a budget approval never fails because of a notification.
+ * The single exception is a failure that has already killed the transaction the
+ * approval is running in (a deadlock, a dropped connection): that propagates,
+ * because the approval is doomed either way and must not commit as a success.
  */
 
 import notificationService from '../../notification/notificationService.js';
@@ -180,7 +183,11 @@ export async function notifyBudgetDecision({
     type: 'budget.stage_advanced',
     audience: [...ownerAudience(proposal), stageAudience(proposal, to)],
     data: { ...common.data, stage: to },
-    dedupeKey: `budget:${proposal?.id}:stage:${to}`,
+    // A proposal reaches the same stage again after every return/resubmit
+    // round, and each arrival is news to that stage's approvers. Budget writes
+    // no `workflow_actions` rows, so unlike the workflow engine there is no
+    // transition id to key on and the timestamp keeps the rounds distinct.
+    dedupeKey: `budget:${proposal?.id}:stage:${to}:${Date.now()}`,
   });
 }
 

@@ -527,6 +527,7 @@ async function emitWorkflowNotification({
   decision,
   feedback,
   actor,
+  actionId = null,
 }) {
   const key = normalizeText(moduleKey).toLowerCase();
   const status = normalizeText(nextState?.status).toLowerCase();
@@ -539,12 +540,23 @@ async function emitWorkflowNotification({
     data: { stage: previousStage, feedback: normalizeText(feedback) || null },
   };
 
+  // Every branch below scopes its dedupe key to the `workflow_actions` row that
+  // caused the transition. A record passes through the same stage repeatedly —
+  // return then resubmit, or a top-up on an already-approved record — so a key
+  // built only from the record and stage suppresses every cycle after the
+  // first and leaves the waiting party unnotified. The action id is unique per
+  // transition and rolls back with it, which is the idempotency scope wanted
+  // here. With no action id there is nothing safe to scope by, so dedupe is
+  // left off rather than risking a silently dropped notification.
+  const cycle = toPositiveInt(actionId);
+  const dedupeFor = (suffix) => (cycle ? `${key}:${subject.recordId}:${suffix}:${cycle}` : null);
+
   if (status === 'completed') {
     return notificationService.emit({
       ...common,
       type: `${key}.approved`,
       audience: applicantAudience(context),
-      dedupeKey: `${key}:${subject.recordId}:approved`,
+      dedupeKey: dedupeFor('approved'),
       tx: conn,
     });
   }
@@ -554,7 +566,7 @@ async function emitWorkflowNotification({
       ...common,
       type: `${key}.rejected`,
       audience: applicantAudience(context),
-      dedupeKey: `${key}:${subject.recordId}:rejected:${previousStage}`,
+      dedupeKey: dedupeFor(`rejected:${previousStage}`),
       tx: conn,
     });
   }
@@ -564,7 +576,7 @@ async function emitWorkflowNotification({
       ...common,
       type: `${key}.returned`,
       audience: applicantAudience(context),
-      dedupeKey: `${key}:${subject.recordId}:returned:${previousStage}:${Date.now()}`,
+      dedupeKey: dedupeFor(`returned:${previousStage}`),
       tx: conn,
     });
   }
@@ -582,7 +594,7 @@ async function emitWorkflowNotification({
     // stage's approvers learn it is theirs now.
     audience: [...applicantAudience(context), stageAudience(key, nextStage, context)],
     data: { ...common.data, stage: nextStage, decision },
-    dedupeKey: `${key}:${subject.recordId}:stage:${nextStage}`,
+    dedupeKey: dedupeFor(`stage:${nextStage}`),
     tx: conn,
   });
 }
@@ -756,7 +768,7 @@ export async function actOnWorkflow({
       decision: normalizedDecision,
     });
 
-    await conn.query(
+    const [actionResult] = await conn.query(
       `INSERT INTO workflow_actions (
           module_key,
           record_id,
@@ -798,6 +810,7 @@ export async function actOnWorkflow({
       decision: normalizedDecision,
       feedback,
       actor: normalizedActor,
+      actionId: actionResult?.insertId ?? null,
     });
 
     return {
@@ -1035,7 +1048,7 @@ export async function logWorkflowResubmission({
   const actorRole = normalizeText(actor?.role).toLowerCase() || null;
 
   const executor = tx || db;
-  await executor.query(
+  const [actionResult] = await executor.query(
     `INSERT INTO workflow_actions (
         module_key,
         record_id,
@@ -1061,6 +1074,8 @@ export async function logWorkflowResubmission({
     ],
   );
 
+  const resubmitActionId = toPositiveInt(actionResult?.insertId);
+
   // Tell the stage it went back to. Unlike the other two hooks this one has no
   // record context in hand, so it is loaded here — resubmission is a rare,
   // user-initiated action, so the extra read costs nothing that matters.
@@ -1085,8 +1100,11 @@ export async function logWorkflowResubmission({
     audience: [stageAudience(normalizedModuleKey, normalizedStage, context)],
     data: { stage: normalizedStage },
     // Resubmission can legitimately happen more than once for the same record
-    // and stage, so the timestamp keeps each round distinct.
-    dedupeKey: `${normalizedModuleKey}:${normalizedRecordId}:resubmitted:${normalizedStage}:${Date.now()}`,
+    // and stage, so the key is scoped to the action row just written and each
+    // round stays distinct.
+    dedupeKey: resubmitActionId
+      ? `${normalizedModuleKey}:${normalizedRecordId}:resubmitted:${normalizedStage}:${resubmitActionId}`
+      : null,
     tx: executor,
   });
 }

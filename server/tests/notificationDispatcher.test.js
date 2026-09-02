@@ -337,6 +337,108 @@ describe('notificationDispatcher.runOnce', () => {
     expect(notificationModel.markEventDone).toHaveBeenCalledWith(100);
   });
 
+  it('retries an event whose delivery failed transiently instead of closing it', async () => {
+    // A 'failed' delivery is the channel saying "try again" — a dead push
+    // endpoint answers 'skipped'. Nothing else ever looks at the row again
+    // (`listPendingDeliveries` reads 'pending' only), so if the event were
+    // completed here the recipient would simply never be told.
+    const inApp = getChannel('in_app');
+    const deliver = vi
+      .spyOn(inApp, 'deliver')
+      .mockResolvedValue({ status: 'failed', error: 'push service 503' });
+
+    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    notificationModel.listPendingDeliveries.mockResolvedValue([
+      {
+        notification_id: 900,
+        channel: 'in_app',
+        user_id: 2,
+        event_type: 'finance.stage_advanced',
+        category: 'finance',
+        severity: 'info',
+        title: 'x',
+        body: null,
+        link: '/x',
+      },
+    ]);
+
+    try {
+      await runOnce();
+    } finally {
+      deliver.mockRestore();
+    }
+
+    expect(notificationModel.markDelivery).toHaveBeenCalledWith(900, 'in_app', {
+      status: 'failed',
+      error: 'push service 503',
+    });
+    expect(notificationModel.markEventDone).not.toHaveBeenCalled();
+    expect(notificationModel.markEventForRetry).toHaveBeenCalledWith(
+      100,
+      expect.objectContaining({ delaySeconds: 60 }),
+    );
+  });
+
+  it('completes an event when every delivery was skipped rather than failed', async () => {
+    // 'skipped' is a settled outcome — a muted channel, or one this deployment
+    // has no keys for. Retrying it would burn the ladder for nothing.
+    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    notificationModel.listPendingDeliveries.mockResolvedValue([
+      {
+        notification_id: 900,
+        channel: 'web_push',
+        user_id: 2,
+        event_type: 'finance.stage_advanced',
+        category: 'finance',
+        severity: 'info',
+        title: 'x',
+        body: null,
+        link: '/x',
+      },
+    ]);
+
+    await runOnce();
+
+    expect(notificationModel.markEventForRetry).not.toHaveBeenCalled();
+    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100);
+  });
+
+  it('stops retrying failed deliveries once the ladder is exhausted', async () => {
+    const inApp = getChannel('in_app');
+    const deliver = vi
+      .spyOn(inApp, 'deliver')
+      .mockResolvedValue({ status: 'failed', error: 'still down' });
+
+    notificationModel.claimPendingEvents.mockResolvedValue([
+      makeEvent({ attempts: __testing.MAX_ATTEMPTS - 1 }),
+    ]);
+    notificationModel.listPendingDeliveries.mockResolvedValue([
+      {
+        notification_id: 900,
+        channel: 'in_app',
+        user_id: 2,
+        event_type: 'finance.stage_advanced',
+        category: 'finance',
+        severity: 'info',
+        title: 'x',
+        body: null,
+        link: '/x',
+      },
+    ]);
+
+    try {
+      await runOnce();
+    } finally {
+      deliver.mockRestore();
+    }
+
+    expect(notificationModel.markEventForRetry).not.toHaveBeenCalled();
+    expect(notificationModel.markEventFailed).toHaveBeenCalledWith(
+      100,
+      expect.objectContaining({ error: expect.stringContaining('deliveries failed') }),
+    );
+  });
+
   it('marks a channel skipped when the deployment has it disabled', async () => {
     // Stated rather than assumed: vitest.setup.js blanks the VAPID keys so the
     // push channel reports itself disabled on every machine. Without that pin

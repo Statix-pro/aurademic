@@ -212,6 +212,8 @@ async function processEvent(event) {
   // still owed, so a reprocessed event does not push twice.
   const pending = await notificationModel.listPendingDeliveries(event.id);
 
+  const failedDeliveries = [];
+
   for (const delivery of pending) {
     const channel = getChannel(delivery.channel);
     if (!channel) continue;
@@ -237,15 +239,38 @@ async function processEvent(event) {
       outcome = { status: 'failed', error: error?.message || 'Channel threw' };
     }
 
+    const status = outcome?.status || 'failed';
+
     await notificationModel.markDelivery(delivery.notification_id, delivery.channel, {
-      status: outcome?.status || 'failed',
+      status,
       error: outcome?.error || null,
     });
+
+    if (status === 'failed') {
+      failedDeliveries.push(
+        `${delivery.channel} to user ${delivery.user_id}: ${outcome?.error || 'unknown error'}`,
+      );
+    }
   }
 
   // A descriptor that failed to resolve is worth another pass: the retry adds
   // the missing recipients without disturbing the ones already notified.
   if (errors.length) throw new Error(`Partial audience resolution: ${errors.join('; ')}`);
+
+  // A 'failed' delivery means the channel judged the failure transient — a push
+  // service that answered 404/410 reports 'skipped' instead, precisely so it is
+  // not retried. Throwing hands the event back to the retry ladder in runOnce,
+  // which is the only thing that ever looks at it again: `listPendingDeliveries`
+  // reads 'pending' rows only, so a failure left behind here would never be
+  // reattempted and the recipient would simply never hear. On the next pass
+  // `insertDeliveries` resets these rows to 'pending' while leaving 'sent' ones
+  // alone, so nobody is pushed to twice, and MAX_ATTEMPTS bounds the ladder.
+  if (failedDeliveries.length) {
+    throw new Error(
+      `${failedDeliveries.length} of ${pending.length} deliveries failed: ` +
+        failedDeliveries.slice(0, 3).join(' | '),
+    );
+  }
 
   await notificationModel.markEventDone(event.id);
 }
