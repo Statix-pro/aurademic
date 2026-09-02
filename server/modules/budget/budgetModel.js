@@ -1344,7 +1344,7 @@ export async function update(
       const actorUserId = Number.isInteger(Number(editedByUserId)) ? Number(editedByUserId) : 0;
       const actorEmail = normalizeText(editedByEmail);
 
-      await conn.execute(
+      const [resubmitLog] = await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
@@ -1367,6 +1367,7 @@ export async function update(
         },
         stage: nextCurrentStage,
         actorUserId,
+        approvalId: resubmitLog?.insertId,
         tx: conn,
       });
     }
@@ -1570,7 +1571,7 @@ export async function processApproval(
         [proposalId],
       );
 
-      await conn.execute(
+      const [archiveLog] = await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
@@ -1584,6 +1585,7 @@ export async function processApproval(
         stage: proposal.current_stage,
         feedback,
         actorUserId: approverUserId,
+        approvalId: archiveLog?.insertId,
         tx: conn,
       });
     });
@@ -1680,8 +1682,9 @@ export async function processApproval(
       throw new Error('Feedback required for reject/return');
     }
 
-    // 1. Insert the ACTUAL approval (DoF/Level-1/Principal)
-    await conn.execute(
+    // 1. Insert the ACTUAL approval (DoF/Level-1/Principal). Its id is the
+    // per-round discriminator the notification dedupe key is built from.
+    const [approvalLog] = await conn.execute(
       `INSERT INTO budget_proposal_approvals(
           budget_proposal_id, role, approver_user_id, approver_email,
           decision, feedback, allows_edit
@@ -1717,6 +1720,7 @@ export async function processApproval(
       nextStage,
       feedback,
       actorUserId: approverUserId,
+      approvalId: approvalLog?.insertId,
       tx: conn,
     });
   });

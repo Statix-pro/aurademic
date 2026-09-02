@@ -73,6 +73,27 @@ const subjectOf = (proposal) => ({
   applicantUserId: toPositiveInt(proposal?.user_id),
 });
 
+/**
+ * Dedupe keys for the transitions that can happen more than once.
+ *
+ * A proposal returned and resubmitted reaches the same stage again, and each
+ * arrival is real news, so these cannot be keyed on the stage alone. What makes
+ * one round distinct is the `budget_proposal_approvals` row the caller has just
+ * written: its id is unique per decision and rolls back with the transaction,
+ * which is exactly the idempotency scope wanted — a retried transaction (the
+ * deadlock path in `notificationService`) re-emits with the same id and the
+ * duplicate is suppressed.
+ *
+ * With no id to hand, dedupe is left off rather than keyed on something like a
+ * timestamp: a key that can never match is not deduplication, it just fills the
+ * unique index with single-use values and reads like an idempotency guarantee
+ * that is not there. Same choice, and the same reason, as `workflowService`.
+ */
+const roundKey = (proposalId, suffix, approvalId) => {
+  const round = toPositiveInt(approvalId);
+  return round ? `budget:${proposalId}:${suffix}:${round}` : null;
+};
+
 /** A proposal has arrived at its first stage. */
 export async function notifyBudgetSubmitted({ proposal, stage, actorUserId = null, tx }) {
   const stageKey = normalize(stage);
@@ -92,7 +113,13 @@ export async function notifyBudgetSubmitted({ proposal, stage, actorUserId = nul
 }
 
 /** An applicant edited a returned proposal and sent it back. */
-export async function notifyBudgetResubmitted({ proposal, stage, actorUserId = null, tx }) {
+export async function notifyBudgetResubmitted({
+  proposal,
+  stage,
+  actorUserId = null,
+  approvalId = null,
+  tx,
+}) {
   const stageKey = normalize(stage);
   if (!stageKey || ['completed', 'archived', 'deleted'].includes(stageKey)) return;
 
@@ -102,9 +129,7 @@ export async function notifyBudgetResubmitted({ proposal, stage, actorUserId = n
     subject: subjectOf(proposal),
     audience: [stageAudience(proposal, stageKey)],
     data: { stage: stageKey },
-    // A proposal can be returned and resubmitted repeatedly, so each round
-    // must be its own notification.
-    dedupeKey: `budget:${proposal?.id}:resubmitted:${stageKey}:${Date.now()}`,
+    dedupeKey: roundKey(proposal?.id, `resubmitted:${stageKey}`, approvalId),
     tx,
   });
 }
@@ -120,6 +145,7 @@ export async function notifyBudgetDecision({
   nextStage,
   feedback = null,
   actorUserId = null,
+  approvalId = null,
   tx,
 }) {
   const decided = normalize(decision);
@@ -148,7 +174,7 @@ export async function notifyBudgetDecision({
       ...common,
       type: 'budget.returned',
       audience: ownerAudience(proposal),
-      dedupeKey: `budget:${proposal?.id}:returned:${from}:${Date.now()}`,
+      dedupeKey: roundKey(proposal?.id, `returned:${from}`, approvalId),
     });
     return;
   }
@@ -159,7 +185,7 @@ export async function notifyBudgetDecision({
       type: 'budget.archived',
       audience: ownerAudience(proposal),
       data: { ...common.data, unarchived: false },
-      dedupeKey: `budget:${proposal?.id}:archived:${Date.now()}`,
+      dedupeKey: roundKey(proposal?.id, 'archived', approvalId),
     });
     return;
   }
@@ -183,24 +209,23 @@ export async function notifyBudgetDecision({
     type: 'budget.stage_advanced',
     audience: [...ownerAudience(proposal), stageAudience(proposal, to)],
     data: { ...common.data, stage: to },
-    // A proposal reaches the same stage again after every return/resubmit
-    // round, and each arrival is news to that stage's approvers. Budget writes
-    // no `workflow_actions` rows, so unlike the workflow engine there is no
-    // transition id to key on and the timestamp keeps the rounds distinct.
-    dedupeKey: `budget:${proposal?.id}:stage:${to}:${Date.now()}`,
+    dedupeKey: roundKey(proposal?.id, `stage:${to}`, approvalId),
   });
 }
 
 /** An approver changed the sanctioned amounts without changing the stage. */
-export async function notifyBudgetAmountsUpdated({ proposal, actorUserId = null, tx }) {
+export async function notifyBudgetAmountsUpdated({
+  proposal,
+  actorUserId = null,
+  approvalId = null,
+  tx,
+}) {
   await notificationService.emit({
     type: 'budget.amounts_updated',
     actorUserId,
     subject: subjectOf(proposal),
     audience: ownerAudience(proposal),
-    // Amounts can be revised more than once, and each revision matters to the
-    // applicant, so these are not collapsed.
-    dedupeKey: `budget:${proposal?.id}:amounts:${Date.now()}`,
+    dedupeKey: roundKey(proposal?.id, 'amounts', approvalId),
     tx,
   });
 }
@@ -211,6 +236,7 @@ export async function notifyBudgetArchiveToggled({
   unarchived = false,
   feedback = null,
   actorUserId = null,
+  approvalId = null,
   tx,
 }) {
   await notificationService.emit({
@@ -219,7 +245,7 @@ export async function notifyBudgetArchiveToggled({
     subject: subjectOf(proposal),
     audience: ownerAudience(proposal),
     data: { unarchived: Boolean(unarchived), feedback },
-    dedupeKey: `budget:${proposal?.id}:archive:${unarchived ? 'off' : 'on'}:${Date.now()}`,
+    dedupeKey: roundKey(proposal?.id, `archive:${unarchived ? 'off' : 'on'}`, approvalId),
     tx,
   });
 }

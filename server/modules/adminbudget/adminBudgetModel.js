@@ -342,7 +342,7 @@ export async function toggleArchiveState(
         [parsedProposalId],
       );
 
-      await conn.execute(
+      const [archiveLog] = await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
@@ -361,6 +361,7 @@ export async function toggleArchiveState(
         unarchived: false,
         feedback,
         actorUserId: approverUserId,
+        approvalId: archiveLog?.insertId,
         tx: conn,
       });
 
@@ -411,7 +412,7 @@ export async function toggleArchiveState(
       [restoreState.previousStatus, restoreState.previousStage, parsedProposalId],
     );
 
-    await conn.execute(
+    const [unarchiveLog] = await conn.execute(
       `INSERT INTO budget_proposal_approvals(
           budget_proposal_id, role, approver_user_id, approver_email,
           decision, feedback, allows_edit
@@ -430,6 +431,7 @@ export async function toggleArchiveState(
       unarchived: true,
       feedback,
       actorUserId: requesterUserId,
+      approvalId: unarchiveLog?.insertId,
       tx: conn,
     });
 
@@ -873,6 +875,9 @@ export async function updateApprovedAmounts(
     }
 
     const hasAnyEdit = changedRows.length > 0 || proposalChanges.length > 0;
+    // Set when the edit is logged below; the notification's dedupe key is keyed
+    // on it so a retried transaction cannot announce the same edit twice.
+    let editApprovalId = null;
 
     if (changedRows.length > 0) {
       await conn.execute(
@@ -930,13 +935,14 @@ export async function updateApprovedAmounts(
       }
       const rowText = feedbackParts.join(' | ') || 'Proposal updated';
 
-      await conn.execute(
+      const [editLog] = await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
           ) VALUES(?, ?, ?, ?, 'updated', ?, 0)`,
         [proposalId, logRole, Number(editorUserId), normalizeText(editorEmail), rowText],
       );
+      editApprovalId = editLog?.insertId || null;
     }
 
     // Only worth telling the applicant when something actually changed — an
@@ -945,6 +951,7 @@ export async function updateApprovedAmounts(
       await budgetNotifications.notifyBudgetAmountsUpdated({
         proposal,
         actorUserId: editorUserId,
+        approvalId: editApprovalId,
         tx: conn,
       });
     }
@@ -2448,7 +2455,7 @@ export async function processApproval(
         [proposalId],
       );
 
-      await conn.execute(
+      const [archiveDecisionLog] = await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
@@ -2462,6 +2469,7 @@ export async function processApproval(
         stage: proposal.current_stage,
         feedback,
         actorUserId: approverUserId,
+        approvalId: archiveDecisionLog?.insertId,
         tx: conn,
       });
     });
@@ -2542,7 +2550,9 @@ export async function processApproval(
       throw new Error('Feedback required for reject/return');
     }
 
-    await conn.execute(
+    // The approval row's id is unique per decision and rolls back with this
+    // transaction, so it is what the notification dedupe key is keyed on.
+    const [approvalLog] = await conn.execute(
       `INSERT INTO budget_proposal_approvals(
           budget_proposal_id, role, approver_user_id, approver_email,
           decision, feedback, allows_edit
@@ -2575,6 +2585,7 @@ export async function processApproval(
       nextStage,
       feedback,
       actorUserId: approverUserId,
+      approvalId: approvalLog?.insertId,
       tx: conn,
     });
   });
