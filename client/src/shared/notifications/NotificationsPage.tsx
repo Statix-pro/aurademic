@@ -151,13 +151,16 @@ const NotificationsPage: React.FC = () => {
             setUnreadOnly(false);
             setCategory(null);
           })}
+          {/* Toggles, like the module items below it. Setting it true only left
+              no way back off Unread except "All", which also clears the module
+              filter the user had chosen. */}
           {railItem(
             'unread',
             'Unread',
             Layers,
             unreadCount,
             unreadOnly,
-            () => setUnreadOnly(true),
+            () => setUnreadOnly((previous) => !previous),
             true,
           )}
 

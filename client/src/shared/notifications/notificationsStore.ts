@@ -236,7 +236,23 @@ const handleSummary = (summary: NotificationSummary) => {
     .list({ limit: 15 })
     .then((page) => {
       const arrivals = page.items.filter((item) => item.id > previousLastSeen);
-      setState({ items: page.items, nextCursor: page.nextCursor, loaded: true });
+
+      // A background refresh must not undo "Load older". Assigning `page.items`
+      // straight to `items` would drop every page the user had paged in and
+      // snap the list back to the newest fifteen, and resetting the cursor
+      // would make their next "Load older" re-fetch page two. The fresh page is
+      // authoritative for the newest rows — a notification read on another
+      // device shows up through it — and everything already loaded below it is
+      // kept in place. The cursor only moves while the user is still on the
+      // first page; once they have paged deeper, theirs is the further one.
+      const freshIds = new Set(page.items.map((item) => item.id));
+      const olderItems = state.items.filter((item) => !freshIds.has(item.id));
+
+      setState({
+        items: [...page.items, ...olderItems],
+        nextCursor: olderItems.length > 0 ? state.nextCursor : page.nextCursor,
+        loaded: true,
+      });
       if (arrivals.length > 0) onArrival?.(arrivals);
     })
     .catch(() => {
