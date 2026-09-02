@@ -149,7 +149,6 @@ const editRequestController = {
         });
       }
 
-      // const request = await editRequestModel.findPendingEditRequest(entityId, userId, entityType);
       const request = await editRequestModel.findEditRequest(entityId, userId, entityType);
 
       if (!request) {

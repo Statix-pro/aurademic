@@ -41,10 +41,6 @@ import notificationRoutes from './modules/notification/notificationRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
 
-// FinanceCard routes
-// import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
-// import guesthouseRoutes from './modules/guesthouse/guesthouseRoutes.js';
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -149,10 +145,6 @@ app.use('/api/expenditure-requests', expenditureRoutes);
 app.use('/api/expenditure-dashboard', expenditureUserDashboardRoutes);
 app.use('/api/expenditure-report', expenditureReportRoutes);
 
-// FinanceCard API
-// app.use('/api/finance-dashboard', financeCardRoutes);
-// app.use('/api/guesthouse', guesthouseRoutes);
-
 // Updates & documents
 app.use('/api/updates', updatesRoutes);
 app.use('/api/documents', documentsRoutes);
@@ -198,8 +190,6 @@ export const startServer = (port = process.env.PORT || 5000) =>
   app.listen(port, () => {
     startNotificationDispatcher();
     console.log(`Server running on port ${port}`);
-    console.log('- /api/finance-cards (FinanceCard API)');
-    console.log('- /api-docs (Swagger API docs)');
   });
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

@@ -20,7 +20,7 @@
 | 5   | Auth Middleware      | Dual-key JWT normalization (`id`/`userId`, `role`/`roles`, snake_case) | ✅ Safe |
 | 6   | Auth Middleware      | `toRequestUser()` backward-compat aliases                              | ✅ Safe |
 | 7   | Auth Controller      | `is_admin` baked into JWT via OR fallback                              | ✅ Safe |
-| 8   | Auth Model           | Commented-out old `authModel` (lines 1–82)                             | ✅ Safe |
+| 8   | Auth Model           | Commented-out old `authModel` (lines 1–82)                             | ✔ Done  |
 | 9   | Pre-Event Controller | Snake_case field name fallbacks                                        | ✅ Safe |
 | 10  | Documents Controller | "Legacy mode" for missing `events.status` col                          | ✅ Safe |
 | 11  | Budget Catalog       | Text-matching fallback when `budget_head_id IS NULL`                   | ✅ Safe |
@@ -45,7 +45,8 @@
 | 30  | Client (finance)     | `stageRoleFallback` role-name matching                                 | ⚠️ Keep |
 | 31  | Expenditure (API)    | Bulk NEFT → Bulk Transaction rename aliases                            | ✅ Safe |
 
-**Legend:** ✅ Safe = remove on fresh deploy. ⚠️ Keep = functional safety net, not just legacy compat.
+**Legend:** ✅ Safe = remove on fresh deploy. ⚠️ Keep = functional safety net, not just legacy
+compat. ✔ Done = already removed.
 
 ---
 
@@ -189,13 +190,14 @@ The `|| Boolean(user.is_admin)` is a fallback for users who have the old `is_adm
 
 ---
 
-## 8. Auth Model — Commented-Out Old Version
+## 8. Auth Model — Commented-Out Old Version ✔ Done
 
-**File:** [authModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/auth/authModel.js#L1-L82)
+**File:** [authModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/auth/authModel.js)
 
-Lines 1–82 contain the entire old `authModel` implementation commented out. It directly returned `is_admin` from the DB column with no RBAC integration.
+Lines 1–82 held the entire old `authModel` implementation commented out. It returned `is_admin`
+straight from the DB column with no RBAC integration.
 
-**Cleanup:** Delete the commented-out code block.
+**Cleanup:** Done — the commented-out block was deleted; the live `authModel` is untouched.
 
 ---
 
@@ -694,7 +696,6 @@ ALTER TABLE finance_requests
 > has been cleaned up and deployed. Dropping a column while code still reads it
 > will cause runtime errors.
 
-
 ---
 
 ## 31. Expenditure — Bulk NEFT → Bulk Transaction rename aliases
@@ -705,13 +706,13 @@ ALTER TABLE finance_requests
 "Bulk NEFT" was renamed to "Bulk Transaction" (modes NEFT / RTGS / UPI / DD). The API
 field names were renamed with the UI; these aliases keep an older deployed client working:
 
-| Where                    | Legacy alias                                          | Replacement                       |
-| ------------------------ | ----------------------------------------------------- | --------------------------------- |
-| Upload field (routes)    | `bulk_neft_file`                                      | `bulk_transaction_file`           |
-| Template route           | `GET /templates/bulk-neft`                            | `GET /templates/bulk-transaction` |
-| Payload keys             | `showbulkneft`, `bulknefttemplateversion`             | `showbulktransaction`, `bulktransactiontype`, `bulktransactionbank`, `bulktransactiontemplateversion` |
-| Response key             | `bulk_neft_file`                                      | `bulk_transaction_file`           |
-| Client load path         | `record.bulk_neft_file` fallback                      | `record.bulk_transaction_file`    |
+| Where                 | Legacy alias                              | Replacement                                                                                           |
+| --------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Upload field (routes) | `bulk_neft_file`                          | `bulk_transaction_file`                                                                               |
+| Template route        | `GET /templates/bulk-neft`                | `GET /templates/bulk-transaction`                                                                     |
+| Payload keys          | `showbulkneft`, `bulknefttemplateversion` | `showbulktransaction`, `bulktransactiontype`, `bulktransactionbank`, `bulktransactiontemplateversion` |
+| Response key          | `bulk_neft_file`                          | `bulk_transaction_file`                                                                               |
+| Client load path      | `record.bulk_neft_file` fallback          | `record.bulk_transaction_file`                                                                        |
 
 **When to remove:** once no deployed client posts the old field/payload names or reads the
 old response key. Search for `LEGACY: pre-rename` to find every site.

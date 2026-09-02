@@ -17,10 +17,7 @@ import {
   buildClaimedExpenditureStatusCondition,
   buildFinalizedExpenditureStatusCondition,
 } from '../shared/expenditureFilters.js';
-import {
-  buildFinanceOwnerCondition,
-  buildFinanceOwnerParams,
-} from '../shared/financeOwnership.js';
+import { buildFinanceOwnerCondition, buildFinanceOwnerParams } from '../shared/financeOwnership.js';
 
 const safeParseJSON = (value, fallback = null) => {
   if (value === undefined || value === null || value === '') return fallback;

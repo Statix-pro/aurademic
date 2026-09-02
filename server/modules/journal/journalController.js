@@ -719,12 +719,6 @@ const journalController = {
 
       const uploadDir = path.join(process.cwd(), 'uploads', 'journalform-articles');
 
-      // Ensure the final upload directory exists
-      // Not tested
-      // if (!fs.existsSync(uploadDir)) {
-      //   fs.mkdirSync(uploadDir, { recursive: true });
-      // }
-
       await fs.promises.mkdir(uploadDir, { recursive: true });
 
       // Create unique filename

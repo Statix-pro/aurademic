@@ -8,7 +8,7 @@ Devin, Jules. It is written to the [AGENTS.md](https://agents.md) open format.
 
 There is **no `CLAUDE.md`, no `GEMINI.md`, no `.cursorrules`, no `copilot-instructions.md`** in this
 repo, and none should be created. One file, no drift, no per-tool copies to fall out of date.
-§28 explains how each tool is wired to it.
+§27 explains how each tool is wired to it.
 
 > **Read this file fully before any file edit.** Then verify what it says against the code — if the
 > two disagree, the code wins and the doc gets flagged (§1).
@@ -256,7 +256,7 @@ different". Escalate (§3); do not bypass.
 | `try { … } catch { /* ignore */ }` around a real failure        | Turns a bug into silent wrong data                                | Handle it, or let the error middleware return the envelope             |
 | `eslint-disable`, `--no-verify`, `test.skip` to go green        | Hides the defect the check exists to catch                        | Fix it, or escalate (§3)                                               |
 | `Co-Authored-By:` in a commit message                           | Explicitly prohibited by the repo owner                           | Plain message (§24)                                                    |
-| Creating `CLAUDE.md` / `GEMINI.md` / `.cursorrules`             | Rule drift — two files always diverge                             | This file only (§28)                                                   |
+| Creating `CLAUDE.md` / `GEMINI.md` / `.cursorrules`             | Rule drift — two files always diverge                             | This file only (§27)                                                   |
 | `console.log` of a token, password or full `req.user`           | Leaks credentials into server logs                                | Log an id, not the payload                                             |
 
 ---
@@ -274,7 +274,11 @@ Verified against the code on the date above. Getting these wrong breaks things q
 - `journalRoutes`, `projectRoutes` and `editRequestRoutes` mount on bare `/api` and declare their
   own full paths; the rest mount under a prefix.
 - Swagger mounts **only** when `NODE_ENV !== 'production'`.
-- The global rate limiter in `server.js` is **commented out** — assume no throttling exists.
+- The global rate limiter in `server.js` is **commented out on purpose**, and the same block in
+  `accessControlRoutes.js` with it. The portal is reached only from inside the CKG campus network,
+  so every request arrives from the same egress IP and a per-IP limit would throttle the whole
+  college at once. Assume no throttling exists; **leave both blocks where they are** — they are the
+  record of that decision, not dead code to tidy away.
 
 **Database**
 
@@ -299,15 +303,18 @@ Verified against the code on the date above. Getting these wrong breaks things q
 
 - Server is ES modules; relative imports need `.js`.
 - Client TypeScript runs with `strict: false` / `strictNullChecks: false`. Not a licence for `any`.
-- 38 client files call the API through `authenticityUtility`. One file —
-  `features/admin/masterData/MasterDataPage.tsx` — still uses raw `fetch`. That is the lone legacy
-  exception, not a pattern to copy.
+- All 38 client files that talk to the API go through `authenticityUtility`. There is **no raw
+  `fetch` and no bare `axios` left in `client/src`** — `features/admin/masterData/MasterDataPage.tsx`
+  was the last exception and was migrated. Keep it that way; there is no precedent to copy.
 - 9 of the 23 `*Routes.js` files call `permissionMiddleware`; the others gate through
   `adminAuthMiddleware` / `superAdminMiddleware` or handler-level checks. **Verify which applies
   before assuming a given route is protected.**
 - There are only 2 `eslint-disable` comments in the whole codebase. Keep it that way.
-- `financeCard` and `guesthouse` server routes are commented out while the client still ships
-  `client/src/features/guesthouse/`. Check both sides before "fixing" a dead import.
+- There is **no `financeCard` and no `guesthouse` server module** — the commented-out imports and
+  mounts were deleted from `server.js`. The client still ships `features/guesthouse/`
+  (an `UnderConstruction` page) and `features/user-dashboard/guesthousedashboard/` (a calendar built
+  from a hardcoded `allEvents` array — demo data, not an API). Do not go looking for a backend
+  behind either page.
 - `event-client/` is untracked build residue. Never edit or reference it.
 - `.vscode/` is partially ignored; `.claude/` is ignored entirely.
 - `server/schema/dump/` and `uploads/` are excluded from lint and Prettier — don't reformat them.
@@ -422,7 +429,7 @@ npm run dev
 
 ```
 aurademic/
-├── .gemini/settings.json                # points Gemini CLI at AGENTS.md (see §28)
+├── .gemini/settings.json                # points Gemini CLI at AGENTS.md (see §27)
 ├── .github/workflows/pull-request.yml   # CI: lint, typecheck, syntax, test, build
 ├── .husky/{pre-commit,pre-push}         # pre-commit = lint-staged; pre-push = no-op (CI validates)
 ├── AGENTS.md                            # this file — the only agent instruction file
@@ -801,24 +808,7 @@ If you find one of these edited by hand, revert it, fix the source, regenerate, 
 
 ---
 
-## 27. Known gaps register
-
-Verified observations whose intent is **not** documented anywhere in the repo. Do not "fix" one on
-your own initiative — confirm with the owner first, then record the answer here.
-
-| ID  | Area        | Observation                                                                                                            | Status                      |
-| --- | ----------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| G-1 | Security    | The global `express-rate-limit` middleware is imported and configured but commented out in `server.js` — no throttling | OPEN — confirm intent       |
-| G-2 | Dead code   | `financeCard` and `guesthouse` server routes are commented out while `client/src/features/guesthouse/` still ships     | OPEN — confirm intent       |
-| G-3 | Testing     | No client-side test runner exists; all coverage is server-side Vitest                                                  | OPEN — deliberate?          |
-| G-4 | Consistency | `features/admin/masterData/MasterDataPage.tsx` calls the API with raw `fetch` instead of `authenticityUtility`         | OPEN — migrate when touched |
-
-Add a row when you find a gap you were told not to fix. Remove it when it is resolved, with the
-commit that resolved it.
-
----
-
-## 28. Agent tooling — how each tool loads this file
+## 27. Agent tooling — how each tool loads this file
 
 `AGENTS.md` is the only agent instruction file in this repository. Per-tool copies were removed on
 purpose: two files always drift, and a stale rule is worse than no rule.

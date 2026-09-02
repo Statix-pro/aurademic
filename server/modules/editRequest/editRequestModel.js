@@ -9,14 +9,6 @@ const editRequestModel = {
     return result;
   },
 
-  // async findPendingEditRequest(entityId, userId, entityType) {
-  //     const [rows] = await db.query(
-  //         'SELECT * FROM edit_requests WHERE entity_id = ? AND user_id = ? AND entity_type = ? AND status = "pending"',
-  //         [entityId, userId, entityType]
-  //     );
-  //     return rows[0];
-  // },
-
   /**
    * The newest request wins. Without the ordering MySQL was free to hand back an older
    * row, so a user who re-requested after a rejection kept seeing "rejected" while a
