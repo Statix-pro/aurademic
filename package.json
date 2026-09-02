@@ -20,6 +20,7 @@
     "check:server": "find server -path 'server/node_modules' -prune -o \\( -name '*.js' -o -name '*.cjs' \\) -print0 | xargs -0 -n1 node --check",
     "test:server": "npm test --prefix server",
     "reconcile:budget-annual": "npm run reconcile:budget-annual --prefix server --",
+    "purge:notifications": "npm run purge:notifications --prefix server --",
     "build": "npm run build --prefix client",
     "prepare": "husky"
   },

@@ -13,6 +13,8 @@ npm run dev:client     # Frontend only
 npm run dev:server     # Backend only
 npm install            # Installs dependencies for both client and server
 npm run test:server    # Run backend Vitest test suite
+npm run purge:notifications        # Notification retention (see below)
+npm run purge:notifications -- --dry-run
 
 # From client/
 npm run build          # tsc + vite build → client/dist/
@@ -121,11 +123,79 @@ The Events domain nests sub-modules: `modules/events/{events,preevents,finance,u
 
 All endpoints return `{ success: boolean, data?: T, message?: string, error?: string }`.
 
-Key prefixes: `/api/auth`, `/api/admin`, `/api/dashboard`, `/api/form-options`, `/api/journals`, `/api/projects`, `/api/events`, `/api/pre-events`, `/api/finance` (events), `/api/finance-requests`, `/api/budget`, `/api/adminbudget`, `/api/budget-catalog`, `/api/account-options`, `/api/expenditure`, `/api/expenditure-requests`, `/api/expenditure-dashboard`, `/api/expenditure-report`, `/api/updates`, `/api/documents`, `/api/access-control`, `/api/master-data`.
+Key prefixes: `/api/auth`, `/api/admin`, `/api/dashboard`, `/api/form-options`, `/api/journals`, `/api/projects`, `/api/events`, `/api/pre-events`, `/api/finance` (events), `/api/finance-requests`, `/api/budget`, `/api/adminbudget`, `/api/budget-catalog`, `/api/account-options`, `/api/expenditure`, `/api/expenditure-requests`, `/api/expenditure-dashboard`, `/api/expenditure-report`, `/api/updates`, `/api/documents`, `/api/access-control`, `/api/master-data`, `/api/notifications`.
 
 ### File uploads
 
 Multer saves files to `server/uploads/[category]/` and Express serves the directory statically at `/uploads`. Upload categories include `sanctionOrder`, `sanctionLetter`, `ucAndSoE`, `utilizationCertificate`, `statementOfExpenditure`, `projectReport`, `bankStatement`, `project-presentation`, `project-bill-copies`, `journal-article`, `finance-principal-documents`.
+
+### Notifications
+
+One engine every module emits into. `server/modules/notification/`:
+
+| File                        | Role                                                                 |
+| --------------------------- | -------------------------------------------------------------------- |
+| `notificationService.js`    | `emit()` — the only API other modules call                           |
+| `notificationCatalog.js`    | Event-type registry: category, severity, channels, render functions  |
+| `notificationDispatcher.js` | Outbox worker: claims events, fans out, dispatches channels, retries |
+| `recipientResolver.js`      | Audience descriptors → user ids                                      |
+| `audiences.js`              | Reusable audience builders                                           |
+| `channels/`                 | `in_app`, `web_push`; add a channel by adding a file here            |
+
+**How to notify from new code.** Describe the audience in intent terms and let
+the resolver work out who that is — never look up user ids at the call site:
+
+```js
+import notificationService from '../notification/notificationService.js';
+
+await notificationService.emit({
+  type: 'finance.stage_advanced', // must exist in notificationCatalog.js
+  actorUserId: actor.userId, // excluded from recipients automatically
+  subject: { moduleKey: 'finance', recordId },
+  audience: [
+    { kind: 'user', userId: applicantUserId, recipientRole: 'applicant' },
+    {
+      kind: 'workflow_stage',
+      moduleKey: 'finance',
+      stageKey: 'dof',
+      departmentId,
+      entityId,
+      recipientRole: 'approver',
+    },
+  ],
+  data: { stage: 'dof', feedback },
+  dedupeKey: `finance:${recordId}:stage:dof`,
+  tx: conn, // joins the caller's transaction
+});
+```
+
+Audience kinds: `user`, `users`, `employee`, `employees`, `role`, `permission`
+(supports a trailing `*`), and `workflow_stage` (resolves role + department/entity
+scope from `workflow_stage_policies`).
+
+**Two things to know before changing it.**
+
+1. **`emit` writes one row and never throws.** It is called inside the business
+   transaction, so it must not be able to roll back an approval. Delivery is the
+   dispatcher's job, outside that transaction, with retry. This is also why a
+   rolled-back approval correctly takes its notification with it.
+2. **`finance` and `expenditure` are already covered.** Both run on the shared
+   workflow engine, so `workflowService.js` emits for them at `startWorkflow`,
+   `actOnWorkflow` and `logWorkflowResubmission`. Any module registered through
+   `registerWorkflowModule()` is notified with no further work. Budget has its
+   own older engine and is wired through `shared/budget/budgetNotifications.js`
+   instead — note that `shared/budget/budgetApprovalEngine.js` looks like the
+   place to hook but is dead code that nothing imports.
+
+**Retention.** `npm run purge:notifications` archives read notifications older
+than 90 days and deletes finished outbox events older than 180 days. Nothing
+else prunes these tables; schedule it.
+
+**Client.** `client/src/shared/notifications/` — a module-scope store in the
+same shape as `shared/hooks/useBudgetCatalog.ts`, plus `notificationsTransport.ts`,
+which is the single seam holding the polling implementation. Polling (not SSE or
+WebSockets) because production runs behind IIS/iisnode, which buffers responses.
+Moving to a push transport means rewriting that one file.
 
 ## Environment configuration
 
@@ -151,7 +221,20 @@ GOOGLE_CLIENT_ID=...
 JWT_SECRET=...
 FRONTEND_URL=http://localhost:3000
 NODE_ENV=development
+
+# Notifications — Web Push (optional; in-app notifications work without these)
+# Generate a pair with: npx web-push generate-vapid-keys
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:noreply@ksrct.ac.in
+# Set to false to run the API with notification delivery paused. Emits keep
+# accumulating harmlessly in the outbox.
+NOTIFICATIONS_DISPATCH_ENABLED=true
+NOTIFICATIONS_DISPATCH_INTERVAL_MS=10000
 ```
+
+The client needs no notification configuration: it fetches the VAPID public key
+from `GET /api/notifications/push/public-key`, so the keys live in one place.
 
 ## Database
 
@@ -159,17 +242,18 @@ MySQL 8.x. Schema files live in `server/schema/` (includes `migrations/`, `scrip
 
 Key table groups:
 
-| Group       | Tables                                                                                                                                                                                                                                                                                                                                                                 |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Auth & RBAC | `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `user_entity_roles`                                                                                                                                                                                                                                                                                 |
-| Master data | `master_departments`, `master_employees`, `master_entities`, `master_entity_types`, `master_entity_contacts`                                                                                                                                                                                                                                                           |
-| Budget      | `budget_proposals`, `budget_proposal_lines`, `budget_catalog`, `budget_sub_catalog`                                                                                                                                                                                                                                                                                    |
-| Finance     | `finance_requests`, `finance_request_budget_rows`, `finance_request_income_rows`, `finance_request_annexures`, `finance_request_status_updates`                                                                                                                                                                                                                        |
-| Expenditure | `expenditure_requests`, `expenditure_advance_rows`, `expenditure_line_rows`, `expenditure_settlement_rows`, `expenditure_request_refs`                                                                                                                                                                                                                                 |
-| Research    | `journals`, `journal_authors`, `authors`, `author_students`                                                                                                                                                                                                                                                                                                            |
-| Projects    | `research_projects`, `project_investigators`, `project_tags`, `project_collaborators`, `project_finance_rows`, `project_grant_disbursements`, `project_documents`, `project_organizations`, `project_schemes`, `project_requests`, `project_budget_years`, `project_budget_heads`, `project_budget_allotments`, `project_transaction_accounts`, `project_transactions` |
-| Events      | `events`, `pre_events`, `event_finance`                                                                                                                                                                                                                                                                                                                                |
-| Workflow    | `workflow_instances`, `workflow_stage_logs`                                                                                                                                                                                                                                                                                                                            |
+| Group         | Tables                                                                                                                                                                                                                                                                                                                                                                 |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auth & RBAC   | `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `user_entity_roles`                                                                                                                                                                                                                                                                                 |
+| Master data   | `master_departments`, `master_employees`, `master_entities`, `master_entity_types`, `master_entity_contacts`                                                                                                                                                                                                                                                           |
+| Budget        | `budget_proposals`, `budget_proposal_lines`, `budget_catalog`, `budget_sub_catalog`                                                                                                                                                                                                                                                                                    |
+| Finance       | `finance_requests`, `finance_request_budget_rows`, `finance_request_income_rows`, `finance_request_annexures`, `finance_request_status_updates`                                                                                                                                                                                                                        |
+| Expenditure   | `expenditure_requests`, `expenditure_advance_rows`, `expenditure_line_rows`, `expenditure_settlement_rows`, `expenditure_request_refs`                                                                                                                                                                                                                                 |
+| Research      | `journals`, `journal_authors`, `authors`, `author_students`                                                                                                                                                                                                                                                                                                            |
+| Projects      | `research_projects`, `project_investigators`, `project_tags`, `project_collaborators`, `project_finance_rows`, `project_grant_disbursements`, `project_documents`, `project_organizations`, `project_schemes`, `project_requests`, `project_budget_years`, `project_budget_heads`, `project_budget_allotments`, `project_transaction_accounts`, `project_transactions` |
+| Events        | `events`, `pre_events`, `event_finance`                                                                                                                                                                                                                                                                                                                                |
+| Workflow      | `workflow_actions` (append-only decision log), `workflow_stage_policies` (per-stage scope), `approval_flow_config` (flow definitions). Live state is a `workflow_state` JSON column on each record's own table, not a separate instances table                                                                                                                         |
+| Notifications | `notification_events` (transactional outbox), `notifications` (one row per recipient), `notification_deliveries` (per-channel attempts), `notification_preferences`, `push_subscriptions`                                                                                                                                                                              |
 
 All queries use parameterized statements (`mysql2`). Typical usage in a model:
 
