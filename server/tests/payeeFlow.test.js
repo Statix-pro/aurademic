@@ -18,6 +18,7 @@ vi.mock('../modules/expenditure/expenditureModel.js', () => {
     getExpenditureDashboard: vi.fn(),
     getFinanceRequestContext: vi.fn(),
     listPayees: vi.fn(),
+    listPayeeDirectory: vi.fn(),
     getPayeeById: vi.fn(),
     updatePayeeById: vi.fn(),
     updatePayeeApproval: vi.fn(),
@@ -115,6 +116,113 @@ describe('Payee Management Flow Integration Tests', () => {
       expect(response.status).toBe(400);
       expect(response.body.message).toContain('required');
       expect(expenditureModel.upsertPayee).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/expenditure/payees/directory - Paged Directory', () => {
+    // The directory is the DoF management reader: it returns full bank details
+    // for every payee, rejected rows included, so it is gated like the payee
+    // mutations rather than like the '/payees' typeahead.
+    let dofToken;
+
+    beforeEach(() => {
+      dofToken = generateTestToken({
+        userId: 2,
+        email: 'dof@ksrct.ac.in',
+        name: 'DoF User',
+        roles: ['dof'],
+        permissions: [],
+      });
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['dof'],
+        permissions: [],
+        isAdmin: false,
+        isSuperAdmin: false,
+      });
+    });
+
+    it('returns one page of rows with server-side totals', async () => {
+      expenditureModel.listPayeeDirectory.mockResolvedValue({
+        rows: [{ id: 501, payee_name: 'John Doe' }],
+        total: 137,
+        counts: { all: 137, pending: 4, approved: 130, rejected: 3 },
+        limit: 20,
+        offset: 40,
+      });
+
+      const response = await request(app)
+        .get('/api/expenditure/payees/directory')
+        .query({ status: 'all', limit: 20, offset: 40 })
+        .set('Authorization', `Bearer ${dofToken}`);
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveLength(1);
+      // Totals must survive paging: the page holds 1 row but reports all 137.
+      expect(response.body.meta).toEqual({
+        total: 137,
+        counts: { all: 137, pending: 4, approved: 130, rejected: 3 },
+        limit: 20,
+        offset: 40,
+      });
+      expect(expenditureModel.listPayeeDirectory).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'all', limit: '20', offset: '40' }),
+      );
+    });
+
+    it('passes the status and beneficiary filters through to the model', async () => {
+      expenditureModel.listPayeeDirectory.mockResolvedValue({
+        rows: [],
+        total: 0,
+        counts: { all: 0, pending: 0, approved: 0, rejected: 0 },
+        limit: 20,
+        offset: 0,
+      });
+
+      const response = await request(app)
+        .get('/api/expenditure/payees/directory')
+        .query({ status: 'pending', beneficiary_type: 'organization', search: 'sharvi' })
+        .set('Authorization', `Bearer ${dofToken}`);
+
+      expect(response.status).toBe(200);
+      expect(expenditureModel.listPayeeDirectory).toHaveBeenCalledWith(
+        expect.objectContaining({
+          status: 'pending',
+          beneficiaryType: 'organization',
+          search: 'sharvi',
+        }),
+      );
+    });
+
+    it('is not shadowed by the /payees/:id route', async () => {
+      expenditureModel.listPayeeDirectory.mockResolvedValue({
+        rows: [],
+        total: 0,
+        counts: { all: 0, pending: 0, approved: 0, rejected: 0 },
+        limit: 20,
+        offset: 0,
+      });
+
+      await request(app)
+        .get('/api/expenditure/payees/directory')
+        .set('Authorization', `Bearer ${dofToken}`);
+
+      expect(expenditureModel.getPayeeById).not.toHaveBeenCalled();
+    });
+
+    it('refuses a requester without expenditure workflow access', async () => {
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['faculty'],
+        permissions: [],
+        isAdmin: false,
+        isSuperAdmin: false,
+      });
+
+      const response = await request(app)
+        .get('/api/expenditure/payees/directory')
+        .set('Authorization', `Bearer ${token}`);
+
+      expect(response.status).toBe(403);
+      expect(expenditureModel.listPayeeDirectory).not.toHaveBeenCalled();
     });
   });
 

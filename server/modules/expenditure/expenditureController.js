@@ -895,6 +895,41 @@ const expenditureController = {
     }
   },
 
+  async listPayeeDirectory(req, res) {
+    try {
+      const {
+        search = '',
+        status = 'all',
+        beneficiary_type: beneficiaryType = 'all',
+        limit = 20,
+        offset = 0,
+      } = req.query;
+
+      const result = await expenditureModel.listPayeeDirectory({
+        search,
+        status,
+        beneficiaryType,
+        limit,
+        offset,
+      });
+
+      return res.json({
+        status: 'success',
+        success: true,
+        data: result.rows,
+        meta: {
+          total: result.total,
+          counts: result.counts,
+          pending_total: result.pendingTotal,
+          limit: result.limit,
+          offset: result.offset,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error listing payee directory');
+    }
+  },
+
   async getPayee(req, res) {
     try {
       const id = toPositiveInt(req.params.id);

@@ -53,6 +53,25 @@ interface ExpenditureDialogConfig {
   onConfirm?: () => void | Promise<void>;
 }
 
+// AddPayeeModal reports its own validation through showAlert; map each of its
+// four kinds onto a dialog title and variant so an error never renders with a
+// "check your details" heading.
+type PayeeAlertType = 'success' | 'error' | 'warning' | 'info';
+
+const PAYEE_ALERT_TITLES: Record<PayeeAlertType, string> = {
+  success: 'Payee saved',
+  error: 'Payee error',
+  warning: 'Check payee details',
+  info: 'Payee',
+};
+
+const PAYEE_ALERT_VARIANTS: Record<PayeeAlertType, ExpenditureDialogConfig['variant']> = {
+  success: 'info',
+  error: 'danger',
+  warning: 'warning',
+  info: 'info',
+};
+
 interface DashboardReturnState {
   dashboardRowId?: string;
   rowReferenceId?: string;
@@ -570,7 +589,11 @@ const ExpenditureDashboard: React.FC = () => {
       !normalizeText(payee.bankName) ||
       !normalizeText(payee.branchName)
     ) {
-      window.alert('Please enter account name, account number, IFSC, bank name and branch name.');
+      showDialog({
+        title: 'Incomplete payee details',
+        message: 'Please enter account name, account number, IFSC, bank name and branch name.',
+        variant: 'warning',
+      });
       return;
     }
 
@@ -603,15 +626,22 @@ const ExpenditureDashboard: React.FC = () => {
         throw new Error(response.message || 'Unable to send payee for approval');
       }
 
-      window.alert(response.message || 'Payee request submitted for DoF approval.');
       setShowAddPayeeModal(false);
+      showDialog({
+        title: 'Payee submitted',
+        message: response.message || 'Payee request submitted for DoF approval.',
+      });
     } catch (error) {
       console.error('Failed to submit payee:', error);
       const apiMessage =
         (error as any)?.response?.data?.message ||
         (error as any)?.response?.data?.error ||
         (error as any)?.message;
-      window.alert(apiMessage || 'Unable to send payee for approval right now.');
+      showDialog({
+        title: 'Payee submission failed',
+        message: apiMessage || 'Unable to send payee for approval right now.',
+        variant: 'danger',
+      });
     } finally {
       setIsSubmittingPayee(false);
     }
@@ -2337,7 +2367,13 @@ const ExpenditureDashboard: React.FC = () => {
               if (!isSubmittingPayee) setShowAddPayeeModal(false);
             }}
             onAddPayee={submitPayeeForApproval}
-            showAlert={(message) => window.alert(String(message))}
+            showAlert={(message, type) =>
+              showDialog({
+                title: PAYEE_ALERT_TITLES[type] ?? 'Payee',
+                message,
+                variant: PAYEE_ALERT_VARIANTS[type] ?? 'info',
+              })
+            }
             submitLabel="Submit for Approval"
             isSubmitting={isSubmittingPayee}
           />

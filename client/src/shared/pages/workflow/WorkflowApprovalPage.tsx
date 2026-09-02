@@ -26,6 +26,7 @@ import ExportOptionsModal, {
   type ExportOptions,
   type ExportRunResult,
 } from '../../components/export/ExportOptionsModal';
+import { type PayeeDirectoryRecord, usePayeeDirectory } from '../../hooks/usePayeeDirectory';
 import authenticityUtility from '../../utils/authenticityUtility';
 import {
   buildCsvFilename,
@@ -627,28 +628,7 @@ interface WorkflowApprovalPageProps {
   config: WorkflowApprovalModuleConfig;
 }
 
-interface PendingPayeeRecord {
-  id: number;
-  payee_name?: string;
-  account_name?: string | null;
-  pan_number?: string | null;
-  account_no?: string;
-  account_type?: string | null;
-  ifsc?: string;
-  bank_name?: string;
-  branch_name?: string;
-  beneficiary_type?: string | null;
-  beneficiary_org?: string | null;
-  organization_type?: string | null;
-  msme?: string | null;
-  gstin?: string | null;
-  tds_details?: string | null;
-  tds_section?: string | null;
-  approval_status?: string | null;
-  rejection_reason?: string | null;
-  approved_at?: string | null;
-  requested_at?: string | null;
-}
+type PendingPayeeRecord = PayeeDirectoryRecord;
 
 interface WorkflowStageTab {
   key: string;
@@ -686,7 +666,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState<string>('');
-  const [payeeSearchTerm, setPayeeSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<
     'total' | 'pending' | 'approved' | 'returned' | 'rejected' | 'archived'
   >('pending');
@@ -748,8 +727,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [proposalTypeFilter, setProposalTypeFilter] = useState<
     'all' | 'advance' | 'expenditure' | 'settlement'
   >('all');
-  const [pendingPayees, setPendingPayees] = useState<PendingPayeeRecord[]>([]);
-  const [pendingPayeesLoading, setPendingPayeesLoading] = useState<boolean>(false);
   const [pendingPayeeActingId, setPendingPayeeActingId] = useState<number | null>(null);
   const [pendingPayeeEditingId, setPendingPayeeEditingId] = useState<number | null>(null);
   const [exportingCsv, setExportingCsv] = useState<boolean>(false);
@@ -1812,29 +1789,25 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     );
   }, [activeStage, config.moduleKey, isSuperAdminView]);
 
-  const loadPendingPayees = useCallback(async () => {
-    if (!showExpenditurePayeePanel) return;
-    setPendingPayeesLoading(true);
-    try {
-      const response = (await authenticityUtility.get(`${config.apiBasePath}/payees`, {
-        params: { status: 'all', limit: 200 },
-      })) as { success?: boolean; status?: string; data?: PendingPayeeRecord[] };
+  const payeeDirectory = usePayeeDirectory({
+    apiBasePath: config.apiBasePath,
+    enabled: showExpenditurePayeePanel,
+  });
+  const refreshPayeeDirectory = payeeDirectory.refresh;
 
-      if (response?.success === true || response?.status === 'success') {
-        setPendingPayees(Array.isArray(response.data) ? response.data : []);
-      } else {
-        setPendingPayees([]);
-      }
-    } catch {
-      setPendingPayees([]);
-    } finally {
-      setPendingPayeesLoading(false);
-    }
-  }, [config.apiBasePath, showExpenditurePayeePanel]);
-
+  // Payees requested from other screens (the user dashboard) land while this
+  // page is already mounted, so re-read the directory whenever the tab opens.
   useEffect(() => {
-    loadPendingPayees().catch(() => {});
-  }, [loadPendingPayees]);
+    if (viewMode !== 'payees') return;
+    refreshPayeeDirectory();
+  }, [viewMode, refreshPayeeDirectory]);
+
+  // The Requests/Payees switch only exists on the DoF stage (and for super
+  // admins). Moving to another stage hides it, so drop back to the workflow
+  // view instead of leaving the page stuck on a panel with no way out.
+  useEffect(() => {
+    if (!showExpenditurePayeePanel) setViewMode('workflow');
+  }, [showExpenditurePayeePanel]);
 
   const onPayeeDecision = useCallback(
     async (payeeId: number, decision: 'approved' | 'rejected') => {
@@ -1858,19 +1831,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         )) as { success?: boolean; status?: string; message?: string };
 
         if (response?.success === true || response?.status === 'success') {
-          setPendingPayees((prev) =>
-            prev.map((row) =>
-              Number(row.id) === Number(payeeId)
-                ? {
-                    ...row,
-                    approval_status: decision,
-                    rejection_reason: decision === 'rejected' ? rejectionReason : null,
-                    approved_at:
-                      decision === 'approved' ? new Date().toISOString() : row.approved_at,
-                  }
-                : row,
-            ),
-          );
+          refreshPayeeDirectory();
           showAlert(response.message || `Payee ${decision} successfully.`, 'success');
           return true;
         }
@@ -1887,7 +1848,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         setPendingPayeeActingId(null);
       }
     },
-    [config.apiBasePath, showAlert],
+    [config.apiBasePath, refreshPayeeDirectory, showAlert],
   );
 
   const onPayeeEdit = useCallback(
@@ -1905,12 +1866,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         };
 
         if (response?.success === true || response?.status === 'success') {
-          const updatedRow = response.data || payload;
-          setPendingPayees((prev) =>
-            prev.map((row) =>
-              Number(row.id) === Number(payeeId) ? { ...row, ...updatedRow } : row,
-            ),
-          );
+          refreshPayeeDirectory();
           return true;
         }
 
@@ -1926,7 +1882,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         setPendingPayeeEditingId(null);
       }
     },
-    [config.apiBasePath, showAlert],
+    [config.apiBasePath, refreshPayeeDirectory, showAlert],
   );
 
   const onPayeeDelete = useCallback(
@@ -1946,7 +1902,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             };
 
             if (response?.success === true || response?.status === 'success') {
-              setPendingPayees((prev) => prev.filter((row) => Number(row.id) !== Number(payeeId)));
+              refreshPayeeDirectory();
               return;
             }
 
@@ -1964,7 +1920,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       );
       return false;
     },
-    [config.apiBasePath, showAlert],
+    [config.apiBasePath, refreshPayeeDirectory, showAlert],
   );
 
   const performApproval = useCallback(
@@ -3219,77 +3175,22 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                   {config.title}
                 </h5>
                 {showExpenditurePayeePanel && (
-                  <div
-                    className="fw-view-tabs"
-                    style={{
-                      display: 'flex',
-                      background: '#f1f5f9',
-                      padding: '4px',
-                      borderRadius: '8px',
-                    }}
-                  >
+                  <div className="fw-view-tabs">
                     <button
                       type="button"
                       onClick={() => setViewMode('workflow')}
-                      style={{
-                        padding: '6px 12px',
-                        border: 'none',
-                        background: viewMode === 'workflow' ? '#fff' : 'transparent',
-                        borderRadius: '6px',
-                        fontWeight: 600,
-                        color: viewMode === 'workflow' ? '#0f172a' : '#64748b',
-                        boxShadow: viewMode === 'workflow' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                      }}
+                      className={`fw-view-tab ${viewMode === 'workflow' ? 'active' : ''}`}
                     >
                       Requests
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode('payees')}
-                      style={{
-                        padding: '6px 12px',
-                        border: 'none',
-                        background: viewMode === 'payees' ? '#fff' : 'transparent',
-                        borderRadius: '6px',
-                        fontWeight: 600,
-                        color: viewMode === 'payees' ? '#0f172a' : '#64748b',
-                        boxShadow: viewMode === 'payees' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
+                      className={`fw-view-tab ${viewMode === 'payees' ? 'active' : ''}`}
                     >
                       Payees
-                      {pendingPayees.filter(
-                        (payee) =>
-                          String(payee.approval_status || 'pending')
-                            .trim()
-                            .toLowerCase() === 'pending',
-                      ).length > 0 && (
-                        <span
-                          style={{
-                            background: '#ef4444',
-                            color: '#fff',
-                            fontSize: '0.75rem',
-                            padding: '2px 6px',
-                            borderRadius: '10px',
-                            minWidth: '20px',
-                            textAlign: 'center',
-                          }}
-                        >
-                          {
-                            pendingPayees.filter(
-                              (payee) =>
-                                String(payee.approval_status || 'pending')
-                                  .trim()
-                                  .toLowerCase() === 'pending',
-                            ).length
-                          }
-                        </span>
+                      {payeeDirectory.pendingTotal > 0 && (
+                        <span className="fw-view-tab-badge">{payeeDirectory.pendingTotal}</span>
                       )}
                     </button>
                   </div>
@@ -3336,19 +3237,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     <span>{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
                   </button>
                 )}
+                {/* Payee search shares the title row: Export CSV is workflow-only and
+                    this is payees-only, so both can claim the same right-hand slot. */}
+                {config.moduleKey === 'expenditure' && viewMode === 'payees' && (
+                  <div className="fw-payee-header-search">
+                    <Search size={16} className="fw-payee-header-search-icon" />
+                    <input
+                      type="text"
+                      className="fw-control fw-payee-header-search-input"
+                      placeholder="Search payee..."
+                      value={payeeDirectory.search}
+                      onChange={(e) => payeeDirectory.setSearch(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
-              {config.moduleKey === 'expenditure' && viewMode === 'payees' && (
-                <div className="fw-payee-header-search">
-                  <Search size={16} className="fw-payee-header-search-icon" />
-                  <input
-                    type="text"
-                    className="fw-control fw-payee-header-search-input"
-                    placeholder="Search payee..."
-                    value={payeeSearchTerm}
-                    onChange={(e) => setPayeeSearchTerm(e.target.value)}
-                  />
-                </div>
-              )}
               {viewMode === 'workflow' && (
                 <div className="fw-header-actions">
                   {/* Proposal-type shortcuts live in the actions row (like finance's
@@ -3580,19 +3483,16 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
               </div>
             )}
 
-            {viewMode === 'payees' ? (
+            {viewMode === 'payees' && showExpenditurePayeePanel ? (
               <div className="fw-payee-panel" style={{ margin: '10px 0 24px', padding: '0 24px' }}>
                 <PendingPayeeApprovals
-                  pendingPayees={pendingPayees}
-                  pendingPayeesLoading={pendingPayeesLoading}
+                  directory={payeeDirectory}
                   onPayeeDecision={onPayeeDecision}
                   pendingPayeeActingId={pendingPayeeActingId}
                   onPayeeEdit={onPayeeEdit}
                   pendingPayeeEditingId={pendingPayeeEditingId}
                   apiBasePath={config.apiBasePath}
                   onPayeeDelete={onPayeeDelete}
-                  searchTerm={payeeSearchTerm}
-                  onSearchTermChange={setPayeeSearchTerm}
                   showTopSearch={false}
                 />
               </div>

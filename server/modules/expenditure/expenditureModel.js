@@ -1921,6 +1921,182 @@ export async function getAdvanceSummary({
 
 // ─── Payee master ─────────────────────────────────────────────────────────────
 
+const PAYEE_SEARCHABLE_COLUMNS_SQL = `
+  LOWER(CONCAT_WS(' ',
+    COALESCE(ep.payee_name, ''),
+    COALESCE(ep.account_name, ''),
+    COALESCE(ep.account_no, ''),
+    COALESCE(ep.bank_name, ''),
+    COALESCE(ep.branch_name, ''),
+    COALESCE(ep.ifsc, ''),
+    COALESCE(ep.pan_number, ''),
+    COALESCE(ep.beneficiary_type, ''),
+    COALESCE(ep.beneficiary_org, ''),
+    COALESCE(ep.organization_type, ''),
+    COALESCE(ep.msme, ''),
+    COALESCE(ep.gstin, ''),
+    COALESCE(ep.tds_details, ''),
+    COALESCE(ep.tds_section, '')
+  ))
+`;
+
+// Mirrors normalizePayeeRecord() so the SQL tiles and the rendered badges can
+// never disagree: blank status means pending unless the row was approved.
+const PAYEE_STATUS_SQL = `
+  LOWER(TRIM(COALESCE(
+    NULLIF(TRIM(ep.approval_status), ''),
+    CASE WHEN ep.approved_at IS NOT NULL THEN 'approved' ELSE 'pending' END
+  )))
+`;
+
+const PAYEE_BENEFICIARY_TYPE_SQL = `
+  LOWER(TRIM(COALESCE(NULLIF(TRIM(ep.beneficiary_type), ''), 'individual')))
+`;
+
+// Mirrors resolveCanonicalPayeeName(): a legacy row can carry the beneficiary
+// org ('KSRCT'/'KSREI'/'External') in payee_name, and the screen then renders
+// account_name instead. Now that paging is server-side, the sort has to follow
+// the name that is actually rendered, or an alphabetical list breaks across
+// page boundaries. CAST(... AS BINARY) keeps the match case-sensitive, as
+// isBeneficiaryOrgValue() is.
+const PAYEE_DISPLAY_NAME_SQL = `
+  COALESCE(
+    NULLIF(
+      CASE
+        WHEN CAST(TRIM(COALESCE(ep.payee_name, '')) AS BINARY)
+             IN (${BENEFICIARY_ORG_OPTIONS.map((option) => `'${option}'`).join(', ')})
+          THEN ''
+        ELSE TRIM(COALESCE(ep.payee_name, ''))
+      END,
+      ''
+    ),
+    NULLIF(TRIM(COALESCE(ep.account_name, '')), ''),
+    TRIM(COALESCE(ep.payee_name, '')),
+    ''
+  )
+`;
+
+const PAYEE_DIRECTORY_STATUSES = ['pending', 'approved', 'rejected'];
+const PAYEE_DIRECTORY_BENEFICIARY_TYPES = ['individual', 'organization'];
+const PAYEE_DIRECTORY_MAX_LIMIT = 100;
+
+// A payee search is a literal substring match, so `%`, `_` and `\` typed into
+// the box must not be read as LIKE syntax — without this, searching "50%"
+// matches every payee and a trailing backslash escapes the closing wildcard.
+const escapeLikeLiteral = (value) => value.replace(/[\\%_]/g, '\\$&');
+
+const buildPayeeDirectoryFilters = ({ search, beneficiaryType }) => {
+  const clauses = ['ep.is_active = 1'];
+  const params = [];
+
+  const normalizedBeneficiaryType = normalizeText(beneficiaryType).toLowerCase();
+  if (PAYEE_DIRECTORY_BENEFICIARY_TYPES.includes(normalizedBeneficiaryType)) {
+    clauses.push(`${PAYEE_BENEFICIARY_TYPE_SQL} = ?`);
+    params.push(normalizedBeneficiaryType);
+  }
+
+  normalizeText(search)
+    .split(/\s+/)
+    .map((term) => term.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 8)
+    .forEach((term) => {
+      clauses.push(`${PAYEE_SEARCHABLE_COLUMNS_SQL} LIKE ? ESCAPE '\\\\'`);
+      params.push(`%${escapeLikeLiteral(term)}%`);
+    });
+
+  return { where: clauses.join('\n    AND '), params };
+};
+
+/**
+ * Count of every active payee still awaiting approval, ignoring the directory's
+ * search and beneficiary filters — the figure the "Payees" nav badge shows.
+ */
+async function countPendingPayees() {
+  const [[row]] = await db.execute(
+    `SELECT COUNT(*) AS pending_count
+       FROM expenditure_payees ep
+      WHERE ep.is_active = 1
+        AND ${PAYEE_STATUS_SQL} = 'pending'`,
+    [],
+  );
+  return Number(row?.pending_count || 0);
+}
+
+/**
+ * Paged reader for the payee management directory.
+ *
+ * Unlike listPayees() (a typeahead helper that returns a bare array), this
+ * returns one page of rows plus server-side totals, so the screen never has to
+ * hold the whole payee master in memory to know how many records exist.
+ */
+export async function listPayeeDirectory({
+  search = '',
+  status = 'all',
+  beneficiaryType = 'all',
+  limit = 20,
+  offset = 0,
+} = {}) {
+  const limitNum = Math.min(Math.max(Number(limit) || 20, 1), PAYEE_DIRECTORY_MAX_LIMIT);
+  const offsetNum = Math.max(Number(offset) || 0, 0);
+  const normalizedStatus = normalizeText(status).toLowerCase();
+  const statusFilter = PAYEE_DIRECTORY_STATUSES.includes(normalizedStatus) ? normalizedStatus : '';
+  const { where, params } = buildPayeeDirectoryFilters({ search, beneficiaryType });
+
+  // Status counts deliberately ignore the status filter so every tile keeps its
+  // full value while one status is being browsed.
+  const [[countRow]] = await db.execute(
+    `SELECT
+       COUNT(*) AS all_count,
+       ${PAYEE_DIRECTORY_STATUSES.map(
+         (value) =>
+           `SUM(CASE WHEN ${PAYEE_STATUS_SQL} = '${value}' THEN 1 ELSE 0 END) AS ${value}_count`,
+       ).join(',\n       ')}
+     FROM expenditure_payees ep
+     WHERE ${where}`,
+    params,
+  );
+
+  const counts = {
+    all: Number(countRow?.all_count || 0),
+    pending: Number(countRow?.pending_count || 0),
+    approved: Number(countRow?.approved_count || 0),
+    rejected: Number(countRow?.rejected_count || 0),
+  };
+  const total = statusFilter ? counts[statusFilter] : counts.all;
+
+  // counts.pending narrows with the search box, which is right for the tile but
+  // wrong for the "Payees" nav badge — that has to keep saying how many payees
+  // await approval in total, not how many the current query happens to show.
+  const isFiltered = params.length > 0;
+  const pendingTotal = isFiltered ? await countPendingPayees() : counts.pending;
+
+  if (!total) {
+    return { rows: [], total: 0, counts, pendingTotal, limit: limitNum, offset: offsetNum };
+  }
+
+  const [rows] = await db.execute(
+    `SELECT ep.* FROM expenditure_payees ep
+      WHERE ${where}
+        ${statusFilter ? `AND ${PAYEE_STATUS_SQL} = ?` : ''}
+      ORDER BY
+        CASE WHEN ${PAYEE_STATUS_SQL} = 'pending' THEN 0 ELSE 1 END,
+        ${PAYEE_DISPLAY_NAME_SQL} ASC,
+        ep.id ASC
+      LIMIT ${limitNum} OFFSET ${offsetNum}`,
+    statusFilter ? [...params, statusFilter] : params,
+  );
+
+  return {
+    rows: rows.map(normalizePayeeRecord),
+    total,
+    counts,
+    pendingTotal,
+    limit: limitNum,
+    offset: offsetNum,
+  };
+}
+
 export async function listPayees({ search = '', limit = 20, offset = 0, status = 'all' } = {}) {
   const q = normalizeText(search);
   const limitNum = Math.min(Math.max(Number(limit) || 20, 1), 100);
@@ -1943,24 +2119,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
   const rowAccountCompareSql = `
     REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(epr.account_no, ''))), ' ', ''), '-', ''), '\t', '')
   `;
-  const payeeSearchableColumns = `
-    LOWER(CONCAT_WS(' ',
-      COALESCE(ep.payee_name, ''),
-      COALESCE(ep.account_name, ''),
-      COALESCE(ep.account_no, ''),
-      COALESCE(ep.bank_name, ''),
-      COALESCE(ep.branch_name, ''),
-      COALESCE(ep.ifsc, ''),
-      COALESCE(ep.pan_number, ''),
-      COALESCE(ep.beneficiary_type, ''),
-      COALESCE(ep.beneficiary_org, ''),
-      COALESCE(ep.organization_type, ''),
-      COALESCE(ep.msme, ''),
-      COALESCE(ep.gstin, ''),
-      COALESCE(ep.tds_details, ''),
-      COALESCE(ep.tds_section, '')
-    ))
-  `;
+  const payeeSearchableColumns = PAYEE_SEARCHABLE_COLUMNS_SQL;
   const payeeRowSearchableColumns = `
     LOWER(CONCAT_WS(' ',
       COALESCE(epr.payee_name, ''),
