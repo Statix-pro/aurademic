@@ -274,6 +274,74 @@ export const NOTIFICATION_TYPES = Object.freeze({
     link: () => '/budgetcard',
   },
 
+  /* ---- deletion, for the two modules on the generic engine ----
+     Budget already had budget.deleted; these keep finance and expenditure
+     symmetrical with it. The generic workflowEntries() set covers the six
+     stage transitions but not deletion, which is not a stage decision. */
+
+  'finance.deleted': {
+    category: 'finance',
+    label: 'Deleted',
+    description: 'A finance request you submitted was deleted.',
+    severity: 'warning',
+    defaultChannels: IN_APP_ONLY,
+    title: (d) => `Finance request ${recordName(d)} was deleted`,
+    body: (d) => `Deleted by ${asText(d.actorName, 'an administrator')}.`,
+    link: () => '/financecard',
+  },
+
+  'expenditure.deleted': {
+    category: 'expenditure',
+    label: 'Deleted',
+    description: 'An expenditure request you submitted was deleted.',
+    severity: 'warning',
+    defaultChannels: IN_APP_ONLY,
+    title: (d) => `Expenditure request ${recordName(d)} was deleted`,
+    body: (d) => `Deleted by ${asText(d.actorName, 'an administrator')}.`,
+    link: () => '/expenditurecard',
+  },
+
+  /* ---- expenditure payee directory ----
+     Payees have their own approval path, separate from the expenditure request
+     workflow: a requester adds bank details, the DoF vets them, and only then
+     can the payee be used for a payment. Filed under the `expenditure`
+     category so muting that domain mutes these too. */
+
+  'payee.submitted': {
+    category: 'expenditure',
+    label: 'Payee awaiting verification',
+    description: 'Someone added or edited payee bank details that need vetting.',
+    severity: 'info',
+    defaultChannels: BOTH_CHANNELS,
+    title: (d) => `Payee "${asText(d.name, 'Unnamed')}" is awaiting verification`,
+    body: (d) => `Added by ${asText(d.applicantName, 'a user')}.`,
+    link: () => '/workflow/expenditure',
+  },
+
+  'payee.approved': {
+    category: 'expenditure',
+    label: 'Payee verified',
+    description: 'Payee details you submitted were verified.',
+    severity: 'success',
+    defaultChannels: BOTH_CHANNELS,
+    title: (d) => `Payee "${asText(d.name, 'Unnamed')}" was verified`,
+    body: () => 'You can now select this payee on an expenditure request.',
+    link: () => '/expenditurecard',
+  },
+
+  'payee.rejected': {
+    category: 'expenditure',
+    label: 'Payee rejected',
+    description: 'Payee details you submitted were rejected.',
+    severity: 'error',
+    defaultChannels: BOTH_CHANNELS,
+    title: (d) => `Payee "${asText(d.name, 'Unnamed')}" was rejected`,
+    // The reason is the whole point here: it tells the requester which bank
+    // detail to correct.
+    body: (d) => asText(d.feedback) || 'Open the payee to see why.',
+    link: () => '/expenditurecard',
+  },
+
   /* ---- publications ---- */
 
   'journal.submitted': {
