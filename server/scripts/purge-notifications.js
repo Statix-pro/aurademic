@@ -13,7 +13,8 @@
  *   2. Outbox events that have finished (done or failed) and are older than the
  *      event window are deleted outright. Their `notifications` rows go with
  *      them by ON DELETE CASCADE, which is why this window is the longer of the
- *      two.
+ *      two — and why an event still holding an unread notification is skipped,
+ *      so the cascade cannot take away what pass 1 promised to keep.
  *
  * Usage:
  *   npm run purge:notifications                       # 90 / 180 day defaults
@@ -47,9 +48,12 @@ async function countCandidates(readDays, eventDays) {
 
   const [[events]] = await db.query(
     `SELECT COUNT(*) AS total
-       FROM notification_events
-      WHERE status IN ('done', 'failed')
-        AND created_at < (NOW() - INTERVAL ? DAY)`,
+       FROM notification_events e
+      WHERE e.status IN ('done', 'failed')
+        AND e.created_at < (NOW() - INTERVAL ? DAY)
+        AND NOT EXISTS (
+          SELECT 1 FROM notifications n WHERE n.event_id = e.id AND n.is_read = 0
+        )`,
     [eventDays],
   );
 

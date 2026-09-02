@@ -6,6 +6,8 @@
  * models already use for their workflow-facing methods.
  */
 
+import { randomUUID } from 'node:crypto';
+
 import db from '../../config/connection.js';
 
 const toPositiveInt = (value) => {
@@ -71,9 +73,21 @@ const notificationModel = {
    * The UPDATE ... LIMIT is the claim: MySQL applies it under a row lock, so
    * two dispatchers (or two iisnode workers) can never take the same row. Only
    * then are the claimed rows read back.
+   *
+   * The read-back finds rows by the value just written to `locked_by`, so that
+   * value has to be unique per claim rather than per process. Sharing it — two
+   * workers on the `lockedBy` default, or one worker's overlapping sweeps —
+   * would have each SELECT return the other's rows: the same batch processed
+   * twice while the other batch sat in `processing` until the reaper freed it.
+   * Hence the random suffix, which the caller must carry into `renewClaim` and
+   * the terminal writes as its lease token.
+   *
+   * @returns {Promise<{ token: string, events: object[] }>}
    */
   async claimPendingEvents({ limit = 25, lockedBy = 'dispatcher' } = {}) {
     const batchSize = clampLimit(limit, 25, 200);
+    // Bounded to fit locked_by's 64 characters with the suffix attached.
+    const token = `${String(lockedBy).slice(0, 40)}:${randomUUID().slice(0, 12)}`;
 
     const [result] = await db.query(
       `UPDATE notification_events
@@ -81,10 +95,10 @@ const notificationModel = {
        WHERE status = 'pending' AND available_at <= NOW()
        ORDER BY id
        LIMIT ?`,
-      [String(lockedBy).slice(0, 64), batchSize],
+      [token, batchSize],
     );
 
-    if (!result.affectedRows) return [];
+    if (!result.affectedRows) return { token, events: [] };
 
     const [rows] = await db.query(
       `SELECT id, event_type, actor_user_id, module_key, record_id, payload, attempts
@@ -92,10 +106,10 @@ const notificationModel = {
        WHERE status = 'processing' AND locked_by = ?
        ORDER BY id
        LIMIT ?`,
-      [String(lockedBy).slice(0, 64), batchSize],
+      [token, batchSize],
     );
 
-    return rows;
+    return { token, events: rows };
   },
 
   /**
@@ -599,11 +613,23 @@ const notificationModel = {
     return result.affectedRows || 0;
   },
 
+  /**
+   * Deletes finished outbox events, whose `notifications` rows follow by
+   * ON DELETE CASCADE.
+   *
+   * An event still holding an unread notification is left alone however old it
+   * is: the retention rule is that nobody loses a notification they never
+   * acknowledged, and the cascade would delete it out from under them.
+   */
   async purgeOldEvents({ olderThanDays = 180 } = {}) {
     const [result] = await db.query(
       `DELETE FROM notification_events
        WHERE status IN ('done', 'failed')
-         AND created_at < (NOW() - INTERVAL ? DAY)`,
+         AND created_at < (NOW() - INTERVAL ? DAY)
+         AND NOT EXISTS (
+           SELECT 1 FROM notifications n
+           WHERE n.event_id = notification_events.id AND n.is_read = 0
+         )`,
       [Math.max(1, Number(olderThanDays) || 180)],
     );
     return result.affectedRows || 0;

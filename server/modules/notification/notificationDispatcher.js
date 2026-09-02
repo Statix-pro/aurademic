@@ -34,8 +34,11 @@ const STALE_CLAIM_MINUTES = 5;
 const STALE_REAP_INTERVAL_MS = 60000;
 
 /**
- * Identifies this process's claims. Two iisnode workers, or a dev server plus a
- * script, must not read each other's claimed rows.
+ * Prefixes this process's claims. Two iisnode workers, or a dev server plus a
+ * script, must not read each other's claimed rows. `claimPendingEvents` adds a
+ * per-claim suffix and returns the result as the lease token for that batch,
+ * which is what the writes below are fenced on — this constant only makes the
+ * owner legible in the table.
  */
 const INSTANCE_ID = `${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -114,7 +117,7 @@ async function enrichActorNames(event, data) {
   }
 }
 
-async function processEvent(event) {
+async function processEvent(event, token) {
   const payload = parsePayload(event.payload);
   const data = payload.data || {};
   const audience = Array.isArray(payload.audience) ? payload.audience : [];
@@ -125,7 +128,7 @@ async function processEvent(event) {
     // is no way to render it, and retrying will never help.
     await notificationModel.markEventFailed(event.id, {
       error: `Unknown notification type: ${event.event_type}`,
-      lockedBy: INSTANCE_ID,
+      lockedBy: token,
     });
     return;
   }
@@ -139,7 +142,7 @@ async function processEvent(event) {
     // Nobody to tell is a legitimate outcome — a department with no HOD
     // assigned, or an event whose only recipient was the actor.
     if (errors.length) throw new Error(`No recipients resolved: ${errors.join('; ')}`);
-    await notificationModel.markEventDone(event.id, { lockedBy: INSTANCE_ID });
+    await notificationModel.markEventDone(event.id, { lockedBy: token });
     return;
   }
 
@@ -273,7 +276,7 @@ async function processEvent(event) {
     );
   }
 
-  await notificationModel.markEventDone(event.id, { lockedBy: INSTANCE_ID });
+  await notificationModel.markEventDone(event.id, { lockedBy: token });
 }
 
 /**
@@ -294,7 +297,9 @@ export async function runOnce() {
       await notificationModel.releaseStaleClaims({ staleMinutes: STALE_CLAIM_MINUTES });
     }
 
-    const events = await notificationModel.claimPendingEvents({
+    // `token` is this claim's lease: every write below is fenced on it, so a
+    // batch the reaper took away cannot be finished by its former owner.
+    const { token, events } = await notificationModel.claimPendingEvents({
       limit: BATCH_SIZE,
       lockedBy: INSTANCE_ID,
     });
@@ -304,7 +309,7 @@ export async function runOnce() {
       // batch could sit claimed for longer than the stale threshold and be
       // reaped out from under this worker. Restamping the lease as each event
       // starts keeps the threshold measuring one event's runtime.
-      const held = await notificationModel.renewClaim(event.id, { lockedBy: INSTANCE_ID });
+      const held = await notificationModel.renewClaim(event.id, { lockedBy: token });
       if (!held) {
         console.warn(
           `Notification event ${event.id} (${event.event_type}) lost its claim before ` +
@@ -314,7 +319,7 @@ export async function runOnce() {
       }
 
       try {
-        await processEvent(event);
+        await processEvent(event, token);
       } catch (error) {
         const attempts = Number(event.attempts || 0);
         const message = error?.message || 'Unknown dispatch error';
@@ -325,7 +330,7 @@ export async function runOnce() {
           );
           await notificationModel.markEventFailed(event.id, {
             error: message,
-            lockedBy: INSTANCE_ID,
+            lockedBy: token,
           });
         } else {
           const delay = RETRY_DELAYS_SECONDS[attempts] ?? RETRY_DELAYS_SECONDS.at(-1);
@@ -336,7 +341,7 @@ export async function runOnce() {
           await notificationModel.markEventForRetry(event.id, {
             error: message,
             delaySeconds: delay,
-            lockedBy: INSTANCE_ID,
+            lockedBy: token,
           });
         }
       }

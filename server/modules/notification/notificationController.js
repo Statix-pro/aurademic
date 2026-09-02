@@ -47,7 +47,6 @@ const notificationController = {
       return res.status(500).json({
         success: false,
         message: 'Failed to load notification summary',
-        error: error.message,
       });
     }
   },
@@ -73,7 +72,6 @@ const notificationController = {
       return res.status(500).json({
         success: false,
         message: 'Failed to load notifications',
-        error: error.message,
       });
     }
   },
@@ -99,7 +97,6 @@ const notificationController = {
       return res.status(500).json({
         success: false,
         message: 'Failed to mark notification as read',
-        error: error.message,
       });
     }
   },
@@ -119,7 +116,6 @@ const notificationController = {
       return res.status(500).json({
         success: false,
         message: 'Failed to mark notifications as read',
-        error: error.message,
       });
     }
   },
@@ -142,7 +138,6 @@ const notificationController = {
       return res.status(500).json({
         success: false,
         message: 'Failed to dismiss notification',
-        error: error.message,
       });
     }
   },
@@ -197,7 +192,6 @@ const notificationController = {
       return res.status(500).json({
         success: false,
         message: 'Failed to load notification preferences',
-        error: error.message,
       });
     }
   },
@@ -262,7 +256,6 @@ const notificationController = {
       return res.status(500).json({
         success: false,
         message: 'Failed to save notification preferences',
-        error: error.message,
       });
     }
   },
@@ -311,7 +304,6 @@ const notificationController = {
       return res.status(500).json({
         success: false,
         message: 'Failed to save push subscription',
-        error: error.message,
       });
     }
   },
@@ -330,7 +322,6 @@ const notificationController = {
       return res.status(500).json({
         success: false,
         message: 'Failed to remove push subscription',
-        error: error.message,
       });
     }
   },

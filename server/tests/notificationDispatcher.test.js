@@ -71,12 +71,16 @@ const makeNotification = (overrides = {}) => ({
   ...overrides,
 });
 
+/** claimPendingEvents hands back its lease token alongside the batch. */
+const mockClaim = (events) =>
+  notificationModel.claimPendingEvents.mockResolvedValue({ token: 'test-lease', events });
+
 beforeEach(() => {
   vi.clearAllMocks();
   __testing.resetSweepState();
   notificationModel.releaseStaleClaims.mockResolvedValue(0);
   notificationModel.renewClaim.mockResolvedValue(true);
-  notificationModel.claimPendingEvents.mockResolvedValue([]);
+  mockClaim([]);
   notificationModel.insertNotifications.mockResolvedValue([makeNotification()]);
   notificationModel.insertDeliveries.mockResolvedValue(undefined);
   notificationModel.listPendingDeliveries.mockResolvedValue([]);
@@ -96,7 +100,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('fans an event out and completes it', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
 
     expect(await runOnce()).toBe(1);
 
@@ -120,7 +124,7 @@ describe('notificationDispatcher.runOnce', () => {
   it('completes an event with no recipients rather than retrying it', async () => {
     // A department with no HOD assigned, or an event whose only recipient was
     // the actor. Nothing is wrong; there is simply nobody to tell.
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     resolveRecipients.mockResolvedValue({ recipients: [], errors: [], truncated: false });
 
     await runOnce();
@@ -133,7 +137,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('retries when a descriptor failed to resolve, so the rest still get told', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     resolveRecipients.mockResolvedValue({
       recipients: [{ userId: 2, recipientRole: 'approver' }],
       errors: ['audience role: connection lost'],
@@ -161,7 +165,7 @@ describe('notificationDispatcher.runOnce', () => {
       [2, third],
     ]) {
       vi.clearAllMocks();
-      notificationModel.claimPendingEvents.mockResolvedValue([makeEvent({ attempts })]);
+      mockClaim([makeEvent({ attempts })]);
       notificationModel.insertNotifications.mockRejectedValue(new Error('db down'));
       resolveRecipients.mockResolvedValue({
         recipients: [{ userId: 2, recipientRole: 'approver' }],
@@ -179,9 +183,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('gives up after the last attempt instead of retrying forever', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([
-      makeEvent({ attempts: __testing.MAX_ATTEMPTS - 1 }),
-    ]);
+    mockClaim([makeEvent({ attempts: __testing.MAX_ATTEMPTS - 1 })]);
     notificationModel.insertNotifications.mockRejectedValue(new Error('db down'));
 
     await runOnce();
@@ -195,9 +197,7 @@ describe('notificationDispatcher.runOnce', () => {
 
   it('fails an event permanently when its type has left the catalog', async () => {
     // Retrying cannot help: there is no template to render it with.
-    notificationModel.claimPendingEvents.mockResolvedValue([
-      makeEvent({ event_type: 'finance.removed_type' }),
-    ]);
+    mockClaim([makeEvent({ event_type: 'finance.removed_type' })]);
 
     await runOnce();
 
@@ -209,10 +209,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('keeps processing the rest of the batch when one event fails', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([
-      makeEvent({ id: 100, event_type: 'finance.removed_type' }),
-      makeEvent({ id: 101 }),
-    ]);
+    mockClaim([makeEvent({ id: 100, event_type: 'finance.removed_type' }), makeEvent({ id: 101 })]);
 
     expect(await runOnce()).toBe(2);
     expect(notificationModel.markEventFailed).toHaveBeenCalledWith(100, expect.anything());
@@ -222,7 +219,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('fills in the actor name so the body reads as a sentence', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     notificationModel.getUserNames.mockResolvedValue(new Map([[1, 'Dr. Approver']]));
     resolveRecipients.mockResolvedValue({
       recipients: [{ userId: 2, recipientRole: 'applicant' }],
@@ -238,7 +235,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('does not look up a name the emitter already supplied', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([
+    mockClaim([
       makeEvent({
         payload: JSON.stringify({
           audience: [{ kind: 'user', userId: 2, recipientRole: 'applicant' }],
@@ -259,7 +256,7 @@ describe('notificationDispatcher.runOnce', () => {
 
   it('still delivers when the name lookup fails', async () => {
     // Nicer wording is not worth retrying an approval notification over.
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     notificationModel.getUserNames.mockRejectedValue(new Error('lookup down'));
 
     await runOnce();
@@ -271,7 +268,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('renders once per recipient role, not once per person', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     resolveRecipients.mockResolvedValue({
       recipients: [
         { userId: 2, recipientRole: 'approver' },
@@ -296,7 +293,7 @@ describe('notificationDispatcher.runOnce', () => {
   it('only sends deliveries the model still reports as pending', async () => {
     // This is what stops a reprocessed event from pushing to a browser twice:
     // rows already 'sent' are simply not returned.
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     notificationModel.listPendingDeliveries.mockResolvedValue([
       {
         notification_id: 900,
@@ -321,7 +318,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('records a channel that throws as failed without stopping the sweep', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     notificationModel.listPendingDeliveries.mockResolvedValue([
       {
         notification_id: 900,
@@ -359,7 +356,7 @@ describe('notificationDispatcher.runOnce', () => {
       .spyOn(inApp, 'deliver')
       .mockResolvedValue({ status: 'failed', error: 'push service 503' });
 
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     notificationModel.listPendingDeliveries.mockResolvedValue([
       {
         notification_id: 900,
@@ -394,7 +391,7 @@ describe('notificationDispatcher.runOnce', () => {
   it('completes an event when every delivery was skipped rather than failed', async () => {
     // 'skipped' is a settled outcome — a muted channel, or one this deployment
     // has no keys for. Retrying it would burn the ladder for nothing.
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     notificationModel.listPendingDeliveries.mockResolvedValue([
       {
         notification_id: 900,
@@ -423,9 +420,7 @@ describe('notificationDispatcher.runOnce', () => {
       .spyOn(inApp, 'deliver')
       .mockResolvedValue({ status: 'failed', error: 'still down' });
 
-    notificationModel.claimPendingEvents.mockResolvedValue([
-      makeEvent({ attempts: __testing.MAX_ATTEMPTS - 1 }),
-    ]);
+    mockClaim([makeEvent({ attempts: __testing.MAX_ATTEMPTS - 1 })]);
     notificationModel.listPendingDeliveries.mockResolvedValue([
       {
         notification_id: 900,
@@ -459,7 +454,7 @@ describe('notificationDispatcher.runOnce', () => {
     // this test passed or failed depending on the developer's local .env.
     expect(getChannel('web_push').isEnabled()).toBe(false);
 
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
 
     await runOnce();
 
@@ -471,7 +466,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('tolerates a payload that is not valid JSON', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent({ payload: 'not json{' })]);
+    mockClaim([makeEvent({ payload: 'not json{' })]);
     resolveRecipients.mockResolvedValue({ recipients: [], errors: [], truncated: false });
 
     await runOnce();
@@ -492,7 +487,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('renews its lease per event so a slow batch is not reaped mid-flight', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
 
     await runOnce();
 
@@ -502,7 +497,7 @@ describe('notificationDispatcher.runOnce', () => {
   });
 
   it('skips an event whose claim was revoked rather than double-sending it', async () => {
-    notificationModel.claimPendingEvents.mockResolvedValue([makeEvent()]);
+    mockClaim([makeEvent()]);
     notificationModel.renewClaim.mockResolvedValue(false);
 
     await runOnce();
