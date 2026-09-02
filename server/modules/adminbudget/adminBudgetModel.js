@@ -8,6 +8,7 @@ import {
   normalizeRollupRow,
 } from '../shared/budget/budgetAnnualRollup.js';
 import { buildBudgetList, buildBudgetKpiStats } from '../shared/budget/budgetListBuilder.js';
+import budgetNotifications from '../shared/budget/budgetNotifications.js';
 import {
   VALID_MONTHS as SHARED_VALID_MONTHS,
   APPROVAL_FLOW as SHARED_APPROVAL_FLOW,
@@ -298,7 +299,10 @@ export async function getProposalForArchiveToggle(proposalId, conn = db) {
   }
 
   const [rows] = await conn.execute(
-    `SELECT id, status, current_stage, approval_flow
+    // user_id / employee_id / fiscal_year come along so the archive toggle can
+    // notify the proposal's owners without a second read.
+    `SELECT id, status, current_stage, approval_flow,
+            user_id, employee_id, applicant_name, fiscal_year
        FROM budget_proposals
        WHERE id = ?
          AND LOWER(TRIM(status)) <> 'deleted'
@@ -351,6 +355,14 @@ export async function toggleArchiveState(
           encodeArchiveFeedback(feedback, proposal),
         ],
       );
+
+      await budgetNotifications.notifyBudgetArchiveToggled({
+        proposal,
+        unarchived: false,
+        feedback,
+        actorUserId: approverUserId,
+        tx: conn,
+      });
 
       return { action: 'archived', proposal };
     }
@@ -412,6 +424,14 @@ export async function toggleArchiveState(
         normalizeText(feedback) || `Restored to ${restoreState.previousStage}`,
       ],
     );
+
+    await budgetNotifications.notifyBudgetArchiveToggled({
+      proposal,
+      unarchived: true,
+      feedback,
+      actorUserId: requesterUserId,
+      tx: conn,
+    });
 
     return { action: 'unarchived', proposal };
   });
@@ -917,6 +937,16 @@ export async function updateApprovedAmounts(
           ) VALUES(?, ?, ?, ?, 'updated', ?, 0)`,
         [proposalId, logRole, Number(editorUserId), normalizeText(editorEmail), rowText],
       );
+    }
+
+    // Only worth telling the applicant when something actually changed — an
+    // idempotent save must not generate a notification.
+    if (changedRows > 0) {
+      await budgetNotifications.notifyBudgetAmountsUpdated({
+        proposal,
+        actorUserId: editorUserId,
+        tx: conn,
+      });
     }
 
     return {
@@ -2334,7 +2364,9 @@ async function insertMonthAllocation(lineId, month, amount, conn) {
 async function deleteBudgetProposal(proposalId, actor = {}) {
   return withTransaction(async (conn) => {
     const [rows] = await conn.execute(
-      `SELECT status
+      // The owner columns come along for the ride so the deletion can be
+      // announced without a second read.
+      `SELECT status, user_id, employee_id, applicant_name, fiscal_year
          FROM budget_proposals
         WHERE id = ?
         LIMIT 1
@@ -2373,6 +2405,16 @@ async function deleteBudgetProposal(proposalId, actor = {}) {
         ) VALUES(?, ?, ?, ?, 'deleted', ?, 0)`,
       [proposalId, actorRole, actorUserId, actorEmail, feedback],
     );
+
+    // An admin deleting someone else's proposal is the case worth announcing;
+    // an owner deleting their own is the actor and so is excluded.
+    if (result.affectedRows > 0) {
+      await budgetNotifications.notifyBudgetDeleted({
+        proposal: { id: proposalId, ...rows[0] },
+        actorUserId,
+        tx: conn,
+      });
+    }
 
     return result.affectedRows > 0;
   });
@@ -2413,6 +2455,15 @@ export async function processApproval(
           ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
         [proposalId, logRole, approverUserId, approverEmail || '', feedback || ''],
       );
+
+      await budgetNotifications.notifyBudgetDecision({
+        proposal,
+        decision: 'archived',
+        stage: proposal.current_stage,
+        feedback,
+        actorUserId: approverUserId,
+        tx: conn,
+      });
     });
   }
 
@@ -2516,6 +2567,16 @@ export async function processApproval(
         [proposalId, approverUserId, 'system-auto@ksrct.ac.in'],
       );
     }
+
+    await budgetNotifications.notifyBudgetDecision({
+      proposal,
+      decision: normalizedDecision,
+      stage: role,
+      nextStage,
+      feedback,
+      actorUserId: approverUserId,
+      tx: conn,
+    });
   });
 }
 

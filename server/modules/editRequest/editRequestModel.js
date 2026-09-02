@@ -54,7 +54,9 @@ const editRequestModel = {
   async updateLatestEditRequestStatus(entityId, entityType, status, userId = null) {
     try {
       const params = [entityId, entityType];
-      let sql = `SELECT id FROM edit_requests
+      // `user_id` comes back so the caller can address a notification to
+      // whoever asked, without having to guess which row was decided.
+      let sql = `SELECT id, user_id FROM edit_requests
           WHERE entity_id = ? AND entity_type = ? AND status = 'pending'`;
       if (userId != null) {
         sql += ' AND user_id = ?';
@@ -72,7 +74,8 @@ const editRequestModel = {
         "UPDATE edit_requests SET status = ? WHERE id = ? AND status = 'pending'",
         [status, rows[0].id],
       );
-      return result;
+      // Existing callers read `affectedRows`; `decidedUserId` is additive.
+      return { ...result, decidedUserId: rows[0].user_id ?? null };
     } catch (error) {
       console.error('Error in updateLatestEditRequestStatus:', error);
       throw error;
