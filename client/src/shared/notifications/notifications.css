@@ -1,0 +1,400 @@
+/* ─── Bell (in the topbar) ─── */
+.notif-bell-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.notif-bell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.notif-bell:hover,
+.notif-bell.is-open {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.notif-badge {
+  position: absolute;
+  top: -2px;
+  right: -3px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: #dc3545;
+  border: 1.5px solid #0069ab;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* ─── Panel ───
+   Fixed, not absolute: the topbar is a flex row inside a 100vh layout, and an
+   absolutely-positioned panel would be clipped by it. */
+.notif-panel {
+  position: fixed;
+  top: 52px;
+  right: 12px;
+  width: min(400px, calc(100vw - 24px));
+  max-height: min(560px, calc(100vh - 80px));
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(16, 24, 40, 0.18);
+  z-index: 1002; /* above .topbar (1001) */
+  overflow: hidden;
+}
+
+.notif-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 14px;
+  border-bottom: 1px solid #eef1f6;
+}
+
+.notif-panel-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.notif-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.notif-link-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  color: #0069ab;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.notif-link-btn:hover {
+  text-decoration: underline;
+}
+
+.notif-link-btn:disabled {
+  color: #98a2b3;
+  cursor: default;
+  text-decoration: none;
+}
+
+.notif-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ─── Item ─── */
+.notif-item {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  border-bottom: 1px solid #f4f6fa;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notif-item:hover {
+  background: #f8fafc;
+}
+
+.notif-item.is-unread {
+  background: #f5faff;
+}
+
+.notif-item.is-unread:hover {
+  background: #eef6ff;
+}
+
+.notif-dot {
+  flex-shrink: 0;
+  width: 7px;
+  height: 7px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: #0069ab;
+}
+
+.notif-dot.is-read {
+  background: transparent;
+}
+
+.notif-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-item-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.notif-item.is-read .notif-item-title {
+  font-weight: 500;
+  color: #475467;
+}
+
+.notif-item-text {
+  margin-top: 2px;
+  font-size: 12px;
+  color: #667085;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.notif-item-meta {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  color: #98a2b3;
+}
+
+.notif-sev {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.notif-sev--info {
+  background: #e7f1fb;
+  color: #0b5ea8;
+}
+.notif-sev--success {
+  background: #e6f5ec;
+  color: #14713c;
+}
+.notif-sev--warning {
+  background: #fff3e6;
+  color: #a35200;
+}
+.notif-sev--error {
+  background: #fdeaec;
+  color: #a4161f;
+}
+
+.notif-dismiss {
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding: 2px;
+  border: none;
+  background: none;
+  color: #cbd2dd;
+  border-radius: 4px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.notif-dismiss:hover {
+  color: #667085;
+  background: #eef1f6;
+}
+
+/* ─── Empty / loading / error ─── */
+.notif-empty {
+  padding: 34px 18px;
+  text-align: center;
+  color: #98a2b3;
+  font-size: 12.5px;
+}
+
+.notif-empty-icon {
+  margin-bottom: 8px;
+  color: #cbd2dd;
+}
+
+.notif-error {
+  margin: 10px 14px;
+  padding: 9px 11px;
+  border-radius: 6px;
+  background: #fdeaec;
+  color: #a4161f;
+  font-size: 12px;
+}
+
+.notif-panel-foot {
+  padding: 9px 14px;
+  border-top: 1px solid #eef1f6;
+  text-align: center;
+  background: #fcfdfe;
+}
+
+/* ─── Full inbox page ─── */
+.notif-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+.notif-page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.notif-page-head h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.notif-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.notif-chip {
+  padding: 5px 11px;
+  border: 1px solid #dce2ec;
+  border-radius: 16px;
+  background: #fff;
+  color: #475467;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.notif-chip:hover {
+  border-color: #b6c2d4;
+}
+
+.notif-chip.is-active {
+  background: #0069ab;
+  border-color: #0069ab;
+  color: #fff;
+}
+
+.notif-card {
+  background: #fff;
+  border: 1px solid #e3e8ef;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+/* ─── Preferences ─── */
+.notif-prefs-group {
+  margin-bottom: 22px;
+}
+
+.notif-prefs-group h3 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+  text-transform: capitalize;
+}
+
+.notif-prefs-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.notif-prefs-table th,
+.notif-prefs-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid #f0f3f8;
+  font-size: 12.5px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.notif-prefs-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475467;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.notif-prefs-table th.notif-prefs-channel,
+.notif-prefs-table td.notif-prefs-channel {
+  width: 110px;
+  text-align: center;
+}
+
+.notif-prefs-table tr:last-child td {
+  border-bottom: none;
+}
+
+.notif-prefs-label {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.notif-prefs-desc {
+  margin-top: 2px;
+  color: #667085;
+  font-size: 11.5px;
+}
+
+.notif-push-panel {
+  margin-bottom: 22px;
+  padding: 13px 15px;
+  background: #f8fafc;
+  border: 1px solid #e3e8ef;
+  border-radius: 8px;
+}
+
+.notif-push-panel h3 {
+  margin: 0 0 3px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.notif-push-panel p {
+  margin: 0 0 10px;
+  font-size: 12.5px;
+  color: #667085;
+}
