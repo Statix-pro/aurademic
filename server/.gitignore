@@ -24,5 +24,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-
-.env.development
+# .env.development is intentionally tracked, so a clean clone gives a new
+# developer a working local config. It must therefore never hold a production
+# credential — see .env.example for what each variable is for.
+# .env.production stays ignored (listed above).
