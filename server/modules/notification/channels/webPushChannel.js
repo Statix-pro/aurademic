@@ -16,6 +16,24 @@ import webpush from 'web-push';
 
 import notificationModel from '../notificationModel.js';
 
+/**
+ * Socket timeout for one push request. `web-push` hands this to https.request
+ * and destroys the socket when it fires, so a push service that accepts the
+ * connection and then goes quiet cannot hold a delivery open indefinitely.
+ */
+const REQUEST_TIMEOUT_MS = 10000;
+
+/**
+ * Ceiling on one recipient's whole fan-out. The dispatcher renews its lease
+ * between deliveries, not during one, so a single deliver() call has to stay
+ * well inside the stale-claim threshold: a person with a dozen registered
+ * devices must not be able to stretch one delivery past it and let the reaper
+ * hand the event to another worker that pushes it all over again. Whatever is
+ * left when the budget runs out is reported as a failure, which is the retry
+ * ladder's cue to come back for it.
+ */
+const DELIVERY_BUDGET_MS = 60000;
+
 let configured = null;
 
 const configure = () => {
@@ -82,8 +100,17 @@ const webPushChannel = {
 
     let sent = 0;
     const failures = [];
+    const deadline = Date.now() + DELIVERY_BUDGET_MS;
 
-    for (const subscription of subscriptions) {
+    for (const [index, subscription] of subscriptions.entries()) {
+      if (Date.now() >= deadline) {
+        failures.push(
+          `TIMEBUDGET: ${subscriptions.length - index} subscription(s) not attempted within ` +
+            `${DELIVERY_BUDGET_MS}ms`,
+        );
+        break;
+      }
+
       try {
         await webpush.sendNotification(
           {
@@ -91,6 +118,7 @@ const webPushChannel = {
             keys: { p256dh: subscription.p256dh, auth: subscription.auth },
           },
           body,
+          { timeout: REQUEST_TIMEOUT_MS },
         );
         sent += 1;
       } catch (error) {

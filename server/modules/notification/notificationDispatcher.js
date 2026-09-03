@@ -251,12 +251,17 @@ async function processEvent(event, token) {
     const channel = getChannel(delivery.channel);
     if (!channel) continue;
 
-    // Deliveries are the only unbounded part of an event: a slow push service
-    // can hold the loop open past the stale threshold, at which point the
-    // reaper would hand the event to another worker while these rows are still
-    // 'pending' — and that worker would push them again. Restamping between
-    // deliveries keeps the lease alive for as long as the fan-out honestly
-    // needs; losing it means someone else owns the event now, so stop sending.
+    // Deliveries are the slow part of an event: left unattended they hold the
+    // loop open past the stale threshold, at which point the reaper would hand
+    // the event to another worker while these rows are still 'pending' — and
+    // that worker would push them again. Restamping between deliveries keeps
+    // the lease alive for as long as the fan-out honestly needs; losing it
+    // means someone else owns the event now, so stop sending.
+    //
+    // This renewal cannot run *during* a delivery, so it only holds up while
+    // one delivery stays well inside the threshold. That is a channel's
+    // responsibility: `deliver` is contracted to return in bounded time, and
+    // the push channel enforces it with a socket timeout and a fan-out budget.
     if (!(await keepLeaseAlive(event.id, token))) {
       console.warn(
         `Notification event ${event.id} (${event.event_type}) lost its claim mid-delivery; ` +

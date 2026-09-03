@@ -9,6 +9,12 @@
  * A channel is `{ key, label, isEnabled(), deliver(notification, recipient) }`
  * where `deliver` resolves to `{ status: 'sent' | 'skipped' | 'failed', error? }`
  * and must never throw.
+ *
+ * `deliver` must also return in bounded time — comfortably inside the
+ * dispatcher's stale-claim threshold, which it cannot renew mid-delivery. A
+ * channel that talks to the network owns that bound: give the request a
+ * timeout, and cap any per-recipient fan-out, reporting whatever is left as
+ * 'failed' so the retry ladder picks it up.
  */
 
 import inAppChannel from './inAppChannel.js';
