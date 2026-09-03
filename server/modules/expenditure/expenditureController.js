@@ -211,6 +211,29 @@ const toPositiveInt = (value) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
+/**
+ * Payee notifications are per submission round, not per save. `upsertPayee`
+ * resets `requested_at` on every save and it is the only round marker the row
+ * carries, so it is the dedupe scope: a Save clicked twice — or two saves of
+ * the same bank details racing, which `upsertPayee` now resolves instead of
+ * failing — collapses to one notification, while a genuine resubmission later
+ * is news again and gets through.
+ *
+ * With no `requested_at` to hand, dedupe is left off rather than keyed on
+ * `Date.now()`: a key that can never match is not deduplication, it just fills
+ * the unique index with single-use values and reads like an idempotency
+ * guarantee that is not there. Same choice, and the same reason, as
+ * `budgetNotifications`.
+ */
+const payeeRoundKey = (payeeId, suffix, requestedAt) => {
+  const id = toPositiveInt(payeeId);
+  const round = requestedAt ? new Date(requestedAt).getTime() : Number.NaN;
+  // Seconds, not milliseconds: MySQL stores the timestamp to the second, but a
+  // driver configured for date strings can still hand back a value that parses
+  // with millisecond noise.
+  return id && Number.isFinite(round) ? `payee:${id}:${suffix}:${Math.floor(round / 1000)}` : null;
+};
+
 const parseWorkflowState = (value) => {
   if (!value) return null;
   if (typeof value === 'object' && !Array.isArray(value)) return value;
@@ -1000,7 +1023,9 @@ const expenditureController = {
           ? [{ kind: 'user', userId: payee.created_by, recipientRole: 'applicant' }]
           : [],
         data: { feedback: rejectionReason || null },
-        dedupeKey: `payee:${id}:${decision}:${Date.now()}`,
+        // One decision per submission round; a double-clicked Approve is the
+        // same decision, not a second one.
+        dedupeKey: payeeRoundKey(id, decision, payee?.requested_at),
       });
 
       return res.json({
@@ -1080,7 +1105,7 @@ const expenditureController = {
         data: { applicantName: req.user?.name || null },
         // Details can be corrected and resubmitted, and each round needs a
         // fresh look.
-        dedupeKey: `payee:${payeeId}:submitted:${Date.now()}`,
+        dedupeKey: payeeRoundKey(payeeId, 'submitted', payee?.requested_at),
       });
 
       return res.status(201).json({
