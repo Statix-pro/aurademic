@@ -37,6 +37,21 @@ const STALE_CLAIM_MINUTES = 5;
  * treat the claim as abandoned.
  */
 const LEASE_RENEW_INTERVAL_MS = Math.max(5000, Math.floor((STALE_CLAIM_MINUTES * 60000) / 5));
+const STALE_CLAIM_MS = STALE_CLAIM_MINUTES * 60000;
+/**
+ * Slack subtracted from the remaining lease before a delivery is allowed to
+ * start. The heartbeat learns a renewal succeeded when the reply arrives, so
+ * the row's real age is a round trip older than this process thinks; the margin
+ * covers that, a beat that has just been missed, and clock drift between here
+ * and the database.
+ */
+const LEASE_SAFETY_MARGIN_MS = LEASE_RENEW_INTERVAL_MS;
+/**
+ * What a channel is assumed to need when it does not say. Channels are asked to
+ * declare `maxDeliveryMs` (see channels/index.js); this is the fallback for one
+ * that forgets, deliberately generous rather than optimistic.
+ */
+const DEFAULT_MAX_DELIVERY_MS = 60000;
 /**
  * How often to look for stranded claims. Tied to elapsed time rather than a
  * sweep counter so it stays right whichever dispatch interval is configured.
@@ -152,12 +167,18 @@ async function enrichActorNames(event, data) {
 function startLeaseHeartbeat(eventId, token) {
   let lost = false;
   let inFlight = false;
+  // Set from the stamp runOnce took immediately before calling us.
+  let lastRenewAt = Date.now();
 
   const beat = async () => {
     if (inFlight || lost) return;
     inFlight = true;
     try {
-      if (!(await notificationModel.renewClaim(eventId, { lockedBy: token }))) lost = true;
+      if (await notificationModel.renewClaim(eventId, { lockedBy: token })) {
+        lastRenewAt = Date.now();
+      } else {
+        lost = true;
+      }
     } catch (error) {
       console.warn(
         `Could not renew the lease on notification event ${eventId}:`,
@@ -174,7 +195,23 @@ function startLeaseHeartbeat(eventId, token) {
   if (typeof timer.unref === 'function') timer.unref();
 
   return {
-    isLost: () => lost,
+    /**
+     * Is this worker still certain it will own the event for the next `ms`?
+     *
+     * Two ways to answer no. The lease was revoked — a renewal came back
+     * fenced out — or it has simply gone unrenewed for too long: renewals that
+     * keep failing (this process's connection pool exhausted, its database
+     * link cut) leave the row untouched, and once it is older than the stale
+     * threshold the reaper is entitled to give it away whether or not this
+     * worker has noticed. A lease holder has to expire itself on the clock
+     * rather than wait to be told, which is the whole point of a lease.
+     *
+     * The `ms` is what makes it safe to *start* something: a delivery is not
+     * begun unless the lease outlasts the worst case for that delivery, so no
+     * push is ever in flight after another worker could have taken the event.
+     */
+    holdsFor: (ms = 0) =>
+      !lost && Date.now() - lastRenewAt + ms + LEASE_SAFETY_MARGIN_MS < STALE_CLAIM_MS,
     stop: () => clearInterval(timer),
   };
 }
@@ -295,15 +332,18 @@ async function fanOutEvent(event, token, lease) {
     const channel = getChannel(delivery.channel);
     if (!channel) continue;
 
-    // The heartbeat has found this event in someone else's hands: the reaper
-    // released it and another worker claimed it, and that worker is sending
-    // whatever is still 'pending'. Carrying on here would push those recipients
-    // twice, so stop. Anything already delivered above has been marked, so the
-    // new owner will not re-send it either.
-    if (lease.isLost()) {
+    // Only start a delivery this lease is certain to outlive. If the event has
+    // been taken away — or the lease has gone unrenewed long enough that the
+    // reaper could take it away before this send returns — stop: another worker
+    // is, or is about to be, sending exactly these still-'pending' rows, and
+    // two workers in the same push means the recipient hears twice. Whatever
+    // went out above has been marked, so the new owner will not repeat it, and
+    // whatever is left stays 'pending' for it to finish.
+    const worstCase = Number(channel.maxDeliveryMs) || DEFAULT_MAX_DELIVERY_MS;
+    if (!lease.holdsFor(worstCase)) {
       console.warn(
-        `Notification event ${event.id} (${event.event_type}) lost its claim mid-delivery; ` +
-          'stopping so the worker that holds it now can finish the remaining deliveries',
+        `Notification event ${event.id} (${event.event_type}) can no longer vouch for its claim ` +
+          'mid-delivery; stopping so the worker that holds it now can finish the rest',
       );
       return;
     }

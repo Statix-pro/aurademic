@@ -10,13 +10,16 @@
  * where `deliver` resolves to `{ status: 'sent' | 'skipped' | 'failed', error? }`
  * and must never throw.
  *
- * `deliver` should also return in bounded time. The dispatcher heartbeats its
- * lease while a delivery is in flight, so a slow channel no longer risks having
- * its event reclaimed and re-sent — but a delivery that never returns still
- * blocks every recipient queued behind it. A channel that talks to the network
- * owns that bound: give the request a timeout, and cap any per-recipient
- * fan-out, reporting whatever is left as 'failed' so the retry ladder picks it
- * up on the next pass.
+ * A channel also declares `maxDeliveryMs`: the longest one `deliver` call can
+ * take. This is a promise, not a hint — the dispatcher will not begin a
+ * delivery unless its lease on the event outlasts that number, which is what
+ * guarantees no push is still in flight once another worker could have claimed
+ * the event and started sending the same rows. A channel that talks to the
+ * network keeps the promise the way the push channel does: a timeout on the
+ * request, and a budget across any per-recipient fan-out, reporting whatever is
+ * left as 'failed' so the retry ladder picks it up on the next pass. Declaring
+ * a number and then overrunning it is the one way to reintroduce duplicate
+ * notifications, so keep it honest and generous.
  */
 
 import inAppChannel from './inAppChannel.js';

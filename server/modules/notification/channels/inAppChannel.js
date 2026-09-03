@@ -12,6 +12,9 @@ const inAppChannel = {
   key: 'in_app',
   label: 'In-app',
 
+  /** Nothing leaves the process, so a delivery is over before it starts. */
+  maxDeliveryMs: 0,
+
   isEnabled() {
     return true;
   },

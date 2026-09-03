@@ -39,7 +39,7 @@ vi.mock('../modules/notification/recipientResolver.js', () => ({
   resolveRecipients: vi.fn(),
 }));
 
-import { getChannel } from '../modules/notification/channels/index.js';
+import { getChannel, listChannels } from '../modules/notification/channels/index.js';
 import { __testing, runOnce } from '../modules/notification/notificationDispatcher.js';
 import notificationModel from '../modules/notification/notificationModel.js';
 import { resolveRecipients } from '../modules/notification/recipientResolver.js';
@@ -449,6 +449,57 @@ describe('notificationDispatcher.runOnce', () => {
     warn.mockRestore();
     deliver.mockRestore();
     vi.useRealTimers();
+  });
+
+  it('will not start a delivery its lease cannot outlive', async () => {
+    // Renewals that keep failing leave the row untouched, so the reaper is free
+    // to give the event away whether or not this worker has been told. A lease
+    // holder has to expire itself on the clock; carrying on would put this
+    // worker's push and the new owner's push on the wire at the same time.
+    vi.useFakeTimers();
+    const inApp = getChannel('in_app');
+    let finishFirstDelivery;
+    const deliver = vi
+      .spyOn(inApp, 'deliver')
+      .mockReturnValueOnce(new Promise((resolve) => (finishFirstDelivery = resolve)))
+      .mockResolvedValue({ status: 'sent' });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // The pre-processing stamp succeeds; every heartbeat after it fails — this
+    // worker's database link is down, which tells it nothing about who owns the
+    // event, only that it can no longer vouch for its claim.
+    notificationModel.renewClaim
+      .mockResolvedValueOnce(true)
+      .mockRejectedValue(new Error('pool exhausted'));
+
+    mockClaim([makeEvent()]);
+    notificationModel.listPendingDeliveries.mockResolvedValue([
+      makePendingDelivery({ notification_id: 900 }),
+      makePendingDelivery({ notification_id: 901 }),
+    ]);
+
+    const sweep = runOnce();
+    await vi.advanceTimersByTimeAsync(__testing.STALE_CLAIM_MINUTES * 60000);
+    finishFirstDelivery({ status: 'sent' });
+    await sweep;
+
+    expect(deliver).toHaveBeenCalledTimes(1);
+    expect(notificationModel.markEventDone).not.toHaveBeenCalled();
+
+    warn.mockRestore();
+    deliver.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it('every channel declares how long a delivery can take', async () => {
+    // The dispatcher refuses to start a delivery its lease cannot outlive, and
+    // it can only do that arithmetic if the channel states its worst case.
+    for (const channel of listChannels()) {
+      expect(typeof channel.maxDeliveryMs, `${channel.key}.maxDeliveryMs`).toBe('number');
+      expect(channel.maxDeliveryMs).toBeGreaterThanOrEqual(0);
+      // Anything approaching the stale threshold leaves no room to send at all.
+      expect(channel.maxDeliveryMs).toBeLessThan((__testing.STALE_CLAIM_MINUTES * 60000) / 2);
+    }
   });
 
   it('records a channel that throws as failed without stopping the sweep', async () => {

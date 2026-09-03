@@ -72,6 +72,13 @@ const webPushChannel = {
   key: 'web_push',
   label: 'Browser push',
 
+  /**
+   * The worst case the dispatcher has to cover: the budget below stops the
+   * loop starting another request, and the request already running can take
+   * one timeout to give up.
+   */
+  maxDeliveryMs: DELIVERY_BUDGET_MS + REQUEST_TIMEOUT_MS,
+
   isEnabled() {
     return configure();
   },
