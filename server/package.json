@@ -10,8 +10,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
-    "format:check": "prettier . --check",
-    "purge:notifications": "node scripts/purge-notifications.js"
+    "format:check": "prettier . --check"
   },
   "keywords": [],
   "author": "",
@@ -30,8 +29,7 @@
     "mysql2": "^3.9.7",
     "nodemon": "^3.1.0",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1",
-    "web-push": "^3.6.7"
+    "swagger-ui-express": "^5.0.1"
   },
   "type": "module",
   "devDependencies": {

@@ -1,7 +1,5 @@
 import editRequestModel from './editRequestModel.js';
 import journalModel from '../journal/journalModel.js';
-import { reviewerAudience, userAudience } from '../notification/audiences.js';
-import notificationService from '../notification/notificationService.js';
 import projectModel from '../project/projectModel.js';
 
 const isRequesterAdmin = (requestUser = {}) => Boolean(requestUser.isAdmin ?? requestUser.is_admin);
@@ -10,21 +8,6 @@ const SUPPORTED_ENTITY_TYPES = ['journals', 'research_projects'];
 
 const normalizeEntityType = (value) =>
   SUPPORTED_ENTITY_TYPES.includes(String(value || '').trim()) ? String(value).trim() : null;
-
-/**
- * A new or resubmitted edit request, announced to the reviewers who can grant
- * it. Shared by both branches of `createEditRequest` so a resubmission is
- * described exactly like a first request.
- */
-const notifyEditRequestSubmitted = ({ req, entityId, entityType, userId }) =>
-  notificationService.emit({
-    type: 'edit_request.submitted',
-    actorUserId: userId,
-    subject: { moduleKey: 'edit_request', recordId: Number(entityId), entityType },
-    audience: [reviewerAudience()],
-    data: { applicantName: req.user?.name || null },
-    dedupeKey: `edit_request:${entityType}:${entityId}:submitted:${Date.now()}`,
-  });
 
 const editRequestController = {
   async createEditRequest(req, res) {
@@ -109,22 +92,17 @@ const editRequestController = {
           'pending',
           userId,
         );
-        await notifyEditRequestSubmitted({ req, entityId, entityType, userId });
-
         return res.status(200).json({
           success: true,
           message: 'Edit request resubmitted successfully.',
         });
       } else {
         // Create a new edit request record if none exists
-        await editRequestModel.createEditRequest({
+        const newRequest = await editRequestModel.createEditRequest({
           entity_id: entityId,
           user_id: userId,
           entity_type: entityType,
         });
-
-        await notifyEditRequestSubmitted({ req, entityId, entityType, userId });
-
         return res.status(201).json({
           success: true,
           message: 'Edit request submitted for approval.',
@@ -149,6 +127,7 @@ const editRequestController = {
         });
       }
 
+      // const request = await editRequestModel.findPendingEditRequest(entityId, userId, entityType);
       const request = await editRequestModel.findEditRequest(entityId, userId, entityType);
 
       if (!request) {
@@ -258,18 +237,6 @@ const editRequestController = {
         message: 'No pending edit request found for this publication.',
       });
     }
-
-    // `userId` is optional on the route, so the recipient comes from the row the
-    // model actually decided rather than from the request body.
-    await notificationService.emit({
-      type: status === 'approved' ? 'edit_request.approved' : 'edit_request.rejected',
-      actorUserId: req.user?.id || null,
-      subject: { moduleKey: 'edit_request', recordId: Number(entityId), entityType },
-      audience: userAudience(userId || result.decidedUserId, 'applicant'),
-      // A request can be raised, refused and raised again, so decisions are not
-      // collapsed into one.
-      dedupeKey: `edit_request:${entityType}:${entityId}:${status}:${Date.now()}`,
-    });
 
     return res.status(200).json({
       success: true,

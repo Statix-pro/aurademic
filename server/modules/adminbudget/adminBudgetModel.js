@@ -8,7 +8,6 @@ import {
   normalizeRollupRow,
 } from '../shared/budget/budgetAnnualRollup.js';
 import { buildBudgetList, buildBudgetKpiStats } from '../shared/budget/budgetListBuilder.js';
-import budgetNotifications from '../shared/budget/budgetNotifications.js';
 import {
   VALID_MONTHS as SHARED_VALID_MONTHS,
   APPROVAL_FLOW as SHARED_APPROVAL_FLOW,
@@ -299,10 +298,7 @@ export async function getProposalForArchiveToggle(proposalId, conn = db) {
   }
 
   const [rows] = await conn.execute(
-    // user_id / employee_id / fiscal_year come along so the archive toggle can
-    // notify the proposal's owners without a second read.
-    `SELECT id, status, current_stage, approval_flow,
-            user_id, employee_id, applicant_name, fiscal_year
+    `SELECT id, status, current_stage, approval_flow
        FROM budget_proposals
        WHERE id = ?
          AND LOWER(TRIM(status)) <> 'deleted'
@@ -342,7 +338,7 @@ export async function toggleArchiveState(
         [parsedProposalId],
       );
 
-      const [archiveLog] = await conn.execute(
+      await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
@@ -355,15 +351,6 @@ export async function toggleArchiveState(
           encodeArchiveFeedback(feedback, proposal),
         ],
       );
-
-      await budgetNotifications.notifyBudgetArchiveToggled({
-        proposal,
-        unarchived: false,
-        feedback,
-        actorUserId: approverUserId,
-        approvalId: archiveLog?.insertId,
-        tx: conn,
-      });
 
       return { action: 'archived', proposal };
     }
@@ -412,7 +399,7 @@ export async function toggleArchiveState(
       [restoreState.previousStatus, restoreState.previousStage, parsedProposalId],
     );
 
-    const [unarchiveLog] = await conn.execute(
+    await conn.execute(
       `INSERT INTO budget_proposal_approvals(
           budget_proposal_id, role, approver_user_id, approver_email,
           decision, feedback, allows_edit
@@ -425,15 +412,6 @@ export async function toggleArchiveState(
         normalizeText(feedback) || `Restored to ${restoreState.previousStage}`,
       ],
     );
-
-    await budgetNotifications.notifyBudgetArchiveToggled({
-      proposal,
-      unarchived: true,
-      feedback,
-      actorUserId: requesterUserId,
-      approvalId: unarchiveLog?.insertId,
-      tx: conn,
-    });
 
     return { action: 'unarchived', proposal };
   });
@@ -875,9 +853,6 @@ export async function updateApprovedAmounts(
     }
 
     const hasAnyEdit = changedRows.length > 0 || proposalChanges.length > 0;
-    // Set when the edit is logged below; the notification's dedupe key is keyed
-    // on it so a retried transaction cannot announce the same edit twice.
-    let editApprovalId = null;
 
     if (changedRows.length > 0) {
       await conn.execute(
@@ -935,25 +910,13 @@ export async function updateApprovedAmounts(
       }
       const rowText = feedbackParts.join(' | ') || 'Proposal updated';
 
-      const [editLog] = await conn.execute(
+      await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
           ) VALUES(?, ?, ?, ?, 'updated', ?, 0)`,
         [proposalId, logRole, Number(editorUserId), normalizeText(editorEmail), rowText],
       );
-      editApprovalId = editLog?.insertId || null;
-    }
-
-    // Only worth telling the applicant when something actually changed — an
-    // idempotent save must not generate a notification.
-    if (changedRows.length > 0) {
-      await budgetNotifications.notifyBudgetAmountsUpdated({
-        proposal,
-        actorUserId: editorUserId,
-        approvalId: editApprovalId,
-        tx: conn,
-      });
     }
 
     return {
@@ -2371,9 +2334,7 @@ async function insertMonthAllocation(lineId, month, amount, conn) {
 async function deleteBudgetProposal(proposalId, actor = {}) {
   return withTransaction(async (conn) => {
     const [rows] = await conn.execute(
-      // The owner columns come along for the ride so the deletion can be
-      // announced without a second read.
-      `SELECT status, user_id, employee_id, applicant_name, fiscal_year
+      `SELECT status
          FROM budget_proposals
         WHERE id = ?
         LIMIT 1
@@ -2413,16 +2374,6 @@ async function deleteBudgetProposal(proposalId, actor = {}) {
       [proposalId, actorRole, actorUserId, actorEmail, feedback],
     );
 
-    // An admin deleting someone else's proposal is the case worth announcing;
-    // an owner deleting their own is the actor and so is excluded.
-    if (result.affectedRows > 0) {
-      await budgetNotifications.notifyBudgetDeleted({
-        proposal: { id: proposalId, ...rows[0] },
-        actorUserId,
-        tx: conn,
-      });
-    }
-
     return result.affectedRows > 0;
   });
 }
@@ -2455,23 +2406,13 @@ export async function processApproval(
         [proposalId],
       );
 
-      const [archiveDecisionLog] = await conn.execute(
+      await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
           ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
         [proposalId, logRole, approverUserId, approverEmail || '', feedback || ''],
       );
-
-      await budgetNotifications.notifyBudgetDecision({
-        proposal,
-        decision: 'archived',
-        stage: proposal.current_stage,
-        feedback,
-        actorUserId: approverUserId,
-        approvalId: archiveDecisionLog?.insertId,
-        tx: conn,
-      });
     });
   }
 
@@ -2550,9 +2491,7 @@ export async function processApproval(
       throw new Error('Feedback required for reject/return');
     }
 
-    // The approval row's id is unique per decision and rolls back with this
-    // transaction, so it is what the notification dedupe key is keyed on.
-    const [approvalLog] = await conn.execute(
+    await conn.execute(
       `INSERT INTO budget_proposal_approvals(
           budget_proposal_id, role, approver_user_id, approver_email,
           decision, feedback, allows_edit
@@ -2577,17 +2516,6 @@ export async function processApproval(
         [proposalId, approverUserId, 'system-auto@ksrct.ac.in'],
       );
     }
-
-    await budgetNotifications.notifyBudgetDecision({
-      proposal,
-      decision: normalizedDecision,
-      stage: role,
-      nextStage,
-      feedback,
-      actorUserId: approverUserId,
-      approvalId: approvalLog?.insertId,
-      tx: conn,
-    });
   });
 }
 

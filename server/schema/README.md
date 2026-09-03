@@ -34,28 +34,6 @@ mysql -u root -p research < schema/migrations/YYYYMMDD_description.sql
 
 ---
 
-## 🔔 Notification retention
-
-The notification tables (`notification_events`, `notifications`,
-`notification_deliveries`) grow with every approval in the system and nothing
-prunes them automatically.
-
-```bash
-npm run purge:notifications -- --dry-run    # report only
-npm run purge:notifications                 # 90 / 180 day defaults
-npm run purge:notifications -- --read-days=30 --event-days=90
-```
-
-Read notifications past the window are **archived, not deleted** — they leave the
-bell but stay readable for audit. Unread notifications are never touched however
-old they are. Finished outbox events past the longer window are deleted, and
-their notification rows go with them by `ON DELETE CASCADE`.
-
-Schedule this (Task Scheduler on the IIS box, or cron) rather than running it by
-hand.
-
----
-
 ## 🔄 Making Schema Changes
 
 ### Adding a Column / Modifying Tables

@@ -17,8 +17,6 @@ import {
   normalizeProjectPayload,
   parseDocumentFieldName,
 } from './projectPayload.js';
-import { reviewerAudience } from '../notification/audiences.js';
-import notificationService from '../notification/notificationService.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import { toStoredWebsite } from '../shared/webUrl.js';
 
@@ -442,15 +440,6 @@ const projectController = {
         // who can fix a mistyped address.
         website: toStoredWebsite(req.body?.website),
         description: String(req.body?.description ?? '').trim() || null,
-      });
-
-      await notificationService.emit({
-        type: 'project.request_submitted',
-        actorUserId: req.user.id,
-        subject: { moduleKey: 'project', recordId: request?.id ?? null, name },
-        audience: [reviewerAudience()],
-        data: { applicantName: req.user?.name || null, requestType },
-        dedupeKey: request?.id ? `project_request:${request.id}:submitted` : null,
       });
 
       return res.status(201).json({
