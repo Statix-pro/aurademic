@@ -31,3 +31,7 @@ yarn-error.log*
 # private key and a commented-out production database password. A new developer
 # runs `cp .env.example .env.development` instead; .env.example documents every
 # variable the code reads and is the file to keep in sync.
+# mysqldump output. Real rows mean real people — 555 staff email addresses and
+# the financial history were readable to anyone who cloned this. Developers get
+# a dump out of band and restore it locally; it never enters git again.
+/schema/dump/

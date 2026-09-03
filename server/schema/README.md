@@ -7,8 +7,9 @@ This guide explains how to manage database schemas for the Aurademic Research Po
 ```
 schema/
 ├── README.md              # This file
-├── dump/                  # Full database backups (use this for setup)
-│   └── dump-research-YYYYMMDD.sql
+├── structure.sql          # Schema only, no rows (use this for setup)
+├── developer_seed.sql     # Minimal rows to log in and click around
+├── dump/                  # Untracked. A real dump, if someone hands you one
 ├── migrations/            # Incremental schema changes
 │   └── YYYYMMDD_description.sql
 └── legacy/                # Old individual schema files (reference only)
@@ -22,15 +23,23 @@ schema/
 # 1. Create the database
 mysql -u root -p -e "CREATE DATABASE research;"
 
-# 2. Load the latest dump
-mysql -u root -p research < schema/dump/dump-research-YYYYMMDD.sql
+# 2. Load the schema
+mysql -u root -p research < schema/structure.sql
 
-# 3. Run any newer migrations (check dates after the dump)
-# For each migration file newer than the dump:
+# 3. Apply every migration dated after structure.sql was regenerated, in date order
 mysql -u root -p research < schema/migrations/YYYYMMDD_description.sql
+
+# 4. Seed enough data to log in
+mysql -u root -p research < schema/developer_seed.sql
 ```
 
-✅ Done! You have a complete copy of the database.
+✅ Done! You have the schema and enough rows to work with.
+
+`structure.sql` is `mysqldump --no-data`, so it carries no rows. That is
+deliberate: the full dump it replaced held 555 real staff email addresses and
+the institution's financial history, in a public repository. **Never commit a
+dump with rows in it.** If you need production-like data, ask for a dump
+directly and restore it locally — `schema/dump/` is gitignored for that.
 
 ---
 
@@ -122,14 +131,15 @@ CREATE TABLE IF NOT EXISTS `notifications` (
 After making schema changes, **update the dump** so future developers get the latest version:
 
 ```bash
-# Create new dump with today's date
-mysqldump -u root -p research > schema/dump/dump-research-$(date +%Y%m%d).sql
+# Schema only — no rows, safe to commit
+mysqldump -u root -p --no-data --skip-comments research > schema/structure.sql
 
-# Commit it
-git add schema/dump/dump-research-*.sql
-git commit -m "Updated database dump"
-git push
+git add schema/structure.sql
+git commit -m "Regenerate schema structure"
 ```
+
+Check the diff before committing. If `git diff` shows an `INSERT INTO`, the
+`--no-data` flag was missed and real rows are about to be published.
 
 ---
 

@@ -14,6 +14,21 @@
  * Where it is unsure it says yes. Showing a switch nobody needs is clutter;
  * hiding one for a notification that does arrive would leave a person unable
  * to turn it off, which is the worse failure.
+ *
+ * `isSuperAdmin` is deliberately not consulted here. That flag short-circuits
+ * the permission gate (`permissionMiddleware`), answering "may I pass?" — but
+ * notifications answer a different question, "whose queue is this?", and that
+ * one has no sensible wildcard: a super admin holds no module or entity scope,
+ * so honouring the flag would put every super admin in every approval audience
+ * of all three workflow modules with no way to narrow it. `recipientResolver`
+ * reads only the role and permission tables for the same reason, which keeps
+ * the two sides consistent: a super admin with no functional role sees no
+ * approver switches and is genuinely never addressed as an approver. Someone
+ * who both administers the system and approves work is given their functional
+ * role (`dof`, `principal`, ...) alongside `super_admin`; delivery and this
+ * filter then follow with no code change. Note that granting the role its own
+ * permission rows is not an option — `updateRolePermissions` refuses to modify
+ * Super Admin.
  */
 
 import { PUBLICATION_REVIEW_PERMISSIONS } from './audiences.js';

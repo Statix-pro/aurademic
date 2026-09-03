@@ -51,6 +51,11 @@ const VALID_PAYEE_BODY = {
   branch_name: 'Tiruchengode',
 };
 
+// `requested_at` is what upsertPayee resets on every save, and so what scopes
+// a payee notification to one submission round.
+const FIRST_ROUND = new Date('2026-09-03T10:15:00Z');
+const SECOND_ROUND = new Date('2026-09-05T09:00:00Z');
+
 let token;
 
 const auth = (req) => req.set('Authorization', `Bearer ${token}`);
@@ -81,6 +86,7 @@ describe('POST /api/expenditure/payees', () => {
       payee_name: 'Acme Instruments',
       created_by: REQUESTER_ID,
       approval_status: 'pending',
+      requested_at: FIRST_ROUND,
     });
   });
 
@@ -124,6 +130,50 @@ describe('POST /api/expenditure/payees', () => {
     expect(response.status).toBe(400);
     expect(notificationService.emit).not.toHaveBeenCalled();
   });
+
+  it('gives two saves of the same round one dedupe key, so a double Save notifies once', async () => {
+    // upsertPayee resolves a duplicate (account_no, ifsc) by updating the row
+    // it collided with, so a double-clicked Save now reaches this emit twice.
+    // The DoF should still be told once: the unique dedupe_key is what drops
+    // the second.
+    await auth(request(app).post('/api/expenditure/payees')).send(VALID_PAYEE_BODY);
+    await auth(request(app).post('/api/expenditure/payees')).send(VALID_PAYEE_BODY);
+
+    const [first, second] = notificationService.emit.mock.calls.map(([event]) => event.dedupeKey);
+    expect(first).toBe('payee:77:submitted:1788430500');
+    expect(second).toBe(first);
+  });
+
+  it('lets a later resubmission through with a key of its own', async () => {
+    await auth(request(app).post('/api/expenditure/payees')).send(VALID_PAYEE_BODY);
+
+    expenditureModel.getPayeeById.mockResolvedValue({
+      id: 77,
+      payee_name: 'Acme Instruments',
+      created_by: REQUESTER_ID,
+      approval_status: 'pending',
+      requested_at: SECOND_ROUND,
+    });
+    await auth(request(app).post('/api/expenditure/payees')).send(VALID_PAYEE_BODY);
+
+    const [first, second] = notificationService.emit.mock.calls.map(([event]) => event.dedupeKey);
+    expect(second).not.toBe(first);
+  });
+
+  it('leaves dedupe off rather than keying on a value that can never match', async () => {
+    // No round marker to key on. A timestamp-based key would only fill the
+    // unique index with single-use values and read like idempotency.
+    expenditureModel.getPayeeById.mockResolvedValue({
+      id: 77,
+      payee_name: 'Acme Instruments',
+      created_by: REQUESTER_ID,
+      approval_status: 'pending',
+    });
+
+    await auth(request(app).post('/api/expenditure/payees')).send(VALID_PAYEE_BODY);
+
+    expect(notificationService.emit.mock.calls[0][0].dedupeKey).toBeNull();
+  });
 });
 
 describe('PATCH /api/expenditure/payees/:id/approval', () => {
@@ -135,6 +185,7 @@ describe('PATCH /api/expenditure/payees/:id/approval', () => {
       id: 77,
       payee_name: 'Acme Instruments',
       created_by: REQUESTER_ID,
+      requested_at: FIRST_ROUND,
     });
   });
 
@@ -208,6 +259,19 @@ describe('PATCH /api/expenditure/payees/:id/approval', () => {
     expect(notificationService.emit).toHaveBeenCalledWith(
       expect.objectContaining({ audience: [] }),
     );
+  });
+
+  it('keys the decision on the round, so a double-clicked Approve notifies once', async () => {
+    await auth(request(app).patch('/api/expenditure/payees/77/approval')).send({
+      decision: 'approved',
+    });
+    await auth(request(app).patch('/api/expenditure/payees/77/approval')).send({
+      decision: 'approved',
+    });
+
+    const [first, second] = notificationService.emit.mock.calls.map(([event]) => event.dedupeKey);
+    expect(first).toBe('payee:77:approved:1788430500');
+    expect(second).toBe(first);
   });
 
   it('refuses a requester with no workflow role', async () => {

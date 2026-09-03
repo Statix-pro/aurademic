@@ -1,11 +1,14 @@
 // This file is CommonJS (.cjs) and will be run by iisnode.
 
-// Use dynamic import() to load your main ES Module application file.
-// Make sure the relative path './server.js' points correctly to your main server file.
+/**
+ * `server.js` only calls `app.listen` when it is the process entrypoint, so
+ * importing it for its side effects is not enough — the wrapper has to start the
+ * listener itself. Without this the worker boots, binds nothing, and every
+ * request through IIS fails with no error in the log to explain it.
+ */
 import('./server.js')
-  .then(() => {
-    console.log('Successfully loaded ES Module server.js via wrapper.');
-    // Your server.js should handle its own logging like 'listening on port...'
+  .then(({ startServer }) => {
+    startServer();
   })
   .catch((err) => {
     // Log any error that occurs during the dynamic import
