@@ -1050,6 +1050,25 @@ j.*,
     }
   },
 
+  /**
+   * Just enough about a status update to address a notification about it: who
+   * posted it, which paper it is on, and that paper's title. Used by both the
+   * "update posted" and "admin replied" notifications, so the recipient and
+   * the wording come from one query rather than two guesses.
+   */
+  async getStatusUpdateContext(statusUpdateId) {
+    const [rows] = await db.query(
+      `SELECT su.id, su.journal_id, su.user_id, su.user_comment, j.title
+         FROM journal_status_updates su
+         JOIN journals j ON j.id = su.journal_id
+        WHERE su.id = ?
+        LIMIT 1`,
+      [statusUpdateId],
+    );
+
+    return rows[0] || null;
+  },
+
   async updateStatusUpdateAdminReply(statusUpdateId, adminReply) {
     try {
       const [result] = await db.query(

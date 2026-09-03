@@ -1127,6 +1127,10 @@ const ExpenditureApproval: React.FC = () => {
   const lockBeneficiaryAndTagFields = true;
   const [isPayeeCardOpen, setIsPayeeCardOpen] = useState(true);
   const [showAddPayeeModal, setShowAddPayeeModal] = useState(false);
+  // AddPayeeModal's own double-submit guard is driven entirely by this
+  // prop; without it the Save button stays live and a second click posts
+  // the same bank details again.
+  const [isSavingPayee, setIsSavingPayee] = useState(false);
   const [newPayee, setNewPayee] = useState<PayeeRow>(createPayeeRow());
   const [approvedBudgetOptions, setApprovedBudgetOptions] = useState<ApprovedBudgetOption[]>([]);
   const [isApprovedBudgetLoading, setIsApprovedBudgetLoading] = useState(false);
@@ -3794,7 +3798,6 @@ const ExpenditureApproval: React.FC = () => {
   const handleApplicantSearch = async (query: string) => {
     setApplicantSearchQuery(query);
     // Allow empty query to fetch initial list
-    // if (query.length < 2) { ... } <- Removed restriction
     try {
       const response = (await authenticityUtility.get(
         `/expenditure/search-applicant?q=${encodeURIComponent(query)}`,
@@ -5685,7 +5688,10 @@ const ExpenditureApproval: React.FC = () => {
   };
 
   const handleAddPayee = async (payee: AddPayeeModalPayee) => {
+    if (isSavingPayee) return;
+
     try {
+      setIsSavingPayee(true);
       const canonicalPayeeName = resolveCanonicalPayeeName(payee.payeeName, payee.accountName);
 
       const response = (await authenticityUtility.post('/expenditure/payees', {
@@ -5777,6 +5783,8 @@ const ExpenditureApproval: React.FC = () => {
     } catch (error) {
       console.error('Failed to save payee:', error);
       showAlert('Unable to save payee right now', 'error');
+    } finally {
+      setIsSavingPayee(false);
     }
   };
 
@@ -8826,9 +8834,12 @@ const ExpenditureApproval: React.FC = () => {
 
         <AddPayeeModal
           show={showAddPayeeModal}
-          onClose={() => setShowAddPayeeModal(false)}
+          onClose={() => {
+            if (!isSavingPayee) setShowAddPayeeModal(false);
+          }}
           onAddPayee={handleAddPayee}
           showAlert={showAlert}
+          isSubmitting={isSavingPayee}
         />
       </div>
       )

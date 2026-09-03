@@ -2873,13 +2873,16 @@ export async function upsertPayee(payeeData, userId, conn = db) {
   if (!beneficiaryOrg) throw new Error('beneficiary_org is required');
   if (!accountType) throw new Error('account_type must be Savings or Current');
 
-  const [existing] = await conn.execute(
-    'SELECT id FROM expenditure_payees WHERE account_no = ? AND ifsc = ? LIMIT 1',
-    [accountNo, ifsc],
-  );
+  const findExisting = async () => {
+    const [rows] = await conn.execute(
+      'SELECT id FROM expenditure_payees WHERE account_no = ? AND ifsc = ? LIMIT 1',
+      [accountNo, ifsc],
+    );
+    return rows.length ? toPositiveInt(rows[0].id) : null;
+  };
 
-  if (existing.length) {
-    await conn.execute(
+  const updateExisting = (payeeId) =>
+    conn.execute(
       `UPDATE expenditure_payees
           SET payee_name   = COALESCE(?, payee_name),
               account_name = COALESCE(?, account_name),
@@ -2916,40 +2919,56 @@ export async function upsertPayee(payeeData, userId, conn = db) {
         beneficiaryType === 'organization' ? gstin || null : null,
         payeeData.tds_details || null,
         payeeData.tds_section || null,
-        existing[0].id,
+        payeeId,
       ],
     );
-    return toPositiveInt(existing[0].id);
+
+  const existingId = await findExisting();
+  if (existingId) {
+    await updateExisting(existingId);
+    return existingId;
   }
 
-  const [result] = await conn.execute(
-    `INSERT INTO expenditure_payees
-       (payee_name, account_name, account_no, account_type,
-        bank_name, branch_name, ifsc, beneficiary_type,
-        beneficiary_org, organization_type, msme,
-        pan_number, gstin, tds_details, tds_section,
-        approval_status, requested_at, approved_by, approved_at, rejection_reason, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
-    [
-      canonicalPayeeName,
-      canonicalPayeeName || null,
-      accountNo,
-      accountType,
-      normalizeText(payeeData.bank_name),
-      normalizeText(payeeData.branch_name || ''),
-      ifsc,
-      beneficiaryType,
-      beneficiaryOrg,
-      payeeData.organization_type || null,
-      payeeData.msme || null,
-      panNumber || null,
-      beneficiaryType === 'organization' ? gstin || null : null,
-      payeeData.tds_details || null,
-      payeeData.tds_section || null,
-      userId || null,
-    ],
-  );
-  return result.insertId;
+  try {
+    const [result] = await conn.execute(
+      `INSERT INTO expenditure_payees
+         (payee_name, account_name, account_no, account_type,
+          bank_name, branch_name, ifsc, beneficiary_type,
+          beneficiary_org, organization_type, msme,
+          pan_number, gstin, tds_details, tds_section,
+          approval_status, requested_at, approved_by, approved_at, rejection_reason, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
+      [
+        canonicalPayeeName,
+        canonicalPayeeName || null,
+        accountNo,
+        accountType,
+        normalizeText(payeeData.bank_name),
+        normalizeText(payeeData.branch_name || ''),
+        ifsc,
+        beneficiaryType,
+        beneficiaryOrg,
+        payeeData.organization_type || null,
+        payeeData.msme || null,
+        panNumber || null,
+        beneficiaryType === 'organization' ? gstin || null : null,
+        payeeData.tds_details || null,
+        payeeData.tds_section || null,
+        userId || null,
+      ],
+    );
+    return result.insertId;
+  } catch (err) {
+    if (err?.code !== 'ER_DUP_ENTRY') throw err;
+    // The lookup above and this insert are not atomic, so two saves for the
+    // same (account_no, ifsc) — a double-clicked Save, or two users entering
+    // the same bank details — can both miss and then both insert. The row is
+    // there now, so treat the loser as the update path instead of a 500.
+    const racedId = await findExisting();
+    if (!racedId) throw err;
+    await updateExisting(racedId);
+    return racedId;
+  }
 }
 
 // ─── Core SELECT for expenditure_requests ────────────────────────────────────

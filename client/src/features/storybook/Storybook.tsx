@@ -12,6 +12,7 @@ import CustomSearchInput from '../../shared/components/ui/CustomSearchInput';
 import CustomTable from '../../shared/components/ui/CustomTable';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 import CustomToggle from '../../shared/components/ui/CustomToggle';
+import { useToast } from '../../shared/components/ui/toast/ToastProvider';
 import './Storybook.css';
 
 interface SearchResult {
@@ -58,6 +59,7 @@ interface ComponentGroup {
 
 const Storybook: React.FC = () => {
   const [showModal, setShowModal] = useState<boolean>(false);
+  const toast = useToast();
   const [activeStory, setActiveStory] = useState<string>('button-variants');
   const [expandedGroups, setExpandedGroups] = useState<string[]>([
     'buttons',
@@ -776,6 +778,102 @@ const results = data.filter(item =>
               description: 'URL for preview (existing server files)',
             },
             { name: 'accept', type: 'string', description: 'Accepted file types' },
+          ],
+        },
+      ],
+    },
+    {
+      id: 'notifications',
+      name: 'Notifications',
+      icon: '🔔',
+      stories: [
+        {
+          id: 'toast',
+          name: 'Toast',
+          description:
+            'Transient feedback that does not interrupt. Use a toast when something happened that the user should notice but does not have to act on right now — a saved preference, an arriving notification. Use AlertModal instead when the user must acknowledge or decide something before continuing. Toasts auto-dismiss after 6 seconds, pause that timer while hovered, and dismiss on Escape; at most three are visible at once.',
+          component: (
+            <div className="sb-component-row">
+              <CustomButton
+                variant="success"
+                onClick={() => toast.success('Saved', 'Your changes have been stored.')}
+              >
+                Success
+              </CustomButton>
+              <CustomButton
+                variant="danger"
+                onClick={() => toast.error('Could not save', 'The server rejected the request.')}
+              >
+                Error
+              </CustomButton>
+              <CustomButton
+                variant="warning"
+                onClick={() =>
+                  toast.warning('Returned for changes', 'Please attach the quotation.')
+                }
+              >
+                Warning
+              </CustomButton>
+              <CustomButton
+                variant="outline-primary"
+                onClick={() =>
+                  toast.show({
+                    title: 'Finance request #42 needs your approval',
+                    body: 'Dr. Test Applicant · ₹1,25,000.00',
+                    type: 'info',
+                    actionLabel: 'View',
+                    onAction: () => toast.success('Action clicked'),
+                  })
+                }
+              >
+                With action
+              </CustomButton>
+            </div>
+          ),
+          code: `import { useToast } from '@/components/ui/toast/ToastProvider';
+
+const toast = useToast();
+
+// Shorthands
+toast.success('Saved', 'Your changes have been stored.');
+toast.error('Could not save', 'The server rejected the request.');
+toast.warning('Returned for changes', 'Please attach the quotation.');
+toast.info('Heads up');
+
+// Full form, with an action the user can take from the toast
+toast.show({
+  title: 'Finance request #42 needs your approval',
+  body: 'Dr. Test Applicant · ₹1,25,000.00',
+  type: 'info',
+  actionLabel: 'View',
+  onAction: () => navigate('/workflow/finance'),
+  duration: 6000, // 0 keeps it up until dismissed
+});`,
+          props: [
+            { name: 'title', type: 'string', description: 'Headline text', required: true },
+            { name: 'body', type: 'string', description: 'Optional supporting line' },
+            {
+              name: 'type',
+              type: '"success" | "error" | "warning" | "info"',
+              default: '"info"',
+              description: 'Icon and accent colour; matches AlertModal',
+            },
+            {
+              name: 'actionLabel',
+              type: 'string',
+              description: 'Label for an optional inline action button',
+            },
+            {
+              name: 'onAction',
+              type: '() => void',
+              description: 'Runs on action click, then dismisses the toast',
+            },
+            {
+              name: 'duration',
+              type: 'number',
+              default: '6000',
+              description: 'Milliseconds before auto-dismiss; 0 stays until dismissed',
+            },
           ],
         },
       ],
