@@ -28,6 +28,13 @@ const NUDGE_DELAY_MS = 700;
 const BATCH_SIZE = 25;
 const STALE_CLAIM_MINUTES = 5;
 /**
+ * How often the lease is restamped while an event is mid-delivery. Deliveries
+ * are network calls with no ceiling on how long they take, so a wide audience
+ * can outlive the stale threshold; renewing between them keeps the threshold
+ * measuring one delivery rather than the whole fan-out.
+ */
+const LEASE_RENEW_INTERVAL_MS = 60000;
+/**
  * How often to look for stranded claims. Tied to elapsed time rather than a
  * sweep counter so it stays right whichever dispatch interval is configured.
  */
@@ -117,7 +124,29 @@ async function enrichActorNames(event, data) {
   }
 }
 
+/**
+ * Restamps the lease at most once per `LEASE_RENEW_INTERVAL_MS`, so a long
+ * fan-out costs a handful of UPDATEs rather than one per delivery. Returns
+ * false only when the lease is genuinely gone.
+ *
+ * `renewClaim` is fenced on the token, so a renewal after the reaper has
+ * released the row (or another worker has claimed it) matches nothing and
+ * reports false.
+ */
+function makeLeaseKeeper() {
+  let lastRenewAt = Date.now();
+  return async (eventId, token) => {
+    if (Date.now() - lastRenewAt < LEASE_RENEW_INTERVAL_MS) return true;
+    const held = await notificationModel.renewClaim(eventId, { lockedBy: token });
+    if (held) lastRenewAt = Date.now();
+    return held;
+  };
+}
+
 async function processEvent(event, token) {
+  // runOnce restamped the lease immediately before calling us, so the keeper
+  // starts its clock from that stamp.
+  const keepLeaseAlive = makeLeaseKeeper();
   const payload = parsePayload(event.payload);
   const data = payload.data || {};
   const audience = Array.isArray(payload.audience) ? payload.audience : [];
@@ -221,6 +250,20 @@ async function processEvent(event, token) {
   for (const delivery of pending) {
     const channel = getChannel(delivery.channel);
     if (!channel) continue;
+
+    // Deliveries are the only unbounded part of an event: a slow push service
+    // can hold the loop open past the stale threshold, at which point the
+    // reaper would hand the event to another worker while these rows are still
+    // 'pending' — and that worker would push them again. Restamping between
+    // deliveries keeps the lease alive for as long as the fan-out honestly
+    // needs; losing it means someone else owns the event now, so stop sending.
+    if (!(await keepLeaseAlive(event.id, token))) {
+      console.warn(
+        `Notification event ${event.id} (${event.event_type}) lost its claim mid-delivery; ` +
+          'stopping so the worker that holds it now can finish the remaining deliveries',
+      );
+      return;
+    }
 
     let outcome;
     try {
