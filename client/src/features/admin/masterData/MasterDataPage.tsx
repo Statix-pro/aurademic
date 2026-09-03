@@ -94,35 +94,6 @@ interface EmployeeLookupOption {
   mobile: string | null;
 }
 
-interface EmployeeLookupRow {
-  id: number;
-  erp_id: string;
-  full_name: string;
-  email: string;
-  mobile: string | null;
-}
-
-interface EmployeePage {
-  rows: Employee[];
-  total: number;
-  totalPages: number;
-}
-
-/** The `{ success, data?, message? }` envelope every endpoint returns. */
-interface ApiEnvelope<T = undefined> {
-  success?: boolean;
-  message?: string;
-  data: T;
-}
-
-/**
- * `authenticityUtility` is axios, so a 4xx/5xx rejects instead of resolving with the
- * body. The server's envelope message rides along on the error — surface it, and fall
- * back to a generic line when the request never reached the API.
- */
-const apiMessage = (error: unknown, fallback: string): string =>
-  (error as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
-
 type TabKey = 'departments' | 'entities' | 'employees';
 
 type SortDirection = 'asc' | 'desc';
@@ -136,6 +107,7 @@ interface SortConfig {
 // ============================================
 
 export default function MasterDataPage() {
+  const baseUrl = authenticityUtility.getBaseURL();
   const [activeTab, setActiveTab] = useState<TabKey>('departments');
 
   const [deptSort, setDeptSort] = useState<SortConfig | null>(null);
@@ -198,11 +170,17 @@ export default function MasterDataPage() {
   const loadEmployeeOptions = async (inputValue: string): Promise<EmployeeLookupOption[]> => {
     if (!inputValue || inputValue.length < 2) return [];
     try {
-      const data = (await authenticityUtility.get('/master-data/employees/lookup', {
-        params: { search: inputValue },
-      })) as ApiEnvelope<EmployeeLookupRow[]>;
-      if (data.success) {
-        return data.data.map((emp) => ({
+      const response = await fetch(
+        `${baseUrl}/api/master-data/employees/lookup?search=${encodeURIComponent(inputValue)}`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        },
+      );
+      const data = await response.json();
+      if (data.status === 'success') {
+        return data.data.map((emp: any) => ({
           value: emp.id,
           label: `${emp.full_name?.trim()} (${emp.erp_id})`,
           email: emp.email,
@@ -273,19 +251,23 @@ export default function MasterDataPage() {
   const fetchDepartments = useCallback(async () => {
     setDeptLoading(true);
     try {
-      const data = (await authenticityUtility.get('/master-data/departments', {
-        params: {
-          ...(deptSearch ? { search: deptSearch } : {}),
-          ...(deptTypeFilter ? { type: deptTypeFilter } : {}),
+      const params = new URLSearchParams();
+      if (deptSearch) params.set('search', deptSearch);
+      if (deptTypeFilter) params.set('type', deptTypeFilter);
+
+      const response = await fetch(`${baseUrl}/api/master-data/departments?${params}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-      })) as ApiEnvelope<Department[]>;
-      if (data.success) setDepartments(data.data);
-    } catch (error) {
-      showAlert(apiMessage(error, 'Failed to load departments'), 'error');
+      });
+      const data = await response.json();
+      if (data.status === 'success') setDepartments(data.data);
+    } catch {
+      showAlert('Failed to load departments', 'error');
     } finally {
       setDeptLoading(false);
     }
-  }, [deptSearch, deptTypeFilter]);
+  }, [baseUrl, deptSearch, deptTypeFilter]);
 
   useEffect(() => {
     if (activeTab === 'departments') fetchDepartments();
@@ -341,10 +323,21 @@ export default function MasterDataPage() {
         // sort_order: parseInt(deptForm.sort_order) || 0,
       };
 
-      const data = (await (editingDept
-        ? authenticityUtility.put(`/master-data/departments/${editingDept.id}`, body)
-        : authenticityUtility.post('/master-data/departments', body))) as ApiEnvelope;
-      if (data.success) {
+      const url = editingDept
+        ? `${baseUrl}/api/master-data/departments/${editingDept.id}`
+        : `${baseUrl}/api/master-data/departments`;
+
+      const response = await fetch(url, {
+        method: editingDept ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+      if (data.status === 'success') {
         showAlert(
           editingDept ? 'Department updated successfully' : 'Department created successfully',
           'success',
@@ -354,8 +347,8 @@ export default function MasterDataPage() {
       } else {
         showAlert(data.message || 'Operation failed', 'error');
       }
-    } catch (error) {
-      showAlert(apiMessage(error, 'Failed to save department'), 'error');
+    } catch {
+      showAlert('Failed to save department', 'error');
     }
   };
 
@@ -370,17 +363,21 @@ export default function MasterDataPage() {
       'Deactivate',
       async () => {
         try {
-          const data = (await authenticityUtility.delete(
-            `/master-data/departments/${dept.id}`,
-          )) as ApiEnvelope;
-          if (data.success) {
+          const response = await fetch(`${baseUrl}/api/master-data/departments/${dept.id}`, {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          });
+          const data = await response.json();
+          if (data.status === 'success') {
             showAlert('Department deactivated', 'success');
             fetchDepartments();
           } else {
             showAlert(data.message || 'Failed to deactivate', 'error');
           }
-        } catch (error) {
-          showAlert(apiMessage(error, 'Failed to deactivate department'), 'error');
+        } catch {
+          showAlert('Failed to deactivate department', 'error');
         }
       },
     );
@@ -388,17 +385,21 @@ export default function MasterDataPage() {
 
   const handleRestoreDept = async (dept: Department) => {
     try {
-      const data = (await authenticityUtility.put(`/master-data/departments/${dept.id}`, {
-        is_active: 1,
-      })) as ApiEnvelope;
-      if (data.success) {
+      const response = await fetch(`${baseUrl}/api/master-data/departments/${dept.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ is_active: 1 }),
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
         showAlert('Department reactivated', 'success');
         fetchDepartments();
-      } else {
-        showAlert(data.message || 'Failed to reactivate department', 'error');
       }
-    } catch (error) {
-      showAlert(apiMessage(error, 'Failed to reactivate department'), 'error');
+    } catch {
+      showAlert('Failed to reactivate department', 'error');
     }
   };
 
@@ -425,31 +426,38 @@ export default function MasterDataPage() {
 
   const fetchEntityTypes = useCallback(async () => {
     try {
-      const data = (await authenticityUtility.get('/master-data/entity-types')) as ApiEnvelope<
-        EntityType[]
-      >;
-      if (data.success) setEntityTypes(data.data);
+      const response = await fetch(`${baseUrl}/api/master-data/entity-types`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      const data = await response.json();
+      if (data.status === 'success') setEntityTypes(data.data);
     } catch {
       /* silent */
     }
-  }, []);
+  }, [baseUrl]);
 
   const fetchEntities = useCallback(async () => {
     setEntityLoading(true);
     try {
-      const data = (await authenticityUtility.get('/master-data/entities', {
-        params: {
-          ...(entitySearch ? { search: entitySearch } : {}),
-          ...(entityTypeFilter ? { entity_type_id: entityTypeFilter } : {}),
+      const params = new URLSearchParams();
+      if (entitySearch) params.set('search', entitySearch);
+      if (entityTypeFilter) params.set('entity_type_id', entityTypeFilter);
+
+      const response = await fetch(`${baseUrl}/api/master-data/entities?${params}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-      })) as ApiEnvelope<Entity[]>;
-      if (data.success) setEntities(data.data);
-    } catch (error) {
-      showAlert(apiMessage(error, 'Failed to load entities'), 'error');
+      });
+      const data = await response.json();
+      if (data.status === 'success') setEntities(data.data);
+    } catch {
+      showAlert('Failed to load entities', 'error');
     } finally {
       setEntityLoading(false);
     }
-  }, [entitySearch, entityTypeFilter]);
+  }, [baseUrl, entitySearch, entityTypeFilter]);
 
   useEffect(() => {
     if (activeTab === 'entities') {
@@ -493,10 +501,21 @@ export default function MasterDataPage() {
         // sort_order: parseInt(entityForm.sort_order) || 0,
       };
 
-      const data = (await (editingEntity
-        ? authenticityUtility.put(`/master-data/entities/${editingEntity.id}`, body)
-        : authenticityUtility.post('/master-data/entities', body))) as ApiEnvelope;
-      if (data.success) {
+      const url = editingEntity
+        ? `${baseUrl}/api/master-data/entities/${editingEntity.id}`
+        : `${baseUrl}/api/master-data/entities`;
+
+      const response = await fetch(url, {
+        method: editingEntity ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+      if (data.status === 'success') {
         showAlert(
           editingEntity ? 'Entity updated successfully' : 'Entity created successfully',
           'success',
@@ -506,8 +525,8 @@ export default function MasterDataPage() {
       } else {
         showAlert(data.message || 'Operation failed', 'error');
       }
-    } catch (error) {
-      showAlert(apiMessage(error, 'Failed to save entity'), 'error');
+    } catch {
+      showAlert('Failed to save entity', 'error');
     }
   };
 
@@ -522,17 +541,21 @@ export default function MasterDataPage() {
       'Deactivate',
       async () => {
         try {
-          const data = (await authenticityUtility.delete(
-            `/master-data/entities/${entity.id}`,
-          )) as ApiEnvelope;
-          if (data.success) {
+          const response = await fetch(`${baseUrl}/api/master-data/entities/${entity.id}`, {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          });
+          const data = await response.json();
+          if (data.status === 'success') {
             showAlert('Entity deactivated', 'success');
             fetchEntities();
           } else {
             showAlert(data.message || 'Failed to deactivate', 'error');
           }
-        } catch (error) {
-          showAlert(apiMessage(error, 'Failed to deactivate entity'), 'error');
+        } catch {
+          showAlert('Failed to deactivate entity', 'error');
         }
       },
     );
@@ -540,17 +563,21 @@ export default function MasterDataPage() {
 
   const handleRestoreEntity = async (entity: Entity) => {
     try {
-      const data = (await authenticityUtility.put(`/master-data/entities/${entity.id}`, {
-        is_active: 1,
-      })) as ApiEnvelope;
-      if (data.success) {
+      const response = await fetch(`${baseUrl}/api/master-data/entities/${entity.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ is_active: 1 }),
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
         showAlert('Entity reactivated', 'success');
         fetchEntities();
-      } else {
-        showAlert(data.message || 'Failed to reactivate entity', 'error');
       }
-    } catch (error) {
-      showAlert(apiMessage(error, 'Failed to reactivate entity'), 'error');
+    } catch {
+      showAlert('Failed to reactivate entity', 'error');
     }
   };
 
@@ -595,27 +622,31 @@ export default function MasterDataPage() {
   const fetchEmployees = useCallback(async () => {
     setEmpLoading(true);
     try {
-      const data = (await authenticityUtility.get('/master-data/employees', {
-        params: {
-          ...(empSearch ? { search: empSearch } : {}),
-          ...(empDeptFilter ? { department_id: empDeptFilter } : {}),
-          ...(empStatusFilter ? { status: empStatusFilter } : {}),
-          ...(empTypeFilter ? { employee_type: empTypeFilter } : {}),
-          page: empPage,
-          limit: 50,
+      const params = new URLSearchParams();
+      if (empSearch) params.set('search', empSearch);
+      if (empDeptFilter) params.set('department_id', empDeptFilter);
+      if (empStatusFilter) params.set('status', empStatusFilter);
+      if (empTypeFilter) params.set('employee_type', empTypeFilter);
+      params.set('page', String(empPage));
+      params.set('limit', '50');
+
+      const response = await fetch(`${baseUrl}/api/master-data/employees?${params}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
-      })) as ApiEnvelope<EmployeePage>;
-      if (data.success) {
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
         setEmployees(data.data.rows);
         setEmpTotal(data.data.total);
         setEmpTotalPages(data.data.totalPages);
       }
-    } catch (error) {
-      showAlert(apiMessage(error, 'Failed to load employees'), 'error');
+    } catch {
+      showAlert('Failed to load employees', 'error');
     } finally {
       setEmpLoading(false);
     }
-  }, [empSearch, empDeptFilter, empStatusFilter, empTypeFilter, empPage]);
+  }, [baseUrl, empSearch, empDeptFilter, empStatusFilter, empTypeFilter, empPage]);
 
   useEffect(() => {
     if (activeTab === 'employees') fetchEmployees();
@@ -628,27 +659,33 @@ export default function MasterDataPage() {
   useEffect(() => {
     const fetchAllDepts = async () => {
       try {
-        const data = (await authenticityUtility.get('/master-data/departments', {
-          params: { is_active: 1 },
-        })) as ApiEnvelope<Department[]>;
-        if (data.success) setAllDepartments(data.data);
+        const response = await fetch(`${baseUrl}/api/master-data/departments?is_active=1`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        const data = await response.json();
+        if (data.status === 'success') setAllDepartments(data.data);
       } catch {
         /* silent */
       }
     };
     const fetchAllEntitiesList = async () => {
       try {
-        const data = (await authenticityUtility.get('/master-data/entities', {
-          params: { is_active: 1 },
-        })) as ApiEnvelope<Entity[]>;
-        if (data.success) setAllEntitiesList(data.data);
+        const response = await fetch(`${baseUrl}/api/master-data/entities?is_active=1`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        const data = await response.json();
+        if (data.status === 'success') setAllEntitiesList(data.data);
       } catch {
         /* silent */
       }
     };
     fetchAllDepts();
     fetchAllEntitiesList();
-  }, []);
+  }, [baseUrl]);
 
   const formatDate = (dateStr: string | null): string => {
     if (!dateStr) return '';
@@ -726,10 +763,21 @@ export default function MasterDataPage() {
         dor: empForm.dor || null,
       };
 
-      const data = (await (editingEmp
-        ? authenticityUtility.put(`/master-data/employees/${editingEmp.id}`, body)
-        : authenticityUtility.post('/master-data/employees', body))) as ApiEnvelope;
-      if (data.success) {
+      const url = editingEmp
+        ? `${baseUrl}/api/master-data/employees/${editingEmp.id}`
+        : `${baseUrl}/api/master-data/employees`;
+
+      const response = await fetch(url, {
+        method: editingEmp ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+      if (data.status === 'success') {
         showAlert(
           editingEmp ? 'Employee updated successfully' : 'Employee created successfully',
           'success',
@@ -739,8 +787,8 @@ export default function MasterDataPage() {
       } else {
         showAlert(data.message || 'Operation failed', 'error');
       }
-    } catch (error) {
-      showAlert(apiMessage(error, 'Failed to save employee'), 'error');
+    } catch {
+      showAlert('Failed to save employee', 'error');
     }
   };
 
@@ -759,17 +807,21 @@ export default function MasterDataPage() {
       'Deactivate',
       async () => {
         try {
-          const data = (await authenticityUtility.delete(
-            `/master-data/employees/${emp.id}`,
-          )) as ApiEnvelope;
-          if (data.success) {
+          const response = await fetch(`${baseUrl}/api/master-data/employees/${emp.id}`, {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+            },
+          });
+          const data = await response.json();
+          if (data.status === 'success') {
             showAlert('Employee deactivated', 'success');
             fetchEmployees();
           } else {
             showAlert(data.message || 'Failed to deactivate', 'error');
           }
-        } catch (error) {
-          showAlert(apiMessage(error, 'Failed to deactivate employee'), 'error');
+        } catch {
+          showAlert('Failed to deactivate employee', 'error');
         }
       },
     );
@@ -777,17 +829,21 @@ export default function MasterDataPage() {
 
   const handleRestoreEmp = async (emp: Employee) => {
     try {
-      const data = (await authenticityUtility.put(`/master-data/employees/${emp.id}`, {
-        status: 'Active',
-      })) as ApiEnvelope;
-      if (data.success) {
+      const response = await fetch(`${baseUrl}/api/master-data/employees/${emp.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({ status: 'Active' }),
+      });
+      const data = await response.json();
+      if (data.status === 'success') {
         showAlert('Employee reactivated', 'success');
         fetchEmployees();
-      } else {
-        showAlert(data.message || 'Failed to reactivate employee', 'error');
       }
-    } catch (error) {
-      showAlert(apiMessage(error, 'Failed to reactivate employee'), 'error');
+    } catch {
+      showAlert('Failed to reactivate employee', 'error');
     }
   };
 

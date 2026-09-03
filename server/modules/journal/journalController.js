@@ -2,8 +2,6 @@ import fs from 'fs';
 import path from 'path';
 
 import journalModel from './journalModel.js';
-import { reviewerAudience, userAudience } from '../notification/audiences.js';
-import notificationService from '../notification/notificationService.js';
 
 /**
  * Multer writes uploads into uploads/temp under a sanitized name, but `req.file.path`
@@ -171,18 +169,6 @@ const journalController = {
         const filePath = `/uploads/${sanitizedFileName}`;
         await journalModel.update(journal.id, { file_path: filePath });
       }
-
-      // Fires after the record and its upload are settled, and outside any
-      // transaction — a publication is created without one, so there is nothing
-      // for the emit to join.
-      await notificationService.emit({
-        type: 'journal.submitted',
-        actorUserId: req.user?.id || null,
-        subject: { moduleKey: 'journal', recordId: journal.id, title: journal.title },
-        audience: [reviewerAudience()],
-        data: { applicantName: req.user?.name || null },
-        dedupeKey: `journal:${journal.id}:submitted`,
-      });
 
       res.status(201).json({
         status: 'success',
@@ -363,15 +349,11 @@ const journalController = {
         journalUpdateData.external_details = JSON.stringify(journalUpdateData.external_details);
       }
 
-      // Editing a rejected paper, or one unlocked by an approved edit request,
-      // sends it back to 'pending' — an implicit resubmission that the
-      // reviewers need to hear about, since nothing else announces it.
-      const isImplicitResubmission =
+      if (
         !requesterHasAdminOverride &&
         (approvalStatus === 'rejected' ||
-          (approvalStatus === 'approved' && editRequestStatus === 'approved'));
-
-      if (isImplicitResubmission) {
+          (approvalStatus === 'approved' && editRequestStatus === 'approved'))
+      ) {
         Object.assign(journalUpdateData, {
           admin_approval_status: 'pending',
           admin_approval_comment: null,
@@ -404,23 +386,6 @@ const journalController = {
         await file.mv(uploadPath);
         const filePath = `/uploads/${sanitizedFileName}`;
         await journalModel.update(id, { file_path: filePath });
-      }
-
-      if (result.success && isImplicitResubmission) {
-        await notificationService.emit({
-          type: 'journal.resubmitted',
-          actorUserId: req.user?.id || null,
-          subject: {
-            moduleKey: 'journal',
-            recordId: Number(id),
-            title: journalUpdateData.title || null,
-          },
-          audience: [reviewerAudience()],
-          data: { actorName: req.user?.name || null },
-          // A paper can go round the review loop more than once, so each pass
-          // is its own notification.
-          dedupeKey: `journal:${id}:resubmitted:${Date.now()}`,
-        });
       }
 
       if (result.success) {
@@ -719,6 +684,12 @@ const journalController = {
 
       const uploadDir = path.join(process.cwd(), 'uploads', 'journalform-articles');
 
+      // Ensure the final upload directory exists
+      // Not tested
+      // if (!fs.existsSync(uploadDir)) {
+      //   fs.mkdirSync(uploadDir, { recursive: true });
+      // }
+
       await fs.promises.mkdir(uploadDir, { recursive: true });
 
       // Create unique filename
@@ -808,15 +779,6 @@ const journalController = {
         category: category || 'National',
       });
 
-      await notificationService.emit({
-        type: 'journal.request_submitted',
-        actorUserId: userId,
-        subject: { moduleKey: 'journal', recordId: request?.id ?? null, name: journal_name.trim() },
-        audience: [reviewerAudience()],
-        data: { applicantName: req.user?.name || null },
-        dedupeKey: request?.id ? `journal_request:${request.id}:submitted` : null,
-      });
-
       res.status(201).json({
         status: 'success',
         message: 'Journal request submitted successfully. It will be reviewed by an administrator.',
@@ -904,24 +866,6 @@ const journalController = {
         user_comment: user_comment?.trim() || null,
       });
 
-      const updateContext = await journalModel.getStatusUpdateContext(statusUpdateId);
-
-      await notificationService.emit({
-        type: 'journal.status_update_posted',
-        actorUserId: userId,
-        subject: {
-          moduleKey: 'journal',
-          recordId: Number(journalId),
-          title: updateContext?.title || null,
-        },
-        audience: [reviewerAudience()],
-        data: {
-          applicantName: req.user?.name || null,
-          comment: updateContext?.user_comment || status.trim(),
-        },
-        dedupeKey: `journal_status_update:${statusUpdateId}:posted`,
-      });
-
       res.status(201).json({
         status: 'success',
         message: 'Status update created successfully',
@@ -981,24 +925,6 @@ const journalController = {
         statusUpdateId,
         admin_reply.trim(),
       );
-
-      if (result.affectedRows > 0) {
-        const updateContext = await journalModel.getStatusUpdateContext(statusUpdateId);
-
-        await notificationService.emit({
-          type: 'journal.status_update_replied',
-          actorUserId: req.user?.id || null,
-          subject: {
-            moduleKey: 'journal',
-            recordId: updateContext?.journal_id ?? null,
-            title: updateContext?.title || null,
-          },
-          audience: userAudience(updateContext?.user_id, 'applicant'),
-          data: { comment: admin_reply.trim() },
-          // A thread can be replied to more than once and each reply matters.
-          dedupeKey: `journal_status_update:${statusUpdateId}:replied:${Date.now()}`,
-        });
-      }
 
       if (result.affectedRows > 0) {
         res.status(200).json({ message: 'Admin reply updated successfully' });

@@ -1,9 +1,18 @@
 import express from 'express';
-
 import userDashboardController from './userDashboardController.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 
 const router = express.Router();
+
+// Debug middleware to log requests
+// router.use((req, res, next) => {
+//     console.log('Dashboard Request:', {
+//         path: req.path,
+//         method: req.method,
+//         token: req.headers.authorization
+//     });
+//     next();
+// });
 
 // Protect all routes with authentication
 router.use(authMiddleware);

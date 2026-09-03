@@ -4,7 +4,6 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './navbar/navbar';
 import { useAuth } from '../../../contexts/AuthContext';
 import KSRCTLogo from '../../assets/images/ksrct_logo.png';
-import NotificationBell from '../../notifications/NotificationBell';
 import './MainLayout.css';
 
 const getNameInitial = (name?: string): string => {
@@ -64,7 +63,6 @@ const MainLayout = () => {
           <span className="topbar-title">K.S.RANGASAMY COLLEGE OF TECHNOLOGY</span>
         </div>
         <div className="topbar-right">
-          <NotificationBell />
           <span className="topbar-welcome">
             Welcome, <strong>{user?.name || 'User'}</strong>
           </span>

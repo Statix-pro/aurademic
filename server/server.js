@@ -36,10 +36,12 @@ import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
-import { startDispatcher } from './modules/notification/notificationDispatcher.js';
-import notificationRoutes from './modules/notification/notificationRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
+
+// FinanceCard routes
+// import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
+// import guesthouseRoutes from './modules/guesthouse/guesthouseRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -145,6 +147,10 @@ app.use('/api/expenditure-requests', expenditureRoutes);
 app.use('/api/expenditure-dashboard', expenditureUserDashboardRoutes);
 app.use('/api/expenditure-report', expenditureReportRoutes);
 
+// FinanceCard API
+// app.use('/api/finance-dashboard', financeCardRoutes);
+// app.use('/api/guesthouse', guesthouseRoutes);
+
 // Updates & documents
 app.use('/api/updates', updatesRoutes);
 app.use('/api/documents', documentsRoutes);
@@ -152,7 +158,6 @@ app.use('/api/access-control', accessControlRoutes);
 app.use('/api/master-data', masterDataRoutes);
 app.use('/api/budget-catalog', budgetCatalogRoutes);
 app.use('/api/account-options', accountOptionsRoutes);
-app.use('/api/notifications', notificationRoutes);
 
 /* ================= 404 HANDLER ================= */
 
@@ -171,25 +176,11 @@ app.use(errorHandler);
 
 /* ================= SERVER ================= */
 
-/**
- * The notification outbox worker. Started with the HTTP listener rather than at
- * import time: the test suite imports `app` directly, and a background timer
- * polling a mocked connection pool there would be both noisy and useless.
- * Set NOTIFICATIONS_DISPATCH_ENABLED=false to run the API with delivery paused —
- * emits keep accumulating harmlessly in the outbox.
- */
-const startNotificationDispatcher = () => {
-  if (String(process.env.NOTIFICATIONS_DISPATCH_ENABLED || 'true').toLowerCase() === 'false') {
-    console.log('Notification dispatcher disabled by NOTIFICATIONS_DISPATCH_ENABLED=false');
-    return;
-  }
-  startDispatcher();
-};
-
 export const startServer = (port = process.env.PORT || 5000) =>
   app.listen(port, () => {
-    startNotificationDispatcher();
     console.log(`Server running on port ${port}`);
+    console.log('- /api/finance-cards (FinanceCard API)');
+    console.log('- /api-docs (Swagger API docs)');
   });
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

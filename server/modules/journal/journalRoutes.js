@@ -1,22 +1,10 @@
 import express from 'express';
 
 import journalController from './journalController.js';
-import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
+import { authMiddleware } from '../../middleware/authMiddleware.js'; // Add this import
 import upload from '../../middleware/uploadMiddleware.js';
 
 const router = express.Router();
-
-/**
- * Writing an "admin reply" on someone's publication progress update is a
- * reviewer action, so it needs the same gate as the equivalent route on the
- * admin router (`PATCH /api/admin/status-updates/:id/admin-reply`). Without it
- * any authenticated user could post a reply that renders to the author as
- * coming from an administrator.
- */
-const canReplyAsReviewer = permissionMiddleware([
-  'admin_dashboard.approve',
-  'admin_dashboard.manage',
-]);
 
 // Public routes
 router.get('/journals/search', journalController.searchJournals);
@@ -45,12 +33,8 @@ router.get('/journals/:id/indexes', journalController.getIndexes);
 // Status Update operations
 router.post('/journals/:id/status-updates', journalController.createStatusUpdate);
 router.get('/journals/:id/status-updates', journalController.getStatusUpdates);
-// NOTE: no client calls this — the admin dashboard uses the `/api/admin`
-// equivalent. It is kept and gated rather than deleted in case an external
-// consumer relies on it; it is a candidate for removal once that is confirmed.
 router.put(
   '/status-updates/:statusUpdateId/admin-reply',
-  canReplyAsReviewer,
   journalController.updateStatusUpdateAdminReply,
 );
 
