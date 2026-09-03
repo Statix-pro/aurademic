@@ -1,16 +1,14 @@
 import './config/env.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import { fileURLToPath } from 'url';
 
 import cors from 'cors';
 import express from 'express';
+import helmet from 'helmet';
 // import rateLimit from 'express-rate-limit';
 
 // routes
-import swaggerUi from 'swagger-ui-express';
-
-import specs from './config/swagger.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import accountOptionsRoutes from './modules/accountOptions/accountOptionsRoutes.js';
@@ -36,7 +34,7 @@ import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
-import { startDispatcher } from './modules/notification/notificationDispatcher.js';
+import { startDispatcher, stopDispatcher } from './modules/notification/notificationDispatcher.js';
 import notificationRoutes from './modules/notification/notificationRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
@@ -45,6 +43,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Behind IIS / a reverse proxy the client address and scheme only arrive in
+// X-Forwarded-*, so req.ip and the HTTPS check below need this to be true.
+app.set('trust proxy', true);
 
 /* ================= CORS ================= */
 
@@ -59,7 +61,19 @@ const corsOptions = {
 
 /* ================= MIDDLEWARE ================= */
 
+app.use(helmet());
 app.use(cors(corsOptions));
+
+// Registered before the body parsers so a plain-HTTP upload is bounced on its
+// headers rather than read to 50mb first and only then told to retry over TLS.
+if (process.env.NODE_ENV === 'production') {
+  app.use((req, res, next) => {
+    if (req.headers['x-forwarded-proto'] !== 'https') {
+      return res.redirect(`https://${req.headers.host}${req.url}`);
+    }
+    next();
+  });
+}
 
 // const globalLimiter = rateLimit({
 //   windowMs: 15 * 60 * 1000,
@@ -72,11 +86,32 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} from ${req.ip}`);
+  next();
+});
+
 /* ================= SWAGGER ================= */
 
+/**
+ * Loaded on demand rather than at the top of the file. Swagger never mounts in
+ * production, so importing it there only means `swagger-ui-express` and
+ * `swagger-jsdoc` have to be installed on the production box to satisfy an
+ * import whose result is thrown away.
+ *
+ * Deliberately `.then()` and not `await`. A top-level await anywhere in this
+ * file — even inside a branch that production never enters — makes the whole
+ * module async, and iisnode loads this file through `require()`, which refuses
+ * an ESM graph containing one: ERR_REQUIRE_ASYNC_MODULE, before a single route
+ * is reachable. Mounting /api-docs a tick later costs nothing.
+ */
 if (process.env.NODE_ENV !== 'production') {
-  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
-  console.log('Swagger UI available at /api-docs');
+  Promise.all([import('swagger-ui-express'), import('./config/swagger.js')])
+    .then(([{ default: swaggerUi }, { default: specs }]) => {
+      app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+      console.log('Swagger UI available at /api-docs');
+    })
+    .catch((error) => console.error('Swagger UI failed to load.', error));
 }
 
 /* ================= STATIC FILES ================= */
@@ -186,13 +221,43 @@ const startNotificationDispatcher = () => {
   startDispatcher();
 };
 
-export const startServer = (port = process.env.PORT || 5000) =>
-  app.listen(port, () => {
+/**
+ * iisnode recycles the worker with SIGTERM. Stopping the dispatcher on the way
+ * out releases whatever outbox batch it holds a lease on, so the next worker can
+ * pick the batch up at once instead of waiting out the stale-claim threshold.
+ */
+const installShutdownHandlers = (server) => {
+  const shutdown = (signal) => {
+    console.log(`Received ${signal}, shutting down`);
+    stopDispatcher();
+    server.close(() => process.exit(0));
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
+};
+
+export const startServer = (port = process.env.PORT || 5000) => {
+  const server = app.listen(port, () => {
     startNotificationDispatcher();
     console.log(`Server running on port ${port}`);
   });
+  installShutdownHandlers(server);
+  return server;
+};
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+/**
+ * Start unless a test runner is importing this file for `app`.
+ *
+ * This deliberately does not test `process.argv[1]` against this module's own
+ * URL. Under iisnode the entry point is iisnode's interceptor, which pulls this
+ * file in with `require()` — argv[1] is the interceptor, never `server.js`, so
+ * an entrypoint check is false in the one environment that most needs the
+ * listener. The process would boot, bind nothing, and every request through IIS
+ * would fail with nothing in the log to explain it.
+ */
+const isTestRun = Boolean(process.env.VITEST) || process.env.NODE_ENV === 'test';
+
+if (!isTestRun) {
   startServer();
 }
 
