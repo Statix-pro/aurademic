@@ -3,6 +3,8 @@ import path from 'path';
 
 import eventDb from '../../../config/connection.js';
 import { safeResolvePath } from '../../../utils/pathSecurity.js';
+import { reviewerAudience } from '../../notification/audiences.js';
+import notificationService from '../../notification/notificationService.js';
 
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 
@@ -556,6 +558,22 @@ export const submitForApproval = async (req, res) => {
     if (updateResult.affectedRows === 0) {
       return res.status(404).json({ error: 'Failed to update event status' });
     }
+
+    // TODO(events): this notification reaches reviewers only, and carries no
+    // actor. Two gaps in the events module block anything better:
+    //   1. `events` has no owner/created_by column, so there is no applicant to
+    //      address a confirmation to; and
+    //   2. this router has no authMiddleware, so `req.user` is not populated
+    //      and the submitter cannot be identified or excluded.
+    // Both need fixing on their own terms — see the notes in the notification
+    // plan — after which the audience here should gain the applicant.
+    await notificationService.emit({
+      type: 'event.submitted',
+      actorUserId: req.user?.id || null,
+      subject: { moduleKey: 'event', recordId: Number(eventId), title: event.title },
+      audience: [reviewerAudience()],
+      dedupeKey: `event:${eventId}:submitted`,
+    });
 
     res.json({
       success: true,

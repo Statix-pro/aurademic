@@ -3,7 +3,7 @@ import masterDataModel from './masterDataModel.js';
 const handleError = (res, error, fallbackMessage) => {
   console.error(fallbackMessage, error);
   return res.status(error.statusCode || 500).json({
-    status: 'error',
+    success: false,
     message: error.message || fallbackMessage,
   });
 };
@@ -44,7 +44,7 @@ const masterDataController = {
       if (search) filters.search = search;
 
       const departments = await masterDataModel.getDepartments(filters);
-      return res.json({ status: 'success', data: departments });
+      return res.json({ success: true, data: departments });
     } catch (error) {
       return handleError(res, error, 'Failed to fetch departments');
     }
@@ -54,10 +54,10 @@ const masterDataController = {
     try {
       const { name } = req.body || {};
       if (!name) {
-        return res.status(400).json({ status: 'error', message: 'Department name is required' });
+        return res.status(400).json({ success: false, message: 'Department name is required' });
       }
       const department = await masterDataModel.createDepartment(req.body);
-      return res.status(201).json({ status: 'success', data: department });
+      return res.status(201).json({ success: true, data: department });
     } catch (error) {
       return handleError(res, error, 'Failed to create department');
     }
@@ -66,11 +66,11 @@ const masterDataController = {
   async updateDepartment(req, res) {
     try {
       const { id } = req.params;
-      const success = await masterDataModel.updateDepartment(id, req.body || {});
-      if (success) {
-        return res.json({ status: 'success', message: 'Department updated successfully' });
+      const updated = await masterDataModel.updateDepartment(id, req.body || {});
+      if (updated) {
+        return res.json({ success: true, message: 'Department updated successfully' });
       }
-      return res.status(404).json({ status: 'error', message: 'Department not found' });
+      return res.status(404).json({ success: false, message: 'Department not found' });
     } catch (error) {
       return handleError(res, error, 'Failed to update department');
     }
@@ -79,11 +79,11 @@ const masterDataController = {
   async deleteDepartment(req, res) {
     try {
       const { id } = req.params;
-      const success = await masterDataModel.deleteDepartment(id);
-      if (success) {
-        return res.json({ status: 'success', message: 'Department deactivated successfully' });
+      const deactivated = await masterDataModel.deleteDepartment(id);
+      if (deactivated) {
+        return res.json({ success: true, message: 'Department deactivated successfully' });
       }
-      return res.status(404).json({ status: 'error', message: 'Department not found' });
+      return res.status(404).json({ success: false, message: 'Department not found' });
     } catch (error) {
       return handleError(res, error, 'Failed to delete department');
     }
@@ -96,7 +96,7 @@ const masterDataController = {
   async getEntityTypes(req, res) {
     try {
       const types = await masterDataModel.getEntityTypes();
-      return res.json({ status: 'success', data: types });
+      return res.json({ success: true, data: types });
     } catch (error) {
       return handleError(res, error, 'Failed to fetch entity types');
     }
@@ -115,7 +115,7 @@ const masterDataController = {
       if (search) filters.search = search;
 
       const entities = await masterDataModel.getEntities(filters);
-      return res.json({ status: 'success', data: entities });
+      return res.json({ success: true, data: entities });
     } catch (error) {
       return handleError(res, error, 'Failed to fetch entities');
     }
@@ -126,12 +126,12 @@ const masterDataController = {
       const { entity_type_id, name } = req.body || {};
       if (!entity_type_id || !name) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'entity_type_id and name are required',
         });
       }
       const entity = await masterDataModel.createEntity(req.body);
-      return res.status(201).json({ status: 'success', data: entity });
+      return res.status(201).json({ success: true, data: entity });
     } catch (error) {
       return handleError(res, error, 'Failed to create entity');
     }
@@ -140,11 +140,11 @@ const masterDataController = {
   async updateEntity(req, res) {
     try {
       const { id } = req.params;
-      const success = await masterDataModel.updateEntity(id, req.body || {});
-      if (success) {
-        return res.json({ status: 'success', message: 'Entity updated successfully' });
+      const updated = await masterDataModel.updateEntity(id, req.body || {});
+      if (updated) {
+        return res.json({ success: true, message: 'Entity updated successfully' });
       }
-      return res.status(404).json({ status: 'error', message: 'Entity not found' });
+      return res.status(404).json({ success: false, message: 'Entity not found' });
     } catch (error) {
       return handleError(res, error, 'Failed to update entity');
     }
@@ -153,11 +153,11 @@ const masterDataController = {
   async deleteEntity(req, res) {
     try {
       const { id } = req.params;
-      const success = await masterDataModel.deleteEntity(id);
-      if (success) {
-        return res.json({ status: 'success', message: 'Entity deactivated successfully' });
+      const deactivated = await masterDataModel.deleteEntity(id);
+      if (deactivated) {
+        return res.json({ success: true, message: 'Entity deactivated successfully' });
       }
-      return res.status(404).json({ status: 'error', message: 'Entity not found' });
+      return res.status(404).json({ success: false, message: 'Entity not found' });
     } catch (error) {
       return handleError(res, error, 'Failed to delete entity');
     }
@@ -179,7 +179,7 @@ const masterDataController = {
       if (limit) filters.limit = limit;
 
       const result = await masterDataModel.getEmployees(filters);
-      return res.json({ status: 'success', data: result });
+      return res.json({ success: true, data: result });
     } catch (error) {
       return handleError(res, error, 'Failed to fetch employees');
     }
@@ -190,13 +190,13 @@ const masterDataController = {
       const { erp_id, first_name, email } = req.body || {};
       if (!erp_id || !first_name || !email) {
         return res.status(400).json({
-          status: 'error',
+          success: false,
           message: 'erp_id, first_name, and email are required',
         });
       }
       const normalizedPayload = normalizeEmployeeScope(req.body || {});
       const employee = await masterDataModel.createEmployee(normalizedPayload);
-      return res.status(201).json({ status: 'success', data: employee });
+      return res.status(201).json({ success: true, data: employee });
     } catch (error) {
       return handleError(res, error, 'Failed to create employee');
     }
@@ -206,11 +206,11 @@ const masterDataController = {
     try {
       const { id } = req.params;
       const normalizedPayload = normalizeEmployeeScope(req.body || {});
-      const success = await masterDataModel.updateEmployee(id, normalizedPayload);
-      if (success) {
-        return res.json({ status: 'success', message: 'Employee updated successfully' });
+      const updated = await masterDataModel.updateEmployee(id, normalizedPayload);
+      if (updated) {
+        return res.json({ success: true, message: 'Employee updated successfully' });
       }
-      return res.status(404).json({ status: 'error', message: 'Employee not found' });
+      return res.status(404).json({ success: false, message: 'Employee not found' });
     } catch (error) {
       return handleError(res, error, 'Failed to update employee');
     }
@@ -219,11 +219,11 @@ const masterDataController = {
   async deleteEmployee(req, res) {
     try {
       const { id } = req.params;
-      const success = await masterDataModel.deleteEmployee(id);
-      if (success) {
-        return res.json({ status: 'success', message: 'Employee deactivated successfully' });
+      const deactivated = await masterDataModel.deleteEmployee(id);
+      if (deactivated) {
+        return res.json({ success: true, message: 'Employee deactivated successfully' });
       }
-      return res.status(404).json({ status: 'error', message: 'Employee not found' });
+      return res.status(404).json({ success: false, message: 'Employee not found' });
     } catch (error) {
       return handleError(res, error, 'Failed to delete employee');
     }
@@ -234,7 +234,7 @@ const masterDataController = {
     try {
       const { search } = req.query;
       const employees = await masterDataModel.searchEmployeesForLookup(search || '');
-      return res.json({ status: 'success', data: employees });
+      return res.json({ success: true, data: employees });
     } catch (error) {
       return handleError(res, error, 'Failed to search employees');
     }

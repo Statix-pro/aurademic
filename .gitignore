@@ -15,6 +15,10 @@ build/
 !.vscode/settings.json
 !.vscode/extensions.json
 
+# Runtime upload storage. The server writes here, and so do the upload tests
+# (which clean up after themselves, but a killed run cannot).
+uploads/
+
 # Misc
 .DS_Store
 *.log

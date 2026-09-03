@@ -9,14 +9,6 @@ const editRequestModel = {
     return result;
   },
 
-  // async findPendingEditRequest(entityId, userId, entityType) {
-  //     const [rows] = await db.query(
-  //         'SELECT * FROM edit_requests WHERE entity_id = ? AND user_id = ? AND entity_type = ? AND status = "pending"',
-  //         [entityId, userId, entityType]
-  //     );
-  //     return rows[0];
-  // },
-
   /**
    * The newest request wins. Without the ordering MySQL was free to hand back an older
    * row, so a user who re-requested after a rejection kept seeing "rejected" while a
@@ -54,7 +46,9 @@ const editRequestModel = {
   async updateLatestEditRequestStatus(entityId, entityType, status, userId = null) {
     try {
       const params = [entityId, entityType];
-      let sql = `SELECT id FROM edit_requests
+      // `user_id` comes back so the caller can address a notification to
+      // whoever asked, without having to guess which row was decided.
+      let sql = `SELECT id, user_id FROM edit_requests
           WHERE entity_id = ? AND entity_type = ? AND status = 'pending'`;
       if (userId != null) {
         sql += ' AND user_id = ?';
@@ -72,7 +66,8 @@ const editRequestModel = {
         "UPDATE edit_requests SET status = ? WHERE id = ? AND status = 'pending'",
         [status, rows[0].id],
       );
-      return result;
+      // Existing callers read `affectedRows`; `decidedUserId` is additive.
+      return { ...result, decidedUserId: rows[0].user_id ?? null };
     } catch (error) {
       console.error('Error in updateLatestEditRequestStatus:', error);
       throw error;

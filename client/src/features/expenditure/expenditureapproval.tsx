@@ -3794,7 +3794,6 @@ const ExpenditureApproval: React.FC = () => {
   const handleApplicantSearch = async (query: string) => {
     setApplicantSearchQuery(query);
     // Allow empty query to fetch initial list
-    // if (query.length < 2) { ... } <- Removed restriction
     try {
       const response = (await authenticityUtility.get(
         `/expenditure/search-applicant?q=${encodeURIComponent(query)}`,

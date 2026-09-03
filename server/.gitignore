@@ -15,6 +15,7 @@ uploads/**/*
 # misc
 .DS_Store
 .env.local
+.env.development
 .env.development.local
 .env.test.local
 .env.production.local
@@ -24,5 +25,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-
-.env.development
+# No .env file is tracked. .env.development was tracked for a while so a clean
+# clone would come up working, but a working config is by definition a file full
+# of real credentials — the copy in history held a JWT signing secret, a VAPID
+# private key and a commented-out production database password. A new developer
+# runs `cp .env.example .env.development` instead; .env.example documents every
+# variable the code reads and is the file to keep in sync.
