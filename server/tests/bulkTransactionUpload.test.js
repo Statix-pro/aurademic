@@ -3,7 +3,7 @@ import path from 'path';
 
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import app from '../server.js';
 
@@ -53,9 +53,15 @@ describe('Bulk transaction upload validation', () => {
       .field('payload', JSON.stringify(payload))
       .attach('bulk_transaction_file', Buffer.from(contents), filename);
 
+  // Snapshotted once for the whole file, not per test: re-taking it in
+  // beforeEach folds the files earlier cases stored into the "was already
+  // there" set, and afterAll then leaves them behind in the working tree.
+  beforeAll(() => {
+    uploadsBefore = listStoredUploads();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
-    uploadsBefore = listStoredUploads();
     token = jwt.sign(
       {
         userId: 1,
