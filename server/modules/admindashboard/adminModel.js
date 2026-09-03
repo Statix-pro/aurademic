@@ -377,6 +377,31 @@ const adminModel = {
     }
   },
 
+  /**
+   * Who asked for this journal, and what they called it.
+   *
+   * The approve/reject methods return the created master-data row rather than
+   * the request, so this exists to address the notification back to the
+   * requester without changing those return shapes — other callers depend on
+   * them.
+   */
+  async getJournalRequestOwner(requestId) {
+    const [rows] = await db.query(
+      `SELECT id, user_id, journal_name FROM journal_requests WHERE id = ? LIMIT 1`,
+      [requestId],
+    );
+    return rows[0] || null;
+  },
+
+  /** The project-option equivalent of getJournalRequestOwner. */
+  async getProjectRequestOwner(requestId) {
+    const [rows] = await db.query(
+      `SELECT id, user_id, name, request_type FROM project_requests WHERE id = ? LIMIT 1`,
+      [requestId],
+    );
+    return rows[0] || null;
+  },
+
   async rejectJournalRequest(requestId, adminComment) {
     try {
       const [result] = await db.query(
@@ -588,6 +613,7 @@ const adminModel = {
             id,
             title,
             status,
+            created_by,
             admin_approval_status,
             admin_approval_comment,
             admin_approved_by,

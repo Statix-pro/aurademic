@@ -2,6 +2,7 @@ import db from '../../config/connection.js';
 import { resolveCatalogIds } from '../budgetCatalog/budgetCatalogResolver.js';
 import { resolveApprovalFlow as resolveSharedApprovalFlow } from '../shared/budget/approvalFlowResolver.js';
 import { buildBudgetList, buildBudgetKpiStats } from '../shared/budget/budgetListBuilder.js';
+import budgetNotifications from '../shared/budget/budgetNotifications.js';
 import {
   VALID_MONTHS as SHARED_VALID_MONTHS,
   APPROVAL_FLOW as SHARED_APPROVAL_FLOW,
@@ -791,6 +792,28 @@ export async function create(payload, options = {}) {
         }
       }
 
+      // A direct DoF submission is born complete, so there is no queue to
+      // announce it to; notifyBudgetSubmitted screens that out by stage.
+      await budgetNotifications.notifyBudgetSubmitted({
+        proposal: {
+          id: proposalId,
+          user_id: payload.user_id,
+          // Mirrors what the INSERT above stores.
+          employee_id: payload.employee_id || payload.user_id,
+          applicant_name: payload.applicant_name || null,
+          fiscal_year: fyYear,
+          beneficiary_type: payload.beneficiary_type,
+          // The RESOLVED ids, not the raw payload: `payload.department_id` is
+          // not an input to this call, and using it would leave the audience
+          // unscoped and therefore empty.
+          beneficiary_entity_id: beneficiaryEntityId,
+          department_id: departmentId,
+        },
+        stage: isDirectDoFSubmission ? 'completed' : initialStage,
+        actorUserId: payload.user_id,
+        tx: conn,
+      });
+
       return {
         proposalId,
         proposalRef,
@@ -1321,13 +1344,32 @@ export async function update(
       const actorUserId = Number.isInteger(Number(editedByUserId)) ? Number(editedByUserId) : 0;
       const actorEmail = normalizeText(editedByEmail);
 
-      await conn.execute(
+      const [resubmitLog] = await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
           ) VALUES(?, 'applicant', ?, ?, 'resubmitted', ?, 0)`,
         [proposalId, actorUserId, actorEmail, normalizedResubmissionRemarks],
       );
+
+      // Editing a returned proposal resets it to the first stage, so the queue
+      // it lands back in is the one to tell.
+      await budgetNotifications.notifyBudgetResubmitted({
+        proposal: {
+          id: proposalId,
+          user_id: proposal.user_id,
+          employee_id: proposal.employee_id,
+          applicant_name: proposal.applicant_name || null,
+          fiscal_year: proposal.fiscal_year,
+          beneficiary_type: payload.beneficiary_type,
+          beneficiary_entity_id: beneficiaryEntityId,
+          department_id: departmentId,
+        },
+        stage: nextCurrentStage,
+        actorUserId,
+        approvalId: resubmitLog?.insertId,
+        tx: conn,
+      });
     }
 
     const maxLineCount = Math.max(previousLines.length, incomingLines.length);
@@ -1444,7 +1486,10 @@ export async function update(
 async function deleteBudgetProposal(proposalId, actor = {}) {
   return withTransaction(async (conn) => {
     const [rows] = await conn.execute(
-      `SELECT status
+      // The owner columns come along for the ride so the deletion can be
+      // announced without a second read; the row is about to become
+      // unreadable as a normal proposal.
+      `SELECT status, user_id, employee_id, applicant_name, fiscal_year
          FROM budget_proposals
         WHERE id = ?
         LIMIT 1
@@ -1484,6 +1529,16 @@ async function deleteBudgetProposal(proposalId, actor = {}) {
       [proposalId, actorRole, actorUserId, actorEmail, feedback],
     );
 
+    // Usually the owner deleting their own draft, in which case the actor is
+    // excluded and nobody is told. This matters when an admin deletes it.
+    if (result.affectedRows > 0) {
+      await budgetNotifications.notifyBudgetDeleted({
+        proposal: { id: proposalId, ...rows[0] },
+        actorUserId,
+        tx: conn,
+      });
+    }
+
     return result.affectedRows > 0;
   });
 }
@@ -1516,13 +1571,23 @@ export async function processApproval(
         [proposalId],
       );
 
-      await conn.execute(
+      const [archiveLog] = await conn.execute(
         `INSERT INTO budget_proposal_approvals(
             budget_proposal_id, role, approver_user_id, approver_email,
             decision, feedback, allows_edit
           ) VALUES(?, ?, ?, ?, 'archived', ?, 0)`,
         [proposalId, logRole, approverUserId, approverEmail || '', feedback || ''],
       );
+
+      await budgetNotifications.notifyBudgetDecision({
+        proposal,
+        decision: 'archived',
+        stage: proposal.current_stage,
+        feedback,
+        actorUserId: approverUserId,
+        approvalId: archiveLog?.insertId,
+        tx: conn,
+      });
     });
   }
 
@@ -1617,8 +1682,9 @@ export async function processApproval(
       throw new Error('Feedback required for reject/return');
     }
 
-    // 1. Insert the ACTUAL approval (DoF/Level-1/Principal)
-    await conn.execute(
+    // 1. Insert the ACTUAL approval (DoF/Level-1/Principal). Its id is the
+    // per-round discriminator the notification dedupe key is built from.
+    const [approvalLog] = await conn.execute(
       `INSERT INTO budget_proposal_approvals(
           budget_proposal_id, role, approver_user_id, approver_email,
           decision, feedback, allows_edit
@@ -1644,6 +1710,19 @@ export async function processApproval(
         [proposalId, approverUserId, 'system-auto@ksrct.ac.in'],
       );
     }
+
+    // `nextStage` already accounts for the DoF auto-completion above, so the
+    // applicant is correctly told "approved" rather than "now with Principal".
+    await budgetNotifications.notifyBudgetDecision({
+      proposal,
+      decision: normalizedDecision,
+      stage: role,
+      nextStage,
+      feedback,
+      actorUserId: approverUserId,
+      approvalId: approvalLog?.insertId,
+      tx: conn,
+    });
   });
 }
 

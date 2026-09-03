@@ -1,4 +1,6 @@
 import accessControlModel from './accessControlModel.js';
+import { userAudience } from '../notification/audiences.js';
+import notificationService from '../notification/notificationService.js';
 
 const handleError = (res, error, fallbackMessage) => {
   console.error(fallbackMessage, error);
@@ -200,6 +202,23 @@ const accessControlController = {
         req.user?.id || null,
       );
 
+      // Worth telling someone about: their roles decide which approval queues
+      // they are now responsible for, and the JWT they are holding still
+      // carries the old set until they sign in again.
+      await notificationService.emit({
+        type: 'access.roles_updated',
+        actorUserId: req.user?.id || null,
+        subject: { moduleKey: 'access_control', recordId: Number(userId) },
+        audience: userAudience(Number(userId), 'subject'),
+        data: {
+          roleNames: Array.isArray(updatedUser?.roles)
+            ? updatedUser.roles.map((role) => role.role_name).filter(Boolean)
+            : [],
+        },
+        // Roles can be edited repeatedly and each change matters.
+        dedupeKey: `access:${userId}:roles:${Date.now()}`,
+      });
+
       return res.json({
         status: 'success',
         data: updatedUser,
@@ -227,6 +246,15 @@ const accessControlController = {
         parsedEnabled,
         req.user?.id || null,
       );
+
+      await notificationService.emit({
+        type: 'access.super_admin_changed',
+        actorUserId: req.user?.id || null,
+        subject: { moduleKey: 'access_control', recordId: Number(userId) },
+        audience: userAudience(Number(userId), 'subject'),
+        data: { isSuperAdmin: parsedEnabled },
+        dedupeKey: `access:${userId}:super_admin:${parsedEnabled ? 'on' : 'off'}:${Date.now()}`,
+      });
 
       return res.json({
         status: 'success',

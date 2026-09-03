@@ -4,6 +4,7 @@ import path from 'path';
 import financeModel from './financeModel.js';
 import financeWorkflowAdapter from './financeWorkflowAdapter.js';
 import db from '../../config/connection.js';
+import notificationService from '../notification/notificationService.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
@@ -1073,6 +1074,29 @@ const financeController = {
       }
 
       await financeModel.deleteFinanceRequest(financeId, normalizeActor(req));
+
+      // Only meaningful when a super admin deletes someone else's request: an
+      // applicant deleting their own is the actor and is excluded.
+      await notificationService.emit({
+        type: 'finance.deleted',
+        actorUserId: userId,
+        subject: {
+          moduleKey: 'finance',
+          recordId: financeId,
+          applicantUserId: finance.applicant_user_id || finance.created_by || null,
+        },
+        audience:
+          finance.applicant_user_id || finance.created_by
+            ? [
+                {
+                  kind: 'user',
+                  userId: finance.applicant_user_id || finance.created_by,
+                  recipientRole: 'applicant',
+                },
+              ]
+            : [],
+        dedupeKey: `finance:${financeId}:deleted`,
+      });
 
       return res.status(200).json({
         success: true,

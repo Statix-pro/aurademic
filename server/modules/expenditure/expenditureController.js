@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 
 import * as expenditureModel from './expenditureModel.js';
 import './expenditureWorkflowAdapter.js';
+import notificationService from '../notification/notificationService.js';
 import { isFinanceRequestOwner } from '../shared/financeOwnership.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import workflowService from '../shared/workflow/workflowService.js';
@@ -983,6 +984,25 @@ const expenditureController = {
 
       if (!updated) return sendError(res, 404, 'Payee not found');
 
+      // Read after the update so the notification carries the payee's name;
+      // `created_by` is who submitted the details and so who has to fix them.
+      const payee = await expenditureModel.getPayeeById(id);
+
+      await notificationService.emit({
+        type: decision === 'approved' ? 'payee.approved' : 'payee.rejected',
+        actorUserId: toPositiveInt(req.user?.id),
+        subject: {
+          moduleKey: 'expenditure',
+          recordId: id,
+          name: payee?.payee_name || payee?.account_name || null,
+        },
+        audience: payee?.created_by
+          ? [{ kind: 'user', userId: payee.created_by, recipientRole: 'applicant' }]
+          : [],
+        data: { feedback: rejectionReason || null },
+        dedupeKey: `payee:${id}:${decision}:${Date.now()}`,
+      });
+
       return res.json({
         status: 'success',
         message: `Payee ${decision} successfully`,
@@ -1037,6 +1057,31 @@ const expenditureController = {
         userId,
       );
       const payee = await expenditureModel.getPayeeById(payeeId);
+
+      // upsertPayee forces approval_status back to 'pending' on both the
+      // insert and the update path, so every save here needs vetting.
+      //
+      // Addressed to the DoF rather than to everyone the route lets through
+      // (admin/hod/coordinator/dof/principal/entity_approver): the payee
+      // directory is a DoF-curated list, and notifying six roles for every
+      // bank-detail edit would be noise nobody reads.
+      await notificationService.emit({
+        type: 'payee.submitted',
+        actorUserId: userId,
+        subject: { moduleKey: 'expenditure', recordId: payeeId, name: canonicalPayeeName },
+        audience: [
+          { kind: 'role', roleCodes: ['dof'], recipientRole: 'approver' },
+          {
+            kind: 'permission',
+            permissions: ['expenditure.workflow.dof'],
+            recipientRole: 'approver',
+          },
+        ],
+        data: { applicantName: req.user?.name || null },
+        // Details can be corrected and resubmitted, and each round needs a
+        // fresh look.
+        dedupeKey: `payee:${payeeId}:submitted:${Date.now()}`,
+      });
 
       return res.status(201).json({
         status: 'success',
@@ -1427,6 +1472,20 @@ const expenditureController = {
       }
 
       await expenditureModel.deleteExpenditure(id, { isSuperAdmin });
+
+      // Only meaningful when a super admin deletes someone else's request: an
+      // applicant deleting their own is the actor and is excluded.
+      const ownerUserId = toPositiveInt(record.created_by);
+      await notificationService.emit({
+        type: 'expenditure.deleted',
+        actorUserId: userId,
+        subject: { moduleKey: 'expenditure', recordId: id, applicantUserId: ownerUserId },
+        audience: ownerUserId
+          ? [{ kind: 'user', userId: ownerUserId, recipientRole: 'applicant' }]
+          : [],
+        dedupeKey: `expenditure:${id}:deleted`,
+      });
+
       return res.json({ status: 'success', message: 'Expenditure request deleted' });
     } catch (err) {
       if (normalizeText(err.message).toLowerCase().includes('only pending'))
