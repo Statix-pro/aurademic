@@ -121,16 +121,46 @@ const notificationModel = {
    * restamp their lease per event (`renewClaim`) and fence their terminal
    * writes on `locked_by`: whoever picks the row up next owns it outright.
    */
-  async releaseStaleClaims({ staleMinutes = 5 } = {}) {
-    const [result] = await db.query(
+  async releaseStaleClaims({ staleMinutes = 5, maxAttempts = 5 } = {}) {
+    const minutes = Math.max(1, Number(staleMinutes) || 5);
+    const attemptCeiling = Math.max(1, Number(maxAttempts) || 5);
+
+    // A reap counts as an attempt. Without that an event that kills whatever
+    // worker touches it — an audience big enough to exhaust memory, a payload
+    // that hangs a channel — is reclaimed forever, taking a worker down with it
+    // every time, because `attempts` only ever grows on a clean failure path.
+    // Counting it puts a stranded event on the same ladder as a failing one.
+    const [failed] = await db.query(
       `UPDATE notification_events
-       SET status = 'pending', locked_by = NULL, locked_at = NULL
+       SET status = 'failed',
+           attempts = attempts + 1,
+           locked_by = NULL,
+           locked_at = NULL,
+           last_error = CONCAT('Claim went stale after ', attempts + 1, ' attempt(s); giving up')
+       WHERE status = 'processing'
+         AND locked_at IS NOT NULL
+         AND locked_at < (NOW() - INTERVAL ? MINUTE)
+         AND attempts + 1 >= ?`,
+      [minutes, attemptCeiling],
+    );
+
+    // The rest go back to the pool immediately: the stale threshold has already
+    // served as the backoff, and the usual reason is a deploy or a crash that
+    // the next sweep can simply redo.
+    const [released] = await db.query(
+      `UPDATE notification_events
+       SET status = 'pending',
+           attempts = attempts + 1,
+           locked_by = NULL,
+           locked_at = NULL,
+           last_error = 'Claim went stale; returned to the pool'
        WHERE status = 'processing'
          AND locked_at IS NOT NULL
          AND locked_at < (NOW() - INTERVAL ? MINUTE)`,
-      [Math.max(1, Number(staleMinutes) || 5)],
+      [minutes],
     );
-    return result.affectedRows || 0;
+
+    return { released: released.affectedRows || 0, failed: failed.affectedRows || 0 };
   },
 
   /**
@@ -292,6 +322,17 @@ const notificationModel = {
     return rows;
   },
 
+  /**
+   * Records the outcome of one delivery attempt.
+   *
+   * A row already 'sent' is left alone. The dispatcher only ever marks rows
+   * `listPendingDeliveries` handed it, so in normal operation the guard never
+   * bites; it is there for the one case that would be expensive to get wrong —
+   * a worker whose lease lapsed writing 'failed' over a send that succeeded,
+   * which would put the row back in the pending set and push the recipient a
+   * second time. "Sent once" then holds on the row itself rather than on the
+   * lease still being valid.
+   */
   async markDelivery(notificationId, channel, { status, error = null } = {}) {
     await db.query(
       `UPDATE notification_deliveries
@@ -299,7 +340,7 @@ const notificationModel = {
            attempts = attempts + 1,
            last_error = ?,
            sent_at = IF(? = 'sent', NOW(), sent_at)
-       WHERE notification_id = ? AND channel = ?`,
+       WHERE notification_id = ? AND channel = ? AND status <> 'sent'`,
       [
         status,
         error ? String(error).slice(0, 2000) : null,

@@ -28,12 +28,15 @@ const NUDGE_DELAY_MS = 700;
 const BATCH_SIZE = 25;
 const STALE_CLAIM_MINUTES = 5;
 /**
- * How often the lease is restamped while an event is mid-delivery. Deliveries
- * are network calls with no ceiling on how long they take, so a wide audience
- * can outlive the stale threshold; renewing between them keeps the threshold
- * measuring one delivery rather than the whole fan-out.
+ * How often a claimed event's lease is restamped while it is being processed.
+ *
+ * Derived from the stale threshold rather than set beside it: a future change
+ * to `STALE_CLAIM_MINUTES` moves the heartbeat with it instead of silently
+ * leaving it too slow to keep a lease alive. A fifth of the threshold gives
+ * four consecutive beats the room to fail before the reaper is entitled to
+ * treat the claim as abandoned.
  */
-const LEASE_RENEW_INTERVAL_MS = 60000;
+const LEASE_RENEW_INTERVAL_MS = Math.max(5000, Math.floor((STALE_CLAIM_MINUTES * 60000) / 5));
 /**
  * How often to look for stranded claims. Tied to elapsed time rather than a
  * sweep counter so it stays right whichever dispatch interval is configured.
@@ -125,28 +128,69 @@ async function enrichActorNames(event, data) {
 }
 
 /**
- * Restamps the lease at most once per `LEASE_RENEW_INTERVAL_MS`, so a long
- * fan-out costs a handful of UPDATEs rather than one per delivery. Returns
- * false only when the lease is genuinely gone.
+ * Keeps this worker's lease on one event alive for as long as it is being
+ * processed.
  *
- * `renewClaim` is fenced on the token, so a renewal after the reaper has
- * released the row (or another worker has claimed it) matches nothing and
- * reports false.
+ * A timer rather than a check between deliveries, because the thing that takes
+ * the time — `channel.deliver` — is a single await this loop cannot interrupt.
+ * A check placed around it only holds while every individual delivery stays
+ * well inside the stale threshold, which is a promise about code that has not
+ * been written yet: the next channel is an email or an SMS gateway with its own
+ * timeout policy. Heartbeating instead makes the lease independent of how long
+ * any one delivery takes, so a slow channel is merely slow rather than a source
+ * of duplicate notifications.
+ *
+ * `renewClaim` is fenced on the lease token, so once the reaper has released
+ * the row (or another worker has claimed it) the renewal matches nothing and
+ * reports false. That is latched into `isLost`, which the delivery loop checks
+ * before it sends anything else.
+ *
+ * A renewal that throws is treated as transient and simply retried on the next
+ * beat: a database blip is not evidence that the lease is gone, and the reaper
+ * cannot have run during one either.
  */
-function makeLeaseKeeper() {
-  let lastRenewAt = Date.now();
-  return async (eventId, token) => {
-    if (Date.now() - lastRenewAt < LEASE_RENEW_INTERVAL_MS) return true;
-    const held = await notificationModel.renewClaim(eventId, { lockedBy: token });
-    if (held) lastRenewAt = Date.now();
-    return held;
+function startLeaseHeartbeat(eventId, token) {
+  let lost = false;
+  let inFlight = false;
+
+  const beat = async () => {
+    if (inFlight || lost) return;
+    inFlight = true;
+    try {
+      if (!(await notificationModel.renewClaim(eventId, { lockedBy: token }))) lost = true;
+    } catch (error) {
+      console.warn(
+        `Could not renew the lease on notification event ${eventId}:`,
+        error?.message || error,
+      );
+    } finally {
+      inFlight = false;
+    }
+  };
+
+  const timer = setInterval(() => void beat(), LEASE_RENEW_INTERVAL_MS);
+  // Never a reason to hold the process open: the sweep that owns this
+  // heartbeat is what matters, and it stops the timer when it is done.
+  if (typeof timer.unref === 'function') timer.unref();
+
+  return {
+    isLost: () => lost,
+    stop: () => clearInterval(timer),
   };
 }
 
 async function processEvent(event, token) {
-  // runOnce restamped the lease immediately before calling us, so the keeper
-  // starts its clock from that stamp.
-  const keepLeaseAlive = makeLeaseKeeper();
+  // runOnce restamped the lease immediately before calling us, so the first
+  // beat is due one interval from now.
+  const lease = startLeaseHeartbeat(event.id, token);
+  try {
+    return await fanOutEvent(event, token, lease);
+  } finally {
+    lease.stop();
+  }
+}
+
+async function fanOutEvent(event, token, lease) {
   const payload = parsePayload(event.payload);
   const data = payload.data || {};
   const audience = Array.isArray(payload.audience) ? payload.audience : [];
@@ -251,18 +295,12 @@ async function processEvent(event, token) {
     const channel = getChannel(delivery.channel);
     if (!channel) continue;
 
-    // Deliveries are the slow part of an event: left unattended they hold the
-    // loop open past the stale threshold, at which point the reaper would hand
-    // the event to another worker while these rows are still 'pending' — and
-    // that worker would push them again. Restamping between deliveries keeps
-    // the lease alive for as long as the fan-out honestly needs; losing it
-    // means someone else owns the event now, so stop sending.
-    //
-    // This renewal cannot run *during* a delivery, so it only holds up while
-    // one delivery stays well inside the threshold. That is a channel's
-    // responsibility: `deliver` is contracted to return in bounded time, and
-    // the push channel enforces it with a socket timeout and a fan-out budget.
-    if (!(await keepLeaseAlive(event.id, token))) {
+    // The heartbeat has found this event in someone else's hands: the reaper
+    // released it and another worker claimed it, and that worker is sending
+    // whatever is still 'pending'. Carrying on here would push those recipients
+    // twice, so stop. Anything already delivered above has been marked, so the
+    // new owner will not re-send it either.
+    if (lease.isLost()) {
       console.warn(
         `Notification event ${event.id} (${event.event_type}) lost its claim mid-delivery; ` +
           'stopping so the worker that holds it now can finish the remaining deliveries',
@@ -342,7 +380,17 @@ export async function runOnce() {
     // crash without adding a constant UPDATE to the tick.
     if (Date.now() - lastReapAt >= STALE_REAP_INTERVAL_MS) {
       lastReapAt = Date.now();
-      await notificationModel.releaseStaleClaims({ staleMinutes: STALE_CLAIM_MINUTES });
+      const reaped = await notificationModel.releaseStaleClaims({
+        staleMinutes: STALE_CLAIM_MINUTES,
+        // A reap counts as an attempt, so an event that strands every worker
+        // that touches it lands on 'failed' rather than circling forever.
+        maxAttempts: MAX_ATTEMPTS,
+      });
+      if (reaped?.failed) {
+        console.error(
+          `${reaped.failed} notification event(s) gave up after repeatedly going stale mid-flight`,
+        );
+      }
     }
 
     // `token` is this claim's lease: every write below is fenced on it, so a
@@ -372,25 +420,43 @@ export async function runOnce() {
         const attempts = Number(event.attempts || 0);
         const message = error?.message || 'Unknown dispatch error';
 
+        // These writes are fenced on the lease, so they report whether they
+        // actually applied. Logging the outcome rather than the intent keeps
+        // the log from promising a retry that was never recorded, which is
+        // what happens when the lease lapsed while the event was in flight.
         if (attempts + 1 >= MAX_ATTEMPTS) {
-          console.error(
-            `Notification event ${event.id} (${event.event_type}) failed permanently: ${message}`,
-          );
-          await notificationModel.markEventFailed(event.id, {
+          const applied = await notificationModel.markEventFailed(event.id, {
             error: message,
             lockedBy: token,
           });
+          if (applied) {
+            console.error(
+              `Notification event ${event.id} (${event.event_type}) failed permanently: ${message}`,
+            );
+          } else {
+            console.warn(
+              `Notification event ${event.id} (${event.event_type}) failed (${message}) but its ` +
+                'claim was already gone; leaving it to the worker that holds it now',
+            );
+          }
         } else {
           const delay = RETRY_DELAYS_SECONDS[attempts] ?? RETRY_DELAYS_SECONDS.at(-1);
-          console.warn(
-            `Notification event ${event.id} (${event.event_type}) failed, ` +
-              `retrying in ${delay}s: ${message}`,
-          );
-          await notificationModel.markEventForRetry(event.id, {
+          const applied = await notificationModel.markEventForRetry(event.id, {
             error: message,
             delaySeconds: delay,
             lockedBy: token,
           });
+          if (applied) {
+            console.warn(
+              `Notification event ${event.id} (${event.event_type}) failed, ` +
+                `retrying in ${delay}s: ${message}`,
+            );
+          } else {
+            console.warn(
+              `Notification event ${event.id} (${event.event_type}) failed (${message}) but its ` +
+                'claim was already gone; leaving it to the worker that holds it now',
+            );
+          }
         }
       }
     }
@@ -470,6 +536,7 @@ export const __testing = {
   MAX_ATTEMPTS,
   RETRY_DELAYS_SECONDS,
   STALE_CLAIM_MINUTES,
+  LEASE_RENEW_INTERVAL_MS,
 };
 
 export default { startDispatcher, stopDispatcher, runOnce, scheduleDispatch };

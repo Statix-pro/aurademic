@@ -10,11 +10,13 @@
  * where `deliver` resolves to `{ status: 'sent' | 'skipped' | 'failed', error? }`
  * and must never throw.
  *
- * `deliver` must also return in bounded time — comfortably inside the
- * dispatcher's stale-claim threshold, which it cannot renew mid-delivery. A
- * channel that talks to the network owns that bound: give the request a
- * timeout, and cap any per-recipient fan-out, reporting whatever is left as
- * 'failed' so the retry ladder picks it up.
+ * `deliver` should also return in bounded time. The dispatcher heartbeats its
+ * lease while a delivery is in flight, so a slow channel no longer risks having
+ * its event reclaimed and re-sent — but a delivery that never returns still
+ * blocks every recipient queued behind it. A channel that talks to the network
+ * owns that bound: give the request a timeout, and cap any per-recipient
+ * fan-out, reporting whatever is left as 'failed' so the retry ladder picks it
+ * up on the next pass.
  */
 
 import inAppChannel from './inAppChannel.js';

@@ -92,7 +92,12 @@ const mockClaim = (events) =>
 beforeEach(() => {
   vi.clearAllMocks();
   __testing.resetSweepState();
-  notificationModel.releaseStaleClaims.mockResolvedValue(0);
+  notificationModel.releaseStaleClaims.mockResolvedValue({ released: 0, failed: 0 });
+  // The terminal writes are fenced on the lease and report whether they
+  // applied; the default is the ordinary case where this worker still holds it.
+  notificationModel.markEventDone.mockResolvedValue(true);
+  notificationModel.markEventForRetry.mockResolvedValue(true);
+  notificationModel.markEventFailed.mockResolvedValue(true);
   notificationModel.renewClaim.mockResolvedValue(true);
   mockClaim([]);
   notificationModel.insertNotifications.mockResolvedValue([makeNotification()]);
@@ -331,54 +336,56 @@ describe('notificationDispatcher.runOnce', () => {
     });
   });
 
-  it('keeps its lease alive while a slow fan-out delivers', async () => {
-    // Deliveries are network calls with no ceiling. A wide audience can take
-    // longer than the stale threshold, and without a renewal between sends the
-    // reaper would hand the event to another worker while these rows are still
-    // 'pending' — which would push the same notification a second time.
+  it('heartbeats its lease while a single delivery is still in flight', async () => {
+    // The renewal cannot wait for deliver() to return: the whole risk is a
+    // channel that takes longer than the stale threshold, at which point the
+    // reaper would hand the event to another worker and the recipient would be
+    // pushed twice.
+    vi.useFakeTimers();
     const inApp = getChannel('in_app');
-    let clock = Date.now();
-    vi.spyOn(Date, 'now').mockImplementation(() => clock);
-    const deliver = vi.spyOn(inApp, 'deliver').mockImplementation(async () => {
-      clock += 90000;
-      return { status: 'sent' };
-    });
+    let finishDelivery;
+    const deliver = vi
+      .spyOn(inApp, 'deliver')
+      .mockReturnValue(new Promise((resolve) => (finishDelivery = resolve)));
 
     mockClaim([makeEvent()]);
-    notificationModel.listPendingDeliveries.mockResolvedValue([
-      makePendingDelivery({ notification_id: 900 }),
-      makePendingDelivery({ notification_id: 901 }),
-      makePendingDelivery({ notification_id: 902 }),
-    ]);
+    notificationModel.listPendingDeliveries.mockResolvedValue([makePendingDelivery()]);
 
-    await runOnce();
-
-    // Once before the event, then again as each 90s delivery pushes past the
-    // renewal interval.
-    expect(notificationModel.renewClaim.mock.calls.length).toBeGreaterThan(1);
+    const sweep = runOnce();
+    // One renewal happens before the event is processed at all; the rest are
+    // the heartbeat, ticking while the delivery is stuck.
+    await vi.advanceTimersByTimeAsync(__testing.LEASE_RENEW_INTERVAL_MS * 3);
+    expect(notificationModel.renewClaim.mock.calls.length).toBeGreaterThan(2);
     expect(notificationModel.renewClaim).toHaveBeenCalledWith(100, { lockedBy: 'test-lease' });
-    expect(deliver).toHaveBeenCalledTimes(3);
+
+    finishDelivery({ status: 'sent' });
+    await sweep;
+
+    // ...and it stops the moment the event is finished.
+    const beatsWhileWorking = notificationModel.renewClaim.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(__testing.LEASE_RENEW_INTERVAL_MS * 3);
+    expect(notificationModel.renewClaim.mock.calls.length).toBe(beatsWhileWorking);
+
     expect(notificationModel.markEventDone).toHaveBeenCalledWith(100, {
       lockedBy: expect.any(String),
     });
-
     deliver.mockRestore();
-    Date.now.mockRestore();
+    vi.useRealTimers();
   });
 
-  it('stops delivering when the lease is lost mid-fan-out', async () => {
+  it('stops delivering when the heartbeat finds the lease gone', async () => {
     // Another worker owns the event now and will send whatever is still
     // pending. Carrying on here would deliver those rows twice.
+    vi.useFakeTimers();
     const inApp = getChannel('in_app');
-    let clock = Date.now();
-    vi.spyOn(Date, 'now').mockImplementation(() => clock);
-    const deliver = vi.spyOn(inApp, 'deliver').mockImplementation(async () => {
-      clock += 90000;
-      return { status: 'sent' };
-    });
+    let finishFirstDelivery;
+    const deliver = vi
+      .spyOn(inApp, 'deliver')
+      .mockReturnValueOnce(new Promise((resolve) => (finishFirstDelivery = resolve)))
+      .mockResolvedValue({ status: 'sent' });
 
-    // The first call is runOnce's pre-processing stamp; the renewal after the
-    // first delivery finds the claim gone.
+    // The first call is runOnce's pre-processing stamp; the heartbeat that
+    // follows finds the claim gone.
     notificationModel.renewClaim.mockResolvedValueOnce(true).mockResolvedValue(false);
 
     mockClaim([makeEvent()]);
@@ -388,17 +395,60 @@ describe('notificationDispatcher.runOnce', () => {
       makePendingDelivery({ notification_id: 902 }),
     ]);
 
-    await runOnce();
+    const sweep = runOnce();
+    await vi.advanceTimersByTimeAsync(__testing.LEASE_RENEW_INTERVAL_MS + 1000);
+    finishFirstDelivery({ status: 'sent' });
+    await sweep;
 
     expect(deliver).toHaveBeenCalledTimes(1);
+    // The one that did go out is still recorded, so the new owner does not
+    // repeat it — `listPendingDeliveries` will not return a 'sent' row.
     expect(notificationModel.markDelivery).toHaveBeenCalledTimes(1);
-    // The event is left exactly as its new owner found it.
+    expect(notificationModel.markDelivery).toHaveBeenCalledWith(900, 'in_app', {
+      status: 'sent',
+      error: null,
+    });
+    // The event itself is left exactly as its new owner found it.
     expect(notificationModel.markEventDone).not.toHaveBeenCalled();
     expect(notificationModel.markEventForRetry).not.toHaveBeenCalled();
     expect(notificationModel.markEventFailed).not.toHaveBeenCalled();
 
     deliver.mockRestore();
-    Date.now.mockRestore();
+    vi.useRealTimers();
+  });
+
+  it('keeps beating through a database blip rather than abandoning the event', async () => {
+    // A failed renewal is not evidence that the lease is gone — and the reaper
+    // could not have run during the same outage either.
+    vi.useFakeTimers();
+    const inApp = getChannel('in_app');
+    let finishDelivery;
+    const deliver = vi
+      .spyOn(inApp, 'deliver')
+      .mockReturnValue(new Promise((resolve) => (finishDelivery = resolve)));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    notificationModel.renewClaim
+      .mockResolvedValueOnce(true)
+      .mockRejectedValueOnce(new Error('pool exhausted'))
+      .mockResolvedValue(true);
+
+    mockClaim([makeEvent()]);
+    notificationModel.listPendingDeliveries.mockResolvedValue([makePendingDelivery()]);
+
+    const sweep = runOnce();
+    await vi.advanceTimersByTimeAsync(__testing.LEASE_RENEW_INTERVAL_MS * 2);
+    finishDelivery({ status: 'sent' });
+    await sweep;
+
+    expect(deliver).toHaveBeenCalledTimes(1);
+    expect(notificationModel.markEventDone).toHaveBeenCalledWith(100, {
+      lockedBy: expect.any(String),
+    });
+
+    warn.mockRestore();
+    deliver.mockRestore();
+    vi.useRealTimers();
   });
 
   it('records a channel that throws as failed without stopping the sweep', async () => {
@@ -560,6 +610,33 @@ describe('notificationDispatcher.runOnce', () => {
     });
   });
 
+  it('does not claim to have retried an event whose lease was already gone', async () => {
+    // The terminal writes are fenced on the lease, so one that did not apply
+    // means another worker owns the event. Saying "retrying in 60s" then would
+    // describe a row this worker never wrote.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mockClaim([makeEvent()]);
+    notificationModel.insertNotifications.mockRejectedValue(new Error('db down'));
+    notificationModel.markEventForRetry.mockResolvedValue(false);
+
+    await runOnce();
+
+    const messages = warn.mock.calls.map(([message]) => String(message));
+    expect(messages.some((m) => m.includes('claim was already gone'))).toBe(true);
+    expect(messages.some((m) => m.includes('retrying in'))).toBe(false);
+    warn.mockRestore();
+  });
+
+  it('reports events the reaper gave up on', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    notificationModel.releaseStaleClaims.mockResolvedValue({ released: 2, failed: 1 });
+
+    await runOnce();
+
+    expect(error).toHaveBeenCalledWith(expect.stringContaining('gave up'));
+    error.mockRestore();
+  });
+
   it('never throws out of a sweep, even when claiming fails', async () => {
     notificationModel.claimPendingEvents.mockRejectedValue(new Error('pool exhausted'));
     await expect(runOnce()).resolves.toBe(0);
@@ -567,7 +644,10 @@ describe('notificationDispatcher.runOnce', () => {
 
   it('reaps stale claims so a killed process does not strand its batch', async () => {
     await runOnce();
-    expect(notificationModel.releaseStaleClaims).toHaveBeenCalledWith({ staleMinutes: 5 });
+    expect(notificationModel.releaseStaleClaims).toHaveBeenCalledWith({
+      staleMinutes: 5,
+      maxAttempts: __testing.MAX_ATTEMPTS,
+    });
   });
 
   it('renews its lease per event so a slow batch is not reaped mid-flight', async () => {

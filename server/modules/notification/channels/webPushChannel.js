@@ -24,13 +24,12 @@ import notificationModel from '../notificationModel.js';
 const REQUEST_TIMEOUT_MS = 10000;
 
 /**
- * Ceiling on one recipient's whole fan-out. The dispatcher renews its lease
- * between deliveries, not during one, so a single deliver() call has to stay
- * well inside the stale-claim threshold: a person with a dozen registered
- * devices must not be able to stretch one delivery past it and let the reaper
- * hand the event to another worker that pushes it all over again. Whatever is
- * left when the budget runs out is reported as a failure, which is the retry
- * ladder's cue to come back for it.
+ * Ceiling on one recipient's whole fan-out. A person with a dozen registered
+ * devices, each on a push service having a bad day, would otherwise hold the
+ * dispatcher's delivery loop — and therefore every recipient queued behind
+ * them — for as long as the slowest of them takes. Whatever is left when the
+ * budget runs out is reported as a failure, which is the retry ladder's cue to
+ * come back for it on the next pass.
  */
 const DELIVERY_BUDGET_MS = 60000;
 
