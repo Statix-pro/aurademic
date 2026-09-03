@@ -210,10 +210,18 @@ const NotificationsPage: React.FC = () => {
               </div>
             ) : null}
 
-            {/* `error` counts as settled alongside `loaded`: a failed first load
+            {/* Deliberately not gated on `loading`. The store is shared with the
+              bell, so opening the bell starts a forced refetch and flips
+              `loading` true under this page — and gating on it tore the empty
+              state down and rebuilt it for a refresh that changed nothing.
+              Once the first page has settled, `loaded` stays true and this
+              stays put; an in-flight refresh is not a reason to unmount what
+              we already know is correct.
+
+              `error` counts as settled alongside `loaded`: a failed first load
               leaves `loaded` false, and without this the card renders as a tall
               blank rectangle with the reason only in the banner above it. */}
-            {!loading && (loaded || error) && visible.length === 0 ? (
+            {(loaded || error) && visible.length === 0 ? (
               <div className="notif-page-empty">
                 <span className="notif-page-empty-icon" aria-hidden="true">
                   {error && items.length === 0 ? <WifiOff size={26} /> : <Inbox size={26} />}

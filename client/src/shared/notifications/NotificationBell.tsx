@@ -21,7 +21,7 @@ const NotificationBell: React.FC = () => {
   const wrapRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const { items, unreadCount, loading, error, loaded, load, markRead, markAllRead, archive } =
+  const { items, unreadCount, error, loaded, load, markRead, markAllRead, archive } =
     useNotifications();
 
   // Fetch on open rather than on mount: a user who never opens the bell pays
@@ -132,8 +132,11 @@ const NotificationBell: React.FC = () => {
             ) : null}
 
             {/* `loaded` distinguishes "nothing to show" from "not fetched yet",
-                so the panel never flashes an empty state during its first load. */}
-            {!loading && loaded && items.length === 0 ? (
+                so the panel never flashes an empty state during its first load.
+                Not gated on `loading` for the same reason the inbox page is
+                not: every reopen forces a refetch, and unmounting this for the
+                duration of it made a settled panel blink. */}
+            {loaded && items.length === 0 ? (
               <div className="notif-empty">
                 <BellOff size={26} className="notif-empty-icon" />
                 <div>You are all caught up.</div>
