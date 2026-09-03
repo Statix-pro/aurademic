@@ -26,9 +26,16 @@ const NotificationBell: React.FC = () => {
 
   // Fetch on open rather than on mount: a user who never opens the bell pays
   // only for the summary poll, not for a list they will not read.
-  useEffect(() => {
-    if (open) void load(true);
-  }, [open, load]);
+  //
+  // Started here in the click and not from an effect on `open`. An effect runs
+  // after paint, so the panel's first frame would render with `loading` still
+  // false and no items — an empty body under the header until the effect ran.
+  // Starting the fetch in the same event that opens the panel batches
+  // `loading: true` into that first render, so the panel is never blank.
+  const toggleOpen = useCallback(() => {
+    if (!open) void load(true);
+    setOpen(!open);
+  }, [load, open]);
 
   // Close on an outside click or Escape — a dropdown that traps the user is
   // worse than no dropdown.
@@ -64,7 +71,7 @@ const NotificationBell: React.FC = () => {
       <button
         type="button"
         className={`notif-bell ${open ? 'is-open' : ''}`}
-        onClick={() => setOpen((value) => !value)}
+        onClick={toggleOpen}
         aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
         aria-expanded={open}
       >
@@ -104,6 +111,26 @@ const NotificationBell: React.FC = () => {
               />
             ))}
 
+            {/* Placeholder rows rather than the word "Loading", and shown for
+                every state before the first page settles — not only while
+                `loading` is true — so there is no frame in which the body is
+                blank. `error` counts as settled: the banner above says what
+                happened, and skeletons under it would promise a list that is
+                not coming. */}
+            {!loaded && !error && items.length === 0 ? (
+              <div className="notif-skeleton" aria-hidden="true">
+                {[0, 1, 2].map((row) => (
+                  <div className="notif-skeleton-row" key={row}>
+                    <span className="notif-skeleton-dot notif-shimmer" />
+                    <span className="notif-skeleton-lines">
+                      <span className="notif-skeleton-line notif-shimmer" />
+                      <span className="notif-skeleton-line is-short notif-shimmer" />
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
             {/* `loaded` distinguishes "nothing to show" from "not fetched yet",
                 so the panel never flashes an empty state during its first load. */}
             {!loading && loaded && items.length === 0 ? (
@@ -112,8 +139,6 @@ const NotificationBell: React.FC = () => {
                 <div>You are all caught up.</div>
               </div>
             ) : null}
-
-            {loading && items.length === 0 ? <div className="notif-empty">Loading…</div> : null}
           </div>
 
           {/* No paging here on purpose: the panel is for triage of what just

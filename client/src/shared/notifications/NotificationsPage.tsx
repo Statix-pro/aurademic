@@ -193,9 +193,20 @@ const NotificationsPage: React.FC = () => {
               />
             ))}
 
-            {loading && items.length === 0 ? (
-              <div className="notif-page-empty">
-                <div className="notif-page-empty-text">Loading your notifications…</div>
+            {/* Same rule as the bell panel: placeholder rows for every state
+                before the first page settles, so the card is never a blank
+                rectangle in the frame before the fetch starts. */}
+            {!loaded && !error && items.length === 0 ? (
+              <div className="notif-skeleton" aria-hidden="true">
+                {[0, 1, 2, 3, 4].map((row) => (
+                  <div className="notif-skeleton-row" key={row}>
+                    <span className="notif-skeleton-dot notif-shimmer" />
+                    <span className="notif-skeleton-lines">
+                      <span className="notif-skeleton-line notif-shimmer" />
+                      <span className="notif-skeleton-line is-short notif-shimmer" />
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : null}
 
