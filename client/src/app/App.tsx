@@ -21,6 +21,8 @@ import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import Journalform from '../features/journals/journalform';
+import AssociatedRoles, { AssociatedRoleDetailsPage } from '../features/kpi/AssociatedRoles';
+import FacultyCreditPoints from '../features/kpi/FacultyCreditPoints';
 import ProfilePage from '../features/profile/ProfilePage';
 import Projectform from '../features/projects/projectform';
 import Storybook from '../features/storybook/Storybook';
@@ -441,6 +443,30 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <UnderConstruction pageName="KPI Dashboard" />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/kpi/faculty-credit-points"
+                    element={
+                      <ProtectedRoute>
+                        <FacultyCreditPoints />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/kpi/associated-roles"
+                    element={
+                      <ProtectedRoute>
+                        <AssociatedRoles />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/kpi/associated-add"
+                    element={
+                      <ProtectedRoute>
+                        <AssociatedRoleDetailsPage />
                       </ProtectedRoute>
                     }
                   />

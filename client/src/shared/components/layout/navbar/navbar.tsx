@@ -636,15 +636,37 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <span className="sb-text">My Profile</span>
         </Link>
 
-        <Link
-          to="/kpi"
-          className={`sb-link ${isActive('/kpi') ? 'active' : ''}`}
-          onClick={handleLinkClick}
-          title="KPI"
-        >
-          <IconKpi />
-          <span className="sb-text">KPI</span>
-        </Link>
+        <div className="sb-group">
+          <button
+            className={`sb-link ${
+              isGroupActive(['/kpi']) ? 'active' : ''
+            } ${activeMenu === 'KPI' ? 'open' : ''}`}
+            onClick={() => toggleDropdown('KPI')}
+            title="KPI"
+          >
+            <IconKpi />
+            <span className="sb-text">KPI</span>
+            <ChevronDown />
+          </button>
+          {isExpanded && activeMenu === 'KPI' && (
+            <div className="sb-submenu">
+              <Link
+                to="/kpi/faculty-credit-points"
+                className={`sb-sublink ${isActive('/kpi/faculty-credit-points') ? 'active' : ''}`}
+                onClick={handleLinkClick}
+              >
+                Faculty Credit Points
+              </Link>
+              <Link
+                to="/kpi/associated-roles"
+                className={`sb-sublink ${isActive('/kpi/associated-roles') ? 'active' : ''}`}
+                onClick={handleLinkClick}
+              >
+                Associated Levels
+              </Link>
+            </div>
+          )}
+        </div>
 
         <button
           className="sb-link sb-logout-link"

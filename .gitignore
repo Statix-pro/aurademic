@@ -19,4 +19,9 @@ build/
 .DS_Store
 *.log
 
+# Local environment configuration and secrets
+.env
+.env.*
+!.env.example
+
 .claude

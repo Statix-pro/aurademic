@@ -1,7 +1,10 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// Keep the API on the current origin unless a development/deployment URL is supplied.
+// In a production build, `localhost` would point at the visitor's computer rather than
+// the server hosting Aurademic, which makes sign-in fail with a browser "Network Error".
+const baseURL = import.meta.env.VITE_API_URL || '/api';
 
 export interface DownloadedFile {
   blob: Blob;
