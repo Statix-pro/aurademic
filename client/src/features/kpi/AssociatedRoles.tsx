@@ -467,6 +467,33 @@ const AssociatedRoleDetailsPage = ({
               <div className="associated-roles-responsibilities">
                 <FieldLabel>{`${associatedLevel} Responsibilities`}</FieldLabel>
                 <div className="associated-roles-responsibilities-card">
+                  {(responsibilities[associatedLevel] || []).length > 0 && (
+                    <div className="associated-roles-responsibility-list">
+                      {(responsibilities[associatedLevel] || []).map((item) => (
+                        <div key={item.id} className="associated-roles-responsibility-item">
+                          <span className="associated-roles-responsibility-text">{item.text}</span>
+                          <div className="associated-roles-responsibility-item-actions">
+                            <button
+                              type="button"
+                              className="associated-roles-responsibility-edit"
+                              onClick={() => openEditModal(associatedLevel, item.id, item.text)}
+                              aria-label={`Edit responsibility: ${item.text}`}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="associated-roles-responsibility-delete"
+                              onClick={() => deleteResponsibility(associatedLevel, item.id)}
+                              aria-label={`Delete responsibility: ${item.text}`}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <div className="associated-roles-responsibility-input-row">
                     <input
                       type="text"
@@ -508,33 +535,6 @@ const AssociatedRoleDetailsPage = ({
                       <Trash2 size={16} />
                     </button>
                   </div>
-                  {(responsibilities[associatedLevel] || []).length > 0 && (
-                    <div className="associated-roles-responsibility-list">
-                      {(responsibilities[associatedLevel] || []).map((item) => (
-                        <div key={item.id} className="associated-roles-responsibility-item">
-                          <span className="associated-roles-responsibility-text">{item.text}</span>
-                          <div className="associated-roles-responsibility-item-actions">
-                            <button
-                              type="button"
-                              className="associated-roles-responsibility-edit"
-                              onClick={() => openEditModal(associatedLevel, item.id, item.text)}
-                              aria-label={`Edit responsibility: ${item.text}`}
-                            >
-                              <Pencil size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="associated-roles-responsibility-delete"
-                              onClick={() => deleteResponsibility(associatedLevel, item.id)}
-                              aria-label={`Delete responsibility: ${item.text}`}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
                 </div>
               </div>
             </div>

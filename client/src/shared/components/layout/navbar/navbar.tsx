@@ -657,13 +657,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
               >
                 Faculty Credit Points
               </Link>
-              <Link
-                to="/kpi/associated-roles"
-                className={`sb-sublink ${isActive('/kpi/associated-roles') ? 'active' : ''}`}
-                onClick={handleLinkClick}
-              >
-                Associated Levels
-              </Link>
             </div>
           )}
         </div>
