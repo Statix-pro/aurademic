@@ -59,10 +59,7 @@ const financeRowPayload = (row: FinanceRow) => ({
   organization_id: row.organizationId,
   organization_name: row.organizationName || null,
   amount: nullableNumber(row.amount),
-  heads: row.heads.map((head) => ({
-    budget_head_id: head.id,
-    budget_head_name: head.name,
-  })),
+  heads: row.heads.map((name) => ({ budget_head_name: name })),
 });
 
 /** Slots whose stored file the user cleared without picking a replacement. */
@@ -100,7 +97,6 @@ export function buildProjectPayload(form: ProjectFormState) {
       country: row.country || null,
       email: row.email || null,
       is_principal: row.isPrincipal,
-      is_primary: row.isPrimary,
     })),
 
     collaborators: form.collaborators.map((row) => ({
@@ -172,7 +168,6 @@ export function buildProjectPayload(form: ProjectFormState) {
       })),
       heads: form.budgetRows.map((row) => ({
         key: row.key,
-        budget_head_id: row.budgetHeadId,
         budget_head_name: row.budgetHeadName || null,
       })),
       allotments: form.budgetRows
@@ -193,7 +188,6 @@ export function buildProjectPayload(form: ProjectFormState) {
         financial_year: row.financialYear || null,
         transaction_date: row.transactionDate || null,
         head_kind: row.headKind,
-        budget_head_id: row.budgetHeadId,
         head_name: row.headName || null,
         particulars: row.particulars || null,
         reference_no: row.referenceNo || null,

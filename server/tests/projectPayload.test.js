@@ -288,9 +288,9 @@ describe('normalizeProjectPayload', () => {
             organization_name: 'DST',
             amount: '100',
             heads: [
-              { budget_head_id: 3, budget_head_name: 'Equipment' },
-              { budget_head_id: 3, budget_head_name: 'Equipment' },
-              { budget_head_id: 4, budget_head_name: 'Consumables' },
+              { budget_head_name: 'Equipment' },
+              { budget_head_name: 'Equipment' },
+              { budget_head_name: 'Consumables' },
             ],
           },
         ],
@@ -298,8 +298,34 @@ describe('normalizeProjectPayload', () => {
     );
 
     expect(aggregate.financeRows[0].heads).toEqual([
-      { budget_head_id: 3, budget_head_name: 'Equipment' },
-      { budget_head_id: 4, budget_head_name: 'Consumables' },
+      { budget_head_name: 'Equipment' },
+      { budget_head_name: 'Consumables' },
+    ]);
+  });
+
+  it('canonicalizes a finance-row head and keeps one the list has dropped', () => {
+    const { aggregate } = normalizeProjectPayload(
+      validPayload({
+        financial_contribution_enabled: true,
+        financial_contributions: [
+          {
+            organization_name: 'DST',
+            amount: '100',
+            heads: [
+              // Case is normalized to the stored spelling.
+              { budget_head_name: 'overhead charges' },
+              // No longer in the vocabulary, but a row saved under it must not
+              // lose it on the next save — the form still shows the chip.
+              { budget_head_name: 'Postal Expenses' },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(aggregate.financeRows[0].heads).toEqual([
+      { budget_head_name: 'Overhead Charges' },
+      { budget_head_name: 'Postal Expenses' },
     ]);
   });
 
@@ -468,8 +494,8 @@ describe('budget allotment matrix', () => {
           { key: 'y2', financial_year: '2026-27' },
         ],
         heads: [
-          { key: 'h1', budget_head_id: 12, budget_head_name: 'Consumables' },
-          { key: 'h2', budget_head_id: 57, budget_head_name: 'Salary' },
+          { key: 'h1', budget_head_name: 'Consumables' },
+          { key: 'h2', budget_head_name: 'Manpower' },
         ],
         allotments: [
           { head_key: 'h1', year_key: 'y1', amount: '2,50,000' },
@@ -487,7 +513,10 @@ describe('budget allotment matrix', () => {
       { key: 'y1', financial_year: '2025-26', display_order: 0 },
       { key: 'y2', financial_year: '2026-27', display_order: 1 },
     ]);
-    expect(aggregate.budget.heads.map((row) => row.budget_head_id)).toEqual([12, 57]);
+    expect(aggregate.budget.heads.map((row) => row.budget_head_name)).toEqual([
+      'Consumables',
+      'Manpower',
+    ]);
     expect(aggregate.budget.allotments).toEqual([
       { head_key: 'h1', year_key: 'y1', amount: 250000 },
       { head_key: 'h2', year_key: 'y2', amount: 400000 },
@@ -531,8 +560,8 @@ describe('budget allotment matrix', () => {
           { key: 'y2', financial_year: '2025-26' },
         ],
         heads: [
-          { key: 'h1', budget_head_id: 12, budget_head_name: 'Consumables' },
-          { key: 'h2', budget_head_id: 12, budget_head_name: 'Consumables' },
+          { key: 'h1', budget_head_name: 'Consumables' },
+          { key: 'h2', budget_head_name: 'Consumables' },
         ],
       }),
     );
@@ -562,7 +591,6 @@ describe('transaction accounts', () => {
   const ledgerRow = (overrides = {}) => ({
     transaction_date: '2026-05-10',
     head_kind: 'expenditure',
-    budget_head_id: 12,
     head_name: 'Consumables',
     debit: '5000',
     ...overrides,
@@ -592,7 +620,7 @@ describe('transaction accounts', () => {
     expect(aggregate.transactionAccounts[0].transactions[0]).toMatchObject({
       transaction_date: '2026-05-10',
       head_kind: 'expenditure',
-      budget_head_id: 12,
+      head_name: 'Consumables',
       credit: null,
       debit: 5000,
       display_order: 0,
@@ -648,12 +676,11 @@ describe('transaction accounts', () => {
     });
   });
 
-  it('never lets an income row carry a catalog head id', () => {
+  it('stores an income row under its own vocabulary', () => {
     const { aggregate } = normalizeProjectPayload(
       withLedger([
         ledgerRow({
           head_kind: 'income',
-          budget_head_id: 12,
           head_name: 'Deposit',
           debit: '',
           credit: '90000',
@@ -663,9 +690,28 @@ describe('transaction accounts', () => {
 
     expect(aggregate.transactionAccounts[0].transactions[0]).toMatchObject({
       head_kind: 'income',
-      budget_head_id: null,
       head_name: 'Deposit',
     });
+  });
+
+  it('stores an expenditure head in its canonical case', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow({ head_name: 'overhead charges' })]),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].head_name).toBe('Overhead Charges');
+  });
+
+  // A ledger written under a head the vocabulary has since dropped still has
+  // to save, so the name is kept rather than rejected or blanked.
+  it('keeps an expenditure head that is no longer offered', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow({ head_name: 'Postal Expenses' })]),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].head_name).toBe('Postal Expenses');
   });
 
   it('rejects an income head that is not in the vocabulary', () => {
@@ -673,7 +719,6 @@ describe('transaction accounts', () => {
       withLedger([
         ledgerRow({
           head_kind: 'income',
-          budget_head_id: null,
           head_name: 'Bake sale',
           debit: '',
           credit: '500',
@@ -770,9 +815,9 @@ describe('budget error indices survive blank rows and columns', () => {
             { key: 'y2', financial_year: '2025-26' },
           ],
           heads: [
-            { key: 'h0', budget_head_id: null, budget_head_name: null },
-            { key: 'h1', budget_head_id: 12, budget_head_name: 'Consumables' },
-            { key: 'h2', budget_head_id: 12, budget_head_name: 'Consumables' },
+            { key: 'h0', budget_head_name: null },
+            { key: 'h1', budget_head_name: 'Consumables' },
+            { key: 'h2', budget_head_name: 'Consumables' },
           ],
           allotments: [],
         },
@@ -799,7 +844,7 @@ describe('budget error indices survive blank rows and columns', () => {
       validPayload({
         budget: {
           years: [{ key: 'y1', financial_year: '2025-26' }],
-          heads: [{ key: 'h0', budget_head_id: null, budget_head_name: null }],
+          heads: [{ key: 'h0', budget_head_name: null }],
           allotments: [{ head_key: 'h0', year_key: 'y1', amount: '5000' }],
         },
       }),
@@ -814,7 +859,6 @@ describe('the ledger is stored in date order', () => {
   const row = (transaction_date, debit, extra = {}) => ({
     transaction_date,
     head_kind: 'expenditure',
-    budget_head_id: 12,
     head_name: 'Consumables',
     debit,
     ...extra,

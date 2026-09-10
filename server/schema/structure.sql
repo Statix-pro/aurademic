@@ -2174,7 +2174,6 @@ CREATE TABLE `project_investigators` (
   `organization` varchar(255) DEFAULT NULL,
   `country` varchar(100) DEFAULT NULL,
   `is_principal` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1 = Principal Investigator',
-  `is_primary` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1 = primary (corresponding) investigator',
   `display_order` int NOT NULL DEFAULT '0',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),

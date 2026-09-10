@@ -34,6 +34,7 @@ import {
 
 const normalizeText = (v) => String(v || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+const BENEFICIARY_CATEGORY_OPTIONS = ['Student', 'Faculty', 'Staff'];
 const ACCOUNT_TYPE_OPTIONS = ['Savings', 'Current'];
 const EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 
@@ -42,6 +43,17 @@ const normalizeAccountType = (value) =>
   ACCOUNT_TYPE_OPTIONS.find(
     (option) => option.toLowerCase() === normalizeText(value).toLowerCase(),
   ) || null;
+const normalizeBeneficiaryCategory = (value) =>
+  BENEFICIARY_CATEGORY_OPTIONS.find(
+    (option) => option.toLowerCase() === normalizeText(value).toLowerCase(),
+  ) || '';
+/**
+ * Only an individual from inside the institution has a Student / Faculty /
+ * Staff category: an External payee is outside it and an organization is an
+ * entity rather than a person, so both are stored with no category at all.
+ */
+const beneficiaryCategoryApplies = (beneficiaryType, beneficiaryOrg) =>
+  beneficiaryType !== 'organization' && (beneficiaryOrg === 'KSRCT' || beneficiaryOrg === 'KSREI');
 const sanitizeAlphaNumericUpper = (value, maxLength) =>
   normalizeText(value)
     .toUpperCase()
@@ -1932,6 +1944,7 @@ const PAYEE_SEARCHABLE_COLUMNS_SQL = `
     COALESCE(ep.pan_number, ''),
     COALESCE(ep.beneficiary_type, ''),
     COALESCE(ep.beneficiary_org, ''),
+    COALESCE(ep.beneficiary_category, ''),
     COALESCE(ep.organization_type, ''),
     COALESCE(ep.msme, ''),
     COALESCE(ep.gstin, ''),
@@ -2158,6 +2171,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
            UPPER(TRIM(COALESCE(ifsc, ''))) AS ifsc,
            beneficiary_type,
            beneficiary_org,
+           beneficiary_category,
            organization_type,
            msme,
            gstin,
@@ -2191,6 +2205,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
            UPPER(TRIM(COALESCE(NULLIF(TRIM(epr.ifsc), ''), ep.ifsc, ''))) AS ifsc,
            COALESCE(NULLIF(TRIM(epr.beneficiary_type), ''), ep.beneficiary_type) AS beneficiary_type,
            COALESCE(NULLIF(TRIM(epr.beneficiary_org), ''), ep.beneficiary_org) AS beneficiary_org,
+           ep.beneficiary_category,
            COALESCE(NULLIF(TRIM(epr.organization_type), ''), ep.organization_type) AS organization_type,
            COALESCE(NULLIF(TRIM(epr.msme), ''), ep.msme) AS msme,
            COALESCE(NULLIF(TRIM(epr.gstin), ''), ep.gstin) AS gstin,
@@ -2260,6 +2275,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
        UPPER(TRIM(COALESCE(NULLIF(TRIM(epr.ifsc), ''), ep.ifsc, ''))) AS ifsc,
        COALESCE(NULLIF(TRIM(epr.beneficiary_type), ''), ep.beneficiary_type) AS beneficiary_type,
        COALESCE(NULLIF(TRIM(epr.beneficiary_org), ''), ep.beneficiary_org) AS beneficiary_org,
+       ep.beneficiary_category,
        COALESCE(NULLIF(TRIM(epr.organization_type), ''), ep.organization_type) AS organization_type,
        COALESCE(NULLIF(TRIM(epr.msme), ''), ep.msme) AS msme,
        COALESCE(NULLIF(TRIM(epr.gstin), ''), ep.gstin) AS gstin,
@@ -2329,6 +2345,10 @@ export async function updatePayeeById(id, payeeData = {}) {
     ? beneficiaryOrgRaw
     : null;
   const accountType = normalizeAccountType(payeeData.account_type);
+  const categoryApplies = beneficiaryCategoryApplies(beneficiaryType, beneficiaryOrg);
+  const beneficiaryCategory = categoryApplies
+    ? normalizeBeneficiaryCategory(payeeData.beneficiary_category)
+    : '';
   const gstin = sanitizeAlphaNumericUpper(payeeData.gstin, 15);
   const panNumber = sanitizeAlphaNumericUpper(
     payeeData.pan_number || extractPanFromGstin(gstin),
@@ -2340,6 +2360,12 @@ export async function updatePayeeById(id, payeeData = {}) {
   }
   if (!beneficiaryOrg) throw new Error('beneficiary_org is required');
   if (!accountType) throw new Error('account_type must be Savings or Current');
+  // Unlike upsertPayee, this path is only ever reached from a payee form, so
+  // an internal individual arriving without a category is an incomplete edit
+  // rather than an unrelated save that should leave the stored one alone.
+  if (categoryApplies && !beneficiaryCategory) {
+    throw new Error('beneficiary_category must be Student, Faculty or Staff');
+  }
 
   const [existingRows] = await db.execute(
     'SELECT id FROM expenditure_payees WHERE id = ? AND is_active = 1 LIMIT 1',
@@ -2362,6 +2388,7 @@ export async function updatePayeeById(id, payeeData = {}) {
             branch_name = ?,
             beneficiary_type = ?,
             beneficiary_org = ?,
+            beneficiary_category = ?,
             organization_type = ?,
             msme = ?,
             gstin = ?,
@@ -2381,6 +2408,7 @@ export async function updatePayeeById(id, payeeData = {}) {
       branchName,
       beneficiaryType,
       beneficiaryOrg,
+      beneficiaryCategory || null,
       normalizeText(payeeData.organization_type) || null,
       normalizeText(payeeData.msme) || null,
       beneficiaryType === 'organization' ? gstin || null : null,
@@ -2864,6 +2892,10 @@ export async function upsertPayee(payeeData, userId, conn = db) {
     ? beneficiaryOrgRaw
     : null;
   const accountType = normalizeAccountType(payeeData.account_type);
+  const categoryApplies = beneficiaryCategoryApplies(beneficiaryType, beneficiaryOrg);
+  const beneficiaryCategory = categoryApplies
+    ? normalizeBeneficiaryCategory(payeeData.beneficiary_category)
+    : '';
   const gstin = sanitizeAlphaNumericUpper(payeeData.gstin, 15);
   const panNumber = sanitizeAlphaNumericUpper(
     payeeData.pan_number || extractPanFromGstin(gstin),
@@ -2892,6 +2924,12 @@ export async function upsertPayee(payeeData, userId, conn = db) {
               branch_name  = COALESCE(?, branch_name),
               beneficiary_type = COALESCE(?, beneficiary_type),
               beneficiary_org  = COALESCE(?, beneficiary_org),
+              -- Cleared outright once the payee is External or an
+              -- organization, so a category picked under a previous
+              -- beneficiary cannot linger. While it still applies, a save
+              -- that carries no category (an expenditure request reusing
+              -- these bank details) leaves the stored one alone.
+              beneficiary_category = IF(?, COALESCE(?, beneficiary_category), NULL),
               organization_type = COALESCE(?, organization_type),
               msme         = COALESCE(?, msme),
               gstin        = COALESCE(?, gstin),
@@ -2914,6 +2952,8 @@ export async function upsertPayee(payeeData, userId, conn = db) {
         payeeData.branch_name || null,
         beneficiaryType,
         beneficiaryOrg,
+        categoryApplies ? 1 : 0,
+        beneficiaryCategory || null,
         payeeData.organization_type || null,
         payeeData.msme || null,
         beneficiaryType === 'organization' ? gstin || null : null,
@@ -2934,10 +2974,10 @@ export async function upsertPayee(payeeData, userId, conn = db) {
       `INSERT INTO expenditure_payees
          (payee_name, account_name, account_no, account_type,
           bank_name, branch_name, ifsc, beneficiary_type,
-          beneficiary_org, organization_type, msme,
+          beneficiary_org, beneficiary_category, organization_type, msme,
           pan_number, gstin, tds_details, tds_section,
           approval_status, requested_at, approved_by, approved_at, rejection_reason, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
       [
         canonicalPayeeName,
         canonicalPayeeName || null,
@@ -2948,6 +2988,7 @@ export async function upsertPayee(payeeData, userId, conn = db) {
         ifsc,
         beneficiaryType,
         beneficiaryOrg,
+        beneficiaryCategory || null,
         payeeData.organization_type || null,
         payeeData.msme || null,
         panNumber || null,

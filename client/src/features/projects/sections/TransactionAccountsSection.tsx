@@ -1,5 +1,5 @@
-import { Plus, Trash2 } from 'lucide-react';
-import React, { useMemo } from 'react';
+import { ChevronDown, Plus, Trash2 } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
 
 import { SelectField } from '../components/FormFields';
 import RowActions from '../components/RowActions';
@@ -25,21 +25,31 @@ import {
 } from '../projectFormState';
 import { transactionHeadOptions, withSelectedOption } from '../selectOptions';
 
-import type { BudgetHead } from '../../../shared/hooks/useBudgetCatalog';
 import type { AccountOption, ProjectFormState, TransactionAccount, TransactionRow } from '../types';
 
 interface TransactionAccountsSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
   accounts: AccountOption[];
-  budgetHeads: BudgetHead[];
   errors: Record<string, string>;
   disabled: boolean;
 }
 
 /**
+ * The fields a ledger row keeps in its expanded detail strip. The columns that
+ * stay in the row itself are the ones a reader scans down — the year, the head
+ * and the money — so the ones that describe a single entry drop out of the
+ * table's width and into a second row beneath it.
+ */
+const DETAIL_ERROR_KEYS = ['transaction_date'];
+
+/**
  * The Transaction tab: one block per bank account the project's money moves
  * through, each with its own ledger and its own running balance.
+ *
+ * Each row is two rows: the figures stay in the table, and the date,
+ * particulars and reference number sit in a strip that expands under it. Nine
+ * columns of inputs left every field too narrow to read at any window size.
  *
  * Balance is derived from the rows above it rather than typed, so it can never
  * contradict the credit and debit columns beside it.
@@ -48,13 +58,25 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   form,
   patch,
   accounts,
-  budgetHeads,
   errors,
   disabled,
 }) => {
   const blocks = form.transactionAccounts;
 
-  const headOptions = useMemo(() => transactionHeadOptions(budgetHeads), [budgetHeads]);
+  // Which rows the user has opened, by row key — the keys are stable across the
+  // date re-sort, so a row stays open as it moves. Purely presentational, so it
+  // lives here rather than in the form state that gets saved.
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  const toggleRow = (rowKey: string) =>
+    setExpandedRows((previous) => {
+      const next = new Set(previous);
+      if (next.has(rowKey)) next.delete(rowKey);
+      else next.add(rowKey);
+      return next;
+    });
+
+  const headOptions = useMemo(() => transactionHeadOptions(), []);
 
   const yearOptions = useMemo(
     () => financialYearOptions().map((year) => ({ value: year, label: year })),
@@ -160,13 +182,12 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                     <th scope="col" className="pf-table__sno">
                       S.No.
                     </th>
-                    <th scope="col">Financial Year</th>
-                    <th scope="col">Date</th>
-                    <th scope="col">Budget Head</th>
-                    <th scope="col" className="pf-ledger__particulars">
-                      Particulars
+                    <th scope="col" className="pf-ledger__year">
+                      Financial Year
                     </th>
-                    <th scope="col">Ref. No.</th>
+                    <th scope="col" className="pf-ledger__head">
+                      Budget Head
+                    </th>
                     <th scope="col" className="pf-table__amount">
                       Credit
                     </th>
@@ -185,174 +206,226 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                 <tbody>
                   {block.transactions.map((row, rowIndex) => {
                     const field = `transaction_accounts[${blockIndex}].transactions[${rowIndex}]`;
-                    const selectedHead =
-                      row.budgetHeadId || row.headName
-                        ? headIdentity(row.headKind, row.budgetHeadId, row.headName)
-                        : '';
+                    const selectedHead = row.headName
+                      ? headIdentity(row.headKind, row.headName)
+                      : '';
+                    // A row whose hidden fields failed validation opens itself:
+                    // an error the user cannot see is one they cannot fix.
+                    const hasDetailError = DETAIL_ERROR_KEYS.some(
+                      (key) => errors[`${field}.${key}`],
+                    );
+                    const isExpanded = expandedRows.has(row.key) || hasDetailError;
+                    const detailId = `${block.key}-${row.key}-detail`;
 
                     return (
-                      <tr key={row.key}>
-                        <td className="pf-table__sno">{rowIndex + 1}</td>
+                      <React.Fragment key={row.key}>
+                        <tr>
+                          <td className="pf-table__sno">{rowIndex + 1}</td>
 
-                        <td>
-                          <SelectField
-                            value={row.financialYear}
-                            onChange={(value) =>
-                              updateRow(blockIndex, rowIndex, { financialYear: value })
-                            }
-                            options={yearOptions}
-                            placeholder="Select"
-                            disabled={disabled}
-                            invalid={Boolean(errors[`${field}.financial_year`])}
-                            ariaLabel="Financial year"
-                          />
-                        </td>
-
-                        <td>
-                          <input
-                            type="date"
-                            className={`pf-input ${errors[`${field}.transaction_date`] ? 'is-invalid' : ''}`.trim()}
-                            value={row.transactionDate}
-                            onChange={(event) => {
-                              const transactionDate = event.target.value;
-                              // Dating a row files it into the ledger, which is
-                              // kept oldest-first so the running balance beside
-                              // it means what it says. A date input reports a
-                              // value only once all three parts are filled in,
-                              // so this fires when the date is complete rather
-                              // than shuffling rows as they are typed.
-                              // The year follows the date until someone sets it
-                              // themselves. A year that still matches the year
-                              // the old date implied was filled in here, not
-                              // chosen, so correcting the date has to move it
-                              // too — otherwise the summary keeps grouping the
-                              // row under the year it was first dated in.
-                              const derivedBefore = financialYearForDate(row.transactionDate);
-                              const financialYear =
-                                !row.financialYear || row.financialYear === derivedBefore
-                                  ? financialYearForDate(transactionDate) || ''
-                                  : row.financialYear;
-
-                              updateBlock(blockIndex, {
-                                transactions: sortTransactions(
-                                  replaceAt(block.transactions, rowIndex, {
-                                    transactionDate,
-                                    financialYear,
-                                  }),
-                                ),
-                              });
-                            }}
-                            disabled={disabled}
-                            aria-label="Transaction date"
-                          />
-                        </td>
-
-                        <td>
-                          <SelectField
-                            value={selectedHead}
-                            onChange={(value) => {
-                              const option = headOptions.find((item) => item.value === value);
-                              if (!option) {
-                                updateRow(blockIndex, rowIndex, {
-                                  headKind: 'expenditure',
-                                  budgetHeadId: null,
-                                  headName: '',
-                                });
-                                return;
+                          <td className="pf-ledger__year">
+                            <SelectField
+                              value={row.financialYear}
+                              onChange={(value) =>
+                                updateRow(blockIndex, rowIndex, { financialYear: value })
                               }
-                              updateRow(blockIndex, rowIndex, {
-                                ...parseHeadIdentity(value),
-                                headName: option.label,
-                              });
-                            }}
-                            options={withSelectedOption(headOptions, selectedHead, row.headName)}
-                            placeholder="Select"
-                            disabled={disabled}
-                            invalid={Boolean(errors[`${field}.head`])}
-                            ariaLabel="Budget head"
-                          />
-                        </td>
+                              options={yearOptions}
+                              placeholder="Select"
+                              disabled={disabled}
+                              invalid={Boolean(errors[`${field}.financial_year`])}
+                              ariaLabel="Financial year"
+                            />
+                          </td>
 
-                        <td className="pf-ledger__particulars">
-                          <input
-                            type="text"
-                            className="pf-input"
-                            value={row.particulars}
-                            onChange={(event) =>
-                              updateRow(blockIndex, rowIndex, { particulars: event.target.value })
-                            }
-                            disabled={disabled}
-                            aria-label="Particulars"
-                          />
-                        </td>
+                          <td className="pf-ledger__head">
+                            <SelectField
+                              value={selectedHead}
+                              onChange={(value) => {
+                                const option = headOptions.find((item) => item.value === value);
+                                if (!option) {
+                                  updateRow(blockIndex, rowIndex, {
+                                    headKind: 'expenditure',
+                                    headName: '',
+                                  });
+                                  return;
+                                }
+                                updateRow(blockIndex, rowIndex, {
+                                  ...parseHeadIdentity(value),
+                                  headName: option.label,
+                                });
+                              }}
+                              options={withSelectedOption(headOptions, selectedHead, row.headName)}
+                              placeholder="Select"
+                              disabled={disabled}
+                              invalid={Boolean(errors[`${field}.head`])}
+                              ariaLabel="Budget head"
+                            />
+                          </td>
 
-                        <td>
-                          <input
-                            type="text"
-                            className="pf-input"
-                            value={row.referenceNo}
-                            onChange={(event) =>
-                              updateRow(blockIndex, rowIndex, { referenceNo: event.target.value })
-                            }
-                            disabled={disabled}
-                            aria-label="Reference number"
-                          />
-                        </td>
+                          <td className="pf-table__amount">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              className={`pf-input pf-input--amount ${errors[`${field}.amount`] || errors[`${field}.credit`] ? 'is-invalid' : ''}`.trim()}
+                              value={row.credit}
+                              onChange={(event) =>
+                                updateRow(blockIndex, rowIndex, { credit: event.target.value })
+                              }
+                              disabled={disabled}
+                              aria-label="Credit"
+                            />
+                          </td>
 
-                        <td className="pf-table__amount">
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            className={`pf-input pf-input--amount ${errors[`${field}.amount`] || errors[`${field}.credit`] ? 'is-invalid' : ''}`.trim()}
-                            value={row.credit}
-                            onChange={(event) =>
-                              updateRow(blockIndex, rowIndex, { credit: event.target.value })
-                            }
-                            disabled={disabled}
-                            aria-label="Credit"
-                          />
-                        </td>
+                          <td className="pf-table__amount">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              className={`pf-input pf-input--amount ${errors[`${field}.amount`] || errors[`${field}.debit`] ? 'is-invalid' : ''}`.trim()}
+                              value={row.debit}
+                              onChange={(event) =>
+                                updateRow(blockIndex, rowIndex, { debit: event.target.value })
+                              }
+                              disabled={disabled}
+                              aria-label="Debit"
+                            />
+                          </td>
 
-                        <td className="pf-table__amount">
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            className={`pf-input pf-input--amount ${errors[`${field}.amount`] || errors[`${field}.debit`] ? 'is-invalid' : ''}`.trim()}
-                            value={row.debit}
-                            onChange={(event) =>
-                              updateRow(blockIndex, rowIndex, { debit: event.target.value })
-                            }
-                            disabled={disabled}
-                            aria-label="Debit"
-                          />
-                        </td>
+                          <td className="pf-table__amount">
+                            <output className="pf-input pf-input--amount pf-input--readonly pf-ledger__balance">
+                              {formatAmount(balances[rowIndex])}
+                            </output>
+                          </td>
 
-                        <td className="pf-table__amount">
-                          <output className="pf-input pf-input--amount pf-input--readonly pf-ledger__balance">
-                            {formatAmount(balances[rowIndex])}
-                          </output>
-                        </td>
+                          <td className="pf-table__actions">
+                            <RowActions
+                              itemLabel="transaction"
+                              leading={
+                                <button
+                                  type="button"
+                                  className={`pf-icon-btn pf-icon-btn--ghost pf-ledger__toggle ${
+                                    isExpanded ? 'is-open' : ''
+                                  }`.trim()}
+                                  onClick={() => toggleRow(row.key)}
+                                  // A row held open by an error cannot be
+                                  // collapsed, so the control says so rather
+                                  // than offering to hide what it will not.
+                                  disabled={hasDetailError}
+                                  aria-expanded={isExpanded}
+                                  aria-controls={detailId}
+                                  aria-label={
+                                    hasDetailError
+                                      ? 'Fix the date to collapse this row'
+                                      : isExpanded
+                                        ? 'Hide date, particulars and reference number'
+                                        : 'Show date, particulars and reference number'
+                                  }
+                                  title={
+                                    hasDetailError
+                                      ? 'Fix the date to collapse this row'
+                                      : isExpanded
+                                        ? 'Collapse'
+                                        : 'Expand'
+                                  }
+                                >
+                                  <ChevronDown size={16} aria-hidden="true" />
+                                </button>
+                              }
+                              onAdd={() =>
+                                updateBlock(blockIndex, {
+                                  transactions: [...block.transactions, createTransactionRow()],
+                                })
+                              }
+                              showAdd={rowIndex === block.transactions.length - 1}
+                              addDisabled={
+                                block.transactions.length >= MAX_TRANSACTIONS_PER_ACCOUNT
+                              }
+                              onRemove={() =>
+                                updateBlock(blockIndex, {
+                                  transactions: removeAt(block.transactions, rowIndex),
+                                })
+                              }
+                              canRemove={block.transactions.length > 1}
+                              disabled={disabled}
+                            />
+                          </td>
+                        </tr>
 
-                        <td className="pf-table__actions">
-                          <RowActions
-                            itemLabel="transaction"
-                            onAdd={() =>
-                              updateBlock(blockIndex, {
-                                transactions: [...block.transactions, createTransactionRow()],
-                              })
-                            }
-                            showAdd={rowIndex === block.transactions.length - 1}
-                            addDisabled={block.transactions.length >= MAX_TRANSACTIONS_PER_ACCOUNT}
-                            onRemove={() =>
-                              updateBlock(blockIndex, {
-                                transactions: removeAt(block.transactions, rowIndex),
-                              })
-                            }
-                            canRemove={block.transactions.length > 1}
-                            disabled={disabled}
-                          />
-                        </td>
-                      </tr>
+                        <tr id={detailId} className="pf-ledger__detail-row" hidden={!isExpanded}>
+                          <td className="pf-ledger__detail-cell" colSpan={7}>
+                            <div className="pf-ledger__detail">
+                              <label className="pf-ledger__detail-field">
+                                <span className="pf-ledger__detail-label">Date</span>
+                                <input
+                                  type="date"
+                                  className={`pf-input ${errors[`${field}.transaction_date`] ? 'is-invalid' : ''}`.trim()}
+                                  value={row.transactionDate}
+                                  onChange={(event) => {
+                                    const transactionDate = event.target.value;
+                                    // Dating a row files it into the ledger,
+                                    // which is kept oldest-first so the running
+                                    // balance beside it means what it says. A
+                                    // date input reports a value only once all
+                                    // three parts are filled in, so this fires
+                                    // when the date is complete rather than
+                                    // shuffling rows as they are typed.
+                                    // The year follows the date until someone
+                                    // sets it themselves. A year that still
+                                    // matches the year the old date implied was
+                                    // filled in here, not chosen, so correcting
+                                    // the date has to move it too — otherwise
+                                    // the summary keeps grouping the row under
+                                    // the year it was first dated in.
+                                    const derivedBefore = financialYearForDate(row.transactionDate);
+                                    const financialYear =
+                                      !row.financialYear || row.financialYear === derivedBefore
+                                        ? financialYearForDate(transactionDate) || ''
+                                        : row.financialYear;
+
+                                    updateBlock(blockIndex, {
+                                      transactions: sortTransactions(
+                                        replaceAt(block.transactions, rowIndex, {
+                                          transactionDate,
+                                          financialYear,
+                                        }),
+                                      ),
+                                    });
+                                  }}
+                                  disabled={disabled}
+                                />
+                              </label>
+
+                              <label className="pf-ledger__detail-field pf-ledger__detail-field--wide">
+                                <span className="pf-ledger__detail-label">Particulars</span>
+                                <input
+                                  type="text"
+                                  className="pf-input"
+                                  value={row.particulars}
+                                  onChange={(event) =>
+                                    updateRow(blockIndex, rowIndex, {
+                                      particulars: event.target.value,
+                                    })
+                                  }
+                                  disabled={disabled}
+                                />
+                              </label>
+
+                              <label className="pf-ledger__detail-field">
+                                <span className="pf-ledger__detail-label">Ref. No.</span>
+                                <input
+                                  type="text"
+                                  className="pf-input"
+                                  value={row.referenceNo}
+                                  onChange={(event) =>
+                                    updateRow(blockIndex, rowIndex, {
+                                      referenceNo: event.target.value,
+                                    })
+                                  }
+                                  disabled={disabled}
+                                />
+                              </label>
+                            </div>
+                          </td>
+                        </tr>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>

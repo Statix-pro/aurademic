@@ -139,15 +139,14 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
   );
 
   /**
-   * The PI is the row at the top of the list — that flag follows drag order
-   * rather than being picked, so every list change re-derives it. The chosen
-   * corresponding investigator travels with its row, so it only needs a fallback
-   * when the row that held it is gone.
+   * The PI is picked, not positional: the flag travels with its row through
+   * drags and reorders, so the list only needs a fallback when the row that
+   * held it is gone.
    */
   const setRows = (next: InvestigatorRow[]) => {
-    const rebuilt = next.map((row, position) => ({ ...row, isPrincipal: position === 0 }));
-    if (rebuilt.length > 0 && !rebuilt.some((row) => row.isPrimary)) {
-      rebuilt[0] = { ...rebuilt[0], isPrimary: true };
+    const rebuilt = [...next];
+    if (rebuilt.length > 0 && !rebuilt.some((row) => row.isPrincipal)) {
+      rebuilt[0] = { ...rebuilt[0], isPrincipal: true };
     }
     patch({ investigators: rebuilt });
   };
@@ -158,12 +157,12 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
   const changeMemberType = (index: number, memberType: MemberType) => {
     // Switching type invalidates the identity and the auto-filled fields, so
     // the row restarts as a blank row of the new type — but the row keeps its
-    // place in the list and its corresponding-investigator flag.
+    // place in the list and its PI flag.
     setRows(
       replaceAt(rows, index, {
         ...createInvestigatorRow({ memberType }),
         key: rows[index].key,
-        isPrimary: rows[index].isPrimary,
+        isPrincipal: rows[index].isPrincipal,
       }),
     );
   };
@@ -175,8 +174,8 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
 
   const removeRow = (index: number) => setRows(removeAt(rows, index));
 
-  const setPrimary = (index: number) =>
-    setRows(rows.map((row, position) => ({ ...row, isPrimary: position === index })));
+  const setPrincipal = (index: number) =>
+    setRows(rows.map((row, position) => ({ ...row, isPrincipal: position === index })));
 
   const handleDragEnd = (result: DropResult) => {
     if (!result.destination) return;
@@ -232,26 +231,26 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
                         <GripVertical size={16} aria-hidden="true" />
                       </span>
 
-                      {/* One pill carries both facts this column holds: its text
-                          is the role the row's position gives it (top row PI,
-                          the rest Co-PI) and its filled state marks the chosen
-                          corresponding investigator. The radio stays in the
-                          markup — hidden but focusable — so the column is still
-                          a keyboard-navigable radio group. */}
+                      {/* The pill picks the Principal Investigator: the selected
+                          row reads PI, every other row Co-PI. The radio stays in
+                          the markup — hidden but focusable — so the column is
+                          still a keyboard-navigable radio group. */}
                       <label
-                        className={`pf-principal ${row.isPrimary ? 'is-selected' : ''} ${disabled ? 'is-disabled' : ''}`.trim()}
-                        title={`${index === 0 ? 'Principal Investigator' : 'Co-Investigator'} — select to make this the corresponding investigator`}
+                        className={`pf-principal ${row.isPrincipal ? 'is-selected' : ''} ${disabled ? 'is-disabled' : ''}`.trim()}
+                        title="Select to make this the Principal Investigator"
                       >
                         <input
                           type="radio"
-                          name="primaryInvestigator"
-                          checked={row.isPrimary}
-                          onChange={() => setPrimary(index)}
+                          name="principalInvestigator"
+                          checked={row.isPrincipal}
+                          onChange={() => setPrincipal(index)}
                           disabled={disabled}
-                          aria-label={`Corresponding investigator: ${row.name || `row ${index + 1}`}`}
+                          aria-label={`Principal Investigator: ${row.name || `row ${index + 1}`}`}
                         />
                         <span className="pf-principal__dot" aria-hidden="true" />
-                        <span className="pf-principal__tag">{index === 0 ? 'PI' : 'Co-PI'}</span>
+                        <span className="pf-principal__tag">
+                          {row.isPrincipal ? 'PI' : 'Co-PI'}
+                        </span>
                       </label>
 
                       <SelectField

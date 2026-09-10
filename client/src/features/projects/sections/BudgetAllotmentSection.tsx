@@ -16,13 +16,11 @@ import {
 } from '../projectFormState';
 import { budgetHeadOptions, withSelectedOption } from '../selectOptions';
 
-import type { BudgetHead } from '../../../shared/hooks/useBudgetCatalog';
 import type { BudgetAllotmentRow, ProjectFormState } from '../types';
 
 interface BudgetAllotmentSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
-  budgetHeads: BudgetHead[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -38,13 +36,12 @@ interface BudgetAllotmentSectionProps {
 const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
   form,
   patch,
-  budgetHeads,
   errors,
   disabled,
 }) => {
   const { budgetRows, budgetYears, budgetAllotments } = form;
 
-  const headOptions = useMemo(() => budgetHeadOptions(budgetHeads), [budgetHeads]);
+  const headOptions = useMemo(() => budgetHeadOptions(), []);
 
   const yearOptions = useMemo(
     () => financialYearOptions().map((year) => ({ value: year, label: year })),
@@ -52,8 +49,7 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
   );
 
   /** A row is only saved, and so only fillable, once it names a head. */
-  const hasHead = (row: BudgetAllotmentRow) =>
-    Boolean(row.budgetHeadId || row.budgetHeadName.trim());
+  const hasHead = (row: BudgetAllotmentRow) => Boolean(row.budgetHeadName.trim());
 
   const amountAt = (rowKey: string, columnKey: string) =>
     budgetAllotments[allotmentKey(rowKey, columnKey)] ?? '';
@@ -103,9 +99,11 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
   const grandTotal = budgetRows.reduce((total, row) => total + rowTotal(row.key), 0);
 
   // The heads already spoken for, so the same head cannot be given two rows —
-  // which the server rejects and which would split one budget in two.
-  const takenHeadIds = new Set(
-    budgetRows.map((row) => row.budgetHeadId).filter((id): id is number => id !== null),
+  // which the server rejects and which would split one budget in two. Matched
+  // on the name, since that is what a row stores: `Consumables` is offered
+  // under both groups, and taking it from one takes it from the other.
+  const takenHeadNames = new Set(
+    budgetRows.map((row) => row.budgetHeadName.trim().toLowerCase()).filter(Boolean),
   );
   const takenYears = new Set(budgetYears.map((column) => column.financialYear).filter(Boolean));
 
@@ -198,25 +196,22 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
 
                 <td className="pf-matrix__head">
                   <SelectField
-                    value={row.budgetHeadId ? String(row.budgetHeadId) : ''}
+                    value={row.budgetHeadName}
                     onChange={(value) => {
-                      const head = budgetHeads.find((item) => String(item.id) === value);
                       patch(
-                        replaceStructure(
-                          replaceAt(budgetRows, index, {
-                            budgetHeadId: head?.id ?? null,
-                            budgetHeadName: head?.name ?? '',
-                          }),
-                        ),
+                        replaceStructure(replaceAt(budgetRows, index, { budgetHeadName: value })),
                       );
                     }}
                     options={withSelectedOption(
                       headOptions.filter(
                         (option) =>
-                          option.value === String(row.budgetHeadId) ||
-                          !takenHeadIds.has(Number(option.value)),
+                          option.value === row.budgetHeadName ||
+                          !takenHeadNames.has(option.value.toLowerCase()),
                       ),
-                      row.budgetHeadId ? String(row.budgetHeadId) : '',
+                      row.budgetHeadName,
+                      // The value is the name, so a head dropped from the
+                      // vocabulary reads as itself rather than as the generic
+                      // "no longer listed" placeholder.
                       row.budgetHeadName,
                     )}
                     placeholder="Select"

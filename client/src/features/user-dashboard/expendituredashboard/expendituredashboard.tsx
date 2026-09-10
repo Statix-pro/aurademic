@@ -610,6 +610,7 @@ const ExpenditureDashboard: React.FC = () => {
         ifsc: normalizeText(payee.ifsc).toUpperCase(),
         beneficiary_type: payee.beneficiaryType,
         beneficiary_org: normalizeText(payee.beneficiaryOrg) || null,
+        beneficiary_category: normalizeText(payee.beneficiaryCategory) || null,
         organization_type:
           payee.beneficiaryType === 'organization'
             ? normalizeText(payee.organizationType) || null

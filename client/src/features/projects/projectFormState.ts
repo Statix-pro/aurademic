@@ -71,7 +71,6 @@ export function createInvestigatorRow(overrides: Partial<InvestigatorRow> = {}):
     country: memberType === 'external' ? '' : DEFAULT_COUNTRY,
     email: '',
     isPrincipal: false,
-    isPrimary: false,
     ...overrides,
   };
 }
@@ -106,7 +105,7 @@ export function createBudgetYearColumn(): BudgetYearColumn {
 }
 
 export function createBudgetAllotmentRow(): BudgetAllotmentRow {
-  return { key: nextRowKey('budget-row'), budgetHeadId: null, budgetHeadName: '' };
+  return { key: nextRowKey('budget-row'), budgetHeadName: '' };
 }
 
 /** Address of one cell in the allotment matrix. */
@@ -120,7 +119,6 @@ export function createTransactionRow(): TransactionRow {
     financialYear: '',
     transactionDate: '',
     headKind: 'expenditure',
-    budgetHeadId: null,
     headName: '',
     particulars: '',
     referenceNo: '',
@@ -154,7 +152,7 @@ export function createDisbursementRow(): DisbursementRow {
 export function createEmptyProjectForm(): ProjectFormState {
   return {
     drivenBy: 'faculty',
-    investigators: [createInvestigatorRow({ isPrincipal: true, isPrimary: true })],
+    investigators: [createInvestigatorRow({ isPrincipal: true })],
 
     title: '',
     projectCost: '',
@@ -271,7 +269,7 @@ export function projectToFormState(project: any): ProjectFormState {
   const empty = createEmptyProjectForm();
 
   const investigators: InvestigatorRow[] = Array.isArray(project?.investigators)
-    ? project.investigators.map((row: any, index: number) =>
+    ? project.investigators.map((row: any) =>
         createInvestigatorRow({
           memberType: (row.member_type ?? 'faculty') as MemberType,
           identityCode: text(row.identity_code),
@@ -280,18 +278,15 @@ export function projectToFormState(project: any): ProjectFormState {
           organization: text(row.organization),
           country: text(row.country),
           email: text(row.email),
-          // The PI is whoever the saved display order puts first, matching the
-          // form where the role follows the row's position.
-          isPrincipal: index === 0,
-          isPrimary: flag(row.is_primary),
+          isPrincipal: flag(row.is_principal),
         }),
       )
     : [];
 
-  // A project saved before the corresponding-investigator flag existed has no
-  // chosen row, so the PI stands in until someone picks another.
-  if (investigators.length > 0 && !investigators.some((row) => row.isPrimary)) {
-    investigators[0] = { ...investigators[0], isPrimary: true };
+  // Every project has exactly one PI; a row saved without the flag falls back
+  // to the first, which is where the server's own fallback puts it too.
+  if (investigators.length > 0 && !investigators.some((row) => row.isPrincipal)) {
+    investigators[0] = { ...investigators[0], isPrincipal: true };
   }
 
   const collaborators: CollaboratorRow[] = Array.isArray(project?.collaborators)
@@ -317,10 +312,7 @@ export function projectToFormState(project: any): ProjectFormState {
           organizationName: text(row.organization_name || row.organization_label),
           amount: amountInput(row.amount),
           heads: Array.isArray(row.heads)
-            ? row.heads.map((head: any) => ({
-                id: head.budget_head_id ?? null,
-                name: text(head.budget_head_name),
-              }))
+            ? row.heads.map((head: any) => text(head.budget_head_name)).filter(Boolean)
             : [],
         }))
       : [];
@@ -344,7 +336,6 @@ export function projectToFormState(project: any): ProjectFormState {
   const budgetRows: BudgetAllotmentRow[] = Array.isArray(project?.budget?.heads)
     ? project.budget.heads.map((row: any) => ({
         ...createBudgetAllotmentRow(),
-        budgetHeadId: row.budget_head_id ?? null,
         budgetHeadName: text(row.budget_head_name),
       }))
     : [];
@@ -375,7 +366,6 @@ export function projectToFormState(project: any): ProjectFormState {
           financialYear: text(row.financial_year),
           transactionDate: dateInput(row.transaction_date),
           headKind: (row.head_kind === 'income' ? 'income' : 'expenditure') as TransactionHeadKind,
-          budgetHeadId: row.budget_head_id ?? null,
           headName: text(row.head_name),
           particulars: text(row.particulars),
           referenceNo: text(row.reference_no),

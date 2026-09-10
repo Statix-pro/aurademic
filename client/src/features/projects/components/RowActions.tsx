@@ -2,6 +2,11 @@ import { Plus, Trash2 } from 'lucide-react';
 import React from 'react';
 
 interface RowActionsProps {
+  /**
+   * Rendered before the add / remove pair, inside the same row of controls —
+   * the ledger's expand toggle, which belongs with them rather than beside them.
+   */
+  leading?: React.ReactNode;
   onAdd?: () => void;
   onRemove?: () => void;
   /** The design shows "+" only on the last row of a repeated group. */
@@ -14,6 +19,7 @@ interface RowActionsProps {
 
 /** The blue add / red remove pair that ends every repeatable row. */
 const RowActions: React.FC<RowActionsProps> = ({
+  leading,
   onAdd,
   onRemove,
   showAdd = true,
@@ -23,6 +29,8 @@ const RowActions: React.FC<RowActionsProps> = ({
   itemLabel,
 }) => (
   <div className="pf-row-actions">
+    {leading}
+
     {showAdd && onAdd && (
       <button
         type="button"

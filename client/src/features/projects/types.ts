@@ -49,11 +49,6 @@ export interface DocumentSlotState {
   removed: boolean;
 }
 
-export interface BudgetHeadRef {
-  id: number | null;
-  name: string;
-}
-
 export interface InvestigatorRow {
   /** Stable local key — rows are reordered, so the array index is not one. */
   key: string;
@@ -65,10 +60,8 @@ export interface InvestigatorRow {
   organization: string;
   country: string;
   email: string;
-  /** Set by the row's position: the top row is the PI, the rest are Co-PIs. */
+  /** Chosen, not positional: the one Principal Investigator; the rest are Co-PIs. */
   isPrincipal: boolean;
-  /** Chosen, not positional: the investigator who corresponds for the project. */
-  isPrimary: boolean;
 }
 
 export interface CollaboratorRow {
@@ -88,7 +81,8 @@ export interface FinanceRow {
   key: string;
   organizationId: number | null;
   organizationName: string;
-  heads: BudgetHeadRef[];
+  /** Budget head names, which is how a project stores its heads. */
+  heads: string[];
   amount: string;
 }
 
@@ -116,7 +110,6 @@ export interface BudgetYearColumn {
 /** One budget-head row of the Budget Allotment matrix. */
 export interface BudgetAllotmentRow {
   key: string;
-  budgetHeadId: number | null;
   budgetHeadName: string;
 }
 
@@ -134,8 +127,6 @@ export interface TransactionRow {
   transactionDate: string;
   /** Follows the head that was picked; decides which summary section counts it. */
   headKind: TransactionHeadKind;
-  /** Set for expenditure heads, which come from the shared budget catalog. */
-  budgetHeadId: number | null;
   headName: string;
   particulars: string;
   referenceNo: string;

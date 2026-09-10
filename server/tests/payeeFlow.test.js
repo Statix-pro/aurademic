@@ -97,6 +97,116 @@ describe('Payee Management Flow Integration Tests', () => {
       expect(expenditureModel.upsertPayee).toHaveBeenCalled();
     });
 
+    it('rejects a KSRCT individual with no category (Error Path)', async () => {
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['faculty'],
+        permissions: [],
+      });
+
+      const response = await request(app)
+        .post('/api/expenditure/payees')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          payee_name: 'John Doe',
+          account_no: '1234567890',
+          ifsc: 'SBIN0001234',
+          bank_name: 'State Bank of India',
+          branch_name: 'Tiruchengode',
+          beneficiary_type: 'individual',
+          beneficiary_org: 'KSRCT',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toContain('Student, Faculty or Staff');
+      expect(expenditureModel.upsertPayee).not.toHaveBeenCalled();
+    });
+
+    // An older client puts the beneficiary in `payee_name` and sends no
+    // `beneficiary_org` at all. The model reads it back out of the name, so
+    // this check has to as well — otherwise the row it files as internal is
+    // exactly the one that got in without a category.
+    it('rejects an internal individual whose beneficiary only arrives in payee_name', async () => {
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['faculty'],
+        permissions: [],
+      });
+
+      const response = await request(app)
+        .post('/api/expenditure/payees')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          payee_name: 'KSRCT',
+          account_name: 'John Doe',
+          account_no: '1234567890',
+          ifsc: 'SBIN0001234',
+          bank_name: 'State Bank of India',
+          branch_name: 'Tiruchengode',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.message).toContain('Student, Faculty or Staff');
+      expect(expenditureModel.upsertPayee).not.toHaveBeenCalled();
+    });
+
+    it('carries the category through for a KSREI individual', async () => {
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['faculty'],
+        permissions: [],
+      });
+
+      expenditureModel.upsertPayee.mockResolvedValue(502);
+      expenditureModel.getPayeeById.mockResolvedValue({ id: 502, payee_name: 'John Doe' });
+
+      const response = await request(app)
+        .post('/api/expenditure/payees')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          payee_name: 'John Doe',
+          account_no: '1234567890',
+          ifsc: 'SBIN0001234',
+          bank_name: 'State Bank of India',
+          branch_name: 'Tiruchengode',
+          beneficiary_type: 'individual',
+          beneficiary_org: 'KSREI',
+          beneficiary_category: 'Student',
+        });
+
+      expect(response.status).toBe(201);
+      expect(expenditureModel.upsertPayee).toHaveBeenCalledWith(
+        expect.objectContaining({ beneficiary_category: 'Student' }),
+        1,
+      );
+    });
+
+    // Only KSRCT and KSREI payees are inside the institution, so an External
+    // one saves without a category rather than being held up by a field that
+    // does not apply to it.
+    it('accepts an External individual with no category', async () => {
+      accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue({
+        roles: ['faculty'],
+        permissions: [],
+      });
+
+      expenditureModel.upsertPayee.mockResolvedValue(503);
+      expenditureModel.getPayeeById.mockResolvedValue({ id: 503, payee_name: 'Jane Roe' });
+
+      const response = await request(app)
+        .post('/api/expenditure/payees')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          payee_name: 'Jane Roe',
+          account_no: '9876543210',
+          ifsc: 'HDFC0000123',
+          bank_name: 'HDFC Bank',
+          branch_name: 'Erode',
+          beneficiary_type: 'individual',
+          beneficiary_org: 'External',
+        });
+
+      expect(response.status).toBe(201);
+      expect(expenditureModel.upsertPayee).toHaveBeenCalled();
+    });
+
     it('returns 400 if required fields are missing (Error Path)', async () => {
       const invalidPayload = {
         payee_name: 'John Doe',

@@ -1,52 +1,48 @@
-import { PROJECT_INCOME_HEADS } from './constants';
+import { PROJECT_BUDGET_HEAD_GROUPS, PROJECT_INCOME_HEADS } from './constants';
 import { headIdentity } from './projectBudgetSummary';
 
 import type { SelectOption } from './components/FormFields';
-import type { BudgetHead } from '../../shared/hooks/useBudgetCatalog';
 
 /**
- * Expenditure heads from the shared budget catalog, filed under the catalog's
- * own group labels. Retired heads are left out; `withSelectedOption` puts one
- * back when a saved row still points at it.
+ * The project's expenditure heads, filed under the group each belongs to.
+ * Valued by name, which is what a budget row stores — `Consumables` appears
+ * under both groups and is one head either way.
  */
-export function budgetHeadOptions(heads: BudgetHead[]): SelectOption[] {
-  return heads
-    .filter((head) => head.is_active)
-    .map((head) => ({
-      value: String(head.id),
-      label: head.name,
-      group: head.group_label || undefined,
-    }));
+export function budgetHeadOptions(): SelectOption[] {
+  return PROJECT_BUDGET_HEAD_GROUPS.flatMap((group) =>
+    group.heads.map((name) => ({ value: name, label: name, group: group.label })),
+  );
 }
 
 /**
- * The transaction ledger's head dropdown: the catalog's expenditure heads plus
+ * The transaction ledger's head dropdown: the project's expenditure heads plus
  * the fixed income vocabulary, each option valued by the identity the
  * Transaction Summary groups on, so picking one settles both the head and which
  * side of the summary the row lands on.
  */
-export function transactionHeadOptions(heads: BudgetHead[]): SelectOption[] {
+export function transactionHeadOptions(): SelectOption[] {
   return [
     ...PROJECT_INCOME_HEADS.map((name) => ({
-      value: headIdentity('income', null, name),
+      value: headIdentity('income', name),
       label: name,
       group: 'Income',
     })),
-    ...heads
-      .filter((head) => head.is_active)
-      .map((head) => ({
-        value: headIdentity('expenditure', head.id, head.name),
-        label: head.name,
-        group: head.group_label ? `Expenditure — ${head.group_label}` : 'Expenditure',
+    ...PROJECT_BUDGET_HEAD_GROUPS.flatMap((group) =>
+      group.heads.map((name) => ({
+        value: headIdentity('expenditure', name),
+        label: name,
+        group: `Expenditure — ${group.label}`,
       })),
+    ),
   ];
 }
 
 /**
  * Keeps a stored selection visible in a dropdown even when it is no longer
  * offered — an administrator can deactivate a funding agency or scheme that
- * existing projects still point at, and without this the select would render
- * empty and a save would silently drop the value.
+ * existing projects still point at, and a budget head can be dropped from the
+ * vocabulary while sanctioned budgets still sit under it. Without this the
+ * select would render empty and a save would silently drop the value.
  */
 export function withSelectedOption(
   options: SelectOption[],

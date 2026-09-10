@@ -33,7 +33,6 @@ import SanctionDetailsSection from './sections/SanctionDetailsSection';
 import SubmissionDetailsSection from './sections/SubmissionDetailsSection';
 import TransactionAccountsSection from './sections/TransactionAccountsSection';
 import TransactionSummarySection from './sections/TransactionSummarySection';
-import { useBudgetCatalog } from '../../shared/hooks/useBudgetCatalog';
 
 import type { ProjectFormTab } from './constants';
 import type {
@@ -102,7 +101,6 @@ function validate(form: ProjectFormState): Record<string, string> {
     const filledRows = account.transactions.filter(
       (row) =>
         row.transactionDate ||
-        row.budgetHeadId ||
         row.headName ||
         row.particulars ||
         row.referenceNo ||
@@ -123,7 +121,7 @@ function validate(form: ProjectFormState): Record<string, string> {
       const field = `transaction_accounts[${blockIndex}].transactions[${rowIndex}]`;
 
       if (!row.transactionDate) errors[`${field}.transaction_date`] = 'Enter the date.';
-      if (!row.budgetHeadId && !row.headName) errors[`${field}.head`] = 'Select a budget head.';
+      if (!row.headName) errors[`${field}.head`] = 'Select a budget head.';
 
       const credit = toAmount(row.credit);
       const debit = toAmount(row.debit);
@@ -143,7 +141,6 @@ const ProjectForm: React.FC = () => {
   const { id: routeProjectId } = useParams<{ id?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { catalog } = useBudgetCatalog();
 
   const [form, setForm] = useState<ProjectFormState>(createEmptyProjectForm);
   const [lookups, setLookups] = useState<ProjectLookups>(emptyLookups);
@@ -195,6 +192,23 @@ const ProjectForm: React.FC = () => {
     'shortlisted_for_presentation',
   );
   const showOutcome = hasReachedProposalStage(form.proposalStatus, 'result_announced');
+
+  // A proposal that was not selected has nothing to sanction, nothing to
+  // disburse and no project to run, so those three sections stay locked until
+  // the result says it was. They are shown rather than hidden — the stage notes
+  // above already hide what has not happened yet, and here the reader needs to
+  // see that the sections exist and what unlocks them. Anything already
+  // captured stays in state and is still saved, so a result corrected back to
+  // Selected finds its sanction details intact.
+  const isSelected = form.finalResult === 'selected';
+
+  // Outcomes and final documents are what a project leaves behind, so they wait
+  // until it has finished. `isSelected` is carried through rather than assumed
+  // from the status: a project recorded as Completed and then corrected to Not
+  // Selected would otherwise keep these two open while everything above them
+  // locked.
+  const isConcluded =
+    isSelected && (form.projectStatus === 'completed' || form.projectStatus === 'closed');
 
   const patch = useCallback(
     (changes: Partial<ProjectFormState>) => setForm((previous) => ({ ...previous, ...changes })),
@@ -441,8 +455,8 @@ const ProjectForm: React.FC = () => {
           </div>
         )}
 
-        {/* One form across all three tabs: switching tab only changes what is
-            on screen, and the single Save below writes the whole project. */}
+        {/* One form across every tab: switching tab only changes what is on
+            screen, and the single Save below writes the whole project. */}
         <div className="pf-tabs" role="tablist" aria-label="Project form sections">
           {PROJECT_FORM_TABS.map((tab, tabIndex) => (
             <button
@@ -515,7 +529,6 @@ const ProjectForm: React.FC = () => {
               enabled={form.financialContributionEnabled}
               onToggle={(enabled) => patch({ financialContributionEnabled: enabled })}
               organizations={lookups.organizations}
-              budgetHeads={catalog?.heads ?? []}
               errors={errors}
               disabled={isReadOnly}
             />
@@ -528,7 +541,6 @@ const ProjectForm: React.FC = () => {
               enabled={form.financeSharingEnabled}
               onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
               organizations={lookups.organizations}
-              budgetHeads={catalog?.heads ?? []}
               errors={errors}
               disabled={isReadOnly}
             />
@@ -575,13 +587,20 @@ const ProjectForm: React.FC = () => {
                   disabled={isReadOnly}
                 />
 
+                {!isSelected && (
+                  <p className="pf-stage-note">
+                    Set <strong>Final Result</strong> to <strong>Selected</strong> to record the
+                    sanction, the grant disbursements and the project status.
+                  </p>
+                )}
+
                 <SanctionDetailsSection
                   form={form}
                   patch={patch}
                   onSelectDocument={selectDocument}
                   onClearDocument={clearDocument}
                   errors={errors}
-                  disabled={isReadOnly}
+                  disabled={isReadOnly || !isSelected}
                 />
 
                 <GrantDisbursementSection
@@ -591,24 +610,31 @@ const ProjectForm: React.FC = () => {
                   onSelectDocument={selectDisbursementDocument}
                   onClearDocument={clearDisbursementDocument}
                   errors={errors}
-                  disabled={isReadOnly}
+                  disabled={isReadOnly || !isSelected}
                 />
 
                 <ProjectStatusSection
                   form={form}
                   patch={patch}
                   errors={errors}
-                  disabled={isReadOnly}
+                  disabled={isReadOnly || !isSelected}
                 />
 
-                <OutcomeSection form={form} patch={patch} disabled={isReadOnly} />
+                {isSelected && !isConcluded && (
+                  <p className="pf-stage-note">
+                    Set <strong>Status</strong> to <strong>Completed</strong> or{' '}
+                    <strong>Closed</strong> to record the outcomes and the final documents.
+                  </p>
+                )}
+
+                <OutcomeSection form={form} patch={patch} disabled={isReadOnly || !isConcluded} />
 
                 <FinalDocumentsSection
                   form={form}
                   onSelectDocument={selectDocument}
                   onClearDocument={clearDocument}
                   errors={errors}
-                  disabled={isReadOnly}
+                  disabled={isReadOnly || !isConcluded}
                 />
               </>
             )}
@@ -641,14 +667,9 @@ const ProjectForm: React.FC = () => {
             <BudgetAllotmentSection
               form={form}
               patch={patch}
-              budgetHeads={catalog?.heads ?? []}
               errors={errors}
               disabled={isReadOnly}
             />
-
-            {/* Reads the ledger on the next tab, so it lives here where the
-                budget it is measured against is. */}
-            <TransactionSummarySection form={form} />
           </div>
 
           <div
@@ -662,10 +683,22 @@ const ProjectForm: React.FC = () => {
               form={form}
               patch={patch}
               accounts={lookups.accounts}
-              budgetHeads={catalog?.heads ?? []}
               errors={errors}
               disabled={isReadOnly}
             />
+          </div>
+
+          {/* Nothing on this tab is an input: Budget comes from the allotment
+              matrix and Actuals from the ledger, so it reads the two tabs
+              before it rather than adding anything of its own to save. */}
+          <div
+            role="tabpanel"
+            id="pf-panel-summary"
+            aria-labelledby="pf-tab-summary"
+            hidden={activeTab !== 'summary'}
+            className="pf-panel"
+          >
+            <TransactionSummarySection form={form} />
           </div>
 
           {!isReadOnly && (

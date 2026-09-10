@@ -83,12 +83,65 @@ export const DOCUMENT_UPLOAD_DIRS = {
 export const TRANSACTION_HEAD_KINDS = ['expenditure', 'income'];
 
 /**
- * The income side of the ledger, which has no catalog to point at the way
- * expenditure has `budget_heads`. These are the standard ways money reaches a
- * project account rather than institution data, so — as with the SDG list on
- * the client — they live in code instead of a master table nobody would curate.
+ * The income side of the ledger: the standard ways money reaches a project
+ * account. A fixed vocabulary rather than institution data, so — as with the
+ * expenditure heads in `PROJECT_BUDGET_HEAD_GROUPS` below, and the SDG list on
+ * the client — it lives in code instead of a master table nobody would curate.
  */
 export const PROJECT_INCOME_HEADS = ['Deposit', 'Interest', 'Grant Received', 'Other Income'];
+
+/**
+ * The expenditure heads a project budgets against. Mirrors
+ * `PROJECT_BUDGET_HEAD_GROUPS` in `client/src/features/projects/constants.ts`,
+ * which renders them; the reasoning for keeping them out of the `budget_heads`
+ * catalog is written up there.
+ */
+export const PROJECT_BUDGET_HEAD_GROUPS = [
+  {
+    label: 'Research Projects',
+    heads: [
+      'Equipment',
+      'Consumables',
+      'Manpower',
+      'Contingencies',
+      'Overhead Charges',
+      'Travel',
+      'Field Work',
+      'Other Costs',
+    ],
+  },
+  {
+    label: 'Sponsored Events',
+    heads: [
+      'Honorarium',
+      'Consumables',
+      'Travel Allowance',
+      'Food & Refreshment',
+      'Registration Kit',
+      'Printing',
+      'Stationery',
+      'Administrative Expenses',
+      'Boarding Expenses',
+      'Lodging Expenses',
+    ],
+  },
+];
+
+export const PROJECT_BUDGET_HEADS = [
+  ...new Set(PROJECT_BUDGET_HEAD_GROUPS.flatMap((group) => group.heads)),
+];
+
+/**
+ * Resolves a submitted head to the name it is stored under, matched
+ * case-insensitively so a name that only differs in case is not saved as a
+ * second head. Returns '' for anything outside the vocabulary.
+ */
+const canonicalBudgetHead = (value) => {
+  const name = String(value ?? '')
+    .trim()
+    .toLowerCase();
+  return PROJECT_BUDGET_HEADS.find((head) => head.toLowerCase() === name) || '';
+};
 
 export const MAX_INVESTIGATORS = 15;
 export const MAX_COLLABORATORS = 20;
@@ -249,9 +302,6 @@ function normalizeInvestigators(raw, errors) {
       country: toNullableString(row?.country, 100),
       email: toNullableString(row?.email, 255),
       is_principal: toBoolean(row?.is_principal ?? row?.isPrincipal),
-      // The chosen corresponding investigator, independent of the PI, which the
-      // row order decides.
-      is_primary: toBoolean(row?.is_primary ?? row?.isPrimary),
       display_order: index,
     };
 
@@ -293,13 +343,6 @@ function normalizeInvestigators(raw, errors) {
   const resolvedPrincipal = principalIndex === -1 ? 0 : principalIndex;
   investigators.forEach((row, index) => {
     row.is_principal = index === resolvedPrincipal ? 1 : 0;
-  });
-
-  // Exactly one corresponding investigator too; unchosen falls back to the PI.
-  const primaryIndex = investigators.findIndex((row) => row.is_primary);
-  const resolvedPrimary = primaryIndex === -1 ? resolvedPrincipal : primaryIndex;
-  investigators.forEach((row, index) => {
-    row.is_primary = index === resolvedPrimary ? 1 : 0;
   });
 
   return investigators;
@@ -361,20 +404,21 @@ function normalizeBudgetHeads(raw) {
   const seen = new Set();
 
   return rows.reduce((heads, head) => {
-    const id = toId(typeof head === 'object' ? (head?.budget_head_id ?? head?.id) : head);
-    const name = toNullableString(
-      typeof head === 'object' ? (head?.budget_head_name ?? head?.name) : '',
-      255,
-    );
-    if (!id && !name) return heads;
+    const submitted = typeof head === 'object' ? (head?.budget_head_name ?? head?.name) : head;
+    // A head still in the vocabulary is stored in its canonical case; one that
+    // is no longer offered is kept as submitted, the same way the allotment
+    // matrix keeps its retired heads. Dropping it would delete a head the
+    // form still shows on the row, on a save that never mentioned it.
+    const name = canonicalBudgetHead(submitted) || toNullableString(submitted, 255);
+    if (!name) return heads;
 
     // The junction table is unique on (row, head), so duplicates are dropped
     // here rather than surfacing as a save error.
-    const key = id ? `id:${id}` : `name:${name.toLowerCase()}`;
+    const key = name.toLowerCase();
     if (seen.has(key)) return heads;
     seen.add(key);
 
-    heads.push({ budget_head_id: id, budget_head_name: name });
+    heads.push({ budget_head_name: name });
     return heads;
   }, []);
 }
@@ -541,17 +585,22 @@ function normalizeBudgetAllotment(raw, errors) {
   const seenHeads = new Set();
   const heads = headRows
     .slice(0, MAX_BUDGET_HEAD_ROWS)
-    .map((row, index) => ({
-      key: toNullableString(row?.key, 64) || `head-${index}`,
-      budget_head_id: toId(row?.budget_head_id ?? row?.budgetHeadId),
-      budget_head_name: toNullableString(row?.budget_head_name ?? row?.budgetHeadName, 255),
-      sourceIndex: index,
-    }))
-    .filter((row) => row.budget_head_id || row.budget_head_name)
+    .map((row, index) => {
+      const submitted = row?.budget_head_name ?? row?.budgetHeadName;
+      const name = canonicalBudgetHead(submitted);
+      // A head the vocabulary no longer offers is kept rather than dropped:
+      // the row belongs to a budget that was already sanctioned under it, and
+      // discarding it here would silently delete its allotments.
+      const stored = name || toNullableString(submitted, 255);
+      return {
+        key: toNullableString(row?.key, 64) || `head-${index}`,
+        budget_head_name: stored,
+        sourceIndex: index,
+      };
+    })
+    .filter((row) => row.budget_head_name)
     .map(({ sourceIndex, ...row }) => {
-      const identity = row.budget_head_id
-        ? `id:${row.budget_head_id}`
-        : `name:${row.budget_head_name.toLowerCase()}`;
+      const identity = row.budget_head_name.toLowerCase();
       if (seenHeads.has(identity)) {
         errors.push({
           field: `budget.heads[${sourceIndex}]`,
@@ -635,11 +684,16 @@ function normalizeTransactions(raw, fieldPrefix, errors) {
           financial_year: financialYear,
           transaction_date: transactionDate,
           head_kind: headKind,
-          // Income heads are a fixed vocabulary rather than catalog rows, so only
-          // expenditure rows carry a `budget_heads` id.
-          budget_head_id:
-            headKind === 'expenditure' ? toId(row?.budget_head_id ?? row?.budgetHeadId) : null,
-          head_name: toNullableString(row?.head_name ?? row?.headName, 255),
+          // Expenditure heads are stored by name. A name still in the
+          // vocabulary is stored in its canonical case so the summary groups it
+          // with its allotment row; one that is no longer offered is kept as
+          // submitted, since a ledger written under a head the list has since
+          // dropped must still save.
+          head_name:
+            headKind === 'expenditure'
+              ? canonicalBudgetHead(row?.head_name ?? row?.headName) ||
+                toNullableString(row?.head_name ?? row?.headName, 255)
+              : toNullableString(row?.head_name ?? row?.headName, 255),
           particulars: toNullableString(row?.particulars, 500),
           reference_no: toNullableString(row?.reference_no ?? row?.referenceNo, 150),
           credit: toAmount(row?.credit, `${field}.credit`, errors),
@@ -650,7 +704,6 @@ function normalizeTransactions(raw, fieldPrefix, errors) {
       .filter(
         (row) =>
           row.transaction_date ||
-          row.budget_head_id ||
           row.head_name ||
           row.particulars ||
           row.reference_no ||
@@ -673,7 +726,7 @@ function normalizeTransactions(raw, fieldPrefix, errors) {
         if (!row.transaction_date) {
           errors.push({ field: `${field}.transaction_date`, message: 'Enter the date.' });
         }
-        if (!row.budget_head_id && !row.head_name) {
+        if (!row.head_name) {
           errors.push({ field: `${field}.head`, message: 'Select a budget head.' });
         }
         if (

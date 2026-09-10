@@ -79,6 +79,28 @@ const bulkTransactionTypeNeedsBank = (type) => BANK_TEMPLATE_BULK_TRANSACTION_TY
 
 const normalizeText = (value) => String(value || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+const BENEFICIARY_CATEGORY_OPTIONS = ['Student', 'Faculty', 'Staff'];
+const INTERNAL_BENEFICIARY_ORGS = ['KSRCT', 'KSREI'];
+/**
+ * Mirrors the model's `resolveCanonicalBeneficiaryOrg`: a payload that names no
+ * beneficiary can still carry one in `payee_name`, which is where the older
+ * clients put it. Reading it the same way here keeps the check below from
+ * waving through the very rows the model then files as internal.
+ */
+const resolveBeneficiaryOrg = (beneficiaryOrg, payeeName) => {
+  const submitted = normalizeText(beneficiaryOrg);
+  if (submitted) return submitted;
+
+  const fromPayeeName = normalizeText(payeeName);
+  return BENEFICIARY_ORG_OPTIONS.includes(fromPayeeName) ? fromPayeeName : '';
+};
+// A KSRCT / KSREI individual is someone inside the institution, and which
+// population they belong to is part of identifying them — so the category is
+// as mandatory as the beneficiary itself. External payees and organizations
+// carry none; the model stores NULL for them either way.
+const beneficiaryCategoryRequired = (beneficiaryType, beneficiaryOrg, payeeName) =>
+  normalizeText(beneficiaryType).toLowerCase() !== 'organization' &&
+  INTERNAL_BENEFICIARY_ORGS.includes(resolveBeneficiaryOrg(beneficiaryOrg, payeeName));
 
 const toMoney = (value) => {
   const parsed = Number(String(value ?? '').replace(/,/g, ''));
@@ -984,8 +1006,18 @@ const expenditureController = {
         data: payee,
       });
     } catch (err) {
+      // `updatePayeeById` reports a bad payload by throwing, in two shapes: a
+      // missing field ("... is required") and a field outside its vocabulary
+      // ("account_type must be Savings or Current", "beneficiary_category must
+      // be Student, Faculty or Staff"). Both are the caller's mistake, so both
+      // answer 400 — without the second pattern a category the form left blank
+      // came back as a 500 the user could not act on.
       const message = normalizeText(err.message);
-      if (message.includes('required') || message.includes('Invalid')) {
+      if (
+        message.includes('required') ||
+        message.includes('Invalid') ||
+        message.includes('must be')
+      ) {
         return sendError(res, 400, message);
       }
       return handleError(res, err, 'Error updating payee');
@@ -1062,7 +1094,17 @@ const expenditureController = {
   async createPayee(req, res) {
     try {
       const userId = toPositiveInt(req.user?.id);
-      const { payee_name, account_name, account_no, ifsc, bank_name, branch_name } = req.body || {};
+      const {
+        payee_name,
+        account_name,
+        account_no,
+        ifsc,
+        bank_name,
+        branch_name,
+        beneficiary_type,
+        beneficiary_org,
+        beneficiary_category,
+      } = req.body || {};
       const canonicalPayeeName = resolveCanonicalPayeeName(payee_name, account_name);
 
       if (!canonicalPayeeName || !account_no || !ifsc || !bank_name || !branch_name) {
@@ -1071,6 +1113,13 @@ const expenditureController = {
           400,
           'accountant name, account_no, ifsc, bank_name and branch_name are required',
         );
+      }
+
+      if (
+        beneficiaryCategoryRequired(beneficiary_type, beneficiary_org, payee_name) &&
+        !BENEFICIARY_CATEGORY_OPTIONS.includes(normalizeText(beneficiary_category))
+      ) {
+        return sendError(res, 400, 'category must be Student, Faculty or Staff');
       }
 
       const payeeId = await expenditureModel.upsertPayee(

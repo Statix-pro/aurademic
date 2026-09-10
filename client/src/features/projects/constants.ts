@@ -21,13 +21,66 @@ export const MAX_TRANSACTION_ACCOUNTS = 10;
 export const MAX_TRANSACTIONS_PER_ACCOUNT = 500;
 
 /**
- * The income side of the transaction ledger. Expenditure heads come from the
- * shared budget catalog; income has no catalog, and these are the standard ways
- * money reaches a project account rather than institution data — so, like the
- * SDG list below, they live in code. Mirrored by `PROJECT_INCOME_HEADS` in
+ * The income side of the transaction ledger: the standard ways money reaches a
+ * project account. Like the expenditure heads in `PROJECT_BUDGET_HEAD_GROUPS`
+ * below, these are a fixed vocabulary rather than institution data, so they
+ * live in code. Mirrored by `PROJECT_INCOME_HEADS` in
  * `server/modules/project/projectPayload.js`, which validates them.
  */
 export const PROJECT_INCOME_HEADS = ['Deposit', 'Interest', 'Grant Received', 'Other Income'];
+
+/**
+ * The expenditure heads a project budgets against, grouped by the kind of
+ * project the vocabulary belongs to.
+ *
+ * Deliberately not the institution-wide `budget_heads` catalog: a project is
+ * sanctioned against the heads its funding agency recognises — Manpower and
+ * Contingencies on a research grant, Honorarium and Lodging on a sponsored
+ * event — which is a different vocabulary from the one the college budgets its
+ * own spending under. Like `PROJECT_INCOME_HEADS` above they live in code, and
+ * are mirrored by `PROJECT_BUDGET_HEAD_GROUPS` in
+ * `server/modules/project/projectPayload.js`, which validates them.
+ *
+ * Both groups are offered together, since nothing on a project records which
+ * kind it is. `Consumables` appears under each on purpose: heads are stored and
+ * matched by name, so it is one head reachable from either list, and a project
+ * can budget it once.
+ */
+export const PROJECT_BUDGET_HEAD_GROUPS = [
+  {
+    label: 'Research Projects',
+    heads: [
+      'Equipment',
+      'Consumables',
+      'Manpower',
+      'Contingencies',
+      'Overhead Charges',
+      'Travel',
+      'Field Work',
+      'Other Costs',
+    ],
+  },
+  {
+    label: 'Sponsored Events',
+    heads: [
+      'Honorarium',
+      'Consumables',
+      'Travel Allowance',
+      'Food & Refreshment',
+      'Registration Kit',
+      'Printing',
+      'Stationery',
+      'Administrative Expenses',
+      'Boarding Expenses',
+      'Lodging Expenses',
+    ],
+  },
+];
+
+/** Every project budget head, in vocabulary order, each name once. */
+export const PROJECT_BUDGET_HEADS: string[] = [
+  ...new Set(PROJECT_BUDGET_HEAD_GROUPS.flatMap((group) => group.heads)),
+];
 
 /** Matches the server-side document check advertised on every upload control. */
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
@@ -192,18 +245,32 @@ export const OUTCOME_FIELDS = [
 ] as const;
 
 /**
- * Indian financial years for the disbursement dropdown: a window around the
- * current year, so past tranches and next year's release are both selectable.
+ * Indian financial years for the year dropdowns — the budget allotment columns,
+ * the grant disbursements and the ledger — as a window around the current year,
+ * so past tranches and a future year's release are both selectable.
+ *
+ * The current financial year comes first, then the years ahead, then the years
+ * behind. Order matters here because it decides which year is one stray click
+ * or arrow key away: listing the whole window newest-first put the last year of
+ * the window — three years in the future — at the top of every one of these
+ * dropdowns, which is the least likely year anyone means and the easiest to
+ * pick by accident. It then followed the row into the Transaction Summary's
+ * year filter, which offers whatever years the project actually uses.
  */
-export function financialYearOptions(yearsBack = 10, yearsAhead = 3): string[] {
+export function financialYearOptions(yearsBack = 5, yearsAhead = 3): string[] {
   const today = new Date();
   // A financial year runs April–March, so before April the current one started
   // in the previous calendar year.
   const currentStart = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
 
+  const label = (start: number) => `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+
   const options: string[] = [];
-  for (let start = currentStart + yearsAhead; start >= currentStart - yearsBack; start -= 1) {
-    options.push(`${start}-${String((start + 1) % 100).padStart(2, '0')}`);
+  for (let start = currentStart; start <= currentStart + yearsAhead; start += 1) {
+    options.push(label(start));
+  }
+  for (let start = currentStart - 1; start >= currentStart - yearsBack; start -= 1) {
+    options.push(label(start));
   }
   return options;
 }
@@ -226,6 +293,9 @@ export const PROJECT_FORM_TABS = [
   { id: 'details', label: 'Project Details' },
   { id: 'budget', label: 'Budget' },
   { id: 'transaction', label: 'Transaction' },
+  // Last, and read-only: every figure on it is derived from the two tabs
+  // before it, so it is where you go once the budget and the ledger are in.
+  { id: 'summary', label: 'Summary' },
 ] as const;
 
 export type ProjectFormTab = (typeof PROJECT_FORM_TABS)[number]['id'];

@@ -992,6 +992,26 @@
 
 .pf-table-wrap {
   overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c3cede transparent;
+}
+
+.pf-table-wrap::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.pf-table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pf-table-wrap::-webkit-scrollbar-thumb {
+  background: #c3cede;
+  border-radius: 999px;
+}
+
+.pf-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: #a8b6cc;
 }
 
 .pf-table {
@@ -1105,12 +1125,21 @@
    Budget allotment matrix
    -------------------------------------------------------------------------- */
 
+/* Both of these are floors, not just preferred widths. The matrix grows a
+   column per financial year, and a table set to `width: 100%` answers that by
+   compressing every column to fit its container — which clipped the head names
+   and the year labels to "Academic Eve..." and "2029-". With a floor per
+   column the table takes the width it actually needs and `.pf-table-wrap`
+   scrolls it, so however many years a project budgets across, each one can be
+   read in full. */
 .pf-matrix__head {
   width: 240px;
+  min-width: 240px;
 }
 
 .pf-matrix__year {
   width: 200px;
+  min-width: 200px;
 }
 
 /* The year column's own header is a control, not a label, so it needs the
@@ -1121,9 +1150,12 @@
   align-items: center;
 }
 
+/* Enough for a full "2029-30" beside the chevron: the select is what the
+   header's flex row would otherwise shrink first, and the column floor above
+   only holds if its contents refuse to collapse. */
 .pf-matrix__year-header .pf-select {
   flex: 1;
-  min-width: 0;
+  min-width: 104px;
 }
 
 .pf-matrix thead .pf-row-actions {
@@ -1201,16 +1233,82 @@
   min-width: 0;
 }
 
+/* Three of the nine columns moved into the expanding strip below each row, so
+   the table itself needs far less width before it starts scrolling. */
 .pf-ledger {
-  min-width: 1100px;
-}
-
-.pf-ledger__particulars {
-  min-width: 220px;
+  min-width: 760px;
 }
 
 .pf-ledger .pf-table__amount {
   width: 120px;
+}
+
+/* Floors, for the same reason as the matrix columns above: the min-width on
+   the table lets it stop growing, and a table that has stopped growing pays
+   for it by squeezing these two — which clipped "2029-30" and any head longer
+   than a word once the window got narrow. */
+.pf-ledger__year {
+  width: 150px;
+  min-width: 134px;
+}
+
+.pf-ledger__head {
+  width: 260px;
+  min-width: 220px;
+}
+
+/* The expand toggle sits with the add / remove buttons, so it keeps their
+   shape — only the chevron turns to say which way the row is going. */
+.pf-ledger .pf-table__actions {
+  width: 132px;
+}
+
+.pf-ledger__toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.pf-ledger__toggle.is-open svg {
+  transform: rotate(180deg);
+}
+
+/* Reads as part of the row above rather than as a row of its own: no zebra
+   striping, and the top border is left off so the two look joined. */
+.pf-ledger__detail-row > .pf-ledger__detail-cell {
+  padding: 12px 14px 16px;
+  background: #f7faff;
+  border-top: 0;
+}
+
+.pf-ledger__detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+}
+
+.pf-ledger__detail-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+}
+
+/* Particulars is free text and takes whatever the other two leave. */
+.pf-ledger__detail-field--wide {
+  flex: 1 1 260px;
+  min-width: 240px;
+}
+
+.pf-ledger__detail-label {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--primary-color, #0069ab);
+  white-space: nowrap;
+}
+
+.pf-ledger__detail-field .pf-input {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 /* Derived, so it is shown rather than typed — but keeps the shape of the

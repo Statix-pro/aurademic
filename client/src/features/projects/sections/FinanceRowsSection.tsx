@@ -4,12 +4,11 @@ import { SelectField } from '../components/FormFields';
 import RowActions from '../components/RowActions';
 import SectionCard from '../components/SectionCard';
 import TagSelectField from '../components/TagSelectField';
-import { MAX_FINANCE_ROWS } from '../constants';
+import { MAX_FINANCE_ROWS, PROJECT_BUDGET_HEADS } from '../constants';
 import { createFinanceRow, removeAt, replaceAt, sumAmounts } from '../projectFormState';
 import { withSelectedOption } from '../selectOptions';
 
-import type { BudgetHead } from '../../../shared/hooks/useBudgetCatalog';
-import type { BudgetHeadRef, FinanceRow, ProjectOrganization } from '../types';
+import type { FinanceRow, ProjectOrganization } from '../types';
 
 interface FinanceRowsSectionProps {
   title: string;
@@ -20,7 +19,6 @@ interface FinanceRowsSectionProps {
   enabled: boolean;
   onToggle: (enabled: boolean) => void;
   organizations: ProjectOrganization[];
-  budgetHeads: BudgetHead[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -31,25 +29,19 @@ const currency = new Intl.NumberFormat('en-IN', {
   maximumFractionDigits: 2,
 });
 
-/** A stored head is addressed by its catalog id, a free-text one by its name. */
-const headValue = (head: BudgetHeadRef) => (head.id ? String(head.id) : head.name);
-
 /**
- * Keeps a stored head selectable when the catalog does not offer it — it was
- * deactivated, or the catalog has not loaded yet. Without this its chip would
- * render as a bare id and an edit to the row would save it as a nameless head.
+ * Keeps a stored head selectable when the vocabulary no longer offers it —
+ * without this its chip would disappear and an edit to any other cell in the
+ * row would save the row without it.
  */
 const withStoredHeads = (
   options: { value: string; label: string }[],
-  heads: BudgetHeadRef[],
+  heads: string[],
 ): { value: string; label: string }[] => {
   const offered = new Set(options.map((option) => option.value));
   const missing = heads
-    .filter((head) => !offered.has(headValue(head)))
-    .map((head) => ({
-      value: headValue(head),
-      label: head.name?.trim() || 'Currently selected (no longer listed)',
-    }));
+    .filter((name) => !offered.has(name))
+    .map((name) => ({ value: name, label: name }));
 
   return missing.length > 0 ? [...missing, ...options] : options;
 };
@@ -67,7 +59,6 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
   enabled,
   onToggle,
   organizations,
-  budgetHeads,
   errors,
   disabled,
 }) => {
@@ -80,9 +71,13 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
     [organizations],
   );
 
+  // The flat head list rather than the grouped one `budgetHeadOptions()`
+  // builds: this is a multi-select with no group headings, so a head that
+  // belongs to both vocabularies — `Consumables` — would be offered twice over,
+  // indistinguishably, and twice under the same React key.
   const headOptions = useMemo(
-    () => budgetHeads.map((head) => ({ value: String(head.id), label: head.name })),
-    [budgetHeads],
+    () => PROJECT_BUDGET_HEADS.map((name) => ({ value: name, label: name })),
+    [],
   );
 
   const update = (index: number, changes: Partial<FinanceRow>) =>
@@ -148,25 +143,11 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
                   <TagSelectField
                     compact
                     options={withStoredHeads(headOptions, row.heads)}
-                    value={row.heads.map(headValue)}
-                    onChange={(values) =>
-                      update(index, {
-                        heads: values.map((value) => {
-                          const head = budgetHeads.find((item) => String(item.id) === value);
-                          if (head) return { id: head.id, name: head.name };
-
-                          // Not in the catalog: keep what the row already holds
-                          // for that chip so its id and name survive the edit.
-                          const stored = row.heads.find((item) => headValue(item) === value);
-                          return stored ? { ...stored } : { id: null, name: value };
-                        }),
-                      })
-                    }
+                    value={row.heads}
+                    onChange={(values) => update(index, { heads: values })}
                     placeholder="Select budget head(s)"
                     disabled={disabled}
-                    emptyMessage={
-                      headOptions.length === 0 ? 'Budget heads are still loading' : 'No matches'
-                    }
+                    emptyMessage="No matches"
                   />
                 </td>
 

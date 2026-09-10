@@ -251,8 +251,8 @@ async function replaceInvestigators(connection, projectId, investigators, author
     await connection.query(
       `INSERT INTO project_investigators
         (project_id, member_type, author_id, name, department, organization, country,
-         is_principal, is_primary, display_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         is_principal, display_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         projectId,
         investigator.member_type,
@@ -262,7 +262,6 @@ async function replaceInvestigators(connection, projectId, investigators, author
         investigator.organization,
         investigator.country,
         investigator.is_principal,
-        investigator.is_primary,
         investigator.display_order,
       ],
     );
@@ -331,8 +330,8 @@ async function replaceFinanceRows(connection, projectId, financeRows) {
     if (row.heads.length === 0) continue;
 
     await connection.query(
-      'INSERT INTO project_finance_row_heads (finance_row_id, budget_head_id, budget_head_name) VALUES ?',
-      [row.heads.map((head) => [inserted.insertId, head.budget_head_id, head.budget_head_name])],
+      'INSERT INTO project_finance_row_heads (finance_row_id, budget_head_name) VALUES ?',
+      [row.heads.map((head) => [inserted.insertId, head.budget_head_name])],
     );
   }
 }
@@ -363,9 +362,9 @@ async function replaceBudgetAllotment(connection, projectId, budget) {
   for (const row of budget.heads) {
     const [inserted] = await connection.query(
       `INSERT INTO project_budget_heads
-        (project_id, budget_head_id, budget_head_name, display_order)
-       VALUES (?, ?, ?, ?)`,
-      [projectId, row.budget_head_id, row.budget_head_name, row.display_order],
+        (project_id, budget_head_name, display_order)
+       VALUES (?, ?, ?)`,
+      [projectId, row.budget_head_name, row.display_order],
     );
     headIdByKey.set(row.key, inserted.insertId);
   }
@@ -408,7 +407,7 @@ async function replaceTransactionAccounts(connection, projectId, accounts) {
 
     await connection.query(
       `INSERT INTO project_transactions
-        (project_id, account_id, financial_year, transaction_date, head_kind, budget_head_id,
+        (project_id, account_id, financial_year, transaction_date, head_kind,
          head_name, particulars, reference_no, credit, debit, display_order)
        VALUES ?`,
       [
@@ -418,7 +417,6 @@ async function replaceTransactionAccounts(connection, projectId, accounts) {
           row.financial_year,
           row.transaction_date,
           row.head_kind,
-          row.budget_head_id,
           row.head_name,
           row.particulars,
           row.reference_no,
@@ -747,7 +745,7 @@ const projectModel = {
     ] = await Promise.all([
       db.query(
         `SELECT
-              pin.id, pin.member_type, pin.author_id, pin.is_principal, pin.is_primary,
+              pin.id, pin.member_type, pin.author_id, pin.is_principal,
               pin.display_order,
               COALESCE(NULLIF(pin.name, ''), va.author_name) AS name,
               COALESCE(NULLIF(pin.department, ''), va.department) AS department,
@@ -782,11 +780,9 @@ const projectModel = {
         [projectId],
       ),
       db.query(
-        `SELECT frh.finance_row_id, frh.budget_head_id,
-                  COALESCE(NULLIF(frh.budget_head_name, ''), bh.name) AS budget_head_name
+        `SELECT frh.finance_row_id, frh.budget_head_name
              FROM project_finance_row_heads frh
              JOIN project_finance_rows pfr ON frh.finance_row_id = pfr.id
-             LEFT JOIN budget_heads bh ON frh.budget_head_id = bh.id
             WHERE pfr.project_id = ?
             ORDER BY frh.id`,
         [projectId],
@@ -817,10 +813,8 @@ const projectModel = {
         [projectId],
       ),
       db.query(
-        `SELECT pbh.id, pbh.budget_head_id, pbh.display_order,
-                  COALESCE(NULLIF(pbh.budget_head_name, ''), bh.name) AS budget_head_name
+        `SELECT pbh.id, pbh.display_order, pbh.budget_head_name
              FROM project_budget_heads pbh
-             LEFT JOIN budget_heads bh ON pbh.budget_head_id = bh.id
             WHERE pbh.project_id = ?
             ORDER BY pbh.display_order, pbh.id`,
         [projectId],
@@ -841,12 +835,11 @@ const projectModel = {
         [projectId],
       ),
       db.query(
-        `SELECT pt.id, pt.account_id, pt.financial_year, pt.head_kind, pt.budget_head_id,
+        `SELECT pt.id, pt.account_id, pt.financial_year, pt.head_kind,
                   pt.particulars, pt.reference_no, pt.credit, pt.debit, pt.display_order,
                   DATE_FORMAT(pt.transaction_date, '%Y-%m-%d') AS transaction_date,
-                  COALESCE(NULLIF(pt.head_name, ''), bh.name) AS head_name
+                  pt.head_name
              FROM project_transactions pt
-             LEFT JOIN budget_heads bh ON pt.budget_head_id = bh.id
             WHERE pt.project_id = ?
             ORDER BY pt.display_order, pt.id`,
         [projectId],
@@ -855,7 +848,7 @@ const projectModel = {
 
     const headsByRow = financeHeads[0].reduce((map, head) => {
       const heads = map.get(head.finance_row_id) ?? [];
-      heads.push({ budget_head_id: head.budget_head_id, budget_head_name: head.budget_head_name });
+      heads.push({ budget_head_name: head.budget_head_name });
       map.set(head.finance_row_id, heads);
       return map;
     }, new Map());

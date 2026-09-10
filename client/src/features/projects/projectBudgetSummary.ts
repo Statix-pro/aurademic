@@ -41,20 +41,13 @@ export function formatAmount(value: number | null): string {
 }
 
 /**
- * The identity a ledger row and an allotment row are matched on. The catalog id
- * is used where there is one, so a head an administrator later renames keeps
- * its ledger rows attached to its budget; heads with no id fall back to the
- * name they were saved under.
+ * The identity a ledger row and an allotment row are matched on. Project heads
+ * are stored by name, so the name is the identity — lower-cased, so a head
+ * saved in a different case still counts against its own budget.
  */
-export function headIdentity(
-  kind: TransactionHeadKind,
-  budgetHeadId: number | null,
-  name: string,
-): string {
-  if (kind === 'income') return `income:${name.trim().toLowerCase()}`;
-  return budgetHeadId
-    ? `expenditure:id:${budgetHeadId}`
-    : `expenditure:name:${name.trim().toLowerCase()}`;
+export function headIdentity(kind: TransactionHeadKind, name: string): string {
+  const key = name.trim().toLowerCase();
+  return kind === 'income' ? `income:${key}` : `expenditure:name:${key}`;
 }
 
 /**
@@ -63,17 +56,8 @@ export function headIdentity(
  * it counts on; the display name comes from the chosen option, since the
  * identity lower-cases it.
  */
-export function parseHeadIdentity(identity: string): {
-  headKind: TransactionHeadKind;
-  budgetHeadId: number | null;
-} {
-  if (identity.startsWith('income:')) return { headKind: 'income', budgetHeadId: null };
-
-  const catalogId = /^expenditure:id:(\d+)$/.exec(identity);
-  return {
-    headKind: 'expenditure',
-    budgetHeadId: catalogId ? Number(catalogId[1]) : null,
-  };
+export function parseHeadIdentity(identity: string): { headKind: TransactionHeadKind } {
+  return { headKind: identity.startsWith('income:') ? 'income' : 'expenditure' };
 }
 
 /**
@@ -157,7 +141,7 @@ export function buildTransactionSummary({
 
   accounts.forEach((account) => {
     account.transactions.forEach((row) => {
-      if (!row.budgetHeadId && !row.headName.trim()) return;
+      if (!row.headName.trim()) return;
 
       // Money that moved in an earlier year is no part of this year's figures,
       // but it is exactly what the year opens with. Financial years are fixed
@@ -168,7 +152,7 @@ export function buildTransactionSummary({
       }
       if (financialYear && row.financialYear !== financialYear) return;
 
-      const identity = headIdentity(row.headKind, row.budgetHeadId, row.headName);
+      const identity = headIdentity(row.headKind, row.headName);
       const net =
         row.headKind === 'income'
           ? toAmount(row.credit) - toAmount(row.debit)
@@ -182,9 +166,9 @@ export function buildTransactionSummary({
   const listed = new Set<string>();
 
   const budgetedExpenditure: SummaryRow[] = budgetRows
-    .filter((row) => row.budgetHeadId || row.budgetHeadName.trim())
+    .filter((row) => row.budgetHeadName.trim())
     .map((row) => {
-      const identity = headIdentity('expenditure', row.budgetHeadId, row.budgetHeadName);
+      const identity = headIdentity('expenditure', row.budgetHeadName);
       listed.add(identity);
 
       const budget = columns.reduce(
@@ -221,7 +205,7 @@ export function buildTransactionSummary({
   // fixed schedule rather than appearing a row at a time. Income is received
   // rather than budgeted, so these carry actuals only.
   const standardIncome: SummaryRow[] = PROJECT_INCOME_HEADS.map((name) => {
-    const identity = headIdentity('income', null, name);
+    const identity = headIdentity('income', name);
     listed.add(identity);
 
     return {

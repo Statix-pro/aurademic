@@ -14,6 +14,8 @@ export interface PayeeDirectoryRecord {
   branch_name?: string;
   beneficiary_type?: string | null;
   beneficiary_org?: string | null;
+  /** Student / Faculty / Staff — set only for a KSRCT or KSREI individual. */
+  beneficiary_category?: string | null;
   organization_type?: string | null;
   msme?: string | null;
   gstin?: string | null;

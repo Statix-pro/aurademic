@@ -5706,6 +5706,7 @@ const ExpenditureApproval: React.FC = () => {
         beneficiary_type: payee.beneficiaryType || 'individual',
         beneficiary_org:
           resolveCanonicalBeneficiaryOrg(payee.beneficiaryOrg, payee.payeeName) || null,
+        beneficiary_category: payee.beneficiaryCategory || null,
         organization_type: payee.organizationType || null,
         msme: payee.msme || null,
         gstin: payee.gstin || null,

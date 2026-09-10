@@ -32,6 +32,18 @@ type PayeeFormDraft = PendingPayeeRecord & {
 
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'] as const;
 
+const BENEFICIARY_CATEGORY_OPTIONS = ['Student', 'Faculty', 'Staff'] as const;
+
+/**
+ * Which population an internal individual belongs to. KSRCT and KSREI payees
+ * are people inside the institution and Finance reports on students, faculty
+ * and staff separately; an External payee is outside it and an organization is
+ * an entity rather than a person, so neither carries a category.
+ */
+const requiresBeneficiaryCategory = (beneficiaryType: unknown, beneficiaryOrg: unknown): boolean =>
+  normalizePayeeText(beneficiaryType).toLowerCase() !== 'organization' &&
+  ['KSRCT', 'KSREI'].includes(normalizePayeeText(beneficiaryOrg));
+
 const ORGANIZATION_TYPE_OPTIONS = [
   'Sole Proprietorship',
   'Partnership Firm',
@@ -266,6 +278,7 @@ const createDraftFromPayee = (payee: PendingPayeeRecord): PayeeFormDraft => ({
   beneficiary_org:
     normalizePayeeText(payee.beneficiary_org || '') ||
     (isBeneficiaryOrgValue(payee.payee_name) ? normalizePayeeText(payee.payee_name) : ''),
+  beneficiary_category: normalizePayeeText(payee.beneficiary_category || ''),
   organization_type: payee.organization_type || '',
   msme: payee.msme || '',
   gstin: payee.gstin || '',
@@ -434,6 +447,9 @@ const PayeeDetailModal: React.FC<{
         return {
           ...prev,
           beneficiary_type: beneficiaryType,
+          ...(requiresBeneficiaryCategory(beneficiaryType, prev.beneficiary_org)
+            ? {}
+            : { beneficiary_category: '' }),
           ...(beneficiaryType === 'organization'
             ? {
                 pan_number: extractPanFromGstin(prev.gstin) || prev.pan_number,
@@ -445,6 +461,18 @@ const PayeeDetailModal: React.FC<{
                 tds_details: '',
                 tds_section: '',
               }),
+        };
+      }
+
+      // A move to External leaves the stored category inapplicable, and a
+      // value nothing renders would still reach the payload.
+      if (key === 'beneficiary_org') {
+        return {
+          ...prev,
+          beneficiary_org: value,
+          ...(requiresBeneficiaryCategory(prev.beneficiary_type, value)
+            ? {}
+            : { beneficiary_category: '' }),
         };
       }
 
@@ -475,9 +503,14 @@ const PayeeDetailModal: React.FC<{
     const tdsDetails = normalizePayeeText(draft.tds_details);
     const tdsSection = normalizePayeeText(draft.tds_section);
     const accountType = normalizePayeeText(draft.account_type);
+    const categoryRequired = requiresBeneficiaryCategory(beneficiaryType, beneficiaryOrg);
+    const beneficiaryCategory = categoryRequired
+      ? normalizePayeeText(draft.beneficiary_category)
+      : '';
 
     const missingFields: string[] = [];
     if (!beneficiaryOrg) missingFields.push('Beneficiary');
+    if (categoryRequired && !beneficiaryCategory) missingFields.push('Category');
     if (!accountName) missingFields.push('Account Name');
     if (beneficiaryType === 'individual') {
       if (!panNumber) missingFields.push('PAN Number');
@@ -522,6 +555,7 @@ const PayeeDetailModal: React.FC<{
       branch_name: branchName,
       beneficiary_type: beneficiaryType,
       beneficiary_org: beneficiaryOrg,
+      beneficiary_category: beneficiaryCategory,
       organization_type: beneficiaryType === 'organization' ? organizationType : '',
       msme: beneficiaryType === 'organization' ? msme : '',
       gstin: beneficiaryType === 'organization' ? gstin : '',
@@ -633,6 +667,23 @@ const PayeeDetailModal: React.FC<{
                   <option value="organization">Organization</option>
                 </select>
               </div>
+              {requiresBeneficiaryCategory(draft.beneficiary_type, draft.beneficiary_org) ? (
+                <div>
+                  <label style={labelStyle}>Category *</label>
+                  <select
+                    style={inputStyle}
+                    value={normalizePayeeText(draft.beneficiary_category)}
+                    onChange={(e) => updateDraft('beneficiary_category', e.target.value)}
+                  >
+                    <option value="">Select Category</option>
+                    {BENEFICIARY_CATEGORY_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div>
                 <label style={labelStyle}>Account Number</label>
                 <input
@@ -776,6 +827,25 @@ const PayeeDetailModal: React.FC<{
                 label="Beneficiary Type"
                 value={formatToken(effectivePayee.beneficiary_type)}
               />
+              {/* Every individual has a beneficiary — the organization branch
+                  below reads the same column under its own label — but only an
+                  internal one carries a category. */}
+              {String(effectivePayee.beneficiary_type || '')
+                .trim()
+                .toLowerCase() !== 'organization' ? (
+                <>
+                  <PayeeDetailField label="Beneficiary" value={effectivePayee.beneficiary_org} />
+                  {requiresBeneficiaryCategory(
+                    effectivePayee.beneficiary_type,
+                    effectivePayee.beneficiary_org,
+                  ) ? (
+                    <PayeeDetailField
+                      label="Category"
+                      value={effectivePayee.beneficiary_category}
+                    />
+                  ) : null}
+                </>
+              ) : null}
               {String(effectivePayee.beneficiary_type || '')
                 .trim()
                 .toLowerCase() === 'organization' ? (
@@ -1133,6 +1203,9 @@ const PayeeFormModal: React.FC<{
         return {
           ...prev,
           beneficiary_type: beneficiaryType,
+          ...(requiresBeneficiaryCategory(beneficiaryType, prev.beneficiary_org)
+            ? {}
+            : { beneficiary_category: '' }),
           ...(beneficiaryType === 'organization'
             ? {
                 pan_number: extractPanFromGstin(prev.gstin) || prev.pan_number,
@@ -1144,6 +1217,18 @@ const PayeeFormModal: React.FC<{
                 tds_details: '',
                 tds_section: '',
               }),
+        };
+      }
+
+      // A move to External leaves the stored category inapplicable, and a
+      // value nothing renders would still reach the payload.
+      if (key === 'beneficiary_org') {
+        return {
+          ...prev,
+          beneficiary_org: value,
+          ...(requiresBeneficiaryCategory(prev.beneficiary_type, value)
+            ? {}
+            : { beneficiary_category: '' }),
         };
       }
 
@@ -1184,9 +1269,14 @@ const PayeeFormModal: React.FC<{
     const tdsDetails = normalizePayeeText(draft.tds_details);
     const tdsSection = normalizePayeeText(draft.tds_section);
     const accountType = normalizePayeeText(draft.account_type);
+    const categoryRequired = requiresBeneficiaryCategory(beneficiaryType, beneficiaryOrg);
+    const beneficiaryCategory = categoryRequired
+      ? normalizePayeeText(draft.beneficiary_category)
+      : '';
 
     const missingFields: string[] = [];
     if (!beneficiaryOrg) missingFields.push('Beneficiary');
+    if (categoryRequired && !beneficiaryCategory) missingFields.push('Category');
     if (!accountName) missingFields.push('Account Name');
     if (beneficiaryType === 'organization') {
       if (!organizationType) missingFields.push('Organization Type');
@@ -1228,6 +1318,7 @@ const PayeeFormModal: React.FC<{
       branch_name: branchName,
       beneficiary_type: beneficiaryType,
       beneficiary_org: beneficiaryOrg,
+      beneficiary_category: beneficiaryCategory,
       organization_type: beneficiaryType === 'organization' ? organizationType : '',
       msme: beneficiaryType === 'organization' ? msme : '',
       gstin: beneficiaryType === 'organization' ? gstin : '',
@@ -1372,6 +1463,29 @@ const PayeeFormModal: React.FC<{
                     ))}
                   </div>
                 </div>
+
+                {requiresBeneficiaryCategory(beneficiaryType, formDraft.beneficiary_org) && (
+                  <div className="add-payee-modal-row">
+                    <label>Category *</label>
+                    <div className="add-payee-modal-radio-group">
+                      {BENEFICIARY_CATEGORY_OPTIONS.map((option) => (
+                        <label key={option} className="add-payee-modal-radio">
+                          <input
+                            type="radio"
+                            name="beneficiaryCategory"
+                            value={option}
+                            checked={normalizePayeeText(formDraft.beneficiary_category) === option}
+                            onChange={() =>
+                              !isReadOnly && updateDraft('beneficiary_category', option)
+                            }
+                            disabled={busy || isReadOnly}
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="add-payee-modal-row">
                   <label>Account Name</label>
