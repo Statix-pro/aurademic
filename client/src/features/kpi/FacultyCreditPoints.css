@@ -62,7 +62,7 @@
   border-collapse: separate;
   border-spacing: 0;
   color: #1e293b;
-  font-size: 1rem;
+  font-size: 0.875rem;
   table-layout: fixed;
 }
 
@@ -80,7 +80,7 @@
 .faculty-credit-points-table th {
   background: #0069ab;
   color: #fff;
-  font-size: 1rem;
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
@@ -146,7 +146,7 @@
   justify-content: center;
   gap: 12px;
   color: #4f4f6e;
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 500;
 }
 

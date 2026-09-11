@@ -96,7 +96,7 @@
   align-items: center;
   gap: 6px;
   color: #555;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -148,7 +148,7 @@
   background: #fafafa;
   color: #555;
   font:
-    600 1rem 'Roboto',
+    600 0.95rem 'Roboto',
     sans-serif;
   outline: none;
 }
@@ -210,7 +210,7 @@
   align-items: center;
   gap: 7px;
   color: #555;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -259,7 +259,7 @@
 .associated-roles-multiselect-placeholder {
   color: #555;
   font:
-    600 1rem 'Roboto',
+    600 0.95rem 'Roboto',
     sans-serif;
 }
 .associated-roles-multiselect-toggle {
@@ -299,7 +299,7 @@
   background: #fff;
   color: #555;
   font:
-    600 1rem 'Roboto',
+    600 0.95rem 'Roboto',
     sans-serif;
   text-align: left;
   cursor: pointer;
@@ -326,7 +326,7 @@
   background: #fafafa;
   color: #555;
   font:
-    600 1rem 'Roboto',
+    600 0.95rem 'Roboto',
     sans-serif;
   outline: none;
   cursor: pointer;
@@ -357,7 +357,7 @@
   border-radius: 5px;
   background: #e1eff8;
   color: var(--associated-roles-blue);
-  font-size: 1rem;
+  font-size: 0.875rem;
   font-weight: 600;
 }
 .associated-roles-chip button {
@@ -595,7 +595,7 @@
 }
 .associated-roles-responsibilities .associated-roles-field-label {
   color: var(--associated-roles-blue);
-  font-size: 1.125rem;
+  font-size: 1rem;
   font-weight: 700;
 }
 .associated-roles-responsibilities-card {
@@ -635,7 +635,7 @@
   background: transparent;
   color: #555;
   font:
-    600 1rem 'Roboto',
+    600 0.95rem 'Roboto',
     sans-serif;
   outline: none;
 }

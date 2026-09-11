@@ -441,33 +441,33 @@ function App() {
                   <Route
                     path="/kpi"
                     element={
-                      <ProtectedRoute>
+                      <AdminRoute>
                         <UnderConstruction pageName="KPI Dashboard" />
-                      </ProtectedRoute>
+                      </AdminRoute>
                     }
                   />
                   <Route
                     path="/kpi/faculty-credit-points"
                     element={
-                      <ProtectedRoute>
+                      <AdminRoute>
                         <FacultyCreditPoints />
-                      </ProtectedRoute>
+                      </AdminRoute>
                     }
                   />
                   <Route
                     path="/kpi/associated-roles"
                     element={
-                      <ProtectedRoute>
+                      <AdminRoute>
                         <AssociatedRoles />
-                      </ProtectedRoute>
+                      </AdminRoute>
                     }
                   />
                   <Route
                     path="/kpi/associated-add"
                     element={
-                      <ProtectedRoute>
+                      <AdminRoute>
                         <AssociatedRoleDetailsPage />
-                      </ProtectedRoute>
+                      </AdminRoute>
                     }
                   />
                   <Route

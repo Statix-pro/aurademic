@@ -122,7 +122,6 @@ const IconAdmin = () => (
   >
     <rect x="9" y="2" width="6" height="5" rx="1" />
     <line x1="12" y1="7" x2="12" y2="11" />
-    <line x1="4" y1="11" x2="20" y2="11" />
     <line x1="4" y1="11" x2="4" y2="15" />
     <line x1="12" y1="11" x2="12" y2="15" />
     <line x1="20" y1="11" x2="20" y2="15" />
@@ -133,20 +132,7 @@ const IconAdmin = () => (
 );
 
 // Profile — user circle
-const IconProfile = () => (
-  <svg
-    className="sb-icon"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-    <circle cx="12" cy="7" r="4" />
-  </svg>
-);
+const IconProfile = () => <svg className="sb-icon" viewBox="0 0 24 24" fill="none"></svg>;
 
 // KPI — bar chart trending up
 const IconKpi = () => (
@@ -239,6 +225,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
+  const showKpiMenu = canAccessAdminArea(user);
   const showAdminMenu =
     showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow;
   const showSuperAdminMenu = isSuperAdmin(user);
@@ -636,30 +623,39 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <span className="sb-text">My Profile</span>
         </Link>
 
-        <div className="sb-group">
-          <button
-            className={`sb-link ${
-              isGroupActive(['/kpi']) ? 'active' : ''
-            } ${activeMenu === 'KPI' ? 'open' : ''}`}
-            onClick={() => toggleDropdown('KPI')}
-            title="KPI"
-          >
-            <IconKpi />
-            <span className="sb-text">KPI</span>
-            <ChevronDown />
-          </button>
-          {isExpanded && activeMenu === 'KPI' && (
-            <div className="sb-submenu">
-              <Link
-                to="/kpi/faculty-credit-points"
-                className={`sb-sublink ${isActive('/kpi/faculty-credit-points') ? 'active' : ''}`}
-                onClick={handleLinkClick}
-              >
-                Faculty Credit Points
-              </Link>
-            </div>
-          )}
-        </div>
+        {showKpiMenu && (
+          <div className="sb-group">
+            <button
+              className={`sb-link ${
+                isGroupActive(['/kpi']) ? 'active' : ''
+              } ${activeMenu === 'KPI' ? 'open' : ''}`}
+              onClick={() => toggleDropdown('KPI')}
+              title="KPI"
+            >
+              <IconKpi />
+              <span className="sb-text">KPI</span>
+              <ChevronDown />
+            </button>
+            {isExpanded && activeMenu === 'KPI' && (
+              <div className="sb-submenu">
+                <Link
+                  to="/kpi"
+                  className={`sb-sublink ${isActive('/kpi') ? 'active' : ''}`}
+                  onClick={handleLinkClick}
+                >
+                  KPI Dashboard
+                </Link>
+                <Link
+                  to="/kpi/faculty-credit-points"
+                  className={`sb-sublink ${isActive('/kpi/faculty-credit-points') ? 'active' : ''}`}
+                  onClick={handleLinkClick}
+                >
+                  Faculty Credit Points
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           className="sb-link sb-logout-link"

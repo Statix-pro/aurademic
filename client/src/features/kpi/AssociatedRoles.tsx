@@ -1,22 +1,20 @@
-import { ChevronDown, Info, Pencil, Plus, Star, Trash2, X } from 'lucide-react';
+import { Info, Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import CustomInput from '../../shared/components/ui/CustomInput';
+import CustomModal from '../../shared/components/ui/CustomModal';
+import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 import './AssociatedRoles.css';
+import { useAssociatedLevels } from './useAssociatedLevels';
 
-const associatedLevelOptions = [
-  'Institute - Level 1',
-  'Institute - Level 2',
-  'Department - Level 1',
-  'Department - Level 2',
-];
-
-const instituteLevels = ['Institute - Level 1', 'Institute - Level 2'];
-const departmentLevels = ['Department - Level 1', 'Department - Level 2'];
-
-const StarRating = ({ filled: initialFilled }: { filled: number }) => {
-  const [filled, setFilled] = useState(initialFilled);
-
+const StarRating = ({
+  filled,
+  onChange,
+}: {
+  filled: number;
+  onChange: (value: number) => void;
+}) => {
   return (
     <div
       className="associated-roles-stars"
@@ -30,7 +28,7 @@ const StarRating = ({ filled: initialFilled }: { filled: number }) => {
           className={star <= filled ? 'is-filled' : 'is-empty'}
           aria-label={`${star} star${star === 1 ? '' : 's'}`}
           aria-pressed={star <= filled}
-          onClick={() => setFilled((current) => (current === star ? 0 : star))}
+          onClick={() => onChange(filled === star ? 0 : star)}
         >
           <Star size={22} fill={star <= filled ? 'currentColor' : 'none'} />
         </button>
@@ -58,9 +56,13 @@ const FieldLabel = ({ children, hint }: { children: string; hint?: string }) => 
 const AssociatedLevelCreditPoints = ({
   level,
   sectionId,
+  ratings,
+  onRatingChange,
 }: {
   level: string;
   sectionId: string;
+  ratings: { priority: number; frequency: number; workload: number };
+  onRatingChange: (field: 'priority' | 'frequency' | 'workload', value: number) => void;
 }) => (
   <section
     className="associated-roles-credit-section"
@@ -76,31 +78,40 @@ const AssociatedLevelCreditPoints = ({
         <FieldLabel hint="Shows how important this role is compared with the other associated levels.">
           Priority
         </FieldLabel>
-        <StarRating filled={4} />
+        <StarRating
+          filled={ratings.priority}
+          onChange={(value) => onRatingChange('priority', value)}
+        />
       </div>
       <div>
         <FieldLabel hint="Shows how often the responsibilities for this role are carried out.">
           Frequency
         </FieldLabel>
-        <StarRating filled={1} />
+        <StarRating
+          filled={ratings.frequency}
+          onChange={(value) => onRatingChange('frequency', value)}
+        />
       </div>
       <div>
         <FieldLabel hint="Shows the expected effort and time required for this role.">
           Work Load
         </FieldLabel>
-        <StarRating filled={1} />
+        <StarRating
+          filled={ratings.workload}
+          onChange={(value) => onRatingChange('workload', value)}
+        />
       </div>
       <label>
         <FieldLabel> Max</FieldLabel>
-        <input className="associated-roles-number" value="50" readOnly />
+        <input className="associated-roles-number" value="" placeholder="—" readOnly />
       </label>
       <label>
         <FieldLabel>Score</FieldLabel>
-        <input className="associated-roles-number" value="34" readOnly />
+        <input className="associated-roles-number" value="" placeholder="—" readOnly />
       </label>
       <label>
         <FieldLabel>Credit Point</FieldLabel>
-        <input className="associated-roles-credit-value" value="50" readOnly />
+        <input className="associated-roles-credit-value" value="" placeholder="—" readOnly />
       </label>
     </div>
   </section>
@@ -193,84 +204,6 @@ const AssociatedLevelsTable = ({ onAddDetails }: { onAddDetails: () => void }) =
   );
 };
 
-const AssociatedLevelMultiSelect = ({
-  availableOptions,
-  selectedLevels,
-  onSelect,
-  onRemove,
-  isEnabled,
-}: {
-  availableOptions: string[];
-  selectedLevels: string[];
-  onSelect: (level: string) => void;
-  onRemove: (level: string) => void;
-  isEnabled: boolean;
-}) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const options = availableOptions.filter((option) => !selectedLevels.includes(option));
-
-  const selectLevel = (level: string) => {
-    onSelect(level);
-    setIsOpen(false);
-  };
-
-  return (
-    <div className="associated-roles-multiselect">
-      <div className="associated-roles-multiselect-control">
-        <div className="associated-roles-multiselect-values">
-          {selectedLevels.length > 0 ? (
-            selectedLevels.map((level) => (
-              <span className="associated-roles-chip" key={level}>
-                {level}
-                <button
-                  type="button"
-                  onClick={() => onRemove(level)}
-                  aria-label={`Remove ${level}`}
-                >
-                  <X size={14} />
-                </button>
-              </span>
-            ))
-          ) : (
-            <span className="associated-roles-multiselect-placeholder">
-              {isEnabled ? 'Select a level to add' : 'Select a level above.'}
-            </span>
-          )}
-        </div>
-        <button
-          type="button"
-          className="associated-roles-multiselect-toggle"
-          onClick={() => isEnabled && setIsOpen((current) => !current)}
-          aria-label="Select a level to add"
-          aria-expanded={isOpen}
-          disabled={!isEnabled}
-        >
-          <ChevronDown size={18} />
-        </button>
-      </div>
-      {isOpen && (
-        <div
-          className="associated-roles-multiselect-menu"
-          role="listbox"
-          aria-label="Available levels"
-        >
-          {options.length > 0 ? (
-            options.map((option) => (
-              <button type="button" key={option} role="option" onClick={() => selectLevel(option)}>
-                {option}
-              </button>
-            ))
-          ) : (
-            <span className="associated-roles-multiselect-empty">
-              All available levels are selected.
-            </span>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
 const AssociatedRoleDetailsPage = ({
   associatedRole,
   primaryRole,
@@ -283,12 +216,35 @@ const AssociatedRoleDetailsPage = ({
   // First use props, then fall back to route state, then use defaults
   const roleValue = associatedRole || routeState?.associatedRole || '';
   const primaryRoleValue = primaryRole || routeState?.primaryRole || '';
-  const [selectedAssociatedLevels, setSelectedAssociatedLevels] = useState<string[]>([]);
-  const [isInstitutionalChecked, setIsInstitutionalChecked] = useState(false);
-  const [isDepartmentChecked, setIsDepartmentChecked] = useState(false);
   const [responsibilities, setResponsibilities] = useState<{
     [level: string]: { id: string; text: string }[];
   }>({});
+  const [ratings, setRatings] = useState<{
+    [level: string]: { priority: number; frequency: number; workload: number };
+  }>({});
+  const {
+    selectedAssociatedLevels,
+    isInstitutionalChecked,
+    isDepartmentChecked,
+    getAvailableLevelOptions,
+    handleLevelSelect,
+    removeAssociatedLevel,
+    handleInstitutionalLevelChange,
+    handleDepartmentLevelChange,
+  } = useAssociatedLevels({
+    onLevelsRemoved: (levels) => {
+      setResponsibilities((current) => {
+        const updated = { ...current };
+        levels.forEach((level) => delete updated[level]);
+        return updated;
+      });
+      setRatings((current) => {
+        const updated = { ...current };
+        levels.forEach((level) => delete updated[level]);
+        return updated;
+      });
+    },
+  });
   const [modalState, setModalState] = useState<{
     isOpen: boolean;
     level: string;
@@ -302,61 +258,6 @@ const AssociatedRoleDetailsPage = ({
     text: '',
   });
   const [inputValues, setInputValues] = useState<{ [level: string]: string }>({});
-
-  const getAvailableLevelOptions = () => {
-    const options = [];
-    if (isInstitutionalChecked) {
-      options.push(...instituteLevels);
-    }
-    if (isDepartmentChecked) {
-      options.push(...departmentLevels);
-    }
-    return options;
-  };
-
-  const handleLevelSelect = (level: string) => {
-    if (level && !selectedAssociatedLevels.includes(level)) {
-      setSelectedAssociatedLevels((current) => [...current, level]);
-      setResponsibilities((current) => ({ ...current, [level]: [] }));
-    }
-  };
-
-  const removeAssociatedLevel = (associatedLevel: string) => {
-    setSelectedAssociatedLevels((current) => current.filter((level) => level !== associatedLevel));
-    setResponsibilities((current) => {
-      const updated = { ...current };
-      delete updated[associatedLevel];
-      return updated;
-    });
-  };
-
-  const handleInstitutionalLevelChange = (checked: boolean) => {
-    setIsInstitutionalChecked(checked);
-    if (!checked) {
-      setSelectedAssociatedLevels((current) =>
-        current.filter((level) => !instituteLevels.includes(level)),
-      );
-      setResponsibilities((current) => {
-        const updated = { ...current };
-        instituteLevels.forEach((level) => delete updated[level]);
-        return updated;
-      });
-    }
-  };
-
-  const handleDepartmentLevelChange = (checked: boolean) => {
-    setIsDepartmentChecked(checked);
-    if (!checked) {
-      setSelectedAssociatedLevels((current) =>
-        current.filter((level) => !departmentLevels.includes(level)),
-      );
-      setResponsibilities((current) => {
-        const updated = { ...current };
-        departmentLevels.forEach((level) => delete updated[level]);
-        return updated;
-      });
-    }
-  };
 
   const openEditModal = (level: string, id: string, text: string) => {
     setModalState({ isOpen: true, level, mode: 'edit', id, text });
@@ -374,7 +275,7 @@ const AssociatedRoleDetailsPage = ({
       const levelResponsibilities = current[level] || [];
       return {
         ...current,
-        [level]: [...levelResponsibilities, { id: Date.now().toString(), text }],
+        [level]: [...levelResponsibilities, { id: crypto.randomUUID(), text }],
       };
     });
     setInputValues((current) => ({ ...current, [level]: '' }));
@@ -382,19 +283,22 @@ const AssociatedRoleDetailsPage = ({
 
   const saveResponsibility = () => {
     const { level, mode, text, id } = modalState;
-    if (!text.trim()) return;
+    const trimmedText = text.trim();
+    if (!trimmedText) return;
 
     setResponsibilities((current) => {
       const levelResponsibilities = current[level] || [];
       if (mode === 'add') {
         return {
           ...current,
-          [level]: [...levelResponsibilities, { id: Date.now().toString(), text }],
+          [level]: [...levelResponsibilities, { id: crypto.randomUUID(), text: trimmedText }],
         };
       } else if (mode === 'edit' && id) {
         return {
           ...current,
-          [level]: levelResponsibilities.map((item) => (item.id === id ? { ...item, text } : item)),
+          [level]: levelResponsibilities.map((item) =>
+            item.id === id ? { ...item, text: trimmedText } : item,
+          ),
         };
       }
       return current;
@@ -406,6 +310,17 @@ const AssociatedRoleDetailsPage = ({
     setResponsibilities((current) => ({
       ...current,
       [level]: (current[level] || []).filter((item) => item.id !== id),
+    }));
+  };
+
+  const updateRating = (
+    level: string,
+    field: 'priority' | 'frequency' | 'workload',
+    value: number,
+  ) => {
+    setRatings((current) => ({
+      ...current,
+      [level]: { priority: 0, frequency: 0, workload: 0, ...current[level], [field]: value },
     }));
   };
 
@@ -448,12 +363,24 @@ const AssociatedRoleDetailsPage = ({
 
         <div className="associated-roles-associated-levels">
           <FieldLabel>Associated Levels</FieldLabel>
-          <AssociatedLevelMultiSelect
-            availableOptions={getAvailableLevelOptions()}
-            selectedLevels={selectedAssociatedLevels}
-            onSelect={handleLevelSelect}
-            onRemove={removeAssociatedLevel}
-            isEnabled={isInstitutionalChecked || isDepartmentChecked}
+          <CustomTagInput
+            name="associated-levels-details"
+            value={selectedAssociatedLevels}
+            onChange={(levels) => {
+              const nextLevel = levels.find((level) => !selectedAssociatedLevels.includes(level));
+              const removedLevel = selectedAssociatedLevels.find(
+                (level) => !levels.includes(level),
+              );
+              if (nextLevel) handleLevelSelect(nextLevel);
+              if (removedLevel) removeAssociatedLevel(removedLevel);
+            }}
+            suggestions={getAvailableLevelOptions()}
+            placeholder={
+              isInstitutionalChecked || isDepartmentChecked
+                ? 'Select a level to add'
+                : 'Select a level above.'
+            }
+            disabled={!isInstitutionalChecked && !isDepartmentChecked}
           />
         </div>
 
@@ -463,6 +390,8 @@ const AssociatedRoleDetailsPage = ({
               <AssociatedLevelCreditPoints
                 level={associatedLevel}
                 sectionId={`detail-${associatedLevel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
+                ratings={ratings[associatedLevel] || { priority: 0, frequency: 0, workload: 0 }}
+                onRatingChange={(field, value) => updateRating(associatedLevel, field, value)}
               />
               <div className="associated-roles-responsibilities">
                 <FieldLabel>{`${associatedLevel} Responsibilities`}</FieldLabel>
@@ -504,7 +433,7 @@ const AssociatedRoleDetailsPage = ({
                           [associatedLevel]: e.target.value,
                         }))
                       }
-                      onKeyPress={(e) => {
+                      onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           handleAddResponsibility(associatedLevel);
                         }
@@ -541,47 +470,33 @@ const AssociatedRoleDetailsPage = ({
           </div>
         ))}
 
-        {modalState.isOpen && (
-          <div className="associated-roles-modal-overlay" onClick={closeModal}>
-            <div className="associated-roles-modal" onClick={(e) => e.stopPropagation()}>
-              <div className="associated-roles-modal-header">
-                <h2>Edit Responsibility</h2>
-                <button type="button" className="associated-roles-modal-close" onClick={closeModal}>
-                  <X size={20} />
-                </button>
-              </div>
-              <div className="associated-roles-modal-body">
-                <input
-                  type="text"
-                  value={modalState.text}
-                  onChange={(e) =>
-                    setModalState((current) => ({ ...current, text: e.target.value }))
-                  }
-                  placeholder="Enter responsibility"
-                  aria-label="Responsibility text"
-                  autoFocus
-                />
-              </div>
-              <div className="associated-roles-modal-footer">
-                <button
-                  type="button"
-                  className="associated-roles-modal-cancel"
-                  onClick={closeModal}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  className="associated-roles-modal-save"
-                  onClick={saveResponsibility}
-                  disabled={!modalState.text.trim()}
-                >
-                  Save
-                </button>
-              </div>
-            </div>
+        <CustomModal
+          show={modalState.isOpen}
+          onHide={closeModal}
+          title="Edit Responsibility"
+          size="sm"
+        >
+          <CustomInput
+            name="responsibility-text"
+            value={modalState.text}
+            onChange={(value) => setModalState((current) => ({ ...current, text: value }))}
+            placeholder="Enter responsibility"
+            autoFocus
+          />
+          <div className="d-flex justify-content-end gap-2">
+            <button type="button" className="associated-roles-modal-cancel" onClick={closeModal}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="associated-roles-modal-save"
+              onClick={saveResponsibility}
+              disabled={!modalState.text.trim()}
+            >
+              Save
+            </button>
           </div>
-        )}
+        </CustomModal>
       </div>
     </section>
   );
@@ -592,9 +507,20 @@ const AssociatedRoles = () => {
   const location = useLocation();
   const [category, setCategory] = useState<'Academic' | 'Non-Academic'>('Academic');
   const [role, setRole] = useState('');
-  const [selectedAssociatedLevels, setSelectedAssociatedLevels] = useState<string[]>([]);
-  const [isInstitutionalChecked, setIsInstitutionalChecked] = useState(false);
-  const [isDepartmentChecked, setIsDepartmentChecked] = useState(false);
+  const [ratings, setRatings] = useState<{
+    [level: string]: { priority: number; frequency: number; workload: number };
+  }>({});
+  const {
+    selectedAssociatedLevels,
+    isInstitutionalChecked,
+    isDepartmentChecked,
+    getAvailableLevelOptions,
+    handleLevelSelect,
+    removeAssociatedLevel,
+    handleInstitutionalLevelChange,
+    handleDepartmentLevelChange,
+    reset: resetAssociatedLevels,
+  } = useAssociatedLevels();
 
   useEffect(() => {
     const shouldResetForm = (location.state as { resetForm?: boolean } | null)?.resetForm;
@@ -602,54 +528,15 @@ const AssociatedRoles = () => {
     if (shouldResetForm) {
       setRole('');
       setCategory('Academic');
-      setSelectedAssociatedLevels([]);
-      setIsInstitutionalChecked(false);
-      setIsDepartmentChecked(false);
+      resetAssociatedLevels();
+      setRatings({});
     }
-  }, [location.state]);
-
-  const getAvailableLevelOptions = () => {
-    const options = [];
-    if (isInstitutionalChecked) {
-      options.push(...instituteLevels);
-    }
-    if (isDepartmentChecked) {
-      options.push(...departmentLevels);
-    }
-    return options;
-  };
-
-  const handleLevelSelect = (level: string) => {
-    if (level && !selectedAssociatedLevels.includes(level)) {
-      setSelectedAssociatedLevels((current) => [...current, level]);
-    }
-  };
-
-  const removeAssociatedLevel = (associatedLevel: string) => {
-    setSelectedAssociatedLevels((current) => current.filter((level) => level !== associatedLevel));
-  };
-
-  const handleInstitutionalLevelChange = (checked: boolean) => {
-    setIsInstitutionalChecked(checked);
-    if (!checked) {
-      setSelectedAssociatedLevels((current) =>
-        current.filter((level) => !instituteLevels.includes(level)),
-      );
-    }
-  };
-
-  const handleDepartmentLevelChange = (checked: boolean) => {
-    setIsDepartmentChecked(checked);
-    if (!checked) {
-      setSelectedAssociatedLevels((current) =>
-        current.filter((level) => !departmentLevels.includes(level)),
-      );
-    }
-  };
+  }, [location.state, resetAssociatedLevels]);
 
   const handleAddAssociatedLevel = () => {
     navigate('/kpi/associated-add', {
       state: {
+        associatedRole: role,
         primaryRole: role,
       },
     });
@@ -710,12 +597,24 @@ const AssociatedRoles = () => {
 
         <div className="associated-roles-associated-levels">
           <FieldLabel>Associated Levels</FieldLabel>
-          <AssociatedLevelMultiSelect
-            availableOptions={getAvailableLevelOptions()}
-            selectedLevels={selectedAssociatedLevels}
-            onSelect={handleLevelSelect}
-            onRemove={removeAssociatedLevel}
-            isEnabled={isInstitutionalChecked || isDepartmentChecked}
+          <CustomTagInput
+            name="associated-levels"
+            value={selectedAssociatedLevels}
+            onChange={(levels) => {
+              const nextLevel = levels.find((level) => !selectedAssociatedLevels.includes(level));
+              const removedLevel = selectedAssociatedLevels.find(
+                (level) => !levels.includes(level),
+              );
+              if (nextLevel) handleLevelSelect(nextLevel);
+              if (removedLevel) removeAssociatedLevel(removedLevel);
+            }}
+            suggestions={getAvailableLevelOptions()}
+            placeholder={
+              isInstitutionalChecked || isDepartmentChecked
+                ? 'Select a level to add'
+                : 'Select a level above.'
+            }
+            disabled={!isInstitutionalChecked && !isDepartmentChecked}
           />
         </div>
 
@@ -724,13 +623,31 @@ const AssociatedRoles = () => {
             key={associatedLevel}
             level={associatedLevel}
             sectionId={associatedLevel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
+            ratings={ratings[associatedLevel] || { priority: 0, frequency: 0, workload: 0 }}
+            onRatingChange={(field, value) =>
+              setRatings((current) => ({
+                ...current,
+                [associatedLevel]: {
+                  priority: 0,
+                  frequency: 0,
+                  workload: 0,
+                  ...current[associatedLevel],
+                  [field]: value,
+                },
+              }))
+            }
           />
         ))}
 
         <AssociatedLevelsTable onAddDetails={handleAddAssociatedLevel} />
 
         <div className="associated-roles-action-footer">
-          <button type="button" className="associated-roles-save-button">
+          <button
+            type="button"
+            className="associated-roles-save-button"
+            disabled
+            title="Persistence is not available yet"
+          >
             Save
           </button>
         </div>
