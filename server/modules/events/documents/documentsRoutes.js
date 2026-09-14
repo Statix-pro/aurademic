@@ -31,7 +31,35 @@ const storage = multer.diskStorage({
     cb(null, `${stamp}_${safe}`);
   },
 });
-const upload = multer({ storage });
+/**
+ * Same allow-list and cap as `middleware/uploadMiddleware.js`.
+ *
+ * Without these, `multer({ storage })` accepts a file of any type and any size,
+ * writes it to `uploads/` before the controller runs, and `server.js` serves
+ * that directory statically with no gate — so an accepted upload is publicly
+ * retrievable even when the request that carried it goes on to fail.
+ */
+const ALLOWED_UPLOAD_MIMES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+];
+
+const upload = multer({
+  storage,
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_UPLOAD_MIMES.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF, DOC, DOCX, JPG, and PNG files are allowed.'));
+    }
+  },
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB, matching uploadMiddleware.js
+  },
+});
 
 // Documents + Participants APIs
 router.get('/:eventId', getDocumentsAndParticipants); // Get all docs & participants for event
