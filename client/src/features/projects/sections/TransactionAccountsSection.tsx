@@ -63,18 +63,15 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
 }) => {
   const blocks = form.transactionAccounts;
 
-  // Which rows the user has opened, by row key — the keys are stable across the
-  // date re-sort, so a row stays open as it moves. Purely presentational, so it
-  // lives here rather than in the form state that gets saved.
-  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  // The one row the user is working on, by row key — the keys are stable across
+  // the date re-sort, so a row stays open as it moves. One at a time: the strip
+  // is as tall as the row above it, so several open at once push the figures a
+  // reader is scanning down the table apart. Purely presentational, so it lives
+  // here rather than in the form state that gets saved.
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
 
   const toggleRow = (rowKey: string) =>
-    setExpandedRows((previous) => {
-      const next = new Set(previous);
-      if (next.has(rowKey)) next.delete(rowKey);
-      else next.add(rowKey);
-      return next;
-    });
+    setExpandedRow((previous) => (previous === rowKey ? null : rowKey));
 
   const headOptions = useMemo(() => transactionHeadOptions(), []);
 
@@ -92,10 +89,22 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   const updateBlock = (index: number, changes: Partial<TransactionAccount>) =>
     patch({ transactionAccounts: replaceAt(blocks, index, changes) });
 
-  const updateRow = (blockIndex: number, rowIndex: number, changes: Partial<TransactionRow>) =>
+  // Touching a row is what says which entry is being worked on, so the row
+  // being edited is the row whose details are showing — a new row opens on the
+  // date and particulars it still needs, and an edit to any figure brings the
+  // rest of that entry into view rather than leaving it a click away.
+  const updateRow = (blockIndex: number, rowIndex: number, changes: Partial<TransactionRow>) => {
+    setExpandedRow(blocks[blockIndex].transactions[rowIndex].key);
     updateBlock(blockIndex, {
       transactions: replaceAt(blocks[blockIndex].transactions, rowIndex, changes),
     });
+  };
+
+  const addRow = (blockIndex: number) => {
+    const row = createTransactionRow();
+    setExpandedRow(row.key);
+    updateBlock(blockIndex, { transactions: [...blocks[blockIndex].transactions, row] });
+  };
 
   return (
     <>
@@ -214,7 +223,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                     const hasDetailError = DETAIL_ERROR_KEYS.some(
                       (key) => errors[`${field}.${key}`],
                     );
-                    const isExpanded = expandedRows.has(row.key) || hasDetailError;
+                    const isExpanded = expandedRow === row.key || hasDetailError;
                     const detailId = `${block.key}-${row.key}-detail`;
 
                     return (
@@ -329,11 +338,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                   <ChevronDown size={16} aria-hidden="true" />
                                 </button>
                               }
-                              onAdd={() =>
-                                updateBlock(blockIndex, {
-                                  transactions: [...block.transactions, createTransactionRow()],
-                                })
-                              }
+                              onAdd={() => addRow(blockIndex)}
                               showAdd={rowIndex === block.transactions.length - 1}
                               addDisabled={
                                 block.transactions.length >= MAX_TRANSACTIONS_PER_ACCOUNT
