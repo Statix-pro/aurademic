@@ -131,8 +131,9 @@ CREATE TABLE IF NOT EXISTS `notifications` (
 After making schema changes, **update the dump** so future developers get the latest version:
 
 ```bash
-# Schema only — no rows, safe to commit
-mysqldump -u root -p --no-data --skip-comments research > schema/structure.sql
+# Schema only — no rows, safe to commit. The sed strips DEFINER clauses.
+mysqldump -u root -p --no-data --skip-comments research \
+  | sed -E 's/ DEFINER=`[^`]*`@`[^`]*`//g' > schema/structure.sql
 
 git add schema/structure.sql
 git commit -m "Regenerate schema structure"
@@ -140,6 +141,23 @@ git commit -m "Regenerate schema structure"
 
 Check the diff before committing. If `git diff` shows an `INSERT INTO`, the
 `--no-data` flag was missed and real rows are about to be published.
+
+**Why the `sed`.** `mysqldump` stamps every view with the account that created
+it — `` DEFINER=`research`@`%` `` — and MySQL refuses to read a view whose
+definer does not exist. That account exists only on the production box, so on
+any other machine all eight views (`v_budget_summary`, `v_finance_requests`,
+`v_authors`, `v_employees`, `master_cells`, `master_centres`, `master_clubs`,
+`master_professional_bodies`) are dead and every statement touching one fails
+with `ERROR 1449`. Removing the clause makes them run as the invoking user,
+which is what a developer box wants. There is no `--skip-definer` flag; the
+`sed` is the standard workaround.
+
+Verify after loading — this should print eight rows, not an error:
+
+```bash
+mysql -u root -p research -e "SELECT table_name FROM information_schema.views \
+  WHERE table_schema='research';"
+```
 
 ---
 
