@@ -40,6 +40,27 @@ const db = mysql.createPool({
   ...credentials,
   waitForConnections: true,
   connectionLimit: 10,
+
+  /**
+   * Return `DATE` columns as `YYYY-MM-DD` strings instead of JS Dates.
+   *
+   * A DATE is a calendar day, not an instant. The driver was turning it into a
+   * Date at local midnight, and `JSON.stringify` then re-emitted that in UTC —
+   * so `2026-03-31` left the API as `"2026-03-30T18:30:00.000Z"` and every
+   * consumer that reads the date portion of the string saw the day before.
+   * A viewer outside IST saw the wrong day everywhere; inside IST the shift
+   * cancelled on the way back in, which is why this hid for so long.
+   *
+   * `modules/project/projectDates.js` already documents this bug and works
+   * around it for the projects module. Setting it here fixes it for all 22
+   * DATE columns at once, and that helper stays correct because it already
+   * accepts a string.
+   *
+   * Scoped to `DATE` deliberately. `DATETIME`/`TIMESTAMP` are instants and keep
+   * returning Date objects; widening this would shift every `created_at` by the
+   * session offset.
+   */
+  dateStrings: ['DATE'],
 });
 
 export default db;
