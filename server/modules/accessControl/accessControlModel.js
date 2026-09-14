@@ -94,6 +94,13 @@ const SYSTEM_PERMISSION_SEED = [
   },
   {
     module_key: 'budget_workflow',
+    action_key: 'ithead',
+    permission_key: 'budget.workflow.ithead',
+    description: 'View IT Head queue and process IT-Head-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_workflow',
     action_key: 'dof',
     permission_key: 'budget.workflow.dof',
     description: 'View DoF queue and process DoF-stage approvals',
@@ -167,6 +174,20 @@ const SYSTEM_PERMISSION_SEED = [
     action_key: 'chairman',
     permission_key: 'finance.workflow.chairman',
     description: 'Process finance Chairman-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'expenditure_workflow',
+    action_key: 'dof',
+    permission_key: 'expenditure.workflow.dof',
+    description: 'Process expenditure DoF-stage approvals and verify payees',
+    is_system: true,
+  },
+  {
+    module_key: 'expenditure_workflow',
+    action_key: 'principal',
+    permission_key: 'expenditure.workflow.principal',
+    description: 'Process expenditure Principal-stage approvals',
     is_system: true,
   },
   {
