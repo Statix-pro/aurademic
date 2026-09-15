@@ -24,6 +24,10 @@
 }
 
 .faculty-credit-points-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 18px 22px;
   border-bottom: 1px solid #eef2f6;
 }
@@ -80,7 +84,7 @@
 .faculty-credit-points-table th {
   background: #0069ab;
   color: #fff;
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   font-weight: 700;
 }
 
@@ -161,7 +165,7 @@
   background: transparent;
   color: #0069ab;
   font:
-    600 0.95rem 'Roboto',
+    700 0.875rem 'Roboto',
     sans-serif;
   cursor: pointer;
 }

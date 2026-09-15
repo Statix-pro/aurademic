@@ -67,10 +67,11 @@ npm install
 
 ### Environment Variables
 
-Create a `.env.development` file with the following variables:
+Create a `.env.development` file with the following variables. Leave `VITE_API_URL` unset
+to use Vite's same-origin `/api` and `/uploads` proxies during development.
 
 ```env
-VITE_API_URL=http://localhost:5000/api
+# VITE_API_URL=http://localhost:5000/api
 VITE_GOOGLE_CLIENT_ID=your_google_client_id
 VITE_AZURE_CLIENT_ID=your_azure_client_id
 ```

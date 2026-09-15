@@ -33,7 +33,7 @@
   padding-bottom: 8px;
 }
 .associated-roles-primary-heading {
-  padding: 18px 22px 8px;
+  padding: 18px 2px 8px;
   border-bottom: 1px solid #dce3eb;
 }
 .associated-roles-primary-heading h1 {
@@ -64,6 +64,9 @@
 .associated-roles-role-field {
   display: grid;
   gap: 7px;
+}
+.associated-roles-role-field .custom-label {
+  font-weight: 700;
 }
 .associated-roles-role-suggestions {
   display: flex;
@@ -219,6 +222,74 @@
   height: 15px;
   margin: 0;
   accent-color: var(--associated-roles-blue);
+}
+.associated-roles-levels .associated-roles-round-checkbox .form-check-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+  cursor: pointer;
+}
+.associated-roles-levels .associated-roles-round-checkbox .form-check-label {
+  position: relative;
+  padding-left: 28px;
+  cursor: pointer;
+}
+.associated-roles-levels .associated-roles-round-checkbox .form-check-label::before,
+.associated-roles-levels .associated-roles-round-checkbox .form-check-label::after {
+  position: absolute;
+  top: 50%;
+  content: '';
+  border-radius: 50%;
+}
+.associated-roles-levels .associated-roles-round-checkbox .form-check-label::before {
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #c3d3e8;
+  background-color: #fff;
+  transform: translateY(-50%);
+}
+.associated-roles-levels .associated-roles-round-checkbox .form-check-label::after {
+  left: 5px;
+  width: 10px;
+  height: 10px;
+  background-color: var(--associated-roles-blue);
+  transform: translateY(-50%) scale(0);
+  transition: transform 0.2s ease-in-out;
+}
+.associated-roles-levels
+  .associated-roles-round-checkbox
+  .form-check-input:checked
+  + .form-check-label::before {
+  border-color: var(--associated-roles-blue);
+}
+.associated-roles-levels
+  .associated-roles-round-checkbox
+  .form-check-input:checked
+  + .form-check-label::after {
+  transform: translateY(-50%) scale(1);
+}
+.associated-roles-levels
+  .associated-roles-round-checkbox
+  .form-check-input:focus-visible
+  + .form-check-label::before {
+  outline: 2px solid rgba(0, 105, 171, 0.32);
+  outline-offset: 2px;
+}
+.associated-roles-levels .associated-roles-round-checkbox .form-check-input:disabled {
+  cursor: not-allowed;
+}
+.associated-roles-levels
+  .associated-roles-round-checkbox
+  .form-check-input:disabled
+  + .form-check-label {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 .associated-roles-associated-levels {
   display: grid;
@@ -424,6 +495,17 @@
   min-height: 24px;
   color: #fff;
 }
+.associated-roles-credit-card .custom-input-group {
+  margin-bottom: 0;
+}
+.associated-roles-credit-card .custom-label {
+  min-height: 24px;
+  margin-bottom: 0;
+  color: #fff;
+}
+.associated-roles-credit-card .custom-input {
+  height: 38px;
+}
 .associated-roles-credit-card .associated-roles-field-label svg {
   color: #fff;
 }
@@ -451,26 +533,38 @@
 .associated-roles-stars .is-empty {
   color: #b8e0f5;
 }
-.associated-roles-number,
-.associated-roles-credit-value {
+.associated-roles-number .custom-input,
+.associated-roles-credit-value .custom-input {
   text-align: center;
   padding: 5px !important;
 }
-.associated-roles-credit-card .associated-roles-number {
-  background: #fff;
-  border: 0;
-}
+.associated-roles-credit-card .associated-roles-number,
 .associated-roles-credit-card .associated-roles-credit-value {
+  padding: 0;
+  background: transparent;
+}
+.associated-roles-credit-card .associated-roles-number .custom-input {
   background: #fff;
-  border: 0;
-  color: var(--associated-roles-blue);
+  border: 1px solid #d6dbe3;
+  color: #1e293b;
+}
+.associated-roles-credit-card .associated-roles-credit-value .custom-input {
+  background: #fff;
+  border: 1px solid #d6dbe3;
+  color: #1e293b;
   font-weight: 700;
 }
 .associated-roles-table-section {
   padding-top: 24px;
 }
-.associated-roles-table-section h2 {
+.associated-roles-table-heading-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding-bottom: 10px;
+}
+.associated-roles-table-heading-row h2 {
+  margin: 0;
 }
 .associated-roles-table-wrap {
   overflow-x: auto;
@@ -544,6 +638,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  margin-left: auto;
   gap: 6px;
   padding: 8px 14px;
   border: 1px solid var(--associated-roles-blue);
@@ -618,7 +713,7 @@
 }
 .associated-roles-responsibility-input-row {
   display: grid;
-  grid-template-columns: 1fr 24px 24px 24px;
+  grid-template-columns: 1fr repeat(3, 32px);
   gap: 12px;
   align-items: center;
   padding: 2px 0;
@@ -642,6 +737,13 @@
 .associated-roles-responsibility-input-row input::placeholder {
   color: #9ca3af;
 }
+.associated-roles-responsibility-input-row .custom-input-group {
+  margin-bottom: 0;
+}
+.associated-roles-responsibility-input-row .custom-input {
+  border: 0;
+  background: transparent;
+}
 .associated-roles-responsibility-add {
   color: #0069ab;
   cursor: pointer;
@@ -653,6 +755,10 @@
 .associated-roles-responsibility-delete {
   color: #e66a70;
   cursor: pointer;
+}
+.associated-roles-responsibility-input-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 .associated-roles-responsibility-add-button {
   display: inline-flex;
