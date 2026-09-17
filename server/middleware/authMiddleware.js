@@ -113,19 +113,45 @@ const mergeAuthorizationSnapshot = async (user) => {
 
   const authorization = await accessControlModel.getUserAuthorizationSnapshot(user.id);
 
-  const roles =
-    authorization.roles.length > 0 ? authorization.roles : uniqueStringArray(user.roles);
-  const permissions =
-    authorization.permissions.length > 0
-      ? authorization.permissions
-      : uniqueStringArray(user.permissions);
+  // The token's roles and permissions are a copy of this same snapshot, taken
+  // when the token was signed and then frozen for its 24h lifetime. Falling
+  // back to them can therefore only ever restore authority the database has
+  // since taken away -- there is no grant the token can hold that the database
+  // legitimately should not. The one exception is a snapshot that could not be
+  // read at all: `degraded` marks the missing-RBAC-table branch, where the
+  // stale copy is better than locking the estate out.
+  //
+  // This matters even for a user that still exists. Every user row gets a
+  // `base_user` assignment, so a resolved snapshot always carries a role, but
+  // its permission list is empty whenever that user's roles grant nothing --
+  // and the old fallback then handed back whatever the token was signed with.
+  const roles = authorization.degraded ? uniqueStringArray(user.roles) : authorization.roles;
+  const permissions = authorization.degraded
+    ? uniqueStringArray(user.permissions)
+    : authorization.permissions;
 
   return {
     ...user,
     roles,
     permissions,
-    isSuperAdmin: authorization.isSuperAdmin || user.isSuperAdmin,
-    isAdmin: authorization.isAdmin || user.isAdmin,
+    // Authority comes from the database, never from the token. A token may say
+    // who you are; it may not say what you may do.
+    //
+    // These were `authorization.X || user.X`. Because `user` is the DECODED
+    // TOKEN, that OR meant a self-signed token asserting isSuperAdmin was
+    // super-admin regardless of the database — and getUserAuthorizationSnapshot
+    // returns an empty snapshot for an id with no users row, so the id did not
+    // have to exist. permissionMiddleware short-circuits on isSuperAdmin, so
+    // that claim bypassed every permission check on every write route.
+    //
+    // NOTE ON THE BLAST RADIUS: getUserAuthorizationSnapshot has a catch branch
+    // for a missing RBAC table that returns isSuperAdmin false for everyone,
+    // and the old fallback silently rescued an administrator in that state.
+    // Failing closed is correct for an authority check, but it means a missing
+    // table is now a lockout rather than a degradation. Pair this with a
+    // startup check that the RBAC tables exist, so it surfaces at boot.
+    isSuperAdmin: authorization.isSuperAdmin,
+    isAdmin: authorization.isAdmin,
   };
 };
 
