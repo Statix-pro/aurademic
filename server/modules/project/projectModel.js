@@ -981,7 +981,7 @@ const projectModel = {
    * latency to the form's first paint.
    */
   async getFormLookups() {
-    const [organizations, schemes, departments, accounts] = await Promise.all([
+    const [organizations, schemes, departments, accounts, budgetHeads] = await Promise.all([
       db.query(
         `SELECT id, name, short_name, category, city, state, country, website,
                 is_funding_agency, is_internal
@@ -1006,6 +1006,15 @@ const projectModel = {
           WHERE is_active = 1 AND is_deleted = 0
           ORDER BY sort_order, account_name`,
       ),
+      // The budget-head vocabulary the form offers, curated in the admin. A
+      // head retired there stays on the projects that already budget under it,
+      // which store the name rather than a reference to this row.
+      db.query(
+        `SELECT id, name, head_group
+           FROM project_budget_head_options
+          WHERE is_active = 1
+          ORDER BY head_group, sort_order, name`,
+      ),
     ]);
 
     return {
@@ -1013,7 +1022,21 @@ const projectModel = {
       schemes: schemes[0],
       departments: departments[0],
       accounts: accounts[0],
+      budgetHeads: budgetHeads[0],
     };
+  },
+
+  /**
+   * Just the head names, for the save path: the normalizer uses them to store a
+   * submitted head in its curated case, so `overhead charges` and
+   * `Overhead Charges` do not become two heads on one project. Names only, and
+   * every group's, since a head is stored by name whichever group offered it.
+   */
+  async listBudgetHeadNames() {
+    const [rows] = await db.query(
+      'SELECT DISTINCT name FROM project_budget_head_options WHERE is_active = 1',
+    );
+    return rows.map((row) => row.name);
   },
 
   async searchOrganizations(query, { fundingOnly = false, limit = 25 } = {}) {

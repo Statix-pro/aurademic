@@ -14,6 +14,11 @@ const validPayload = (overrides = {}) => ({
   ...overrides,
 });
 
+// The curated vocabulary reaches the normalizer from
+// `project_budget_head_options` by way of the controller, so the tests that
+// pin how a head is stored hand it one of their own.
+const budgetHeads = ['Equipment', 'Consumables', 'Overhead Charges', 'Manpower'];
+
 const errorFields = (errors) => errors.map((error) => error.field);
 
 describe('normalizeProjectPayload', () => {
@@ -321,6 +326,7 @@ describe('normalizeProjectPayload', () => {
           },
         ],
       }),
+      { budgetHeadNames: budgetHeads },
     );
 
     expect(aggregate.financeRows[0].heads).toEqual([
@@ -697,10 +703,23 @@ describe('transaction accounts', () => {
   it('stores an expenditure head in its canonical case', () => {
     const { aggregate, errors } = normalizeProjectPayload(
       withLedger([ledgerRow({ head_name: 'overhead charges' })]),
+      { budgetHeadNames: budgetHeads },
     );
 
     expect(errors).toEqual([]);
     expect(aggregate.transactionAccounts[0].transactions[0].head_name).toBe('Overhead Charges');
+  });
+
+  // The vocabulary only settles the case a head is stored in. Without one — a
+  // database with no curated heads yet — every head is stored as submitted,
+  // which is what an unrecognised name does anyway.
+  it('stores a head as submitted when no vocabulary is supplied', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow({ head_name: 'overhead charges' })]),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].head_name).toBe('overhead charges');
   });
 
   // A ledger written under a head the vocabulary has since dropped still has

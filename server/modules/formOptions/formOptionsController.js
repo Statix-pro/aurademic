@@ -209,6 +209,57 @@ const formOptionsController = {
       return res.status(500).json({ status: 'error', message: error.message });
     }
   },
+
+  // ==========================================================================
+  // Project budget heads
+  // ==========================================================================
+
+  async getProjectBudgetHeads(req, res) {
+    try {
+      const heads = await formOptionsModel.getProjectBudgetHeads();
+      res.json({ status: 'success', data: heads });
+    } catch (error) {
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  },
+
+  async addProjectBudgetHead(req, res) {
+    try {
+      const head = await formOptionsModel.addProjectBudgetHead(req.body ?? {});
+      return res.status(201).json({ status: 'success', data: head });
+    } catch (error) {
+      return respondWithError(res, error);
+    }
+  },
+
+  async updateProjectBudgetHead(req, res) {
+    try {
+      const success = await formOptionsModel.updateProjectBudgetHead(req.params.id, req.body ?? {});
+      if (!success) {
+        return res.status(404).json({ status: 'error', message: 'Budget head not found' });
+      }
+      return res.json({ status: 'success', message: 'Budget head updated successfully' });
+    } catch (error) {
+      return respondWithError(res, error);
+    }
+  },
+
+  async deleteProjectBudgetHead(req, res) {
+    try {
+      const result = await formOptionsModel.deleteProjectBudgetHead(req.params.id);
+      if (!result) {
+        return res.status(404).json({ status: 'error', message: 'Budget head not found' });
+      }
+      return res.json({
+        status: 'success',
+        message: result?.deactivated
+          ? 'Budget head is used by existing projects, so it was deactivated instead of deleted'
+          : 'Budget head deleted successfully',
+      });
+    } catch (error) {
+      return respondWithError(res, error);
+    }
+  },
 };
 
 export default formOptionsController;
