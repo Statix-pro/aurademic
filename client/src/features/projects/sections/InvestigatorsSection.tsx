@@ -34,6 +34,10 @@ interface InvestigatorsSectionProps {
  * Faculty rows are picked from the employee directory — that link is what puts
  * the project on the person's dashboard — so the name field searches instead of
  * accepting free text. Students and external members are typed in.
+ *
+ * A picked row is replaced by typing over the name: the first keystroke clears
+ * the identity link and reopens the menu, which is why there is no separate
+ * button to undo the pick.
  */
 const FacultyNameSearch: React.FC<{
   row: InvestigatorRow;
@@ -91,12 +95,6 @@ const FacultyNameSearch: React.FC<{
         disabled={disabled}
         aria-label="Faculty name"
       />
-
-      {selected && !disabled && (
-        <button type="button" className="pf-search__clear" onClick={onClear}>
-          Change
-        </button>
-      )}
 
       {isOpen && !selected && results.length > 0 && (
         <ul className="pf-search__menu">

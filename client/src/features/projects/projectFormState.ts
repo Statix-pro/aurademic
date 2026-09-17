@@ -79,7 +79,7 @@ export function createCollaboratorRow(): CollaboratorRow {
   return {
     key: nextRowKey('collaborator'),
     category: '',
-    role: '',
+    roles: [],
     organizationId: null,
     organizationName: '',
     city: '',
@@ -293,7 +293,12 @@ export function projectToFormState(project: any): ProjectFormState {
     ? project.collaborators.map((row: any) => ({
         ...createCollaboratorRow(),
         category: text(row.category),
-        role: text(row.role),
+        // One comma-separated column on the way in and out; a role the list no
+        // longer offers is kept as its own chip rather than dropped.
+        roles: text(row.role)
+          .split(',')
+          .map((role: string) => role.trim())
+          .filter(Boolean),
         organizationId: row.organization_id ?? null,
         organizationName: text(row.organization_name || row.organization_label),
         city: text(row.city),

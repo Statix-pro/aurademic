@@ -67,7 +67,12 @@ export interface InvestigatorRow {
 export interface CollaboratorRow {
   key: string;
   category: string;
-  role: string;
+  /**
+   * The parts a collaborator plays, several at once. Stored as one
+   * comma-separated string in `project_collaborators.role`, which is what every
+   * screen that reads a project back renders.
+   */
+  roles: string[];
   organizationId: number | null;
   organizationName: string;
   city: string;
@@ -270,11 +275,20 @@ export interface AccountOption {
   name: string;
 }
 
+/** A head from the admin-curated `project_budget_head_options` vocabulary. */
+export interface BudgetHeadOption {
+  id: number;
+  name: string;
+  /** The vocabulary it is offered under — 'Research Projects', say. */
+  head_group: string;
+}
+
 export interface ProjectLookups {
   organizations: ProjectOrganization[];
   schemes: ProjectScheme[];
   departments: DepartmentOption[];
   accounts: AccountOption[];
+  budgetHeads: BudgetHeadOption[];
 }
 
 export interface EmployeeSearchResult {

@@ -4,11 +4,11 @@ import { SelectField } from '../components/FormFields';
 import RowActions from '../components/RowActions';
 import SectionCard from '../components/SectionCard';
 import TagSelectField from '../components/TagSelectField';
-import { MAX_FINANCE_ROWS, PROJECT_BUDGET_HEADS } from '../constants';
+import { MAX_FINANCE_ROWS } from '../constants';
 import { createFinanceRow, removeAt, replaceAt, sumAmounts } from '../projectFormState';
-import { withSelectedOption } from '../selectOptions';
+import { flatBudgetHeadOptions, withSelectedOption } from '../selectOptions';
 
-import type { FinanceRow, ProjectOrganization } from '../types';
+import type { BudgetHeadOption, FinanceRow, ProjectOrganization } from '../types';
 
 interface FinanceRowsSectionProps {
   title: string;
@@ -18,7 +18,9 @@ interface FinanceRowsSectionProps {
   onChange: (rows: FinanceRow[]) => void;
   enabled: boolean;
   onToggle: (enabled: boolean) => void;
+  /** The project's own parties, not the whole master list — see `financeOrganizations`. */
   organizations: ProjectOrganization[];
+  budgetHeads: BudgetHeadOption[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -59,6 +61,7 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
   enabled,
   onToggle,
   organizations,
+  budgetHeads,
   errors,
   disabled,
 }) => {
@@ -75,10 +78,7 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
   // builds: this is a multi-select with no group headings, so a head that
   // belongs to both vocabularies — `Consumables` — would be offered twice over,
   // indistinguishably, and twice under the same React key.
-  const headOptions = useMemo(
-    () => PROJECT_BUDGET_HEADS.map((name) => ({ value: name, label: name })),
-    [],
-  );
+  const headOptions = useMemo(() => flatBudgetHeadOptions(budgetHeads), [budgetHeads]);
 
   const update = (index: number, changes: Partial<FinanceRow>) =>
     onChange(replaceAt(rows, index, changes));
@@ -96,7 +96,7 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
       }}
     >
       <div className="pf-table-wrap">
-        <table className="pf-table">
+        <table className="pf-table pf-table--fixed">
           <thead>
             <tr>
               <th scope="col" className="pf-table__sno">

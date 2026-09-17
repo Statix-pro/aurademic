@@ -25,12 +25,19 @@ import {
 } from '../projectFormState';
 import { transactionHeadOptions, withSelectedOption } from '../selectOptions';
 
-import type { AccountOption, ProjectFormState, TransactionAccount, TransactionRow } from '../types';
+import type {
+  AccountOption,
+  BudgetHeadOption,
+  ProjectFormState,
+  TransactionAccount,
+  TransactionRow,
+} from '../types';
 
 interface TransactionAccountsSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
   accounts: AccountOption[];
+  budgetHeads: BudgetHeadOption[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -58,6 +65,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   form,
   patch,
   accounts,
+  budgetHeads,
   errors,
   disabled,
 }) => {
@@ -68,12 +76,23 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   // is as tall as the row above it, so several open at once push the figures a
   // reader is scanning down the table apart. Purely presentational, so it lives
   // here rather than in the form state that gets saved.
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  //
+  // `undefined` is the state before anyone has touched a toggle, which is not
+  // the same as `null` — a row deliberately collapsed. It defers to the default
+  // below rather than freezing a key at mount, because an edited project's rows
+  // arrive after this mounts.
+  const [expandedRow, setExpandedRow] = useState<string | null | undefined>(undefined);
 
-  const toggleRow = (rowKey: string) =>
-    setExpandedRow((previous) => (previous === rowKey ? null : rowKey));
+  // Until a row is picked, the ledger's first row is the open one: a fresh
+  // account's only entry still needs the date and particulars that live in the
+  // strip, and leaving it shut hides them behind a control the user has to
+  // find first.
+  const openRow =
+    expandedRow === undefined ? (blocks[0]?.transactions[0]?.key ?? null) : expandedRow;
 
-  const headOptions = useMemo(() => transactionHeadOptions(), []);
+  const toggleRow = (rowKey: string) => setExpandedRow(openRow === rowKey ? null : rowKey);
+
+  const headOptions = useMemo(() => transactionHeadOptions(budgetHeads), [budgetHeads]);
 
   const yearOptions = useMemo(
     () => financialYearOptions().map((year) => ({ value: year, label: year })),
@@ -223,7 +242,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                     const hasDetailError = DETAIL_ERROR_KEYS.some(
                       (key) => errors[`${field}.${key}`],
                     );
-                    const isExpanded = expandedRow === row.key || hasDetailError;
+                    const isExpanded = openRow === row.key || hasDetailError;
                     const detailId = `${block.key}-${row.key}-detail`;
 
                     return (

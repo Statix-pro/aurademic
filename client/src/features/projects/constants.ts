@@ -21,66 +21,14 @@ export const MAX_TRANSACTION_ACCOUNTS = 10;
 export const MAX_TRANSACTIONS_PER_ACCOUNT = 500;
 
 /**
- * The income side of the transaction ledger: the standard ways money reaches a
- * project account. Like the expenditure heads in `PROJECT_BUDGET_HEAD_GROUPS`
- * below, these are a fixed vocabulary rather than institution data, so they
- * live in code. Mirrored by `PROJECT_INCOME_HEADS` in
- * `server/modules/project/projectPayload.js`, which validates them.
+ * The income side of the transaction ledger: the four ways money reaches a
+ * project account. A closed list rather than institution data — unlike the
+ * expenditure heads, which an administrator curates under Project Form Options
+ * and which reach the form through `ProjectLookups.budgetHeads`. Mirrored by
+ * `PROJECT_INCOME_HEADS` in `server/modules/project/projectPayload.js`, which
+ * validates them.
  */
 export const PROJECT_INCOME_HEADS = ['Deposit', 'Interest', 'Grant Received', 'Other Income'];
-
-/**
- * The expenditure heads a project budgets against, grouped by the kind of
- * project the vocabulary belongs to.
- *
- * Deliberately not the institution-wide `budget_heads` catalog: a project is
- * sanctioned against the heads its funding agency recognises — Manpower and
- * Contingencies on a research grant, Honorarium and Lodging on a sponsored
- * event — which is a different vocabulary from the one the college budgets its
- * own spending under. Like `PROJECT_INCOME_HEADS` above they live in code, and
- * are mirrored by `PROJECT_BUDGET_HEAD_GROUPS` in
- * `server/modules/project/projectPayload.js`, which validates them.
- *
- * Both groups are offered together, since nothing on a project records which
- * kind it is. `Consumables` appears under each on purpose: heads are stored and
- * matched by name, so it is one head reachable from either list, and a project
- * can budget it once.
- */
-export const PROJECT_BUDGET_HEAD_GROUPS = [
-  {
-    label: 'Research Projects',
-    heads: [
-      'Equipment',
-      'Consumables',
-      'Manpower',
-      'Contingencies',
-      'Overhead Charges',
-      'Travel',
-      'Field Work',
-      'Other Costs',
-    ],
-  },
-  {
-    label: 'Sponsored Events',
-    heads: [
-      'Honorarium',
-      'Consumables',
-      'Travel Allowance',
-      'Food & Refreshment',
-      'Registration Kit',
-      'Printing',
-      'Stationery',
-      'Administrative Expenses',
-      'Boarding Expenses',
-      'Lodging Expenses',
-    ],
-  },
-];
-
-/** Every project budget head, in vocabulary order, each name once. */
-export const PROJECT_BUDGET_HEADS: string[] = [
-  ...new Set(PROJECT_BUDGET_HEAD_GROUPS.flatMap((group) => group.heads)),
-];
 
 /** Matches the server-side document check advertised on every upload control. */
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
@@ -91,6 +39,19 @@ export const MEMBER_TYPE_OPTIONS = [
   { value: 'student', label: 'Student' },
   { value: 'external', label: 'External' },
 ] as const;
+
+/**
+ * What a collaborating organization brings to the project. A collaborator can
+ * play several of these at once — a partner institute that shares a facility
+ * and funds part of the work — so the field is a multi-select.
+ */
+export const COLLABORATOR_ROLES = [
+  'Knowledge Partner',
+  'Technology Partner',
+  'Facility Sharing',
+  'Financial Support',
+  'Implementation Partner',
+];
 
 export const COLLABORATOR_CATEGORIES = [
   'Academic',

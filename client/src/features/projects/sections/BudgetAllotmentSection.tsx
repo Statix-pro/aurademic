@@ -16,11 +16,12 @@ import {
 } from '../projectFormState';
 import { budgetHeadOptions, withSelectedOption } from '../selectOptions';
 
-import type { BudgetAllotmentRow, ProjectFormState } from '../types';
+import type { BudgetAllotmentRow, BudgetHeadOption, ProjectFormState } from '../types';
 
 interface BudgetAllotmentSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
+  budgetHeads: BudgetHeadOption[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -36,12 +37,13 @@ interface BudgetAllotmentSectionProps {
 const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
   form,
   patch,
+  budgetHeads,
   errors,
   disabled,
 }) => {
   const { budgetRows, budgetYears, budgetAllotments } = form;
 
-  const headOptions = useMemo(() => budgetHeadOptions(), []);
+  const headOptions = useMemo(() => budgetHeadOptions(budgetHeads), [budgetHeads]);
 
   const yearOptions = useMemo(
     () => financialYearOptions().map((year) => ({ value: year, label: year })),

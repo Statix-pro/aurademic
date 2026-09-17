@@ -33,6 +33,7 @@ import SanctionDetailsSection from './sections/SanctionDetailsSection';
 import SubmissionDetailsSection from './sections/SubmissionDetailsSection';
 import TransactionAccountsSection from './sections/TransactionAccountsSection';
 import TransactionSummarySection from './sections/TransactionSummarySection';
+import { financeOrganizations } from './selectOptions';
 
 import type { ProjectFormTab } from './constants';
 import type {
@@ -49,6 +50,7 @@ const emptyLookups: ProjectLookups = {
   schemes: [],
   departments: [],
   accounts: [],
+  budgetHeads: [],
 };
 
 /**
@@ -207,6 +209,25 @@ const ProjectForm: React.FC = () => {
   // locked.
   const isConcluded =
     isSelected && (form.projectStatus === 'completed' || form.projectStatus === 'closed');
+
+  // The two finance tables record money moving between this project's own
+  // parties, so they offer those rather than the whole master list — see
+  // `financeOrganizations`. Derived from the form, so adding a collaborator
+  // makes it selectable on both tables straight away.
+  const financeParties = useMemo(
+    () =>
+      financeOrganizations(lookups.organizations, {
+        fundingOrganizationId: form.fundingOrganizationId,
+        collaborators: form.collaborators,
+        collaboratorsEnabled: form.collaboratorsEnabled,
+      }),
+    [
+      lookups.organizations,
+      form.fundingOrganizationId,
+      form.collaborators,
+      form.collaboratorsEnabled,
+    ],
+  );
 
   const patch = useCallback(
     (changes: Partial<ProjectFormState>) => setForm((previous) => ({ ...previous, ...changes })),
@@ -526,7 +547,8 @@ const ProjectForm: React.FC = () => {
               onChange={(rows) => patch({ financialContributions: rows })}
               enabled={form.financialContributionEnabled}
               onToggle={(enabled) => patch({ financialContributionEnabled: enabled })}
-              organizations={lookups.organizations}
+              organizations={financeParties}
+              budgetHeads={lookups.budgetHeads}
               errors={errors}
               disabled={isReadOnly}
             />
@@ -538,7 +560,8 @@ const ProjectForm: React.FC = () => {
               onChange={(rows) => patch({ financeSharing: rows })}
               enabled={form.financeSharingEnabled}
               onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
-              organizations={lookups.organizations}
+              organizations={financeParties}
+              budgetHeads={lookups.budgetHeads}
               errors={errors}
               disabled={isReadOnly}
             />
@@ -673,6 +696,7 @@ const ProjectForm: React.FC = () => {
             <BudgetAllotmentSection
               form={form}
               patch={patch}
+              budgetHeads={lookups.budgetHeads}
               errors={errors}
               disabled={isReadOnly}
             />
@@ -689,6 +713,7 @@ const ProjectForm: React.FC = () => {
               form={form}
               patch={patch}
               accounts={lookups.accounts}
+              budgetHeads={lookups.budgetHeads}
               errors={errors}
               disabled={isReadOnly}
             />
