@@ -2088,47 +2088,45 @@ export default function MasterDataPage() {
   };
 
   return (
-    <div className="master-data-page-wrapper">
-      <div className="admin-screen master-data-management">
-        <AdminScreenHeader
-          title="Master Data"
-          description="The institution's own records — the departments, centres and cells work is filed under, and the employees who staff them."
-          actions={
-            <CustomButton onClick={addAction[activeTab].onClick}>
-              <Plus size={16} aria-hidden="true" />
-              {addAction[activeTab].label}
-            </CustomButton>
-          }
-        />
+    <div className="admin-screen master-data-management">
+      <AdminScreenHeader
+        title="Master Data"
+        description="The institution's own records — the departments, centres and cells work is filed under, and the employees who staff them."
+        actions={
+          <CustomButton onClick={addAction[activeTab].onClick}>
+            <Plus size={16} aria-hidden="true" />
+            {addAction[activeTab].label}
+          </CustomButton>
+        }
+      />
 
-        <AdminTabs<TabKey>
-          tabs={[
-            { key: 'departments', label: 'Departments', count: departments.length },
-            { key: 'entities', label: 'Entities', count: entities.length },
-            { key: 'employees', label: 'Employees', count: empTotal },
-          ]}
-          active={activeTab}
-          onChange={setActiveTab}
-        />
+      <AdminTabs<TabKey>
+        tabs={[
+          { key: 'departments', label: 'Departments', count: departments.length },
+          { key: 'entities', label: 'Entities', count: entities.length },
+          { key: 'employees', label: 'Employees', count: empTotal },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
-        {activeTab === 'departments' && renderDepartmentsTab()}
-        {activeTab === 'entities' && renderEntitiesTab()}
-        {activeTab === 'employees' && renderEmployeesTab()}
+      {activeTab === 'departments' && renderDepartmentsTab()}
+      {activeTab === 'entities' && renderEntitiesTab()}
+      {activeTab === 'employees' && renderEmployeesTab()}
 
-        <AlertModal
-          show={alertState.show}
-          type={alertState.type}
-          title={alertState.title}
-          message={alertState.message}
-          showCancel={alertState.showCancel}
-          confirmText={alertState.confirmText}
-          onConfirm={() => {
-            alertState.onConfirm?.();
-            closeAlert();
-          }}
-          onHide={closeAlert}
-        />
-      </div>
+      <AlertModal
+        show={alertState.show}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        showCancel={alertState.showCancel}
+        confirmText={alertState.confirmText}
+        onConfirm={() => {
+          alertState.onConfirm?.();
+          closeAlert();
+        }}
+        onHide={closeAlert}
+      />
     </div>
   );
 }

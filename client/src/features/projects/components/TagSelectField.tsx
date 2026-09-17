@@ -52,7 +52,12 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLUListElement>(null);
+  // State, not a ref: the first placement has to happen once the <ul> is in the
+  // DOM, and a ref changing does not re-run the effect that places it. Held as
+  // state, the node arriving is a render, so the menu is measured and placed
+  // from its real height instead of the 240px ceiling assumed in its absence —
+  // which parked an upward-opening menu a gap above the field it belongs to.
+  const [menuNode, setMenuNode] = useState<HTMLUListElement | null>(null);
   // Where the menu sits on screen. It is rendered into `document.body` rather
   // than beside the control, because inside a table the control's own scroll
   // container (`.pf-table-wrap`, which needs `overflow-x` for narrow windows)
@@ -68,7 +73,7 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
     const rect = control.getBoundingClientRect();
     // `scrollHeight`, not `offsetHeight`: the menu we are measuring may already
     // be capped by a maxHeight this function set for a tighter position.
-    const wanted = Math.min(menuRef.current?.scrollHeight ?? MENU_MAX_HEIGHT, MENU_MAX_HEIGHT);
+    const wanted = Math.min(menuNode?.scrollHeight ?? MENU_MAX_HEIGHT, MENU_MAX_HEIGHT);
     const below = window.innerHeight - rect.bottom - MENU_GAP - VIEWPORT_MARGIN;
     const above = rect.top - MENU_GAP - VIEWPORT_MARGIN;
 
@@ -85,7 +90,7 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
       width: rect.width,
       maxHeight,
     });
-  }, []);
+  }, [menuNode]);
 
   const suggestions = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -109,7 +114,7 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
       const target = event.target as Node;
       // The menu is outside the wrapper in the DOM now, so a click on an option
       // has to be recognised as inside.
-      if (!wrapperRef.current?.contains(target) && !menuRef.current?.contains(target)) {
+      if (!wrapperRef.current?.contains(target) && !menuNode?.contains(target)) {
         setIsOpen(false);
         setQuery('');
       }
@@ -210,7 +215,7 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
           <ul
             className="pf-tags__menu pf-tags__menu--floating"
             role="listbox"
-            ref={menuRef}
+            ref={setMenuNode}
             style={{
               top: menuBox.top,
               left: menuBox.left,
