@@ -289,6 +289,23 @@
   text-align: right;
 }
 
+/* The column the row's head does not normally use. Dimmed so the ordinary
+   entry lands in the other one, but not disabled: a returned advance is a
+   credit against an expenditure head and the ledger has to be able to say so.
+   Only ever applied while the field is empty (the class is dropped once it
+   holds a figure), and focusing it restores full contrast — past that point
+   the contra entry is what the user means and dimming it would just make a
+   real number hard to read. */
+.pf-input--contra {
+  background: #f4f6fa;
+  color: #97a1b5;
+}
+
+.pf-input--contra:focus {
+  background: #fbfcfe;
+  color: var(--text-main, #4f4f6e);
+}
+
 .pf-textarea {
   height: auto;
   padding: 10px 12px;
