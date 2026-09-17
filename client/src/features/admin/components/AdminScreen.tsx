@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 
 import './adminScreen.css';
 
@@ -48,14 +48,58 @@ interface AdminTabsProps<Key extends string> {
 }
 
 export function AdminTabs<Key extends string>({ tabs, active, onChange }: AdminTabsProps<Key>) {
+  const stripRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * What `role="tab"` promises a keyboard user: the arrows walk the strip and
+   * switch as they go, Home and End jump to either end, and only the selected
+   * tab is in the page's tab order, so Tab steps over the strip in one press
+   * rather than once per tab.
+   */
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const index = tabs.findIndex((tab) => tab.key === active);
+    if (index < 0) return;
+
+    let next = index;
+    switch (event.key) {
+      case 'ArrowRight':
+        next = (index + 1) % tabs.length;
+        break;
+      case 'ArrowLeft':
+        next = (index - 1 + tabs.length) % tabs.length;
+        break;
+      case 'Home':
+        next = 0;
+        break;
+      case 'End':
+        next = tabs.length - 1;
+        break;
+      default:
+        return;
+    }
+
+    event.preventDefault();
+    onChange(tabs[next].key);
+    // Focus follows selection; the button is already on screen, so it only has
+    // to be found again after the key moved which one is selected.
+    stripRef.current?.querySelectorAll<HTMLButtonElement>('.admin-tab')[next]?.focus();
+  };
+
   return (
-    <div className="admin-tabs" role="tablist">
+    <div
+      className="admin-tabs"
+      role="tablist"
+      aria-orientation="horizontal"
+      ref={stripRef}
+      onKeyDown={handleKeyDown}
+    >
       {tabs.map((tab) => (
         <button
           key={tab.key}
           type="button"
           role="tab"
           aria-selected={active === tab.key}
+          tabIndex={active === tab.key ? 0 : -1}
           className={`admin-tab ${active === tab.key ? 'is-active' : ''}`.trim()}
           onClick={() => onChange(tab.key)}
         >

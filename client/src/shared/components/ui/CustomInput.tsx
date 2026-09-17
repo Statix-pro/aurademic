@@ -16,6 +16,8 @@ interface CustomInputProps {
   as?: React.ElementType;
   rows?: number;
   autoFocus?: boolean;
+  /** Blocks submission when left blank, and marks the field so in the a11y tree. */
+  required?: boolean;
   /** Id of a <datalist> whose options the browser suggests while typing. */
   list?: string;
   onClick?: (e: any) => void;

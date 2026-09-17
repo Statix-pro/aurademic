@@ -484,6 +484,10 @@ const ProjectFormOptions: React.FC = () => {
               value={current.name || ''}
               onChange={(value) => setCurrent({ ...current, name: value })}
               autoFocus
+              // Nothing here is worth a row without one: an unnamed organization
+              // or scheme lands in the project form as an empty option, and the
+              // columns take an empty string happily.
+              required
             />
 
             {activeTab === 'organizations' && (
@@ -528,6 +532,9 @@ const ProjectFormOptions: React.FC = () => {
                   placeholder="Research Projects"
                   value={current.head_group || ''}
                   onChange={(value) => setCurrent({ ...current, head_group: value })}
+                  // A head is stored under its group, and the server rejects a
+                  // blank one — the dialog says so before the round trip.
+                  required
                 />
                 <datalist id="pfo-head-groups">
                   {headGroups.map((group) => (

@@ -2,6 +2,12 @@ import { ChevronDown, X } from 'lucide-react';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
+// Mirrors `.pf-tags__menu`'s max-height, and the breathing room the menu keeps
+// from the control and from the edge of the window.
+const MENU_MAX_HEIGHT = 240;
+const MENU_GAP = 4;
+const VIEWPORT_MARGIN = 8;
+
 export interface TagOption {
   value: string;
   label: string;
@@ -53,20 +59,48 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
   // clipped the list to the row — the options below the first were unreachable.
   // Portalled out, nothing above it can crop it, so it is positioned by hand
   // against the control's box.
-  const [menuBox, setMenuBox] = useState({ top: 0, left: 0, width: 0 });
+  const [menuBox, setMenuBox] = useState({ top: 0, left: 0, width: 0, maxHeight: MENU_MAX_HEIGHT });
 
   const positionMenu = useCallback(() => {
     const control = wrapperRef.current;
     if (!control) return;
 
     const rect = control.getBoundingClientRect();
-    setMenuBox({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    // `scrollHeight`, not `offsetHeight`: the menu we are measuring may already
+    // be capped by a maxHeight this function set for a tighter position.
+    const wanted = Math.min(menuRef.current?.scrollHeight ?? MENU_MAX_HEIGHT, MENU_MAX_HEIGHT);
+    const below = window.innerHeight - rect.bottom - MENU_GAP - VIEWPORT_MARGIN;
+    const above = rect.top - MENU_GAP - VIEWPORT_MARGIN;
+
+    // Below the control, as a dropdown should be — unless the list would run
+    // off the bottom of the window and there is more room above it. The last
+    // row of a long form otherwise opens its options where nobody can reach
+    // them without scrolling the page underneath.
+    const openUp = below < wanted && above > below;
+    const maxHeight = Math.max(0, Math.min(wanted, openUp ? above : below));
+
+    setMenuBox({
+      top: openUp ? rect.top - MENU_GAP - maxHeight : rect.bottom + MENU_GAP,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    });
   }, []);
+
+  const suggestions = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return options.filter(
+      (option) =>
+        !value.includes(option.value) && (!needle || option.label.toLowerCase().includes(needle)),
+    );
+  }, [options, query, value]);
 
   // Before paint, so the menu never shows at the previous row's coordinates.
   useLayoutEffect(() => {
     if (isOpen) positionMenu();
-  }, [isOpen, positionMenu, value.length]);
+    // `suggestions.length` too: how tall the list wants to be decides which way
+    // it opens, so a list that shrinks as it is filtered is placed again.
+  }, [isOpen, positionMenu, value.length, suggestions.length]);
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -108,14 +142,6 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
       ),
     [options, value],
   );
-
-  const suggestions = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return options.filter(
-      (option) =>
-        !value.includes(option.value) && (!needle || option.label.toLowerCase().includes(needle)),
-    );
-  }, [options, query, value]);
 
   const add = (option: TagOption) => {
     onChange([...value, option.value]);
@@ -185,7 +211,12 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
             className="pf-tags__menu pf-tags__menu--floating"
             role="listbox"
             ref={menuRef}
-            style={{ top: menuBox.top, left: menuBox.left, width: menuBox.width }}
+            style={{
+              top: menuBox.top,
+              left: menuBox.left,
+              width: menuBox.width,
+              maxHeight: menuBox.maxHeight,
+            }}
           >
             {suggestions.length === 0 ? (
               <li className="pf-tags__empty">{emptyMessage}</li>
