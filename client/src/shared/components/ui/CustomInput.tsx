@@ -16,6 +16,8 @@ interface CustomInputProps {
   as?: React.ElementType;
   rows?: number;
   autoFocus?: boolean;
+  /** Id of a <datalist> whose options the browser suggests while typing. */
+  list?: string;
   onClick?: (e: any) => void;
   onFocus?: (e: any) => void;
   onBlur?: (e: any) => void;

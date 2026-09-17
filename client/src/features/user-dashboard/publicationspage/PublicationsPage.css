@@ -687,16 +687,11 @@
   padding: 24px !important;
 }
 
-.modal-backdrop {
-  position: fixed !important;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1040 !important;
-  background-color: rgba(0, 0, 0, 0.5) !important;
-  pointer-events: auto !important;
-}
+/* A `.modal-backdrop` override lived here, forcing position, size, z-index and
+   a 50% black behind `!important`. It was treating the symptoms of the bespoke
+   `.modal`/`.modal-backdrop` rules that used to sit in the events stylesheet
+   and clobber every dialog in the app; with those gone, Bootstrap's own
+   backdrop is correct and this only fought it. */
 
 /* Category Selection Buttons */
 .category-btn {
@@ -742,17 +737,12 @@
   display: block;
 }
 
-/* Ensure modal and backdrop don't disappear on hover */
-.modal.fade.show,
-.modal-backdrop.fade.show {
-  pointer-events: auto !important;
-}
-
-.modal:hover,
-.modal-dialog:hover,
-.modal-content:hover {
-  pointer-events: auto !important;
-}
+/* The `pointer-events: auto !important` band-aids that followed — on the shown
+   modal, the shown backdrop and every hovered part of the dialog — chased the
+   same ghost: `display: flex` from that stray `.modal` rule reflowed Bootstrap's
+   scroll container, which is what made a dialog seem to vanish under the
+   cursor. Nothing sets `pointer-events: none`, so there was never anything to
+   restore. */
 
 .publication-section {
   margin-top: 1.5rem;

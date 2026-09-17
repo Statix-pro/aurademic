@@ -32,6 +32,68 @@
   --shadow-sm: 0 2px 8px rgba(0, 105, 171, 0.1);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.05);
   --shadow-focus: 0 0 0 3px rgba(0, 105, 171, 0.15);
+  --shadow-raised: 0 1px 3px rgba(16, 42, 74, 0.12);
+  --shadow-card: 0 1px 2px rgba(16, 42, 74, 0.06);
+
+  /* ---------------------------------------------------------------------
+     Scales. Everything below is additive: these name the values screens were
+     picking by hand, so spacing, type and neutral tints line up between one
+     screen and the next instead of being re-chosen per page.
+     --------------------------------------------------------------------- */
+
+  /* Spacing — a 4px step. Gaps, padding and margins come from here. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* Type scale */
+  --font-2xs: 0.72rem;
+  --font-xs: 0.76rem;
+  --font-sm: 0.82rem;
+  --font-md: 0.88rem;
+  --font-lg: 0.95rem;
+  /* A dialog's title: bigger than its fields, smaller than a page heading. */
+  --font-lead: 1.1rem;
+  --font-xl: 1.45rem;
+
+  /* Neutral surfaces and borders, lighter than --bg-light / --border-color:
+     table headers, hover rows, segmented controls. */
+  --surface-subtle: #f7fafd;
+  --surface-muted: #f4f7fc;
+  --surface-hover: #f8fbff;
+  /* A table's heading row. Deep enough to read as the head of the table from
+     across the page rather than as a slightly off-white first record. */
+  --surface-header: #d4dfec;
+  --border-subtle: #e6ebf3;
+  --border-input: #dfe6f0;
+
+  /* Text, from strongest to softest, for rows of records. */
+  --text-strong: #16233a;
+  --text-body: #27364b;
+  --text-soft: #51607a;
+
+  /* Status tints — a pale fill with a readable foreground. */
+  --tint-primary-bg: #e4f1ff;
+  --tint-primary-fg: var(--primary-color);
+  --tint-success-bg: #e7f6ee;
+  --tint-success-fg: #1a7f48;
+  --tint-danger-bg: #fdeef0;
+  --tint-danger-fg: #d3384a;
+  --tint-neutral-bg: #f1f3f7;
+  --tint-neutral-fg: var(--text-muted);
+
+  /* Interactive surfaces — hover and focus rings on quiet controls. */
+  --hover-primary-bg: #eef5fd;
+  --hover-primary-border: #cfe2f6;
+  --hover-danger-border: #f7d4d8;
+
+  /* The height every single-line control lines up on. */
+  --control-height: 42px;
 
   /* Bootstrap Overrides */
   --bs-primary: var(--primary-color);

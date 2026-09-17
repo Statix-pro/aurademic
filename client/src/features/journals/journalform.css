@@ -1222,16 +1222,10 @@ input[type='checkbox'],
   margin-left: 0.5rem;
 }
 
-/* Modal specific styles for journal request modal */
-.modal.fade.show {
-  display: block !important;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-.modal-backdrop.fade.show {
-  display: block !important;
-  background-color: rgba(0, 0, 0, 0.5);
-}
+/* The `.modal`/`.modal-backdrop` backgrounds that sat here were a copy of the
+   pair in `shared/styles/forms.css`, and were removed for the same reason: a
+   colour keyed on `.show` steps in one frame while the backdrop fades over
+   150ms. See the note there. */
 
 /* Modal dialog and content styling - Compact size */
 .modal-dialog {

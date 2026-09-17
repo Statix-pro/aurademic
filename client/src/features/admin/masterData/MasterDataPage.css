@@ -1,243 +1,34 @@
-.master-data-page-wrapper {
-  min-height: 100vh;
-  background-color: #f8fafc;
-}
+/**
+ * Master Data Management — only what this screen adds on top of the shared
+ * admin shell in `features/admin/components/adminScreen.css`: the search box's
+ * inset icon, the read-only detail view, the pagination strip and the form
+ * dialog's internals. The page frame, tabs, toolbar, table, row buttons and
+ * badges all come from the shell, so this screen and the other two stay in
+ * step.
+ */
 
-.master-data-management {
-  padding: 24px;
-  border-radius: 12px;
-}
-
-.master-data-management h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 0;
-}
-
-/* ===== Nav Tabs ===== */
-.master-data-management .nav-tabs {
-  border-bottom: 2px solid #e2e8f0;
-  margin-bottom: 20px;
-}
-
-.master-data-management .nav-tabs .nav-link {
-  color: #64748b;
-  font-weight: 500;
-  font-size: 0.9rem;
-  padding: 10px 20px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  transition: all 0.2s ease;
-}
-
-.master-data-management .nav-tabs .nav-link:hover {
-  color: #0069ab;
-  border-bottom-color: #cbd5e1;
-}
-
-.master-data-management .nav-tabs .nav-link.active {
-  color: #0069ab;
-  font-weight: 600;
-  border-bottom-color: #0069ab;
-  background: transparent;
-}
-
-/* ===== Search & Filter Bar ===== */
-.master-data-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
-.master-data-toolbar .form-control,
-.master-data-toolbar .form-select {
-  flex: 1;
-  min-width: 200px;
-  max-width: 300px;
-  border-radius: 8px;
-  border: 1px solid #cbd5e1;
-  padding: 8px 14px;
-  font-size: 0.875rem;
-}
-
+/* ===== Search box ===== */
 .search-wrapper {
   position: relative;
   display: flex;
-  align-items: center;
   flex: 1;
-  max-width: 300px;
+  align-items: center;
+  /* Matches the bare search box on the other admin screens — see
+     `.admin-toolbar__filters .form-control` in the shell. */
+  max-width: 260px;
 }
 
 .search-wrapper .search-icon {
   position: absolute;
-  left: 12px;
-  color: #94a3b8;
+  left: var(--space-3);
   z-index: 5;
+  color: var(--text-muted);
   pointer-events: none;
 }
 
 .search-wrapper .form-control {
-  padding-left: 40px !important;
   width: 100%;
-}
-
-.master-data-toolbar .form-control:focus,
-.master-data-toolbar .form-select:focus {
-  border-color: #0069ab;
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
-}
-
-.master-data-toolbar .btn-add {
-  margin-left: auto;
-  padding: 8px 18px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #0069ab 0%, #005492 100%);
-  border: none;
-  color: #fff;
-  box-shadow: 0 2px 4px rgba(0, 105, 171, 0.3);
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.master-data-toolbar .btn-add:hover {
-  background: linear-gradient(135deg, #005492 0%, #004a7a 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 105, 171, 0.4);
-}
-
-/* ===== Table ===== */
-.master-data-management .table {
-  background-color: #ffffff;
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.08),
-    0 1px 2px rgba(0, 0, 0, 0.06);
-  margin-bottom: 0;
-  border-collapse: separate;
-  border-spacing: 0;
-  width: 100%;
-}
-
-.master-data-management .table thead th {
-  background: linear-gradient(180deg, #475569 0%, #334155 100%);
-  color: #ffffff;
-  font-weight: 600;
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  padding: 14px 16px;
-  border: none;
-  white-space: nowrap;
-  vertical-align: middle;
-}
-
-.master-data-management .table thead th:first-child {
-  border-top-left-radius: 8px;
-}
-
-.master-data-management .table thead th:last-child {
-  border-top-right-radius: 8px;
-}
-
-.master-data-management .table tbody td {
-  padding: 12px 16px;
-  vertical-align: middle;
-  border-bottom: 1px solid #e2e8f0;
-  color: #334155;
-  font-size: 0.875rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.master-data-management .table tbody tr:hover {
-  background-color: #f1f5f9;
-}
-
-.master-data-management .table tbody tr:nth-child(even) {
-  background-color: #fafbfc;
-}
-
-.master-data-management .table tbody tr:nth-child(even):hover {
-  background-color: #f1f5f9;
-}
-
-.master-data-management .table tbody tr:last-child td:first-child {
-  border-bottom-left-radius: 8px;
-}
-
-.master-data-management .table tbody tr:last-child td:last-child {
-  border-bottom-right-radius: 8px;
-}
-
-/* ===== Action Buttons ===== */
-.master-data-management .btn-action {
-  padding: 4px 8px;
-  font-size: 0.8rem;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-  border: none;
-}
-
-.master-data-management .btn-edit {
-  background: linear-gradient(135deg, #0069ab 0%, #005492 100%);
-  color: #fff;
-}
-
-.master-data-management .btn-edit:hover {
-  background: linear-gradient(135deg, #005492 0%, #004a7a 100%);
-  transform: translateY(-1px);
-  color: #fff;
-}
-
-.master-data-management .btn-delete {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  color: #fff;
-}
-
-.master-data-management .btn-delete:hover {
-  background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-  transform: translateY(-1px);
-  color: #fff;
-}
-
-.master-data-management .btn-restore {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
-  color: #fff;
-}
-
-.master-data-management .btn-restore:hover {
-  background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
-  transform: translateY(-1px);
-  color: #fff;
-}
-
-/* ===== Badges ===== */
-.master-data-management .badge {
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 5px 10px;
-  border-radius: 50px;
-  letter-spacing: 0.3px;
-}
-
-.badge-active {
-  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%) !important;
-  box-shadow: 0 1px 3px rgba(22, 163, 74, 0.3);
-}
-
-.badge-inactive {
-  background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%) !important;
-  box-shadow: 0 1px 3px rgba(100, 116, 139, 0.3);
+  padding-left: var(--space-8) !important;
 }
 
 /* ===== Pagination ===== */
@@ -279,33 +70,12 @@
   cursor: not-allowed;
 }
 
-/* ===== Empty State ===== */
-.master-data-management .table tbody td[colspan] {
-  text-align: center;
-  padding: 40px 16px;
-  color: #64748b;
-  font-size: 0.95rem;
-  background-color: #fafbfc;
-}
-
 /* ===== Loading ===== */
 .master-data-loading {
   display: flex;
   justify-content: center;
   align-items: center;
   padding: 60px 0;
-}
-
-/* ===== View Button ===== */
-.master-data-management .btn-view {
-  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
-  color: #fff;
-}
-
-.master-data-management .btn-view:hover {
-  background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-  transform: translateY(-1px);
-  color: #fff;
 }
 
 /* ===== Detail View Modal ===== */
@@ -348,14 +118,17 @@
   border-top: 2px solid #e2e8f0;
 }
 
-/* ===== Modal Enhancements ===== */
+/* ===== Modal =====
+   The employee form is the largest dialog in the app — four columns, three
+   sections, eighteen fields. Everything below is about making that legible:
+   one field size, one label size, one section rule, all from the shell's
+   tokens. It used to carry its own slate palette and its own focus blue
+   (#2563eb), which is not the blue anything else in the app uses. */
 .master-data-modal .modal-content {
-  border: none;
-  border-radius: 12px;
-  box-shadow:
-    0 20px 25px -5px rgba(0, 0, 0, 0.1),
-    0 10px 10px -5px rgba(0, 0, 0, 0.04);
   overflow: hidden;
+  border: none;
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--shadow-md);
 }
 
 @media (min-width: 992px) {
@@ -368,59 +141,114 @@
   }
 }
 
-.master-data-modal .modal-header {
-  border-bottom: 1px solid #f1f5f9;
-  padding: 0.75rem 1.5rem;
-  background: #fff;
+/* The dialog wraps its body and footer in a <form>, which puts an ordinary
+   block in the middle of the flex column bootstrap builds from .modal-content
+   down to .modal-body. With the chain broken the body cannot shrink, so a long
+   form pushes its own footer off the bottom of the screen and `scrollable` has
+   nothing to act on. Carrying the column through the form restores it: the
+   fields scroll, and the title and Save stay in view. */
+.master-data-modal .modal-content > form {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  /* A `gap` is inherited onto this form from elsewhere in the app. It did
+     nothing while the form was a plain block; making it a flex column turned it
+     into 20px of blank dialog between the last field and the footer. */
+  gap: 0;
+  min-height: 0;
 }
 
-.master-data-modal .modal-title {
-  font-weight: 700;
-  color: #1e293b;
-  font-size: 1.15rem;
+.master-data-modal .modal-content > form > .modal-body {
+  min-height: 0;
+  overflow-y: auto;
 }
 
-.master-data-modal .modal-footer {
-  border-top: 1px solid #f1f5f9;
-}
-
+/* A quiet rule with a label on it, not a heading competing with the dialog's
+   own title. All three read the same — one of them used to be primary blue,
+   which made "Research Identifiers" look like the important one. */
 .form-section-header {
-  border-bottom: 2px solid #f1f5f9;
-  padding-bottom: 0.75rem;
-  margin-bottom: 1.5rem;
-  margin-top: 1rem;
+  padding-bottom: var(--space-2);
+  margin-top: var(--space-6);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.form-section-header:first-child {
+  margin-top: 0;
 }
 
 .form-section-header h6 {
+  color: var(--text-soft);
   font-weight: 700;
+  font-size: var(--font-xs);
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.85rem;
-  color: #475569;
 }
 
 .master-data-modal .form-label {
+  margin-bottom: var(--space-1);
+  color: var(--text-soft);
   font-weight: 600;
-  font-size: 0.875rem;
-  color: #334155;
-  margin-bottom: 0.5rem;
+  font-size: var(--font-sm);
 }
 
+/* One height for every control, so a row of four lines up whether it holds a
+   text box, a select or a date.
+
+   `background-color`, never the `background` shorthand: the shorthand resets
+   `background-image` with it, and a select's dropdown chevron IS its background
+   image — set it here and every dropdown in the dialog silently turns into
+   something that looks like a text box. */
 .master-data-modal .form-control,
 .master-data-modal .form-select {
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 0.6rem 0.8rem;
-  font-size: 0.95rem;
-  color: #0f172a;
-  transition: all 0.2s ease;
+  height: var(--control-height);
+  border: 1px solid var(--border-input);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--bg-surface);
+  color: var(--text-body);
+  font-size: var(--font-md);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.master-data-modal .form-control {
+  padding: 0 var(--space-3);
+}
+
+/* The chevron, and the room for it.
+
+   `!important` is not decoration here: `forms.css` sets
+   `.modal-body .form-select { padding: 0.4rem 0.75rem !important }` globally,
+   and nothing but `!important` outranks it — which is also why the arrow had
+   nowhere to sit and overlapped the text.
+
+   The mark itself is lucide's `chevron-down`, the same icon set the buttons and
+   row actions use, rather than bootstrap's heavier filled arrow. */
+.master-data-modal .modal-body .form-select {
+  /* Three classes, not two: `forms.css` loads after this file, so at equal
+     specificity its !important wins the tie on source order. */
+  padding: 0 var(--space-8) 0 var(--space-3) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2351607a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  background-size: 16px 16px;
+}
+
+.master-data-modal .form-control::placeholder {
+  color: var(--text-muted);
 }
 
 .master-data-modal .form-control:focus,
 .master-data-modal .form-select:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  border-color: var(--hover-primary-border);
+  box-shadow: var(--shadow-focus);
   outline: none;
+}
+
+/* The asterisk marks the field; it should not shout over the label. */
+.master-data-modal .form-label .text-danger {
+  font-weight: 700;
 }
 
 .master-data-modal .btn-update {
