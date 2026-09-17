@@ -1,6 +1,7 @@
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Trash2 } from 'lucide-react';
 import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
 import { Table, Button, Form, Modal, Alert } from 'react-bootstrap';
+import { createPortal } from 'react-dom';
 
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import './FormManagementStyles.css';
@@ -18,7 +19,18 @@ interface JournalOption {
   category: string;
 }
 
-const JournalManagement: React.FC = () => {
+interface JournalManagementProps {
+  /**
+   * Where the Add button should render. The dashboard hands us the slot on its
+   * tab strip so the action shares that row with the tabs, the way Configure
+   * Columns does — on its own row it read as a band of empty page above the
+   * table it belongs to. Standalone there is no slot, so it falls back to a
+   * row of its own.
+   */
+  actionSlot?: HTMLElement | null;
+}
+
+const JournalManagement: React.FC<JournalManagementProps> = ({ actionSlot = null }) => {
   const [journals, setJournals] = useState<JournalOption[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState('');
@@ -160,6 +172,21 @@ const JournalManagement: React.FC = () => {
     setError('');
   };
 
+  const addButton = (
+    <Button
+      variant="primary"
+      className="journal-management__add"
+      onClick={() => {
+        resetForm();
+        setShowModal(true);
+      }}
+      disabled={loading}
+    >
+      <Plus size={17} aria-hidden="true" />
+      Add Journal
+    </Button>
+  );
+
   return (
     <div className="journal-management">
       {error && <Alert variant="danger">{error}</Alert>}
@@ -171,19 +198,11 @@ const JournalManagement: React.FC = () => {
         </div>
       )}
 
-      <div className="d-flex justify-content-between align-items-center mb-4">
-        <h2>Journal Management</h2>
-        <Button
-          variant="primary"
-          onClick={() => {
-            resetForm();
-            setShowModal(true);
-          }}
-          disabled={loading}
-        >
-          Add New Journal
-        </Button>
-      </div>
+      {actionSlot ? (
+        createPortal(addButton, actionSlot)
+      ) : (
+        <div className="d-flex justify-content-end align-items-center">{addButton}</div>
+      )}
 
       <Table striped bordered hover responsive>
         <thead>
@@ -249,134 +268,133 @@ const JournalManagement: React.FC = () => {
         </tbody>
       </Table>
 
-      <Modal show={showModal} onHide={() => setShowModal(false)}>
+      <Modal
+        show={showModal}
+        onHide={() => setShowModal(false)}
+        size="lg"
+        className="journal-modal"
+        centered
+      >
         <Modal.Header closeButton>
           <Modal.Title>{isEditing ? 'Edit Journal' : 'Add New Journal'}</Modal.Title>
         </Modal.Header>
-        <Modal.Body>
-          {error && <Alert variant="danger">{error}</Alert>}
-          <Form onSubmit={handleSubmit}>
-            <Form.Group className="mb-3">
-              <Form.Label>Journal Name</Form.Label>
-              <Form.Control
-                type="text"
-                value={currentJournal.journal_name || ''}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setCurrentJournal({ ...currentJournal, journal_name: e.target.value })
-                }
-                required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Category</Form.Label>
-              <Form.Select
-                value={currentJournal.category || 'National'}
-                onChange={(e: ChangeEvent<HTMLSelectElement>) =>
-                  setCurrentJournal({ ...currentJournal, category: e.target.value })
-                }
-                required
-              >
-                <option value="National">National</option>
-                <option value="International">International</option>
-              </Form.Select>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Publisher *</Form.Label>
-              <Form.Control
-                type="text"
-                value={currentJournal.publisher || ''}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setCurrentJournal({ ...currentJournal, publisher: e.target.value })
-                }
-                required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Print ISSN *</Form.Label>
-              <Form.Control
-                type="text"
-                value={currentJournal.print_issn || ''}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setCurrentJournal({ ...currentJournal, print_issn: e.target.value })
-                }
-                required
-              />
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Online ISSN *</Form.Label>
-              <Form.Control
-                type="text"
-                value={currentJournal.online_issn || ''}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setCurrentJournal({ ...currentJournal, online_issn: e.target.value })
-                }
-                required
-              />
-            </Form.Group>
-            <div className="row mb-3">
-              <div className="col-6">
-                <Form.Group>
-                  <Form.Label>Impact Factor *</Form.Label>
-                  <Form.Control
-                    type="number"
-                    step="0.001"
-                    value={currentJournal.impact_factor ?? ''}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setCurrentJournal({
-                        ...currentJournal,
-                        impact_factor: e.target.value ? parseFloat(e.target.value) : null,
-                      })
-                    }
-                    placeholder="e.g., 5.123"
-                    required
-                  />
-                </Form.Group>
-              </div>
-              <div className="col-6">
-                <Form.Group>
-                  <Form.Label>Cite Score *</Form.Label>
-                  <Form.Control
-                    type="number"
-                    step="0.001"
-                    value={currentJournal.cite_score ?? ''}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                      setCurrentJournal({
-                        ...currentJournal,
-                        cite_score: e.target.value ? parseFloat(e.target.value) : null,
-                      })
-                    }
-                    placeholder="e.g., 8.5"
-                    required
-                  />
-                </Form.Group>
-              </div>
+        <Form onSubmit={handleSubmit}>
+          <Modal.Body>
+            {error && <Alert variant="danger">{error}</Alert>}
+            {/* Two fields to a row. Stacked full-width it ran to seven rows and
+                scrolled, for eight short values that all fit side by side. */}
+            <div className="row g-3">
+              <Form.Group className="col-md-6">
+                <Form.Label>Journal Name *</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={currentJournal.journal_name || ''}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setCurrentJournal({ ...currentJournal, journal_name: e.target.value })
+                  }
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="col-md-6">
+                <Form.Label>Category *</Form.Label>
+                <Form.Select
+                  value={currentJournal.category || 'National'}
+                  onChange={(e: ChangeEvent<HTMLSelectElement>) =>
+                    setCurrentJournal({ ...currentJournal, category: e.target.value })
+                  }
+                  required
+                >
+                  <option value="National">National</option>
+                  <option value="International">International</option>
+                </Form.Select>
+              </Form.Group>
+              <Form.Group className="col-md-6">
+                <Form.Label>Publisher *</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={currentJournal.publisher || ''}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setCurrentJournal({ ...currentJournal, publisher: e.target.value })
+                  }
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="col-md-6">
+                <Form.Label>Website *</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={currentJournal.website || ''}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setCurrentJournal({ ...currentJournal, website: e.target.value })
+                  }
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="col-md-6">
+                <Form.Label>Print ISSN *</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={currentJournal.print_issn || ''}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setCurrentJournal({ ...currentJournal, print_issn: e.target.value })
+                  }
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="col-md-6">
+                <Form.Label>Online ISSN *</Form.Label>
+                <Form.Control
+                  type="text"
+                  value={currentJournal.online_issn || ''}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setCurrentJournal({ ...currentJournal, online_issn: e.target.value })
+                  }
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="col-md-6">
+                <Form.Label>Impact Factor *</Form.Label>
+                <Form.Control
+                  type="number"
+                  step="0.001"
+                  value={currentJournal.impact_factor ?? ''}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setCurrentJournal({
+                      ...currentJournal,
+                      impact_factor: e.target.value ? parseFloat(e.target.value) : null,
+                    })
+                  }
+                  placeholder="e.g., 5.123"
+                  required
+                />
+              </Form.Group>
+              <Form.Group className="col-md-6">
+                <Form.Label>Cite Score *</Form.Label>
+                <Form.Control
+                  type="number"
+                  step="0.001"
+                  value={currentJournal.cite_score ?? ''}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    setCurrentJournal({
+                      ...currentJournal,
+                      cite_score: e.target.value ? parseFloat(e.target.value) : null,
+                    })
+                  }
+                  placeholder="e.g., 8.5"
+                  required
+                />
+              </Form.Group>
             </div>
-            <Form.Group className="mb-3">
-              <Form.Label>Website *</Form.Label>
-              <Form.Control
-                type="text"
-                value={currentJournal.website || ''}
-                onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                  setCurrentJournal({ ...currentJournal, website: e.target.value })
-                }
-                required
-              />
-            </Form.Group>
-            <div className="d-flex justify-content-end">
-              <Button
-                variant="secondary"
-                className="me-2"
-                onClick={() => setShowModal(false)}
-                disabled={loading}
-              >
-                Cancel
-              </Button>
-              <Button variant="primary" type="submit" disabled={loading}>
-                {loading ? 'Saving...' : 'Save'}
-              </Button>
-            </div>
-          </Form>
-        </Modal.Body>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="secondary" onClick={() => setShowModal(false)} disabled={loading}>
+              Cancel
+            </Button>
+            <Button variant="primary" type="submit" disabled={loading}>
+              {loading ? 'Saving...' : 'Save'}
+            </Button>
+          </Modal.Footer>
+        </Form>
       </Modal>
 
       <AlertModal

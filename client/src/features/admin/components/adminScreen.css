@@ -167,6 +167,53 @@
   box-shadow: var(--shadow-raised);
 }
 
+/* ------------------------------------------------------- nested tab strip */
+
+/* A screen rendered inside another screen's tab — Project Options in the admin
+   dashboard — would otherwise run the same pill strip as the tabs that opened
+   it, twice over, one under the other. Two identical controls stacked say
+   nothing about which contains which; they just look like a mistake.
+   Nested, the strip drops the track and becomes underlined text: still the
+   same component and the same behaviour, just quieter, so the pill above it
+   reads as the page and this reads as a section of it. */
+.admin-screen--embedded .admin-tabs {
+  gap: var(--space-5);
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: none;
+  /* Full width, so the rule under it runs the page rather than stopping with
+     the last tab. */
+  align-self: stretch;
+}
+
+.admin-screen--embedded .admin-tab {
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  /* Sits on the rule above, so the active underline replaces it. */
+  margin-bottom: -1px;
+  font-size: var(--font-sm);
+}
+
+.admin-screen--embedded .admin-tab:hover:not(.is-active) {
+  border-bottom-color: var(--border-input);
+  background: none;
+}
+
+.admin-screen--embedded .admin-tab.is-active {
+  border-bottom-color: var(--primary-color);
+  background: none;
+  box-shadow: none;
+}
+
+/* Quieter than the pill's badge, which had a filled chip to sit against. */
+.admin-screen--embedded .admin-tab__count {
+  background: none;
+  color: var(--text-muted);
+}
+
 /* The count rides in the tab, so the size of each list is legible before it is
    opened. */
 .admin-tab__count {

@@ -9,6 +9,7 @@ import './admindashboard.css';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { AdminTabs } from './components/AdminScreen';
 import JournalStatusDetails from './components/JournalStatusDetails';
 import JournalStatusUpdates from './components/JournalStatusUpdates';
 import JournalManagement from './formManagement/JournalFormOptions';
@@ -555,6 +556,34 @@ const Dashboard: React.FC = () => {
   // a table of failed requests; this is the same check their API makes.
   const showFormOptions = canManageFormOptions(user);
 
+  // The strip is data now rather than two near-identical blocks of JSX, which
+  // is what let a tab drift out of step with its twin on the other dashboard.
+  const isProjectDashboard = location.pathname === '/project-dashboard';
+
+  const dashboardTabs: { key: TabType; label: string }[] = isProjectDashboard
+    ? [
+        { key: 'projects', label: 'Projects' },
+        { key: 'project-requests', label: 'Project Requests' },
+        ...(showFormOptions
+          ? [{ key: 'project-management' as TabType, label: 'Project Management' }]
+          : []),
+      ]
+    : [
+        { key: 'journals', label: 'Publications' },
+        { key: 'journal-requests', label: 'Publication Requests' },
+        { key: 'journal-status-updates', label: 'Publication Status Updates' },
+        ...(showFormOptions
+          ? [{ key: 'journal-management' as TabType, label: 'Publication Management' }]
+          : []),
+      ];
+
+  const selectTab = (key: TabType) => {
+    setActiveTab(key);
+    // Page 1 of the new tab's list, never the page number left over from the
+    // last one.
+    setCurrentPage(1);
+  };
+
   // Handle URL pathname for initial tab selection and subsequent changes
   useEffect(() => {
     const path = location.pathname;
@@ -570,6 +599,11 @@ const Dashboard: React.FC = () => {
   const [projectRequests, setProjectRequests] = useState<ProjectRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Only the two list tabs have columns to configure, and only once their rows
+  // are in — the control used to inherit both from the branch it was nested in.
+  const showColumnToggle =
+    (activeTab === 'projects' || activeTab === 'journals') && !loading && !error;
   const [showModal, setShowModal] = useState(false);
   const [selectedItem, setSelectedItem] = useState<Project | Journal | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -579,6 +613,11 @@ const Dashboard: React.FC = () => {
   const [showStatusDetailsModal, setShowStatusDetailsModal] = useState(false);
   const [selectedJournalForStatus, setSelectedJournalForStatus] = useState<number | null>(null);
   const [isColumnDropdownOpen, setIsColumnDropdownOpen] = useState(false);
+  // Journal Management brings its own Add button but has no row to put it on;
+  // it portals into this slot so it shares the tab strip's row, the way the
+  // column toggle does. A callback ref, so the portal re-renders once the node
+  // exists.
+  const [journalActionsSlot, setJournalActionsSlot] = useState<HTMLDivElement | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [alertConfig, setAlertConfig] = useState<{
@@ -1362,20 +1401,20 @@ const Dashboard: React.FC = () => {
           type="button"
           onClick={() => setIsColumnDropdownOpen(!isColumnDropdownOpen)}
         >
-          <Settings size={18} />
+          <Settings size={17} />
           <span>Configure Columns</span>
         </button>
         {isColumnDropdownOpen && (
           <div className="column-config-dropdown shadow-lg border">
             {groupOrder.map((group) => (
-              <div key={group} className="mb-3">
+              <div key={group} className="mb-2">
                 <h6 className="column-group-title">{group}</h6>
-                <div className="row g-2">
+                <div className="row g-1">
                   {groupedColumns[group]
                     ?.sort((a, b) => a[1].order - b[1].order)
                     .map(([key, config]) => (
                       <div key={key} className="col-6">
-                        <div className="form-check py-1">
+                        <div className="form-check">
                           <input
                             type="checkbox"
                             className="form-check-input"
@@ -2066,80 +2105,21 @@ const Dashboard: React.FC = () => {
     <div>
       <div className="publication-approval-dashboard">
         <div className="w-100 max-w-1400">
-          <div className="tab-buttons">
-            {location.pathname === '/project-dashboard' ? (
-              <>
-                <div
-                  className={`tab-button ${activeTab === 'projects' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('projects');
-                    setCurrentPage(1);
-                  }}
-                >
-                  Projects
-                </div>
-                <div
-                  className={`tab-button ${activeTab === 'project-requests' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('project-requests');
-                    setCurrentPage(1);
-                  }}
-                >
-                  Project Requests
-                </div>
-                {showFormOptions && (
-                  <div
-                    className={`tab-button ${activeTab === 'project-management' ? 'active' : ''}`}
-                    onClick={() => {
-                      setActiveTab('project-management');
-                      setCurrentPage(1);
-                    }}
-                  >
-                    Project Management
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <div
-                  className={`tab-button ${activeTab === 'journals' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('journals');
-                    setCurrentPage(1);
-                  }}
-                >
-                  Publications
-                </div>
-                <div
-                  className={`tab-button ${activeTab === 'journal-requests' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('journal-requests');
-                    setCurrentPage(1);
-                  }}
-                >
-                  Publication Requests
-                </div>
-                <div
-                  className={`tab-button ${activeTab === 'journal-status-updates' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('journal-status-updates');
-                    setCurrentPage(1);
-                  }}
-                >
-                  Publication Status Updates
-                </div>
-                {showFormOptions && (
-                  <div
-                    className={`tab-button ${activeTab === 'journal-management' ? 'active' : ''}`}
-                    onClick={() => {
-                      setActiveTab('journal-management');
-                      setCurrentPage(1);
-                    }}
-                  >
-                    Publication Management
-                  </div>
-                )}
-              </>
+          <div className="dashboard-tabs">
+            {/* The same segmented control the admin screens use, so the
+                portal has one tab design rather than two. It brings the
+                tablist roles and arrow-key navigation with it — these were
+                clickable <div>s before, which no keyboard could reach. */}
+            <AdminTabs<TabType> tabs={dashboardTabs} active={activeTab} onChange={selectTab} />
+
+            {/* On the strip's own row. It used to sit on a full-width row of
+                its own below, which read as a band of empty page between the
+                tabs and the table it belongs to. */}
+            {showColumnToggle && (
+              <div className="dashboard-tabs__actions">{renderColumnToggleDropdown()}</div>
+            )}
+            {activeTab === 'journal-management' && showFormOptions && (
+              <div className="dashboard-tabs__actions" ref={setJournalActionsSlot} />
             )}
           </div>
         </div>
@@ -2154,15 +2134,10 @@ const Dashboard: React.FC = () => {
         ) : (
           <div className="w-100 max-w-1400">
             {(activeTab === 'projects' || activeTab === 'journals') && (
-              <>
-                <div className="d-flex justify-content-end mb-4 pe-4">
-                  {renderColumnToggleDropdown()}
-                </div>
-                <div className="table-container">
-                  {renderTable()}
-                  <div className="table-footer">{renderPagination()}</div>
-                </div>
-              </>
+              <div className="table-container">
+                {renderTable()}
+                <div className="table-footer">{renderPagination()}</div>
+              </div>
             )}
             {activeTab === 'journal-requests' && (
               <div className="table-container">{renderJournalRequestsTable()}</div>
@@ -2179,7 +2154,9 @@ const Dashboard: React.FC = () => {
                 bare <table>, and these are whole screens that bring their own
                 tab strip and their own table card — the wrapper only showed as
                 an empty white band around them. */}
-            {activeTab === 'journal-management' && showFormOptions && <JournalManagement />}
+            {activeTab === 'journal-management' && showFormOptions && (
+              <JournalManagement actionSlot={journalActionsSlot} />
+            )}
             {activeTab === 'project-management' && showFormOptions && (
               <ProjectFormOptions embedded />
             )}

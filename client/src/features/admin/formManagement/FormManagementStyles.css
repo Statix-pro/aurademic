@@ -3,13 +3,6 @@
   background-color: transparent;
   border-radius: 0;
 }
-.journal-management h2 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  color: #1e293b;
-  margin-bottom: 0;
-}
-
 /* ===== Table Container Styling ===== */
 .journal-management .table {
   background-color: #ffffff;
@@ -208,27 +201,33 @@
 }
 
 /* ===== Header Section Styling ===== */
-.journal-management .d-flex.justify-content-between {
-  margin-bottom: 16px;
-  padding: 16px 24px 0 24px;
-  /* border-bottom removal for flush look */
+/* Only rendered standalone — embedded, the button portals onto the dashboard's
+   tab strip instead, so there is no row here to space. */
+.journal-management > .d-flex {
+  margin-bottom: 12px;
+  padding: 0;
 }
 
-/* Add New Button in header */
-.journal-management > .d-flex > .btn-primary {
-  padding: 10px 20px;
+/* Add New Journal. Sized to match `.column-toggle-button`, which it sits
+   beside on the dashboard's tab strip; keyed off its own class rather than its
+   parent, because it renders in two different places. */
+.journal-management__add.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.1rem;
   font-weight: 600;
-  font-size: 0.9rem;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #0069ab 0%, #005492 100%);
+  font-size: 0.875rem;
+  line-height: 1.25;
+  border-radius: 10px;
+  background: #0069ab;
   border: none;
-  box-shadow: 0 2px 4px rgba(0, 105, 171, 0.3);
-  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition: background-color 0.2s ease;
 }
-.journal-management > .d-flex > .btn-primary:hover {
-  background: linear-gradient(135deg, #005492 0%, #004a7a 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(0, 105, 171, 0.4);
+.journal-management__add.btn-primary:hover,
+.journal-management__add.btn-primary:focus-visible {
+  background: #005492;
 }
 
 /* ===== Tab Button Styling for Project Management ===== */
@@ -277,6 +276,26 @@
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
 }
 
+/* ===== Add / Edit Journal Modal ===== */
+.journal-modal .modal-body {
+  padding: 18px 24px;
+}
+
+.journal-modal .form-label {
+  font-size: 0.82rem;
+  margin-bottom: 4px;
+}
+
+.journal-modal .form-control,
+.journal-modal .form-select {
+  padding: 7px 12px;
+  font-size: 0.875rem;
+}
+
+.journal-modal .modal-footer {
+  padding: 12px 24px;
+}
+
 /* ===== Empty State Styling ===== */
 .journal-management .table tbody td[colspan] {
   text-align: center;
@@ -319,13 +338,5 @@
 @media (max-width: 768px) {
   .journal-management {
     padding: 16px;
-  }
-  .journal-management h2 {
-    font-size: 1.25rem;
-  }
-  .journal-management .d-flex.justify-content-between {
-    flex-direction: column;
-    gap: 12px;
-    align-items: flex-start !important;
   }
 }

@@ -2,19 +2,25 @@
   padding: 0;
 }
 
+/* A title and one filter — it only needs to clear the control inside it, so it
+   is padded to that rather than to a 1rem block on every side. */
 .journal-status-updates .filter-controls {
   display: flex;
-  gap: 1.5rem;
+  gap: 1rem;
   align-items: center;
-  margin-bottom: 2rem;
+  margin-bottom: 1rem;
   background: #f8fafc;
-  padding: 1rem;
+  padding: 0.5rem 0.875rem;
   border-radius: 0.5rem;
   border: 1px solid #f1f5f9;
 }
 
 .journal-status-updates .status-filter {
-  min-width: 220px;
+  min-width: 190px;
+  padding: 0.35rem 2rem 0.35rem 0.75rem;
+  font-size: 0.85rem;
+  border-radius: 0.5rem;
+  background-position: right 0.6rem center;
 }
 
 .journal-status-updates .table-responsive {
