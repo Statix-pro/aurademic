@@ -79,7 +79,18 @@ const TAB_TITLES: Record<TabType, string> = {
 // form, so the button reaches the form by id.
 const FORM_ID = 'project-form-options-form';
 
-const ProjectFormOptions: React.FC = () => {
+interface ProjectFormOptionsProps {
+  /**
+   * Rendered inside the admin dashboard's "Project Management" tab rather than
+   * on its own route. The tab strip above it already names the screen and the
+   * panel supplies the gutter, so the page title, its blurb and the page
+   * padding would all be said twice — everything below the header is identical
+   * either way.
+   */
+  embedded?: boolean;
+}
+
+const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = false }) => {
   const [activeTab, setActiveTab] = useState<TabType>('organizations');
   const [organizations, setOrganizations] = useState<OrganizationRow[]>([]);
   const [schemes, setSchemes] = useState<SchemeRow[]>([]);
@@ -157,7 +168,20 @@ const ProjectFormOptions: React.FC = () => {
     [budgetHeads],
   );
 
+  /**
+   * Where a new head sits in the group it is being added to — after the ones
+   * already there. Counted within the group, not across the whole table: the
+   * order only decides the position inside one dropdown heading, and a total
+   * row count would sit a head behind a group whose own orders run higher.
+   */
+  const nextSortOrderIn = (group: string) =>
+    budgetHeads
+      .filter((head) => head.head_group === group)
+      .reduce((highest, head) => Math.max(highest, head.sort_order ?? 0), 0) + 1;
+
   const openCreate = () => {
+    const defaultHeadGroup = headGroups[0] ?? 'Research Projects';
+
     const defaults: Record<TabType, EditableRow> = {
       organizations: {
         name: '',
@@ -176,9 +200,9 @@ const ProjectFormOptions: React.FC = () => {
       // jumping to the top of every dropdown that offers it.
       'budget-heads': {
         name: '',
-        head_group: headGroups[0] ?? 'Research Projects',
+        head_group: defaultHeadGroup,
         is_active: 1,
-        sort_order: budgetHeads.length + 1,
+        sort_order: nextSortOrderIn(defaultHeadGroup),
       },
     };
 
@@ -396,18 +420,22 @@ const ProjectFormOptions: React.FC = () => {
 
   const active = tables[activeTab];
 
+  const addButton = (
+    <CustomButton onClick={openCreate} disabled={loading}>
+      <Plus size={16} aria-hidden="true" />
+      Add {TAB_LABELS[activeTab]}
+    </CustomButton>
+  );
+
   return (
-    <div className="admin-screen">
-      <AdminScreenHeader
-        title="Project Options"
-        description="The master lists the project form is built from — who funds and collaborates on projects, the schemes they offer, and the heads a project budgets against."
-        actions={
-          <CustomButton onClick={openCreate} disabled={loading}>
-            <Plus size={16} aria-hidden="true" />
-            Add {TAB_LABELS[activeTab]}
-          </CustomButton>
-        }
-      />
+    <div className={`admin-screen ${embedded ? 'admin-screen--embedded' : ''}`.trim()}>
+      {!embedded && (
+        <AdminScreenHeader
+          title="Project Options"
+          description="The master lists the project form is built from — who funds and collaborates on projects, the schemes they offer, and the heads a project budgets against."
+          actions={addButton}
+        />
+      )}
 
       <AdminTabs<TabType>
         tabs={(Object.keys(TAB_LABELS) as TabType[]).map((tab) => ({
@@ -418,6 +446,13 @@ const ProjectFormOptions: React.FC = () => {
         active={activeTab}
         onChange={setActiveTab}
       />
+
+      {/* Embedded there is no title for the button to sit beside, so it shares
+          the tab strip's row instead of taking one of its own — a full-width
+          band of empty card with a button at the far end. */}
+      {embedded && (
+        <div className="admin-screen__header-actions admin-screen__tab-actions">{addButton}</div>
+      )}
 
       {error && <Alert variant="danger">{error}</Alert>}
 
@@ -531,7 +566,16 @@ const ProjectFormOptions: React.FC = () => {
                   list="pfo-head-groups"
                   placeholder="Research Projects"
                   value={current.head_group || ''}
-                  onChange={(value) => setCurrent({ ...current, head_group: value })}
+                  onChange={(value) =>
+                    setCurrent({
+                      ...current,
+                      head_group: value,
+                      // The order is a position inside one group, so moving a
+                      // new head to another group re-reads it there. Only while
+                      // creating: an existing head keeps the place it was given.
+                      ...(isEditing ? {} : { sort_order: nextSortOrderIn(value) }),
+                    })
+                  }
                   // A head is stored under its group, and the server rejects a
                   // blank one — the dialog says so before the round trip.
                   required

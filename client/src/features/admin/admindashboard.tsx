@@ -13,7 +13,9 @@ import JournalStatusDetails from './components/JournalStatusDetails';
 import JournalStatusUpdates from './components/JournalStatusUpdates';
 import JournalManagement from './formManagement/JournalFormOptions';
 import ProjectFormOptions from './formManagement/ProjectFormOptions';
+import { useAuth } from '../../contexts/AuthContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import { canManageFormOptions } from '../../shared/utils/permissionUtils';
 
 interface ColumnConfigItem {
   show: boolean;
@@ -544,7 +546,14 @@ const EditRequestActions: React.FC<EditRequestActionsProps> = ({ status, onUpdat
 const Dashboard: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<TabType>('journals');
+
+  // The two management tabs are the only things here behind `form_options.*`
+  // rather than the admin-dashboard permission the rest of the screen uses.
+  // Without this an admin who may approve but not curate saw both tabs and got
+  // a table of failed requests; this is the same check their API makes.
+  const showFormOptions = canManageFormOptions(user);
 
   // Handle URL pathname for initial tab selection and subsequent changes
   useEffect(() => {
@@ -2078,15 +2087,17 @@ const Dashboard: React.FC = () => {
                 >
                   Project Requests
                 </div>
-                <div
-                  className={`tab-button ${activeTab === 'project-management' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('project-management');
-                    setCurrentPage(1);
-                  }}
-                >
-                  Project Management
-                </div>
+                {showFormOptions && (
+                  <div
+                    className={`tab-button ${activeTab === 'project-management' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('project-management');
+                      setCurrentPage(1);
+                    }}
+                  >
+                    Project Management
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -2117,15 +2128,17 @@ const Dashboard: React.FC = () => {
                 >
                   Publication Status Updates
                 </div>
-                <div
-                  className={`tab-button ${activeTab === 'journal-management' ? 'active' : ''}`}
-                  onClick={() => {
-                    setActiveTab('journal-management');
-                    setCurrentPage(1);
-                  }}
-                >
-                  Publication Management
-                </div>
+                {showFormOptions && (
+                  <div
+                    className={`tab-button ${activeTab === 'journal-management' ? 'active' : ''}`}
+                    onClick={() => {
+                      setActiveTab('journal-management');
+                      setCurrentPage(1);
+                    }}
+                  >
+                    Publication Management
+                  </div>
+                )}
               </>
             )}
           </div>
@@ -2162,15 +2175,13 @@ const Dashboard: React.FC = () => {
                 <JournalStatusUpdates />
               </div>
             )}
-            {activeTab === 'journal-management' && (
-              <div className="table-container">
-                <JournalManagement />
-              </div>
-            )}
-            {activeTab === 'project-management' && (
-              <div className="table-container">
-                <ProjectFormOptions />
-              </div>
+            {/* No `.table-container` on these two. It paints a white card for a
+                bare <table>, and these are whole screens that bring their own
+                tab strip and their own table card — the wrapper only showed as
+                an empty white band around them. */}
+            {activeTab === 'journal-management' && showFormOptions && <JournalManagement />}
+            {activeTab === 'project-management' && showFormOptions && (
+              <ProjectFormOptions embedded />
             )}
           </div>
         )}

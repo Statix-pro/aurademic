@@ -58,6 +58,28 @@ export const canAccessAdminArea = (user?: User | null) => {
   ]);
 };
 
+/**
+ * The form-options master data — Project Options and Publication Management.
+ *
+ * Mirrors what `formOptionsRoutes.js` actually enforces: `adminAuthMiddleware`
+ * on the router, then `permissionMiddleware(['form_options.read', 'edit',
+ * 'manage'])`, which a super admin short-circuits. Both halves matter, so both
+ * are checked here — gating the link on super-admin alone hid the screen from
+ * the admins the API lets in, and gating it on the admin area alone offered it
+ * to admins the API then answers with 403.
+ */
+export const canManageFormOptions = (user?: User | null) => {
+  if (!user || !canAccessAdminArea(user)) {
+    return false;
+  }
+
+  if (isSuperAdmin(user)) {
+    return true;
+  }
+
+  return hasAnyPermission(user, ['form_options.read', 'form_options.edit', 'form_options.manage']);
+};
+
 export const canManageAccessControl = (user?: User | null) => {
   if (!user) {
     return false;

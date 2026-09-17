@@ -29,6 +29,13 @@
   padding: var(--space-7) var(--space-7) var(--space-8);
 }
 
+/* Rendered inside another screen's panel — the admin dashboard's tab, say —
+   where the gutter is already the panel's to give. Only the frame changes:
+   everything the screen puts inside it keeps its own spacing. */
+.admin-screen--embedded {
+  padding: 0;
+}
+
 /* Every block runs the width of the page... */
 .admin-screen > * {
   grid-column: 1 / -1;
@@ -43,6 +50,14 @@
 }
 
 .admin-screen > .admin-tabs + .admin-toolbar {
+  grid-column: 2;
+  justify-content: flex-end;
+}
+
+/* The embedded screen's single action, on the tab strip's row. Same pairing as
+   the toolbar above — it is the element after the tabs, right-aligned in the
+   column the tabs do not take. */
+.admin-screen > .admin-tabs + .admin-screen__tab-actions {
   grid-column: 2;
   justify-content: flex-end;
 }

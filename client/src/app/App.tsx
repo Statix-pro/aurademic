@@ -9,7 +9,6 @@ import AdminBudget from '../features/admin/budget/budget-approval/adminbudget';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
-import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import PublicationReview from '../features/admin/PublicationReview';
 import Login from '../features/auth/login/login';
@@ -44,6 +43,7 @@ import {
   SuperAdminRoute,
   ExpenditureApprovalRoute,
 } from '../shared/components/ProtectedRoute';
+import NotFound from '../shared/components/ui/NotFound';
 import { ToastProvider } from '../shared/components/ui/toast/ToastProvider';
 import UnderConstruction from '../shared/components/ui/UnderConstruction';
 import NotificationProvider from '../shared/notifications/NotificationProvider';
@@ -356,14 +356,6 @@ function App() {
                         }
                       />
                       <Route
-                        path="/admin/form-management/project-options"
-                        element={
-                          <AdminRoute>
-                            <ProjectFormOptions />
-                          </AdminRoute>
-                        }
-                      />
-                      <Route
                         path="/access-control"
                         element={
                           <SuperAdminRoute>
@@ -523,6 +515,19 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <UnderConstruction pageName="Patent" />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      {/* Last, and inside the layout: anything no route above
+                          claimed used to render an empty document. Behind
+                          `ProtectedRoute` so a signed-out visitor still goes to
+                          the login screen rather than meeting a 404 first. */}
+                      <Route
+                        path="*"
+                        element={
+                          <ProtectedRoute>
+                            <NotFound />
                           </ProtectedRoute>
                         }
                       />
