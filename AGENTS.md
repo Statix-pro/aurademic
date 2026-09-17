@@ -384,8 +384,9 @@ mysql -u root -p research < server/schema/structure.sql
 # then apply every server/schema/migrations/*.sql dated AFTER it, in date order
 mysql -u root -p research < server/schema/developer_seed.sql
 
-# 3. Environment — .env.development is committed for both apps, but the server one
-#    ships without DB credentials. Add PORT + DB_* from server/.env.example.
+# 3. Environment — NOT tracked. `server/.gitignore` ignores .env.development, so
+#    a fresh clone has none. Copy the example and fill in PORT + DB_*.
+cp server/.env.example server/.env.development
 $EDITOR server/.env.development
 
 # 4. Run both servers (client :3000, server :5000)
@@ -509,12 +510,20 @@ Modules: `accessControl`, `accountOptions`, `adminbudget`, `admindashboard`, `au
 
 ### API prefixes
 
-`/api/auth`, `/api/admin`, `/api/dashboard`, `/api/form-options`, `/api/journals`, `/api/projects`,
-`/api/events`, `/api/pre-events`, `/api/finance` (events finance), `/api/finance-requests`,
-`/api/budget`, `/api/adminbudget`, `/api/budget-catalog`, `/api/account-options`,
-`/api/expenditure`, `/api/expenditure-requests`, `/api/expenditure-dashboard`,
-`/api/expenditure-report`, `/api/notifications`, `/api/updates`, `/api/documents`,
-`/api/access-control`, `/api/master-data`, `/api/health`.
+`/api/auth`, `/api/admin`, `/api/dashboard`, `/api/form-options`, `/api/events`, `/api/pre-events`,
+`/api/finance` (events finance), `/api/finance-requests`, `/api/budget`, `/api/adminbudget`,
+`/api/budget-catalog`, `/api/account-options`, `/api/expenditure`, `/api/expenditure-requests`,
+`/api/expenditure-dashboard`, `/api/expenditure-report`, `/api/notifications`, `/api/updates`,
+`/api/documents`, `/api/access-control`, `/api/master-data`, `/api/health`.
+
+**There is no `/api/journals`, `/api/projects` or `/api/edit-requests` prefix.** `journalRoutes`,
+`projectRoutes` and `editRequestRoutes` mount on bare `/api` and declare their own full paths (§9),
+so those paths exist but the prefixes do not — do not add a route to one expecting it to be scoped.
+
+To check this list rather than trust it: `server.js` ends in `export default app` and skips
+`listen()` when `NODE_ENV=test`, so the app can be imported and `app._router.stack` walked for the
+exact mount table. Run it from a scratch directory — `createUploadDirectories()` resolves against
+`process.cwd()`.
 
 ### Database access
 
@@ -632,14 +641,14 @@ bottom; tested against a restored dump; dump refreshed after significant changes
 | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth & RBAC  | `users`, `roles`, `permissions`, `role_permissions`, `user_roles`, `user_entity_roles`                                                                                                                                                                                                                                                                                 |
 | Master data  | `master_departments`, `master_employees`, `master_entities`, `master_entity_types`, `master_entity_contacts`                                                                                                                                                                                                                                                           |
-| Budget       | `budget_proposals`, `budget_proposal_lines`, `budget_catalog`, `budget_sub_catalog`                                                                                                                                                                                                                                                                                    |
-| Finance      | `finance_requests`, `finance_request_budget_rows`, `finance_request_income_rows`, `finance_request_annexures`, `finance_request_status_updates`                                                                                                                                                                                                                        |
-| Expenditure  | `expenditure_requests`, `expenditure_advance_rows`, `expenditure_line_rows`, `expenditure_settlement_rows`, `expenditure_request_refs`                                                                                                                                                                                                                                 |
-| Research     | `journals`, `journal_authors`, `authors`, `author_students`                                                                                                                                                                                                                                                                                                            |
+| Budget       | `budget_proposals`, `budget_proposal_lines`, `budget_annual`, `budget_heads`, `budget_sub_heads`                                                                                                                                                                                                                                                                       |
+| Finance      | `finance_requests`, `finance_budget_breakup`, `finance_income_rows`, `finance_request_annexures`, `finance_status_updates`, `finance_budget_line_usage`, `finance_budget_usage_ledger`                                                                                                                                                                                 |
+| Expenditure  | `expenditure_requests`, `expenditure_advance_rows`, `expenditure_line_rows`, `expenditure_settlement_rows`, `expenditure_request_refs`, `expenditure_budget_ledger`                                                                                                                                                                                                    |
+| Research     | `journals`, `author_journal`, `authors`, `author_students`                                                                                                                                                                                                                                                                                                             |
 | Projects     | `research_projects`, `project_investigators`, `project_tags`, `project_collaborators`, `project_finance_rows`, `project_grant_disbursements`, `project_documents`, `project_organizations`, `project_schemes`, `project_requests`, `project_budget_years`, `project_budget_heads`, `project_budget_allotments`, `project_transaction_accounts`, `project_transactions` |
-| Events       | `events`, `pre_events`, `event_finance`                                                                                                                                                                                                                                                                                                                                |
-| Workflow     | `workflow_instances`, `workflow_stage_logs`                                                                                                                                                                                                                                                                                                                            |
-| Notification | `notification_events`, `notifications`, `notification_deliveries`                                                                                                                                                                                                                                                                                                      |
+| Events       | `events`, `pre_events`, `participants`, `resource_persons`, `events_uploads` — **not created by `structure.sql` or any migration**; they exist only in `schema/legacy/04_events.sql`, so the events module has no schema on a fresh database                                                                                                                           |
+| Workflow     | `workflow_actions`, `workflow_stage_policies`, `approval_flow_config`                                                                                                                                                                                                                                                                                                  |
+| Notification | `notification_events`, `notifications`, `notification_deliveries`, `notification_preferences`, `push_subscriptions` — created by `migrations/20260902_create_notification_system.sql`, not by `structure.sql`                                                                                                                                                          |
 
 ---
 

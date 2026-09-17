@@ -94,7 +94,7 @@ CREATE TABLE `author_journal` (
   KEY `idx_author` (`author_id`),
   CONSTRAINT `author_journal_ibfk_1` FOREIGN KEY (`author_id`) REFERENCES `authors` (`id`) ON DELETE CASCADE,
   CONSTRAINT `author_journal_ibfk_2` FOREIGN KEY (`journal_id`) REFERENCES `journals` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=33 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=36 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -155,7 +155,7 @@ CREATE TABLE `authors` (
   KEY `idx_author_employee` (`employee_id`),
   CONSTRAINT `fk_author_employee` FOREIGN KEY (`employee_id`) REFERENCES `master_employees` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_authors_student_ref` FOREIGN KEY (`student_ref`) REFERENCES `author_students` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=91 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=92 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -253,7 +253,7 @@ CREATE TABLE `budget_line_month_allocations` (
   KEY `idx_budget_line_month_allocations_month` (`month`),
   CONSTRAINT `fk_budget_line_month_allocations_line` FOREIGN KEY (`budget_line_id`) REFERENCES `budget_proposal_lines` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `chk_budget_line_month_amount_non_zero` CHECK ((`amount` <> 0.00))
-) ENGINE=InnoDB AUTO_INCREMENT=38945 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=38969 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -284,7 +284,7 @@ CREATE TABLE `budget_proposal_approvals` (
   KEY `idx_budget_proposal_approvals_decided_at` (`decided_at`),
   KEY `idx_budget_proposal_approvals_approver` (`approver_user_id`),
   CONSTRAINT `fk_budget_proposal_approvals_proposal` FOREIGN KEY (`budget_proposal_id`) REFERENCES `budget_proposals` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=3862 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3907 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -309,7 +309,7 @@ CREATE TABLE `budget_proposal_edits` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_budget_proposal_edits_proposal` (`budget_proposal_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=1188 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1190 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -345,7 +345,7 @@ CREATE TABLE `budget_proposal_lines` (
   KEY `idx_bpl_head_id` (`budget_head_id`),
   KEY `idx_bpl_subhead_id` (`budget_sub_head_id`),
   CONSTRAINT `fk_budget_proposal_lines_proposal` FOREIGN KEY (`budget_proposal_id`) REFERENCES `budget_proposals` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=5807 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=5821 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -374,7 +374,7 @@ CREATE TABLE `budget_proposal_refs` (
   KEY `idx_budget_proposal_refs_year` (`ref_year`),
   KEY `idx_budget_proposal_refs_sequence` (`ref_year`,`ref_sequence`),
   CONSTRAINT `fk_budget_proposal_refs_proposal` FOREIGN KEY (`proposal_id`) REFERENCES `budget_proposals` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2716 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2740 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -429,7 +429,7 @@ CREATE TABLE `budget_proposals` (
   KEY `idx_budget_proposals_tag` (`budget_tag`),
   CONSTRAINT `fk_budget_proposals_department` FOREIGN KEY (`department_id`) REFERENCES `master_departments` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_budget_proposals_entity` FOREIGN KEY (`beneficiary_entity_id`) REFERENCES `master_entities` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=1358 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=1370 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -467,7 +467,7 @@ CREATE TABLE `budget_sub_heads` (
   KEY `idx_subhead_event_type` (`event_type`),
   KEY `idx_budget_sub_heads_code` (`code`),
   KEY `idx_budget_sub_head_deleted` (`is_deleted`)
-) ENGINE=InnoDB AUTO_INCREMENT=622 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=624 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -597,7 +597,7 @@ CREATE TABLE `expenditure_advance_rows` (
   CONSTRAINT `fk_expenditure_advance_rows_line` FOREIGN KEY (`budget_line_id`) REFERENCES `budget_proposal_lines` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_advance_rows_proposal` FOREIGN KEY (`budget_proposal_id`) REFERENCES `budget_proposals` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_advance_rows_request` FOREIGN KEY (`expenditure_id`) REFERENCES `expenditure_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=34 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -741,7 +741,7 @@ CREATE TABLE `expenditure_line_rows` (
   CONSTRAINT `fk_expenditure_line_rows_line` FOREIGN KEY (`budget_line_id`) REFERENCES `budget_proposal_lines` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_line_rows_proposal` FOREIGN KEY (`budget_proposal_id`) REFERENCES `budget_proposals` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_line_rows_request` FOREIGN KEY (`expenditure_id`) REFERENCES `expenditure_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=479 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=649 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -787,7 +787,7 @@ CREATE TABLE `expenditure_payee_rows` (
   KEY `idx_expenditure_payee_rows_sort` (`expenditure_id`,`sort_order`),
   CONSTRAINT `fk_expenditure_payee_rows_payee` FOREIGN KEY (`payee_id`) REFERENCES `expenditure_payees` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_payee_rows_request` FOREIGN KEY (`expenditure_id`) REFERENCES `expenditure_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=350 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=427 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -814,6 +814,7 @@ CREATE TABLE `expenditure_payees` (
   `ifsc` varchar(30) COLLATE utf8mb4_unicode_ci NOT NULL,
   `beneficiary_type` enum('individual','organization') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'individual',
   `beneficiary_org` enum('KSRCT','KSREI','External') COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `beneficiary_category` enum('Student','Faculty','Staff') COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Population an internal individual payee belongs to; NULL for External and Organization',
   `organization_type` varchar(120) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `msme` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `gstin` varchar(30) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
@@ -842,7 +843,7 @@ CREATE TABLE `expenditure_payees` (
   CONSTRAINT `fk_expenditure_payees_approved_by` FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_payees_requested_by` FOREIGN KEY (`requested_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_payees_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=124 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=139 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -879,7 +880,7 @@ CREATE TABLE `expenditure_request_bills` (
   CONSTRAINT `fk_expenditure_request_bills_finance_annexure` FOREIGN KEY (`source_finance_annexure_id`) REFERENCES `finance_request_annexures` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_request_bills_payee_row` FOREIGN KEY (`payee_row_id`) REFERENCES `expenditure_payee_rows` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_request_bills_request` FOREIGN KEY (`expenditure_id`) REFERENCES `expenditure_requests` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=297 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=390 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -910,7 +911,7 @@ CREATE TABLE `expenditure_request_edits` (
   KEY `fk_expenditure_request_edits_user` (`edited_by_user_id`),
   CONSTRAINT `fk_expenditure_request_edits_request` FOREIGN KEY (`expenditure_request_id`) REFERENCES `expenditure_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_request_edits_user` FOREIGN KEY (`edited_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=57 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=67 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -958,7 +959,7 @@ CREATE TABLE `expenditure_request_refs` (
   UNIQUE KEY `uq_expenditure_request_refs_year_seq` (`ref_year`,`ref_sequence`),
   KEY `idx_expenditure_request_refs_year` (`ref_year`),
   CONSTRAINT `fk_expenditure_request_refs_request` FOREIGN KEY (`expenditure_request_id`) REFERENCES `expenditure_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=223 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=274 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1061,7 +1062,7 @@ CREATE TABLE `expenditure_requests` (
   CONSTRAINT `fk_expenditure_requests_entity` FOREIGN KEY (`beneficiary_entity_id`) REFERENCES `master_entities` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_requests_finance` FOREIGN KEY (`finance_request_id`) REFERENCES `finance_requests` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_requests_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=221 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=272 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1108,7 +1109,7 @@ CREATE TABLE `expenditure_settlement_rows` (
   CONSTRAINT `fk_expenditure_settlement_rows_line` FOREIGN KEY (`budget_line_id`) REFERENCES `budget_proposal_lines` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_settlement_rows_proposal` FOREIGN KEY (`budget_proposal_id`) REFERENCES `budget_proposals` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_expenditure_settlement_rows_request` FOREIGN KEY (`expenditure_id`) REFERENCES `expenditure_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1183,7 +1184,7 @@ CREATE TABLE `finance_budget_breakup` (
   CONSTRAINT `fk_finance_budget_breakup_budget_line` FOREIGN KEY (`budget_line_id`) REFERENCES `budget_proposal_lines` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_finance_budget_breakup_budget_proposal` FOREIGN KEY (`budget_proposal_id`) REFERENCES `budget_proposals` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_finance_budget_breakup_finance` FOREIGN KEY (`finance_id`) REFERENCES `finance_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=2147 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2333 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1240,7 +1241,7 @@ CREATE TABLE `finance_budget_usage_ledger` (
   CONSTRAINT `fk_finance_budget_usage_ledger_breakup` FOREIGN KEY (`finance_budget_breakup_id`) REFERENCES `finance_budget_breakup` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_finance_budget_usage_ledger_budget_line` FOREIGN KEY (`budget_line_id`) REFERENCES `budget_proposal_lines` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_finance_budget_usage_ledger_finance` FOREIGN KEY (`finance_id`) REFERENCES `finance_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=522 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=639 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1305,7 +1306,7 @@ CREATE TABLE `finance_income_rows` (
   KEY `idx_finance_income_rows_finance` (`finance_id`),
   KEY `idx_finance_income_rows_sort` (`finance_id`,`sort_order`),
   CONSTRAINT `fk_finance_income_rows_request` FOREIGN KEY (`finance_id`) REFERENCES `finance_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=58 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=59 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1335,7 +1336,7 @@ CREATE TABLE `finance_request_annexures` (
   KEY `idx_finance_request_annexures_finance_id` (`finance_id`),
   KEY `idx_finance_request_annexures_sort` (`finance_id`,`sort_order`,`id`),
   CONSTRAINT `fk_finance_request_annexures_finance_id` FOREIGN KEY (`finance_id`) REFERENCES `finance_requests` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=887 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=962 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1366,7 +1367,7 @@ CREATE TABLE `finance_request_edits` (
   KEY `fk_finance_request_edits_user` (`edited_by_user_id`),
   CONSTRAINT `fk_finance_request_edits_request` FOREIGN KEY (`finance_request_id`) REFERENCES `finance_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_finance_request_edits_user` FOREIGN KEY (`edited_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=460 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=482 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1414,7 +1415,7 @@ CREATE TABLE `finance_request_refs` (
   UNIQUE KEY `uq_finance_request_refs_year_seq` (`ref_year`,`ref_sequence`),
   KEY `idx_finance_request_refs_year` (`ref_year`),
   CONSTRAINT `fk_finance_request_refs_request` FOREIGN KEY (`finance_request_id`) REFERENCES `finance_requests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=452 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=505 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1505,7 +1506,7 @@ CREATE TABLE `finance_requests` (
   CONSTRAINT `fk_finance_requests_employee` FOREIGN KEY (`employee_id`) REFERENCES `master_employees` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_finance_requests_entity` FOREIGN KEY (`beneficiary_entity_id`) REFERENCES `master_entities` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_finance_requests_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=452 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=505 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1556,7 +1557,7 @@ CREATE TABLE `journal_indexes` (
   PRIMARY KEY (`id`),
   KEY `journal_id` (`journal_id`),
   CONSTRAINT `journal_indexes_ibfk_1` FOREIGN KEY (`journal_id`) REFERENCES `journals` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=39 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=43 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1581,12 +1582,13 @@ CREATE TABLE `journal_options` (
   `impact_factor` decimal(10,3) DEFAULT NULL,
   `cite_score` decimal(10,3) DEFAULT NULL,
   `category` enum('National','International') NOT NULL DEFAULT 'National',
+  `is_placeholder` tinyint(1) NOT NULL DEFAULT '0' COMMENT '1 = stand-in row for a book/conference, not a real journal',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_journal_options_name` (`journal_name`),
   KEY `idx_journal_options_publisher` (`publisher`)
-) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1706,6 +1708,7 @@ CREATE TABLE `journals` (
   `driven_by` enum('faculty','student') DEFAULT 'faculty',
   `credit_to` varchar(255) DEFAULT NULL,
   `reference_number` varchar(255) DEFAULT NULL,
+  `created_by` int DEFAULT NULL COMMENT 'User who submitted the publication',
   `scopus_id` varchar(100) DEFAULT NULL,
   `scie_id` varchar(100) DEFAULT NULL,
   `open_access` varchar(3) DEFAULT NULL,
@@ -1717,10 +1720,12 @@ CREATE TABLE `journals` (
   KEY `idx_journals_admin_approval_status` (`admin_approval_status`),
   KEY `fk_journals_admin_approved_by` (`admin_approved_by`),
   KEY `fk_journals_admin_rejected_by` (`admin_rejected_by`),
+  KEY `fk_journals_created_by` (`created_by`),
   CONSTRAINT `fk_journal_options` FOREIGN KEY (`journal_options_id`) REFERENCES `journal_options` (`id`),
   CONSTRAINT `fk_journals_admin_approved_by` FOREIGN KEY (`admin_approved_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `fk_journals_admin_rejected_by` FOREIGN KEY (`admin_rejected_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
-) ENGINE=InnoDB AUTO_INCREMENT=18 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+  CONSTRAINT `fk_journals_admin_rejected_by` FOREIGN KEY (`admin_rejected_by`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_journals_created_by` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -1982,6 +1987,138 @@ SET @saved_cs_client     = @@character_set_client;
 SET character_set_client = @saved_cs_client;
 
 --
+-- Table structure for table `notification_deliveries`
+--
+
+DROP TABLE IF EXISTS `notification_deliveries`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notification_deliveries` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `notification_id` bigint NOT NULL,
+  `channel` varchar(32) NOT NULL COMMENT 'in_app / web_push / (email, later)',
+  `status` enum('pending','sent','skipped','failed') NOT NULL DEFAULT 'pending' COMMENT 'skipped = the user preference or the channel config turned it off',
+  `attempts` int NOT NULL DEFAULT '0',
+  `last_error` text,
+  `sent_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_notification_deliveries_channel` (`notification_id`,`channel`),
+  KEY `idx_notification_deliveries_status` (`status`,`channel`),
+  CONSTRAINT `fk_notification_deliveries_notification` FOREIGN KEY (`notification_id`) REFERENCES `notifications` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=1781 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `notification_deliveries`
+--
+
+
+--
+-- Table structure for table `notification_events`
+--
+
+DROP TABLE IF EXISTS `notification_events`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notification_events` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `event_type` varchar(100) NOT NULL COMMENT 'Key into the code-side notification catalog, e.g. finance.stage_advanced',
+  `actor_user_id` int DEFAULT NULL COMMENT 'Who caused it; excluded from the recipients so nobody is told about their own action',
+  `module_key` varchar(64) DEFAULT NULL COMMENT 'Owning domain, e.g. finance / budget / journal',
+  `record_id` bigint DEFAULT NULL COMMENT 'Primary key of the record within that domain',
+  `payload` json NOT NULL COMMENT '{ subject, audience[], data } — everything the dispatcher needs',
+  `dedupe_key` varchar(191) DEFAULT NULL COMMENT 'Optional idempotency key; NULL means "no deduplication"',
+  `status` enum('pending','processing','done','failed') NOT NULL DEFAULT 'pending',
+  `attempts` int NOT NULL DEFAULT '0',
+  `available_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'Not claimed before this; pushed forward on each retry',
+  `locked_by` varchar(64) DEFAULT NULL COMMENT 'Dispatcher instance id holding the claim',
+  `locked_at` timestamp NULL DEFAULT NULL COMMENT 'When the claim was taken; a reaper releases stale ones',
+  `last_error` text COMMENT 'Most recent failure, for diagnosis',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_notification_events_dedupe` (`dedupe_key`),
+  KEY `idx_notification_events_claim` (`status`,`available_at`,`id`),
+  KEY `idx_notification_events_record` (`module_key`,`record_id`,`created_at`),
+  KEY `idx_notification_events_actor` (`actor_user_id`),
+  CONSTRAINT `fk_notification_events_actor` FOREIGN KEY (`actor_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB AUTO_INCREMENT=269 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `notification_events`
+--
+
+
+--
+-- Table structure for table `notification_preferences`
+--
+
+DROP TABLE IF EXISTS `notification_preferences`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notification_preferences` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `event_type` varchar(100) NOT NULL COMMENT 'Exact catalog key, or * to cover every type in the category',
+  `category` varchar(50) NOT NULL DEFAULT 'general' COMMENT 'Scopes a wildcard row; empty on an exact row, which is looked up by event_type alone',
+  `channel` varchar(32) NOT NULL COMMENT 'in_app / web_push',
+  `is_enabled` tinyint(1) NOT NULL DEFAULT '1',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_notification_preferences` (`user_id`,`event_type`,`category`,`channel`),
+  KEY `idx_notification_preferences_user` (`user_id`),
+  CONSTRAINT `fk_notification_preferences_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `notification_preferences`
+--
+
+
+--
+-- Table structure for table `notifications`
+--
+
+DROP TABLE IF EXISTS `notifications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `notifications` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `event_id` bigint NOT NULL,
+  `user_id` int NOT NULL COMMENT 'Recipient',
+  `event_type` varchar(100) NOT NULL COMMENT 'Denormalised from the event so the inbox can filter without a join',
+  `category` varchar(50) NOT NULL DEFAULT 'general' COMMENT 'Coarse grouping used by the inbox filter, e.g. finance',
+  `severity` enum('info','success','warning','error') NOT NULL DEFAULT 'info',
+  `title` varchar(255) NOT NULL COMMENT 'Rendered at dispatch and never re-rendered',
+  `body` text COMMENT 'Rendered at dispatch and never re-rendered',
+  `link` varchar(500) DEFAULT NULL COMMENT 'Client-relative deep link, validated against a route whitelist before storage',
+  `recipient_role` varchar(32) NOT NULL DEFAULT 'recipient' COMMENT 'Why this person is being told: applicant / approver / admin / subject',
+  `is_read` tinyint(1) NOT NULL DEFAULT '0',
+  `read_at` timestamp NULL DEFAULT NULL,
+  `archived_at` timestamp NULL DEFAULT NULL COMMENT 'Dismissed by the user; hidden from the bell but kept for audit',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_notifications_event_user` (`event_id`,`user_id`),
+  KEY `idx_notifications_user_unread` (`user_id`,`is_read`,`archived_at`,`created_at`),
+  KEY `idx_notifications_user_created` (`user_id`,`created_at`),
+  KEY `idx_notifications_user_category` (`user_id`,`category`,`created_at`),
+  CONSTRAINT `fk_notifications_event` FOREIGN KEY (`event_id`) REFERENCES `notification_events` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_notifications_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB AUTO_INCREMENT=891 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `notifications`
+--
+
+
+--
 -- Table structure for table `permissions`
 --
 
@@ -1999,11 +2136,87 @@ CREATE TABLE `permissions` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_permissions_key` (`permission_key`),
   UNIQUE KEY `uq_permissions_module_action` (`module_key`,`action_key`)
-) ENGINE=InnoDB AUTO_INCREMENT=10955 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11045 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Dumping data for table `permissions`
+--
+
+
+--
+-- Table structure for table `project_budget_allotments`
+--
+
+DROP TABLE IF EXISTS `project_budget_allotments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_budget_allotments` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `project_id` int NOT NULL,
+  `budget_head_row_id` int NOT NULL,
+  `budget_year_id` int NOT NULL,
+  `amount` decimal(15,2) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_project_budget_allotments` (`budget_head_row_id`,`budget_year_id`),
+  KEY `idx_project_budget_allotments_project` (`project_id`),
+  KEY `idx_project_budget_allotments_year` (`budget_year_id`),
+  CONSTRAINT `fk_project_budget_allotments_head_row` FOREIGN KEY (`budget_head_row_id`) REFERENCES `project_budget_heads` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_project_budget_allotments_project` FOREIGN KEY (`project_id`) REFERENCES `research_projects` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_project_budget_allotments_year` FOREIGN KEY (`budget_year_id`) REFERENCES `project_budget_years` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `project_budget_allotments`
+--
+
+
+--
+-- Table structure for table `project_budget_heads`
+--
+
+DROP TABLE IF EXISTS `project_budget_heads`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_budget_heads` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `project_id` int NOT NULL,
+  `budget_head_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Snapshot of the head name at save time',
+  `display_order` int NOT NULL DEFAULT '0' COMMENT 'Top-to-bottom row order',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_project_budget_heads_name` (`project_id`,`budget_head_name`),
+  KEY `idx_project_budget_heads_project` (`project_id`,`display_order`),
+  CONSTRAINT `fk_project_budget_heads_project` FOREIGN KEY (`project_id`) REFERENCES `research_projects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `project_budget_heads`
+--
+
+
+--
+-- Table structure for table `project_budget_years`
+--
+
+DROP TABLE IF EXISTS `project_budget_years`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_budget_years` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `project_id` int NOT NULL,
+  `financial_year` varchar(9) NOT NULL COMMENT 'e.g. 2025-26',
+  `display_order` int NOT NULL DEFAULT '0' COMMENT 'Left-to-right column order',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_project_budget_years` (`project_id`,`financial_year`),
+  KEY `idx_project_budget_years_project` (`project_id`,`display_order`),
+  CONSTRAINT `fk_project_budget_years_project` FOREIGN KEY (`project_id`) REFERENCES `research_projects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `project_budget_years`
 --
 
 
@@ -2083,12 +2296,9 @@ DROP TABLE IF EXISTS `project_finance_row_heads`;
 CREATE TABLE `project_finance_row_heads` (
   `id` int NOT NULL AUTO_INCREMENT,
   `finance_row_id` int NOT NULL,
-  `budget_head_id` int DEFAULT NULL COMMENT 'FK to budget_heads; NULL keeps a head that was later retired',
   `budget_head_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Snapshot of the head name at save time',
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_project_finance_row_heads` (`finance_row_id`,`budget_head_id`),
-  KEY `idx_project_finance_row_heads_head` (`budget_head_id`),
-  CONSTRAINT `fk_project_finance_row_heads_head` FOREIGN KEY (`budget_head_id`) REFERENCES `budget_heads` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  UNIQUE KEY `uq_project_finance_row_heads_name` (`finance_row_id`,`budget_head_name`),
   CONSTRAINT `fk_project_finance_row_heads_row` FOREIGN KEY (`finance_row_id`) REFERENCES `project_finance_rows` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -2321,6 +2531,98 @@ CREATE TABLE `project_tags` (
 
 
 --
+-- Table structure for table `project_transaction_accounts`
+--
+
+DROP TABLE IF EXISTS `project_transaction_accounts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_transaction_accounts` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `project_id` int NOT NULL,
+  `account_option_id` int DEFAULT NULL COMMENT 'FK to account_options; NULL keeps an account that was later removed',
+  `account_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Snapshot of the account label at save time',
+  `display_order` int NOT NULL DEFAULT '0',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_project_transaction_accounts` (`project_id`,`account_option_id`),
+  KEY `idx_project_transaction_accounts_project` (`project_id`,`display_order`),
+  KEY `idx_project_transaction_accounts_option` (`account_option_id`),
+  CONSTRAINT `fk_project_transaction_accounts_option` FOREIGN KEY (`account_option_id`) REFERENCES `account_options` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_project_transaction_accounts_project` FOREIGN KEY (`project_id`) REFERENCES `research_projects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `project_transaction_accounts`
+--
+
+
+--
+-- Table structure for table `project_transactions`
+--
+
+DROP TABLE IF EXISTS `project_transactions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `project_transactions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `project_id` int NOT NULL,
+  `account_id` int NOT NULL,
+  `financial_year` varchar(9) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'e.g. 2025-26; derived from the date when left blank',
+  `transaction_date` date DEFAULT NULL,
+  `head_kind` enum('expenditure','income') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'expenditure',
+  `head_name` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Snapshot for expenditure heads, the value itself for income heads',
+  `particulars` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `reference_no` varchar(150) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `credit` decimal(15,2) DEFAULT NULL COMMENT 'Money in; NULL when the row is a debit',
+  `debit` decimal(15,2) DEFAULT NULL COMMENT 'Money out; NULL when the row is a credit',
+  `display_order` int NOT NULL DEFAULT '0' COMMENT 'Ledger order; the running Balance is derived from it',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_project_transactions_account` (`account_id`,`display_order`),
+  KEY `idx_project_transactions_project` (`project_id`,`financial_year`),
+  KEY `idx_project_transactions_head_name` (`project_id`,`head_name`),
+  CONSTRAINT `fk_project_transactions_account` FOREIGN KEY (`account_id`) REFERENCES `project_transaction_accounts` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_project_transactions_project` FOREIGN KEY (`project_id`) REFERENCES `research_projects` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `project_transactions`
+--
+
+
+--
+-- Table structure for table `push_subscriptions`
+--
+
+DROP TABLE IF EXISTS `push_subscriptions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `push_subscriptions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `endpoint` varchar(500) NOT NULL COMMENT 'Push service URL; the identity of this subscription',
+  `p256dh` varchar(255) NOT NULL COMMENT 'Client public key from the Push API subscription',
+  `auth` varchar(255) NOT NULL COMMENT 'Client auth secret from the Push API subscription',
+  `user_agent` varchar(255) DEFAULT NULL COMMENT 'For the user to recognise the device in settings',
+  `last_seen_at` timestamp NULL DEFAULT NULL,
+  `disabled_at` timestamp NULL DEFAULT NULL COMMENT 'Set when the push service reports the endpoint is gone',
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_push_subscriptions_endpoint` (`endpoint`),
+  KEY `idx_push_subscriptions_user` (`user_id`,`disabled_at`),
+  CONSTRAINT `fk_push_subscriptions_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `push_subscriptions`
+--
+
+
+--
 -- Table structure for table `research_projects`
 --
 
@@ -2431,7 +2733,7 @@ CREATE TABLE `roles` (
   `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_roles_code` (`role_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=69108 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=75014 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -2459,7 +2761,7 @@ CREATE TABLE `user_entity_roles` (
   KEY `fk_uer_role` (`role_id`),
   CONSTRAINT `fk_uer_role` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_uer_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB AUTO_INCREMENT=558 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=559 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -2511,7 +2813,7 @@ CREATE TABLE `users` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`),
   KEY `idx_email` (`email`)
-) ENGINE=InnoDB AUTO_INCREMENT=347 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=353 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -2683,7 +2985,7 @@ CREATE TABLE `workflow_actions` (
   KEY `idx_workflow_actions_record` (`module_key`,`record_id`,`decided_at`),
   KEY `idx_workflow_actions_actor` (`actor_user_id`),
   KEY `idx_workflow_actions_stage` (`module_key`,`stage`,`decided_at`)
-) ENGINE=InnoDB AUTO_INCREMENT=2202 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2569 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -2712,7 +3014,7 @@ CREATE TABLE `workflow_stage_policies` (
   KEY `idx_workflow_stage_policy_module` (`module_key`),
   KEY `idx_workflow_stage_policy_scope` (`scope_type`),
   KEY `idx_workflow_stage_policy_active` (`is_active`)
-) ENGINE=InnoDB AUTO_INCREMENT=13 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=17 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -2736,7 +3038,7 @@ CREATE TABLE `workflow_stage_policies` (
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`research`@`%` SQL SECURITY DEFINER */
+/*!50013 SQL SECURITY DEFINER */
 /*!50001 VIEW `master_cells` AS select `me`.`id` AS `id`,`me`.`code` AS `code`,`me`.`name` AS `name`,`me`.`is_active` AS `is_active`,`me`.`sort_order` AS `sort_order`,`me`.`created_at` AS `created_at`,`me`.`updated_at` AS `updated_at` from (`master_entities` `me` join `master_entity_types` `met` on((`me`.`entity_type_id` = `met`.`id`))) where (`met`.`code` = 'CELL') */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
@@ -2754,7 +3056,7 @@ CREATE TABLE `workflow_stage_policies` (
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`research`@`%` SQL SECURITY DEFINER */
+/*!50013 SQL SECURITY DEFINER */
 /*!50001 VIEW `master_centres` AS select `me`.`id` AS `id`,`me`.`code` AS `code`,`me`.`name` AS `name`,`me`.`is_active` AS `is_active`,`me`.`sort_order` AS `sort_order`,`me`.`created_at` AS `created_at`,`me`.`updated_at` AS `updated_at` from (`master_entities` `me` join `master_entity_types` `met` on((`me`.`entity_type_id` = `met`.`id`))) where (`met`.`code` = 'CENTRE') */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
@@ -2772,7 +3074,7 @@ CREATE TABLE `workflow_stage_policies` (
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`research`@`%` SQL SECURITY DEFINER */
+/*!50013 SQL SECURITY DEFINER */
 /*!50001 VIEW `master_clubs` AS select `me`.`id` AS `id`,`me`.`code` AS `code`,`me`.`name` AS `name`,`me`.`is_active` AS `is_active`,`me`.`sort_order` AS `sort_order`,`me`.`created_at` AS `created_at`,`me`.`updated_at` AS `updated_at` from (`master_entities` `me` join `master_entity_types` `met` on((`me`.`entity_type_id` = `met`.`id`))) where (`met`.`code` = 'CLUB') */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
@@ -2790,7 +3092,7 @@ CREATE TABLE `workflow_stage_policies` (
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`research`@`%` SQL SECURITY DEFINER */
+/*!50013 SQL SECURITY DEFINER */
 /*!50001 VIEW `master_professional_bodies` AS select `me`.`id` AS `id`,`me`.`code` AS `code`,`me`.`name` AS `name`,`me`.`is_active` AS `is_active`,`me`.`sort_order` AS `sort_order`,`me`.`created_at` AS `created_at`,`me`.`updated_at` AS `updated_at` from (`master_entities` `me` join `master_entity_types` `met` on((`me`.`entity_type_id` = `met`.`id`))) where (`met`.`code` = 'PROFESSIONAL_BODY') */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
@@ -2808,7 +3110,7 @@ CREATE TABLE `workflow_stage_policies` (
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`research`@`%` SQL SECURITY DEFINER */
+/*!50013 SQL SECURITY DEFINER */
 /*!50001 VIEW `v_authors` AS select `a`.`id` AS `author_id`,`a`.`author_id` AS `author_code`,(case when (`a`.`employee_id` is not null) then trim(concat(`e`.`first_name`,' ',coalesce(`e`.`last_name`,''))) else `a`.`name` end) AS `author_name`,(case when (`a`.`employee_id` is not null) then `e`.`email` else `a`.`email` end) AS `email`,(case when (`a`.`employee_id` is not null) then `e`.`designation` else `a`.`designation` end) AS `designation`,(case when (`a`.`employee_id` is not null) then `d`.`name` else `a`.`department` end) AS `department`,(case when (`a`.`employee_id` is not null) then 'K.S.Rangasamy College of Technology' else `a`.`organization` end) AS `organization`,(case when (`a`.`employee_id` is not null) then `e`.`erp_id` else `s`.`student_unique_id` end) AS `erp_id`,`e`.`orcid_id` AS `orcid_id`,`e`.`scopus_id` AS `scopus_id`,`e`.`wos_researcher_id` AS `wos_researcher_id`,`e`.`google_scholar_id` AS `google_scholar_id`,(case when (`a`.`employee_id` is not null) then 'Internal' else 'External' end) AS `author_type`,`a`.`employee_id` AS `employee_id`,`a`.`student_ref` AS `student_ref`,`a`.`created_at` AS `created_at` from (((`authors` `a` left join `master_employees` `e` on((`a`.`employee_id` = `e`.`id`))) left join `master_departments` `d` on((`e`.`department_id` = `d`.`id`))) left join `author_students` `s` on((`a`.`student_ref` = `s`.`id`))) */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
@@ -2826,7 +3128,7 @@ CREATE TABLE `workflow_stage_policies` (
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`research`@`%` SQL SECURITY DEFINER */
+/*!50013 SQL SECURITY DEFINER */
 /*!50001 VIEW `v_budget_summary` AS select `bp`.`id` AS `id`,`bp`.`proposal_ref` AS `proposal_ref`,`bp`.`fiscal_year` AS `fiscal_year`,`bp`.`beneficiary_type` AS `beneficiary_type`,`bp`.`beneficiary_value` AS `beneficiary_value`,`bp`.`beneficiary_entity_id` AS `beneficiary_entity_id`,`bp`.`department_id` AS `department_id`,`md`.`name` AS `department`,`md`.`code` AS `department_code`,`me`.`name` AS `entity_name`,`me`.`code` AS `entity_code`,`met`.`name` AS `entity_type_name`,`met`.`code` AS `entity_type_code`,`bp`.`total_amount` AS `total_amount`,`bp`.`status` AS `status`,`bp`.`current_stage` AS `current_stage`,`bp`.`approval_flow` AS `approval_flow`,`bp`.`user_id` AS `user_id`,`bp`.`user_email` AS `user_email`,count(distinct `bpl`.`id`) AS `line_count`,count(distinct `bpa`.`id`) AS `approval_count`,sum(`bpl`.`line_total`) AS `calculated_total`,`bp`.`created_at` AS `created_at`,`bp`.`updated_at` AS `updated_at` from (((((`budget_proposals` `bp` left join `master_departments` `md` on((`bp`.`department_id` = `md`.`id`))) left join `master_entities` `me` on((`bp`.`beneficiary_entity_id` = `me`.`id`))) left join `master_entity_types` `met` on((`me`.`entity_type_id` = `met`.`id`))) left join `budget_proposal_lines` `bpl` on((`bp`.`id` = `bpl`.`budget_proposal_id`))) left join `budget_proposal_approvals` `bpa` on((`bp`.`id` = `bpa`.`budget_proposal_id`))) group by `bp`.`id`,`bp`.`proposal_ref`,`bp`.`fiscal_year`,`bp`.`beneficiary_type`,`bp`.`beneficiary_value`,`bp`.`beneficiary_entity_id`,`bp`.`department_id`,`md`.`name`,`md`.`code`,`me`.`name`,`me`.`code`,`met`.`name`,`met`.`code`,`bp`.`total_amount`,`bp`.`status`,`bp`.`current_stage`,`bp`.`approval_flow`,`bp`.`user_id`,`bp`.`user_email`,`bp`.`created_at`,`bp`.`updated_at` */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
@@ -2844,7 +3146,7 @@ CREATE TABLE `workflow_stage_policies` (
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`research`@`%` SQL SECURITY DEFINER */
+/*!50013 SQL SECURITY DEFINER */
 /*!50001 VIEW `v_employees` AS select `e`.`id` AS `id`,`e`.`erp_id` AS `erp_id`,concat(coalesce(`e`.`title`,''),' ',`e`.`first_name`,' ',coalesce(`e`.`last_name`,'')) AS `full_name`,`e`.`first_name` AS `first_name`,`e`.`last_name` AS `last_name`,`e`.`email` AS `email`,`e`.`mobile` AS `mobile`,`e`.`designation` AS `designation`,`e`.`department_id` AS `department_id`,`d`.`name` AS `department_name`,`d`.`code` AS `department_code`,coalesce(`pd_emp`.`name`,`pd_dept`.`name`) AS `parent_department_name`,`e`.`entity_id` AS `entity_id`,`me`.`name` AS `entity_name`,`me`.`code` AS `entity_code`,`e`.`status` AS `status`,`e`.`doj` AS `doj`,`e`.`orcid_id` AS `orcid_id`,`e`.`scopus_id` AS `scopus_id` from ((((`master_employees` `e` left join `master_departments` `d` on((`e`.`department_id` = `d`.`id`))) left join `master_departments` `pd_emp` on((`e`.`parent_department_id` = `pd_emp`.`id`))) left join `master_departments` `pd_dept` on((`d`.`parent_id` = `pd_dept`.`id`))) left join `master_entities` `me` on((`e`.`entity_id` = `me`.`id`))) */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
@@ -2862,7 +3164,7 @@ CREATE TABLE `workflow_stage_policies` (
 /*!50001 SET character_set_results     = utf8mb4 */;
 /*!50001 SET collation_connection      = utf8mb4_0900_ai_ci */;
 /*!50001 CREATE ALGORITHM=UNDEFINED */
-/*!50013 DEFINER=`research`@`%` SQL SECURITY DEFINER */
+/*!50013 SQL SECURITY DEFINER */
 /*!50001 VIEW `v_finance_requests` AS select `fr`.`id` AS `id`,`fr`.`employee_id` AS `employee_id`,`fr`.`created_by` AS `created_by`,coalesce(concat(coalesce(`e`.`title`,''),' ',`e`.`first_name`,' ',coalesce(`e`.`last_name`,'')),`fr`.`applicant_name`) AS `applicant_name`,coalesce(`e`.`designation`,`fr`.`designation`) AS `designation`,coalesce(`d`.`name`,`fr`.`department`) AS `department`,coalesce(`e`.`email`,`fr`.`email`) AS `email`,coalesce(`e`.`mobile`,`fr`.`mobile`) AS `mobile`,`e`.`erp_id` AS `erp_id`,(case when (`fr`.`employee_id` is null) then 1 else 0 end) AS `is_external`,`fr`.`request_date` AS `request_date`,`fr`.`description` AS `description`,`fr`.`beneficiary_type` AS `beneficiary_type`,`fr`.`beneficiary_value` AS `beneficiary_value`,`fr`.`primary_head` AS `primary_head`,`fr`.`event_sub_head` AS `event_sub_head`,`fr`.`is_budget_proposed` AS `is_budget_proposed`,`fr`.`proposed_amount` AS `proposed_amount`,`fr`.`balance_amount` AS `balance_amount`,`fr`.`total_budget` AS `total_budget`,`fr`.`income_type` AS `income_type`,`fr`.`income_status` AS `income_status`,`fr`.`income_amount_type` AS `income_amount_type`,`fr`.`credit_status` AS `credit_status`,`fr`.`debit_status` AS `debit_status`,`fr`.`partial_amount` AS `partial_amount`,`fr`.`enclosures` AS `enclosures`,`fr`.`director_status` AS `director_status`,`fr`.`director_comment` AS `director_comment`,`fr`.`principal_status` AS `principal_status`,`fr`.`principal_comment` AS `principal_comment`,`fr`.`principal_priority` AS `principal_priority`,`fr`.`chairman_status` AS `chairman_status`,`fr`.`chairman_comment` AS `chairman_comment`,`fr`.`overall_status` AS `overall_status`,`fr`.`created_at` AS `created_at`,`fr`.`updated_at` AS `updated_at` from ((`finance_requests` `fr` left join `master_employees` `e` on((`fr`.`employee_id` = `e`.`id`))) left join `master_departments` `d` on((`e`.`department_id` = `d`.`id`))) */;
 /*!50001 SET character_set_client      = @saved_cs_client */;
 /*!50001 SET character_set_results     = @saved_cs_results */;
@@ -2877,4 +3179,4 @@ CREATE TABLE `workflow_stage_policies` (
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-08-29 12:40:32
+-- Dump completed on 2026-09-13  1:05:50

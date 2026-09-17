@@ -194,16 +194,14 @@ const ProjectForm: React.FC = () => {
   const showOutcome = hasReachedProposalStage(form.proposalStatus, 'result_announced');
 
   // A proposal that was not selected has nothing to sanction, nothing to
-  // disburse and no project to run, so those three sections stay locked until
-  // the result says it was. They are shown rather than hidden — the stage notes
-  // above already hide what has not happened yet, and here the reader needs to
-  // see that the sections exist and what unlocks them. Anything already
-  // captured stays in state and is still saved, so a result corrected back to
-  // Selected finds its sanction details intact.
+  // disburse and no project to run, so those three sections stay hidden until
+  // the result says it was — the stage note below names what unlocks them.
+  // Anything already captured stays in state and is still saved, so a result
+  // corrected back to Selected finds its sanction details intact.
   const isSelected = form.finalResult === 'selected';
 
-  // Outcomes and final documents are what a project leaves behind, so they wait
-  // until it has finished. `isSelected` is carried through rather than assumed
+  // Outcomes and final documents are what a project leaves behind, so they stay
+  // hidden until it has finished. `isSelected` is carried through rather than assumed
   // from the status: a project recorded as Completed and then corrected to Not
   // Selected would otherwise keep these two open while everything above them
   // locked.
@@ -594,31 +592,35 @@ const ProjectForm: React.FC = () => {
                   </p>
                 )}
 
-                <SanctionDetailsSection
-                  form={form}
-                  patch={patch}
-                  onSelectDocument={selectDocument}
-                  onClearDocument={clearDocument}
-                  errors={errors}
-                  disabled={isReadOnly || !isSelected}
-                />
+                {isSelected && (
+                  <>
+                    <SanctionDetailsSection
+                      form={form}
+                      patch={patch}
+                      onSelectDocument={selectDocument}
+                      onClearDocument={clearDocument}
+                      errors={errors}
+                      disabled={isReadOnly}
+                    />
 
-                <GrantDisbursementSection
-                  form={form}
-                  patch={patch}
-                  organizations={lookups.organizations}
-                  onSelectDocument={selectDisbursementDocument}
-                  onClearDocument={clearDisbursementDocument}
-                  errors={errors}
-                  disabled={isReadOnly || !isSelected}
-                />
+                    <GrantDisbursementSection
+                      form={form}
+                      patch={patch}
+                      organizations={lookups.organizations}
+                      onSelectDocument={selectDisbursementDocument}
+                      onClearDocument={clearDisbursementDocument}
+                      errors={errors}
+                      disabled={isReadOnly}
+                    />
 
-                <ProjectStatusSection
-                  form={form}
-                  patch={patch}
-                  errors={errors}
-                  disabled={isReadOnly || !isSelected}
-                />
+                    <ProjectStatusSection
+                      form={form}
+                      patch={patch}
+                      errors={errors}
+                      disabled={isReadOnly}
+                    />
+                  </>
+                )}
 
                 {isSelected && !isConcluded && (
                   <p className="pf-stage-note">
@@ -627,15 +629,19 @@ const ProjectForm: React.FC = () => {
                   </p>
                 )}
 
-                <OutcomeSection form={form} patch={patch} disabled={isReadOnly || !isConcluded} />
+                {isConcluded && (
+                  <>
+                    <OutcomeSection form={form} patch={patch} disabled={isReadOnly} />
 
-                <FinalDocumentsSection
-                  form={form}
-                  onSelectDocument={selectDocument}
-                  onClearDocument={clearDocument}
-                  errors={errors}
-                  disabled={isReadOnly || !isConcluded}
-                />
+                    <FinalDocumentsSection
+                      form={form}
+                      onSelectDocument={selectDocument}
+                      onClearDocument={clearDocument}
+                      errors={errors}
+                      disabled={isReadOnly}
+                    />
+                  </>
+                )}
               </>
             )}
 
