@@ -794,6 +794,35 @@ describe('transaction accounts', () => {
     });
   });
 
+  // DEFAULT 1 on the column is only half the guarantee: the normalizer has to
+  // agree, or a caller that does not send the field would write an explicit 0
+  // over it and quietly drop the row out of the project's own Actuals.
+  it('counts a ledger row toward Actuals when the flag is not sent', () => {
+    const { aggregate, errors } = normalizeProjectPayload(withLedger([ledgerRow()]));
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].counts_as_actual).toBe(1);
+  });
+
+  it('keeps a ledger row out of Actuals when the flag is sent false', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow({ counts_as_actual: false })]),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].counts_as_actual).toBe(0);
+  });
+
+  it('accepts the flag camelCased, as the form sends it', () => {
+    const { aggregate } = normalizeProjectPayload(
+      withLedger([ledgerRow({ countsAsActual: true }), ledgerRow({ countsAsActual: false })]),
+    );
+
+    const [first, second] = aggregate.transactionAccounts[0].transactions;
+    expect(first.counts_as_actual).toBe(1);
+    expect(second.counts_as_actual).toBe(0);
+  });
+
   it('rejects two name-only ledgers on the same removed account', () => {
     const { errors } = normalizeProjectPayload(
       validPayload({

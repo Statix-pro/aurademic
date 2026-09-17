@@ -145,6 +145,17 @@ export function toBoolean(value) {
 }
 
 /**
+ * A flag whose column default is not 0, read so that an absent field keeps that
+ * default instead of reading as unchecked. `toBoolean` alone cannot do this: it
+ * answers 0 for everything it does not recognise, so a caller that simply does
+ * not send the field would switch it off on every row it touches.
+ */
+export function toBooleanWithDefault(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback ? 1 : 0;
+  return toBoolean(value);
+}
+
+/**
  * Date inputs post `YYYY-MM-DD`; a cleared input posts `''`. Anything that is
  * neither is reported rather than silently dropped, because a bad date usually
  * means a client bug and a NULL would look like "not filled yet".
@@ -656,6 +667,13 @@ function normalizeTransactions(raw, fieldPrefix, errors, canonicalBudgetHead) {
           financial_year: financialYear,
           transaction_date: transactionDate,
           head_kind: headKind,
+          // Defaults to counted, matching the column, so a ledger saved by a
+          // caller that does not know about this field keeps every row in the
+          // Actuals figures rather than quietly dropping out of them.
+          counts_as_actual: toBooleanWithDefault(
+            row?.counts_as_actual ?? row?.countsAsActual,
+            true,
+          ),
           // Expenditure heads are stored by name. A name still in the
           // vocabulary is stored in its canonical case so the summary groups it
           // with its allotment row; one that is no longer offered is kept as

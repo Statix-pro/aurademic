@@ -408,7 +408,8 @@ async function replaceTransactionAccounts(connection, projectId, accounts) {
     await connection.query(
       `INSERT INTO project_transactions
         (project_id, account_id, financial_year, transaction_date, head_kind,
-         head_name, particulars, reference_no, credit, debit, display_order)
+         head_name, particulars, reference_no, credit, debit, counts_as_actual,
+         display_order)
        VALUES ?`,
       [
         account.transactions.map((row) => [
@@ -422,6 +423,7 @@ async function replaceTransactionAccounts(connection, projectId, accounts) {
           row.reference_no,
           row.credit,
           row.debit,
+          row.counts_as_actual,
           row.display_order,
         ]),
       ],
@@ -837,6 +839,7 @@ const projectModel = {
       db.query(
         `SELECT pt.id, pt.account_id, pt.financial_year, pt.head_kind,
                   pt.particulars, pt.reference_no, pt.credit, pt.debit, pt.display_order,
+                  pt.counts_as_actual,
                   DATE_FORMAT(pt.transaction_date, '%Y-%m-%d') AS transaction_date,
                   pt.head_name
              FROM project_transactions pt

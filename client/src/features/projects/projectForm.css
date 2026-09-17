@@ -1391,6 +1391,27 @@
   min-width: 0;
 }
 
+/* The Actuals tick sits beside Ref. No. rather than stretching like the text
+   fields do, so it takes only the width of its box and its word. */
+.pf-ledger__detail-field--check {
+  flex: 0 0 auto;
+  min-width: 0;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.pf-checkbox {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--primary-color, #0069ab);
+  cursor: pointer;
+}
+
+.pf-checkbox:disabled {
+  cursor: default;
+}
+
 /* Derived, so it is shown rather than typed — but keeps the shape of the
    credit and debit fields beside it. */
 .pf-ledger__balance {

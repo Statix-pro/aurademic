@@ -137,6 +137,13 @@ export interface TransactionRow {
   referenceNo: string;
   credit: string;
   debit: string;
+  /**
+   * Whether this row is counted in the Transaction Summary's Actuals. On by
+   * default; an internal transfer or a correction entry is real money in the
+   * account but not what the project spent against its budget. The ledger's own
+   * running Balance ignores this — the cash position is the cash position.
+   */
+  countsAsActual: boolean;
 }
 
 /** A bank account the project's money moves through, with its own ledger. */

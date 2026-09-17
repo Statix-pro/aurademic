@@ -124,6 +124,7 @@ export function createTransactionRow(): TransactionRow {
     referenceNo: '',
     credit: '',
     debit: '',
+    countsAsActual: true,
   };
 }
 
@@ -232,6 +233,15 @@ const text = (value: unknown): string =>
   value === null || value === undefined ? '' : String(value);
 
 const flag = (value: unknown): boolean => value === 1 || value === true || value === '1';
+
+/**
+ * A stored flag whose column default is on, so a value the response does not
+ * carry reads as on rather than off. `flag` alone answers false for a missing
+ * field, which would show every row of a ledger saved before the column existed
+ * as excluded from its own totals.
+ */
+const flagDefaultOn = (value: unknown): boolean =>
+  value === undefined || value === null ? true : flag(value);
 
 /** Dates arrive pre-formatted as `YYYY-MM-DD`; anything else is treated as empty. */
 const dateInput = (value: unknown): string => {
@@ -376,6 +386,7 @@ export function projectToFormState(project: any): ProjectFormState {
           referenceNo: text(row.reference_no),
           credit: amountInput(row.credit),
           debit: amountInput(row.debit),
+          countsAsActual: flagDefaultOn(row.counts_as_actual),
         }));
 
         return {

@@ -713,7 +713,6 @@ const ProjectForm: React.FC = () => {
               form={form}
               patch={patch}
               accounts={lookups.accounts}
-              budgetHeads={lookups.budgetHeads}
               errors={errors}
               disabled={isReadOnly}
             />

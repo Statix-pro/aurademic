@@ -2,7 +2,8 @@
  * Derivations behind the Budget tab.
  *
  * Nothing here is stored. The Transaction Summary is Budget (from the
- * allotment matrix) against Actuals (from the ledger on the Transaction tab),
+ * allotment matrix) against Actuals (the ledger rows on the Transaction tab
+ * that are ticked as Actuals),
  * and the ledger's Balance column is a running total of its own rows — so both
  * are computed from form state and stay correct while the user is still typing,
  * with no way to drift out of step with the numbers they are built from.
@@ -142,6 +143,13 @@ export function buildTransactionSummary({
   accounts.forEach((account) => {
     account.transactions.forEach((row) => {
       if (!row.headName.trim()) return;
+      // A row the user has unticked is out of this report altogether — not just
+      // out of its head's Actuals, but out of the opening and closing balances
+      // too. Counting it in one and not the other would leave the section
+      // totals and the net balance describing two different ledgers. The
+      // Balance column on the Transaction tab still includes it: that is the
+      // account's cash position, which is true whatever the row is reported as.
+      if (!row.countsAsActual) return;
 
       // Money that moved in an earlier year is no part of this year's figures,
       // but it is exactly what the year opens with. Financial years are fixed

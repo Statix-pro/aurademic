@@ -2,7 +2,12 @@ import { PROJECT_INCOME_HEADS } from './constants';
 import { headIdentity } from './projectBudgetSummary';
 
 import type { SelectOption } from './components/FormFields';
-import type { BudgetHeadOption, ProjectFormState, ProjectOrganization } from './types';
+import type {
+  BudgetAllotmentRow,
+  BudgetHeadOption,
+  ProjectFormState,
+  ProjectOrganization,
+} from './types';
 
 /**
  * The project's expenditure heads, filed under the group each belongs to.
@@ -27,22 +32,51 @@ export function flatBudgetHeadOptions(heads: BudgetHeadOption[]): SelectOption[]
 }
 
 /**
- * The transaction ledger's head dropdown: the project's expenditure heads plus
- * the fixed income vocabulary, each option valued by the identity the
- * Transaction Summary groups on, so picking one settles both the head and which
- * side of the summary the row lands on.
+ * The transaction ledger's head dropdown: the heads this project actually
+ * budgeted for, plus the fixed income vocabulary. Each option is valued by the
+ * identity the Transaction Summary groups on, so picking one settles both the
+ * head and which side of the summary the row lands on.
+ *
+ * The expenditure side comes from the Budget Allotment matrix rather than the
+ * whole admin vocabulary: a ledger row filed under a head the project never
+ * allotted has no budget to be counted against, and lands in the summary as an
+ * unbudgeted line. Offering only what the Budget tab lists is what stops that
+ * happening by a stray pick.
+ *
+ * A row already saved against a head that has since left the matrix keeps it —
+ * `withSelectedOption` re-offers the stored name, so narrowing the list here
+ * never silently rewrites a saved entry's head.
+ *
+ * Expenditure is listed first because it is the side the project chose: most
+ * ledger rows are spending, and the heads the user picked on the Budget tab are
+ * what they come here looking for. Income is a fixed four-line schedule that
+ * reads the same on every project, so it sits below them.
  */
-export function transactionHeadOptions(heads: BudgetHeadOption[]): SelectOption[] {
+export function transactionHeadOptions(budgetRows: BudgetAllotmentRow[]): SelectOption[] {
+  // Heads are stored by name and the matrix already refuses the same head
+  // twice, but two rows naming one head would collide on a single identity —
+  // and so on a single option — so the first one named wins.
+  const seen = new Set<string>();
+  const allottedHeads: string[] = [];
+
+  budgetRows.forEach((row) => {
+    const name = row.budgetHeadName.trim();
+    if (!name || seen.has(name.toLowerCase())) return;
+
+    seen.add(name.toLowerCase());
+    allottedHeads.push(name);
+  });
+
   return [
+    ...allottedHeads.map((name) => ({
+      value: headIdentity('expenditure', name),
+      label: name,
+      group: 'Expenditure',
+    })),
     ...PROJECT_INCOME_HEADS.map((name) => ({
       value: headIdentity('income', name),
       label: name,
       group: 'Income',
-    })),
-    ...heads.map((head) => ({
-      value: headIdentity('expenditure', head.name),
-      label: head.name,
-      group: `Expenditure — ${head.head_group}`,
     })),
   ];
 }

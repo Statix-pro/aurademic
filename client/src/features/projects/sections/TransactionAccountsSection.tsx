@@ -25,19 +25,12 @@ import {
 } from '../projectFormState';
 import { transactionHeadOptions, withSelectedOption } from '../selectOptions';
 
-import type {
-  AccountOption,
-  BudgetHeadOption,
-  ProjectFormState,
-  TransactionAccount,
-  TransactionRow,
-} from '../types';
+import type { AccountOption, ProjectFormState, TransactionAccount, TransactionRow } from '../types';
 
 interface TransactionAccountsSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
   accounts: AccountOption[];
-  budgetHeads: BudgetHeadOption[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -49,6 +42,10 @@ interface TransactionAccountsSectionProps {
  * table's width and into a second row beneath it.
  */
 const DETAIL_ERROR_KEYS = ['transaction_date'];
+
+/** What unticking Actuals does, on the control itself rather than in a legend. */
+const ACTUALS_HINT =
+  'Counted in the Transaction Summary\u2019s Actuals. Untick for money that moved through the account without being spent or received against the budget \u2014 the ledger Balance still includes it.';
 
 /**
  * The Transaction tab: one block per bank account the project's money moves
@@ -65,7 +62,6 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   form,
   patch,
   accounts,
-  budgetHeads,
   errors,
   disabled,
 }) => {
@@ -92,7 +88,10 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
 
   const toggleRow = (rowKey: string) => setExpandedRow(openRow === rowKey ? null : rowKey);
 
-  const headOptions = useMemo(() => transactionHeadOptions(budgetHeads), [budgetHeads]);
+  // The heads this project budgeted for, so the ledger can only be filed under
+  // a head the Budget tab has allotted — income aside, which is received rather
+  // than budgeted.
+  const headOptions = useMemo(() => transactionHeadOptions(form.budgetRows), [form.budgetRows]);
 
   const yearOptions = useMemo(
     () => financialYearOptions().map((year) => ({ value: year, label: year })),
@@ -245,6 +244,18 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                     const isExpanded = openRow === row.key || hasDetailError;
                     const detailId = `${block.key}-${row.key}-detail`;
 
+                    // The head settles which column the row can use: money
+                    // under an income head came in, money under an expenditure
+                    // head went out. Until a head is picked neither is ruled
+                    // out, so both stay open rather than greying a column on
+                    // the strength of the kind's default.
+                    const headPicked = Boolean(row.headName.trim());
+                    const creditDisabled =
+                      disabled || (headPicked && row.headKind === 'expenditure');
+                    const debitDisabled = disabled || (headPicked && row.headKind === 'income');
+                    const wrongColumn =
+                      'Not used by this head \u2014 change the budget head to enter it here.';
+
                     return (
                       <React.Fragment key={row.key}>
                         <tr>
@@ -276,9 +287,16 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                   });
                                   return;
                                 }
+                                const { headKind } = parseHeadIdentity(value);
                                 updateRow(blockIndex, rowIndex, {
-                                  ...parseHeadIdentity(value),
+                                  headKind,
                                   headName: option.label,
+                                  // The column this head does not use is
+                                  // emptied, not just greyed: a figure left
+                                  // behind it is still saved and still counted
+                                  // in the summary, under a head the user has
+                                  // just said it does not belong to.
+                                  ...(headKind === 'income' ? { debit: '' } : { credit: '' }),
                                 });
                               }}
                               options={withSelectedOption(headOptions, selectedHead, row.headName)}
@@ -298,7 +316,8 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                               onChange={(event) =>
                                 updateRow(blockIndex, rowIndex, { credit: event.target.value })
                               }
-                              disabled={disabled}
+                              disabled={creditDisabled}
+                              title={creditDisabled && !disabled ? wrongColumn : undefined}
                               aria-label="Credit"
                             />
                           </td>
@@ -312,7 +331,8 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                               onChange={(event) =>
                                 updateRow(blockIndex, rowIndex, { debit: event.target.value })
                               }
-                              disabled={disabled}
+                              disabled={debitDisabled}
+                              title={debitDisabled && !disabled ? wrongColumn : undefined}
                               aria-label="Debit"
                             />
                           </td>
@@ -445,6 +465,29 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                   }
                                   disabled={disabled}
                                 />
+                              </label>
+
+                              {/* On by default, so the ordinary entry needs no
+                                  thought: unticking is the exception, for money
+                                  that moved through the account without being
+                                  what the project spent or received against its
+                                  budget. */}
+                              <label
+                                className="pf-ledger__detail-field pf-ledger__detail-field--check"
+                                title={ACTUALS_HINT}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="pf-checkbox"
+                                  checked={row.countsAsActual}
+                                  onChange={(event) =>
+                                    updateRow(blockIndex, rowIndex, {
+                                      countsAsActual: event.target.checked,
+                                    })
+                                  }
+                                  disabled={disabled}
+                                />
+                                <span className="pf-ledger__detail-label">Actuals</span>
                               </label>
                             </div>
                           </td>

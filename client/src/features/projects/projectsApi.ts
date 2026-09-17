@@ -195,6 +195,7 @@ export function buildProjectPayload(form: ProjectFormState) {
         reference_no: row.referenceNo || null,
         credit: nullableNumber(row.credit),
         debit: nullableNumber(row.debit),
+        counts_as_actual: row.countsAsActual,
       })),
     })),
 
