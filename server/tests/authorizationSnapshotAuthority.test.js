@@ -129,6 +129,61 @@ describe('token authority after the database snapshot resolves', () => {
 });
 
 /**
+ * The degraded branch -- the RBAC tables cannot be read at all -- deliberately
+ * falls back to the token, because a stale copy beats locking the estate out of
+ * an install that is merely half-migrated.
+ *
+ * `super_admin` is the one claim that cannot come along. `isSuperAdminActor`
+ * reads `actor.roles` directly and never consults `isSuperAdmin`, so leaving
+ * the role in would let a forged token hold full workflow authority on the one
+ * path where the database cannot contradict it -- super admin has no `users`
+ * column behind it, only a role assignment.
+ */
+describe('the degraded snapshot does not restore super admin from the token', () => {
+  const degradedSnapshot = {
+    roles: [],
+    permissions: [],
+    isSuperAdmin: false,
+    isAdmin: true,
+    degraded: true,
+  };
+
+  it('keeps the token permissions that let a half-migrated install work', async () => {
+    accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue(degradedSnapshot);
+
+    await request(app)
+      .get('/api/finance-requests/queue/dof')
+      .set('Authorization', `Bearer ${staleToken}`)
+      .expect(200);
+
+    const [{ actor }] = workflowService.listQueue.mock.calls[0];
+    expect(actor.permissions).toEqual(['finance.workflow.dof']);
+  });
+
+  it('strips super_admin from the roles the workflow layer sees', async () => {
+    accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue(degradedSnapshot);
+
+    await request(app)
+      .get('/api/finance-requests/queue/dof')
+      .set('Authorization', `Bearer ${staleToken}`)
+      .expect(200);
+
+    const [{ actor }] = workflowService.listQueue.mock.calls[0];
+    expect(actor.roles).not.toContain('super_admin');
+    expect(actor.isSuperAdmin).toBe(false);
+  });
+
+  it('refuses a super-admin-only route in that state', async () => {
+    accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue(degradedSnapshot);
+
+    await request(app)
+      .get('/api/master-data/departments')
+      .set('Authorization', `Bearer ${staleToken}`)
+      .expect(403);
+  });
+});
+
+/**
  * The other half of the same guarantee: a real super admin loses nothing. The
  * `super_admin` role is the only source of that authority -- there is no
  * `users.is_super_admin` column -- so the snapshot resolves it from the role

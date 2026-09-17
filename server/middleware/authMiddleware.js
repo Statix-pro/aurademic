@@ -2,6 +2,13 @@ import jwt from 'jsonwebtoken';
 
 import accessControlModel from '../modules/accessControl/accessControlModel.js';
 
+// Declared here rather than imported from accessControlModel.js, which most of
+// the test suite replaces with a `default`-only mock: a named import off that
+// module throws the moment this line runs under test. The same literal is in
+// accessControlModel.js and in shared/workflow/workflowValidators.js; all three
+// have to agree, and the tests below pin that they do.
+const SUPER_ADMIN_ROLE_CODE = 'super_admin';
+
 const extractToken = (req) => {
   const authHeader = req.headers.authorization;
 
@@ -125,7 +132,20 @@ const mergeAuthorizationSnapshot = async (user) => {
   // `base_user` assignment, so a resolved snapshot always carries a role, but
   // its permission list is empty whenever that user's roles grant nothing --
   // and the old fallback then handed back whatever the token was signed with.
-  const roles = authorization.degraded ? uniqueStringArray(user.roles) : authorization.roles;
+  //
+  // `super_admin` is stripped from the degraded fallback on purpose. The rest
+  // of a token's roles only ever name what the database already granted, but
+  // this one is not merely a grant -- `isSuperAdminActor` in
+  // shared/workflow/workflowValidators.js reads `roles` directly and treats it
+  // as full authority, without consulting `isSuperAdmin` below. Passing it
+  // through would leave the degraded branch honouring exactly the forged claim
+  // the rest of this function refuses, on the one code path where the database
+  // cannot contradict it: super admin has no `users` column behind it, only a
+  // role assignment, so when the RBAC tables are unreadable it is unverifiable
+  // and the answer has to be no.
+  const roles = authorization.degraded
+    ? uniqueStringArray(user.roles).filter((role) => role !== SUPER_ADMIN_ROLE_CODE)
+    : authorization.roles;
   const permissions = authorization.degraded
     ? uniqueStringArray(user.permissions)
     : authorization.permissions;
@@ -148,8 +168,9 @@ const mergeAuthorizationSnapshot = async (user) => {
     // for a missing RBAC table that returns isSuperAdmin false for everyone,
     // and the old fallback silently rescued an administrator in that state.
     // Failing closed is correct for an authority check, but it means a missing
-    // table is now a lockout rather than a degradation. Pair this with a
-    // startup check that the RBAC tables exist, so it surfaces at boot.
+    // table is now a lockout rather than a degradation. `verifyRbacSchema` in
+    // server.js names the missing tables in the boot log, so that state is read
+    // off startup rather than guessed at from a user's 403.
     isSuperAdmin: authorization.isSuperAdmin,
     isAdmin: authorization.isAdmin,
   };
