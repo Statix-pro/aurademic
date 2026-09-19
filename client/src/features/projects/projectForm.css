@@ -536,6 +536,47 @@
   pointer-events: none;
 }
 
+/* The select is a text input you can type into (see `SelectField`), so it takes
+   a caret where a native select took none — but it still reads as a dropdown:
+   it keeps `.pf-select__control`'s box and chevron, and looks the same closed. */
+.pf-combo__input {
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.pf-combo__input:focus {
+  cursor: text;
+}
+
+.pf-combo__input::placeholder {
+  color: #a9b3c4;
+}
+
+/* Sticky so a heading stays legible while its own options scroll under it, the
+   way the budget-head catalog's groups run longer than the menu. */
+.pf-combo__group {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  padding: 7px 10px 4px;
+  background: #fff;
+  color: var(--text-muted, #6c757d);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Hover is not the only way in: the keyboard walks the same highlight. */
+.pf-combo__option[data-highlighted='true'] {
+  background: #f2f7ff;
+}
+
+.pf-combo__option[data-selected='true'] {
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+}
+
 /* --------------------------------------------------------------- yes/no pill */
 
 .pf-yesno {

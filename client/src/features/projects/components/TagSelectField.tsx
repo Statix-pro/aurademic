@@ -1,12 +1,8 @@
 import { ChevronDown, X } from 'lucide-react';
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 
-// Mirrors `.pf-tags__menu`'s max-height, and the breathing room the menu keeps
-// from the control and from the edge of the window.
-const MENU_MAX_HEIGHT = 240;
-const MENU_GAP = 4;
-const VIEWPORT_MARGIN = 8;
+import { useFloatingMenu } from './useFloatingMenu';
 
 export interface TagOption {
   value: string;
@@ -51,46 +47,6 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
 }) => {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  // State, not a ref: the first placement has to happen once the <ul> is in the
-  // DOM, and a ref changing does not re-run the effect that places it. Held as
-  // state, the node arriving is a render, so the menu is measured and placed
-  // from its real height instead of the 240px ceiling assumed in its absence —
-  // which parked an upward-opening menu a gap above the field it belongs to.
-  const [menuNode, setMenuNode] = useState<HTMLUListElement | null>(null);
-  // Where the menu sits on screen. It is rendered into `document.body` rather
-  // than beside the control, because inside a table the control's own scroll
-  // container (`.pf-table-wrap`, which needs `overflow-x` for narrow windows)
-  // clipped the list to the row — the options below the first were unreachable.
-  // Portalled out, nothing above it can crop it, so it is positioned by hand
-  // against the control's box.
-  const [menuBox, setMenuBox] = useState({ top: 0, left: 0, width: 0, maxHeight: MENU_MAX_HEIGHT });
-
-  const positionMenu = useCallback(() => {
-    const control = wrapperRef.current;
-    if (!control) return;
-
-    const rect = control.getBoundingClientRect();
-    // `scrollHeight`, not `offsetHeight`: the menu we are measuring may already
-    // be capped by a maxHeight this function set for a tighter position.
-    const wanted = Math.min(menuNode?.scrollHeight ?? MENU_MAX_HEIGHT, MENU_MAX_HEIGHT);
-    const below = window.innerHeight - rect.bottom - MENU_GAP - VIEWPORT_MARGIN;
-    const above = rect.top - MENU_GAP - VIEWPORT_MARGIN;
-
-    // Below the control, as a dropdown should be — unless the list would run
-    // off the bottom of the window and there is more room above it. The last
-    // row of a long form otherwise opens its options where nobody can reach
-    // them without scrolling the page underneath.
-    const openUp = below < wanted && above > below;
-    const maxHeight = Math.max(0, Math.min(wanted, openUp ? above : below));
-
-    setMenuBox({
-      top: openUp ? rect.top - MENU_GAP - maxHeight : rect.bottom + MENU_GAP,
-      left: rect.left,
-      width: rect.width,
-      maxHeight,
-    });
-  }, [menuNode]);
 
   const suggestions = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -100,39 +56,16 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
     );
   }, [options, query, value]);
 
-  // Before paint, so the menu never shows at the previous row's coordinates.
-  useLayoutEffect(() => {
-    if (isOpen) positionMenu();
-    // `suggestions.length` too: how tall the list wants to be decides which way
-    // it opens, so a list that shrinks as it is filtered is placed again.
-  }, [isOpen, positionMenu, value.length, suggestions.length]);
-
-  useEffect(() => {
-    if (!isOpen) return undefined;
-
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      // The menu is outside the wrapper in the DOM now, so a click on an option
-      // has to be recognised as inside.
-      if (!wrapperRef.current?.contains(target) && !menuNode?.contains(target)) {
-        setIsOpen(false);
-        setQuery('');
-      }
-    };
-
-    // Anything that moves the control moves the menu with it; `true` catches
-    // scrolling in the table wrapper and the page alike.
-    const reposition = () => positionMenu();
-
-    document.addEventListener('mousedown', handlePointerDown);
-    window.addEventListener('scroll', reposition, true);
-    window.addEventListener('resize', reposition);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      window.removeEventListener('scroll', reposition, true);
-      window.removeEventListener('resize', reposition);
-    };
-  }, [isOpen, positionMenu]);
+  const { wrapperRef, setMenuNode, menuBox } = useFloatingMenu<HTMLUListElement>({
+    isOpen,
+    onClose: () => {
+      setIsOpen(false);
+      setQuery('');
+    },
+    // How tall the list wants to be decides which way it opens, so a list that
+    // shrinks as it is filtered — or as chips are added — is placed again.
+    contentKey: `${value.length}:${suggestions.length}`,
+  });
 
   const selectedOptions = useMemo(
     () =>

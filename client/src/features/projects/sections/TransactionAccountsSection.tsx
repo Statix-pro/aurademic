@@ -159,7 +159,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                 // snapshot, and there is no id left to select it by — so the
                 // name shows here rather than leaving the ledger looking
                 // unattributed. Picking a live account re-links the block.
-                placeholder={block.accountName || 'Select'}
+                placeholder={block.accountName || undefined}
                 disabled={disabled}
                 invalid={Boolean(accountError)}
                 ariaLabel="Transaction account"
@@ -278,7 +278,6 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                 updateRow(blockIndex, rowIndex, { financialYear: value })
                               }
                               options={yearOptions}
-                              placeholder="Select"
                               disabled={disabled}
                               invalid={Boolean(errors[`${field}.financial_year`])}
                               ariaLabel="Financial year"
@@ -310,7 +309,6 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                 });
                               }}
                               options={withSelectedOption(headOptions, selectedHead, row.headName)}
-                              placeholder="Select"
                               disabled={disabled}
                               invalid={Boolean(errors[`${field}.head`])}
                               ariaLabel="Budget head"

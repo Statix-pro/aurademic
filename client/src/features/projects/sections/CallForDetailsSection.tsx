@@ -104,7 +104,6 @@ const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
             })
           }
           options={agencyOptions}
-          placeholder="Select Funding Agency"
           disabled={disabled}
           invalid={Boolean(errors.funding_organization_id)}
         />
@@ -130,7 +129,6 @@ const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
             })
           }
           options={schemeOptions}
-          placeholder="Select Scheme"
           disabled={disabled || !form.fundingOrganizationId}
           invalid={Boolean(errors.scheme_id)}
         />

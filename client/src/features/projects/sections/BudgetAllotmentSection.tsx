@@ -139,7 +139,6 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
                         (option) =>
                           option.value === column.financialYear || !takenYears.has(option.value),
                       )}
-                      placeholder="Select"
                       disabled={disabled}
                       invalid={Boolean(errors[`budget.years[${index}]`])}
                       ariaLabel={`Financial year for column ${index + 1}`}
@@ -216,7 +215,6 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
                       // "no longer listed" placeholder.
                       row.budgetHeadName,
                     )}
-                    placeholder="Select"
                     disabled={disabled}
                     invalid={Boolean(errors[`budget.heads[${index}]`])}
                     ariaLabel="Budget head"

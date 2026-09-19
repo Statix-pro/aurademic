@@ -132,7 +132,6 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
                       row.organizationId ? String(row.organizationId) : '',
                       row.organizationName,
                     )}
-                    placeholder="Select"
                     disabled={disabled}
                     invalid={Boolean(errors[`${errorPrefix}[${index}].organization`])}
                     ariaLabel="Organization"

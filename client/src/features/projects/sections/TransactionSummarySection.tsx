@@ -65,7 +65,13 @@ const TransactionSummarySection: React.FC<TransactionSummarySectionProps> = ({ f
       }),
     );
 
-    return [...years].sort().map((year) => ({ value: year, label: year }));
+    return [
+      // Unlike every other picker on this form, the empty value here is a
+      // choice rather than an unset field — it is the summary with no year
+      // filter at all — so it needs a row of its own to come back to.
+      { value: '', label: 'All years' },
+      ...[...years].sort().map((year) => ({ value: year, label: year })),
+    ];
   }, [form.budgetYears, form.transactionAccounts]);
 
   // Removing the year column that was being filtered to leaves the selection

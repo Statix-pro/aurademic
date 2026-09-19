@@ -101,7 +101,6 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                     value: category,
                     label: category,
                   }))}
-                  placeholder="Select"
                   disabled={disabled}
                   ariaLabel="Collaborator category"
                 />
@@ -132,7 +131,6 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                     row.organizationId ? String(row.organizationId) : '',
                     row.organizationName,
                   )}
-                  placeholder="Select Organization"
                   disabled={disabled}
                   invalid={Boolean(errors[`collaborators[${index}].organization`])}
                   ariaLabel="Collaborating organization"

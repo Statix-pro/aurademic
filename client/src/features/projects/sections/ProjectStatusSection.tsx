@@ -59,7 +59,6 @@ const ProjectStatusSection: React.FC<ProjectStatusSectionProps> = ({
           value={form.projectStatus}
           onChange={(value) => patch({ projectStatus: value as ProjectStatus })}
           options={PROJECT_STATUS_OPTIONS}
-          placeholder="Select"
           disabled={disabled}
           invalid={Boolean(errors.project_status)}
         />
