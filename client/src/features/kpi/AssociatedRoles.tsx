@@ -17,6 +17,11 @@ type CreditPointValues = {
   creditPoint: string;
 };
 
+const createResponsibilityId = () =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `responsibility-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
 const StarRating = ({
   filled,
   onChange,
@@ -220,8 +225,7 @@ const AssociatedRoleDetailsPage = ({
     isInstitutionalChecked,
     isDepartmentChecked,
     getAvailableLevelOptions,
-    handleLevelSelect,
-    removeAssociatedLevel,
+    syncAssociatedLevels,
     handleInstitutionalLevelChange,
     handleDepartmentLevelChange,
   } = useAssociatedLevels({
@@ -273,7 +277,7 @@ const AssociatedRoleDetailsPage = ({
       const levelResponsibilities = current[level] || [];
       return {
         ...current,
-        [level]: [...levelResponsibilities, { id: crypto.randomUUID(), text }],
+        [level]: [...levelResponsibilities, { id: createResponsibilityId(), text }],
       };
     });
     setInputValues((current) => ({ ...current, [level]: '' }));
@@ -289,7 +293,7 @@ const AssociatedRoleDetailsPage = ({
       if (mode === 'add') {
         return {
           ...current,
-          [level]: [...levelResponsibilities, { id: crypto.randomUUID(), text: trimmedText }],
+          [level]: [...levelResponsibilities, { id: createResponsibilityId(), text: trimmedText }],
         };
       } else if (mode === 'edit' && id) {
         return {
@@ -391,14 +395,7 @@ const AssociatedRoleDetailsPage = ({
           <CustomTagInput
             name="associated-levels-details"
             value={selectedAssociatedLevels}
-            onChange={(levels) => {
-              const nextLevel = levels.find((level) => !selectedAssociatedLevels.includes(level));
-              const removedLevel = selectedAssociatedLevels.find(
-                (level) => !levels.includes(level),
-              );
-              if (nextLevel) handleLevelSelect(nextLevel);
-              if (removedLevel) removeAssociatedLevel(removedLevel);
-            }}
+            onChange={syncAssociatedLevels}
             suggestions={getAvailableLevelOptions()}
             placeholder={
               isInstitutionalChecked || isDepartmentChecked
@@ -558,12 +555,24 @@ const AssociatedRoles = () => {
     isInstitutionalChecked,
     isDepartmentChecked,
     getAvailableLevelOptions,
-    handleLevelSelect,
-    removeAssociatedLevel,
+    syncAssociatedLevels,
     handleInstitutionalLevelChange,
     handleDepartmentLevelChange,
     reset: resetAssociatedLevels,
-  } = useAssociatedLevels();
+  } = useAssociatedLevels({
+    onLevelsRemoved: (levels) => {
+      setRatings((current) => {
+        const updated = { ...current };
+        levels.forEach((level) => delete updated[level]);
+        return updated;
+      });
+      setCreditPointValues((current) => {
+        const updated = { ...current };
+        levels.forEach((level) => delete updated[level]);
+        return updated;
+      });
+    },
+  });
 
   useEffect(() => {
     const shouldResetForm = (location.state as { resetForm?: boolean } | null)?.resetForm;
@@ -574,8 +583,9 @@ const AssociatedRoles = () => {
       resetAssociatedLevels();
       setRatings({});
       setCreditPointValues({});
+      navigate(location.pathname, { replace: true, state: null });
     }
-  }, [location.state, resetAssociatedLevels]);
+  }, [location.pathname, location.state, navigate, resetAssociatedLevels]);
 
   const handleAddAssociatedLevel = () => {
     navigate('/kpi/associated-add', {
@@ -636,14 +646,7 @@ const AssociatedRoles = () => {
           <CustomTagInput
             name="associated-levels"
             value={selectedAssociatedLevels}
-            onChange={(levels) => {
-              const nextLevel = levels.find((level) => !selectedAssociatedLevels.includes(level));
-              const removedLevel = selectedAssociatedLevels.find(
-                (level) => !levels.includes(level),
-              );
-              if (nextLevel) handleLevelSelect(nextLevel);
-              if (removedLevel) removeAssociatedLevel(removedLevel);
-            }}
+            onChange={syncAssociatedLevels}
             suggestions={getAvailableLevelOptions()}
             placeholder={
               isInstitutionalChecked || isDepartmentChecked

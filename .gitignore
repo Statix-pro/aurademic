@@ -21,6 +21,7 @@ build/
 
 # Local environment configuration and secrets
 .env
+.env.development
 .env.*
 !.env.example
 

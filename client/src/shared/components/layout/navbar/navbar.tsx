@@ -122,6 +122,7 @@ const IconAdmin = () => (
   >
     <rect x="9" y="2" width="6" height="5" rx="1" />
     <line x1="12" y1="7" x2="12" y2="11" />
+    <line x1="4" y1="11" x2="20" y2="11" />
     <line x1="4" y1="11" x2="4" y2="15" />
     <line x1="12" y1="11" x2="12" y2="15" />
     <line x1="20" y1="11" x2="20" y2="15" />
@@ -132,7 +133,12 @@ const IconAdmin = () => (
 );
 
 // Profile — user circle
-const IconProfile = () => <svg className="sb-icon" viewBox="0 0 24 24" fill="none"></svg>;
+const IconProfile = () => (
+  <svg className="sb-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+);
 
 // KPI — bar chart trending up
 const IconKpi = () => (

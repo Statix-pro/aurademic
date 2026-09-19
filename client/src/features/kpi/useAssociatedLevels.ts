@@ -18,7 +18,7 @@ export const useAssociatedLevels = ({ onLevelsRemoved }: UseAssociatedLevelsOpti
   ];
 
   const handleLevelSelect = (level: string) => {
-    if (level && !selectedAssociatedLevels.includes(level)) {
+    if (getAvailableLevelOptions().includes(level) && !selectedAssociatedLevels.includes(level)) {
       setSelectedAssociatedLevels((current) => [...current, level]);
     }
   };
@@ -26,6 +26,14 @@ export const useAssociatedLevels = ({ onLevelsRemoved }: UseAssociatedLevelsOpti
   const removeAssociatedLevel = (level: string) => {
     setSelectedAssociatedLevels((current) => current.filter((item) => item !== level));
     onLevelsRemoved?.([level]);
+  };
+
+  const syncAssociatedLevels = (levels: string[]) => {
+    const allowedLevels = new Set(getAvailableLevelOptions());
+    const nextLevels = levels.filter((level) => allowedLevels.has(level));
+    const removedLevels = selectedAssociatedLevels.filter((level) => !nextLevels.includes(level));
+    setSelectedAssociatedLevels(nextLevels);
+    onLevelsRemoved?.(removedLevels);
   };
 
   const handleInstitutionalLevelChange = (checked: boolean) => {
@@ -67,6 +75,7 @@ export const useAssociatedLevels = ({ onLevelsRemoved }: UseAssociatedLevelsOpti
     getAvailableLevelOptions,
     handleLevelSelect,
     removeAssociatedLevel,
+    syncAssociatedLevels,
     handleInstitutionalLevelChange,
     handleDepartmentLevelChange,
     reset,
