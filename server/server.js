@@ -9,6 +9,7 @@ import helmet from 'helmet';
 // import rateLimit from 'express-rate-limit';
 
 // routes
+import db from './config/connection.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import accountOptionsRoutes from './modules/accountOptions/accountOptionsRoutes.js';
@@ -222,6 +223,49 @@ const startNotificationDispatcher = () => {
 };
 
 /**
+ * The RBAC tables `mergeAuthorizationSnapshot` depends on, checked once at boot.
+ *
+ * Authority is read from the database on every request and no longer falls back
+ * to the token's own claims, so if these tables are missing the whole estate
+ * degrades at once: `getUserAuthorizationSnapshot` catches the missing-table
+ * error, returns a `degraded` snapshot with `isSuperAdmin` false, and every
+ * admin screen closes to everybody. That is the right answer for an authority
+ * check, but it is a terrible thing to discover from a user's 403. Checked
+ * here, it is one line in the boot log instead.
+ *
+ * Deliberately a warning and not a refusal to start: the API serves plenty that
+ * never reaches a permission check, and a half-migrated database should still
+ * come up so the migration can be finished against it. Started with the
+ * listener, not at import time, for the same reason as the dispatcher above.
+ */
+const RBAC_TABLES = ['roles', 'permissions', 'role_permissions', 'user_roles', 'user_entity_roles'];
+
+const verifyRbacSchema = async () => {
+  try {
+    const [rows] = await db.query(
+      `SELECT table_name AS name
+         FROM information_schema.tables
+        WHERE table_schema = DATABASE()
+          AND table_name IN (?)`,
+      [RBAC_TABLES],
+    );
+
+    const present = new Set(rows.map((row) => String(row.name).toLowerCase()));
+    const missing = RBAC_TABLES.filter((table) => !present.has(table));
+
+    if (missing.length > 0) {
+      console.error(
+        `RBAC tables missing: ${missing.join(', ')}. ` +
+          'Roles and permissions cannot be resolved, so every admin and super-admin ' +
+          'screen will be denied until the access-control migrations are applied.',
+      );
+    }
+  } catch (error) {
+    console.error('Could not verify the RBAC schema at startup:', error.message);
+  }
+};
+
+/**
  * iisnode recycles the worker with SIGTERM. Stopping the dispatcher on the way
  * out releases whatever outbox batch it holds a lease on, so the next worker can
  * pick the batch up at once instead of waiting out the stale-claim threshold.
@@ -239,6 +283,7 @@ const installShutdownHandlers = (server) => {
 export const startServer = (port = process.env.PORT || 5000) => {
   const server = app.listen(port, () => {
     startNotificationDispatcher();
+    verifyRbacSchema();
     console.log(`Server running on port ${port}`);
   });
   installShutdownHandlers(server);

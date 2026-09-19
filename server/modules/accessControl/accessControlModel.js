@@ -424,11 +424,17 @@ const ensureUserBaseRoleAssignment = async (userId, connection = db, assignedBy 
   return true;
 };
 
+// `degraded` tells the caller whether this snapshot is an answer or an
+// apology. Every other field is the same shape either way, so without it a
+// deleted user and an unreadable RBAC schema are indistinguishable — both
+// arrive as an empty snapshot, and a caller that falls back to the token to
+// cover the second case silently re-arms the first.
 const getEmptyAuthorizationSnapshot = () => ({
   roles: [],
   permissions: [],
   isSuperAdmin: false,
   isAdmin: false,
+  degraded: false,
 });
 
 const groupUserRows = (rows = []) => {
@@ -575,6 +581,7 @@ const accessControlModel = {
         permissions: uniqueStringArray(permissions),
         isSuperAdmin,
         isAdmin: isSuperAdmin || hasAdminRole || legacyIsAdmin,
+        degraded: false,
       };
     } catch (error) {
       if (isMissingRbacTableError(error)) {
@@ -583,6 +590,7 @@ const accessControlModel = {
           permissions: fallbackPermissions,
           isSuperAdmin: false,
           isAdmin: legacyIsAdmin,
+          degraded: true,
         };
       }
 

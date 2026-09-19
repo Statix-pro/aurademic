@@ -4873,26 +4873,14 @@ input:checked + .slider:before {
   font-weight: 600;
 }
 
-.modal-backdrop {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.15);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
+/* A hand-rolled overlay used to live here under the names `.modal` and
+   `.modal-backdrop`. Those are Bootstrap's, and no element in this feature ever
+   carried them, so the rules only ever landed on react-bootstrap's <Modal> —
+   every dialog in the app, because nothing here is lazy-loaded and all feature
+   CSS ships in one bundle.
 
-.modal {
-  background: white;
-  padding: 24px;
-  border-radius: 8px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
-  min-width: 320px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+   `.modal` is Bootstrap's full-viewport scroll container, not the white card,
+   so `background: white` painted the whole screen. It was masked only while
+   `.show` was on the element, which is why dialogs flashed white for a frame on
+   open and for the whole exit transition on close. Deleted, not renamed:
+   nothing referenced it. */

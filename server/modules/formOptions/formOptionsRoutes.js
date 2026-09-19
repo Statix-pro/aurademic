@@ -58,4 +58,26 @@ router.delete(
   formOptionsController.deleteProjectScheme,
 );
 
+// Project budget head routes (the vocabulary the project form offers)
+router.get(
+  '/project-options/budget-heads',
+  canReadFormOptions,
+  formOptionsController.getProjectBudgetHeads,
+);
+router.post(
+  '/project-options/budget-heads',
+  canEditFormOptions,
+  formOptionsController.addProjectBudgetHead,
+);
+router.put(
+  '/project-options/budget-heads/:id',
+  canEditFormOptions,
+  formOptionsController.updateProjectBudgetHead,
+);
+router.delete(
+  '/project-options/budget-heads/:id',
+  canEditFormOptions,
+  formOptionsController.deleteProjectBudgetHead,
+);
+
 export default router;

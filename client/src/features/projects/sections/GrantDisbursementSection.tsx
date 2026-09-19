@@ -101,7 +101,6 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
                     value={row.financialYear}
                     onChange={(value) => update(index, { financialYear: value })}
                     options={yearOptions}
-                    placeholder="Select"
                     disabled={disabled}
                     invalid={Boolean(errors[`disbursements[${index}].financial_year`])}
                     ariaLabel="Financial year"
@@ -123,7 +122,6 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
                       row.organizationId ? String(row.organizationId) : '',
                       row.organizationName,
                     )}
-                    placeholder="Select"
                     disabled={disabled}
                     ariaLabel="Releasing organization"
                   />

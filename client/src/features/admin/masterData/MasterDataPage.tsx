@@ -10,11 +10,13 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, FormEvent } from 'react';
-import { Table, Button, Form, Modal, Nav, Spinner, Badge } from 'react-bootstrap';
+import { Table, Button, Form, Modal, Spinner } from 'react-bootstrap';
 import AsyncSelect from 'react-select/async';
 
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomButton from '../../../shared/components/ui/CustomButton';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { AdminIconButton, AdminScreenHeader, AdminTabs } from '../components/AdminScreen';
 
 import './MasterDataPage.css';
 
@@ -287,9 +289,13 @@ export default function MasterDataPage() {
     }
   }, [deptSearch, deptTypeFilter]);
 
+  // Not `if (activeTab === 'departments')`: the tab strip shows how many rows
+  // each list holds, and a count for a list that has not been fetched is either
+  // absent or a lie. Three small requests on open buys a strip that is complete
+  // before anything is clicked.
   useEffect(() => {
-    if (activeTab === 'departments') fetchDepartments();
-  }, [activeTab, fetchDepartments]);
+    fetchDepartments();
+  }, [fetchDepartments]);
 
   const openDeptModal = (dept?: Department) => {
     if (dept) {
@@ -452,11 +458,9 @@ export default function MasterDataPage() {
   }, [entitySearch, entityTypeFilter]);
 
   useEffect(() => {
-    if (activeTab === 'entities') {
-      fetchEntityTypes();
-      fetchEntities();
-    }
-  }, [activeTab, fetchEntities, fetchEntityTypes]);
+    fetchEntityTypes();
+    fetchEntities();
+  }, [fetchEntities, fetchEntityTypes]);
 
   const openEntityModal = (entity?: Entity) => {
     if (entity) {
@@ -618,8 +622,8 @@ export default function MasterDataPage() {
   }, [empSearch, empDeptFilter, empStatusFilter, empTypeFilter, empPage]);
 
   useEffect(() => {
-    if (activeTab === 'employees') fetchEmployees();
-  }, [activeTab, fetchEmployees]);
+    fetchEmployees();
+  }, [fetchEmployees]);
 
   // Also fetch departments and entities for employee dropdowns
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
@@ -796,22 +800,20 @@ export default function MasterDataPage() {
   // ============================================
 
   const renderStatusBadge = (active: number | boolean) => (
-    <Badge className={active ? 'badge-active' : 'badge-inactive'}>
+    <span className={`admin-badge ${active ? 'admin-badge--yes' : 'admin-badge--muted'}`}>
       {active ? 'Active' : 'Inactive'}
-    </Badge>
+    </span>
   );
 
-  const renderEmpStatusBadge = (status: string) => {
-    const colorMap: Record<string, string> = {
-      Active: 'badge-active',
-      Retired: 'badge-inactive',
-      Resigned: 'badge-inactive',
-      Terminated: 'badge-inactive',
-      Relieved: 'badge-inactive',
-      'On Leave': 'bg-warning',
-    };
-    return <Badge className={colorMap[status] || 'badge-inactive'}>{status}</Badge>;
-  };
+  // Only a serving employee is a positive state; every other status — retired,
+  // resigned, on leave — is simply not serving, and reads the same quiet way.
+  const renderEmpStatusBadge = (status: string) => (
+    <span
+      className={`admin-badge ${status === 'Active' ? 'admin-badge--yes' : 'admin-badge--muted'}`}
+    >
+      {status}
+    </span>
+  );
 
   // ============================================
   // RENDER: DEPARTMENTS TAB
@@ -819,29 +821,28 @@ export default function MasterDataPage() {
 
   const renderDepartmentsTab = () => (
     <>
-      <div className="master-data-toolbar">
-        <div className="search-wrapper">
-          <Search size={16} className="search-icon" />
-          <Form.Control
-            placeholder="Search departments..."
-            value={deptSearch}
-            onChange={(e) => setDeptSearch(e.target.value)}
-          />
+      <div className="admin-toolbar">
+        <div className="admin-toolbar__filters">
+          <div className="search-wrapper">
+            <Search size={16} className="search-icon" />
+            <Form.Control
+              placeholder="Search departments..."
+              value={deptSearch}
+              onChange={(e) => setDeptSearch(e.target.value)}
+            />
+          </div>
+          <Form.Select
+            value={deptTypeFilter}
+            onChange={(e) => setDeptTypeFilter(e.target.value)}
+            style={{ maxWidth: 180 }}
+          >
+            <option value="">All Types</option>
+            <option value="Academic">Academic</option>
+            <option value="Administrative">Administrative</option>
+            <option value="Support">Support</option>
+            <option value="Research">Research</option>
+          </Form.Select>
         </div>
-        <Form.Select
-          value={deptTypeFilter}
-          onChange={(e) => setDeptTypeFilter(e.target.value)}
-          style={{ maxWidth: 180 }}
-        >
-          <option value="">All Types</option>
-          <option value="Academic">Academic</option>
-          <option value="Administrative">Administrative</option>
-          <option value="Support">Support</option>
-          <option value="Research">Research</option>
-        </Form.Select>
-        <Button className="btn-add" onClick={() => openDeptModal()}>
-          <Plus size={16} /> Add Department
-        </Button>
       </div>
 
       {deptLoading ? (
@@ -849,7 +850,7 @@ export default function MasterDataPage() {
           <Spinner animation="border" variant="primary" />
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="admin-card table-responsive">
           <Table hover>
             <thead>
               <tr>
@@ -895,7 +896,9 @@ export default function MasterDataPage() {
             <tbody>
               {departments.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>No departments found</td>
+                  <td colSpan={7} className="admin-empty">
+                    No departments found
+                  </td>
                 </tr>
               ) : (
                 getSortedData(departments, deptSort).map((dept) => (
@@ -909,41 +912,30 @@ export default function MasterDataPage() {
                     <td>{dept.hod_name || '—'}</td>
                     <td>{renderStatusBadge(dept.is_active)}</td>
                     <td>
-                      <div className="d-flex gap-1">
-                        <Button
-                          className="btn-action btn-view"
-                          size="sm"
-                          title="View"
+                      <div className="admin-actions">
+                        <AdminIconButton
+                          icon={<Eye size={16} aria-hidden="true" />}
+                          label="View"
                           onClick={() => setViewingDept(dept)}
-                        >
-                          <Eye size={14} />
-                        </Button>
-                        <Button
-                          className="btn-action btn-edit"
-                          size="sm"
-                          title="Edit"
+                        />
+                        <AdminIconButton
+                          icon={<Pencil size={16} aria-hidden="true" />}
+                          label="Edit"
                           onClick={() => openDeptModal(dept)}
-                        >
-                          <Pencil size={14} />
-                        </Button>
+                        />
                         {dept.is_active ? (
-                          <Button
-                            className="btn-action btn-delete"
-                            size="sm"
-                            title="Deactivate"
+                          <AdminIconButton
+                            icon={<Trash2 size={16} aria-hidden="true" />}
+                            label="Deactivate"
+                            variant="danger"
                             onClick={() => handleDeleteDept(dept)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                          />
                         ) : (
-                          <Button
-                            className="btn-action btn-restore"
-                            size="sm"
-                            title="Reactivate"
+                          <AdminIconButton
+                            icon={<RotateCcw size={16} aria-hidden="true" />}
+                            label="Reactivate"
                             onClick={() => handleRestoreDept(dept)}
-                          >
-                            <RotateCcw size={14} />
-                          </Button>
+                          />
                         )}
                       </div>
                     </td>
@@ -959,7 +951,7 @@ export default function MasterDataPage() {
       <Modal
         show={!!viewingDept}
         onHide={() => setViewingDept(null)}
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1015,7 +1007,7 @@ export default function MasterDataPage() {
       <Modal
         show={showDeptModal}
         onHide={() => setShowDeptModal(false)}
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1142,11 +1134,11 @@ export default function MasterDataPage() {
               )}
             </div>
           </Modal.Body>
-          <Modal.Footer className="bg-light p-3">
+          <Modal.Footer>
             <Button
-              variant="outline-secondary"
+              variant="light"
+              className="admin-btn-secondary"
               onClick={() => setShowDeptModal(false)}
-              className="px-4"
             >
               Cancel
             </Button>
@@ -1165,30 +1157,29 @@ export default function MasterDataPage() {
 
   const renderEntitiesTab = () => (
     <>
-      <div className="master-data-toolbar">
-        <div className="search-wrapper">
-          <Search size={16} className="search-icon" />
-          <Form.Control
-            placeholder="Search entities..."
-            value={entitySearch}
-            onChange={(e) => setEntitySearch(e.target.value)}
-          />
+      <div className="admin-toolbar">
+        <div className="admin-toolbar__filters">
+          <div className="search-wrapper">
+            <Search size={16} className="search-icon" />
+            <Form.Control
+              placeholder="Search entities..."
+              value={entitySearch}
+              onChange={(e) => setEntitySearch(e.target.value)}
+            />
+          </div>
+          <Form.Select
+            value={entityTypeFilter}
+            onChange={(e) => setEntityTypeFilter(e.target.value)}
+            style={{ maxWidth: 200 }}
+          >
+            <option value="">All Types</option>
+            {entityTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Form.Select>
         </div>
-        <Form.Select
-          value={entityTypeFilter}
-          onChange={(e) => setEntityTypeFilter(e.target.value)}
-          style={{ maxWidth: 200 }}
-        >
-          <option value="">All Types</option>
-          {entityTypes.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </Form.Select>
-        <Button className="btn-add" onClick={() => openEntityModal()}>
-          <Plus size={16} /> Add Entity
-        </Button>
       </div>
 
       {entityLoading ? (
@@ -1196,7 +1187,7 @@ export default function MasterDataPage() {
           <Spinner animation="border" variant="primary" />
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="admin-card table-responsive">
           <Table hover>
             <thead>
               <tr>
@@ -1236,54 +1227,45 @@ export default function MasterDataPage() {
             <tbody>
               {entities.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>No entities found</td>
+                  <td colSpan={6} className="admin-empty">
+                    No entities found
+                  </td>
                 </tr>
               ) : (
                 getSortedData(entities, entitySort).map((entity) => (
                   <tr key={entity.id} style={{ opacity: entity.is_active ? 1 : 0.6 }}>
                     <td>
-                      <Badge bg="secondary">{entity.type_name}</Badge>
+                      <span className="admin-badge admin-badge--info">{entity.type_name}</span>
                     </td>
                     <td>{entity.code || '—'}</td>
                     <td>{entity.name}</td>
                     <td>{entity.contacts?.[0]?.email || '—'}</td>
                     <td>{renderStatusBadge(entity.is_active)}</td>
                     <td>
-                      <div className="d-flex gap-1">
-                        <Button
-                          className="btn-action btn-view"
-                          size="sm"
-                          title="View"
+                      <div className="admin-actions">
+                        <AdminIconButton
+                          icon={<Eye size={16} aria-hidden="true" />}
+                          label="View"
                           onClick={() => setViewingEntity(entity)}
-                        >
-                          <Eye size={14} />
-                        </Button>
-                        <Button
-                          className="btn-action btn-edit"
-                          size="sm"
-                          title="Edit"
+                        />
+                        <AdminIconButton
+                          icon={<Pencil size={16} aria-hidden="true" />}
+                          label="Edit"
                           onClick={() => openEntityModal(entity)}
-                        >
-                          <Pencil size={14} />
-                        </Button>
+                        />
                         {entity.is_active ? (
-                          <Button
-                            className="btn-action btn-delete"
-                            size="sm"
-                            title="Deactivate"
+                          <AdminIconButton
+                            icon={<Trash2 size={16} aria-hidden="true" />}
+                            label="Deactivate"
+                            variant="danger"
                             onClick={() => handleDeleteEntity(entity)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                          />
                         ) : (
-                          <Button
-                            className="btn-action btn-restore"
-                            size="sm"
-                            title="Reactivate"
+                          <AdminIconButton
+                            icon={<RotateCcw size={16} aria-hidden="true" />}
+                            label="Reactivate"
                             onClick={() => handleRestoreEntity(entity)}
-                          >
-                            <RotateCcw size={14} />
-                          </Button>
+                          />
                         )}
                       </div>
                     </td>
@@ -1299,7 +1281,7 @@ export default function MasterDataPage() {
       <Modal
         show={!!viewingEntity}
         onHide={() => setViewingEntity(null)}
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1311,7 +1293,7 @@ export default function MasterDataPage() {
               <div className="detail-row">
                 <span className="detail-label">Entity Type</span>
                 <span className="detail-value">
-                  <Badge bg="secondary">{viewingEntity.type_name}</Badge>
+                  <span className="admin-badge admin-badge--info">{viewingEntity.type_name}</span>
                 </span>
               </div>
               <div className="detail-row">
@@ -1353,7 +1335,7 @@ export default function MasterDataPage() {
       <Modal
         show={showEntityModal}
         onHide={() => setShowEntityModal(false)}
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1461,11 +1443,11 @@ export default function MasterDataPage() {
               </div>
             </div>
           </Modal.Body>
-          <Modal.Footer className="bg-light p-3">
+          <Modal.Footer>
             <Button
-              variant="outline-secondary"
+              variant="light"
+              className="admin-btn-secondary"
               onClick={() => setShowEntityModal(false)}
-              className="px-4"
             >
               Cancel
             </Button>
@@ -1484,66 +1466,65 @@ export default function MasterDataPage() {
 
   const renderEmployeesTab = () => (
     <>
-      <div className="master-data-toolbar">
-        <div className="search-wrapper">
-          <Search size={16} className="search-icon" />
-          <Form.Control
-            placeholder="Search by name, ERP ID, email..."
-            value={empSearch}
+      <div className="admin-toolbar">
+        <div className="admin-toolbar__filters">
+          <div className="search-wrapper">
+            <Search size={16} className="search-icon" />
+            <Form.Control
+              placeholder="Search by name, ERP ID, email..."
+              value={empSearch}
+              onChange={(e) => {
+                setEmpSearch(e.target.value);
+                setEmpPage(1);
+              }}
+            />
+          </div>
+          <Form.Select
+            value={empDeptFilter}
             onChange={(e) => {
-              setEmpSearch(e.target.value);
+              setEmpDeptFilter(e.target.value);
               setEmpPage(1);
             }}
-          />
+            style={{ maxWidth: 200 }}
+          >
+            <option value="">All Departments</option>
+            {allDepartments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </Form.Select>
+          <Form.Select
+            value={empTypeFilter}
+            onChange={(e) => {
+              setEmpTypeFilter(e.target.value);
+              setEmpPage(1);
+            }}
+            style={{ maxWidth: 160 }}
+          >
+            <option value="">All Types</option>
+            <option value="Teaching">Teaching</option>
+            <option value="Non-Teaching">Non-Teaching</option>
+            <option value="Contract">Contract</option>
+            <option value="Visiting">Visiting</option>
+            <option value="Guest Faculty">Guest Faculty</option>
+          </Form.Select>
+          <Form.Select
+            value={empStatusFilter}
+            onChange={(e) => {
+              setEmpStatusFilter(e.target.value);
+              setEmpPage(1);
+            }}
+            style={{ maxWidth: 140 }}
+          >
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Retired">Retired</option>
+            <option value="Resigned">Resigned</option>
+            <option value="Relieved">Relieved</option>
+            <option value="On Leave">On Leave</option>
+          </Form.Select>
         </div>
-        <Form.Select
-          value={empDeptFilter}
-          onChange={(e) => {
-            setEmpDeptFilter(e.target.value);
-            setEmpPage(1);
-          }}
-          style={{ maxWidth: 200 }}
-        >
-          <option value="">All Departments</option>
-          {allDepartments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </Form.Select>
-        <Form.Select
-          value={empTypeFilter}
-          onChange={(e) => {
-            setEmpTypeFilter(e.target.value);
-            setEmpPage(1);
-          }}
-          style={{ maxWidth: 160 }}
-        >
-          <option value="">All Types</option>
-          <option value="Teaching">Teaching</option>
-          <option value="Non-Teaching">Non-Teaching</option>
-          <option value="Contract">Contract</option>
-          <option value="Visiting">Visiting</option>
-          <option value="Guest Faculty">Guest Faculty</option>
-        </Form.Select>
-        <Form.Select
-          value={empStatusFilter}
-          onChange={(e) => {
-            setEmpStatusFilter(e.target.value);
-            setEmpPage(1);
-          }}
-          style={{ maxWidth: 140 }}
-        >
-          <option value="">All Status</option>
-          <option value="Active">Active</option>
-          <option value="Retired">Retired</option>
-          <option value="Resigned">Resigned</option>
-          <option value="Relieved">Relieved</option>
-          <option value="On Leave">On Leave</option>
-        </Form.Select>
-        <Button className="btn-add" onClick={() => openEmpModal()}>
-          <Plus size={16} /> Add Employee
-        </Button>
       </div>
 
       {empLoading ? (
@@ -1552,7 +1533,7 @@ export default function MasterDataPage() {
         </div>
       ) : (
         <>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="admin-card table-responsive">
             <Table hover>
               <thead>
                 <tr>
@@ -1604,7 +1585,9 @@ export default function MasterDataPage() {
               <tbody>
                 {employees.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>No employees found</td>
+                    <td colSpan={8} className="admin-empty">
+                      No employees found
+                    </td>
                   </tr>
                 ) : (
                   getSortedData(employees, empSort).map((emp) => (
@@ -1624,45 +1607,34 @@ export default function MasterDataPage() {
                       <td>{emp.designation || '—'}</td>
                       <td>{emp.department_name || emp.entity_name || '—'}</td>
                       <td>
-                        <Badge bg="info">{emp.employee_type}</Badge>
+                        <span className="admin-badge admin-badge--info">{emp.employee_type}</span>
                       </td>
                       <td>{renderEmpStatusBadge(emp.status)}</td>
                       <td>
-                        <div className="d-flex gap-1">
-                          <Button
-                            className="btn-action btn-view"
-                            size="sm"
-                            title="View"
+                        <div className="admin-actions">
+                          <AdminIconButton
+                            icon={<Eye size={16} aria-hidden="true" />}
+                            label="View"
                             onClick={() => setViewingEmp(emp)}
-                          >
-                            <Eye size={14} />
-                          </Button>
-                          <Button
-                            className="btn-action btn-edit"
-                            size="sm"
-                            title="Edit"
+                          />
+                          <AdminIconButton
+                            icon={<Pencil size={16} aria-hidden="true" />}
+                            label="Edit"
                             onClick={() => openEmpModal(emp)}
-                          >
-                            <Pencil size={14} />
-                          </Button>
+                          />
                           {emp.status === 'Active' ? (
-                            <Button
-                              className="btn-action btn-delete"
-                              size="sm"
-                              title="Deactivate"
+                            <AdminIconButton
+                              icon={<Trash2 size={16} aria-hidden="true" />}
+                              label="Deactivate"
+                              variant="danger"
                               onClick={() => handleDeleteEmp(emp)}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
+                            />
                           ) : (
-                            <Button
-                              className="btn-action btn-restore"
-                              size="sm"
-                              title="Reactivate"
+                            <AdminIconButton
+                              icon={<RotateCcw size={16} aria-hidden="true" />}
+                              label="Reactivate"
                               onClick={() => handleRestoreEmp(emp)}
-                            >
-                              <RotateCcw size={14} />
-                            </Button>
+                            />
                           )}
                         </div>
                       </td>
@@ -1705,7 +1677,7 @@ export default function MasterDataPage() {
         show={!!viewingEmp}
         onHide={() => setViewingEmp(null)}
         size="lg"
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1755,7 +1727,7 @@ export default function MasterDataPage() {
               <div className="detail-row">
                 <span className="detail-label">Employee Type</span>
                 <span className="detail-value">
-                  <Badge bg="info">{viewingEmp.employee_type}</Badge>
+                  <span className="admin-badge admin-badge--info">{viewingEmp.employee_type}</span>
                 </span>
               </div>
               <div className="detail-row">
@@ -1821,8 +1793,9 @@ export default function MasterDataPage() {
         show={showEmpModal}
         onHide={() => setShowEmpModal(false)}
         size="lg"
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
+        scrollable
       >
         <Modal.Header closeButton>
           <Modal.Title>{editingEmp ? 'Edit Employee' : 'Add Employee'}</Modal.Title>
@@ -1924,7 +1897,7 @@ export default function MasterDataPage() {
               <h6 className="mb-0">Professional Details</h6>
             </div>
             <div className="row g-3">
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <Form.Group>
                   <Form.Label>Designation</Form.Label>
                   <Form.Control
@@ -2043,7 +2016,7 @@ export default function MasterDataPage() {
             </div>
 
             <div className="form-section-header mt-4 mb-3">
-              <h6 className="mb-0 text-primary">Research Identifiers (Optional)</h6>
+              <h6 className="mb-0">Research Identifiers (Optional)</h6>
             </div>
             <div className="row g-3">
               <div className="col-md-3">
@@ -2087,9 +2060,9 @@ export default function MasterDataPage() {
           </Modal.Body>
           <Modal.Footer>
             <Button
-              variant="outline-secondary"
+              variant="light"
+              className="admin-btn-secondary"
               onClick={() => setShowEmpModal(false)}
-              className="px-4"
             >
               Cancel
             </Button>
@@ -2106,43 +2079,54 @@ export default function MasterDataPage() {
   // MAIN RENDER
   // ============================================
 
+  // The one action each tab adds, in the header beside the title — the same
+  // place Project Options and the Budget Catalog put theirs.
+  const addAction: Record<TabKey, { label: string; onClick: () => void }> = {
+    departments: { label: 'Add Department', onClick: () => openDeptModal() },
+    entities: { label: 'Add Entity', onClick: () => openEntityModal() },
+    employees: { label: 'Add Employee', onClick: () => openEmpModal() },
+  };
+
   return (
-    <div className="master-data-page-wrapper">
-      <div className="master-data-management">
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h2>Master Data Management</h2>
-        </div>
+    <div className="admin-screen master-data-management">
+      <AdminScreenHeader
+        title="Master Data"
+        description="The institution's own records — the departments, centres and cells work is filed under, and the employees who staff them."
+        actions={
+          <CustomButton onClick={addAction[activeTab].onClick}>
+            <Plus size={16} aria-hidden="true" />
+            {addAction[activeTab].label}
+          </CustomButton>
+        }
+      />
 
-        <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k as TabKey)}>
-          <Nav.Item>
-            <Nav.Link eventKey="departments">Departments</Nav.Link>
-          </Nav.Item>
-          <Nav.Item>
-            <Nav.Link eventKey="entities">Entities (Centres / Cells / Clubs)</Nav.Link>
-          </Nav.Item>
-          <Nav.Item>
-            <Nav.Link eventKey="employees">Employees</Nav.Link>
-          </Nav.Item>
-        </Nav>
+      <AdminTabs<TabKey>
+        tabs={[
+          { key: 'departments', label: 'Departments', count: departments.length },
+          { key: 'entities', label: 'Entities', count: entities.length },
+          { key: 'employees', label: 'Employees', count: empTotal },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
-        {activeTab === 'departments' && renderDepartmentsTab()}
-        {activeTab === 'entities' && renderEntitiesTab()}
-        {activeTab === 'employees' && renderEmployeesTab()}
+      {activeTab === 'departments' && renderDepartmentsTab()}
+      {activeTab === 'entities' && renderEntitiesTab()}
+      {activeTab === 'employees' && renderEmployeesTab()}
 
-        <AlertModal
-          show={alertState.show}
-          type={alertState.type}
-          title={alertState.title}
-          message={alertState.message}
-          showCancel={alertState.showCancel}
-          confirmText={alertState.confirmText}
-          onConfirm={() => {
-            alertState.onConfirm?.();
-            closeAlert();
-          }}
-          onHide={closeAlert}
-        />
-      </div>
+      <AlertModal
+        show={alertState.show}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        showCancel={alertState.showCancel}
+        confirmText={alertState.confirmText}
+        onConfirm={() => {
+          alertState.onConfirm?.();
+          closeAlert();
+        }}
+        onHide={closeAlert}
+      />
     </div>
   );
 }

@@ -79,7 +79,7 @@ export function createCollaboratorRow(): CollaboratorRow {
   return {
     key: nextRowKey('collaborator'),
     category: '',
-    role: '',
+    roles: [],
     organizationId: null,
     organizationName: '',
     city: '',
@@ -124,6 +124,7 @@ export function createTransactionRow(): TransactionRow {
     referenceNo: '',
     credit: '',
     debit: '',
+    countsAsActual: true,
   };
 }
 
@@ -233,6 +234,15 @@ const text = (value: unknown): string =>
 
 const flag = (value: unknown): boolean => value === 1 || value === true || value === '1';
 
+/**
+ * A stored flag whose column default is on, so a value the response does not
+ * carry reads as on rather than off. `flag` alone answers false for a missing
+ * field, which would show every row of a ledger saved before the column existed
+ * as excluded from its own totals.
+ */
+const flagDefaultOn = (value: unknown): boolean =>
+  value === undefined || value === null ? true : flag(value);
+
 /** Dates arrive pre-formatted as `YYYY-MM-DD`; anything else is treated as empty. */
 const dateInput = (value: unknown): string => {
   const raw = text(value);
@@ -293,7 +303,12 @@ export function projectToFormState(project: any): ProjectFormState {
     ? project.collaborators.map((row: any) => ({
         ...createCollaboratorRow(),
         category: text(row.category),
-        role: text(row.role),
+        // One comma-separated column on the way in and out; a role the list no
+        // longer offers is kept as its own chip rather than dropped.
+        roles: text(row.role)
+          .split(',')
+          .map((role: string) => role.trim())
+          .filter(Boolean),
         organizationId: row.organization_id ?? null,
         organizationName: text(row.organization_name || row.organization_label),
         city: text(row.city),
@@ -371,6 +386,7 @@ export function projectToFormState(project: any): ProjectFormState {
           referenceNo: text(row.reference_no),
           credit: amountInput(row.credit),
           debit: amountInput(row.debit),
+          countsAsActual: flagDefaultOn(row.counts_as_actual),
         }));
 
         return {

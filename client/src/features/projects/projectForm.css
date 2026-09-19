@@ -289,6 +289,23 @@
   text-align: right;
 }
 
+/* The column the row's head does not normally use. Dimmed so the ordinary
+   entry lands in the other one, but not disabled: a returned advance is a
+   credit against an expenditure head and the ledger has to be able to say so.
+   Only ever applied while the field is empty (the class is dropped once it
+   holds a figure), and focusing it restores full contrast — past that point
+   the contra entry is what the user means and dimming it would just make a
+   real number hard to read. */
+.pf-input--contra {
+  background: #f4f6fa;
+  color: #97a1b5;
+}
+
+.pf-input--contra:focus {
+  background: #fbfcfe;
+  color: var(--text-main, #4f4f6e);
+}
+
 .pf-textarea {
   height: auto;
   padding: 10px 12px;
@@ -365,8 +382,6 @@
    stretching to the full card width, which reads as a mistake next to the
    fixed-width fields beside it. */
 .pf-inline-grid > .pf-inline-field--grow,
-.pf-collaborator__main > .pf-inline-field--grow,
-.pf-collaborator__org > .pf-inline-field--grow,
 .pf-collaborator__contact > .pf-inline-field--grow {
   flex: 1 1 220px;
   max-width: 440px;
@@ -381,6 +396,15 @@
 
 .pf-inline-field--tight {
   min-width: auto;
+}
+
+/* The contact strip's own balance. A contact name is the longest thing on that
+   line and the first to be clipped, so it takes what is left of it; an address
+   fits in far less than the 440px the shared grow cap allows, and letting it
+   take that was what squeezed the name. */
+.pf-inline-field--email {
+  flex: 0 1 300px;
+  min-width: 240px;
 }
 
 /* Submission Details: two rows of three fields that share their columns, so the
@@ -510,6 +534,47 @@
   color: #7d879b;
   transform: translateY(-50%);
   pointer-events: none;
+}
+
+/* The select is a text input you can type into (see `SelectField`), so it takes
+   a caret where a native select took none — but it still reads as a dropdown:
+   it keeps `.pf-select__control`'s box and chevron, and looks the same closed. */
+.pf-combo__input {
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.pf-combo__input:focus {
+  cursor: text;
+}
+
+.pf-combo__input::placeholder {
+  color: #a9b3c4;
+}
+
+/* Sticky so a heading stays legible while its own options scroll under it, the
+   way the budget-head catalog's groups run longer than the menu. */
+.pf-combo__group {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  padding: 7px 10px 4px;
+  background: #fff;
+  color: var(--text-muted, #6c757d);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Hover is not the only way in: the keyboard walks the same highlight. */
+.pf-combo__option[data-highlighted='true'] {
+  background: #f2f7ff;
+}
+
+.pf-combo__option[data-selected='true'] {
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
 }
 
 /* --------------------------------------------------------------- yes/no pill */
@@ -806,21 +871,6 @@
   min-width: 0;
 }
 
-.pf-search__clear {
-  position: absolute;
-  top: 50%;
-  right: 8px;
-  padding: 2px 6px;
-  border: 0;
-  border-radius: 6px;
-  background: #eef4fd;
-  color: var(--primary-color, #0069ab);
-  font-weight: 600;
-  font-size: 0.72rem;
-  transform: translateY(-50%);
-  cursor: pointer;
-}
-
 .pf-search__menu,
 .pf-tags__menu {
   position: absolute;
@@ -869,6 +919,17 @@
   font-size: 0.78rem;
 }
 
+/* The tag menu renders into `document.body` (see TagSelectField), so it is
+   placed against the viewport from the control's measured box rather than
+   against a positioned ancestor — inside a table there is no ancestor left to
+   position against, and the one there was cropped it. Above the modal backdrop
+   the form uses, since a picker inside a dialog has to stay on top. */
+.pf-tags__menu--floating {
+  position: fixed;
+  right: auto;
+  z-index: 1100;
+}
+
 .pf-tags__empty {
   padding: 10px;
   color: var(--text-muted, #6c757d);
@@ -906,6 +967,36 @@
   padding-right: 10px;
 }
 
+/* One line, always. Chips keep their size and the strip scrolls sideways under
+   them, so picking a fourth role cannot make the box taller and push the
+   fields beside it out of line. */
+.pf-tags--single-line .pf-tags__control {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  height: var(--pf-field-height);
+  scrollbar-width: none;
+}
+
+.pf-tags--single-line .pf-tags__control::-webkit-scrollbar {
+  display: none;
+}
+
+.pf-tags--single-line .pf-chip {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.pf-tags--single-line .pf-chip span,
+.pf-tags--single-line .pf-tags__input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-tags--single-line .pf-tags__input {
+  flex: 1 0 60px;
+}
+
 .pf-tags__input {
   flex: 1 1 120px;
   min-width: 90px;
@@ -924,11 +1015,16 @@
   color: #a9b3c4;
 }
 
+/* Centred on the control's own height, not on `.pf-tags`: the wrapper also
+   holds the error message, and the chips can wrap onto a second line, so a
+   plain `top: 50%` would drift down as either appeared. The token keeps it
+   right in the modal too, where the fields are 38px rather than 42px. */
 .pf-tags__chevron {
   position: absolute;
-  top: 20px;
+  top: calc(var(--pf-field-height, 42px) / 2);
   right: 11px;
   color: #7d879b;
+  transform: translateY(-50%);
   pointer-events: none;
 }
 
@@ -966,12 +1062,30 @@
   background: #fcfdff;
 }
 
-.pf-collaborator__main,
-.pf-collaborator__org {
-  display: flex;
-  flex-wrap: wrap;
+/* Category, Role and Organization on one line, in three columns that land at
+   the same x on every collaborator — with the wrapping flex row this replaced,
+   each row sized itself to its own content and the three pickers stepped
+   sideways down the card. City and the MoU switch take the line below, under
+   the first two columns: five labelled fields and the row buttons do not fit
+   one line on a laptop without squeezing the selects to a few characters.
+   `fr` units share the line out in proportion, which is also what stops any one
+   field stretching into the long box the wide modifier used to give it. */
+.pf-collaborator__main {
+  display: grid;
+  /* The buttons take a fixed column, not `auto`: only the last collaborator
+     carries an add button, so a content-sized column made that row's fields
+     narrower than the ones above and the three pickers no longer lined up. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1.5fr) 96px;
   gap: 12px 18px;
   align-items: center;
+}
+
+/* Pinned to the first row so the two fields below flow under the line above
+   rather than around the buttons. */
+.pf-collaborator__main > .pf-row-actions {
+  grid-row: 1;
+  grid-column: 4;
+  justify-content: flex-end;
 }
 
 .pf-collaborator__contact {
@@ -984,8 +1098,18 @@
   background: #eff5fe;
 }
 
-.pf-collaborator .pf-inline-field {
+.pf-collaborator__contact .pf-inline-field {
   min-width: 150px;
+}
+
+.pf-collaborator__main > .pf-inline-field {
+  min-width: 0;
+}
+
+/* The label still takes what it needs; the control gives way first, since the
+   row carries five of them and a label that wrapped would break the line. */
+.pf-collaborator__main > .pf-inline-field {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 /* --------------------------------------------------------------------- tables */
@@ -1038,6 +1162,20 @@
   font-size: 0.85rem;
   white-space: nowrap;
   text-align: center;
+}
+
+/* Financial Contribution and Finance Sharing. Their Budget Head(s) cell is a
+   chip list, so under the default auto layout the column grew with every head
+   picked and took the width out of the Organization column beside it — the
+   table re-flowed while it was being filled in. A fixed layout settles the
+   columns before the chips are laid out: the three below hold their pixel
+   widths, Organization and Budget Head(s) split what is left equally whatever
+   is in them, and the chips wrap inside the cell. The floor keeps both usable
+   on a narrow window, where `.pf-table-wrap` scrolls instead of crushing
+   them. */
+.pf-table--fixed {
+  table-layout: fixed;
+  min-width: 760px;
 }
 
 .pf-table__sno {
@@ -1309,6 +1447,27 @@
 .pf-ledger__detail-field .pf-input {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/* The Actuals tick sits beside Ref. No. rather than stretching like the text
+   fields do, so it takes only the width of its box and its word. */
+.pf-ledger__detail-field--check {
+  flex: 0 0 auto;
+  min-width: 0;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.pf-checkbox {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--primary-color, #0069ab);
+  cursor: pointer;
+}
+
+.pf-checkbox:disabled {
+  cursor: default;
 }
 
 /* Derived, so it is shown rather than typed — but keeps the shape of the
@@ -1585,6 +1744,17 @@
   .pf-presentation,
   .pf-sanction {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Grid columns cannot wrap, so the row is re-cut rather than squeezed: two
+     fields to a line, with the buttons back in the flow at the end. */
+  .pf-collaborator__main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 96px;
+  }
+
+  .pf-collaborator__main > .pf-row-actions {
+    grid-row: auto;
+    grid-column: auto;
   }
 }
 

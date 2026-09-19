@@ -101,7 +101,9 @@ export function buildProjectPayload(form: ProjectFormState) {
 
     collaborators: form.collaborators.map((row) => ({
       category: row.category || null,
-      role: row.role || null,
+      // `project_collaborators.role` is one column, and every screen that reads
+      // a project back renders it as written, so the picks travel joined.
+      role: row.roles.join(', ') || null,
       organization_id: row.organizationId,
       organization_name: row.organizationName || null,
       city: row.city || null,
@@ -193,6 +195,7 @@ export function buildProjectPayload(form: ProjectFormState) {
         reference_no: row.referenceNo || null,
         credit: nullableNumber(row.credit),
         debit: nullableNumber(row.debit),
+        counts_as_actual: row.countsAsActual,
       })),
     })),
 
@@ -243,6 +246,7 @@ const projectsApi = {
       schemes: response.data?.schemes ?? [],
       departments: response.data?.departments ?? [],
       accounts: response.data?.accounts ?? [],
+      budgetHeads: response.data?.budgetHeads ?? [],
     };
   },
 

@@ -3,12 +3,34 @@ import React, { useMemo } from 'react';
 import { SelectField } from '../components/FormFields';
 import RowActions from '../components/RowActions';
 import SectionCard from '../components/SectionCard';
+import TagSelectField from '../components/TagSelectField';
 import YesNoSwitch from '../components/YesNoSwitch';
-import { COLLABORATOR_CATEGORIES, MAX_COLLABORATORS } from '../constants';
+import { COLLABORATOR_CATEGORIES, COLLABORATOR_ROLES, MAX_COLLABORATORS } from '../constants';
 import { createCollaboratorRow, removeAt, replaceAt } from '../projectFormState';
 import { withSelectedOption } from '../selectOptions';
 
 import type { CollaboratorRow, ProjectFormState, ProjectOrganization } from '../types';
+
+/**
+ * Keeps a role that is not in the list selectable — the field was free text
+ * before it was a multi-select, so a project saved then still carries whatever
+ * was typed, and an edit to any other cell would otherwise save the row without
+ * it.
+ */
+const withStoredRoles = (
+  options: { value: string; label: string }[],
+  roles: string[],
+): { value: string; label: string }[] => {
+  const offered = new Set(options.map((option) => option.value));
+  const missing = roles
+    .filter((role) => !offered.has(role))
+    .map((role) => ({
+      value: role,
+      label: role,
+    }));
+
+  return missing.length > 0 ? [...missing, ...options] : options;
+};
 
 interface CollaboratorsSectionProps {
   form: ProjectFormState;
@@ -26,6 +48,11 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
   disabled,
 }) => {
   const rows = form.collaborators;
+
+  const roleOptions = useMemo(
+    () => COLLABORATOR_ROLES.map((role) => ({ value: role, label: role })),
+    [],
+  );
 
   const organizationOptions = useMemo(
     () =>
@@ -74,37 +101,27 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                     value: category,
                     label: category,
                   }))}
-                  placeholder="Select"
                   disabled={disabled}
                   ariaLabel="Collaborator category"
                 />
               </div>
 
-              <div className="pf-inline-field pf-inline-field--grow pf-inline-field--wide">
+              <div className="pf-inline-field">
                 <span className="pf-inline-field__label">Role</span>
-                <input
-                  type="text"
-                  className="pf-input"
-                  value={row.role}
-                  onChange={(event) => update(index, { role: event.target.value })}
+                <TagSelectField
+                  singleLine
+                  // A role typed in before the list existed is kept selectable,
+                  // so editing anything else on the row does not drop it.
+                  options={withStoredRoles(roleOptions, row.roles)}
+                  value={row.roles}
+                  onChange={(values) => update(index, { roles: values })}
+                  placeholder="Select role(s)"
                   disabled={disabled}
-                  aria-label="Collaborator role"
+                  emptyMessage="No matches"
                 />
               </div>
 
-              <RowActions
-                itemLabel="collaborator"
-                onAdd={() => patch({ collaborators: [...rows, createCollaboratorRow()] })}
-                showAdd={index === rows.length - 1}
-                addDisabled={rows.length >= MAX_COLLABORATORS}
-                onRemove={() => patch({ collaborators: removeAt(rows, index) })}
-                canRemove={rows.length > 1}
-                disabled={disabled}
-              />
-            </div>
-
-            <div className="pf-collaborator__org">
-              <div className="pf-inline-field pf-inline-field--grow pf-inline-field--wide">
+              <div className="pf-inline-field">
                 <span className="pf-inline-field__label">Organization</span>
                 <SelectField
                   value={row.organizationId ? String(row.organizationId) : ''}
@@ -114,7 +131,6 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                     row.organizationId ? String(row.organizationId) : '',
                     row.organizationName,
                   )}
-                  placeholder="Select Organization"
                   disabled={disabled}
                   invalid={Boolean(errors[`collaborators[${index}].organization`])}
                   ariaLabel="Collaborating organization"
@@ -143,10 +159,20 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                   label="Active MoU"
                 />
               </div>
+
+              <RowActions
+                itemLabel="collaborator"
+                onAdd={() => patch({ collaborators: [...rows, createCollaboratorRow()] })}
+                showAdd={index === rows.length - 1}
+                addDisabled={rows.length >= MAX_COLLABORATORS}
+                onRemove={() => patch({ collaborators: removeAt(rows, index) })}
+                canRemove={rows.length > 1}
+                disabled={disabled}
+              />
             </div>
 
             <div className="pf-collaborator__contact">
-              <div className="pf-inline-field">
+              <div className="pf-inline-field pf-inline-field--grow pf-inline-field--wide">
                 <span className="pf-inline-field__label pf-inline-field__label--accent">Name</span>
                 <input
                   type="text"
@@ -172,7 +198,7 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                 />
               </div>
 
-              <div className="pf-inline-field pf-inline-field--grow pf-inline-field--wide">
+              <div className="pf-inline-field pf-inline-field--email">
                 <span className="pf-inline-field__label pf-inline-field__label--accent">Email</span>
                 <input
                   type="email"

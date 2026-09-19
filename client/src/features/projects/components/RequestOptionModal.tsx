@@ -173,7 +173,7 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
                   value={organizationId}
                   onChange={setOrganizationId}
                   options={organizationOptions}
-                  placeholder="Select an existing agency"
+                  placeholder="Pick an existing agency"
                 />
               </Field>
 

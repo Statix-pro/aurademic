@@ -1,5 +1,8 @@
 import { ChevronDown, X } from 'lucide-react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
+
+import { useFloatingMenu } from './useFloatingMenu';
 
 export interface TagOption {
   value: string;
@@ -16,6 +19,12 @@ interface TagSelectFieldProps {
   error?: string;
   /** Hides the chevron and chips border for use inside a table cell. */
   compact?: boolean;
+  /**
+   * Keeps the control one line tall however many chips are in it, scrolling
+   * them sideways instead of wrapping. For a field sitting on a row of other
+   * fields, where a box that grows with each pick shifts everything beside it.
+   */
+  singleLine?: boolean;
   emptyMessage?: string;
 }
 
@@ -33,25 +42,30 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
   disabled = false,
   error,
   compact = false,
+  singleLine = false,
   emptyMessage = 'No matches',
 }) => {
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!isOpen) return undefined;
+  const suggestions = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return options.filter(
+      (option) =>
+        !value.includes(option.value) && (!needle || option.label.toLowerCase().includes(needle)),
+    );
+  }, [options, query, value]);
 
-    const handlePointerDown = (event: MouseEvent) => {
-      if (!wrapperRef.current?.contains(event.target as Node)) {
-        setIsOpen(false);
-        setQuery('');
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => document.removeEventListener('mousedown', handlePointerDown);
-  }, [isOpen]);
+  const { wrapperRef, setMenuNode, menuBox } = useFloatingMenu<HTMLUListElement>({
+    isOpen,
+    onClose: () => {
+      setIsOpen(false);
+      setQuery('');
+    },
+    // How tall the list wants to be decides which way it opens, so a list that
+    // shrinks as it is filtered — or as chips are added — is placed again.
+    contentKey: `${value.length}:${suggestions.length}`,
+  });
 
   const selectedOptions = useMemo(
     () =>
@@ -67,14 +81,6 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
     [options, value],
   );
 
-  const suggestions = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return options.filter(
-      (option) =>
-        !value.includes(option.value) && (!needle || option.label.toLowerCase().includes(needle)),
-    );
-  }, [options, query, value]);
-
   const add = (option: TagOption) => {
     onChange([...value, option.value]);
     setQuery('');
@@ -84,7 +90,9 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
 
   return (
     <div
-      className={`pf-tags ${compact ? 'pf-tags--compact' : ''} ${error ? 'pf-tags--invalid' : ''}`.trim()}
+      className={`pf-tags ${compact ? 'pf-tags--compact' : ''} ${
+        singleLine ? 'pf-tags--single-line' : ''
+      } ${error ? 'pf-tags--invalid' : ''}`.trim()}
       ref={wrapperRef}
     >
       <div className="pf-tags__control" onClick={() => !disabled && setIsOpen(true)}>
@@ -134,21 +142,34 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
         {!compact && <ChevronDown className="pf-tags__chevron" size={16} aria-hidden="true" />}
       </div>
 
-      {isOpen && !disabled && (
-        <ul className="pf-tags__menu" role="listbox">
-          {suggestions.length === 0 ? (
-            <li className="pf-tags__empty">{emptyMessage}</li>
-          ) : (
-            suggestions.slice(0, 50).map((option) => (
-              <li key={option.value}>
-                <button type="button" className="pf-tags__option" onClick={() => add(option)}>
-                  {option.label}
-                </button>
-              </li>
-            ))
-          )}
-        </ul>
-      )}
+      {isOpen &&
+        !disabled &&
+        createPortal(
+          <ul
+            className="pf-tags__menu pf-tags__menu--floating"
+            role="listbox"
+            ref={setMenuNode}
+            style={{
+              top: menuBox.top,
+              left: menuBox.left,
+              width: menuBox.width,
+              maxHeight: menuBox.maxHeight,
+            }}
+          >
+            {suggestions.length === 0 ? (
+              <li className="pf-tags__empty">{emptyMessage}</li>
+            ) : (
+              suggestions.slice(0, 50).map((option) => (
+                <li key={option.value}>
+                  <button type="button" className="pf-tags__option" onClick={() => add(option)}>
+                    {option.label}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>,
+          document.body,
+        )}
 
       {error && <span className="pf-field__error">{error}</span>}
     </div>

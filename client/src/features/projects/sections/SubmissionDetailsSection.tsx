@@ -48,7 +48,6 @@ const SubmissionDetailsSection: React.FC<SubmissionDetailsSectionProps> = ({
           value={form.submissionMode}
           onChange={(value) => patch({ submissionMode: value })}
           options={SUBMISSION_MODE_OPTIONS}
-          placeholder="Select"
           disabled={disabled}
         />
       </div>
@@ -107,7 +106,6 @@ const SubmissionDetailsSection: React.FC<SubmissionDetailsSectionProps> = ({
           value={form.proposalStatus}
           onChange={(value) => patch({ proposalStatus: value as ProposalStatus })}
           options={PROPOSAL_STATUS_OPTIONS}
-          placeholder="Select"
           disabled={disabled}
           invalid={Boolean(errors.proposal_status)}
         />

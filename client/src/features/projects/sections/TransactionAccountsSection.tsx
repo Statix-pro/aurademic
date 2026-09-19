@@ -43,6 +43,10 @@ interface TransactionAccountsSectionProps {
  */
 const DETAIL_ERROR_KEYS = ['transaction_date'];
 
+/** What unticking Actuals does, on the control itself rather than in a legend. */
+const ACTUALS_HINT =
+  'Counted in the Transaction Summary\u2019s Actuals. Untick for money that moved through the account without being spent or received against the budget \u2014 the ledger Balance still includes it.';
+
 /**
  * The Transaction tab: one block per bank account the project's money moves
  * through, each with its own ledger and its own running balance.
@@ -68,12 +72,26 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   // is as tall as the row above it, so several open at once push the figures a
   // reader is scanning down the table apart. Purely presentational, so it lives
   // here rather than in the form state that gets saved.
-  const [expandedRow, setExpandedRow] = useState<string | null>(null);
+  //
+  // `undefined` is the state before anyone has touched a toggle, which is not
+  // the same as `null` — a row deliberately collapsed. It defers to the default
+  // below rather than freezing a key at mount, because an edited project's rows
+  // arrive after this mounts.
+  const [expandedRow, setExpandedRow] = useState<string | null | undefined>(undefined);
 
-  const toggleRow = (rowKey: string) =>
-    setExpandedRow((previous) => (previous === rowKey ? null : rowKey));
+  // Until a row is picked, the ledger's first row is the open one: a fresh
+  // account's only entry still needs the date and particulars that live in the
+  // strip, and leaving it shut hides them behind a control the user has to
+  // find first.
+  const openRow =
+    expandedRow === undefined ? (blocks[0]?.transactions[0]?.key ?? null) : expandedRow;
 
-  const headOptions = useMemo(() => transactionHeadOptions(), []);
+  const toggleRow = (rowKey: string) => setExpandedRow(openRow === rowKey ? null : rowKey);
+
+  // The heads this project budgeted for, so the ledger can only be filed under
+  // a head the Budget tab has allotted — income aside, which is received rather
+  // than budgeted.
+  const headOptions = useMemo(() => transactionHeadOptions(form.budgetRows), [form.budgetRows]);
 
   const yearOptions = useMemo(
     () => financialYearOptions().map((year) => ({ value: year, label: year })),
@@ -141,7 +159,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                 // snapshot, and there is no id left to select it by — so the
                 // name shows here rather than leaving the ledger looking
                 // unattributed. Picking a live account re-links the block.
-                placeholder={block.accountName || 'Select'}
+                placeholder={block.accountName || undefined}
                 disabled={disabled}
                 invalid={Boolean(accountError)}
                 ariaLabel="Transaction account"
@@ -223,8 +241,30 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                     const hasDetailError = DETAIL_ERROR_KEYS.some(
                       (key) => errors[`${field}.${key}`],
                     );
-                    const isExpanded = expandedRow === row.key || hasDetailError;
+                    const isExpanded = openRow === row.key || hasDetailError;
                     const detailId = `${block.key}-${row.key}-detail`;
+
+                    // The head says which way money normally moves: in under an
+                    // income head, out under an expenditure one. The other
+                    // column is dimmed to steer the ordinary entry into the
+                    // right one \u2014 but it stays editable, because the reverse is
+                    // a real entry, not a mistake. A returned advance is a
+                    // credit against an expenditure head and a refunded receipt
+                    // is a debit against an income one; `buildTransactionSummary`
+                    // nets both directions on purpose, and the server's only
+                    // rule is that a row is a credit or a debit, not both.
+                    // Disabling the column made those unrecordable.
+                    const headPicked = Boolean(row.headName.trim());
+                    const creditIsContra = headPicked && row.headKind === 'expenditure';
+                    const debitIsContra = headPicked && row.headKind === 'income';
+                    // Dimmed only while empty. Once a figure is in there it is a
+                    // real amount and has to read like one.
+                    const creditDimmed = creditIsContra && !row.credit.trim();
+                    const debitDimmed = debitIsContra && !row.debit.trim();
+                    const contraHint =
+                      row.headKind === 'income'
+                        ? 'Unusual for an income head \u2014 use it for a refunded receipt. It is subtracted from this head\u2019s Actuals.'
+                        : 'Unusual for an expenditure head \u2014 use it for a returned advance or a refund. It is subtracted from this head\u2019s Actuals.';
 
                     return (
                       <React.Fragment key={row.key}>
@@ -238,7 +278,6 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                 updateRow(blockIndex, rowIndex, { financialYear: value })
                               }
                               options={yearOptions}
-                              placeholder="Select"
                               disabled={disabled}
                               invalid={Boolean(errors[`${field}.financial_year`])}
                               ariaLabel="Financial year"
@@ -257,13 +296,19 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                   });
                                   return;
                                 }
+                                // Only the head changes here. An earlier version
+                                // also emptied whichever column the new head
+                                // does not normally use, which destroyed the
+                                // amount on any contra row the moment its head
+                                // was re-picked \u2014 including a rename between two
+                                // expenditure heads, where nothing about the
+                                // row's direction had changed at all.
                                 updateRow(blockIndex, rowIndex, {
                                   ...parseHeadIdentity(value),
                                   headName: option.label,
                                 });
                               }}
                               options={withSelectedOption(headOptions, selectedHead, row.headName)}
-                              placeholder="Select"
                               disabled={disabled}
                               invalid={Boolean(errors[`${field}.head`])}
                               ariaLabel="Budget head"
@@ -274,12 +319,13 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                             <input
                               type="text"
                               inputMode="decimal"
-                              className={`pf-input pf-input--amount ${errors[`${field}.amount`] || errors[`${field}.credit`] ? 'is-invalid' : ''}`.trim()}
+                              className={`pf-input pf-input--amount ${creditDimmed ? 'pf-input--contra' : ''} ${errors[`${field}.amount`] || errors[`${field}.credit`] ? 'is-invalid' : ''}`.trim()}
                               value={row.credit}
                               onChange={(event) =>
                                 updateRow(blockIndex, rowIndex, { credit: event.target.value })
                               }
                               disabled={disabled}
+                              title={creditIsContra ? contraHint : undefined}
                               aria-label="Credit"
                             />
                           </td>
@@ -288,12 +334,13 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                             <input
                               type="text"
                               inputMode="decimal"
-                              className={`pf-input pf-input--amount ${errors[`${field}.amount`] || errors[`${field}.debit`] ? 'is-invalid' : ''}`.trim()}
+                              className={`pf-input pf-input--amount ${debitDimmed ? 'pf-input--contra' : ''} ${errors[`${field}.amount`] || errors[`${field}.debit`] ? 'is-invalid' : ''}`.trim()}
                               value={row.debit}
                               onChange={(event) =>
                                 updateRow(blockIndex, rowIndex, { debit: event.target.value })
                               }
                               disabled={disabled}
+                              title={debitIsContra ? contraHint : undefined}
                               aria-label="Debit"
                             />
                           </td>
@@ -426,6 +473,29 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                   }
                                   disabled={disabled}
                                 />
+                              </label>
+
+                              {/* On by default, so the ordinary entry needs no
+                                  thought: unticking is the exception, for money
+                                  that moved through the account without being
+                                  what the project spent or received against its
+                                  budget. */}
+                              <label
+                                className="pf-ledger__detail-field pf-ledger__detail-field--check"
+                                title={ACTUALS_HINT}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="pf-checkbox"
+                                  checked={row.countsAsActual}
+                                  onChange={(event) =>
+                                    updateRow(blockIndex, rowIndex, {
+                                      countsAsActual: event.target.checked,
+                                    })
+                                  }
+                                  disabled={disabled}
+                                />
+                                <span className="pf-ledger__detail-label">Actuals</span>
                               </label>
                             </div>
                           </td>

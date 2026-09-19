@@ -1,0 +1,650 @@
+/**
+ * The shared shell for the admin master-data screens — Project Options, Master
+ * Data and the Budget Catalog.
+ *
+ * Each of those three grew its own page furniture: one had a navy table header
+ * and three filled round buttons per row, one had bootstrap's card tabs and a
+ * pale blue header, one had neither. They do the same job — a header, a set of
+ * lists to switch between, a toolbar and a table of rows you edit — so they
+ * look the same doing it, and a new screen gets the look by using these classes
+ * rather than by inventing a fourth.
+ *
+ * Every colour, size, radius and gap below comes from a token in
+ * `shared/styles/variables.css`. Nothing here picks its own value, so the three
+ * screens cannot drift apart again one hand-typed hex at a time.
+ */
+
+/* A grid rather than a column of stacked blocks, for one reason: the tab strip
+   and the toolbar that follows it belong on the same line. A search box is a
+   filter on the list the tabs choose, so it reads as part of that control —
+   given a row of its own it looked like a second, unrelated section, and cost
+   a band of empty page before the table even started. */
+.admin-screen {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: var(--space-5);
+  /* The app shell adds no padding of its own, so the gutter belongs here:
+     content never runs into the sidebar, the top bar or the window edge. */
+  padding: var(--space-7) var(--space-7) var(--space-8);
+}
+
+/* Rendered inside another screen's panel — the admin dashboard's tab, say —
+   where the gutter is already the panel's to give. Only the frame changes:
+   everything the screen puts inside it keeps its own spacing. */
+.admin-screen--embedded {
+  padding: 0;
+}
+
+/* Every block runs the width of the page... */
+.admin-screen > * {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+/* ...except those two, which share the row: tabs left, filters right. The
+   pairing is the adjacency — a screen with no toolbar, or one still loading,
+   simply doesn't match, and its tab strip keeps the row to itself. */
+.admin-screen > .admin-tabs {
+  grid-column: 1;
+}
+
+.admin-screen > .admin-tabs + .admin-toolbar {
+  grid-column: 2;
+  justify-content: flex-end;
+}
+
+/* The embedded screen's single action, on the tab strip's row. Same pairing as
+   the toolbar above — it is the element after the tabs, right-aligned in the
+   column the tabs do not take. */
+.admin-screen > .admin-tabs + .admin-screen__tab-actions {
+  grid-column: 2;
+  justify-content: flex-end;
+}
+
+.admin-screen > .admin-tabs + .admin-toolbar .admin-toolbar__filters {
+  /* Fills the right column and packs its controls against the far edge. It has
+     to fill it rather than hug: a content-sized row gives `.form-control` no
+     width to resolve its `width: 100%` against, so the box falls back to the
+     ~200px an <input> is wide by default and `max-width` never binds. */
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+/* ------------------------------------------------------------------ header */
+
+.admin-screen__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-6);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+/* Enough room for the sentence under the title to read as prose rather than as
+   three ragged lines beside the button. */
+.admin-screen__heading {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+
+.admin-screen__title {
+  margin: 0;
+  color: var(--primary-color);
+  font-weight: 700;
+  font-size: var(--font-xl);
+}
+
+.admin-screen__subtitle {
+  max-width: 78ch;
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-md);
+}
+
+.admin-screen__header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* Header buttons at the screen's scale, not bootstrap's. `.btn` ships a 1rem
+   label and `.custom-btn` a 24px gutter either side, which on a page set in
+   --font-md made Refresh and New Head the largest things on it — louder than
+   the title. Sized like the tab strip they sit above, they read as actions. */
+.admin-screen__header-actions .custom-btn {
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-md);
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------------------------- tabs */
+
+/* One control, not a row of loose buttons or bootstrap's file-folder tabs: the
+   segmented track says these lists are alternatives to each other. */
+.admin-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  /* A flex child stretches by default, which spread the track across the page
+     and left the tabs floating in it. It is a control: it is as wide as its
+     tabs. */
+  align-self: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-md);
+  background: var(--surface-muted);
+}
+
+.admin-tab {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-2) var(--space-4);
+  border: 0;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-soft);
+  font-weight: 600;
+  font-size: var(--font-md);
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+  cursor: pointer;
+}
+
+.admin-tab:hover:not(.is-active) {
+  background: var(--tint-primary-bg);
+  color: var(--primary-color);
+}
+
+.admin-tab.is-active {
+  background: var(--bg-surface);
+  color: var(--primary-color);
+  box-shadow: var(--shadow-raised);
+}
+
+/* ------------------------------------------------------- nested tab strip */
+
+/* A screen rendered inside another screen's tab — Project Options in the admin
+   dashboard — would otherwise run the same pill strip as the tabs that opened
+   it, twice over, one under the other. Two identical controls stacked say
+   nothing about which contains which; they just look like a mistake.
+   Nested, the strip drops the track and becomes underlined text: still the
+   same component and the same behaviour, just quieter, so the pill above it
+   reads as the page and this reads as a section of it. */
+.admin-screen--embedded .admin-tabs {
+  gap: var(--space-5);
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: none;
+  /* Full width, so the rule under it runs the page rather than stopping with
+     the last tab. */
+  align-self: stretch;
+}
+
+.admin-screen--embedded .admin-tab {
+  padding: var(--space-2) var(--space-1);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  /* Sits on the rule above, so the active underline replaces it. */
+  margin-bottom: -1px;
+  font-size: var(--font-sm);
+}
+
+.admin-screen--embedded .admin-tab:hover:not(.is-active) {
+  border-bottom-color: var(--border-input);
+  background: none;
+}
+
+.admin-screen--embedded .admin-tab.is-active {
+  border-bottom-color: var(--primary-color);
+  background: none;
+  box-shadow: none;
+}
+
+/* Quieter than the pill's badge, which had a filled chip to sit against. */
+.admin-screen--embedded .admin-tab__count {
+  background: none;
+  color: var(--text-muted);
+}
+
+/* The count rides in the tab, so the size of each list is legible before it is
+   opened. */
+.admin-tab__count {
+  min-width: var(--space-6);
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  background: var(--tint-neutral-bg);
+  color: var(--text-soft);
+  font-weight: 700;
+  font-size: var(--font-2xs);
+}
+
+.admin-tab.is-active .admin-tab__count {
+  background: var(--tint-primary-bg);
+  color: var(--primary-color);
+}
+
+/* ----------------------------------------------------------------- toolbar */
+
+/* Search and filters on the left, the action that adds a row on the right. */
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.admin-toolbar__filters {
+  display: flex;
+  flex: 1 1 320px;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+/* The search box is the one control people type a whole name into, so it gets
+   the room for one. The selects beside it hold a phrase at most. */
+.admin-toolbar__filters .form-control {
+  max-width: 260px;
+}
+
+.admin-toolbar__filters .form-select {
+  max-width: 220px;
+  /* The same lucide `chevron-down` the dialogs use, so a dropdown reads as one
+     everywhere. `!important` on the padding because `forms.css` sets
+     `.form-select { padding: 0.4rem 1rem !important }` globally. */
+  padding: 0 var(--space-8) 0 var(--space-3) !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2351607a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  background-size: 16px 16px;
+}
+
+.admin-toolbar__filters .form-control,
+.admin-toolbar__filters .form-select {
+  height: var(--control-height);
+  border: 1px solid var(--border-input);
+  border-radius: var(--border-radius-sm);
+  /* `background-color`, never the `background` shorthand: the shorthand resets
+     `background-image` too, and a select's dropdown chevron IS its background
+     image. Without it the control looks like a text box. */
+  background-color: var(--bg-surface);
+  font-size: var(--font-lg);
+}
+
+.admin-toolbar__filters .form-control:focus,
+.admin-toolbar__filters .form-select:focus {
+  border-color: var(--hover-primary-border);
+  box-shadow: var(--shadow-focus);
+}
+
+/* ------------------------------------------------------------------- table */
+
+.admin-card {
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.admin-card .table {
+  margin-bottom: 0;
+}
+
+.admin-card .table > thead th {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-header);
+  color: var(--text-body);
+  font-weight: 600;
+  font-size: var(--font-xs);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.admin-card .table > tbody td {
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  border-bottom: 0;
+  color: var(--text-body);
+  font-size: var(--font-lg);
+  vertical-align: middle;
+}
+
+.admin-card .table > tbody tr:first-child td {
+  border-top: 0;
+}
+
+/* A switch in a cell is just the switch. Bootstrap builds its wrapper around a
+   label that is not there — reserved height, a margin under it, and a 2.5em
+   indent the input is pulled back across — which padded out every row carrying
+   one. Laid out as a flex box the wrapper is exactly its own size.
+
+   Both wrapper classes, because react-bootstrap only adds `form-check` to a
+   `<Form.Check>` that has a label: a bare switch in a table cell comes out as
+   `form-switch` alone, so a rule keyed on `.form-check` silently matches
+   nothing here. */
+.admin-card .table > tbody .form-check,
+.admin-card .table > tbody .form-switch {
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding-left: 0;
+  margin-bottom: 0;
+}
+
+.admin-card .table > tbody .form-check-input {
+  float: none;
+  margin: 0;
+  /* It toggles the row on click, so it says so on hover. Bootstrap sets a
+     cursor on the label only, and these switches have no label. */
+  cursor: pointer;
+}
+
+.admin-card .table > tbody .form-check-input:disabled {
+  cursor: not-allowed;
+}
+
+/* Bootstrap sizes a switch in `em` off the cell's type, which left it smaller
+   than the icon buttons across the row. A row's one toggle is worth a real
+   target — and the thumb is a background image sized `contain`, so it scales
+   with the track. */
+.admin-card .table > tbody .form-switch .form-check-input {
+  width: var(--space-8);
+  height: var(--space-5);
+}
+
+.admin-card .table > tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
+/* The buttons sit at the end of the row, so their heading does too. */
+.admin-card .table > thead th:last-child {
+  text-align: right;
+}
+
+/* A heading row inside the body — the Budget Catalog groups its heads under
+   one. It is a label, not a record, so it does not light up on hover. */
+.admin-card .table > tbody tr.admin-group-row td,
+.admin-card .table > tbody tr.admin-group-row:hover td {
+  background: var(--tint-primary-bg);
+  color: var(--primary-color);
+  font-weight: 700;
+  font-size: var(--font-sm);
+  letter-spacing: 0.02em;
+}
+
+.admin-name {
+  color: var(--text-strong);
+  font-weight: 600;
+}
+
+.admin-muted {
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------------------------ badges */
+
+.admin-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: var(--font-2xs);
+  line-height: var(--space-5);
+  white-space: nowrap;
+}
+
+/* Trailing a name rather than standing in its own column. */
+.admin-badge--trailing {
+  margin-left: var(--space-2);
+}
+
+.admin-badge--info {
+  background: var(--tint-primary-bg);
+  color: var(--tint-primary-fg);
+}
+
+.admin-badge--muted,
+.admin-badge--no {
+  background: var(--tint-neutral-bg);
+  color: var(--tint-neutral-fg);
+}
+
+.admin-badge--yes {
+  background: var(--tint-success-bg);
+  color: var(--tint-success-fg);
+}
+
+/* ------------------------------------------------------------- row actions */
+
+/* Ghost buttons, not filled blocks. Filled ones read as three competing calls
+   to action on every row, and a solid fill behind a white icon hid the icon
+   itself. */
+.admin-actions {
+  display: flex;
+  gap: var(--space-1);
+  justify-content: flex-end;
+}
+
+.admin-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 32px around a 16px icon. At 40px these were the tallest thing in a row, so
+     they, not the text, decided how far apart the records sat. */
+  width: var(--space-7);
+  height: var(--space-7);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-soft);
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+  cursor: pointer;
+}
+
+.admin-icon-btn:hover,
+.admin-icon-btn:focus-visible {
+  border-color: var(--hover-primary-border);
+  background: var(--hover-primary-bg);
+  color: var(--primary-color);
+  outline: none;
+}
+
+.admin-icon-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.admin-icon-btn--danger:hover:not(:disabled),
+.admin-icon-btn--danger:focus-visible:not(:disabled) {
+  border-color: var(--hover-danger-border);
+  background: var(--tint-danger-bg);
+  color: var(--tint-danger-fg);
+}
+
+/* ------------------------------------------------------------ empty state */
+
+.admin-empty {
+  padding: var(--space-8) var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--font-lg);
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------- modal */
+
+/* The shared `lg` modal is 80% of the window, which for a handful of short
+   fields leaves a band of empty dialog either side of them.
+
+   The second selector is for a dialog built on `CustomModal`, which defaults to
+   `size="lg"` and so comes out carrying `.custom-modal .modal-dialog.modal-lg`
+   — 80% of the window, declared `!important`. Only a longer selector outranks
+   it, and it is qualified by `.custom-modal` so it cannot reach the Master Data
+   employee dialog, which is a plain `lg` modal widened to 960px on purpose. */
+.admin-modal .modal-dialog,
+.admin-modal.custom-modal .modal-dialog.modal-lg {
+  max-width: 620px !important;
+  width: 100% !important;
+}
+
+/* A dialog's header and footer are its furniture, not its form's, so they are
+   the same size whichever screen opened it. They used to be set per screen,
+   which is why trimming the employee dialog left the Budget Catalog's bars
+   sitting a good deal taller than everything beside them.
+
+   Matched one class deeper than the bar itself — under `.modal-content` —
+   because `CustomModal` ships `.custom-modal .modal-header`, `.modal-title` and
+   `.modal-footer` rules of its own at the same specificity as these. Left as a
+   tie, which padding a dialog got would depend on the order the two stylesheets
+   happened to land in the bundle. */
+.admin-modal .modal-content .modal-header {
+  padding: var(--space-3) var(--space-5);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.admin-modal .modal-content .modal-title {
+  color: var(--text-strong);
+  font-weight: 700;
+  /* Bigger than the fields under it, smaller than the page heading behind it. */
+  font-size: var(--font-lead);
+  /* The title's line box is what the header's height actually comes out of, so
+     it is pinned here too: `CustomModal` tightens it to 1.2 and pulls it up 2px,
+     which left the same bar 44px tall on a dialog built that way and 51px on a
+     plain one. */
+  line-height: 1.5;
+  margin-top: 0;
+}
+
+.admin-modal .modal-body {
+  padding: var(--space-5) var(--space-6) var(--space-4);
+}
+
+/* `features/events/styles/EventForm.css` declares `form { display: flex;
+   flex-direction: column; gap: 20px }` with no scope at all, and it ships in the
+   same stylesheet as everything else — so a dialog's form is a flex column with
+   20px between its blocks. The fields already carry their own spacing and the
+   switch row its own rule above, so that gap only opens a band of empty dialog
+   in the middle of the form. */
+.admin-modal .modal-body > form {
+  gap: 0;
+}
+
+.admin-modal .custom-input-group {
+  margin-bottom: var(--space-4);
+}
+
+.admin-modal .modal-content .modal-footer {
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-5);
+  border-top: 1px solid var(--border-subtle);
+  background-color: var(--surface-subtle);
+}
+
+/* Bootstrap gives each footer child a 4px margin for the gaps between them.
+   The footer already sets `gap`, so that margin only makes the bar taller. */
+.admin-modal .modal-footer > * {
+  margin: 0;
+}
+
+/* The secondary button — Cancel in a dialog, Refresh in a header. A global
+   `.btn { color: white }` sits later in the cascade than anything a single
+   class here can say, so a light button renders white on white; qualified by
+   the screen or the dialog it sits in, it outranks that without reaching for
+   !important. */
+.admin-screen .admin-btn-secondary,
+.admin-modal .admin-btn-secondary {
+  border: 1px solid var(--border-input);
+  background: var(--bg-surface);
+  color: var(--text-soft);
+}
+
+.admin-screen .admin-btn-secondary:hover,
+.admin-screen .admin-btn-secondary:focus-visible,
+.admin-modal .admin-btn-secondary:hover,
+.admin-modal .admin-btn-secondary:focus-visible {
+  border-color: var(--hover-primary-border);
+  background: var(--surface-muted);
+  color: var(--text-body);
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 var(--space-5);
+}
+
+.admin-form-grid .admin-field--full {
+  grid-column: 1 / -1;
+}
+
+.admin-hint {
+  margin: calc(var(--space-2) * -1) 0 var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--font-sm);
+  line-height: 1.45;
+}
+
+.admin-switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-7);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.admin-switches:empty {
+  display: none;
+}
+
+@media (width <= 768px) {
+  .admin-screen {
+    grid-template-columns: minmax(0, 1fr);
+    padding: var(--space-5) var(--space-4) var(--space-7);
+  }
+
+  /* Too narrow to share a line: the toolbar drops back under the tabs and the
+     search box takes the width, the way it does on its own row. */
+  .admin-screen > .admin-tabs,
+  .admin-screen > .admin-tabs + .admin-toolbar {
+    grid-column: 1 / -1;
+  }
+
+  .admin-screen > .admin-tabs + .admin-toolbar {
+    justify-content: flex-start;
+  }
+
+  .admin-screen > .admin-tabs + .admin-toolbar .admin-toolbar__filters {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+  }
+
+  .admin-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-tabs {
+    width: 100%;
+  }
+
+  .admin-tab {
+    flex: 1;
+    justify-content: center;
+  }
+}

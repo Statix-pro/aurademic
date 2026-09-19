@@ -33,6 +33,8 @@ import SanctionDetailsSection from './sections/SanctionDetailsSection';
 import SubmissionDetailsSection from './sections/SubmissionDetailsSection';
 import TransactionAccountsSection from './sections/TransactionAccountsSection';
 import TransactionSummarySection from './sections/TransactionSummarySection';
+import { financeOrganizations } from './selectOptions';
+import AlertModal from '../../shared/components/ui/AlertModal';
 
 import type { ProjectFormTab } from './constants';
 import type {
@@ -49,6 +51,7 @@ const emptyLookups: ProjectLookups = {
   schemes: [],
   departments: [],
   accounts: [],
+  budgetHeads: [],
 };
 
 /**
@@ -146,6 +149,13 @@ const ProjectForm: React.FC = () => {
   const [lookups, setLookups] = useState<ProjectLookups>(emptyLookups);
   const [access, setAccess] = useState<ProjectAccess | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // What went wrong with the last save, as the dialog says it. The per-field
+  // messages in `errors` still mark every offending field in place; this is the
+  // summary that fronts them, because the Save button sits at the foot of a
+  // long form and a message beside it would be read after the fact, if at all.
+  const [saveProblem, setSaveProblem] = useState<{ title: string; messages: string[] } | null>(
+    null,
+  );
   const [status, setStatus] = useState<'loading' | 'ready' | 'saving'>('loading');
   const [loadError, setLoadError] = useState('');
   const [saveMessage, setSaveMessage] = useState('');
@@ -207,6 +217,25 @@ const ProjectForm: React.FC = () => {
   // locked.
   const isConcluded =
     isSelected && (form.projectStatus === 'completed' || form.projectStatus === 'closed');
+
+  // The two finance tables record money moving between this project's own
+  // parties, so they offer those rather than the whole master list — see
+  // `financeOrganizations`. Derived from the form, so adding a collaborator
+  // makes it selectable on both tables straight away.
+  const financeParties = useMemo(
+    () =>
+      financeOrganizations(lookups.organizations, {
+        fundingOrganizationId: form.fundingOrganizationId,
+        collaborators: form.collaborators,
+        collaboratorsEnabled: form.collaboratorsEnabled,
+      }),
+    [
+      lookups.organizations,
+      form.fundingOrganizationId,
+      form.collaborators,
+      form.collaboratorsEnabled,
+    ],
+  );
 
   const patch = useCallback(
     (changes: Partial<ProjectFormState>) => setForm((previous) => ({ ...previous, ...changes })),
@@ -346,8 +375,17 @@ const ProjectForm: React.FC = () => {
 
     const [firstField] = Object.keys(validationErrors);
     if (firstField) {
+      // The tab carrying the first problem, so dismissing the dialog leaves the
+      // marked fields on screen rather than on a tab nobody was looking at.
       setActiveTab(tabForField(firstField));
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const messages = Object.values(validationErrors);
+      setSaveProblem({
+        title:
+          messages.length === 1
+            ? '1 item needs attention'
+            : `${messages.length} items need attention`,
+        messages,
+      });
       return;
     }
 
@@ -367,6 +405,11 @@ const ProjectForm: React.FC = () => {
     } catch (error) {
       setStatus('ready');
 
+      const fieldMessages =
+        error instanceof ProjectSaveError && error.fieldErrors.length > 0
+          ? error.fieldErrors.map((fieldError) => fieldError.message)
+          : [];
+
       if (error instanceof ProjectSaveError && error.fieldErrors.length > 0) {
         setErrors(
           error.fieldErrors.reduce<Record<string, string>>((map, fieldError) => {
@@ -379,18 +422,13 @@ const ProjectForm: React.FC = () => {
 
       setLoadError('');
       setSaveMessage('');
-      setErrors((previous) => ({
-        ...previous,
-        __form: (error as Error).message || 'The project could not be saved.',
-      }));
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      const summary = (error as Error).message || 'The project could not be saved.';
+      setErrors((previous) => ({ ...previous, __form: summary }));
+      // The server's own account of the failure, with whatever it named field
+      // by field underneath it.
+      setSaveProblem({ title: 'Could not save', messages: [summary, ...fieldMessages] });
     }
   };
-
-  const errorList = useMemo(
-    () => Object.entries(errors).filter(([field]) => field !== '__form'),
-    [errors],
-  );
 
   if (status === 'loading') {
     return (
@@ -437,21 +475,28 @@ const ProjectForm: React.FC = () => {
           </div>
         )}
 
-        {(errors.__form || errorList.length > 0) && (
-          <div className="pf-banner pf-banner--error">
-            <AlertCircle size={18} aria-hidden="true" />
-            <div>
-              <strong>{errors.__form || 'Please correct the highlighted fields.'}</strong>
-              {errorList.length > 0 && (
-                <ul className="pf-banner__list">
-                  {errorList.map(([field, message]) => (
-                    <li key={field}>{message}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        )}
+        {/* A failed save is reported in a dialog rather than a strip up here:
+            the Save button is at the foot of a long, tabbed form, and the page
+            scrolls inside the layout's `.app-content`, so a banner at the top
+            of the page opened where nobody standing at the button could see it.
+            The fields themselves stay marked underneath — the dialog names what
+            is wrong, the form still shows where. */}
+        <AlertModal
+          show={Boolean(saveProblem)}
+          onHide={() => setSaveProblem(null)}
+          type="warning"
+          title={saveProblem?.title}
+          message={
+            <>
+              <div className="mb-2">Please fix the following before saving:</div>
+              <ul className="mb-0 ps-3">
+                {saveProblem?.messages.map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+            </>
+          }
+        />
 
         {/* One form across every tab: switching tab only changes what is on
             screen, and the single Save below writes the whole project. */}
@@ -526,7 +571,8 @@ const ProjectForm: React.FC = () => {
               onChange={(rows) => patch({ financialContributions: rows })}
               enabled={form.financialContributionEnabled}
               onToggle={(enabled) => patch({ financialContributionEnabled: enabled })}
-              organizations={lookups.organizations}
+              organizations={financeParties}
+              budgetHeads={lookups.budgetHeads}
               errors={errors}
               disabled={isReadOnly}
             />
@@ -538,7 +584,8 @@ const ProjectForm: React.FC = () => {
               onChange={(rows) => patch({ financeSharing: rows })}
               enabled={form.financeSharingEnabled}
               onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
-              organizations={lookups.organizations}
+              organizations={financeParties}
+              budgetHeads={lookups.budgetHeads}
               errors={errors}
               disabled={isReadOnly}
             />
@@ -673,6 +720,7 @@ const ProjectForm: React.FC = () => {
             <BudgetAllotmentSection
               form={form}
               patch={patch}
+              budgetHeads={lookups.budgetHeads}
               errors={errors}
               disabled={isReadOnly}
             />

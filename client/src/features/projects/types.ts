@@ -67,7 +67,12 @@ export interface InvestigatorRow {
 export interface CollaboratorRow {
   key: string;
   category: string;
-  role: string;
+  /**
+   * The parts a collaborator plays, several at once. Stored as one
+   * comma-separated string in `project_collaborators.role`, which is what every
+   * screen that reads a project back renders.
+   */
+  roles: string[];
   organizationId: number | null;
   organizationName: string;
   city: string;
@@ -132,6 +137,13 @@ export interface TransactionRow {
   referenceNo: string;
   credit: string;
   debit: string;
+  /**
+   * Whether this row is counted in the Transaction Summary's Actuals. On by
+   * default; an internal transfer or a correction entry is real money in the
+   * account but not what the project spent against its budget. The ledger's own
+   * running Balance ignores this — the cash position is the cash position.
+   */
+  countsAsActual: boolean;
 }
 
 /** A bank account the project's money moves through, with its own ledger. */
@@ -270,11 +282,20 @@ export interface AccountOption {
   name: string;
 }
 
+/** A head from the admin-curated `project_budget_head_options` vocabulary. */
+export interface BudgetHeadOption {
+  id: number;
+  name: string;
+  /** The vocabulary it is offered under — 'Research Projects', say. */
+  head_group: string;
+}
+
 export interface ProjectLookups {
   organizations: ProjectOrganization[];
   schemes: ProjectScheme[];
   departments: DepartmentOption[];
   accounts: AccountOption[];
+  budgetHeads: BudgetHeadOption[];
 }
 
 export interface EmployeeSearchResult {

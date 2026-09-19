@@ -283,6 +283,10 @@ const projectController = {
         rowKeysWithDocuments: staged.documents
           .filter((document) => document.scope === 'disbursement' && document.rowKey)
           .map((document) => document.rowKey),
+        // The curated vocabulary decides the case a submitted head is stored
+        // in, so a project's allotment row and its ledger lines group together
+        // however the client cased them.
+        budgetHeadNames: await projectModel.listBudgetHeadNames(),
       });
 
       const allErrors = [...errors, ...staged.errors];

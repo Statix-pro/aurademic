@@ -30,7 +30,6 @@ const ResultAnnouncementSection: React.FC<ResultAnnouncementSectionProps> = ({
           value={form.resultMode}
           onChange={(value) => patch({ resultMode: value })}
           options={RESULT_MODE_OPTIONS}
-          placeholder="Select"
           disabled={disabled}
         />
       </div>
@@ -58,7 +57,6 @@ const ResultAnnouncementSection: React.FC<ResultAnnouncementSectionProps> = ({
           value={form.finalResult}
           onChange={(value) => patch({ finalResult: value as FinalResult })}
           options={FINAL_RESULT_OPTIONS}
-          placeholder="Select"
           disabled={disabled}
           invalid={Boolean(errors.final_result)}
         />

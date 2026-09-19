@@ -83,65 +83,37 @@ export const DOCUMENT_UPLOAD_DIRS = {
 export const TRANSACTION_HEAD_KINDS = ['expenditure', 'income'];
 
 /**
- * The income side of the ledger: the standard ways money reaches a project
- * account. A fixed vocabulary rather than institution data, so — as with the
- * expenditure heads in `PROJECT_BUDGET_HEAD_GROUPS` below, and the SDG list on
- * the client — it lives in code instead of a master table nobody would curate.
+ * The income side of the ledger: the four ways money reaches a project account,
+ * which is a closed list rather than institution data — unlike the expenditure
+ * heads below, which an administrator curates. Validated here, so a ledger row
+ * can only be filed under one of them.
  */
 export const PROJECT_INCOME_HEADS = ['Deposit', 'Interest', 'Grant Received', 'Other Income'];
 
 /**
- * The expenditure heads a project budgets against. Mirrors
- * `PROJECT_BUDGET_HEAD_GROUPS` in `client/src/features/projects/constants.ts`,
- * which renders them; the reasoning for keeping them out of the `budget_heads`
- * catalog is written up there.
- */
-export const PROJECT_BUDGET_HEAD_GROUPS = [
-  {
-    label: 'Research Projects',
-    heads: [
-      'Equipment',
-      'Consumables',
-      'Manpower',
-      'Contingencies',
-      'Overhead Charges',
-      'Travel',
-      'Field Work',
-      'Other Costs',
-    ],
-  },
-  {
-    label: 'Sponsored Events',
-    heads: [
-      'Honorarium',
-      'Consumables',
-      'Travel Allowance',
-      'Food & Refreshment',
-      'Registration Kit',
-      'Printing',
-      'Stationery',
-      'Administrative Expenses',
-      'Boarding Expenses',
-      'Lodging Expenses',
-    ],
-  },
-];
-
-export const PROJECT_BUDGET_HEADS = [
-  ...new Set(PROJECT_BUDGET_HEAD_GROUPS.flatMap((group) => group.heads)),
-];
-
-/**
  * Resolves a submitted head to the name it is stored under, matched
  * case-insensitively so a name that only differs in case is not saved as a
- * second head. Returns '' for anything outside the vocabulary.
+ * second head on the same project. Returns '' for anything outside the
+ * vocabulary.
+ *
+ * The vocabulary is `project_budget_head_options`, curated in the admin and
+ * passed in by the caller — the heads a funding agency recognises, which is a
+ * different list from the institution's own `budget_heads` catalog
+ * (migrations/20260908_project_budget_heads_by_name.sql explains why). With no
+ * vocabulary to match against, every head is stored exactly as submitted, which
+ * is what an unrecognised name does anyway.
  */
-const canonicalBudgetHead = (value) => {
-  const name = String(value ?? '')
-    .trim()
-    .toLowerCase();
-  return PROJECT_BUDGET_HEADS.find((head) => head.toLowerCase() === name) || '';
-};
+export function budgetHeadCanonicalizer(budgetHeadNames = []) {
+  const names = Array.isArray(budgetHeadNames) ? budgetHeadNames.filter(Boolean) : [];
+
+  return (value) => {
+    const name = String(value ?? '')
+      .trim()
+      .toLowerCase();
+    if (!name) return '';
+    return names.find((head) => String(head).toLowerCase() === name) || '';
+  };
+}
 
 export const MAX_INVESTIGATORS = 15;
 export const MAX_COLLABORATORS = 20;
@@ -170,6 +142,17 @@ export function toBoolean(value) {
   if (typeof value === 'boolean') return value ? 1 : 0;
   const text = trimmed(value).toLowerCase();
   return text === '1' || text === 'true' || text === 'yes' || text === 'on' ? 1 : 0;
+}
+
+/**
+ * A flag whose column default is not 0, read so that an absent field keeps that
+ * default instead of reading as unchecked. `toBoolean` alone cannot do this: it
+ * answers 0 for everything it does not recognise, so a caller that simply does
+ * not send the field would switch it off on every row it touches.
+ */
+export function toBooleanWithDefault(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback ? 1 : 0;
+  return toBoolean(value);
 }
 
 /**
@@ -399,7 +382,7 @@ function normalizeCollaborators(raw, enabled, errors) {
   );
 }
 
-function normalizeBudgetHeads(raw) {
+function normalizeBudgetHeads(raw, canonicalBudgetHead) {
   const rows = Array.isArray(raw) ? raw : [];
   const seen = new Set();
 
@@ -423,7 +406,7 @@ function normalizeBudgetHeads(raw) {
   }, []);
 }
 
-function normalizeFinanceRows(raw, rowType, enabled, errors) {
+function normalizeFinanceRows(raw, rowType, enabled, errors, canonicalBudgetHead) {
   if (!enabled) return [];
 
   const rows = Array.isArray(raw) ? raw : [];
@@ -441,7 +424,7 @@ function normalizeFinanceRows(raw, rowType, enabled, errors) {
       organization_id: toId(row?.organization_id ?? row?.organizationId),
       organization_name: toNullableString(row?.organization_name ?? row?.organizationName, 255),
       amount: toAmount(row?.amount, `${rowType}_rows[${index}].amount`, errors),
-      heads: normalizeBudgetHeads(row?.heads ?? row?.budget_heads),
+      heads: normalizeBudgetHeads(row?.heads ?? row?.budget_heads, canonicalBudgetHead),
       // The form keys its inline errors by the index it rendered the row at, so
       // validation below must report the submitted index and not the one left
       // after blank rows are dropped. `toAmount` above already uses it.
@@ -535,7 +518,7 @@ function normalizeDisbursements(raw, errors, keysWithDocuments = new Set()) {
  * thing. The three lists are stitched together by client-supplied `key`s, which
  * the model swaps for the ids it inserts.
  */
-function normalizeBudgetAllotment(raw, errors) {
+function normalizeBudgetAllotment(raw, errors, canonicalBudgetHead) {
   const source = raw && typeof raw === 'object' ? raw : {};
 
   const yearRows = Array.isArray(source.years) ? source.years : [];
@@ -643,7 +626,7 @@ function normalizeBudgetAllotment(raw, errors) {
  * only rule here is that a row is a credit *or* a debit, never both and never
  * neither.
  */
-function normalizeTransactions(raw, fieldPrefix, errors) {
+function normalizeTransactions(raw, fieldPrefix, errors, canonicalBudgetHead) {
   const rows = Array.isArray(raw) ? raw : [];
   if (rows.length > MAX_TRANSACTIONS_PER_ACCOUNT) {
     errors.push({
@@ -684,6 +667,13 @@ function normalizeTransactions(raw, fieldPrefix, errors) {
           financial_year: financialYear,
           transaction_date: transactionDate,
           head_kind: headKind,
+          // Defaults to counted, matching the column, so a ledger saved by a
+          // caller that does not know about this field keeps every row in the
+          // Actuals figures rather than quietly dropping out of them.
+          counts_as_actual: toBooleanWithDefault(
+            row?.counts_as_actual ?? row?.countsAsActual,
+            true,
+          ),
           // Expenditure heads are stored by name. A name still in the
           // vocabulary is stored in its canonical case so the summary groups it
           // with its allotment row; one that is no longer offered is kept as
@@ -761,7 +751,7 @@ function normalizeTransactions(raw, fieldPrefix, errors) {
 }
 
 /** One "Transaction Account" block: the account itself plus its ledger. */
-function normalizeTransactionAccounts(raw, errors) {
+function normalizeTransactionAccounts(raw, errors, canonicalBudgetHead) {
   const accountRows = Array.isArray(raw) ? raw : [];
   if (accountRows.length > MAX_TRANSACTION_ACCOUNTS) {
     errors.push({
@@ -782,6 +772,7 @@ function normalizeTransactionAccounts(raw, errors) {
           account?.transactions,
           `transaction_accounts[${index}]`,
           errors,
+          canonicalBudgetHead,
         ),
         sourceIndex: index,
       }))
@@ -835,10 +826,18 @@ function normalizeTransactionAccounts(raw, errors) {
  * @param {string[]} [options.rowKeysWithDocuments] disbursement row keys that
  *   have a file attached in this request, so those rows are not mistaken for
  *   blank ones.
+ * @param {string[]} [options.budgetHeadNames] the curated budget head
+ *   vocabulary, from `project_budget_head_options`. Heads are stored by name,
+ *   so this only settles the case a submitted head is stored in; a name the
+ *   list does not offer is kept as submitted either way.
  */
-export function normalizeProjectPayload(input = {}, { rowKeysWithDocuments = [] } = {}) {
+export function normalizeProjectPayload(
+  input = {},
+  { rowKeysWithDocuments = [], budgetHeadNames = [] } = {},
+) {
   const errors = [];
   const body = input && typeof input === 'object' ? input : {};
+  const canonicalBudgetHead = budgetHeadCanonicalizer(budgetHeadNames);
 
   const collaboratorsEnabled = toBoolean(body.collaborators_enabled ?? body.collaboratorsEnabled);
   const financialContributionEnabled = toBoolean(
@@ -1016,12 +1015,14 @@ export function normalizeProjectPayload(input = {}, { rowKeysWithDocuments = [] 
         'contribution',
         financialContributionEnabled,
         errors,
+        canonicalBudgetHead,
       ),
       ...normalizeFinanceRows(
         body.finance_sharing ?? body.financeSharing,
         'sharing',
         financeSharingEnabled,
         errors,
+        canonicalBudgetHead,
       ),
     ],
     disbursements: normalizeDisbursements(
@@ -1029,10 +1030,11 @@ export function normalizeProjectPayload(input = {}, { rowKeysWithDocuments = [] 
       errors,
       new Set(rowKeysWithDocuments),
     ),
-    budget: normalizeBudgetAllotment(body.budget, errors),
+    budget: normalizeBudgetAllotment(body.budget, errors, canonicalBudgetHead),
     transactionAccounts: normalizeTransactionAccounts(
       body.transaction_accounts ?? body.transactionAccounts,
       errors,
+      canonicalBudgetHead,
     ),
     // Project-level document slots the user cleared. Files themselves arrive as
     // multipart parts and are handled by the controller. Slots that are neither

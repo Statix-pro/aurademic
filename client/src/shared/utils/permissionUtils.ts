@@ -58,6 +58,45 @@ export const canAccessAdminArea = (user?: User | null) => {
   ]);
 };
 
+/**
+ * The client-side twin of the server's `adminAuthMiddleware`, which admits a
+ * user on `isSuperAdmin || an is_admin_role role || users.is_admin`. All three
+ * are already resolved into the `is_admin` the login payload carries, so that
+ * one flag is the whole test.
+ *
+ * Deliberately narrower than `canAccessAdminArea`, which also admits a user
+ * holding only an `admin_dashboard.*` permission. That user belongs in the
+ * admin area — the navbar and `ProtectedRoute` are right to let them in — but
+ * every route behind `adminAuthMiddleware` answers them 403, so a screen backed
+ * by one has to ask this instead.
+ */
+export const isAdminActor = (user?: User | null) =>
+  Boolean(user) && (isSuperAdmin(user) || Boolean(user.is_admin));
+
+/**
+ * The form-options master data — Project Options and Publication Management.
+ *
+ * Mirrors what `formOptionsRoutes.js` actually enforces: `adminAuthMiddleware`
+ * on the router, then `permissionMiddleware(['form_options.read', 'edit',
+ * 'manage'])`, which a super admin short-circuits. Both halves matter, so both
+ * are checked here — gating the link on super-admin alone hid the screen from
+ * the admins the API lets in, and gating it on `canAccessAdminArea` offered it
+ * to a role granted `admin_dashboard.*` without being an admin role, who then
+ * got a 403 from every request the screen makes. Roles carry `is_admin_role`
+ * independently of their permissions, so that pairing is one role edit away.
+ */
+export const canManageFormOptions = (user?: User | null) => {
+  if (!isAdminActor(user)) {
+    return false;
+  }
+
+  if (isSuperAdmin(user)) {
+    return true;
+  }
+
+  return hasAnyPermission(user, ['form_options.read', 'form_options.edit', 'form_options.manage']);
+};
+
 export const canManageAccessControl = (user?: User | null) => {
   if (!user) {
     return false;

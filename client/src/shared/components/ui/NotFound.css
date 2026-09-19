@@ -1,0 +1,94 @@
+/* The catch-all page. Same card and scale as UnderConstruction next door, so an
+   unknown URL lands somewhere that reads as part of the portal rather than as a
+   crash — before this route existed, every unmatched path rendered blank. */
+
+.not-found-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: var(--space-7, 32px);
+  background: var(--bg-light, #f0f6ff);
+}
+
+.not-found-content {
+  max-width: 520px;
+  padding: 3rem 4rem;
+  border: 1px solid var(--border-color, #e0e0e0);
+  border-radius: var(--border-radius-lg, 20px);
+  background: var(--bg-surface, #ffffff);
+  box-shadow: var(--shadow-md, 0 4px 20px rgba(0, 0, 0, 0.05));
+  text-align: center;
+}
+
+.not-found-code {
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  font-size: 3.5rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.not-found-title {
+  margin-top: var(--space-3, 12px);
+  margin-bottom: var(--space-3, 12px);
+  color: var(--text-main, #4f4f6e);
+  font-weight: 700;
+  font-size: 1.5rem;
+}
+
+.not-found-message {
+  margin-bottom: var(--space-6, 24px);
+  color: var(--text-muted, #6c757d);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+/* The path itself, so a mistyped or stale link is recognisable — it is the one
+   thing that says which address failed. `break-all` because a long path must
+   not widen the card. */
+.not-found-path {
+  display: inline-block;
+  max-width: 100%;
+  margin-bottom: var(--space-6, 24px);
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border-radius: var(--border-radius-sm, 6px);
+  background: var(--surface-muted, #f4f7fc);
+  color: var(--text-soft, #51607a);
+  font-size: 0.85rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3, 12px);
+  justify-content: center;
+}
+
+/* `.custom-btn` paints every button's label white, which on the light variant
+   is white on #f8f9fa — the secondary action was invisible. Scoped here and
+   specific enough to win, the way the admin shell solves the same clash with
+   `.admin-btn-secondary`. */
+.not-found-actions .custom-btn.btn-light {
+  border-color: var(--border-color, #e0e0e0);
+  background: var(--bg-surface, #ffffff);
+  color: var(--text-main, #4f4f6e);
+}
+
+.not-found-actions .custom-btn.btn-light:hover {
+  border-color: var(--hover-primary-border, #cfe2f6);
+  background: var(--hover-primary-bg, #eef5fd);
+  color: var(--primary-color, #0069ab);
+}
+
+@media (width <= 576px) {
+  .not-found-content {
+    padding: var(--space-7, 32px) var(--space-5, 20px);
+  }
+
+  .not-found-code {
+    font-size: 2.5rem;
+  }
+}

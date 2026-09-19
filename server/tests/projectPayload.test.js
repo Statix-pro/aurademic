@@ -14,6 +14,11 @@ const validPayload = (overrides = {}) => ({
   ...overrides,
 });
 
+// The curated vocabulary reaches the normalizer from
+// `project_budget_head_options` by way of the controller, so the tests that
+// pin how a head is stored hand it one of their own.
+const budgetHeads = ['Equipment', 'Consumables', 'Overhead Charges', 'Manpower'];
+
 const errorFields = (errors) => errors.map((error) => error.field);
 
 describe('normalizeProjectPayload', () => {
@@ -321,6 +326,7 @@ describe('normalizeProjectPayload', () => {
           },
         ],
       }),
+      { budgetHeadNames: budgetHeads },
     );
 
     expect(aggregate.financeRows[0].heads).toEqual([
@@ -697,10 +703,23 @@ describe('transaction accounts', () => {
   it('stores an expenditure head in its canonical case', () => {
     const { aggregate, errors } = normalizeProjectPayload(
       withLedger([ledgerRow({ head_name: 'overhead charges' })]),
+      { budgetHeadNames: budgetHeads },
     );
 
     expect(errors).toEqual([]);
     expect(aggregate.transactionAccounts[0].transactions[0].head_name).toBe('Overhead Charges');
+  });
+
+  // The vocabulary only settles the case a head is stored in. Without one — a
+  // database with no curated heads yet — every head is stored as submitted,
+  // which is what an unrecognised name does anyway.
+  it('stores a head as submitted when no vocabulary is supplied', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow({ head_name: 'overhead charges' })]),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].head_name).toBe('overhead charges');
   });
 
   // A ledger written under a head the vocabulary has since dropped still has
@@ -773,6 +792,35 @@ describe('transaction accounts', () => {
       account_option_id: null,
       account_name: 'Retired SBI account',
     });
+  });
+
+  // DEFAULT 1 on the column is only half the guarantee: the normalizer has to
+  // agree, or a caller that does not send the field would write an explicit 0
+  // over it and quietly drop the row out of the project's own Actuals.
+  it('counts a ledger row toward Actuals when the flag is not sent', () => {
+    const { aggregate, errors } = normalizeProjectPayload(withLedger([ledgerRow()]));
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].counts_as_actual).toBe(1);
+  });
+
+  it('keeps a ledger row out of Actuals when the flag is sent false', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow({ counts_as_actual: false })]),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].counts_as_actual).toBe(0);
+  });
+
+  it('accepts the flag camelCased, as the form sends it', () => {
+    const { aggregate } = normalizeProjectPayload(
+      withLedger([ledgerRow({ countsAsActual: true }), ledgerRow({ countsAsActual: false })]),
+    );
+
+    const [first, second] = aggregate.transactionAccounts[0].transactions;
+    expect(first.counts_as_actual).toBe(1);
+    expect(second.counts_as_actual).toBe(0);
   });
 
   it('rejects two name-only ledgers on the same removed account', () => {
