@@ -347,6 +347,85 @@ describe('Finance Workflow Integration Tests', () => {
       expect(financeModel.updateFinanceWorkflowSnapshot).toHaveBeenCalled();
     });
 
+    // REGRESSION: the form renders one row per budget head + sub-head, so a head whose
+    // amount was split across two budget lines comes back as a single row. Counting the
+    // stored rows to find the appended ones therefore overshot by the number of splits
+    // and dropped the top-up the applicant had just added, rejecting a valid submission.
+    it('accepts a topup when a stored head is split across several budget lines', async () => {
+      financeModel.getFinanceRequestById.mockResolvedValue({
+        id: 291,
+        proposal_ref: '#F-2026-0291',
+        created_by: 1,
+        total_budget: 15000,
+        beneficiary_type: 'Department',
+        workflow_state: { status: 'approved', currentStage: null },
+      });
+      // Four stored rows, three rendered rows: Travel Allowance draws 10000 from two lines.
+      financeModel.getBudgetBreakup.mockResolvedValue([
+        {
+          budget_head: 'Faculty Empowerment',
+          sub_head: 'Accommodation',
+          amount: 3000,
+          is_topup: 0,
+        },
+        {
+          budget_head: 'Faculty Empowerment',
+          sub_head: 'Food & Refreshment',
+          amount: 2000,
+          is_topup: 0,
+        },
+        {
+          budget_head: 'Faculty Empowerment',
+          sub_head: 'Travel Allowance',
+          amount: 6000,
+          budget_line_id: 11,
+          is_topup: 0,
+        },
+        {
+          budget_head: 'Faculty Empowerment',
+          sub_head: 'Travel Allowance',
+          amount: 4000,
+          budget_line_id: 12,
+          is_topup: 0,
+        },
+      ]);
+      financeModel.updateFinanceRequest.mockResolvedValue({ affectedRows: 1 });
+      financeModel.getFinanceRecordContext.mockResolvedValue({
+        totalBudget: 23950,
+        workflowStatus: 'approved',
+      });
+      workflowService.startWorkflow.mockResolvedValue({
+        state: { currentStage: 'level1', status: 'in_progress' },
+      });
+      financeModel.updateFinanceWorkflowSnapshot.mockResolvedValue(true);
+
+      const response = await request(app)
+        .put('/api/finance-requests/291')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          topup_mode: true,
+          budget_rows: [
+            { budget_head: 'Faculty Empowerment', sub_head: 'Accommodation', amount: 3000 },
+            { budget_head: 'Faculty Empowerment', sub_head: 'Food & Refreshment', amount: 2000 },
+            { budget_head: 'Faculty Empowerment', sub_head: 'Travel Allowance', amount: 10000 },
+            // The top-up tops up a head the request already carries.
+            { budget_head: 'Faculty Empowerment', sub_head: 'Travel Allowance', amount: 8950 },
+          ],
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      // Routed on the top-up delta alone, and the split rows stay intact underneath it.
+      expect(financeModel.updateFinanceWorkflowSnapshot).toHaveBeenCalledWith(
+        291,
+        expect.objectContaining({ topupAmount: 8950 }),
+        expect.objectContaining({ tx: expect.any(Object) }),
+      );
+      const persistedRows = financeModel.updateFinanceRequest.mock.calls[0][1].budget_rows;
+      expect(persistedRows).toHaveLength(5);
+      expect(persistedRows[4]).toMatchObject({ amount: 8950, is_topup: 1 });
+    });
+
     it('routes a topup above 10k to the chairman even when the proposal total is small', async () => {
       const approvedFinanceRequest = {
         id: 201,
