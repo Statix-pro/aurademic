@@ -1062,29 +1062,65 @@
   background: #fcfdff;
 }
 
-/* Category, Role and Organization on one line, in three columns that land at
-   the same x on every collaborator — with the wrapping flex row this replaced,
-   each row sized itself to its own content and the three pickers stepped
-   sideways down the card. City and the MoU switch take the line below, under
-   the first two columns: five labelled fields and the row buttons do not fit
-   one line on a laptop without squeezing the selects to a few characters.
-   `fr` units share the line out in proportion, which is also what stops any one
-   field stretching into the long box the wide modifier used to give it. */
+/* Two lines of fields on a shared six-column grid, so every field lands at the
+   same x on every collaborator — with the wrapping flex row this replaced, each
+   row sized itself to its own content and the pickers stepped sideways down the
+   card. Five labelled fields and the row buttons do not fit one line on a
+   laptop without squeezing the selects to a few characters, so the line above
+   carries Category and the role picker, and Organization, City and the MoU
+   switch take the one below.
+
+   Twelve columns rather than one per field: they let each field be given the
+   share of the line it actually needs — the roles are a chip list and take the
+   rest of the first line, an organization name is the longest value on the
+   second, and the MoU switch is a fixed-width pill that must not be cut — while
+   still cutting both lines on the same grid. */
 .pf-collaborator__main {
   display: grid;
   /* The buttons take a fixed column, not `auto`: only the last collaborator
      carries an add button, so a content-sized column made that row's fields
-     narrower than the ones above and the three pickers no longer lined up. */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1.5fr) 96px;
+     narrower than the ones above and the pickers no longer lined up. */
+  grid-template-columns: repeat(12, minmax(0, 1fr)) 96px;
   gap: 12px 18px;
   align-items: center;
 }
 
-/* Pinned to the first row so the two fields below flow under the line above
-   rather than around the buttons. */
+.pf-collaborator__category {
+  grid-column: 1 / span 3;
+}
+
+/* The rest of the line. Roles are picked several at a time and each one is a
+   chip, so this is the field that actually uses the width — which is why
+   Organization moved down to the line below rather than sharing this one. */
+.pf-collaborator__role {
+  grid-column: 4 / span 9;
+}
+
+.pf-collaborator__org {
+  grid-column: 1 / span 6;
+}
+
+.pf-collaborator__city {
+  grid-column: 7 / span 3;
+}
+
+/* Three columns for a control that needs about two: the Yes/No pill carries its
+   own width and is `justify-self: start`, so the slack falls after it as
+   whitespace rather than squeezing the pill. Two columns would leave the label
+   and the pill within a few pixels of overflowing. */
+.pf-collaborator__mou {
+  grid-column: 10 / span 3;
+}
+
+/* Pinned to the first row, in the last track — the fixed 96px button column
+   after the twelve field columns — so the fields below flow under the line
+   above rather than around the buttons. Counted from the end rather than
+   numbered, so the pin cannot drift into a field's columns again if the grid is
+   re-cut: it sat at column 4 from when the grid had four tracks, which put the
+   buttons where Role starts and pushed Role onto a line of its own. */
 .pf-collaborator__main > .pf-row-actions {
   grid-row: 1;
-  grid-column: 4;
+  grid-column: -2 / -1;
   justify-content: flex-end;
 }
 
@@ -1164,7 +1200,7 @@
   text-align: center;
 }
 
-/* Financial Contribution and Finance Sharing. Their Budget Head(s) cell is a
+/* Financial Contribution and Budget Sharing. Their Budget Head(s) cell is a
    chip list, so under the default auto layout the column grew with every head
    picked and took the width out of the Organization column beside it — the
    table re-flowed while it was being filled in. A fixed layout settles the
@@ -1260,6 +1296,31 @@
 }
 
 /* --------------------------------------------------------------------------
+   Income heads
+   -------------------------------------------------------------------------- */
+
+/* One line of ticks on a laptop, wrapping rather than scrolling on anything
+   narrower — four short labels, so there is no point giving them a grid. */
+.pf-income-heads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  align-items: center;
+}
+
+.pf-income-heads__option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  /* Bootstrap's label margin, which would drop the text off the tick's centre. */
+  margin: 0;
+  color: #3f4a5f;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
    Budget allotment matrix
    -------------------------------------------------------------------------- */
 
@@ -1275,9 +1336,23 @@
   min-width: 240px;
 }
 
+/* Deliberately 70% of the head column beside it: the contributor is a short
+   organization name and reads as secondary to the head it qualifies, so it
+   takes the narrower half of the pair. Same floor treatment as the others. */
+.pf-matrix__contribution {
+  width: 168px;
+  min-width: 168px;
+}
+
+/* Narrow enough that the Contribution column above earns its place without the
+   matrix growing, wide enough for a crore-scale figure: eight digits of entry,
+   and a column total of `9,99,99,999` under it. What stops it going lower is
+   the header, not the money — the year picker's own floor plus the delete
+   button beside it. The last column carries the add button as well and takes
+   the few extra pixels for it; `.pf-table` is auto-layout, so it can. */
 .pf-matrix__year {
-  width: 200px;
-  min-width: 200px;
+  width: 170px;
+  min-width: 170px;
 }
 
 /* The year column's own header is a control, not a label, so it needs the
@@ -1304,15 +1379,13 @@
    Transaction summary
    -------------------------------------------------------------------------- */
 
+/* The year filter sits in the card header, right of the title. It used to be a
+   grey band of its own above the table; on the title row it needs no band, only
+   to keep its label beside its select. */
 .pf-summary__filter {
   display: flex;
   gap: 12px;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 14px;
-  padding: 10px 18px;
-  border-radius: 10px;
-  background: #f2f5f9;
 }
 
 .pf-summary__filter-label {
@@ -1325,6 +1398,15 @@
   min-width: 190px;
 }
 
+/* A shared card header does not wrap, which is right for a title and a toggle.
+   A title plus a labelled 190px select is wider than that on a narrow window,
+   so this card's header lets the filter drop under the title rather than
+   squeezing either. */
+.pf-summary-card .pf-card__header {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+
 .pf-summary td {
   text-align: left;
 }
@@ -1332,6 +1414,14 @@
 .pf-summary .pf-table__amount {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* The same column as the allotment matrix's, at the same width, so the
+   contributor lines up between the two tables on this tab. Budget Head keeps
+   whatever is left, which is what makes it the column that absorbs a long
+   head name here. */
+.pf-summary__contribution {
+  width: 168px;
 }
 
 .pf-summary__total td {
@@ -1390,6 +1480,23 @@
   min-width: 134px;
 }
 
+/* Grant Disbursement. The year and the date are both fixed-shape values, so
+   they are held to what they need and Organization, which has no width of its
+   own, takes the rest of the line. Left to the auto layout, the date picker and
+   the year select each claimed a share of their own, and the organization name —
+   the longest value on the row — was the one truncated. The year matches the
+   ledger's; the date clears a native `dd-mm-yyyy` picker and its calendar
+   button. */
+.pf-disbursement__year {
+  width: 150px;
+  min-width: 134px;
+}
+
+.pf-disbursement__date {
+  width: 170px;
+  min-width: 160px;
+}
+
 .pf-ledger__head {
   width: 260px;
   min-width: 220px;
@@ -1431,10 +1538,35 @@
   min-width: 200px;
 }
 
-/* Particulars is free text and takes whatever the other two leave. */
+/* Particulars is free text and takes whatever the others leave. */
 .pf-ledger__detail-field--wide {
   flex: 1 1 260px;
   min-width: 240px;
+}
+
+/* A date and a reference number are both short and fixed in shape, so they are
+   held to what they need rather than to the strip's shared floor — the width
+   they were taking came out of Particulars, which is the one field here with
+   nothing to bound it. The floor still clears a native date picker, whose
+   `dd-mm-yyyy` and calendar button the browser draws at its own size. */
+.pf-ledger__detail-field--compact {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.pf-ledger__detail-field--compact .pf-input,
+.pf-ledger__detail-field--compact .pf-select {
+  flex: 0 1 auto;
+  width: 150px;
+  min-width: 150px;
+}
+
+/* Mode is the shortest value on the strip — `Cheque` is the longest word it
+   holds — so it is held tighter still rather than taking a text field's width
+   for a seven-item list. */
+.pf-ledger__detail-field--mode .pf-select {
+  width: 120px;
+  min-width: 120px;
 }
 
 .pf-ledger__detail-label {
@@ -1747,14 +1879,28 @@
   }
 
   /* Grid columns cannot wrap, so the row is re-cut rather than squeezed: two
-     fields to a line, with the buttons back in the flow at the end. */
+     field columns and the button track. Every field is placed in a field
+     column explicitly — left to auto-flow, the third field of each line landed
+     in the 96px button track, which crushed Organization to 96px. The grouping
+     of the wide layout holds: Category and Role, then Organization across both
+     columns (it is the longest value), then City and the MoU switch. The
+     buttons keep their pin from the wide layout: first row, last track. */
   .pf-collaborator__main {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 96px;
   }
 
-  .pf-collaborator__main > .pf-row-actions {
-    grid-row: auto;
-    grid-column: auto;
+  .pf-collaborator__category,
+  .pf-collaborator__city {
+    grid-column: 1;
+  }
+
+  .pf-collaborator__role,
+  .pf-collaborator__mou {
+    grid-column: 2;
+  }
+
+  .pf-collaborator__org {
+    grid-column: 1 / span 2;
   }
 }
 

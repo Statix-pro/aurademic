@@ -23,6 +23,7 @@ import CollaboratorsSection from './sections/CollaboratorsSection';
 import FinalDocumentsSection from './sections/FinalDocumentsSection';
 import FinanceRowsSection from './sections/FinanceRowsSection';
 import GrantDisbursementSection from './sections/GrantDisbursementSection';
+import IncomeHeadsSection from './sections/IncomeHeadsSection';
 import InvestigatorsSection from './sections/InvestigatorsSection';
 import OutcomeSection from './sections/OutcomeSection';
 import PresentationSection from './sections/PresentationSection';
@@ -61,6 +62,8 @@ const emptyLookups: ProjectLookups = {
  */
 function tabForField(field: string): ProjectFormTab {
   if (field.startsWith('budget.')) return 'budget';
+  // Budget Sharing sits on the Budget tab, beside the allotment it shares out.
+  if (field.startsWith('sharing_rows')) return 'budget';
   if (field.startsWith('transaction_accounts')) return 'transaction';
   return 'details';
 }
@@ -101,12 +104,19 @@ function validate(form: ProjectFormState): Record<string, string> {
   }
 
   form.transactionAccounts.forEach((account, blockIndex) => {
+    // Every field the server's own blank-row filter counts, so both sides agree
+    // on which rows have been started — a row carrying only a mode or only a
+    // contributor is one the server will save and then reject for its missing
+    // date and head, and this is what marks those fields before the round trip.
     const filledRows = account.transactions.filter(
       (row) =>
         row.transactionDate ||
         row.headName ||
         row.particulars ||
         row.referenceNo ||
+        row.paymentMode ||
+        row.contributionOrganizationId ||
+        row.contributionOrganizationName ||
         row.credit ||
         row.debit,
     );
@@ -218,10 +228,11 @@ const ProjectForm: React.FC = () => {
   const isConcluded =
     isSelected && (form.projectStatus === 'completed' || form.projectStatus === 'closed');
 
-  // The two finance tables record money moving between this project's own
-  // parties, so they offer those rather than the whole master list — see
-  // `financeOrganizations`. Derived from the form, so adding a collaborator
-  // makes it selectable on both tables straight away.
+  // The two finance tables, Grant Disbursement, the Budget Allotment matrix's
+  // Contribution column and the ledger's own Contribution field record money
+  // moving between this project's own parties, so they offer those rather than
+  // the whole master list — see `financeOrganizations`. Derived from the form,
+  // so adding a collaborator makes it selectable everywhere straight away.
   const financeParties = useMemo(
     () =>
       financeOrganizations(lookups.organizations, {
@@ -235,6 +246,16 @@ const ProjectForm: React.FC = () => {
       form.collaborators,
       form.collaboratorsEnabled,
     ],
+  );
+
+  // Budget Sharing is money this project passes on to other parties, and the
+  // funding agency is where the money came from rather than somewhere it goes —
+  // so it is the one party the sharing table does not offer. A row already
+  // saved against it still shows it: `FinanceRowsSection` re-offers a stored
+  // selection through `withSelectedOption`, so this never rewrites a saved row.
+  const sharingParties = useMemo(
+    () => financeParties.filter((organization) => organization.id !== form.fundingOrganizationId),
+    [financeParties, form.fundingOrganizationId],
   );
 
   const patch = useCallback(
@@ -577,19 +598,6 @@ const ProjectForm: React.FC = () => {
               disabled={isReadOnly}
             />
 
-            <FinanceRowsSection
-              title="Finance Sharing"
-              errorPrefix="sharing_rows"
-              rows={form.financeSharing}
-              onChange={(rows) => patch({ financeSharing: rows })}
-              enabled={form.financeSharingEnabled}
-              onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
-              organizations={financeParties}
-              budgetHeads={lookups.budgetHeads}
-              errors={errors}
-              disabled={isReadOnly}
-            />
-
             <SubmissionDetailsSection
               form={form}
               patch={patch}
@@ -653,7 +661,7 @@ const ProjectForm: React.FC = () => {
                     <GrantDisbursementSection
                       form={form}
                       patch={patch}
-                      organizations={lookups.organizations}
+                      organizations={financeParties}
                       onSelectDocument={selectDisbursementDocument}
                       onClearDocument={clearDisbursementDocument}
                       errors={errors}
@@ -717,10 +725,30 @@ const ProjectForm: React.FC = () => {
             hidden={activeTab !== 'budget'}
             className="pf-panel"
           >
+            <IncomeHeadsSection
+              value={form.incomeHeads}
+              onChange={(incomeHeads) => patch({ incomeHeads })}
+              disabled={isReadOnly}
+            />
+
+            <FinanceRowsSection
+              title="Budget Sharing"
+              errorPrefix="sharing_rows"
+              rows={form.financeSharing}
+              onChange={(rows) => patch({ financeSharing: rows })}
+              enabled={form.financeSharingEnabled}
+              onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
+              organizations={sharingParties}
+              budgetHeads={lookups.budgetHeads}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+
             <BudgetAllotmentSection
               form={form}
               patch={patch}
               budgetHeads={lookups.budgetHeads}
+              organizations={financeParties}
               errors={errors}
               disabled={isReadOnly}
             />
@@ -737,6 +765,7 @@ const ProjectForm: React.FC = () => {
               form={form}
               patch={patch}
               accounts={lookups.accounts}
+              organizations={financeParties}
               errors={errors}
               disabled={isReadOnly}
             />

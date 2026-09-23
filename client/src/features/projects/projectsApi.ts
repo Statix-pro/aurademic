@@ -59,7 +59,8 @@ const financeRowPayload = (row: FinanceRow) => ({
   organization_id: row.organizationId,
   organization_name: row.organizationName || null,
   amount: nullableNumber(row.amount),
-  heads: row.heads.map((name) => ({ budget_head_name: name })),
+  covers_all_heads: row.coversAllHeads,
+  heads: row.coversAllHeads ? [] : row.heads.map((name) => ({ budget_head_name: name })),
 });
 
 /** Slots whose stored file the user cleared without picking a replacement. */
@@ -157,6 +158,8 @@ export function buildProjectPayload(form: ProjectFormState) {
     outcome_tech_transfers: count(form.outcome.techTransfers),
     outcome_startups: count(form.outcome.startups),
 
+    income_heads: form.incomeHeads,
+
     // The allotment matrix travels as its three parts — columns, rows and the
     // amounts between them — stitched together by the form's own row keys,
     // which the server swaps for the ids it inserts.
@@ -171,6 +174,8 @@ export function buildProjectPayload(form: ProjectFormState) {
       heads: form.budgetRows.map((row) => ({
         key: row.key,
         budget_head_name: row.budgetHeadName || null,
+        contribution_organization_id: row.contributionOrganizationId,
+        contribution_organization_name: row.contributionOrganizationName || null,
       })),
       allotments: form.budgetRows
         .flatMap((row) =>
@@ -193,6 +198,9 @@ export function buildProjectPayload(form: ProjectFormState) {
         head_name: row.headName || null,
         particulars: row.particulars || null,
         reference_no: row.referenceNo || null,
+        payment_mode: row.paymentMode || null,
+        contribution_organization_id: row.contributionOrganizationId,
+        contribution_organization_name: row.contributionOrganizationName || null,
         credit: nullableNumber(row.credit),
         debit: nullableNumber(row.debit),
         counts_as_actual: row.countsAsActual,

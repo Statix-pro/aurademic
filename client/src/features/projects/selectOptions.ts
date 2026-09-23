@@ -1,4 +1,3 @@
-import { PROJECT_INCOME_HEADS } from './constants';
 import { headIdentity } from './projectBudgetSummary';
 
 import type { SelectOption } from './components/FormFields';
@@ -33,7 +32,7 @@ export function flatBudgetHeadOptions(heads: BudgetHeadOption[]): SelectOption[]
 
 /**
  * The transaction ledger's head dropdown: the heads this project actually
- * budgeted for, plus the fixed income vocabulary. Each option is valued by the
+ * budgeted for, plus the income heads it ticked. Each option is valued by the
  * identity the Transaction Summary groups on, so picking one settles both the
  * head and which side of the summary the row lands on.
  *
@@ -49,10 +48,14 @@ export function flatBudgetHeadOptions(heads: BudgetHeadOption[]): SelectOption[]
  *
  * Expenditure is listed first because it is the side the project chose: most
  * ledger rows are spending, and the heads the user picked on the Budget tab are
- * what they come here looking for. Income is a fixed four-line schedule that
- * reads the same on every project, so it sits below them.
+ * what they come here looking for. Income sits below them, and is now the
+ * project's own selection too — the heads ticked on the Income Heads card,
+ * rather than the whole vocabulary.
  */
-export function transactionHeadOptions(budgetRows: BudgetAllotmentRow[]): SelectOption[] {
+export function transactionHeadOptions(
+  budgetRows: BudgetAllotmentRow[],
+  incomeHeads: string[],
+): SelectOption[] {
   // Heads are stored by name and the matrix already refuses the same head
   // twice, but two rows naming one head would collide on a single identity —
   // and so on a single option — so the first one named wins.
@@ -73,7 +76,7 @@ export function transactionHeadOptions(budgetRows: BudgetAllotmentRow[]): Select
       label: name,
       group: 'Expenditure',
     })),
-    ...PROJECT_INCOME_HEADS.map((name) => ({
+    ...incomeHeads.map((name) => ({
       value: headIdentity('income', name),
       label: name,
       group: 'Income',
@@ -82,7 +85,7 @@ export function transactionHeadOptions(budgetRows: BudgetAllotmentRow[]): Select
 }
 
 /**
- * The organizations the Financial Contribution and Finance Sharing tables offer:
+ * The organizations the Financial Contribution and Budget Sharing tables offer:
  * the parties this project's money actually moves between, rather than the whole
  * master list.
  *
@@ -94,6 +97,10 @@ export function transactionHeadOptions(budgetRows: BudgetAllotmentRow[]): Select
  * A row already saved against an organization outside this list keeps it:
  * `withSelectedOption` re-offers the stored name, so narrowing the list here
  * never silently rewrites a saved figure's owner.
+ *
+ * Budget Sharing narrows this once more, leaving out the funding agency — it is
+ * where the money came from, not a party it is shared out to. That filter lives
+ * beside the table in `ProjectForm`, since nothing else needs it.
  */
 export function financeOrganizations(
   organizations: ProjectOrganization[],

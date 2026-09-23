@@ -5,7 +5,7 @@ import { SelectField } from '../components/FormFields';
 import RowActions from '../components/RowActions';
 import SectionCard from '../components/SectionCard';
 import { MAX_BUDGET_HEAD_ROWS, MAX_BUDGET_YEARS, financialYearOptions } from '../constants';
-import { formatAmount, toAmount } from '../projectBudgetSummary';
+import { formatBudgetTotal, toAmount } from '../projectBudgetSummary';
 import {
   allotmentKey,
   createBudgetAllotmentRow,
@@ -16,12 +16,19 @@ import {
 } from '../projectFormState';
 import { budgetHeadOptions, withSelectedOption } from '../selectOptions';
 
-import type { BudgetAllotmentRow, BudgetHeadOption, ProjectFormState } from '../types';
+import type {
+  BudgetAllotmentRow,
+  BudgetHeadOption,
+  ProjectFormState,
+  ProjectOrganization,
+} from '../types';
 
 interface BudgetAllotmentSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
   budgetHeads: BudgetHeadOption[];
+  /** The project's own parties, as the finance tables offer them — see `financeOrganizations`. */
+  organizations: ProjectOrganization[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -38,12 +45,24 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
   form,
   patch,
   budgetHeads,
+  organizations,
   errors,
   disabled,
 }) => {
   const { budgetRows, budgetYears, budgetAllotments } = form;
 
   const headOptions = useMemo(() => budgetHeadOptions(budgetHeads), [budgetHeads]);
+
+  // The same parties the Financial Contribution table offers, so a head can be
+  // attributed to whoever is putting up the money for it.
+  const organizationOptions = useMemo(
+    () =>
+      organizations.map((organization) => ({
+        value: String(organization.id),
+        label: organization.name,
+      })),
+    [organizations],
+  );
 
   const yearOptions = useMemo(
     () => financialYearOptions().map((year) => ({ value: year, label: year })),
@@ -120,6 +139,9 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
               </th>
               <th scope="col" className="pf-matrix__head">
                 Budget Head
+              </th>
+              <th scope="col" className="pf-matrix__contribution">
+                Contribution
               </th>
 
               {budgetYears.map((column, index) => (
@@ -221,6 +243,33 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
                   />
                 </td>
 
+                <td className="pf-matrix__contribution">
+                  <SelectField
+                    value={
+                      row.contributionOrganizationId ? String(row.contributionOrganizationId) : ''
+                    }
+                    onChange={(value) => {
+                      const organization = organizations.find((item) => String(item.id) === value);
+                      patch({
+                        budgetRows: replaceAt(budgetRows, index, {
+                          contributionOrganizationId: organization?.id ?? null,
+                          contributionOrganizationName: organization?.name ?? '',
+                        }),
+                      });
+                    }}
+                    options={withSelectedOption(
+                      organizationOptions,
+                      row.contributionOrganizationId ? String(row.contributionOrganizationId) : '',
+                      row.contributionOrganizationName,
+                    )}
+                    // A row is only stored once it names a head, and the
+                    // contribution goes with it — so this stays shut until
+                    // there is a row for it to be saved against.
+                    disabled={disabled || !hasHead(row)}
+                    ariaLabel="Contributing organization"
+                  />
+                </td>
+
                 {budgetYears.map((column) => (
                   <td className="pf-table__amount" key={column.key}>
                     <input
@@ -242,7 +291,7 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
                 ))}
 
                 <td className="pf-table__amount pf-table__total-value">
-                  {formatAmount(rowTotal(row.key) || null)}
+                  {formatBudgetTotal(rowTotal(row.key) || null)}
                 </td>
 
                 <td className="pf-table__actions">
@@ -264,16 +313,16 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
 
           <tfoot>
             <tr>
-              <td colSpan={2} className="pf-table__total-label">
+              <td colSpan={3} className="pf-table__total-label">
                 Total Budget
               </td>
               {budgetYears.map((column) => (
                 <td className="pf-table__amount pf-table__total-value" key={column.key}>
-                  {formatAmount(columnTotal(column.key) || null)}
+                  {formatBudgetTotal(columnTotal(column.key) || null)}
                 </td>
               ))}
               <td className="pf-table__amount pf-table__total-value">
-                {formatAmount(grandTotal || null)}
+                {formatBudgetTotal(grandTotal || null)}
               </td>
               <td />
             </tr>

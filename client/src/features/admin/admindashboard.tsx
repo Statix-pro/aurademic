@@ -58,6 +58,8 @@ const PROJECT_STATUS_LABELS: Record<string, string> = {
 interface FinanceRowView {
   organization_label?: string;
   amount?: string | number;
+  /** 1 when the row covers every budget head; `heads` is then empty. */
+  covers_all_heads?: number | boolean;
   heads?: { budget_head_name?: string | null }[];
 }
 
@@ -1641,10 +1643,15 @@ const Dashboard: React.FC = () => {
                 <tr key={index}>
                   <td>{row.organization_label || '-'}</td>
                   <td>
-                    {(row.heads ?? [])
-                      .map((head) => head.budget_head_name)
-                      .filter(Boolean)
-                      .join(', ') || '-'}
+                    {/* An "all heads" row stores no head list, so reading the
+                        list alone showed it as "-" — the opposite of what the
+                        row says. */}
+                    {row.covers_all_heads
+                      ? 'All Budget Heads'
+                      : (row.heads ?? [])
+                          .map((head) => head.budget_head_name)
+                          .filter(Boolean)
+                          .join(', ') || '-'}
                   </td>
                   <td>{formatCurrency(row.amount ?? 0)}</td>
                 </tr>
@@ -1817,7 +1824,7 @@ const Dashboard: React.FC = () => {
 
         {!!project.financial_contribution_enabled &&
           renderFinanceTable(contributions, 'Financial Contribution')}
-        {!!project.finance_sharing_enabled && renderFinanceTable(financeSharing, 'Finance Sharing')}
+        {!!project.finance_sharing_enabled && renderFinanceTable(financeSharing, 'Budget Sharing')}
 
         {!!project.collaborators_enabled && collaborators.length > 0 && (
           <div className="detail-section">

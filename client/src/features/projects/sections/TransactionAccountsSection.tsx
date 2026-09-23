@@ -7,6 +7,7 @@ import SectionCard from '../components/SectionCard';
 import {
   MAX_TRANSACTIONS_PER_ACCOUNT,
   MAX_TRANSACTION_ACCOUNTS,
+  TRANSACTION_MODE_OPTIONS,
   financialYearForDate,
   financialYearOptions,
 } from '../constants';
@@ -25,12 +26,20 @@ import {
 } from '../projectFormState';
 import { transactionHeadOptions, withSelectedOption } from '../selectOptions';
 
-import type { AccountOption, ProjectFormState, TransactionAccount, TransactionRow } from '../types';
+import type {
+  AccountOption,
+  ProjectFormState,
+  ProjectOrganization,
+  TransactionAccount,
+  TransactionRow,
+} from '../types';
 
 interface TransactionAccountsSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
   accounts: AccountOption[];
+  /** The project's own parties, as the finance tables offer them — see `financeOrganizations`. */
+  organizations: ProjectOrganization[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -43,9 +52,15 @@ interface TransactionAccountsSectionProps {
  */
 const DETAIL_ERROR_KEYS = ['transaction_date'];
 
-/** What unticking Actuals does, on the control itself rather than in a legend. */
+/**
+ * What the tick is and what unticking it does, on the control itself rather
+ * than in a legend. It opens with the field's own name because the strip no
+ * longer prints it: the box sits on a line of labelled fields and the word was
+ * costing more width than it earned, so hovering is what says which tick this
+ * is.
+ */
 const ACTUALS_HINT =
-  'Counted in the Transaction Summary\u2019s Actuals. Untick for money that moved through the account without being spent or received against the budget \u2014 the ledger Balance still includes it.';
+  'Actuals \u2014 counted in the Transaction Summary\u2019s Actuals. Untick for money that moved through the account without being spent or received against the budget \u2014 the ledger Balance still includes it.';
 
 /**
  * The Transaction tab: one block per bank account the project's money moves
@@ -62,6 +77,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   form,
   patch,
   accounts,
+  organizations,
   errors,
   disabled,
 }) => {
@@ -88,14 +104,29 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
 
   const toggleRow = (rowKey: string) => setExpandedRow(openRow === rowKey ? null : rowKey);
 
-  // The heads this project budgeted for, so the ledger can only be filed under
-  // a head the Budget tab has allotted — income aside, which is received rather
-  // than budgeted.
-  const headOptions = useMemo(() => transactionHeadOptions(form.budgetRows), [form.budgetRows]);
+  // The heads this project declared on the Budget tab: the ones it allotted a
+  // budget to, and the income heads it ticked. A row already filed under a head
+  // that has since left either list keeps it — `withSelectedOption` re-offers
+  // the stored name at the point of use.
+  const headOptions = useMemo(
+    () => transactionHeadOptions(form.budgetRows, form.incomeHeads),
+    [form.budgetRows, form.incomeHeads],
+  );
 
   const yearOptions = useMemo(
     () => financialYearOptions().map((year) => ({ value: year, label: year })),
     [],
+  );
+
+  // The same parties the Financial Contribution table offers, so a receipt can
+  // name whoever sent it.
+  const organizationOptions = useMemo(
+    () =>
+      organizations.map((organization) => ({
+        value: String(organization.id),
+        label: organization.name,
+      })),
+    [organizations],
   );
 
   // An account already has a ledger on this project, so offering it again would
@@ -255,6 +286,11 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                     // rule is that a row is a credit or a debit, not both.
                     // Disabling the column made those unrecordable.
                     const headPicked = Boolean(row.headName.trim());
+                    // Which of the two identifying fields the detail strip
+                    // offers. `headKind` returns to 'expenditure' whenever the
+                    // head is cleared, so this is only ever true with an income
+                    // head actually picked.
+                    const isIncomeRow = row.headKind === 'income';
                     const creditIsContra = headPicked && row.headKind === 'expenditure';
                     const debitIsContra = headPicked && row.headKind === 'income';
                     // Dimmed only while empty. Once a figure is in there it is a
@@ -404,7 +440,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                         <tr id={detailId} className="pf-ledger__detail-row" hidden={!isExpanded}>
                           <td className="pf-ledger__detail-cell" colSpan={7}>
                             <div className="pf-ledger__detail">
-                              <label className="pf-ledger__detail-field">
+                              <label className="pf-ledger__detail-field pf-ledger__detail-field--compact">
                                 <span className="pf-ledger__detail-label">Date</span>
                                 <input
                                   type="date"
@@ -460,20 +496,82 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                 />
                               </label>
 
-                              <label className="pf-ledger__detail-field">
-                                <span className="pf-ledger__detail-label">Ref. No.</span>
-                                <input
-                                  type="text"
-                                  className="pf-input"
-                                  value={row.referenceNo}
-                                  onChange={(event) =>
-                                    updateRow(blockIndex, rowIndex, {
-                                      referenceNo: event.target.value,
-                                    })
+                              {/* What identifies the entry, which is a different
+                                  thing on each side of the ledger. Money spent
+                                  is identified by its voucher or cheque; money
+                                  received is identified by who sent it — a
+                                  grant instalment and the college's matching
+                                  share are both `Grant Received` otherwise.
+
+                                  Only the applicable one is shown, but both are
+                                  kept on the row: switching a head from one kind
+                                  to the other hides a value rather than
+                                  destroying it, the same way the credit and
+                                  debit columns above behave. */}
+                              {isIncomeRow ? (
+                                <div className="pf-ledger__detail-field pf-ledger__detail-field--compact">
+                                  <span className="pf-ledger__detail-label">Contribution</span>
+                                  <SelectField
+                                    value={
+                                      row.contributionOrganizationId
+                                        ? String(row.contributionOrganizationId)
+                                        : ''
+                                    }
+                                    onChange={(value) => {
+                                      const organization = organizations.find(
+                                        (item) => String(item.id) === value,
+                                      );
+                                      updateRow(blockIndex, rowIndex, {
+                                        contributionOrganizationId: organization?.id ?? null,
+                                        contributionOrganizationName: organization?.name ?? '',
+                                      });
+                                    }}
+                                    options={withSelectedOption(
+                                      organizationOptions,
+                                      row.contributionOrganizationId
+                                        ? String(row.contributionOrganizationId)
+                                        : '',
+                                      row.contributionOrganizationName,
+                                    )}
+                                    disabled={disabled}
+                                    ariaLabel="Contributing organization"
+                                  />
+                                </div>
+                              ) : (
+                                <label className="pf-ledger__detail-field pf-ledger__detail-field--compact">
+                                  <span className="pf-ledger__detail-label">Ref. No.</span>
+                                  <input
+                                    type="text"
+                                    className="pf-input"
+                                    value={row.referenceNo}
+                                    onChange={(event) =>
+                                      updateRow(blockIndex, rowIndex, {
+                                        referenceNo: event.target.value,
+                                      })
+                                    }
+                                    disabled={disabled}
+                                  />
+                                </label>
+                              )}
+
+                              {/* A div, not a label like the text fields above:
+                                  the picker is a combobox carrying its own
+                                  `aria-label`, and wrapping it would name the
+                                  same control twice over. */}
+                              <div className="pf-ledger__detail-field pf-ledger__detail-field--compact pf-ledger__detail-field--mode">
+                                <span className="pf-ledger__detail-label">Mode</span>
+                                <SelectField
+                                  value={row.paymentMode}
+                                  onChange={(value) =>
+                                    updateRow(blockIndex, rowIndex, { paymentMode: value })
                                   }
+                                  options={TRANSACTION_MODE_OPTIONS}
+                                  placeholder="Select"
                                   disabled={disabled}
+                                  invalid={Boolean(errors[`${field}.payment_mode`])}
+                                  ariaLabel="Payment mode"
                                 />
-                              </label>
+                              </div>
 
                               {/* On by default, so the ordinary entry needs no
                                   thought: unticking is the exception, for money
@@ -495,7 +593,9 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                   }
                                   disabled={disabled}
                                 />
-                                <span className="pf-ledger__detail-label">Actuals</span>
+                                <span className="pf-ledger__detail-label pf-visually-hidden">
+                                  Actuals
+                                </span>
                               </label>
                             </div>
                           </td>

@@ -27,8 +27,16 @@ export const MAX_TRANSACTIONS_PER_ACCOUNT = 500;
  * and which reach the form through `ProjectLookups.budgetHeads`. Mirrored by
  * `PROJECT_INCOME_HEADS` in `server/modules/project/projectPayload.js`, which
  * validates them.
+ *
+ * Which of the four apply is ticked per project on the Income Heads card; this
+ * is the vocabulary that card offers, not what any one project uses.
  */
-export const PROJECT_INCOME_HEADS = ['Deposit', 'Interest', 'Grant Received', 'Other Income'];
+export const PROJECT_INCOME_HEADS = [
+  'Grant-in-aid',
+  'Bank Interest',
+  'HI Contribution',
+  'Other Income',
+];
 
 /** Matches the server-side document check advertised on every upload control. */
 export const MAX_DOCUMENT_BYTES = 5 * 1024 * 1024;
@@ -44,13 +52,23 @@ export const MEMBER_TYPE_OPTIONS = [
  * What a collaborating organization brings to the project. A collaborator can
  * play several of these at once — a partner institute that shares a facility
  * and funds part of the work — so the field is a multi-select.
+ *
+ * Roles are stored as free text, so this list is what is offered rather than
+ * what is allowed — a project saved against a role that has since left the list
+ * keeps it, via `withStoredRoles` in `CollaboratorsSection`.
  */
 export const COLLABORATOR_ROLES = [
-  'Knowledge Partner',
-  'Technology Partner',
-  'Facility Sharing',
+  'Technical Support',
   'Financial Support',
+  'Facility Access',
+  'Resource Provider',
+  'Mentorship',
+  'Field Trial Support',
+  'Validation Support',
   'Implementation Partner',
+  'Training Partner',
+  'Industry Partner',
+  'Community Partner',
 ];
 
 export const COLLABORATOR_CATEGORIES = [
@@ -61,6 +79,21 @@ export const COLLABORATOR_CATEGORIES = [
   'NGO',
   'International',
   'Other',
+];
+
+/**
+ * How a ledger entry's money moved. Valued lower-cased to match the
+ * `project_transactions.payment_mode` enum, and labelled as the office writes
+ * them — NEFT and PFMS are names, not sentences.
+ */
+export const TRANSACTION_MODE_OPTIONS = [
+  { value: 'neft', label: 'NEFT' },
+  { value: 'rtgs', label: 'RTGS' },
+  { value: 'dd', label: 'DD' },
+  { value: 'cheque', label: 'Cheque' },
+  { value: 'upi', label: 'UPI' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'pfms', label: 'PFMS' },
 ];
 
 export const SUBMISSION_MODE_OPTIONS = [

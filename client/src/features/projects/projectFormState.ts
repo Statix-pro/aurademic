@@ -95,6 +95,7 @@ export function createFinanceRow(): FinanceRow {
     key: nextRowKey('finance'),
     organizationId: null,
     organizationName: '',
+    coversAllHeads: false,
     heads: [],
     amount: '',
   };
@@ -105,7 +106,12 @@ export function createBudgetYearColumn(): BudgetYearColumn {
 }
 
 export function createBudgetAllotmentRow(): BudgetAllotmentRow {
-  return { key: nextRowKey('budget-row'), budgetHeadName: '' };
+  return {
+    key: nextRowKey('budget-row'),
+    budgetHeadName: '',
+    contributionOrganizationId: null,
+    contributionOrganizationName: '',
+  };
 }
 
 /** Address of one cell in the allotment matrix. */
@@ -122,6 +128,9 @@ export function createTransactionRow(): TransactionRow {
     headName: '',
     particulars: '',
     referenceNo: '',
+    paymentMode: '',
+    contributionOrganizationId: null,
+    contributionOrganizationName: '',
     credit: '',
     debit: '',
     countsAsActual: true,
@@ -210,6 +219,11 @@ export function createEmptyProjectForm(): ProjectFormState {
       techTransfers: '',
       startups: '',
     },
+
+    // Nothing ticked: which income heads apply is a statement about the project,
+    // and pre-ticking them would put the fixed four-line schedule back — the
+    // thing the card exists to replace.
+    incomeHeads: [],
 
     // One empty row and column so the matrix has something to type into, as
     // every other repeatable section of the form does.
@@ -326,6 +340,7 @@ export function projectToFormState(project: any): ProjectFormState {
           organizationId: row.organization_id ?? null,
           organizationName: text(row.organization_name || row.organization_label),
           amount: amountInput(row.amount),
+          coversAllHeads: flag(row.covers_all_heads),
           heads: Array.isArray(row.heads)
             ? row.heads.map((head: any) => text(head.budget_head_name)).filter(Boolean)
             : [],
@@ -352,6 +367,10 @@ export function projectToFormState(project: any): ProjectFormState {
     ? project.budget.heads.map((row: any) => ({
         ...createBudgetAllotmentRow(),
         budgetHeadName: text(row.budget_head_name),
+        contributionOrganizationId: row.contribution_organization_id ?? null,
+        contributionOrganizationName: text(
+          row.contribution_organization_name || row.contribution_organization_label,
+        ),
       }))
     : [];
   const rowKeyById = new Map<number, string>(
@@ -384,6 +403,11 @@ export function projectToFormState(project: any): ProjectFormState {
           headName: text(row.head_name),
           particulars: text(row.particulars),
           referenceNo: text(row.reference_no),
+          paymentMode: text(row.payment_mode),
+          contributionOrganizationId: row.contribution_organization_id ?? null,
+          contributionOrganizationName: text(
+            row.contribution_organization_name || row.contribution_organization_label,
+          ),
           credit: amountInput(row.credit),
           debit: amountInput(row.debit),
           countsAsActual: flagDefaultOn(row.counts_as_actual),
@@ -493,6 +517,9 @@ export function projectToFormState(project: any): ProjectFormState {
       startups: countInput(project?.outcome_startups),
     },
 
+    incomeHeads: Array.isArray(project?.income_heads)
+      ? project.income_heads.map((name: any) => text(name)).filter(Boolean)
+      : [],
     budgetYears: budgetYears.length > 0 ? budgetYears : empty.budgetYears,
     budgetRows: budgetRows.length > 0 ? budgetRows : empty.budgetRows,
     budgetAllotments,

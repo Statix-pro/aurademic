@@ -49,7 +49,16 @@ const withStoredHeads = (
 };
 
 /**
- * The Financial Contribution and Finance Sharing tables. They carry the same
+ * The picker's stand-in for "every head". Only ever a value inside the
+ * multi-select — a row stores it as `coversAllHeads`, never as a head name, so
+ * it cannot collide with a head an administrator adds to the vocabulary.
+ */
+const ALL_BUDGET_HEADS = '__all_budget_heads__';
+
+const allHeadsOption = { value: ALL_BUDGET_HEADS, label: 'All Budget Heads' };
+
+/**
+ * The Financial Contribution and Budget Sharing tables. They carry the same
  * columns — organization, budget heads, amount — and differ only in whether the
  * money comes in or is shared out, so one component renders both.
  */
@@ -82,6 +91,20 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
 
   const update = (index: number, changes: Partial<FinanceRow>) =>
     onChange(replaceAt(rows, index, changes));
+
+  /**
+   * Reads a change from the picker back into the row. "All Budget Heads" is
+   * exclusive: choosing it replaces whatever specific heads were picked, and
+   * while it holds, nothing else is offered — removing its chip is what opens
+   * the list again. Anything else is an ordinary change to the head list.
+   */
+  const updateHeads = (index: number, values: string[]) =>
+    update(
+      index,
+      values.includes(ALL_BUDGET_HEADS)
+        ? { coversAllHeads: true, heads: [] }
+        : { coversAllHeads: false, heads: values },
+    );
 
   const total = sumAmounts(rows);
 
@@ -141,12 +164,23 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
                 <td>
                   <TagSelectField
                     compact
-                    options={withStoredHeads(headOptions, row.heads)}
-                    value={row.heads}
-                    onChange={(values) => update(index, { heads: values })}
+                    // "All" heads the list so it is the first thing seen; once
+                    // it is chosen it is the only option, which is what stops a
+                    // specific head being picked alongside it.
+                    options={
+                      row.coversAllHeads
+                        ? [allHeadsOption]
+                        : [allHeadsOption, ...withStoredHeads(headOptions, row.heads)]
+                    }
+                    value={row.coversAllHeads ? [ALL_BUDGET_HEADS] : row.heads}
+                    onChange={(values) => updateHeads(index, values)}
                     placeholder="Select budget head(s)"
                     disabled={disabled}
-                    emptyMessage="No matches"
+                    emptyMessage={
+                      row.coversAllHeads
+                        ? 'Covers every head. Remove it to pick specific ones.'
+                        : 'No matches'
+                    }
                   />
                 </td>
 

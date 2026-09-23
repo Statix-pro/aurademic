@@ -24,7 +24,7 @@ const HeadRows: React.FC<{ rows: SummaryRow[]; emptyLabel: string }> = ({ rows, 
   if (rows.length === 0) {
     return (
       <tr>
-        <td colSpan={5} className="pf-summary__empty">
+        <td colSpan={6} className="pf-summary__empty">
           {emptyLabel}
         </td>
       </tr>
@@ -37,6 +37,9 @@ const HeadRows: React.FC<{ rows: SummaryRow[]; emptyLabel: string }> = ({ rows, 
         <tr key={row.key}>
           <td className="pf-table__sno">{index + 1}</td>
           <td>{row.label}</td>
+          {/* Read straight off the head's allotment row, so the summary names
+              the same contributor the Budget Allotment matrix does. */}
+          <td className="pf-summary__contribution">{row.contribution || '—'}</td>
           <FigureCells figures={row} />
         </tr>
       ))}
@@ -88,6 +91,7 @@ const TransactionSummarySection: React.FC<TransactionSummarySectionProps> = ({ f
         budgetRows: form.budgetRows,
         budgetYears: form.budgetYears,
         budgetAllotments: form.budgetAllotments,
+        incomeHeads: form.incomeHeads,
         accounts: form.transactionAccounts,
         financialYear: selectedYear,
       }),
@@ -95,24 +99,32 @@ const TransactionSummarySection: React.FC<TransactionSummarySectionProps> = ({ f
       form.budgetRows,
       form.budgetYears,
       form.budgetAllotments,
+      form.incomeHeads,
       form.transactionAccounts,
       selectedYear,
     ],
   );
 
   return (
-    <SectionCard title="Transaction Summary">
-      <div className="pf-summary__filter">
-        <span className="pf-summary__filter-label">Select Financial Year</span>
-        <SelectField
-          value={selectedYear}
-          onChange={setFinancialYear}
-          options={yearOptions}
-          placeholder="All years"
-          ariaLabel="Financial year to summarize"
-        />
-      </div>
-
+    <SectionCard
+      title="Transaction Summary"
+      className="pf-summary-card"
+      // On the title row rather than above the table: the year is what the
+      // whole card is read against, so it sits with the card's name instead of
+      // taking a band of its own between the heading and the figures.
+      headerRight={
+        <div className="pf-summary__filter">
+          <span className="pf-summary__filter-label">Select Financial Year</span>
+          <SelectField
+            value={selectedYear}
+            onChange={setFinancialYear}
+            options={yearOptions}
+            placeholder="All years"
+            ariaLabel="Financial year to summarize"
+          />
+        </div>
+      }
+    >
       <div className="pf-table-wrap">
         <table className="pf-table pf-summary">
           <thead>
@@ -121,6 +133,9 @@ const TransactionSummarySection: React.FC<TransactionSummarySectionProps> = ({ f
                 S.No.
               </th>
               <th scope="col">Budget Head</th>
+              <th scope="col" className="pf-summary__contribution">
+                Contribution
+              </th>
               <th scope="col" className="pf-table__amount">
                 Budget
               </th>
@@ -139,15 +154,18 @@ const TransactionSummarySection: React.FC<TransactionSummarySectionProps> = ({ f
               emptyLabel="Add a budget head above to see it here."
             />
             <tr className="pf-summary__total">
-              <td colSpan={2} className="pf-table__total-label">
+              <td colSpan={3} className="pf-table__total-label">
                 Total Expenditure
               </td>
               <FigureCells figures={summary.expenditureTotal} />
             </tr>
 
-            <HeadRows rows={summary.income} emptyLabel="No income recorded yet." />
+            <HeadRows
+              rows={summary.income}
+              emptyLabel="Tick the income heads on the Budget tab to see them here."
+            />
             <tr className="pf-summary__total">
-              <td colSpan={2} className="pf-table__total-label">
+              <td colSpan={3} className="pf-table__total-label">
                 Total Income
               </td>
               <FigureCells figures={summary.incomeTotal} />
@@ -157,7 +175,7 @@ const TransactionSummarySection: React.FC<TransactionSummarySectionProps> = ({ f
                 the year with is what makes the closing figure add up. */}
             {summary.openingBalance !== null && (
               <tr className="pf-summary__total">
-                <td colSpan={2} className="pf-table__total-label">
+                <td colSpan={3} className="pf-table__total-label">
                   Opening Balance
                 </td>
                 <td className="pf-table__amount">—</td>
@@ -167,7 +185,7 @@ const TransactionSummarySection: React.FC<TransactionSummarySectionProps> = ({ f
             )}
 
             <tr className="pf-summary__total pf-summary__balance">
-              <td colSpan={2} className="pf-table__total-label">
+              <td colSpan={3} className="pf-table__total-label">
                 {summary.openingBalance === null ? 'Balance' : 'Closing Balance'}
               </td>
               <FigureCells figures={summary.netBalance} />

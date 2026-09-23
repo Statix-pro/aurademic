@@ -92,7 +92,7 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
         {rows.map((row, index) => (
           <div className="pf-collaborator" key={row.key}>
             <div className="pf-collaborator__main">
-              <div className="pf-inline-field">
+              <div className="pf-inline-field pf-collaborator__category">
                 <span className="pf-inline-field__label">Category</span>
                 <SelectField
                   value={row.category}
@@ -106,7 +106,7 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                 />
               </div>
 
-              <div className="pf-inline-field">
+              <div className="pf-inline-field pf-collaborator__role">
                 <span className="pf-inline-field__label">Role</span>
                 <TagSelectField
                   singleLine
@@ -121,7 +121,7 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                 />
               </div>
 
-              <div className="pf-inline-field">
+              <div className="pf-inline-field pf-collaborator__org">
                 <span className="pf-inline-field__label">Organization</span>
                 <SelectField
                   value={row.organizationId ? String(row.organizationId) : ''}
@@ -137,7 +137,7 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                 />
               </div>
 
-              <div className="pf-inline-field">
+              <div className="pf-inline-field pf-collaborator__city">
                 <span className="pf-inline-field__label">City</span>
                 <input
                   type="text"
@@ -149,7 +149,7 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                 />
               </div>
 
-              <div className="pf-inline-field pf-inline-field--tight">
+              <div className="pf-inline-field pf-inline-field--tight pf-collaborator__mou">
                 <span className="pf-inline-field__label">Active MoU</span>
                 <YesNoSwitch
                   name={`mou-${row.key}`}
