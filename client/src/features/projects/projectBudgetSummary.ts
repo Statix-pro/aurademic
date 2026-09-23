@@ -9,7 +9,6 @@
  * with no way to drift out of step with the numbers they are built from.
  */
 
-import { PROJECT_INCOME_HEADS } from './constants';
 import { allotmentKey } from './projectFormState';
 
 import type {
@@ -39,6 +38,24 @@ const amountFormat = new Intl.NumberFormat('en-IN', {
 /** Formats a derived cell; `null` means "there is no such number", not zero. */
 export function formatAmount(value: number | null): string {
   return value === null ? '—' : amountFormat.format(value);
+}
+
+const totalFormat = new Intl.NumberFormat('en-IN', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+/**
+ * The same, for the Budget Allotment matrix's totals. A sanctioned allotment is
+ * a whole-rupee figure, so a trailing `.00` on every total was only taking
+ * width from a table that grows a column per financial year.
+ *
+ * The decimals are dropped, not rounded away: `maximumFractionDigits` stays at
+ * 2, so a project that really did budget a paise figure still reads as what it
+ * budgeted rather than as a total that does not add up.
+ */
+export function formatBudgetTotal(value: number | null): string {
+  return value === null ? '—' : totalFormat.format(value);
 }
 
 /**
@@ -84,6 +101,13 @@ export interface SummaryFigures {
 export interface SummaryRow extends SummaryFigures {
   key: string;
   label: string;
+  /**
+   * The organization contributing this head, carried over from the allotment
+   * matrix. Empty for a head that has no budget row behind it — an unlisted
+   * head the ledger spent against, or an income head, neither of which is
+   * allotted and so neither of which has a contributor to name.
+   */
+  contribution: string;
 }
 
 export interface TransactionSummary {
@@ -107,6 +131,8 @@ interface SummaryInput {
   budgetRows: BudgetAllotmentRow[];
   budgetYears: BudgetYearColumn[];
   budgetAllotments: BudgetAllotmentMap;
+  /** The heads ticked on the Income Heads card — this project's income schedule. */
+  incomeHeads: string[];
   accounts: TransactionAccount[];
   /** A single financial year, or `''` for every year at once. */
   financialYear: string;
@@ -126,6 +152,7 @@ export function buildTransactionSummary({
   budgetRows,
   budgetYears,
   budgetAllotments,
+  incomeHeads,
   accounts,
   financialYear,
 }: SummaryInput): TransactionSummary {
@@ -138,6 +165,11 @@ export function buildTransactionSummary({
   // spend is debit less credit, and income credit less debit.
   const actualsByHead = new Map<string, number>();
   const labelsByHead = new Map<string, string>();
+  // Heads that actually had money move under them. Kept apart from the netted
+  // figure above because the two answer different questions: a receipt that was
+  // refunded in full nets to nothing and still belongs in the report, while a
+  // head picked on a row whose amount has not been typed yet does not.
+  const movedHeads = new Set<string>();
   let openingBalance = 0;
 
   accounts.forEach((account) => {
@@ -167,6 +199,7 @@ export function buildTransactionSummary({
           : toAmount(row.debit) - toAmount(row.credit);
 
       actualsByHead.set(identity, (actualsByHead.get(identity) ?? 0) + net);
+      if (toAmount(row.credit) !== 0 || toAmount(row.debit) !== 0) movedHeads.add(identity);
       if (!labelsByHead.has(identity)) labelsByHead.set(identity, row.headName.trim() || '—');
     });
   });
@@ -188,18 +221,29 @@ export function buildTransactionSummary({
       return {
         key: row.key,
         label: row.budgetHeadName.trim() || '—',
+        contribution: row.contributionOrganizationName.trim(),
         budget,
         actuals,
         balance: budget - actuals,
       };
     });
 
+  /**
+   * The heads the ledger recorded against that the section above has not
+   * already listed. Held to the heads money actually moved under, so a row
+   * still being filled in — head picked, amount not yet typed — does not put a
+   * 0.00 line into the report and take it out again a keystroke later.
+   */
   const unlisted = (prefix: string): SummaryRow[] =>
     [...actualsByHead.entries()]
-      .filter(([identity]) => identity.startsWith(prefix) && !listed.has(identity))
+      .filter(
+        ([identity]) =>
+          identity.startsWith(prefix) && !listed.has(identity) && movedHeads.has(identity),
+      )
       .map(([identity, actuals]) => ({
         key: identity,
         label: labelsByHead.get(identity) ?? '—',
+        contribution: '',
         budget: null,
         actuals,
         balance: null,
@@ -209,23 +253,31 @@ export function buildTransactionSummary({
   // Total Expenditure would not add up to what the ledger says was spent.
   const expenditure = [...budgetedExpenditure, ...unlisted('expenditure:')];
 
-  // The standard income heads are always listed, so the section reads as a
-  // fixed schedule rather than appearing a row at a time. Income is received
-  // rather than budgeted, so these carry actuals only.
-  const standardIncome: SummaryRow[] = PROJECT_INCOME_HEADS.map((name) => {
+  // The income heads this project ticked, listed whether or not anything has
+  // arrived under them yet — the same way an allotted expenditure head is listed
+  // before it has been spent against. This is the project's own schedule rather
+  // than the fixed four every project used to carry, which is what made those
+  // 0.00 rows noise: here each one is a head someone said to expect.
+  //
+  // Income is received rather than budgeted, so these carry actuals only.
+  const declaredIncome: SummaryRow[] = incomeHeads.map((name) => {
     const identity = headIdentity('income', name);
     listed.add(identity);
 
     return {
       key: identity,
       label: name,
+      contribution: '',
       budget: null,
       actuals: actualsByHead.get(identity) ?? 0,
       balance: null,
     };
   });
 
-  const income = [...standardIncome, ...unlisted('income:')];
+  // A head received under but never ticked — or un-ticked afterwards — still has
+  // to be listed, or Total Income would not add up to what the ledger says came
+  // in. Same reason the expenditure side keeps its unbudgeted heads.
+  const income = [...declaredIncome, ...unlisted('income:')];
 
   const expenditureTotal = totalOf(expenditure);
   const incomeTotal = totalOf(income);

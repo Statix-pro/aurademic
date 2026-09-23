@@ -284,8 +284,11 @@ Verified against the code on the date above. Getting these wrong breaks things q
 
 - Most reads call `db.execute(sql, params)` directly on the pool; `db.getConnection()` is for
   transactions (36 `beginTransaction` sites) and is always paired with `release()`.
-- `config/connection.js` reads `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` only —
-  **there is no `DB_PORT`** and no defaults. Pool limit: 10.
+- `config/connection.js` reads `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, or — only when
+  no `DB_*` variable is set at all — the legacy `HOST`/`USER`/`PASSWORD`/`DB` names production's
+  `.env` still uses. The pool reads **no `DB_PORT`** (always 3306) and has no defaults; a
+  `DB_PORT` in an env file is ignored by the app and read only by
+  `scripts/update_parent_departments.cjs`. Pool limit: 10.
 - Eight places in the events controllers interpolate a **table or column name** into a query string;
   the values stay parameterised. Identifier interpolation from a code-controlled list is the only
   interpolation allowed.
@@ -788,7 +791,7 @@ VITE_MICROSOFT_TENANT_ID=
 ```ini
 PORT=5000
 NODE_ENV=development
-DB_HOST= DB_USER= DB_PASSWORD= DB_NAME=research   # no DB_PORT — connection.js does not read one
+DB_HOST= DB_USER= DB_PASSWORD= DB_NAME=research   # DB_PORT is ignored by connection.js (see §9)
 JWT_SECRET=
 GOOGLE_CLIENT_ID=
 FRONTEND_URL=http://localhost:3000

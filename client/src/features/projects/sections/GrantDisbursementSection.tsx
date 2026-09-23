@@ -75,12 +75,16 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
               <th scope="col" className="pf-table__sno">
                 S.No.
               </th>
-              <th scope="col">Financial Year</th>
+              <th scope="col" className="pf-disbursement__year">
+                Financial Year
+              </th>
               <th scope="col">Organization</th>
               <th scope="col" className="pf-table__amount">
                 Amount
               </th>
-              <th scope="col">Date</th>
+              <th scope="col" className="pf-disbursement__date">
+                Date
+              </th>
               {DISBURSEMENT_SLOTS.map((slot) => (
                 <th scope="col" className="pf-table__slot" key={slot}>
                   {DISBURSEMENT_SLOT_LABELS[slot]}
@@ -96,7 +100,7 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
               <tr key={row.key}>
                 <td className="pf-table__sno">{index + 1}</td>
 
-                <td>
+                <td className="pf-disbursement__year">
                   <SelectField
                     value={row.financialYear}
                     onChange={(value) => update(index, { financialYear: value })}
@@ -139,7 +143,7 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
                   />
                 </td>
 
-                <td>
+                <td className="pf-disbursement__date">
                   <input
                     type="date"
                     className={`pf-input ${errors[`disbursements[${index}].disbursement_date`] ? 'is-invalid' : ''}`.trim()}

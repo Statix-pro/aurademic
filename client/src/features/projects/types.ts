@@ -86,6 +86,11 @@ export interface FinanceRow {
   key: string;
   organizationId: number | null;
   organizationName: string;
+  /**
+   * The row covers every budget head rather than the ones listed. `heads` is
+   * always empty while this is set — "all" and a specific list cannot both hold.
+   */
+  coversAllHeads: boolean;
   /** Budget head names, which is how a project stores its heads. */
   heads: string[];
   amount: string;
@@ -116,6 +121,9 @@ export interface BudgetYearColumn {
 export interface BudgetAllotmentRow {
   key: string;
   budgetHeadName: string;
+  /** The party whose money this head is allotted from; optional. */
+  contributionOrganizationId: number | null;
+  contributionOrganizationName: string;
 }
 
 /**
@@ -135,6 +143,15 @@ export interface TransactionRow {
   headName: string;
   particulars: string;
   referenceNo: string;
+  /** How the money moved, as a `TRANSACTION_MODE_OPTIONS` value; '' when unstated. */
+  paymentMode: string;
+  /**
+   * Who a receipt came from. Shown on income rows in place of the reference
+   * number, and kept on every row so switching a row's head between the two
+   * kinds hides the field it no longer uses rather than clearing it.
+   */
+  contributionOrganizationId: number | null;
+  contributionOrganizationName: string;
   credit: string;
   debit: string;
   /**
@@ -232,6 +249,12 @@ export interface ProjectFormState {
   outcome: OutcomeCounts;
 
   // Budget tab
+  /**
+   * The income heads this project declares as applicable, from
+   * `PROJECT_INCOME_HEADS`. They decide what the ledger's head picker offers on
+   * the income side and what the Transaction Summary lists there.
+   */
+  incomeHeads: string[];
   budgetYears: BudgetYearColumn[];
   budgetRows: BudgetAllotmentRow[];
   budgetAllotments: BudgetAllotmentMap;
