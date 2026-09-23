@@ -83,12 +83,29 @@ export const DOCUMENT_UPLOAD_DIRS = {
 export const TRANSACTION_HEAD_KINDS = ['expenditure', 'income'];
 
 /**
+ * How the money moved, matching the `payment_mode` enum. Stored lower-cased —
+ * `toEnum` normalizes to it — so the column holds one form of each mode however
+ * the client spells it; the form renders the labels (NEFT, DD, PFMS).
+ */
+export const TRANSACTION_PAYMENT_MODES = ['neft', 'rtgs', 'dd', 'cheque', 'upi', 'cash', 'pfms'];
+
+/**
  * The income side of the ledger: the four ways money reaches a project account,
  * which is a closed list rather than institution data — unlike the expenditure
  * heads below, which an administrator curates. Validated here, so a ledger row
  * can only be filed under one of them.
+ *
+ * Which of the four apply is a per-project choice, stored in
+ * `project_income_heads` — see `normalizeIncomeHeads`. That narrows what the
+ * form offers; this list stays the bound on what can be stored, so un-ticking a
+ * head never makes a ledger row already filed under it unsaveable.
  */
-export const PROJECT_INCOME_HEADS = ['Deposit', 'Interest', 'Grant Received', 'Other Income'];
+export const PROJECT_INCOME_HEADS = [
+  'Grant-in-aid',
+  'Bank Interest',
+  'HI Contribution',
+  'Other Income',
+];
 
 /**
  * Resolves a submitted head to the name it is stored under, matched
@@ -419,18 +436,36 @@ function normalizeFinanceRows(raw, rowType, enabled, errors, canonicalBudgetHead
 
   return rows
     .slice(0, MAX_FINANCE_ROWS)
-    .map((row, index) => ({
-      row_type: rowType,
-      organization_id: toId(row?.organization_id ?? row?.organizationId),
-      organization_name: toNullableString(row?.organization_name ?? row?.organizationName, 255),
-      amount: toAmount(row?.amount, `${rowType}_rows[${index}].amount`, errors),
-      heads: normalizeBudgetHeads(row?.heads ?? row?.budget_heads, canonicalBudgetHead),
-      // The form keys its inline errors by the index it rendered the row at, so
-      // validation below must report the submitted index and not the one left
-      // after blank rows are dropped. `toAmount` above already uses it.
-      sourceIndex: index,
-    }))
-    .filter((row) => row.organization_id || row.organization_name || row.amount || row.heads.length)
+    .map((row, index) => {
+      const coversAllHeads = toBoolean(row?.covers_all_heads ?? row?.coversAllHeads);
+
+      return {
+        row_type: rowType,
+        organization_id: toId(row?.organization_id ?? row?.organizationId),
+        organization_name: toNullableString(row?.organization_name ?? row?.organizationName, 255),
+        amount: toAmount(row?.amount, `${rowType}_rows[${index}].amount`, errors),
+        covers_all_heads: coversAllHeads,
+        // "All" is the absence of a restriction, so it cannot sit beside a list
+        // of specific heads: a row claiming both would be read one way by
+        // anything that trusts the flag and another by anything that reads the
+        // list. The flag wins, and any heads sent with it are dropped.
+        heads: coversAllHeads
+          ? []
+          : normalizeBudgetHeads(row?.heads ?? row?.budget_heads, canonicalBudgetHead),
+        // The form keys its inline errors by the index it rendered the row at,
+        // so validation below must report the submitted index and not the one
+        // left after blank rows are dropped. `toAmount` above already uses it.
+        sourceIndex: index,
+      };
+    })
+    .filter(
+      (row) =>
+        row.organization_id ||
+        row.organization_name ||
+        row.amount ||
+        row.covers_all_heads ||
+        row.heads.length,
+    )
     .map(({ sourceIndex, ...row }, index) => {
       if (!row.organization_id && !row.organization_name) {
         errors.push({
@@ -509,6 +544,40 @@ function normalizeDisbursements(raw, errors, keysWithDocuments = new Set()) {
 }
 
 /**
+ * The income heads this project declares as applicable — the ticks on the
+ * Income Heads card, which decide what the ledger's head picker offers and what
+ * the Transaction Summary lists on its income side.
+ *
+ * Stored by name and deduplicated case-insensitively, like the budget-head
+ * rows. A name outside the vocabulary is dropped rather than reported: the card
+ * is a fixed set of checkboxes, so anything else is a stale or hand-made
+ * request rather than something a user can act on.
+ */
+function normalizeIncomeHeads(raw) {
+  const submitted = Array.isArray(raw) ? raw : [];
+  const seen = new Set();
+
+  return (
+    submitted
+      .map((value) => {
+        const name = trimmed(typeof value === 'object' ? (value?.income_head_name ?? '') : value);
+        return PROJECT_INCOME_HEADS.find((head) => head.toLowerCase() === name.toLowerCase()) ?? '';
+      })
+      .filter((name) => {
+        if (!name || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      })
+      // Kept in the card's own order rather than the order they arrived in, so
+      // the Transaction Summary reads the same way on every project.
+      .sort(
+        (left, right) => PROJECT_INCOME_HEADS.indexOf(left) - PROJECT_INCOME_HEADS.indexOf(right),
+      )
+      .map((name, index) => ({ income_head_name: name, display_order: index }))
+  );
+}
+
+/**
  * The Budget Allotment matrix: financial-year columns, budget-head rows, and
  * the allotted amount at each intersection.
  *
@@ -578,6 +647,16 @@ function normalizeBudgetAllotment(raw, errors, canonicalBudgetHead) {
       return {
         key: toNullableString(row?.key, 64) || `head-${index}`,
         budget_head_name: stored,
+        // Who the money under this head comes from. Optional — a project that
+        // never splits its budget by contributor leaves it empty — and stored
+        // with a name snapshot beside the id the same way a finance row is.
+        contribution_organization_id: toId(
+          row?.contribution_organization_id ?? row?.contributionOrganizationId,
+        ),
+        contribution_organization_name: toNullableString(
+          row?.contribution_organization_name ?? row?.contributionOrganizationName,
+          255,
+        ),
         sourceIndex: index,
       };
     })
@@ -686,6 +765,23 @@ function normalizeTransactions(raw, fieldPrefix, errors, canonicalBudgetHead) {
               : toNullableString(row?.head_name ?? row?.headName, 255),
           particulars: toNullableString(row?.particulars, 500),
           reference_no: toNullableString(row?.reference_no ?? row?.referenceNo, 150),
+          payment_mode: toEnum(
+            row?.payment_mode ?? row?.paymentMode,
+            TRANSACTION_PAYMENT_MODES,
+            `${field}.payment_mode`,
+            errors,
+          ),
+          // Who a receipt came from. Offered on income rows only, where it
+          // takes the place of the reference number, but stored on every row —
+          // a head switched between the two kinds hides the field it no longer
+          // uses rather than destroying what was typed into it.
+          contribution_organization_id: toId(
+            row?.contribution_organization_id ?? row?.contributionOrganizationId,
+          ),
+          contribution_organization_name: toNullableString(
+            row?.contribution_organization_name ?? row?.contributionOrganizationName,
+            255,
+          ),
           credit: toAmount(row?.credit, `${field}.credit`, errors),
           debit: toAmount(row?.debit, `${field}.debit`, errors),
           sourceIndex: index,
@@ -697,6 +793,9 @@ function normalizeTransactions(raw, fieldPrefix, errors, canonicalBudgetHead) {
           row.head_name ||
           row.particulars ||
           row.reference_no ||
+          row.payment_mode ||
+          row.contribution_organization_id ||
+          row.contribution_organization_name ||
           row.credit !== null ||
           row.debit !== null,
       )
@@ -1030,6 +1129,7 @@ export function normalizeProjectPayload(
       errors,
       new Set(rowKeysWithDocuments),
     ),
+    incomeHeads: normalizeIncomeHeads(body.income_heads ?? body.incomeHeads),
     budget: normalizeBudgetAllotment(body.budget, errors, canonicalBudgetHead),
     transactionAccounts: normalizeTransactionAccounts(
       body.transaction_accounts ?? body.transactionAccounts,

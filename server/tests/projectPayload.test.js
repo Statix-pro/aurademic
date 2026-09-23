@@ -284,6 +284,58 @@ describe('normalizeProjectPayload', () => {
     );
   });
 
+  it('stores a finance row that covers all heads, with no head rows beside it', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        financial_contribution_enabled: true,
+        financial_contributions: [
+          {
+            organization_name: 'K.S.Rangasamy College of Technology',
+            amount: '500000',
+            covers_all_heads: true,
+            // Sent anyway: "all" is exclusive, so these must not survive beside
+            // the flag, or the row would say two different things.
+            heads: [{ budget_head_name: 'Equipment' }, { budget_head_name: 'Travel' }],
+          },
+        ],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.financeRows[0]).toMatchObject({ covers_all_heads: 1, heads: [] });
+  });
+
+  it('leaves the flag off for a row that lists its heads', () => {
+    const { aggregate } = normalizeProjectPayload(
+      validPayload({
+        financial_contribution_enabled: true,
+        financial_contributions: [
+          { organization_name: 'DST', amount: '100', heads: [{ budget_head_name: 'Equipment' }] },
+        ],
+      }),
+    );
+
+    expect(aggregate.financeRows[0]).toMatchObject({
+      covers_all_heads: 0,
+      heads: [{ budget_head_name: 'Equipment' }],
+    });
+  });
+
+  it('keeps a row whose only content so far is "all heads"', () => {
+    // A row the user has started is not a blank row, so it has to reach the
+    // validation below — which then asks for the organization and amount.
+    const { errors } = normalizeProjectPayload(
+      validPayload({
+        financial_contribution_enabled: true,
+        financial_contributions: [{ covers_all_heads: true }],
+      }),
+    );
+
+    expect(errorFields(errors)).toEqual(
+      expect.arrayContaining(['contribution_rows[0].organization', 'contribution_rows[0].amount']),
+    );
+  });
+
   it('deduplicates budget heads on a finance row', () => {
     const { aggregate } = normalizeProjectPayload(
       validPayload({
@@ -491,6 +543,76 @@ describe('presentation documents follow the section toggle', () => {
   });
 });
 
+describe('income heads', () => {
+  it('keeps the ticked heads, in the card order rather than the order they arrived', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({ income_heads: ['Other Income', 'Grant-in-aid'] }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.incomeHeads).toEqual([
+      { income_head_name: 'Grant-in-aid', display_order: 0 },
+      { income_head_name: 'Other Income', display_order: 1 },
+    ]);
+  });
+
+  it('matches a head case-insensitively and drops one outside the vocabulary', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({ income_heads: ['bank interest', 'Grant Received', ''] }),
+    );
+
+    // The card is a fixed set of checkboxes, so anything else is a stale
+    // request rather than something a user could act on — dropped, not reported.
+    expect(errors).toEqual([]);
+    expect(aggregate.incomeHeads).toEqual([
+      { income_head_name: 'Bank Interest', display_order: 0 },
+    ]);
+  });
+
+  it('deduplicates a head sent twice', () => {
+    const { aggregate } = normalizeProjectPayload(
+      validPayload({ income_heads: ['HI Contribution', 'HI CONTRIBUTION'] }),
+    );
+
+    // uq_project_income_heads_name would reject the second row.
+    expect(aggregate.incomeHeads).toEqual([
+      { income_head_name: 'HI Contribution', display_order: 0 },
+    ]);
+  });
+
+  it('is empty when the form sends nothing, so nothing is pre-ticked', () => {
+    const { aggregate, errors } = normalizeProjectPayload(validPayload());
+
+    expect(errors).toEqual([]);
+    expect(aggregate.incomeHeads).toEqual([]);
+  });
+
+  it('still accepts a ledger row under a head that was not ticked', () => {
+    // Un-ticking only stops a head being offered. A row already filed under it
+    // has to stay saveable, or an edit anywhere else on the project would fail.
+    const { errors } = normalizeProjectPayload(
+      validPayload({
+        income_heads: ['Grant-in-aid'],
+        transaction_accounts: [
+          {
+            account_option_id: 17,
+            transactions: [
+              {
+                transaction_date: '2026-05-10',
+                head_kind: 'income',
+                head_name: 'Bank Interest',
+                credit: '4200',
+              },
+            ],
+          },
+        ],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+  });
+});
+
 describe('budget allotment matrix', () => {
   const matrix = (overrides = {}) =>
     validPayload({
@@ -585,6 +707,52 @@ describe('budget allotment matrix', () => {
     expect(errorFields(errors)).toContain('budget.years[0]');
   });
 
+  it('keeps the contributing organization on a head row, and its name snapshot', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      matrix({
+        heads: [
+          {
+            key: 'h1',
+            budget_head_name: 'Consumables',
+            contribution_organization_id: '7',
+            contribution_organization_name: 'Department of Science and Technology',
+          },
+          { key: 'h2', budget_head_name: 'Manpower' },
+        ],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.budget.heads).toEqual([
+      {
+        key: 'h1',
+        budget_head_name: 'Consumables',
+        contribution_organization_id: 7,
+        contribution_organization_name: 'Department of Science and Technology',
+        display_order: 0,
+      },
+      {
+        key: 'h2',
+        budget_head_name: 'Manpower',
+        contribution_organization_id: null,
+        contribution_organization_name: null,
+        display_order: 1,
+      },
+    ]);
+  });
+
+  it('drops a row that names a contributor but no head', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      matrix({
+        heads: [{ key: 'h1', budget_head_name: '', contribution_organization_id: 7 }],
+        allotments: [],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.budget.heads).toEqual([]);
+  });
+
   it('is empty when the form sends no budget at all', () => {
     const { aggregate, errors } = normalizeProjectPayload(validPayload());
 
@@ -631,6 +799,76 @@ describe('transaction accounts', () => {
       debit: 5000,
       display_order: 0,
     });
+  });
+
+  it('stores the payment mode lower-cased, whatever case it arrives in', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow({ payment_mode: 'NEFT' }), ledgerRow({ payment_mode: 'Cheque' })]),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions.map((row) => row.payment_mode)).toEqual([
+      'neft',
+      'cheque',
+    ]);
+  });
+
+  it('leaves the payment mode null when the row does not say', () => {
+    const { aggregate, errors } = normalizeProjectPayload(withLedger([ledgerRow()]));
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].payment_mode).toBeNull();
+  });
+
+  it('rejects a payment mode outside the list rather than storing it', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([ledgerRow({ payment_mode: 'Bitcoin' })]),
+    );
+
+    expect(errorFields(errors)).toContain('transaction_accounts[0].transactions[0].payment_mode');
+    expect(aggregate.transactionAccounts[0].transactions[0].payment_mode).toBeNull();
+  });
+
+  it('keeps the contributing organization on an income row, with its name snapshot', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([
+        ledgerRow({
+          head_kind: 'income',
+          head_name: 'Grant-in-aid',
+          debit: null,
+          credit: '250000',
+          contribution_organization_id: '7',
+          contribution_organization_name: 'Department of Science and Technology',
+        }),
+      ]),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0]).toMatchObject({
+      head_kind: 'income',
+      contribution_organization_id: 7,
+      contribution_organization_name: 'Department of Science and Technology',
+    });
+  });
+
+  it('keeps a reference number on a row that was switched to an income head', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      withLedger([
+        ledgerRow({
+          head_kind: 'income',
+          head_name: 'Bank Interest',
+          debit: null,
+          credit: '1000',
+          reference_no: 'VCH/2026/41',
+          contribution_organization_id: 7,
+        }),
+      ]),
+    );
+
+    // The form hides it rather than clearing it, so the value has to survive
+    // the round trip — switching the head back has to bring it with it.
+    expect(errors).toEqual([]);
+    expect(aggregate.transactionAccounts[0].transactions[0].reference_no).toBe('VCH/2026/41');
   });
 
   it('fills the financial year from the date when the column was left blank', () => {
@@ -687,7 +925,7 @@ describe('transaction accounts', () => {
       withLedger([
         ledgerRow({
           head_kind: 'income',
-          head_name: 'Deposit',
+          head_name: 'Bank Interest',
           debit: '',
           credit: '90000',
         }),
@@ -696,7 +934,7 @@ describe('transaction accounts', () => {
 
     expect(aggregate.transactionAccounts[0].transactions[0]).toMatchObject({
       head_kind: 'income',
-      head_name: 'Deposit',
+      head_name: 'Bank Interest',
     });
   });
 
