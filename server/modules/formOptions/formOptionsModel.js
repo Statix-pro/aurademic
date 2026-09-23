@@ -202,9 +202,11 @@ const formOptionsModel = {
             (SELECT COUNT(*) FROM project_schemes WHERE organization_id = ?) +
             (SELECT COUNT(*) FROM project_collaborators WHERE organization_id = ?) +
             (SELECT COUNT(*) FROM project_finance_rows WHERE organization_id = ?) +
-            (SELECT COUNT(*) FROM project_grant_disbursements WHERE organization_id = ?)
+            (SELECT COUNT(*) FROM project_grant_disbursements WHERE organization_id = ?) +
+            (SELECT COUNT(*) FROM project_budget_heads WHERE contribution_organization_id = ?) +
+            (SELECT COUNT(*) FROM project_transactions WHERE contribution_organization_id = ?)
             AS references_count`,
-        [id, id, id, id, id],
+        [id, id, id, id, id, id, id],
       );
 
       if (Number(usage.references_count) > 0) {

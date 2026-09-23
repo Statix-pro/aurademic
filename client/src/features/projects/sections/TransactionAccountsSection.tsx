@@ -50,7 +50,7 @@ interface TransactionAccountsSectionProps {
  * and the money — so the ones that describe a single entry drop out of the
  * table's width and into a second row beneath it.
  */
-const DETAIL_ERROR_KEYS = ['transaction_date'];
+const DETAIL_ERROR_KEYS = ['transaction_date', 'payment_mode'];
 
 /**
  * What the tick is and what unticking it does, on the control itself rather
@@ -501,7 +501,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                   is identified by its voucher or cheque; money
                                   received is identified by who sent it — a
                                   grant instalment and the college's matching
-                                  share are both `Grant Received` otherwise.
+                                  share are both `Grant-in-aid` otherwise.
 
                                   Only the applicable one is shown, but both are
                                   kept on the row: switching a head from one kind
