@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import {
   AirVent,
@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
   Droplets,
+  Download,
   Eye,
   Fan,
   House,
@@ -23,20 +24,28 @@ import {
   PencilLine,
   PlusCircle,
   PlugZap,
+  RotateCcw,
   ShowerHead,
   Sofa,
   Table,
   Trash2,
   Tv,
   UsersRound,
+  Upload,
   Utensils,
   WashingMachine,
   Wifi,
+  XCircle,
 } from 'lucide-react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAbility } from '../../shared/casl/AbilityContext';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
+import { getGuesthouseWorkflowStage } from '../../shared/utils/permissionUtils';
+import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
+import BudgetSelect from '../../shared/components/ui/BudgetSelect';
+import RecordHeaderBanner from '../../shared/components/ui/RecordHeaderBanner';
+import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import './guesthousebooking.css';
 
 type Gender = 'Male' | 'Female' | 'Others' | '';
@@ -52,6 +61,8 @@ const createNumericId = () => {
 
   return Date.now();
 };
+
+const toText = (value: unknown) => (value === null || value === undefined ? '' : String(value));
 
 type GuestAmenityKey =
   | 'roomCleaning'
@@ -135,6 +146,11 @@ interface BeneficiaryEntityOption {
 
 type BeneficiaryEntityOptions = Record<string, BeneficiaryEntityOption[]>;
 
+interface BeneficiaryTypeOption {
+  value: string;
+  label: string;
+}
+
 const BENEFICIARY_TYPE_OPTIONS = [
   'Faculty',
   'Staff',
@@ -145,6 +161,9 @@ const BENEFICIARY_TYPE_OPTIONS = [
   'Section',
   'Professional Body',
 ];
+const BENEFICIARY_TYPE_SELECT_OPTIONS: BeneficiaryTypeOption[] = BENEFICIARY_TYPE_OPTIONS.map(
+  (option) => ({ value: option, label: option }),
+);
 const BENEFICIARY_TAG_OPTIONS = [
   'Laboratory',
   'Association',
@@ -727,7 +746,7 @@ const buildApplicantDetails = (
     sources.reduce((value, source) => value || getTextValue(source, keys), '');
 
   return {
-    employeeId: read(['employee_id', 'employeeId', 'erp_id', 'erpId', 'id']),
+    employeeId: read(['employee_id', 'employeeId', 'master_employee_id', 'masterEmployeeId']),
     departmentId: read(['department_id', 'departmentId']),
     name: read(['name', 'full_name', 'fullName']),
     date: read(['request_date', 'requestDate', 'date']) || todayInputValue(),
@@ -879,13 +898,189 @@ const emptyTravelDetails: TravelDetails = {
   checkOutTime: '',
 };
 
+const parseCsv = (text: string): string[][] => {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let value = '';
+  let quoted = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (character === '"') {
+      if (quoted && text[index + 1] === '"') {
+        value += '"';
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+    } else if (character === ',' && !quoted) {
+      row.push(value.trim());
+      value = '';
+    } else if ((character === '\n' || character === '\r') && !quoted) {
+      if (character === '\r' && text[index + 1] === '\n') index += 1;
+      row.push(value.trim());
+      if (row.some(Boolean)) rows.push(row);
+      row = [];
+      value = '';
+    } else {
+      value += character;
+    }
+  }
+  row.push(value.trim());
+  if (row.some(Boolean)) rows.push(row);
+  return rows;
+};
+
+const normalizeCsvHeader = (value: string) => value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+
+const downloadCsv = (filename: string, content: string) => {
+  const url = URL.createObjectURL(new Blob([content], { type: 'text/csv;charset=utf-8' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+interface GuesthousePrintPreviewProps {
+  bookingId: number;
+  applicant: ApplicantDetails;
+  beneficiary: BeneficiaryDetails;
+  travel: TravelDetails;
+  guests: GuestDetails[];
+  foodRows: FoodRequirementRow[];
+}
+
+const previewValue = (value: unknown) => String(value ?? '').trim() || '-';
+
+/** A compact document view for the workflow iframe, deliberately separate from the editable form. */
+const GuesthousePrintPreview: React.FC<GuesthousePrintPreviewProps> = ({
+  bookingId,
+  applicant,
+  beneficiary,
+  travel,
+  guests,
+  foodRows,
+}) => {
+  const reference = `#GH-${new Date(applicant.date || Date.now()).getFullYear()}-${String(bookingId).padStart(4, '0')}`;
+  const totalRooms = guests.reduce(
+    (sum, guest) =>
+      sum + Number(guest.roomSingle || 0) + Number(guest.roomDouble || 0) + Number(guest.roomDeluxe || 0),
+    0,
+  );
+  const totalPeople = guests.reduce(
+    (sum, guest) =>
+      sum + 1 + Number(guest.accompaniedMale || 0) + Number(guest.accompaniedFemale || 0) + Number(guest.accompaniedChildren || 0),
+    0,
+  );
+  // Keep this document deliberately compact: it is rendered inside a preview at any
+  // browser zoom, but must also fit cleanly on one A4 page when saved as a PDF.
+  const cell: React.CSSProperties = { border: '1px solid #111', padding: '5px 6px', verticalAlign: 'middle' };
+  const label: React.CSSProperties = { ...cell, width: '16%', fontWeight: 700, color: '#283b6b' };
+  const primaryGuest = guests[0];
+  const guestAddress = [primaryGuest?.organization, primaryGuest?.city, primaryGuest?.state]
+    .filter(Boolean)
+    .join(', ');
+  const formField: React.CSSProperties = { display: 'grid', gridTemplateColumns: '36% minmax(0, 1fr) 12% 22%', alignItems: 'end', columnGap: 8, marginBottom: 10 };
+  const formLabel: React.CSSProperties = { whiteSpace: 'nowrap', fontWeight: 700, fontSize: 11 };
+  const formLine: React.CSSProperties = { borderBottom: '1px solid #111', minHeight: 18, padding: '1px 4px', minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.35 };
+  const mealTotal = (veg: string, nonVeg: string) => `${veg || 0} / ${nonVeg || 0}`;
+  const stayDays = (() => {
+    const checkIn = new Date(travel.checkInDate);
+    const checkOut = new Date(travel.checkOutDate);
+    if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) return '-';
+    return Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / 86_400_000));
+  })();
+
+  return (
+    <main className="guesthouse-print-form" style={{ width: '210mm', minHeight: '297mm', margin: '0 auto', padding: '13mm 14mm', background: '#fff', boxSizing: 'border-box', color: '#111', fontFamily: 'Arial, sans-serif', fontSize: 11 }}>
+      <style>{`
+        @page { size: A4 portrait; margin: 10mm; }
+        html, body { margin: 0; padding: 0; background: #f3f4f6; }
+        * { box-sizing: border-box; }
+        .guesthouse-print-form table, .guesthouse-print-form section { break-inside: avoid; page-break-inside: avoid; }
+        @media print {
+          html, body { width: auto !important; height: auto !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+          .guesthouse-print-form {
+            width: 100% !important;
+            min-height: 277mm !important;
+            margin: 0 !important;
+            padding: 3mm 2mm !important;
+            overflow: visible !important;
+            box-shadow: none !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+      `}</style>
+      <header style={{ textAlign: 'center', marginBottom: 16 }}>
+        <strong style={{ display: 'block', fontSize: 17, letterSpacing: 0.7 }}>KSR EDUCATIONAL INSTITUTIONS</strong>
+        <strong style={{ display: 'block', fontSize: 17, letterSpacing: 0.7, marginTop: 3 }}>GUEST HOUSE BOOKING</strong>
+        <strong style={{ display: 'inline-block', marginTop: 4, borderBottom: '1px solid #111', fontSize: 11 }}>Guest House Contact No. 97902 65556</strong>
+      </header>
+      <div style={{ textAlign: 'right', marginBottom: 18 }}>Date:&nbsp; <span style={{ display: 'inline-block', minWidth: 105, textAlign: 'left', borderBottom: '1px solid #111' }}>{previewValue(formatDateForDisplay(applicant.date))}</span></div>
+      <section>
+        <div style={formField}><span style={formLabel}>Name of the Institution:</span><span style={formLine}>{previewValue(applicant.department)}</span><span style={formLabel}>Department:</span><span style={formLine}>{previewValue(applicant.department)}</span></div>
+        <div style={formField}><span style={formLabel}>Booking Faculty Name:</span><span style={formLine}>{previewValue(applicant.name)}</span><span style={formLabel}>Mobile No.</span><span style={formLine}>{previewValue(applicant.mobile)}</span></div>
+        <div style={formField}><span style={formLabel}>Name of the Guest:</span><span style={{ ...formLine, gridColumn: '2 / -1' }}>{previewValue(primaryGuest?.name)}</span></div>
+        <div style={formField}><span style={formLabel}>Address:</span><span style={formLine}>{previewValue(guestAddress)}</span><span style={formLabel}>Mobile No.</span><span style={formLine}>{previewValue(applicant.mobile)}</span></div>
+        <div style={{ ...formField, alignItems: 'start' }}><span style={formLabel}>Purpose of Visit Details:</span><span style={{ ...formLine, gridColumn: '2 / -1', minHeight: 30 }}>{previewValue(primaryGuest?.remarks || beneficiary.beneficiaryType)}</span></div>
+      </section>
+      <hr style={{ border: 0, borderTop: '2px solid #222', margin: '14px 0 15px' }} />
+      <section>
+        <div style={{ ...formField, gridTemplateColumns: '36% 30%', maxWidth: '65%' }}><span style={formLabel}>Total Number of Guests:</span><span style={formLine}>{totalPeople}</span></div>
+        <div style={formField}><span style={formLabel}>Accommodation From Date:</span><span style={formLine}>{previewValue(formatDateForDisplay(travel.checkInDate))}</span><span style={formLabel}>/ Time:</span><span style={formLine}>{previewValue(travel.checkInTime)}</span></div>
+        <div style={formField}><span style={formLabel}>Leaving Accommodation on Date:</span><span style={formLine}>{previewValue(formatDateForDisplay(travel.checkOutDate))}</span><span style={formLabel}>/ Time:</span><span style={formLine}>{previewValue(travel.checkOutTime)}</span></div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 28 }}><div style={{ ...formField, gridTemplateColumns: '48% minmax(0, 1fr)' }}><span style={formLabel}>Total No. of Days:</span><span style={formLine}>{stayDays}</span></div><div style={{ ...formField, gridTemplateColumns: '58% minmax(0, 1fr)' }}><span style={formLabel}>Total Rooms Required:</span><span style={formLine}>{totalRooms}</span></div></div>
+        <div style={{ textAlign: 'right', marginBottom: 12 }}><strong>Boarding Type: </strong>VEGETARIAN Nos. {guests.reduce((sum, guest) => sum + Number(guest.foodVeg || 0), 0)} &nbsp;&nbsp; NON VEGETARIAN Nos. {guests.reduce((sum, guest) => sum + Number(guest.foodNonVeg || 0), 0)}</div>
+      </section>
+      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', textAlign: 'center' }}><thead><tr><th style={cell} colSpan={6}>Food Requirement Total No. of Members: {totalPeople}</th></tr><tr>{['Date', 'Morning Tea', 'Breakfast', 'Lunch', 'Evening Tea', 'Dinner'].map((heading) => <th key={heading} style={cell}>{heading}</th>)}</tr></thead><tbody>{foodRows.map((row) => <tr key={row.id}><td style={cell}>{previewValue(formatDateForDisplay(row.date))}</td><td style={cell}>{row.morningRefreshment || '-'}</td><td style={cell}>{mealTotal(row.breakfastVeg, row.breakfastNonVeg)}</td><td style={cell}>{mealTotal(row.lunchVeg, row.lunchNonVeg)}</td><td style={cell}>{row.eveningRefreshment || '-'}</td><td style={cell}>{mealTotal(row.dinnerVeg, row.dinnerNonVeg)}</td></tr>)}</tbody></table>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 38 }}><span>Sig. of Dept. HoD</span><span>Institution's Principal's Sig</span></div>
+      <section style={{ borderTop: '1px solid #111', marginTop: 28, paddingTop: 12, textAlign: 'center' }}><strong style={{ textDecoration: 'underline' }}>TO BE FILLED BY GUEST HOUSE INCHARGE</strong><div style={{ fontStyle: 'italic', margin: '12px 0' }}>RECOMMENDED / NOT RECOMMENDED</div><div>KSR Guest House - Room No. .................... &nbsp;&nbsp;&nbsp; RR Guest House - Room No. ....................</div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 52 }}><span>Date: </span><span>Sig. of Guest House IC</span></div></section>
+    </main>
+  );
+
+  return (
+    <main style={{ width: '210mm', minHeight: '297mm', margin: '0 auto', padding: '18px', background: '#fff', boxSizing: 'border-box', color: '#162b55', fontFamily: 'Arial, sans-serif', fontSize: '14px' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', color: '#000' }}><tbody><tr>
+        <td style={{ ...cell, width: '16%', textAlign: 'center' }}><img src={KSRCTLogo} alt="KSRCT" style={{ width: 72, height: 72, objectFit: 'contain' }} /></td>
+        <td style={{ ...cell, textAlign: 'center' }}><strong style={{ fontSize: 22 }}>K.S.RANGASAMY COLLEGE OF TECHNOLOGY</strong><br /><span>(Autonomous)</span><br /><span style={{ fontSize: 17 }}>Tiruchengode – 637 215, Namakkal Dt. Tamil Nadu</span></td>
+        <td style={{ ...cell, width: '17%', textAlign: 'center', fontWeight: 700, fontSize: 18 }}>GUEST HOUSE<br /><span style={{ fontSize: 14 }}>{reference}</span></td>
+      </tr></tbody></table>
+      <h2 style={{ color: '#000', fontSize: 21, textAlign: 'center', margin: '17px 0 20px' }}>GUEST HOUSE ACCOMMODATION REQUEST</h2>
+
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}><tbody>
+        <tr><td style={label}>Applicant</td><td style={cell}>{previewValue(applicant.name)}</td><td style={label}>Request Date</td><td style={cell}>{previewValue(formatDateForDisplay(applicant.date))}</td></tr>
+        <tr><td style={label}>Department</td><td style={cell}>{previewValue(applicant.department)}</td><td style={label}>Designation</td><td style={cell}>{previewValue(applicant.designation)}</td></tr>
+        <tr><td style={label}>Email</td><td style={cell}>{previewValue(applicant.email)}</td><td style={label}>Mobile</td><td style={cell}>{previewValue(applicant.mobile)}</td></tr>
+        <tr><td style={label}>Beneficiary</td><td style={cell} colSpan={3}>{previewValue(beneficiary.beneficiaryType)}{beneficiary.staffName ? ` – ${beneficiary.staffName}` : ''}{beneficiary.tag ? ` (${beneficiary.tag})` : ''}</td></tr>
+        <tr><td style={label}>Check-in</td><td style={cell}>{previewValue(formatDateForDisplay(travel.checkInDate))} &nbsp; {previewValue(travel.checkInTime)}</td><td style={label}>Check-out</td><td style={cell}>{previewValue(formatDateForDisplay(travel.checkOutDate))} &nbsp; {previewValue(travel.checkOutTime)}</td></tr>
+      </tbody></table>
+
+      <h3 style={{ color: '#000', fontSize: 17, margin: '22px 0 8px' }}>Guest Details</h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr style={{ background: '#f1f4f8' }}>
+        {['S.No', 'Guest / Organization', 'Contact & Designation', 'Accompanying', 'Rooms', 'Food', 'Remarks'].map((heading) => <th key={heading} style={{ ...cell, textAlign: 'left', color: '#283b6b' }}>{heading}</th>)}
+      </tr></thead><tbody>{guests.map((guest, index) => <tr key={guest.id}>
+        <td style={cell}>{index + 1}</td><td style={cell}><strong>{previewValue(guest.name)}</strong><br />{previewValue(guest.organization)}</td><td style={cell}>{previewValue(guest.designation)}<br />{previewValue(guest.email)}</td>
+        <td style={cell}>M: {guest.accompaniedMale || 0}<br />F: {guest.accompaniedFemale || 0}<br />C: {guest.accompaniedChildren || 0}</td>
+        <td style={cell}>Single: {guest.roomSingle || 0}<br />Double: {guest.roomDouble || 0}<br />Deluxe: {guest.roomDeluxe || 0}</td><td style={cell}>Veg: {guest.foodVeg || 0}<br />Non-veg: {guest.foodNonVeg || 0}</td><td style={cell}>{previewValue(guest.remarks)}</td>
+      </tr>)}</tbody></table>
+
+      <div style={{ display: 'flex', gap: 0, marginTop: 14 }}><div style={{ ...cell, flex: 1, fontWeight: 700 }}>Total guests: {totalPeople}</div><div style={{ ...cell, flex: 1, fontWeight: 700 }}>Total rooms: {totalRooms}</div></div>
+      <h3 style={{ color: '#000', fontSize: 17, margin: '22px 0 8px' }}>Food Requirements</h3>
+      <table style={{ width: '100%', borderCollapse: 'collapse' }}><thead><tr style={{ background: '#f1f4f8' }}>
+        {['Date', 'Morning Refreshment', 'Breakfast (V / NV)', 'Lunch (V / NV)', 'Evening Refreshment', 'Dinner (V / NV)'].map((heading) => <th key={heading} style={{ ...cell, textAlign: 'left', color: '#283b6b' }}>{heading}</th>)}
+      </tr></thead><tbody>{foodRows.map((row) => <tr key={row.id}><td style={cell}>{previewValue(formatDateForDisplay(row.date))}</td><td style={cell}>{row.morningRefreshment || 0}</td><td style={cell}>{row.breakfastVeg || 0} / {row.breakfastNonVeg || 0}</td><td style={cell}>{row.lunchVeg || 0} / {row.lunchNonVeg || 0}</td><td style={cell}>{row.eveningRefreshment || 0}</td><td style={cell}>{row.dinnerVeg || 0} / {row.dinnerNonVeg || 0}</td></tr>)}</tbody></table>
+      <div style={{ border: '1px solid #111', borderTop: 'none', padding: '12px 9px', marginTop: 28 }}><strong>Submitted by:</strong> {previewValue(applicant.name)} ({previewValue(applicant.email)})</div>
+    </main>
+  );
+};
+
 const GuestHouseBooking: React.FC = () => {
-  const isRoomAllotmentVisible = import.meta.env.VITE_GUESTHOUSE_ROOM_ALLOTMENT === 'true';
   const isGuesthouseManagementVisible = import.meta.env.VITE_GUESTHOUSE_MANAGEMENT === 'true';
   const { user } = useAuth();
   const ability = useAbility();
   const canManageGuesthouse = Boolean(user && ability.can('manage', 'GuestHouse'));
-  const canOverrideApplicant = canManageGuesthouse;
   const location = useLocation();
   const navigate = useNavigate();
   const { id: bookingIdParam } = useParams<{ id?: string }>();
@@ -893,12 +1088,28 @@ const GuestHouseBooking: React.FC = () => {
   const hasBookingId = Number.isInteger(bookingId) && bookingId > 0;
   const isEditMode = hasBookingId && location.pathname.endsWith('/edit');
   const isViewingBooking = hasBookingId && !isEditMode;
+  const isPrintPreview = new URLSearchParams(location.search).get('preview') === 'true';
+  const isManageResourcesView =
+    new URLSearchParams(location.search).get('manageResources') === 'true';
+  const isApprovalForm = new URLSearchParams(location.search).get('admin') === 'true';
+  const isRoomAllotmentLink = new URLSearchParams(location.search).get('allotment') === 'true';
+  const isGuesthouseAdmin = getGuesthouseWorkflowStage(user) === 'guesthouse_admin';
+  const [adminView, setAdminView] = useState<'booking' | 'allotment'>(() =>
+    isRoomAllotmentLink ? 'allotment' : 'booking',
+  );
+  // Applicants may view an allocation through the dashboard house icon, but only
+  // the Guesthouse Admin can edit or submit it.
+  const canShowRoomAllocationTab = hasBookingId && (isGuesthouseAdmin || isRoomAllotmentLink);
+  const isRoomAllotmentVisible = canShowRoomAllocationTab && adminView === 'allotment';
+  const canEditRoomAllotment = hasBookingId && isGuesthouseAdmin && adminView === 'allotment';
+  const canOverrideApplicant = !isViewingBooking;
   const [applicantProfile, setApplicantProfile] = useState<ApiRecord | null>(null);
   const [applicantSearch, setApplicantSearch] = useState('');
   const [applicantSearchInitialized, setApplicantSearchInitialized] = useState(false);
   const [applicantResults, setApplicantResults] = useState<ApiRecord[]>([]);
-  const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(true);
-  const [submitMessage, setSubmitMessage] = useState('');
+  // New bookings start expanded for data entry; every saved booking (including
+  // returned bookings opened in edit mode) starts collapsed.
+  const [isApplicantCardOpen, setIsApplicantCardOpen] = useState(() => !hasBookingId);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [guests, setGuests] = useState<GuestDetails[]>([createGuest(1)]);
   const [travelDetails, setTravelDetails] = useState<TravelDetails>(emptyTravelDetails);
@@ -909,7 +1120,7 @@ const GuestHouseBooking: React.FC = () => {
   const [foodRows, setFoodRows] = useState<FoodRequirementRow[]>([createFoodRow()]);
   const [foodDateInputs, setFoodDateInputs] = useState<Record<number, string>>({});
   const [beneficiaryDetails, setBeneficiaryDetails] = useState<BeneficiaryDetails>({
-    beneficiaryType: 'Staff',
+    beneficiaryType: '',
     staffName: '',
     departmentId: '',
     tag: 'Skilling',
@@ -920,7 +1131,7 @@ const GuestHouseBooking: React.FC = () => {
     useState<BeneficiaryEmployeeOption[]>([]);
   const [beneficiarySearchOpen, setBeneficiarySearchOpen] = useState(false);
   const [roomBlockOptions, setRoomBlockOptions] = useState<RoomBlockOption[]>([]);
-  const [spocOptions, setSpocOptions] = useState<string[]>([]);
+  const [spocOptions, setSpocOptions] = useState<Array<{ name: string; mobile: string }>>([]);
   const [roomAllotments, setRoomAllotments] = useState<RoomAllotmentsByGuest>({});
   const [activeRoomDetail, setActiveRoomDetail] = useState<ActiveRoomDetail>(null);
   const [managedRooms, setManagedRooms] = useState<ManagedRoomRow[]>(initialManagedRooms);
@@ -928,6 +1139,36 @@ const GuestHouseBooking: React.FC = () => {
   const [editingManagedRoomId, setEditingManagedRoomId] = useState<number | null>(null);
   const [viewingManagedRoomId, setViewingManagedRoomId] = useState<number | null>(null);
   const [editingCareTakerId, setEditingCareTakerId] = useState<number | null>(null);
+  const roomCsvInputRef = useRef<HTMLInputElement | null>(null);
+  const careTakerCsvInputRef = useRef<HTMLInputElement | null>(null);
+  const [isSavingAllotments, setIsSavingAllotments] = useState(false);
+  const [isProcessingApproval, setIsProcessingApproval] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+  }>({ show: false, message: '', type: 'info' });
+
+  const showAlert = (message: React.ReactNode, type: AlertType, title?: string) =>
+    setAlertConfig({ show: true, message, type, title });
+
+  useEffect(() => {
+    if (!isManageResourcesView || !isGuesthouseAdmin) return;
+    const loadResources = async () => {
+      try {
+        const [roomsResponse, caretakersResponse]: any = await Promise.all([
+          authenticityUtility.get('/guesthouse/admin/rooms'),
+          authenticityUtility.get('/guesthouse/admin/caretakers'),
+        ]);
+        setManagedRooms((roomsResponse?.data || []).map((room: any) => ({ id: room.id, roomType: room.room_type, block: room.block, floor: room.floor || '', roomNumber: room.room_number, status: room.status })));
+        setCareTakers((caretakersResponse?.data || []).map((caretaker: any) => ({ id: caretaker.id, name: caretaker.name, mobile: caretaker.mobile || '', status: caretaker.status })));
+      } catch (error) {
+        showAlert('Unable to load Guest House resources.', 'error');
+      }
+    };
+    void loadResources();
+  }, [isGuesthouseAdmin, isManageResourcesView]);
 
   const applicantUiDetails = useMemo(
     () => buildApplicantDetails(user as unknown as ApiRecord | null, applicantProfile),
@@ -1071,6 +1312,30 @@ const GuestHouseBooking: React.FC = () => {
           }),
         );
 
+        const savedAllotments = Array.isArray(booking.roomAllotments) ? booking.roomAllotments : [];
+        setRoomAllotments(
+          savedAllotments.reduce<RoomAllotmentsByGuest>((next, allotment: any) => {
+            const guestId = String(allotment.guest_id);
+            next[guestId] = {
+              guestId,
+              spoc: toText(allotment.spoc),
+              mobile: toText(allotment.mobile),
+              amenities: (allotment.amenities && typeof allotment.amenities === 'object'
+                ? allotment.amenities
+                : {}) as Record<GuestAmenityKey, boolean>,
+              rows: (Array.isArray(allotment.rooms) ? allotment.rooms : []).map((room: any) => ({
+                id: String(room.id),
+                roomType: room.room_type as RoomType,
+                block: toText(room.block),
+                roomNumber: toText(room.room_number),
+                occupants: String(Array.isArray(room.occupants) ? room.occupants.length : 0),
+                remarks: toText(room.remarks),
+              })),
+            };
+            return next;
+          }, {}),
+        );
+
         const requirements = Array.isArray(booking.foodRequirements) ? booking.foodRequirements : [];
         if (requirements.length) {
           setFoodRows(
@@ -1091,7 +1356,7 @@ const GuestHouseBooking: React.FC = () => {
       } catch (error) {
         console.error('Failed to load guesthouse booking:', error);
         if (isMounted) {
-          setSubmitMessage('Unable to load this guesthouse booking.');
+          showAlert('Unable to load this Guest House booking.', 'error');
         }
       }
     };
@@ -1135,15 +1400,14 @@ const GuestHouseBooking: React.FC = () => {
 
     const loadSpocOptions = async () => {
       try {
-        const response = await authenticityUtility.get('/guesthouse/spocs');
-        const options = normalizeTextOptions(response, [
-          'name',
-          'spoc',
-          'full_name',
-          'fullName',
-          'label',
-          'value',
-        ]);
+        const response = await authenticityUtility.get('/guesthouse/admin/caretakers');
+        const payload = getPayloadData(response);
+        const options = (Array.isArray(payload) ? payload : [])
+          .map((caretaker: any) => ({
+            name: toText(caretaker.name),
+            mobile: toText(caretaker.mobile),
+          }))
+          .filter((caretaker: { name: string }) => Boolean(caretaker.name));
 
         if (isMounted) {
           setSpocOptions(options);
@@ -1255,11 +1519,17 @@ const GuestHouseBooking: React.FC = () => {
   };
 
   const updateBeneficiaryDetails = (field: keyof BeneficiaryDetails, value: string) => {
-    setBeneficiaryDetails((prev) => ({
-      ...prev,
-      [field]: value,
-      ...(field === 'beneficiaryType' || field === 'staffName' ? { departmentId: '' } : {}),
-    }));
+    setBeneficiaryDetails((prev) => {
+      if (field === 'beneficiaryType') {
+        return { ...prev, beneficiaryType: value, staffName: '', departmentId: '' };
+      }
+
+      return {
+        ...prev,
+        [field]: value,
+        ...(field === 'staffName' ? { departmentId: '' } : {}),
+      };
+    });
   };
 
   useEffect(() => {
@@ -1288,9 +1558,16 @@ const GuestHouseBooking: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (isViewingBooking) {
+      setBeneficiaryEmployeeOptions([]);
+      setBeneficiarySearchOpen(false);
+      return;
+    }
     if (!['Faculty', 'Staff'].includes(beneficiaryDetails.beneficiaryType)) return;
     const query = beneficiaryDetails.staffName.trim();
-    if (query.length < 1 && !beneficiarySearchOpen) {
+    // Once an employee has been picked, do not run a new search for the selected
+    // name; otherwise the same employee appears again as a duplicate suggestion.
+    if (!beneficiarySearchOpen) {
       setBeneficiaryEmployeeOptions([]);
       return;
     }
@@ -1320,7 +1597,12 @@ const GuestHouseBooking: React.FC = () => {
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [beneficiaryDetails.beneficiaryType, beneficiaryDetails.staffName, beneficiarySearchOpen]);
+  }, [
+    beneficiaryDetails.beneficiaryType,
+    beneficiaryDetails.staffName,
+    beneficiarySearchOpen,
+    isViewingBooking,
+  ]);
 
   const addGuest = () => {
     setGuests((prevGuests) => [...prevGuests, createGuest()]);
@@ -1344,6 +1626,16 @@ const GuestHouseBooking: React.FC = () => {
 
       return { ...prevDetails, [field]: value };
     });
+  };
+
+  const saveAllotmentSchedule = async (changes: Partial<TravelDetails>) => {
+    if (!hasBookingId) return;
+    const schedule = { ...travelDetails, ...changes };
+    try {
+      await authenticityUtility.patch(`/guesthouse/${bookingId}/travel-schedule`, schedule);
+    } catch (error) {
+      showAlert((error as any)?.response?.data?.message || 'Unable to update the travel schedule.', 'error');
+    }
   };
 
   const updateTravelDateInput = (field: TravelDateField, value: string) => {
@@ -1542,13 +1834,55 @@ const GuestHouseBooking: React.FC = () => {
     setViewingManagedRoomId(room.id);
   };
 
-  const removeManagedRoom = (id: number) => {
-    setManagedRooms((prevRooms) =>
-      prevRooms.length === 1 ? prevRooms : prevRooms.filter((room) => room.id !== id),
-    );
+  const saveManagedRoom = async (room: ManagedRoomRow) => {
+    if (!room.block.trim() || !room.floor.trim() || !room.roomNumber.trim()) {
+      showAlert('Block, floor, and room number are required.', 'warning');
+      return;
+    }
 
-    setEditingManagedRoomId((currentId) => (currentId === id ? null : currentId));
-    setViewingManagedRoomId((currentId) => (currentId === id ? null : currentId));
+    try {
+      const payload = {
+        roomType: room.roomType,
+        block: room.block.trim(),
+        floor: room.floor.trim(),
+        roomNumber: room.roomNumber.trim(),
+        status: room.status,
+      };
+      const isNewRoom = room.id >= 1_000_000_000;
+      const response: any = isNewRoom
+        ? await authenticityUtility.post('/guesthouse/admin/rooms', payload)
+        : await authenticityUtility.put(`/guesthouse/admin/rooms/${room.id}`, payload);
+      const savedId = Number(response?.data?.id || room.id);
+
+      setManagedRooms((prevRooms) =>
+        prevRooms.map((currentRoom) =>
+          currentRoom.id === room.id ? { ...currentRoom, id: savedId } : currentRoom,
+        ),
+      );
+      setEditingManagedRoomId(null);
+      setViewingManagedRoomId(savedId);
+      showAlert(isNewRoom ? 'Room added successfully.' : 'Room updated successfully.', 'success');
+    } catch (error) {
+      console.error('Unable to save room:', error);
+      showAlert('Unable to save room. Check that the room number is unique.', 'error');
+    }
+  };
+
+  const removeManagedRoom = async (id: number) => {
+    try {
+      // Rows loaded from the API have database ids. A newly added, unsaved row
+      // only exists in the browser and can simply be removed locally.
+      if (id < 1_000_000_000) {
+        await authenticityUtility.delete(`/guesthouse/admin/rooms/${id}`);
+      }
+      setManagedRooms((prevRooms) => prevRooms.filter((room) => room.id !== id));
+      setEditingManagedRoomId((currentId) => (currentId === id ? null : currentId));
+      setViewingManagedRoomId((currentId) => (currentId === id ? null : currentId));
+      showAlert('Room deleted successfully.', 'success');
+    } catch (error) {
+      console.error('Unable to delete room:', error);
+      showAlert('Unable to delete room. Please try again.', 'error');
+    }
   };
 
   const updateCareTaker = (
@@ -1569,14 +1903,126 @@ const GuestHouseBooking: React.FC = () => {
     setEditingCareTakerId(careTaker.id);
   };
 
-  const removeCareTaker = (id: number) => {
-    setCareTakers((prevCareTakers) =>
-      prevCareTakers.length === 1
-        ? prevCareTakers
-        : prevCareTakers.filter((careTaker) => careTaker.id !== id),
-    );
+  const saveCareTaker = async (careTaker: CareTakerRow) => {
+    if (!careTaker.name.trim() || !careTaker.mobile.trim()) {
+      showAlert('Care taker name and mobile number are required.', 'warning');
+      return;
+    }
 
-    setEditingCareTakerId((currentId) => (currentId === id ? null : currentId));
+    try {
+      const payload = {
+        name: careTaker.name.trim(),
+        mobile: careTaker.mobile.trim(),
+        status: careTaker.status,
+      };
+      const isNewCareTaker = careTaker.id >= 1_000_000_000;
+      const response: any = isNewCareTaker
+        ? await authenticityUtility.post('/guesthouse/admin/caretakers', payload)
+        : await authenticityUtility.put(`/guesthouse/admin/caretakers/${careTaker.id}`, payload);
+      const savedId = Number(response?.data?.id || careTaker.id);
+
+      setCareTakers((prevCareTakers) =>
+        prevCareTakers.map((currentCareTaker) =>
+          currentCareTaker.id === careTaker.id ? { ...currentCareTaker, id: savedId } : currentCareTaker,
+        ),
+      );
+      setEditingCareTakerId(null);
+      showAlert(isNewCareTaker ? 'Care taker added successfully.' : 'Care taker updated successfully.', 'success');
+    } catch (error) {
+      console.error('Unable to save care taker:', error);
+      showAlert('Unable to save care taker.', 'error');
+    }
+  };
+
+  const removeCareTaker = async (id: number) => {
+    try {
+      if (id < 1_000_000_000) {
+        await authenticityUtility.delete(`/guesthouse/admin/caretakers/${id}`);
+      }
+      setCareTakers((prevCareTakers) =>
+        prevCareTakers.filter((careTaker) => careTaker.id !== id),
+      );
+      setEditingCareTakerId((currentId) => (currentId === id ? null : currentId));
+      showAlert('Care taker deleted successfully.', 'success');
+    } catch (error) {
+      console.error('Unable to delete care taker:', error);
+      showAlert('Unable to delete care taker. Please try again.', 'error');
+    }
+  };
+
+  const importResourceCsv = async (event: React.ChangeEvent<HTMLInputElement>, type: 'rooms' | 'caretakers') => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.csv')) {
+      showAlert('Please upload a CSV file. In Excel, use Save As and select CSV UTF-8.', 'warning');
+      return;
+    }
+
+    const rows = parseCsv(await file.text());
+    const [headerRow, ...dataRows] = rows;
+    const headers = (headerRow || []).map(normalizeCsvHeader);
+    const read = (row: string[], names: string[]) => {
+      const column = headers.findIndex((header) => names.includes(header));
+      return column >= 0 ? String(row[column] || '').trim() : '';
+    };
+
+    if (type === 'rooms') {
+      const required = ['roomtype', 'block', 'floor', 'roomnumber', 'status'];
+      if (!required.every((header) => headers.includes(header))) {
+        showAlert('Room CSV must include: Room Type, Block, Floor, Room Number, Status.', 'warning');
+        return;
+      }
+      const imported = dataRows.flatMap((row) => {
+        const roomType = read(row, ['roomtype']).toLowerCase();
+        const status = read(row, ['status']).toLowerCase();
+        if (!['single', 'double', 'deluxe'].includes(roomType) || !['active', 'maintenance'].includes(status)) return [];
+        return [{
+          id: createNumericId(),
+          roomType: `${roomType[0].toUpperCase()}${roomType.slice(1)}` as RoomType,
+          block: read(row, ['block']),
+          floor: read(row, ['floor']),
+          roomNumber: read(row, ['roomnumber', 'roomno']),
+          status: `${status[0].toUpperCase()}${status.slice(1)}` as ManagedRoomStatus,
+        }];
+      });
+      if (imported.length === 0) {
+        showAlert('Add at least one valid room row to import.', 'warning');
+        return;
+      }
+      await authenticityUtility.post('/guesthouse/admin/resources/bulk-import', { type: 'rooms', rows: imported });
+      const saved: any = await authenticityUtility.get('/guesthouse/admin/rooms');
+      setManagedRooms((saved?.data || []).map((room: any) => ({ id: room.id, roomType: room.room_type, block: room.block, floor: room.floor || '', roomNumber: room.room_number, status: room.status })));
+      showAlert(`${imported.length} rooms saved. Re-uploading this CSV updates the same rooms without duplicates.`, 'success');
+      return;
+    }
+
+    const required = ['caretakername', 'mobilenumber', 'status'];
+    if (!required.every((header) => headers.includes(header))) {
+      showAlert('Care taker CSV must include: Care Taker Name, Mobile Number, Status.', 'warning');
+      return;
+    }
+    const imported = dataRows.flatMap((row) => {
+      const name = read(row, ['caretakername', 'name']);
+      const mobile = read(row, ['mobilenumber', 'mobile', 'phone']);
+      const status = read(row, ['status']).toLowerCase();
+      if (!name || !mobile || !['active', 'leave'].includes(status)) return [];
+      return [{
+        id: createNumericId(),
+        name,
+        mobile,
+        status: `${status[0].toUpperCase()}${status.slice(1)}` as CareTakerStatus,
+      }];
+    });
+    if (imported.length === 0) {
+      showAlert('Add at least one valid care taker row to import.', 'warning');
+      return;
+    }
+    await authenticityUtility.post('/guesthouse/admin/resources/bulk-import', { type: 'caretakers', rows: imported });
+    const saved: any = await authenticityUtility.get('/guesthouse/admin/caretakers');
+    setCareTakers((saved?.data || []).map((caretaker: any) => ({ id: caretaker.id, name: caretaker.name, mobile: caretaker.mobile || '', status: caretaker.status })));
+    showAlert(`${imported.length} care takers saved. Re-uploading this CSV updates the same care takers without duplicates.`, 'success');
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -1584,32 +2030,27 @@ const GuestHouseBooking: React.FC = () => {
 
     if (isSubmitting) return;
 
-    if (isEditMode) {
-      setSubmitMessage('Editing is preview-only until the guesthouse update API is available.');
-      return;
-    }
-
     // Validate checkout is after checkin
     const start = buildTravelDateTime(travelDetails.checkInDate, travelDetails.checkInTime);
     const end = buildTravelDateTime(travelDetails.checkOutDate, travelDetails.checkOutTime);
 
     if (start && end && end <= start) {
-      setSubmitMessage('Check-out date/time must be after check-in date/time.');
+      showAlert('Check-out date/time must be after check-in date/time.', 'warning');
       return;
     }
 
     if (!applicantUiDetails.name || !beneficiaryDetails.beneficiaryType || !beneficiaryDetails.staffName) {
-      setSubmitMessage('Applicant and beneficiary details are required.');
+      showAlert('Applicant and beneficiary details are required.', 'warning');
       return;
     }
 
     if (!travelDetails.checkInDate || !travelDetails.checkOutDate || !travelDetails.checkInTime || !travelDetails.checkOutTime) {
-      setSubmitMessage('Check-in and check-out date and time are required.');
+      showAlert('Check-in and check-out date and time are required.', 'warning');
       return;
     }
 
     if (guests.some((guest) => !guest.name.trim())) {
-      setSubmitMessage('Enter a name for every guest.');
+      showAlert('Enter a name for every guest.', 'warning');
       return;
     }
 
@@ -1626,21 +2067,54 @@ const GuestHouseBooking: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      const response = (await authenticityUtility.post('/guesthouse', payload)) as any;
+      const response = (await (isEditMode
+        ? authenticityUtility.put(`/guesthouse/${bookingId}`, payload)
+        : authenticityUtility.post('/guesthouse', payload))) as any;
       if (!response?.success) {
-        throw new Error(response?.message || 'Guesthouse booking submission failed');
+        throw new Error(response?.message || 'Guest House booking save failed');
       }
-      setSubmitMessage('Guesthouse booking submitted successfully.');
-      navigate('/guesthouse-dashboard', { replace: true });
+      const successMessage = isEditMode
+        ? 'Guest House booking updated successfully.'
+        : 'Guest House booking submitted successfully.';
+      showAlert(successMessage, 'success', isEditMode ? 'Booking Updated' : 'Booking Submitted');
+      if (!isEditMode) navigate('/guesthouse-dashboard', { replace: true });
     } catch (error: any) {
       console.error('Guesthouse booking submission failed:', error);
-      setSubmitMessage(
-        error?.response?.data?.message ||
-          error?.message ||
-          'Unable to submit guesthouse booking.',
-      );
+      const errorMessage = error?.response?.data?.message || error?.message || 'Unable to save Guest House booking.';
+      showAlert(errorMessage, 'error', 'Booking Not Saved');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSaveRoomAllotments = async () => {
+    if (!canEditRoomAllotment || isSavingAllotments) return;
+    try {
+      setIsSavingAllotments(true);
+      await authenticityUtility.put(`/guesthouse/${bookingId}/room-allotments`, {
+        allotments: guests.map((guest) => {
+          const allocation = roomAllotments[String(guest.id)] || createRoomAllotmentData(String(guest.id), guest);
+          return {
+            guestId: guest.id,
+            spoc: allocation.spoc,
+            mobile: allocation.mobile,
+            amenities: allocation.amenities,
+            rows: allocation.rows.map((row) => ({
+              ...row,
+              occupantNames: Array.from(
+                { length: Math.max(0, Number.parseInt(row.occupants, 10) || 0) },
+                () => guest.name || 'Guest',
+              ),
+            })),
+          };
+        }),
+      });
+      showAlert('Room allocation saved successfully.', 'success');
+    } catch (error: any) {
+      console.error('Failed to save room allocation', error);
+      showAlert(error?.response?.data?.message || error?.message || 'Unable to save room allocation.', 'error');
+    } finally {
+      setIsSavingAllotments(false);
     }
   };
 
@@ -1691,16 +2165,7 @@ const GuestHouseBooking: React.FC = () => {
   const renderTimeInput = (field: TravelTimeField, label: string) => (
     <label className="guesthousebooking-time-field">
       <span>{label}</span>
-      <input
-        className="guesthousebooking-time-input"
-        type="time"
-        step={60}
-        value={travelDetails[field]}
-        onChange={(event) => updateTravelDetails(field, event.target.value)}
-        title="Select time"
-        aria-label={`${label} time`}
-        required
-      />
+      <input className="guesthousebooking-time-input" type="time" step={60} value={travelDetails[field]} onChange={(event) => updateTravelDetails(field, event.target.value)} title="Select time" aria-label={`${label} time`} required />
     </label>
   );
   const renderTravelDateInput = (field: TravelDateField) => (
@@ -1944,8 +2409,39 @@ const GuestHouseBooking: React.FC = () => {
   );
   const renderGuesthouseAdminManagement = () => (
     <section className="guesthousebooking-card guesthousebooking-management-card">
+      <input
+        ref={roomCsvInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        hidden
+        onChange={(event) => void importResourceCsv(event, 'rooms')}
+      />
+      <input
+        ref={careTakerCsvInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        hidden
+        onChange={(event) => void importResourceCsv(event, 'caretakers')}
+      />
       <div className="guesthousebooking-management-panel">
         <div className="guesthousebooking-management-title">Room Management</div>
+        <div className="guesthousebooking-resource-import-toolbar">
+          <span>Bulk add rooms with CSV</span>
+          <div className="guesthousebooking-csv-actions">
+            <button type="button" onClick={addManagedRoom}>
+              <PlusCircle size={14} /> Add Room
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadCsv('room-management-template.csv', 'Room Type,Block,Floor,Room Number,Status\nSingle,Tangore,Ground,T001,Active\n')}
+            >
+              <Download size={14} /> Sample CSV
+            </button>
+            <button type="button" onClick={() => roomCsvInputRef.current?.click()}>
+              <Upload size={14} /> Import CSV
+            </button>
+          </div>
+        </div>
         <div className="guesthousebooking-management-table-wrap">
           <table className="guesthousebooking-management-table guesthousebooking-room-management-table">
             <thead>
@@ -2038,15 +2534,15 @@ const GuestHouseBooking: React.FC = () => {
                       {renderGuesthouseManagementActions(
                         addManagedRoom,
                         () =>
-                          setEditingManagedRoomId((currentId) =>
-                            currentId === room.id ? null : room.id,
-                          ),
+                          editingManagedRoomId === room.id
+                            ? void saveManagedRoom(room)
+                            : setEditingManagedRoomId(room.id),
                         () =>
                           setViewingManagedRoomId((currentId) =>
                             currentId === room.id ? null : room.id,
                           ),
-                        () => removeManagedRoom(room.id),
-                        managedRooms.length === 1,
+                        () => void removeManagedRoom(room.id),
+                        false,
                         isEditing,
                         isViewing,
                         'room',
@@ -2061,6 +2557,23 @@ const GuestHouseBooking: React.FC = () => {
 
         <div className="guesthousebooking-management-title guesthousebooking-management-title--spaced">
           Care Taker Management
+        </div>
+        <div className="guesthousebooking-resource-import-toolbar">
+          <span>Bulk add care takers with CSV</span>
+          <div className="guesthousebooking-csv-actions">
+            <button type="button" onClick={addCareTaker}>
+              <PlusCircle size={14} /> Add Care Taker
+            </button>
+            <button
+              type="button"
+              onClick={() => downloadCsv('care-taker-management-template.csv', 'Care Taker Name,Mobile Number,Status\nValavan C,9876543210,Active\n')}
+            >
+              <Download size={14} /> Sample CSV
+            </button>
+            <button type="button" onClick={() => careTakerCsvInputRef.current?.click()}>
+              <Upload size={14} /> Import CSV
+            </button>
+          </div>
         </div>
         <div className="guesthousebooking-management-table-wrap guesthousebooking-caretaker-management-wrap">
           <table className="guesthousebooking-management-table guesthousebooking-caretaker-management-table">
@@ -2122,11 +2635,11 @@ const GuestHouseBooking: React.FC = () => {
                       {renderCareTakerManagementActions(
                         addCareTaker,
                         () =>
-                          setEditingCareTakerId((currentId) =>
-                            currentId === careTaker.id ? null : careTaker.id,
-                          ),
-                        () => removeCareTaker(careTaker.id),
-                        careTakers.length === 1,
+                          editingCareTakerId === careTaker.id
+                            ? void saveCareTaker(careTaker)
+                            : setEditingCareTakerId(careTaker.id),
+                        () => void removeCareTaker(careTaker.id),
+                        false,
                         isEditing,
                         'care taker',
                       )}
@@ -2140,11 +2653,123 @@ const GuestHouseBooking: React.FC = () => {
       </div>
     </section>
   );
+  // The server validates the active workflow stage and the user's permission.
+  // Render the controls for an approval-route view even while the booking data
+  // is still loading, so an eligible approver never loses the action bar.
+  const canApproveFromForm = isApprovalForm && isViewingBooking;
+  const proposalYear = /^\d{4}/.test(applicantUiDetails.date)
+    ? applicantUiDetails.date.slice(0, 4)
+    : new Date().getFullYear();
+  const guesthouseProposalRef = `#GH-${proposalYear}-${String(bookingId).padStart(4, '0')}`;
+
+  const handleApprovalFromForm = async (
+    decision: 'approved' | 'returned' | 'rejected' | 'archived',
+  ) => {
+    if (!hasBookingId || isProcessingApproval) return;
+
+    let feedback = '';
+    if (decision === 'returned' || decision === 'rejected') {
+      feedback = window.prompt(
+        decision === 'returned'
+          ? 'Enter the reason for returning this request:'
+          : 'Enter the reason for rejecting this request:',
+      )?.trim() || '';
+      if (!feedback) return;
+    }
+
+    setIsProcessingApproval(true);
+    try {
+      const response = (await authenticityUtility.patch(`/guesthouse/${bookingId}/approval`, {
+        decision,
+        feedback,
+      })) as any;
+      if (!response?.success) {
+        throw new Error(response?.message || 'Guest House approval could not be completed');
+      }
+      navigate('/admin/guesthouse', { replace: true });
+    } catch (error) {
+      showAlert(
+        (error as any)?.response?.data?.message ||
+          (error as Error)?.message ||
+          'Guest House approval could not be completed.',
+        'error',
+      );
+    } finally {
+      setIsProcessingApproval(false);
+    }
+  };
+
+  if (isPrintPreview) {
+    return (
+      <GuesthousePrintPreview
+        bookingId={bookingId}
+        applicant={applicantUiDetails}
+        beneficiary={beneficiaryDetails}
+        travel={travelDetails}
+        guests={guests}
+        foodRows={foodRows}
+      />
+    );
+  }
+
+  if (isManageResourcesView && isGuesthouseAdmin) {
+    return (
+      <div className="guesthousebooking-page">
+        <div className="guesthousebooking-shell">
+          <div className="guesthousebooking-management-page-header">
+            <h1>Manage Resources</h1>
+            <button type="button" onClick={() => navigate('/admin/guesthouse')}>
+              Back to Requests
+            </button>
+          </div>
+          {renderGuesthouseAdminManagement()}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="guesthousebooking-page">
+    <div className={`guesthousebooking-page ${isApprovalForm ? 'guesthousebooking-page--approval' : ''}`}>
+      <AlertModal
+        show={alertConfig.show}
+        onHide={() => setAlertConfig((previous) => ({ ...previous, show: false }))}
+        message={alertConfig.message}
+        type={alertConfig.type}
+        title={alertConfig.title}
+      />
+      {isApprovalForm && (
+        <RecordHeaderBanner
+          referenceLabel="Proposal ID"
+          referenceValue={guesthouseProposalRef}
+          createdByEmail={applicantUiDetails.email || applicantUiDetails.name || '-'}
+        />
+      )}
       <div className="guesthousebooking-shell">
         <form onSubmit={handleSubmit}>
-          <fieldset disabled={isViewingBooking} style={{ border: 0, padding: 0, margin: 0 }}>
+          <fieldset disabled={isViewingBooking && !isGuesthouseAdmin && !isApprovalForm && !isRoomAllotmentVisible} style={{ border: 0, padding: 0, margin: 0 }}>
+          {canShowRoomAllocationTab && !isRoomAllotmentVisible && (
+            <div className="guesthousebooking-admin-toggle" role="tablist" aria-label="Guest House Admin view">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={adminView === 'booking'}
+                className={adminView === 'booking' ? 'is-active' : ''}
+                onClick={() => setAdminView('booking')}
+              >
+                Guest House Booking
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={adminView === 'allotment'}
+                className={adminView === 'allotment' ? 'is-active' : ''}
+                onClick={() => setAdminView('allotment')}
+              >
+                Room Allocation Card
+              </button>
+            </div>
+          )}
+          {(!canShowRoomAllocationTab || adminView === 'booking') && <>
           <section className="guesthousebooking-card">
             <button
               className="guesthousebooking-card-header"
@@ -2154,6 +2779,29 @@ const GuestHouseBooking: React.FC = () => {
               <span>Applicant Details</span>
               {isApplicantCardOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
             </button>
+
+            {!isApplicantCardOpen && (
+              <div className="guesthousebooking-card-summary">
+                <div className="guesthousebooking-summary-field">
+                  <span className="guesthousebooking-summary-label">Applicant Name</span>
+                  <input
+                    className="guesthousebooking-input"
+                    value={applicantUiDetails.name}
+                    readOnly
+                    onClick={() => setIsApplicantCardOpen(true)}
+                  />
+                </div>
+                <div className="guesthousebooking-summary-field">
+                  <span className="guesthousebooking-summary-label">Date</span>
+                  <input
+                    className="guesthousebooking-input"
+                    value={applicantUiDetails.date}
+                    readOnly
+                    onClick={() => setIsApplicantCardOpen(true)}
+                  />
+                </div>
+              </div>
+            )}
 
             {isApplicantCardOpen && (
               <div className="guesthousebooking-card-body">
@@ -2178,7 +2826,15 @@ const GuestHouseBooking: React.FC = () => {
                             className="guesthousebooking-employee-option"
                             key={`${employee.employee_id || employee.id || employee.name}-${index}`}
                             onClick={() => {
-                              setApplicantProfile(employee);
+                              setApplicantProfile({
+                                ...employee,
+                                employee_id:
+                                  employee.employee_id ||
+                                  employee.employeeId ||
+                                  employee.master_employee_id ||
+                                  employee.masterEmployeeId ||
+                                  '',
+                              });
                               setApplicantSearch('');
                               setApplicantSearchInitialized(false);
                               setApplicantResults([]);
@@ -2215,24 +2871,38 @@ const GuestHouseBooking: React.FC = () => {
           </section>
 
           <section className="guesthousebooking-card guesthousebooking-beneficiary-card">
-            <div className="guesthousebooking-beneficiary-grid">
-              <div className="guesthousebooking-beneficiary-field">
-                <label className="guesthousebooking-beneficiary-label">Beneficiary</label>
-                <select
-                  className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
-                  value={beneficiaryDetails.beneficiaryType}
-                  onChange={(event) =>
-                    updateBeneficiaryDetails('beneficiaryType', event.target.value)
-                  }
+            <div className="row mb-3" style={{ marginBottom: '15px' }}>
+              <div className="col-md-3">
+                <div className="form-group">
+                <label
+                  style={{
+                    fontSize: '14px',
+                    color: '#495057',
+                    marginBottom: '8px',
+                    fontWeight: '600',
+                    display: 'block',
+                  }}
                 >
-                  {BENEFICIARY_TYPE_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                  Beneficiary
+                </label>
+                <BudgetSelect
+                  value={
+                    BENEFICIARY_TYPE_SELECT_OPTIONS.find(
+                      (option) => option.value === beneficiaryDetails.beneficiaryType,
+                    ) || null
+                  }
+                  onChange={(selected) =>
+                    updateBeneficiaryDetails('beneficiaryType', selected?.value || '')
+                  }
+                  options={BENEFICIARY_TYPE_SELECT_OPTIONS}
+                  placeholder=""
+                  disabled={isViewingBooking}
+                />
+                </div>
               </div>
-              <div className="guesthousebooking-beneficiary-field">
+              {beneficiaryDetails.beneficiaryType && (
+                <>
+              <div className="guesthousebooking-beneficiary-field col-md-6">
                 <label className="guesthousebooking-beneficiary-label">
                   {['Faculty', 'Staff'].includes(beneficiaryDetails.beneficiaryType)
                     ? `${beneficiaryDetails.beneficiaryType} Name`
@@ -2248,17 +2918,25 @@ const GuestHouseBooking: React.FC = () => {
                       onFocus={() => setBeneficiarySearchOpen(true)}
                       onBlur={() => window.setTimeout(() => setBeneficiarySearchOpen(false), 200)}
                     />
-                    {beneficiaryEmployeeOptions.length > 0 && (
+                    {!isViewingBooking && beneficiaryEmployeeOptions.length > 0 && (
                       <div className="guesthousebooking-employee-dropdown">
                         {beneficiaryEmployeeOptions.map((employee, index) => (
                           <button
                             type="button"
                             className="guesthousebooking-employee-option"
                             key={`${employee.employee_id || employee.name || 'employee'}-${index}`}
-                            onClick={() => {
+                            onMouseDown={(event) => {
+                              // Select before the text input can blur, matching Budget's employee picker.
+                              event.preventDefault();
                               setBeneficiaryDetails((prev) => ({
                                 ...prev,
-                                staffName: employee.name || '',
+                                staffName: getTextValue(employee as unknown as ApiRecord, [
+                                  'name',
+                                  'full_name',
+                                  'fullName',
+                                  'employee_name',
+                                  'employeeName',
+                                ]),
                                 departmentId: String(
                                   employee.department_id || employee.departmentId || '',
                                 ),
@@ -2267,19 +2945,36 @@ const GuestHouseBooking: React.FC = () => {
                               setBeneficiarySearchOpen(false);
                             }}
                           >
-                            <strong>{employee.name}</strong>
-                            <span>{employee.department || 'Employee'}</span>
+                            <strong>
+                              {getTextValue(employee as unknown as ApiRecord, [
+                                'name',
+                                'full_name',
+                                'fullName',
+                                'employee_name',
+                                'employeeName',
+                              ])}
+                            </strong>
+                            <span>
+                              {getTextValue(employee as unknown as ApiRecord, [
+                                'department',
+                                'department_name',
+                                'departmentName',
+                              ]) || 'Employee'}
+                            </span>
                           </button>
                         ))}
                       </div>
                     )}
                   </>
                 ) : (
-                  <select
-                    className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
-                    value={beneficiaryDetails.staffName}
-                    onChange={(event) => {
-                      const selectedName = event.target.value;
+                  <BudgetSelect
+                    value={
+                      beneficiaryDetails.staffName
+                        ? { value: beneficiaryDetails.staffName, label: beneficiaryDetails.staffName }
+                        : null
+                    }
+                    onChange={(selected) => {
+                      const selectedName = selected?.value || '';
                       const selectedOption = (
                         beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType.toUpperCase()] ||
                         beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
@@ -2294,32 +2989,30 @@ const GuestHouseBooking: React.FC = () => {
                             : '',
                       }));
                     }}
-                  >
-                    <option value="">Select {beneficiaryDetails.beneficiaryType.toLowerCase()}</option>
-                    {(beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType.toUpperCase()] ||
+                    options={(beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType.toUpperCase()] ||
                       beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
-                      []).map((option) => (
-                      <option key={`${option.id}-${option.name}`} value={option.name}>
-                        {option.name}
-                      </option>
-                    ))}
-                  </select>
+                      []).map((option) => ({ value: option.name, label: option.name }))}
+                    placeholder={`Select ${beneficiaryDetails.beneficiaryType.toLowerCase()}`}
+                    disabled={isViewingBooking}
+                  />
                 )}
               </div>
-              <div className="guesthousebooking-beneficiary-field">
+              <div className="guesthousebooking-beneficiary-field col-md-3">
                 <label className="guesthousebooking-beneficiary-label">Tag</label>
-                <select
-                  className="guesthousebooking-beneficiary-control guesthousebooking-beneficiary-select"
-                  value={beneficiaryDetails.tag}
-                  onChange={(event) => updateBeneficiaryDetails('tag', event.target.value)}
-                >
-                  {BENEFICIARY_TAG_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                <BudgetSelect
+                  value={
+                    beneficiaryDetails.tag
+                      ? { value: beneficiaryDetails.tag, label: beneficiaryDetails.tag }
+                      : null
+                  }
+                  onChange={(selected) => updateBeneficiaryDetails('tag', selected?.value || '')}
+                  options={BENEFICIARY_TAG_OPTIONS.map((option) => ({ value: option, label: option }))}
+                  placeholder=""
+                  disabled={isViewingBooking}
+                />
               </div>
+                </>
+              )}
             </div>
 
           </section>
@@ -2815,7 +3508,8 @@ const GuestHouseBooking: React.FC = () => {
             </div>
           </section>
 
-          {/* Room Allotment Cards */}
+          </>}
+          {/* Existing Room Allotment Card: editable only for Guest House Admin. */}
           {isRoomAllotmentVisible && <div className="guesthousebooking-allotment-list" aria-label="Room Allotment">
             {guests.map((guest, index) => {
               const guestId = String(guest.id);
@@ -2890,16 +3584,33 @@ const GuestHouseBooking: React.FC = () => {
                         <div className="guesthousebooking-allotment-date-stack">
                           <label className="guesthousebooking-allotment-datetime-row">
                             <span className="guesthousebooking-allotment-datetime-title">Check-in</span>
-                            <input value={checkInDate} readOnly aria-label="Check-in date" />
+                            <input
+                              type="date"
+                              value={travelDetails.checkInDate}
+                              onChange={(event) => {
+                                updateTravelDetails('checkInDate', event.target.value);
+                                void saveAllotmentSchedule({ checkInDate: event.target.value });
+                              }}
+                              aria-label="Check-in date"
+                            />
 
-                            <input value={checkInTime} readOnly aria-label="Check-in time" />
+                            <input type="time" value={checkInTime} onChange={(event) => { updateTravelDetails('checkInTime', event.target.value); void saveAllotmentSchedule({ checkInTime: event.target.value }); }} aria-label="Check-in time" />
                             <CircleCheck className="guesthousebooking-allotment-check-icon" size={18} aria-hidden="true" />
                           </label>
                           <label className="guesthousebooking-allotment-datetime-row">
                             <span className="guesthousebooking-allotment-datetime-title">Check-out</span>
-                            <input value={checkOutDate} readOnly aria-label="Check-out date" />
+                            <input
+                              type="date"
+                              value={travelDetails.checkOutDate}
+                              min={travelDetails.checkInDate || undefined}
+                              onChange={(event) => {
+                                updateTravelDetails('checkOutDate', event.target.value);
+                                void saveAllotmentSchedule({ checkOutDate: event.target.value });
+                              }}
+                              aria-label="Check-out date"
+                            />
 
-                            <input value={checkOutTime} readOnly aria-label="Check-out time" />
+                            <input type="time" value={checkOutTime} onChange={(event) => { updateTravelDetails('checkOutTime', event.target.value); void saveAllotmentSchedule({ checkOutTime: event.target.value }); }} aria-label="Check-out time" />
                             <CircleCheck className="guesthousebooking-allotment-check-icon" size={18} aria-hidden="true" />
                           </label>
                         </div>
@@ -3076,14 +3787,16 @@ const GuestHouseBooking: React.FC = () => {
                         <select
                           className="guesthousebooking-input guesthousebooking-spoc-control"
                           value={allotment.spoc}
-                          onChange={(event) =>
-                            updateAllotmentContact(guestId, 'spoc', event.target.value)
-                          }
+                          onChange={(event) => {
+                            const selected = spocOptions.find((spoc) => spoc.name === event.target.value);
+                            updateAllotmentContact(guestId, 'spoc', event.target.value);
+                            updateAllotmentContact(guestId, 'mobile', selected?.mobile || '');
+                          }}
                         >
                           <option value="">Select Care Taker</option>
                           {spocOptions.map((spoc) => (
-                            <option key={spoc} value={spoc}>
-                              {spoc}
+                            <option key={`${spoc.name}-${spoc.mobile}`} value={spoc.name}>
+                              {spoc.name}
                             </option>
                           ))}
                         </select>
@@ -3106,21 +3819,63 @@ const GuestHouseBooking: React.FC = () => {
               );
             })}
           </div>}
-          <div className="guesthousebooking-actions">
-            {submitMessage && (
-              <span className={submitMessage.includes('successfully') ? 'guesthousebooking-success' : 'guesthousebooking-error'}>
-                {submitMessage}
-              </span>
-            )}
-
+          {canEditRoomAllotment && (
+            <div className="guesthousebooking-actions">
+              <button
+                className="guesthousebooking-submit-button"
+                type="button"
+                disabled={isSavingAllotments}
+                onClick={() => void handleSaveRoomAllotments()}
+              >
+                {isSavingAllotments ? 'Saving Room Allocation...' : 'Submit Room Allocation'}
+              </button>
+            </div>
+          )}
+          {(!canShowRoomAllocationTab || adminView === 'booking') && !isApprovalForm && <div className="guesthousebooking-actions">
             <button
               className="guesthousebooking-submit-button"
               type="submit"
               disabled={isViewingBooking || isSubmitting}
             >
-              {isViewingBooking ? 'Viewing Booking' : isEditMode ? 'Preview Edit' : 'Submit Booking'}
+              {isViewingBooking ? 'Viewing Booking' : isEditMode ? 'Update Guest House Booking' : 'Submit Booking'}
             </button>
-          </div>
+          </div>}
+          {canApproveFromForm && (
+            <div className="guesthousebooking-workflow-actions" aria-label="Guesthouse approval actions">
+              <button
+                  type="button"
+                  className="guesthousebooking-workflow-button guesthousebooking-workflow-button--approve"
+                  disabled={isProcessingApproval}
+                  onClick={() => void handleApprovalFromForm('approved')}
+                >
+                  <CircleCheck size={18} /> Approve
+                </button>
+                <button
+                  type="button"
+                  className="guesthousebooking-workflow-button guesthousebooking-workflow-button--return"
+                  disabled={isProcessingApproval}
+                  onClick={() => void handleApprovalFromForm('returned')}
+                >
+                  <RotateCcw size={18} /> Return
+                </button>
+                <button
+                  type="button"
+                  className="guesthousebooking-workflow-button guesthousebooking-workflow-button--reject"
+                  disabled={isProcessingApproval}
+                  onClick={() => void handleApprovalFromForm('rejected')}
+                >
+                  <XCircle size={18} /> Reject
+                </button>
+                <button
+                  type="button"
+                  className="guesthousebooking-workflow-button guesthousebooking-workflow-button--archive"
+                  disabled={isProcessingApproval}
+                  onClick={() => void handleApprovalFromForm('archived')}
+                >
+                  <Trash2 size={18} /> Archive
+              </button>
+            </div>
+          )}
           {canManageGuesthouse &&
             isGuesthouseManagementVisible &&
             renderGuesthouseAdminManagement()}

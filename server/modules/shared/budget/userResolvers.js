@@ -194,6 +194,7 @@ export async function searchApplicant(query = '', employeeType = null) {
   if (!queryStr) {
     sql = `SELECT
     e.id AS employee_id,
+      e.department_id,
       e.erp_id,
       TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
         COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,
@@ -214,6 +215,7 @@ export async function searchApplicant(query = '', employeeType = null) {
   } else {
     sql = `SELECT
     e.id AS employee_id,
+      e.department_id,
       e.erp_id,
       TRIM(CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, ''))) AS name,
         COALESCE(NULLIF(TRIM(e.designation), ''), e.employee_type) AS designation,

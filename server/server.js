@@ -34,13 +34,13 @@ import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUse
 // Finance page
 import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
+import guesthouseRoutes from './modules/guesthouse/guesthouseRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
 
 // FinanceCard routes
 // import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
-// import guesthouseRoutes from './modules/guesthouse/guesthouseRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -147,7 +147,7 @@ app.use('/api/expenditure-dashboard', expenditureUserDashboardRoutes);
 
 // FinanceCard API
 // app.use('/api/finance-dashboard', financeCardRoutes);
-// app.use('/api/guesthouse', guesthouseRoutes);
+app.use('/api/guesthouse', guesthouseRoutes);
 
 // Updates & documents
 app.use('/api/updates', updatesRoutes);

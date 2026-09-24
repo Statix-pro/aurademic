@@ -1,4 +1,32 @@
 
+.guesthousebooking-admin-toggle {
+  display: flex;
+  width: fit-content;
+  gap: 8px;
+  margin: 0 auto 18px;
+  padding: 5px;
+  border: 1px solid #cfe0f2;
+  border-radius: 10px;
+  background: #f5f9fd;
+}
+
+.guesthousebooking-admin-toggle button {
+  border: 0;
+  border-radius: 7px;
+  padding: 8px 14px;
+  color: #24547d;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.guesthousebooking-admin-toggle button.is-active {
+  color: #fff;
+  background: #0069ab;
+  box-shadow: 0 2px 5px rgba(0, 86, 179, 0.22);
+}
+
 .guesthousebooking-page {
   --primary-color: #0069ab;
   --primary-hover: #005492;
@@ -47,6 +75,30 @@
 
 .guesthousebooking-card-body {
   padding: 24px 28px;
+}
+
+.guesthousebooking-card-summary {
+  display: grid;
+  grid-template-columns: 7fr 5fr;
+  gap: 30px;
+  padding: 20px 28px 24px;
+}
+
+.guesthousebooking-summary-field {
+  min-width: 0;
+}
+
+.guesthousebooking-summary-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--booking-text-secondary, #495057);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.guesthousebooking-card-summary .guesthousebooking-input {
+  background: #ffffff;
+  cursor: pointer;
 }
 
 .guesthousebooking-guest-list {
@@ -694,6 +746,123 @@
   box-shadow: none;
 }
 
+.guesthousebooking-approval-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 80px;
+  width: min(1204px, calc(100% - 40px));
+  box-sizing: border-box;
+  margin: 0 auto 22px;
+  padding: 14px 44px;
+  background: #e7f2ff;
+  color: #0069ab;
+}
+
+.guesthousebooking-approval-reference {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46px;
+  border-radius: 24px;
+  padding: 0 22px;
+  background: #0074ba;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.guesthousebooking-approval-created-by {
+  font-size: 16px;
+  font-weight: 700;
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .guesthousebooking-approval-banner {
+    width: min(100% - 20px, 1204px);
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 14px 18px;
+  }
+
+  .guesthousebooking-approval-created-by {
+    text-align: left;
+  }
+}
+
+.guesthousebooking-workflow-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 30px;
+  overflow-x: auto;
+  padding: 40px 20px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+.guesthousebooking-workflow-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  min-width: 0;
+  height: auto;
+  padding: 12px 24px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+  white-space: nowrap;
+}
+
+.guesthousebooking-workflow-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 26px rgba(15, 23, 42, 0.14);
+  filter: brightness(1.01);
+}
+
+.guesthousebooking-workflow-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  transform: none;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.guesthousebooking-workflow-button--approve {
+  background: #e7f8ef;
+  color: #137a3a;
+  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+}
+
+.guesthousebooking-workflow-button--return {
+  background: #fff4d6;
+  color: #a97900;
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+}
+
+.guesthousebooking-workflow-button--reject {
+  background: #fdeaea;
+  color: #b42318;
+  box-shadow: none;
+  gap: 8px;
+}
+
+.guesthousebooking-workflow-button--archive {
+  background: #eef2ff;
+  color: #334155;
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+  gap: 14px;
+}
+
 .guesthousebooking-allotment-header-row {
   display: flex;
   align-items: center;
@@ -1180,10 +1349,21 @@
 
 .guesthousebooking-page {
   min-height: 100vh;
-  background: var(--booking-bg-tint, #f0f6ff);
+  background: #f0f6ff;
   color: var(--text-main, #4f4f6e);
   padding: 32px 0 48px;
   font-family: Roboto, Arial, sans-serif;
+}
+
+/* Keep the approval proposal banner flush with the page top, like Budget. */
+.guesthousebooking-page--approval {
+  min-height: auto;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.guesthousebooking-page--approval .guesthousebooking-workflow-actions {
+  padding-bottom: 48px;
 }
 
 .guesthousebooking-shell {
@@ -1201,11 +1381,13 @@
 }
 
 .guesthousebooking-beneficiary-card {
+  /* Align with the other Guesthouse cards in the shared page shell. */
   width: 100%;
   max-width: none;
-  margin: 18px 0 22px;
-  padding: 24px 24px 48px;
-  border: 0;
+  min-height: 0;
+  margin: 20px 0;
+  padding: 24px;
+  border: none;
   border-radius: 20px;
   background: var(--booking-white, #ffffff);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
@@ -1218,6 +1400,7 @@
   gap: 30px;
   padding: 0;
   align-items: end;
+  margin-bottom: 15px;
 }
 
 .guesthousebooking-beneficiary-field {
@@ -1261,6 +1444,72 @@
 .guesthousebooking-beneficiary-select {
   appearance: auto;
   cursor: pointer;
+}
+
+/* Match the searchable Beneficiary picker used in the Budget form. */
+.guesthousebooking-beneficiary-type-select__control {
+  min-height: 45px !important;
+  border: 1px solid var(--booking-border-light, #e0e0e0) !important;
+  border-radius: 12px !important;
+  background: #fcfdff !important;
+  box-shadow: none !important;
+  cursor: text !important;
+}
+
+.guesthousebooking-beneficiary-type-select__control:hover,
+.guesthousebooking-beneficiary-type-select__control--is-focused {
+  border-color: var(--primary-color, #0069ab) !important;
+}
+
+.guesthousebooking-beneficiary-type-select__control--is-focused {
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15) !important;
+  background: var(--booking-white, #ffffff) !important;
+}
+
+.guesthousebooking-beneficiary-type-select__value-container {
+  padding: 2px 15px !important;
+}
+
+.guesthousebooking-beneficiary-type-select__input-container,
+.guesthousebooking-beneficiary-type-select__single-value {
+  color: #333333 !important;
+  font-size: 0.95rem !important;
+}
+
+.guesthousebooking-beneficiary-type-select__indicator-separator {
+  display: none;
+}
+
+.guesthousebooking-beneficiary-type-select__dropdown-indicator {
+  padding: 0 15px !important;
+  color: #666666 !important;
+  transition: transform 0.2s ease;
+}
+
+.guesthousebooking-beneficiary-type-select__control--menu-is-open
+  .guesthousebooking-beneficiary-type-select__dropdown-indicator {
+  transform: rotate(180deg);
+}
+
+.guesthousebooking-beneficiary-type-select__menu {
+  z-index: 2000 !important;
+  overflow: hidden;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15) !important;
+}
+
+.guesthousebooking-beneficiary-type-select__option {
+  padding: 10px 15px !important;
+  color: #333333 !important;
+}
+
+.guesthousebooking-beneficiary-type-select__option--is-focused {
+  background: rgba(0, 105, 171, 0.1) !important;
+}
+
+.guesthousebooking-beneficiary-type-select__option--is-selected {
+  color: #ffffff !important;
+  background: var(--primary-color, #0069ab) !important;
 }
 
 .guesthousebooking-guest-card {
@@ -3078,6 +3327,8 @@
   min-height: 34px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 0 16px;
   border-radius: 7px;
   background: var(--primary-color, #0069ab);
@@ -3113,13 +3364,17 @@
   border-collapse: collapse;
   table-layout: fixed;
   background: var(--booking-white, #ffffff);
-  border: 1px solid #cbdcea;
+  /* Keep the room and care-taker grids clearly defined against the white card. */
+  border: 1px solid #9db9d3;
+  /* `border-collapse` can suppress a table's final edge; outline keeps the frame intact. */
+  outline: 1px solid #9db9d3;
+  outline-offset: -1px;
 }
 
 .guesthousebooking-management-table th {
   height: 35px;
   padding: 7px 8px;
-  border: 1px solid var(--booking-border-light, #e0e0e0);
+  border: 1px solid #b4c9dc;
   background: var(--booking-bg-tint, #f0f6ff);
   color: var(--primary-color, #0069ab);
   font-size: 12px;
@@ -3131,8 +3386,8 @@
 .guesthousebooking-management-table td {
   height: 42px;
   padding: 5px 8px;
-  border-right: 1px solid #d9e2eb;
-  border-bottom: 1px solid #e7edf3;
+  border-right: 1px solid #b4c9dc;
+  border-bottom: 1px solid #b4c9dc;
   color: var(--booking-text-darker, #111827);
   font-size: 12px;
   font-weight: 500;
@@ -3142,11 +3397,13 @@
 
 .guesthousebooking-management-table th:last-child,
 .guesthousebooking-management-table td:last-child {
-  border-right: 0;
+  /* Preserve the visible outer edge of the Action column. */
+  border-right: 1px solid #9db9d3;
+  box-shadow: inset -1px 0 0 #9db9d3;
 }
 
 .guesthousebooking-management-table tr:last-child td {
-  border-bottom: 0;
+  border-bottom: 1px solid #9db9d3;
 }
 
 .guesthousebooking-management-table tr.is-viewing td {
@@ -3169,7 +3426,7 @@
 
 .guesthousebooking-management-control:not([readonly]):not(:disabled),
 .guesthousebooking-management-status:not(:disabled) {
-  border-color: #cbdcea;
+  border-color: #9db9d3;
   background: var(--booking-white, #ffffff);
   box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.08);
 }
@@ -3394,7 +3651,7 @@
 .guesthousebooking-allotment-amenity {
   gap: 8px;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 500;
 }
 
 .guesthousebooking-allotment-amenities-title {
@@ -3403,7 +3660,7 @@
   padding: 0 16px;
   border-radius: 8px 0 0 8px;
   font-size: 15px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .guesthousebooking-allotment-caretaker-bar {
@@ -3576,7 +3833,7 @@
 .guesthousebooking-allotment-amenity {
   color: var(--primary-color, #0069ab);
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .guesthousebooking-caretaker-field>span {
@@ -3802,6 +4059,12 @@
   border-radius: 8px;
   padding: 4px 8px;
   font-size: 12px;
+}
+
+
+/* Keep typed time fields clean while retaining the date-picker calendar. */
+.guesthousebooking-allotment-datetime-row input[type='time']::-webkit-calendar-picker-indicator {
+  display: none;
 }
 
 .guesthousebooking-allotment-date-stack .guesthousebooking-allotment-check-icon {
@@ -4205,4 +4468,84 @@
 .guesthousebooking-employee-option span {
   color: #65758b;
   font-size: 0.85rem;
+}
+
+.guesthousebooking-csv-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guesthousebooking-management-title {
+  box-sizing: border-box;
+  justify-content: flex-start;
+}
+
+.guesthousebooking-resource-import-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid #d7e4ef;
+  border-bottom: 0;
+  background: #f7fbff;
+  color: #48627d;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.guesthousebooking-csv-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 25px;
+  padding: 3px 9px;
+  border: 1px solid #9dc8e7;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #0069ab;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.guesthousebooking-csv-actions button:hover,
+.guesthousebooking-csv-actions button:focus-visible {
+  background: #e9f5ff;
+  outline: none;
+}
+
+@media (max-width: 760px) {
+  .guesthousebooking-resource-import-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+.guesthousebooking-management-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 18px;
+}
+
+.guesthousebooking-management-page-header h1 {
+  margin: 0;
+  color: #0a2540;
+  font-size: 1.5rem;
+}
+
+.guesthousebooking-management-page-header button {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid #0875b9;
+  border-radius: 8px;
+  background: #fff;
+  color: #0875b9;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }

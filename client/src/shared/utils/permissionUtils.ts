@@ -10,7 +10,16 @@ const uniqueStringArray = (values = []) => [
 ];
 
 const normalizeRoleCodes = (user?: User | null) =>
-  uniqueStringArray(Array.isArray(user?.roles) ? user.roles : []);
+  uniqueStringArray(
+    (Array.isArray(user?.roles) ? user.roles : []).map((role: unknown) => {
+      if (typeof role === 'string') return role;
+      if (role && typeof role === 'object') {
+        const roleRecord = role as { role_code?: unknown; roleCode?: unknown; code?: unknown };
+        return String(roleRecord.role_code || roleRecord.roleCode || roleRecord.code || '');
+      }
+      return '';
+    }),
+  );
 
 const normalizePermissionKeys = (user?: User | null) =>
   uniqueStringArray(Array.isArray(user?.permissions) ? user.permissions : []);
@@ -135,19 +144,39 @@ export const canAccessModuleWorkflow = (user: User | null | undefined, moduleKey
 export const canAccessFinanceWorkflow = (user?: User | null) =>
   canAccessModuleWorkflow(user, 'finance');
 
-export type GuesthouseWorkflowStage = 'admin' | 'hod' | 'principal' | 'guesthouse_admin';
+export type GuesthouseWorkflowStage =
+  | 'admin'
+  | 'hod'
+  | 'guesthouse_incharge'
+  | 'principal'
+  | 'guesthouse_admin';
 
 export const getGuesthouseWorkflowStage = (user?: User | null): GuesthouseWorkflowStage | null => {
   if (!user) return null;
-  if (
-    isSuperAdmin(user) ||
-    hasAnyPermission(user, ['guesthouse.workflow.admin', 'guesthouse.manage'])
-  ) {
+  if (isSuperAdmin(user)) {
     return 'admin';
   }
-  const stages: GuesthouseWorkflowStage[] = ['hod', 'principal', 'guesthouse_admin'];
+  const stages: GuesthouseWorkflowStage[] = [
+    'hod',
+    'guesthouse_incharge',
+    'principal',
+    'guesthouse_admin',
+  ];
+  const roleCodes = new Set(normalizeRoleCodes(user).map((role) => role.toLowerCase()));
+  const explicitRoleStage = stages.find((stage) => roleCodes.has(stage));
+  if (explicitRoleStage) return explicitRoleStage;
+  if (hasAnyPermission(user, ['guesthouse.workflow.admin'])) {
+    return 'admin';
+  }
   const permissions = new Set(normalizePermissionKeys(user));
-  return stages.find((stage) => permissions.has(`guesthouse.workflow.${stage}`)) || null;
+  const explicitStage = stages.find((stage) =>
+    permissions.has(`guesthouse.workflow.${stage}`),
+  );
+  if (explicitStage) return explicitStage;
+  if (hasAnyPermission(user, ['guesthouse.manage']) || canAccessAdminArea(user)) {
+    return 'guesthouse_admin';
+  }
+  return null;
 };
 
 export const canAccessGuesthouseWorkflow = (user?: User | null) => {
@@ -155,7 +184,7 @@ export const canAccessGuesthouseWorkflow = (user?: User | null) => {
     return false;
   }
 
-  return getGuesthouseWorkflowStage(user) !== null;
+  return getGuesthouseWorkflowStage(user) !== null || canAccessAdminArea(user);
 };
 
 const isAdminOrWorkflowRole = (user?: User | null) => {

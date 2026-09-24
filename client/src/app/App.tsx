@@ -28,6 +28,7 @@ import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetda
 import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
+import GuestHouseCalendar from '../features/user-dashboard/guesthousecalendar/GuestHouseCalendar';
 import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
 import PublicationsPage from '../features/user-dashboard/publicationspage/PublicationsPage';
 import UserDashboard from '../features/user-dashboard/userdashboard';
@@ -228,6 +229,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <GuestHouseDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse-calendar"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseCalendar />
                       </ProtectedRoute>
                     }
                   />

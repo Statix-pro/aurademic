@@ -57,6 +57,46 @@
   white-space: nowrap;
 }
 
+.guesthousedashboard-manage-resources-button {
+  min-height: 36px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #0072b8;
+  color: #ffffff;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.guesthousedashboard-manage-resources-button:hover,
+.guesthousedashboard-manage-resources-button:focus-visible {
+  background: #0069ab;
+  outline: none;
+}
+
+.guesthousedashboard-queue-tab {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid #c8d8e8;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #17324d;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.guesthousedashboard-queue-tab:hover,
+.guesthousedashboard-queue-tab:focus-visible {
+  border-color: #0875b9;
+  color: #0875b9;
+  outline: none;
+}
+
 /* Stats Row - Inside Card */
 .guesthousedashboard-stats-row-inside {
   display: grid;
@@ -295,6 +335,39 @@
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: none;
+}
+
+.guesthousedashboard-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.guesthousedashboard-calendar-btn {
+  width: 48px;
+  height: 48px;
+  display: inline-grid;
+  place-items: center;
+  color: #0069ab;
+  background: #fff;
+  border: 1px solid #d8e4f0;
+  border-radius: 50%;
+  box-shadow: 0 5px 14px rgba(0, 72, 124, 0.14);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.guesthousedashboard-calendar-btn:hover {
+  background: #eef7ff;
+  box-shadow: 0 7px 18px rgba(0, 72, 124, 0.2);
+  transform: translateY(-1px);
+}
+
+.guesthousedashboard-calendar-btn--floating {
+  position: fixed;
+  top: 112px;
+  right: 32px;
+  z-index: 20;
 }
 
 .guesthousedashboard-add-btn:hover {
@@ -553,13 +626,43 @@
 }
 
 .guesthousedashboard-log-modal {
-  width: min(760px, 100%);
-  max-height: min(88vh, 720px);
+  /* Keep the earlier compact log-card size while presenting it centrally. */
+  width: min(320px, 100%);
+  max-height: min(88vh, 600px);
   background: #ffffff;
   border-radius: 12px;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15);
   border: 1px solid rgba(226, 232, 240, 0.8);
   overflow: hidden;
+}
+
+.guesthousedashboard-item-card--openable {
+  cursor: pointer;
+}
+
+.guesthousedashboard-item-card--openable:focus-visible {
+  outline: 3px solid rgba(0, 105, 171, 0.35);
+  outline-offset: 3px;
+}
+
+/* Matches the Budget dashboard submission-log popover. */
+.guesthousedashboard-log-popover {
+  position: fixed;
+  width: 320px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: 12px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15);
+  animation: guesthouseLogPopoverFadeIn 0.2s ease-out;
+}
+
+@keyframes guesthouseLogPopoverFadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .guesthousedashboard-log-header {
@@ -585,8 +688,8 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #eef2f6;
+  padding-bottom: 0;
+  border-bottom: 0;
 }
 
 .guesthousedashboard-log-summary-row {
@@ -1143,6 +1246,11 @@
 @media (max-width: 640px) {
   .guesthousedashboard-page {
     padding: 14px;
+  }
+
+  .guesthousedashboard-calendar-btn--floating {
+    top: 80px;
+    right: 18px;
   }
 
   .guesthousedashboard-stats-row-inside {
