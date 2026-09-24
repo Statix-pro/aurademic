@@ -243,30 +243,37 @@ export const OUTCOME_FIELDS = [
  * the grant disbursements and the ledger — as a window around the current year,
  * so past tranches and a future year's release are both selectable.
  *
- * The current financial year comes first, then the years ahead, then the years
- * behind. Order matters here because it decides which year is one stray click
- * or arrow key away: listing the whole window newest-first put the last year of
- * the window — three years in the future — at the top of every one of these
- * dropdowns, which is the least likely year anyone means and the easiest to
- * pick by accident. It then followed the row into the Transaction Summary's
- * year filter, which offers whatever years the project actually uses.
+ * Oldest first, as a calendar reads. The current year was once listed first,
+ * then the years ahead, then the years behind, to keep the likeliest year at
+ * the top — but a list that ran 2026-27 … 2029-30 and then jumped back to
+ * 2025-26 read as out of order. The likeliest year is kept in reach instead by
+ * opening the picker scrolled to it: see `SelectField`'s `scrollToValue` and
+ * `currentFinancialYear` below.
  */
-export function financialYearOptions(yearsBack = 5, yearsAhead = 3): string[] {
-  const today = new Date();
-  // A financial year runs April–March, so before April the current one started
-  // in the previous calendar year.
-  const currentStart = today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
-
-  const label = (start: number) => `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+export function financialYearOptions(yearsBack = 3, yearsAhead = 3): string[] {
+  const currentStart = currentFinancialYearStart();
 
   const options: string[] = [];
-  for (let start = currentStart; start <= currentStart + yearsAhead; start += 1) {
-    options.push(label(start));
-  }
-  for (let start = currentStart - 1; start >= currentStart - yearsBack; start -= 1) {
-    options.push(label(start));
+  for (let start = currentStart - yearsBack; start <= currentStart + yearsAhead; start += 1) {
+    options.push(financialYearLabel(start));
   }
   return options;
+}
+
+// A financial year runs April–March, so before April the current one started in
+// the previous calendar year.
+function currentFinancialYearStart(): number {
+  const today = new Date();
+  return today.getMonth() >= 3 ? today.getFullYear() : today.getFullYear() - 1;
+}
+
+function financialYearLabel(start: number): string {
+  return `${start}-${String((start + 1) % 100).padStart(2, '0')}`;
+}
+
+/** Today's financial year, as `2026-27` — where the year pickers open when nothing is picked. */
+export function currentFinancialYear(): string {
+  return financialYearLabel(currentFinancialYearStart());
 }
 
 /**

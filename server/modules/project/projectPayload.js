@@ -210,8 +210,14 @@ export function toCount(value, field, errors, max = 100000) {
   if (!text) return 0;
 
   const count = Number(text);
-  if (!Number.isInteger(count) || count < 0 || count > max) {
+  if (!Number.isInteger(count) || count < 0) {
     errors.push({ field, message: 'Enter a whole number of 0 or more.' });
+    return 0;
+  }
+  // Said by name: a figure that is only too large is not malformed, and the
+  // message above reads as if it were.
+  if (count > max) {
+    errors.push({ field, message: `Enter a whole number from 0 to ${max}.` });
     return 0;
   }
   return count;
@@ -962,15 +968,15 @@ export function normalizeProjectPayload(
       body.duration_years ?? body.durationYears,
       'duration_years',
       errors,
-      50,
+      10,
     ),
     duration_months: toCount(
       body.duration_months ?? body.durationMonths,
       'duration_months',
       errors,
-      11,
+      12,
     ),
-    duration_days: toCount(body.duration_days ?? body.durationDays, 'duration_days', errors, 30),
+    duration_days: toCount(body.duration_days ?? body.durationDays, 'duration_days', errors, 31),
 
     funding_organization_id: toId(body.funding_organization_id ?? body.fundingOrganizationId),
     scheme_id: toId(body.scheme_id ?? body.schemeId),

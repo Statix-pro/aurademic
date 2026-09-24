@@ -132,7 +132,9 @@ const TransactionSummarySection: React.FC<TransactionSummarySectionProps> = ({ f
               <th scope="col" className="pf-table__sno">
                 S.No.
               </th>
-              <th scope="col">Budget Head</th>
+              <th scope="col" className="pf-summary__head">
+                Budget Head
+              </th>
               <th scope="col" className="pf-summary__contribution">
                 Contribution
               </th>

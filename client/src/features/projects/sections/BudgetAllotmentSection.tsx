@@ -1,10 +1,15 @@
 import { Plus, Trash2 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
-import { SelectField } from '../components/FormFields';
+import { AmountInput, SelectField } from '../components/FormFields';
 import RowActions from '../components/RowActions';
 import SectionCard from '../components/SectionCard';
-import { MAX_BUDGET_HEAD_ROWS, MAX_BUDGET_YEARS, financialYearOptions } from '../constants';
+import {
+  MAX_BUDGET_HEAD_ROWS,
+  MAX_BUDGET_YEARS,
+  financialYearOptions,
+  currentFinancialYear,
+} from '../constants';
 import { formatBudgetTotal, toAmount } from '../projectBudgetSummary';
 import {
   allotmentKey,
@@ -164,6 +169,7 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
                       disabled={disabled}
                       invalid={Boolean(errors[`budget.years[${index}]`])}
                       ariaLabel={`Financial year for column ${index + 1}`}
+                      scrollToValue={currentFinancialYear()}
                     />
 
                     <div className="pf-row-actions">
@@ -272,12 +278,10 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
 
                 {budgetYears.map((column) => (
                   <td className="pf-table__amount" key={column.key}>
-                    <input
-                      type="text"
-                      inputMode="decimal"
+                    <AmountInput
                       className="pf-input pf-input--amount"
                       value={amountAt(row.key, column.key)}
-                      onChange={(event) => setAmount(row.key, column.key, event.target.value)}
+                      onChange={(amount) => setAmount(row.key, column.key, amount)}
                       // A cell is only storable once both its head and its year
                       // are chosen: a row or column that is still blank is not
                       // saved, and an amount under it would be dropped on save

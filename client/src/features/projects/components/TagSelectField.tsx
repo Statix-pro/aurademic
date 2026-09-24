@@ -152,8 +152,10 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
             style={{
               top: menuBox.top,
               left: menuBox.left,
-              width: menuBox.width,
+              minWidth: menuBox.minWidth,
+              maxWidth: menuBox.maxWidth,
               maxHeight: menuBox.maxHeight,
+              overflowY: menuBox.overflowY,
             }}
           >
             {suggestions.length === 0 ? (

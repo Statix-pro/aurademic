@@ -1,5 +1,5 @@
 import { AlertCircle, Info, Loader2, Pencil } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import RequestOptionModal from './components/RequestOptionModal';
@@ -150,6 +150,67 @@ function validate(form: ProjectFormState): Record<string, string> {
   return errors;
 }
 
+/** Error paths whose first segment does not name the form-state key it belongs to. */
+const ERROR_SECTION_ALIASES: Record<string, (keyof ProjectFormState)[]> = {
+  budget: ['budgetRows', 'budgetYears', 'budgetAllotments', 'incomeHeads'],
+  contribution_rows: ['financialContributions'],
+  sharing_rows: ['financeSharing'],
+};
+
+/**
+ * The part of the form an error path is about — `transaction_accounts[0]…` is
+ * `transactionAccounts`, `duration_years` is `durationYears`. `null` when the
+ * path names nothing the form holds, which the caller treats as "any edit may
+ * have fixed it".
+ */
+function errorSections(key: string, form: ProjectFormState): (keyof ProjectFormState)[] | null {
+  const head = key.split(/[.[]/)[0];
+  if (ERROR_SECTION_ALIASES[head]) return ERROR_SECTION_ALIASES[head];
+  if (head.startsWith('outcome_')) return ['outcome'];
+  const camel = head.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+  return camel in form ? [camel as keyof ProjectFormState] : null;
+}
+
+/**
+ * The errors still true of `form`, out of those a failed save left behind.
+ *
+ * Without this a field stayed red after it was fixed — the marks came from the
+ * save attempt and nothing cleared them until the next one. A rule the client
+ * checks itself is re-run, so its mark goes the moment it is satisfied and
+ * follows the row if rows move. One only the server knows (a duration past its
+ * cap, a malformed email) cannot be re-checked here, so it goes once the part
+ * of the form it names has been edited. Nothing is added: a field the user has
+ * not reached yet does not turn red mid-edit.
+ */
+function reconcileErrors(
+  errors: Record<string, string>,
+  form: ProjectFormState,
+  baseline: ProjectFormState,
+): Record<string, string> {
+  const flaggedByClient = validate(baseline);
+  const live = validate(form);
+  const next: Record<string, string> = {};
+
+  Object.entries(errors).forEach(([key, message]) => {
+    // The save summary and a rejected upload are not about a form value; the
+    // next save and the next pick replace them.
+    if (key === '__form' || key.startsWith('document__')) {
+      next[key] = message;
+      return;
+    }
+    if (key in flaggedByClient) {
+      if (key in live) next[key] = live[key];
+      return;
+    }
+    const sections = errorSections(key, form);
+    if (sections && sections.every((section) => form[section] === baseline[section])) {
+      next[key] = message;
+    }
+  });
+
+  return next;
+}
+
 const ProjectForm: React.FC = () => {
   const { id: routeProjectId } = useParams<{ id?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -159,6 +220,9 @@ const ProjectForm: React.FC = () => {
   const [lookups, setLookups] = useState<ProjectLookups>(emptyLookups);
   const [access, setAccess] = useState<ProjectAccess | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  // The form as it stood when the last save failed — what `reconcileErrors`
+  // measures each edit against.
+  const errorBaselineRef = useRef<ProjectFormState | null>(null);
   // What went wrong with the last save, as the dialog says it. The per-field
   // messages in `errors` still mark every offending field in place; this is the
   // summary that fronts them, because the Save button sits at the foot of a
@@ -262,6 +326,12 @@ const ProjectForm: React.FC = () => {
     (changes: Partial<ProjectFormState>) => setForm((previous) => ({ ...previous, ...changes })),
     [],
   );
+
+  useEffect(() => {
+    const baseline = errorBaselineRef.current;
+    if (!baseline || form === baseline) return;
+    setErrors((previous) => reconcileErrors(previous, form, baseline));
+  }, [form]);
 
   useEffect(() => {
     let active = true;
@@ -392,6 +462,7 @@ const ProjectForm: React.FC = () => {
 
     setSaveMessage('');
     const validationErrors = validate(form);
+    errorBaselineRef.current = form;
     setErrors(validationErrors);
 
     const [firstField] = Object.keys(validationErrors);
@@ -414,6 +485,7 @@ const ProjectForm: React.FC = () => {
       setStatus('saving');
       const saved = await projectsApi.saveProject(routeProjectId ?? null, form);
 
+      errorBaselineRef.current = null;
       setForm(projectToFormState(saved));
       setAccess(saved.access ?? access);
       setSaveMessage('Project saved.');

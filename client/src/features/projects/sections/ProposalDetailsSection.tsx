@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 
-import { Field } from '../components/FormFields';
+import { AmountInput, Field } from '../components/FormFields';
 import SectionCard from '../components/SectionCard';
 import TagSelectField from '../components/TagSelectField';
 import { NATIONAL_INITIATIVES, SUSTAINABLE_DEVELOPMENT_GOALS } from '../constants';
@@ -42,14 +42,12 @@ const ProposalDetailsSection: React.FC<ProposalDetailsSectionProps> = ({
 
       <div className="pf-grid pf-grid--budget">
         <Field label="Budget" htmlFor="pf-project-cost" error={errors.project_cost}>
-          <input
+          <AmountInput
             id="pf-project-cost"
-            type="text"
-            inputMode="decimal"
             className={`pf-input ${errors.project_cost ? 'is-invalid' : ''}`.trim()}
             placeholder="Enter Project Cost"
             value={form.projectCost}
-            onChange={(event) => patch({ projectCost: event.target.value })}
+            onChange={(projectCost) => patch({ projectCost })}
             disabled={disabled}
           />
         </Field>
@@ -61,9 +59,10 @@ const ProposalDetailsSection: React.FC<ProposalDetailsSectionProps> = ({
           <div className="pf-duration">
             {(
               [
-                { key: 'durationYears', placeholder: 'Years', max: 50 },
-                { key: 'durationMonths', placeholder: 'Months', max: 11 },
-                { key: 'durationDays', placeholder: 'Days', max: 30 },
+                // The same caps the server enforces in `normalizeProjectPayload`.
+                { key: 'durationYears', placeholder: 'Years', max: 10 },
+                { key: 'durationMonths', placeholder: 'Months', max: 12 },
+                { key: 'durationDays', placeholder: 'Days', max: 31 },
               ] as const
             ).map((part) => (
               <input
@@ -74,7 +73,13 @@ const ProposalDetailsSection: React.FC<ProposalDetailsSectionProps> = ({
                 className="pf-input pf-input--compact"
                 placeholder={part.placeholder}
                 value={form[part.key]}
-                onChange={(event) => patch({ [part.key]: event.target.value })}
+                onChange={(event) => {
+                  // `max` only bounds the spinner; a typed figure past the cap
+                  // is refused here so it never reaches the save.
+                  const { value } = event.target;
+                  if (value !== '' && Number(value) > part.max) return;
+                  patch({ [part.key]: value });
+                }}
                 disabled={disabled}
                 aria-label={`Duration in ${part.placeholder.toLowerCase()}`}
               />

@@ -305,7 +305,11 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
                           {/* Department before organization, as on an internal
                               row, then the organization's country. An outside
                               collaborator has no directory record, so all of it
-                              — the email included — is typed in. */}
+                              is typed in. No email: it is not asked of an
+                              external member. One saved before it was dropped
+                              stays on the row and is sent back unchanged — a
+                              type switch starts the row blank, so a new
+                              external row never carries one. */}
                           <input
                             type="text"
                             className="pf-input"
@@ -334,15 +338,6 @@ const InvestigatorsSection: React.FC<InvestigatorsSectionProps> = ({
                             onChange={(event) => update(index, { country: event.target.value })}
                             disabled={disabled}
                             aria-label="Country"
-                          />
-                          <input
-                            type="email"
-                            className={`pf-input ${errors[`investigators[${index}].email`] ? 'is-invalid' : ''}`.trim()}
-                            placeholder="Email"
-                            value={row.email}
-                            onChange={(event) => update(index, { email: event.target.value })}
-                            disabled={disabled}
-                            aria-label="External email"
                           />
                         </>
                       ) : (

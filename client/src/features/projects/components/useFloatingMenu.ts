@@ -9,8 +9,11 @@ const VIEWPORT_MARGIN = 8;
 export interface MenuBox {
   top: number;
   left: number;
-  width: number;
+  /** The control's width: the menu is never narrower than the field it opens from. */
+  minWidth: number;
+  maxWidth: number;
   maxHeight: number;
+  overflowY: 'auto' | 'hidden';
 }
 
 interface FloatingMenuOptions {
@@ -50,8 +53,10 @@ export function useFloatingMenu<T extends HTMLElement>({
   const [menuBox, setMenuBox] = useState<MenuBox>({
     top: 0,
     left: 0,
-    width: 0,
+    minWidth: 0,
+    maxWidth: 0,
     maxHeight: MENU_MAX_HEIGHT,
+    overflowY: 'auto',
   });
 
   // Held in a ref so a caller passing a fresh closure each render does not
@@ -65,8 +70,13 @@ export function useFloatingMenu<T extends HTMLElement>({
 
     const rect = control.getBoundingClientRect();
     // `scrollHeight`, not `offsetHeight`: the menu we are measuring may already
-    // be capped by a maxHeight this function set for a tighter position.
-    const wanted = Math.min(menuNode?.scrollHeight ?? MENU_MAX_HEIGHT, MENU_MAX_HEIGHT);
+    // be capped by a maxHeight this function set for a tighter position. Plus
+    // the menu's own borders, because the cap is a border-box height and
+    // `scrollHeight` stops inside them — without them a list that fits was 2px
+    // short and drew a scrollbar for nothing.
+    const borders = menuNode ? menuNode.offsetHeight - menuNode.clientHeight : 0;
+    const contentHeight = menuNode ? menuNode.scrollHeight + borders : MENU_MAX_HEIGHT;
+    const wanted = Math.min(contentHeight, MENU_MAX_HEIGHT);
     const below = window.innerHeight - rect.bottom - MENU_GAP - VIEWPORT_MARGIN;
     const above = rect.top - MENU_GAP - VIEWPORT_MARGIN;
 
@@ -77,11 +87,29 @@ export function useFloatingMenu<T extends HTMLElement>({
     const openUp = below < wanted && above > below;
     const maxHeight = Math.max(0, Math.min(wanted, openUp ? above : below));
 
+    // The menu sizes to its longest option rather than to the control, so a
+    // name like "K.S.Rangasamy College of Technology" reads on one line instead
+    // of wrapping into three inside a narrow table cell. It still starts under
+    // the control, and is pulled left only as far as it takes to stay inside
+    // the window; wider than the window, the options wrap again.
+    const maxWidth = Math.max(rect.width, window.innerWidth - 2 * VIEWPORT_MARGIN);
+    const menuWidth = Math.min(Math.max(menuNode?.offsetWidth ?? 0, rect.width), maxWidth);
+    const left = Math.max(
+      VIEWPORT_MARGIN,
+      Math.min(rect.left, window.innerWidth - VIEWPORT_MARGIN - menuWidth),
+    );
+
     setMenuBox({
       top: openUp ? rect.top - MENU_GAP - maxHeight : rect.bottom + MENU_GAP,
-      left: rect.left,
-      width: rect.width,
+      left,
+      minWidth: rect.width,
+      maxWidth,
       maxHeight,
+      // No scrolling at all for a list that fits. `scrollHeight` is rounded, so
+      // a short list could still come out a fraction of a pixel taller than its
+      // cap and draw a scrollbar with nothing to scroll; the pixel of slack
+      // absorbs that rounding.
+      overflowY: contentHeight <= maxHeight + 1 ? 'hidden' : 'auto',
     });
   }, [menuNode]);
 

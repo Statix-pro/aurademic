@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 
 import DocumentSlotButton from '../components/DocumentSlotButton';
-import { SelectField } from '../components/FormFields';
+import { AmountInput, SelectField } from '../components/FormFields';
 import RowActions from '../components/RowActions';
 import SectionCard from '../components/SectionCard';
 import {
@@ -9,6 +9,7 @@ import {
   DISBURSEMENT_SLOT_LABELS,
   MAX_DISBURSEMENTS,
   financialYearOptions,
+  currentFinancialYear,
 } from '../constants';
 import { createDisbursementRow, removeAt, replaceAt, sumAmounts } from '../projectFormState';
 import { withSelectedOption } from '../selectOptions';
@@ -108,6 +109,7 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
                     disabled={disabled}
                     invalid={Boolean(errors[`disbursements[${index}].financial_year`])}
                     ariaLabel="Financial year"
+                    scrollToValue={currentFinancialYear()}
                   />
                 </td>
 
@@ -132,12 +134,10 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
                 </td>
 
                 <td className="pf-table__amount">
-                  <input
-                    type="text"
-                    inputMode="decimal"
+                  <AmountInput
                     className={`pf-input pf-input--amount ${errors[`disbursements[${index}].amount`] ? 'is-invalid' : ''}`.trim()}
                     value={row.amount}
-                    onChange={(event) => update(index, { amount: event.target.value })}
+                    onChange={(amount) => update(index, { amount })}
                     disabled={disabled}
                     aria-label="Amount"
                   />

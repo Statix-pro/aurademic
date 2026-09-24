@@ -124,6 +124,30 @@
   white-space: nowrap;
 }
 
+/* Sits on the title's line, muted so it reads as an aside to the heading. */
+.pf-card__info {
+  display: inline-flex;
+  margin-left: 8px;
+  color: #7a8aa3;
+  vertical-align: -2px;
+  cursor: help;
+}
+
+.pf-card__info:hover,
+.pf-card__info:focus-visible {
+  color: var(--primary-color, #0069ab);
+}
+
+/* A card's help text is an aside, so it is set smaller and left-aligned rather
+   than at Bootstrap's default tooltip size, which read as a heading. */
+.pf-tooltip .tooltip-inner {
+  max-width: 300px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: left;
+}
+
 .pf-card__header-right {
   display: flex;
   gap: 14px;
@@ -296,16 +320,6 @@
    holds a figure), and focusing it restores full contrast — past that point
    the contra entry is what the user means and dimming it would just make a
    real number hard to read. */
-.pf-input--contra {
-  background: #f4f6fa;
-  color: #97a1b5;
-}
-
-.pf-input--contra:focus {
-  background: #fbfcfe;
-  color: var(--text-main, #4f4f6e);
-}
-
 .pf-textarea {
   height: auto;
   padding: 10px 12px;
@@ -402,8 +416,10 @@
    line and the first to be clipped, so it takes what is left of it; an address
    fits in far less than the 440px the shared grow cap allows, and letting it
    take that was what squeezed the name. */
+/* Grows at twice the rate of the contact name beside it: an address is the
+   longer value, and a name box as wide as the email one sat mostly empty. */
 .pf-inline-field--email {
-  flex: 0 1 300px;
+  flex: 2 1 300px;
   min-width: 240px;
 }
 
@@ -767,15 +783,15 @@
   min-width: 0;
 }
 
-/* An external member carries two fields more than an internal one (department
-   and email are typed in rather than read from the directory), so the row gets
-   its own narrower columns instead of wrapping onto a second line. Tracks read
-   left to right: handle, role, type, name, department, organization, country,
-   email, actions. */
+/* An external member carries one field more than an internal one (the
+   country of its organization), so the row gets its own columns rather than
+   wrapping onto a second line. The type column matches the internal row's
+   150px so the pickers line up down a mixed list. Tracks read left to right:
+   handle, role, type, name, department, organization, country, actions. */
 .pf-investigator-row--external {
   grid-template-columns:
-    20px 66px 130px minmax(0, 1.15fr) minmax(0, 1fr)
-    minmax(0, 1.15fr) minmax(0, 0.7fr) minmax(0, 1.15fr) 78px;
+    20px 66px 150px minmax(0, 1.3fr) minmax(0, 1fr)
+    minmax(0, 1.3fr) minmax(0, 0.7fr) 78px;
 }
 
 .pf-drag-handle {
@@ -924,10 +940,32 @@
    against a positioned ancestor — inside a table there is no ancestor left to
    position against, and the one there was cropped it. Above the modal backdrop
    the form uses, since a picker inside a dialog has to stay on top. */
+/* The same thin, pale scrollbar as the tables' (`.pf-table-wrap`), for the
+   lists long enough to need one — the browser default is a heavy grey bar that
+   read as part of the options. */
+.pf-search__menu,
+.pf-tags__menu {
+  scrollbar-width: thin;
+  scrollbar-color: #c3cede transparent;
+}
+
+.pf-search__menu::-webkit-scrollbar,
+.pf-tags__menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pf-search__menu::-webkit-scrollbar-thumb,
+.pf-tags__menu::-webkit-scrollbar-thumb {
+  border-radius: 6px;
+  background: #c3cede;
+}
+
 .pf-tags__menu--floating {
   position: fixed;
   right: auto;
   z-index: 1100;
+  /* As wide as the longest option; useFloatingMenu sets the min and max. */
+  width: max-content;
 }
 
 .pf-tags__empty {
@@ -1097,19 +1135,20 @@
 }
 
 .pf-collaborator__org {
-  grid-column: 1 / span 6;
+  grid-column: 1 / span 7;
 }
 
 .pf-collaborator__city {
-  grid-column: 7 / span 3;
+  grid-column: 8 / span 3;
 }
 
-/* Three columns for a control that needs about two: the Yes/No pill carries its
-   own width and is `justify-self: start`, so the slack falls after it as
-   whitespace rather than squeezing the pill. Two columns would leave the label
-   and the pill within a few pixels of overflowing. */
+/* The last two field columns plus the button track, which is empty on this
+   line: the field shrinks to its label and pill and sits against the right
+   edge, level with the row buttons above, so the slack goes to Organization
+   instead of trailing the pill as whitespace. */
 .pf-collaborator__mou {
-  grid-column: 10 / span 3;
+  grid-column: 11 / -1;
+  justify-self: end;
 }
 
 /* Pinned to the first row, in the last track — the fixed 96px button column
@@ -1416,12 +1455,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* The same column as the allotment matrix's, at the same width, so the
-   contributor lines up between the two tables on this tab. Budget Head keeps
-   whatever is left, which is what makes it the column that absorbs a long
-   head name here. */
-.pf-summary__contribution {
-  width: 168px;
+/* Head names are short ("Manpower", "Bank Interest"), so Budget Head is held
+   to what they need and Contribution — an organization name, the longest value
+   in the table — takes whatever is left. At a fixed 168px the name wrapped to
+   three lines and made every contributed row three times as tall as the rest. */
+.pf-summary__head {
+  width: 250px;
 }
 
 .pf-summary__total td {
@@ -1558,6 +1597,19 @@
 .pf-ledger__detail-field--compact .pf-select {
   flex: 0 1 auto;
   width: 150px;
+  min-width: 150px;
+}
+
+/* An income row has no Actuals tick, and Contribution — an organization name,
+   the longest value on the strip after Particulars — takes the room it frees.
+   It grows alongside Particulars rather than being held compact. */
+.pf-ledger__detail-field--contribution {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.pf-ledger__detail-field--contribution .pf-select {
+  flex: 1 1 auto;
   min-width: 150px;
 }
 
@@ -1897,6 +1949,10 @@
   .pf-collaborator__role,
   .pf-collaborator__mou {
     grid-column: 2;
+  }
+
+  .pf-collaborator__mou {
+    justify-self: start;
   }
 
   .pf-collaborator__org {

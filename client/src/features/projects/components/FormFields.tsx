@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react';
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { useFloatingMenu } from './useFloatingMenu';
@@ -34,6 +34,76 @@ export const Field: React.FC<FieldProps> = ({
   </div>
 );
 
+/**
+ * Groups a typed amount the Indian way — `2500000` reads `25,00,000` — leaving
+ * the fraction as typed so a half-entered `1234.` survives. Anything that is not
+ * a plain number is shown untouched, so the field's validation still sees what
+ * the user actually typed.
+ */
+export function groupAmount(raw: string): string {
+  if (!/^\d*(\.\d*)?$/.test(raw)) return raw;
+  const [whole, fraction] = raw.split('.');
+  const lastThree = whole.slice(-3);
+  const rest = whole.slice(0, -3).replace(/\B(?=(\d{2})+(?!\d))/g, ',');
+  const grouped = rest ? `${rest},${lastThree}` : lastThree;
+  return fraction === undefined ? grouped : `${grouped}.${fraction}`;
+}
+
+interface AmountInputProps extends Omit<
+  React.InputHTMLAttributes<HTMLInputElement>,
+  'value' | 'onChange' | 'type'
+> {
+  /** The plain figure, without commas — what the form state and the API hold. */
+  value: string;
+  onChange: (value: string) => void;
+}
+
+/**
+ * A money field that shows its figure with Indian digit grouping while the form
+ * keeps the bare number. The commas exist only on screen: what is stored,
+ * validated and sent is exactly what it was before, so nothing downstream has
+ * to learn to strip them.
+ */
+export const AmountInput: React.FC<AmountInputProps> = ({ value, onChange, ...props }) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  // How many non-comma characters sat before the caret when the user typed.
+  // Regrouping rewrites the whole value, which would otherwise throw the caret
+  // to the end — typing into the middle of a figure would scatter the digits.
+  const caretRef = useRef<number | null>(null);
+  const shown = groupAmount(value ?? '');
+
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    const wanted = caretRef.current;
+    if (!input || wanted === null || document.activeElement !== input) return;
+    caretRef.current = null;
+
+    let seen = 0;
+    let position = 0;
+    while (position < shown.length && seen < wanted) {
+      if (shown[position] !== ',') seen += 1;
+      position += 1;
+    }
+    input.setSelectionRange(position, position);
+  }, [shown]);
+
+  return (
+    <input
+      {...props}
+      ref={inputRef}
+      type="text"
+      inputMode="decimal"
+      value={shown}
+      onChange={(event) => {
+        const typed = event.target.value;
+        const caret = event.target.selectionStart ?? typed.length;
+        caretRef.current = typed.slice(0, caret).replace(/,/g, '').length;
+        onChange(typed.replace(/,/g, ''));
+      }}
+    />
+  );
+};
+
 export interface SelectOption {
   value: string;
   label: string;
@@ -52,6 +122,12 @@ interface SelectFieldProps {
   className?: string;
   ariaLabel?: string;
   emptyMessage?: string;
+  /**
+   * The option the menu opens scrolled to while nothing is picked — the current
+   * financial year in a long year list. Only scrolled to, not highlighted, so
+   * Enter on an untouched field still picks nothing.
+   */
+  scrollToValue?: string;
 }
 
 /** An option paired with its position in the flat, filtered list. */
@@ -101,6 +177,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   className = '',
   ariaLabel,
   emptyMessage = 'No matches',
+  scrollToValue,
 }) => {
   // `null` while the field is showing its selection rather than a search: the
   // input then reads as the picked label and the whole list is on offer. A
@@ -189,6 +266,25 @@ export const SelectField: React.FC<SelectFieldProps> = ({
   const listboxId = `${fieldId}-listbox`;
   const optionId = (index: number) => `${fieldId}-option-${index}`;
   const armed = highlight >= 0 ? matches[highlight] : undefined;
+
+  // An empty, untouched field opens on `scrollToValue` rather than at the top
+  // of the list. Typing hands the scroll back to the highlight, which follows
+  // the matches.
+  const scrollTargetIndex =
+    !value && query === null && scrollToValue
+      ? options.findIndex((option) => option.value === scrollToValue)
+      : -1;
+  const scrollTargetId = scrollTargetIndex >= 0 ? optionId(scrollTargetIndex) : null;
+
+  // The menu's own `scrollTop` rather than `scrollIntoView`, which would also
+  // scroll the page under a menu that is fixed in place.
+  useEffect(() => {
+    if (!isOpen || !menuNode || !scrollTargetId) return;
+    const row = document.getElementById(scrollTargetId);
+    if (row && menuNode.contains(row)) {
+      menuNode.scrollTop = row.offsetTop - (menuNode.clientHeight - row.offsetHeight) / 2;
+    }
+  }, [isOpen, menuNode, scrollTargetId]);
 
   const pick = (option: SelectOption) => {
     // Re-picking what is already selected stays silent. `onChange` is not
@@ -298,8 +394,10 @@ export const SelectField: React.FC<SelectFieldProps> = ({
             style={{
               top: menuBox.top,
               left: menuBox.left,
-              width: menuBox.width,
+              minWidth: menuBox.minWidth,
+              maxWidth: menuBox.maxWidth,
               maxHeight: menuBox.maxHeight,
+              overflowY: menuBox.overflowY,
             }}
           >
             {matches.length === 0 ? (

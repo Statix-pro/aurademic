@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 
-import { SelectField } from '../components/FormFields';
+import { AmountInput, SelectField } from '../components/FormFields';
 import RowActions from '../components/RowActions';
 import SectionCard from '../components/SectionCard';
 import TagSelectField from '../components/TagSelectField';
@@ -185,12 +185,10 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
                 </td>
 
                 <td className="pf-table__amount">
-                  <input
-                    type="text"
-                    inputMode="decimal"
+                  <AmountInput
                     className={`pf-input pf-input--amount ${errors[`${errorPrefix}[${index}].amount`] ? 'is-invalid' : ''}`.trim()}
                     value={row.amount}
-                    onChange={(event) => update(index, { amount: event.target.value })}
+                    onChange={(amount) => update(index, { amount })}
                     disabled={disabled}
                     aria-label="Amount"
                   />

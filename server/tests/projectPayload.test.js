@@ -64,6 +64,33 @@ describe('normalizeProjectPayload', () => {
     expect(errorFields(errors)).toContain('result_date');
   });
 
+  // A project runs at most 10 years, and a months or days figure is the part
+  // left over beyond whole years and months — so 12 months and 31 days are the
+  // most either can hold. Anything larger is refused by name, not by the
+  // generic "whole number" message, which read as if the figure were malformed.
+  it('caps the duration at 10 years, 12 months and 31 days', () => {
+    const atLimit = normalizeProjectPayload(
+      validPayload({ duration_years: '10', duration_months: '12', duration_days: '31' }),
+    );
+    expect(atLimit.errors).toEqual([]);
+    expect(atLimit.aggregate.project).toMatchObject({
+      duration_years: 10,
+      duration_months: 12,
+      duration_days: 31,
+    });
+
+    const { errors } = normalizeProjectPayload(
+      validPayload({ duration_years: '11', duration_months: '13', duration_days: '32' }),
+    );
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        { field: 'duration_years', message: 'Enter a whole number from 0 to 10.' },
+        { field: 'duration_months', message: 'Enter a whole number from 0 to 12.' },
+        { field: 'duration_days', message: 'Enter a whole number from 0 to 31.' },
+      ]),
+    );
+  });
+
   it('rejects negative amounts', () => {
     const { errors } = normalizeProjectPayload(validPayload({ project_cost: '-5' }));
 

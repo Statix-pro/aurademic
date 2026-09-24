@@ -1,7 +1,11 @@
+import { Info } from 'lucide-react';
 import React from 'react';
+import { OverlayTrigger, Tooltip } from 'react-bootstrap';
 
 interface SectionCardProps {
   title?: string;
+  /** Help text behind an info icon beside the title, shown on hover or focus. */
+  info?: string;
   /** Rendered on the title row, right-aligned (radios, buttons, totals). */
   headerRight?: React.ReactNode;
   /** When provided, the card shows a switch and can be turned off entirely. */
@@ -25,6 +29,7 @@ interface SectionCardProps {
  */
 const SectionCard: React.FC<SectionCardProps> = ({
   title,
+  info,
   headerRight,
   toggle,
   inline = false,
@@ -38,7 +43,28 @@ const SectionCard: React.FC<SectionCardProps> = ({
     <section className={`pf-card ${inline ? 'pf-card--inline' : ''} ${className}`.trim()}>
       {(title || headerRight || toggle) && (
         <header className={`pf-card__header ${inline ? 'pf-card__header--inline' : ''}`.trim()}>
-          {title && <h2 className="pf-card__title">{title}</h2>}
+          {title && (
+            <h2 className="pf-card__title">
+              {title}
+              {info && (
+                <OverlayTrigger
+                  placement="right"
+                  trigger={['hover', 'focus']}
+                  overlay={
+                    <Tooltip className="pf-tooltip" id={`${switchId ?? 'pf-card'}-info`}>
+                      {info}
+                    </Tooltip>
+                  }
+                >
+                  {/* Focusable, so keyboard users reach the text a mouse user
+                      gets on hover. */}
+                  <span className="pf-card__info" tabIndex={0} aria-label={info}>
+                    <Info size={16} aria-hidden="true" />
+                  </span>
+                </OverlayTrigger>
+              )}
+            </h2>
+          )}
 
           <div className="pf-card__header-right">
             {headerRight}
