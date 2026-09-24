@@ -588,6 +588,14 @@
   background: #f2f7ff;
 }
 
+/* The year the picker opens on, marked for as long as the menu is open: the
+   hover highlight moves with the pointer, so it cannot be what says "this one
+   is today's". */
+.pf-combo__option[data-current='true'] {
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+}
+
 .pf-combo__option[data-selected='true'] {
   color: var(--primary-color, #0069ab);
   font-weight: 600;
@@ -1371,16 +1379,17 @@
    scrolls it, so however many years a project budgets across, each one can be
    read in full. */
 .pf-matrix__head {
-  width: 240px;
-  min-width: 240px;
+  width: 180px;
+  min-width: 180px;
 }
 
-/* Deliberately 70% of the head column beside it: the contributor is a short
-   organization name and reads as secondary to the head it qualifies, so it
-   takes the narrower half of the pair. Same floor treatment as the others. */
+/* The wider of the pair: a head name is a word or two ("Manpower",
+   "Contingencies"), while the contributor is an organization's full name —
+   "K.S.Rangasamy College of Technology" was cut to "K.S.Rangasamy C…" at
+   168px. Same floor treatment as the others. */
 .pf-matrix__contribution {
-  width: 168px;
-  min-width: 168px;
+  width: 320px;
+  min-width: 320px;
 }
 
 /* Narrow enough that the Contribution column above earns its place without the
@@ -1831,11 +1840,6 @@
 .pf-banner--error {
   background: #fdecec;
   color: #9e2530;
-}
-
-.pf-banner--info {
-  background: #e7f0fc;
-  color: #14548a;
 }
 
 .pf-banner__list {

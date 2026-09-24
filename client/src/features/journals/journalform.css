@@ -148,9 +148,19 @@
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
 }
 
-.form-control:disabled {
-  background-color: #f5f5f5;
-  color: #999;
+/* Read-only fields (view mode, auto-filled author/journal values) share one calm look:
+   a faint blue fill and full-strength text, so a saved record stays easy to read instead
+   of fading into mixed greys. Scoped under the body so it outranks Bootstrap, which is
+   imported after this file. -webkit-text-fill-color/opacity stop Safari dimming the text. */
+.journal-form-body .form-control:disabled,
+.journal-form-body .form-control[readonly],
+.journal-form-body .form-select:disabled {
+  background-color: #f6f9fd !important;
+  border-color: #e3eaf3;
+  color: #2f3b4c;
+  -webkit-text-fill-color: #2f3b4c;
+  opacity: 1;
+  cursor: default;
 }
 
 /* Author Section */
@@ -181,11 +191,6 @@
 .author-input-group > * {
   flex: 1 1 0px;
   min-width: 100px;
-}
-
-.author-input-group .form-control[readOnly] {
-  background-color: #e9ecef !important;
-  color: #495057;
 }
 
 .designation-select {
@@ -372,7 +377,9 @@
 }
 
 .btn-add-journal:disabled {
-  background-color: #b3d9ff !important;
+  background-color: #eef2f7 !important;
+  color: #94a3b8 !important;
+  opacity: 1;
   cursor: not-allowed;
 }
 
@@ -839,8 +846,8 @@
 }
 
 .btn-submit-approval:disabled {
-  background-color: #b3d9ff;
-  /* Light blue when disabled */
+  background-color: #e6ebf2;
+  color: #94a3b8;
   cursor: not-allowed;
   box-shadow: none;
 }
@@ -1020,8 +1027,10 @@
 }
 
 .btn-submit-approval:disabled {
-  background-color: #b3d9ff !important;
-  /* Light blue when disabled */
+  /* Neutral grey reads as "not available"; the old light blue looked like a faded
+     primary button. */
+  background-color: #e6ebf2 !important;
+  color: #94a3b8 !important;
   cursor: not-allowed !important;
   box-shadow: none !important;
   transform: none !important;
@@ -1039,7 +1048,8 @@ button[type='submit']:hover:not(:disabled) {
 }
 
 button[type='submit']:disabled {
-  background-color: #b3d9ff !important;
+  background-color: #e6ebf2 !important;
+  color: #94a3b8 !important;
   cursor: not-allowed !important;
 }
 

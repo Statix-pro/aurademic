@@ -124,8 +124,9 @@ interface SelectFieldProps {
   emptyMessage?: string;
   /**
    * The option the menu opens scrolled to while nothing is picked — the current
-   * financial year in a long year list. Only scrolled to, not highlighted, so
-   * Enter on an untouched field still picks nothing.
+   * financial year in a long year list — and marks in the list, whatever is
+   * picked. Only scrolled to and marked, not highlighted, so Enter on an
+   * untouched field still picks nothing.
    */
   scrollToValue?: string;
 }
@@ -423,6 +424,7 @@ export const SelectField: React.FC<SelectFieldProps> = ({
                       className="pf-tags__option pf-combo__option"
                       data-highlighted={index === highlight}
                       data-selected={option.value === value}
+                      data-current={Boolean(scrollToValue) && option.value === scrollToValue}
                       // The input keeps the focus, so the menu is not dismissed
                       // out from under the click that picks.
                       onMouseDown={(event) => event.preventDefault()}

@@ -5,6 +5,7 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
+import ViewModeBanner from '../../shared/components/ui/ViewModeBanner';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 import './journalform.css';
@@ -21,6 +22,7 @@ import {
   FileText,
   CheckCircle,
   ExternalLink,
+  Pencil,
 } from 'lucide-react';
 
 // Type definitions
@@ -2814,33 +2816,33 @@ const JournalForm: React.FC<JournalFormProps> = ({
           {!embedded &&
             isViewMode &&
             (adminApprovalStatus === 'approved' && !hasAdminOverride ? (
-              <div className="alert alert-info d-flex justify-content-between align-items-center">
-                <span>
-                  View Mode - This publication is admin approved. Request edit to modify it.
-                </span>
-                <button
-                  className="btn btn-warning"
-                  onClick={handleEditRequest}
-                  disabled={!canRequestEdit || editRequestStatus === 'pending'}
-                >
-                  {editRequestStatus === 'pending'
-                    ? 'Request Pending'
-                    : canRequestEdit
-                      ? 'Request Edit'
-                      : 'Edit Not Available'}
-                </button>
-              </div>
+              <ViewModeBanner
+                locked
+                message="This publication is admin approved. Request an edit to modify it."
+                action={{
+                  label:
+                    editRequestStatus === 'pending'
+                      ? 'Request Pending'
+                      : canRequestEdit
+                        ? 'Request Edit'
+                        : 'Edit Not Available',
+                  onClick: handleEditRequest,
+                  disabled: !canRequestEdit || editRequestStatus === 'pending',
+                }}
+              />
             ) : (
-              <div className="alert alert-info d-flex justify-content-between align-items-center">
-                <span>
-                  {adminApprovalStatus === 'approved'
-                    ? 'View Mode - This publication is admin approved. You have admin rights to edit it directly.'
-                    : 'View Mode - This submission is unapproved. You can edit it directly.'}
-                </span>
-                <button className="btn btn-primary" onClick={openEditableMode}>
-                  Edit Now
-                </button>
-              </div>
+              <ViewModeBanner
+                message={
+                  adminApprovalStatus === 'approved'
+                    ? 'This publication is admin approved. You have admin rights to edit it directly.'
+                    : 'This submission is not yet approved. You can edit it directly.'
+                }
+                action={{
+                  label: 'Edit now',
+                  icon: <Pencil size={15} />,
+                  onClick: openEditableMode,
+                }}
+              />
             ))}
           {editRequestStatus === 'rejected' && showRejectedAlert && (
             <div className="alert alert-danger alert-dismissible fade show" role="alert">
@@ -3787,11 +3789,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               className="form-control"
                               disabled={true}
                               readOnly
-                              style={{
-                                backgroundColor: '#e9ecef',
-                                cursor: 'not-allowed',
-                                color: '#495057',
-                              }}
                             />
                           </div>
                           <div className="col-6">
@@ -3809,11 +3806,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               className="form-control"
                               disabled={true}
                               readOnly
-                              style={{
-                                backgroundColor: '#e9ecef',
-                                cursor: 'not-allowed',
-                                color: '#495057',
-                              }}
                             />
                           </div>
                         </div>

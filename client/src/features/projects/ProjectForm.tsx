@@ -1,4 +1,4 @@
-import { AlertCircle, Info, Loader2, Pencil } from 'lucide-react';
+import { AlertCircle, Loader2, Pencil } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
@@ -36,6 +36,7 @@ import TransactionAccountsSection from './sections/TransactionAccountsSection';
 import TransactionSummarySection from './sections/TransactionSummarySection';
 import { financeOrganizations } from './selectOptions';
 import AlertModal from '../../shared/components/ui/AlertModal';
+import ViewModeBanner from '../../shared/components/ui/ViewModeBanner';
 
 import type { ProjectFormTab } from './constants';
 import type {
@@ -536,29 +537,28 @@ const ProjectForm: React.FC = () => {
     <div className="pf-page">
       <div className="pf-page__inner">
         {/* The form carries no page heading — the sections name themselves. Only
-            the save confirmation and the way out of view mode appear up here. */}
-        {(saveMessage || (canEdit && isViewMode)) && (
+            the save confirmation appears up here. */}
+        {saveMessage && (
           <div className="pf-page__header">
-            {saveMessage && <span className="pf-page__saved">{saveMessage}</span>}
-
-            {canEdit && isViewMode && (
-              <button
-                type="button"
-                className="pf-btn pf-btn--primary"
-                onClick={() => setSearchParams({}, { replace: true })}
-              >
-                <Pencil size={16} aria-hidden="true" />
-                Edit
-              </button>
-            )}
+            <span className="pf-page__saved">{saveMessage}</span>
           </div>
         )}
 
-        {!canEdit && (
-          <div className="pf-banner pf-banner--info">
-            <Info size={18} aria-hidden="true" />
-            <span>View only — the principal investigator can edit this project.</span>
-          </div>
+        {/* Same banner as the journal form: read-only, and the way into editing
+            when the viewer is allowed to. */}
+        {!canEdit ? (
+          <ViewModeBanner locked message="Only the principal investigator can edit this project." />
+        ) : (
+          isViewMode && (
+            <ViewModeBanner
+              message="This project is open read-only. You can edit it directly."
+              action={{
+                label: 'Edit now',
+                icon: <Pencil size={15} aria-hidden="true" />,
+                onClick: () => setSearchParams({}, { replace: true }),
+              }}
+            />
+          )
         )}
 
         {loadError && (

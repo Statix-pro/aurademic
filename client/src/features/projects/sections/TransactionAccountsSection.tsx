@@ -632,20 +632,29 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                               {/* Off unless the row is a refund, and unavailable
                                   until a head says which way the row normally
                                   runs — or while both columns hold a figure,
-                                  when neither direction is the one to flip. */}
-                              <label
-                                className="pf-ledger__detail-field pf-ledger__detail-field--check"
-                                title={REFUND_HINT[isIncomeRow ? 'income' : 'expenditure']}
-                              >
-                                <input
-                                  type="checkbox"
-                                  className="pf-checkbox"
-                                  checked={isRefund}
-                                  onChange={(event) => toggleRefund(event.target.checked)}
-                                  disabled={disabled || !headPicked || bothFilled}
-                                />
-                                <span className="pf-ledger__detail-label">Refund</span>
-                              </label>
+                                  when neither direction is the one to flip.
+
+                                  Expenditure rows only, once the head is
+                                  picked: an income row takes its receipt as a
+                                  Credit and nothing else, and a row with no head
+                                  yet has no direction to reverse. A row already
+                                  carrying a refund keeps the box, so it can be
+                                  turned back into an ordinary entry. */}
+                              {((headPicked && !isIncomeRow) || isRefund) && (
+                                <label
+                                  className="pf-ledger__detail-field pf-ledger__detail-field--check"
+                                  title={REFUND_HINT[isIncomeRow ? 'income' : 'expenditure']}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    className="pf-checkbox"
+                                    checked={isRefund}
+                                    onChange={(event) => toggleRefund(event.target.checked)}
+                                    disabled={disabled || !headPicked || bothFilled}
+                                  />
+                                  <span className="pf-ledger__detail-label">Refund</span>
+                                </label>
+                              )}
 
                               {/* On by default, so the ordinary entry needs no
                                   thought: unticking is the exception, for money
@@ -653,13 +662,13 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                   what the project spent or received against its
                                   budget.
 
-                                  Expenditure rows only: income received is
-                                  always counted, and picking an income head
-                                  re-ticks it. An income row that is somehow
-                                  still unticked keeps the box, so it is not
-                                  left out of the summary with nothing on screen
-                                  to say why. */}
-                              {(!isIncomeRow || !row.countsAsActual) && (
+                                  Expenditure rows only, once the head is
+                                  picked: income received is always counted,
+                                  and picking an income head re-ticks it. A row
+                                  that is somehow still unticked keeps the box,
+                                  so it is not left out of the summary with
+                                  nothing on screen to say why. */}
+                              {((headPicked && !isIncomeRow) || !row.countsAsActual) && (
                                 <label
                                   className="pf-ledger__detail-field pf-ledger__detail-field--check"
                                   title={ACTUALS_HINT}
