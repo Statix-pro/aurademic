@@ -12,6 +12,7 @@ export interface DownloadedFile {
 interface AuthenticityUtility extends AxiosInstance {
   postFile: (endpoint: string, formData: FormData) => Promise<unknown>;
   getFile: (endpoint: string, params?: Record<string, unknown>) => Promise<DownloadedFile>;
+  putFile: (endpoint: string, formData: FormData) => Promise<unknown>;
   getBaseURL: () => string;
 }
 
@@ -46,6 +47,12 @@ const authenticityUtility = axios.create({
 
 authenticityUtility.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // Let the browser/Axios set the multipart boundary for file uploads.
+    // The instance default is JSON, which causes Multer to receive no file
+    // when the request body is FormData.
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
     const token = localStorage.getItem('token');
     if (token) {
       // Check if token is expired before making the request
@@ -108,11 +115,7 @@ authenticityUtility.interceptors.response.use(
 
 authenticityUtility.postFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
-    const response = await authenticityUtility.post(endpoint, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await authenticityUtility.post(endpoint, formData);
     return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
@@ -156,8 +159,28 @@ authenticityUtility.getFile = async (
   return { blob: response.data, filename };
 };
 
+authenticityUtility.putFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
+  try {
+    const response = await authenticityUtility.put(endpoint, formData);
+    return response;
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: unknown }; message?: string };
+    console.error('Error in putFile request:', axiosError.response?.data || axiosError.message);
+    throw error;
+  }
+};
+
 authenticityUtility.getBaseURL = (): string => {
   return baseURL.replace(/\/api\/?$/, '');
+};
+
+export const isFallbackEligible = (error: any): boolean => {
+  return !!(
+    error &&
+    typeof error === 'object' &&
+    !error.response &&
+    (error.request || error.isAxiosError === true || error.code === 'ERR_NETWORK')
+  );
 };
 
 export default authenticityUtility;
