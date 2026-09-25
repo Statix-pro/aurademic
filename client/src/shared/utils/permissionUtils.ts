@@ -93,6 +93,7 @@ const getWorkflowPermissionPrefix = (moduleKey: string) => {
   const normalizedModule = String(moduleKey || '')
     .trim()
     .toLowerCase();
+  if (normalizedModule === 'workorder') return 'work_order.workflow.';
   return normalizedModule ? `${normalizedModule}.workflow.` : '';
 };
 
@@ -102,12 +103,19 @@ export const getWorkflowPermissionsForModule = (
 ) => {
   const workflowPrefix = getWorkflowPermissionPrefix(moduleKey);
 
+  // Work-order permissions are stored with the module key `workorder`.
+  // Keep accepting the underscored form for older assignments.
+  const workflowPrefixes =
+    String(moduleKey || '').trim().toLowerCase() === 'workorder'
+      ? ['workorder.workflow.', 'work_order.workflow.']
+      : [workflowPrefix];
+
   if (!workflowPrefix) {
     return [];
   }
 
   return normalizePermissionKeys(user).filter((permissionKey) =>
-    permissionKey.startsWith(workflowPrefix),
+    workflowPrefixes.some((prefix) => permissionKey.startsWith(prefix)),
   );
 };
 
@@ -127,6 +135,25 @@ export const canAccessModuleWorkflow = (user: User | null | undefined, moduleKey
     canAccessAdminArea(user)
   ) {
     return true;
+  }
+
+  if (String(moduleKey || '').trim().toLowerCase() === 'workorder') {
+    if (canAccessAdminArea(user)) {
+      return true;
+    }
+
+    const workOrderRoles = [
+      'hod',
+      'coordinator',
+      'workorderincharge',
+      'incharge',
+      'principal',
+      'workorderadmin',
+      'admin',
+    ];
+    if (normalizeRoleCodes(user).some((role) => workOrderRoles.includes(role.toLowerCase()))) {
+      return true;
+    }
   }
 
   return getWorkflowPermissionsForModule(user, moduleKey).length > 0;

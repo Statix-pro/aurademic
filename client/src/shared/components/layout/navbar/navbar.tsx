@@ -8,6 +8,7 @@ import {
   canAccessAdminArea,
   canAccessBudgetApproval,
   canAccessExpenditureWorkflow,
+  canAccessModuleWorkflow,
   canAccessFinanceWorkflow,
   canAccessGuesthouseWorkflow,
   canManageAccessControl,
@@ -247,6 +248,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showFinanceWorkflow = canAccessFinanceWorkflow(user);
   const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
   const showGuesthouseApproval = canAccessGuesthouseWorkflow(user);
+  const showWorkorderWorkflow = canAccessModuleWorkflow(user, 'workorder');
+  const showWorkorderApproval = showWorkorderWorkflow;
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu =
@@ -254,7 +257,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
     showBudgetApproval ||
     showFinanceWorkflow ||
     showExpenditureWorkflow ||
-    showGuesthouseApproval;
+    showGuesthouseApproval ||
+    showWorkorderApproval;
   const showSuperAdminMenu = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
@@ -563,6 +567,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                   '/admin/guesthouse',
                   '/workflow/finance',
                   '/workflow/expenditure',
+                  '/workflow/workorder',
                 ])
                   ? 'active'
                   : ''
@@ -637,6 +642,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     Guesthouse Approval
                   </Link>
                 )}
+                {showWorkorderApproval && (
+                  <Link
+                    to="/workflow/workorder"
+                    className={`sb-sublink ${isActive('/workflow/workorder') ? 'active' : ''}`}
+                    onClick={handleLinkClick}
+                  >
+                    Work Order Approval
+                  </Link>
+                )}
               </div>
             )}
           </div>
@@ -685,6 +699,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     onClick={handleLinkClick}
                   >
                     Budget Catalog
+                  </Link>
+                )}
+                {showMasterData && (
+                  <Link
+                    to="/admin/workorder-catalog"
+                    className={`sb-sublink ${isActive('/admin/workorder-catalog') ? 'active' : ''}`}
+                    onClick={handleLinkClick}
+                  >
+                    Work Order Catalog
                   </Link>
                 )}
               </div>

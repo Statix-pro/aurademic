@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 import {
   BatteryCharging,
   Building2,
@@ -921,6 +922,7 @@ const WorkOrder: React.FC = () => {
   const [mobile, setMobile] = useState('');
   const [beneficiaryType, setBeneficiaryType] = useState('');
   const [beneficiaryValue, setBeneficiaryValue] = useState('');
+  const [beneficiaryEmployeeId, setBeneficiaryEmployeeId] = useState<number | null>(null);
   const [beneficiaryValueOptions, setBeneficiaryValueOptions] = useState<OptionType[]>([]);
   const [beneficiarySearchQuery, setBeneficiarySearchQuery] = useState('');
   const [beneficiarySearchResults, setBeneficiarySearchResults] = useState<BeneficiaryEmployee[]>(
@@ -935,6 +937,10 @@ const WorkOrder: React.FC = () => {
   // Flipped to true once loadRecord has applied all hydrated state.
   // Used to clear isHydrating.current after the hydration commit.
   const [recordLoaded, setRecordLoaded] = useState(false);
+  const isAssignmentMode = isEditMode && new URLSearchParams(location.search).get('assign') === 'true';
+  const [assignees, setAssignees] = useState<BeneficiaryEmployee[]>([]);
+  const [assignmentStatus, setAssignmentStatus] = useState('Pending');
+  const [assignedEmployee, setAssignedEmployee] = useState('');
 
   // Request ID tracking for race condition resolution during fast navigation
   const currentRequestIdRef = useRef(0);
@@ -961,12 +967,18 @@ const WorkOrder: React.FC = () => {
       setDesignation(wo.designation || '');
       setEmail(wo.email || '');
       setMobile(wo.mobile || '');
-      setBeneficiaryType(wo.beneficiary_type || '');
-      setBeneficiaryValue(wo.beneficiary_value || '');
+      const storedBeneficiaryType = String(wo.beneficiary_type || wo.beneficiaryType || '').trim();
+      const beneficiaryTypeValue = BENEFICIARY_OPTIONS.find(
+        (option) => option.toLowerCase() === storedBeneficiaryType.toLowerCase(),
+      ) || storedBeneficiaryType;
+      setBeneficiaryType(beneficiaryTypeValue);
+      setBeneficiaryValue(wo.beneficiary_value || wo.beneficiaryValue || '');
       setSelectedTag(wo.budget_tag || '');
       isHydrating.current = true;
       setSelectedCategory(wo.category_name || 'Carpentry');
       if (Array.isArray(wo.items) && wo.items.length > 0) {
+        setAssignedEmployee(wo.items[0]?.assigned_to || wo.items[0]?.assignedTo || '');
+        setAssignmentStatus(wo.items[0]?.status || 'Pending');
         const loadedItems = wo.items.map((item: any) => ({
           id: String(item.id || crypto.randomUUID()),
           type: item.type_name || item.type || '',
@@ -1015,6 +1027,28 @@ const WorkOrder: React.FC = () => {
       currentRequestIdRef.current += 1;
     };
   }, [id]);
+
+  useEffect(() => {
+    if (!isAssignmentMode) return;
+    authenticityUtility.get('/workorders/assignees').then((response: any) => {
+      setAssignees(Array.isArray(response?.data) ? response.data : []);
+    }).catch((err) => console.error('Failed to load assignees:', err));
+  }, [isAssignmentMode]);
+
+  const saveAssignment = async () => {
+    if (!workItems.length) return;
+    const employee = assignees.find((item) => item.name === assignedEmployee);
+    try {
+      await Promise.all(workItems.map((item) => authenticityUtility.patch(`/workorders/items/${item.id}/dashboard`, {
+        status: assignmentStatus,
+        assignedTo: assignedEmployee,
+        assignedToRole: employee?.designation || 'Staff',
+      })));
+      navigate('/workflow/workorder');
+    } catch (err) {
+      setError('Failed to save assignment. Please try again.');
+    }
+  };
 
   // Fetch applicant details on mount (only for new records)
   useEffect(() => {
@@ -1327,10 +1361,10 @@ const WorkOrder: React.FC = () => {
     if (!validateForm()) return;
 
     // 1. Upload any newly added photos first
-    const uploadedUrlsByItem = new Map<string, string[]>();
+    const uploadedUrlsByItem = new Map<string, Array<string | Record<string, any>>>();
     try {
       for (const item of workItems) {
-        const urls: string[] = [];
+        const urls: Array<string | Record<string, any>> = [];
         for (const photo of item.locationPhotos) {
           if (!photo.file) {
             urls.push(photo.preview);
@@ -1346,7 +1380,13 @@ const WorkOrder: React.FC = () => {
           if (!uploadRes?.success || !uploadRes.data?.url) {
             throw new Error(uploadRes?.message || 'Upload response missing url');
           }
-          urls.push(uploadRes.data.url);
+          urls.push({
+            url: uploadRes.data.url,
+            file_path: uploadRes.data.file_path || uploadRes.data.url,
+            file_name: uploadRes.data.file_name || photo.file.name,
+            mime_type: uploadRes.data.mimeType || photo.file.type || null,
+            file_size: uploadRes.data.size ?? photo.file.size ?? null,
+          });
         }
         uploadedUrlsByItem.set(item.id, urls);
       }
@@ -1367,7 +1407,8 @@ const WorkOrder: React.FC = () => {
       beneficiary_value:
         beneficiaryType === 'Institution'
           ? 'K.S.Rangasamy College of Technology'
-          : beneficiaryValue || department,
+          : beneficiaryValue || '',
+      ...(beneficiaryEmployeeId ? { beneficiary_employee_id: beneficiaryEmployeeId } : {}),
       budget_tag: selectedTag,
       category: selectedCategory,
       workItems: workItems.map((item) => ({
@@ -1448,6 +1489,31 @@ const WorkOrder: React.FC = () => {
   return (
     <div className="workorderPage journal-form-body">
       <div className="journal-form-container workorderContainer">
+        {isAssignmentMode && (
+          <div className="card mb-3 p-3 border-primary">
+            <h5 className="mb-3">Assign Work</h5>
+            <div className="workorder-assignment-details">
+              <div><span>Type of Work</span><strong>{workItems[0]?.type || selectedCategory || 'Not specified'}</strong></div>
+              <div><span>Subtype</span><strong>{workItems[0]?.subType || 'Not specified'}</strong></div>
+            </div>
+            <div className="row g-3">
+              <div className="col-md-7">
+                <label className="form-label">Active employee</label>
+                <select className="form-select" value={assignedEmployee} onChange={(event) => setAssignedEmployee(event.target.value)}>
+                  <option value="">Not assigned</option>
+                  {assignees.map((employee) => <option key={String(employee.employee_id)} value={employee.name}>{employee.name}{employee.designation ? ` (${employee.designation})` : ''}</option>)}
+                </select>
+              </div>
+              <div className="col-md-5">
+                <label className="form-label">Status</label>
+                <select className="form-select" value={assignmentStatus} onChange={(event) => setAssignmentStatus(event.target.value)}>
+                  {['Pending', 'Assigned', 'Procurement', 'On Hold', 'Completed'].map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
+              </div>
+            </div>
+            <button type="button" className="btn btn-primary mt-3" onClick={saveAssignment}>Save assignment</button>
+          </div>
+        )}
         <form onSubmit={handleSubmit}>
           <CollapsibleCard
             title="Applicant Details"
@@ -1540,6 +1606,7 @@ const WorkOrder: React.FC = () => {
                                   onClick={() => {
                                     const name = employee.name || '';
                                     setBeneficiaryValue(name);
+                                    setBeneficiaryEmployeeId(Number(employee.employee_id) || null);
                                     setBeneficiarySearchQuery(name);
                                     setShowBeneficiarySearch(false);
                                   }}

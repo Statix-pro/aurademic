@@ -1,8 +1,10 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/set-state-in-effect */
 import {
   ChevronLeft,
   ChevronRight,
+  Info,
   Eye,
-  Image as ImageIcon,
+  Pencil,
   Search,
   ClipboardList,
   UserCheck,
@@ -18,6 +20,31 @@ import { useNavigate } from 'react-router-dom';
 import './WorkOrderDashboard.css';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { useAuth } from '../../../contexts/AuthContext';
+
+const API_ORIGIN = authenticityUtility.getBaseURL().replace(/\/api\/?$/, '');
+
+type WorkOrderTimelineEntry = {
+  id: number | string;
+  stage?: string;
+  decision?: string;
+  feedback?: string;
+  actor_name?: string;
+  actor_email?: string;
+  decided_at?: string;
+};
+
+const resolveWorkOrderPhotoUrl = (value: string) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) return normalized;
+  if (/^(data:|blob:|https?:\/\/)/i.test(normalized)) return normalized;
+  if (normalized.startsWith('/uploads/workorder-photos/')) {
+    // Work-order uploads are served by the server's same-origin static route.
+    // An <img> request cannot attach the bearer header used by API requests.
+    return normalized;
+  }
+  return `${API_ORIGIN}/${normalized.replace(/^\/+/, '')}`;
+};
 
 type WorkOrderPriority = 'High' | 'Medium' | 'Low' | 'Routine';
 type WorkOrderStatus = 'Pending' | 'Completed' | 'Procurement' | 'On Hold' | 'Assigned';
@@ -53,6 +80,7 @@ interface StoredWorkOrderSubmission {
   status: WorkOrderStatus;
   overall_status?: string;
   workflow_status?: string;
+  workflow_stage?: string | null;
   workflow_state?: {
     status?: string;
     currentStage?: string | null;
@@ -62,6 +90,8 @@ interface StoredWorkOrderSubmission {
   workItems: StoredWorkOrderItem[];
   beneficiary_tag?: string;
   beneficiaryTag?: string;
+  beneficiary_type?: string;
+  beneficiary_value?: string;
   budget_tag?: string;
   budgetTag?: string;
 }
@@ -93,6 +123,7 @@ interface WorkOrderItem {
   };
   status: WorkOrderStatus;
   approvalStatus: string;
+  workflowStage?: string | null;
   description: string;
   targetDate?: string;
   reminderDate?: string;
@@ -211,11 +242,6 @@ const formatLegacyWorkOrderId = (id: string | number, category?: string): string
   return rawId;
 };
 
-const isReminderStatus = (status: string) => {
-  const s = String(status || '').toLowerCase();
-  return s === 'reminder' || s === 'remainder' || s === 'on hold';
-};
-
 // LEGACY: Normalize old status values ('In Progress', 'Reminder', 'Remainder') to new set.
 // Remove after all stored submissions have been re-saved with new status values.
 const normalizeStatus = (status: string): WorkOrderStatus => {
@@ -230,6 +256,15 @@ const normalizeStatus = (status: string): WorkOrderStatus => {
 };
 
 const normalizeApprovalStatus = (submission: StoredWorkOrderSubmission) => {
+  // overall_status is the persisted final workflow result. Prefer its
+  // terminal values so a stale in-progress workflow snapshot cannot make a
+  // fully approved/rejected/returned work order appear pending.
+  const overallStatus = String(submission.overall_status || '').trim().toLowerCase();
+  if (overallStatus === 'approved') return 'Approved';
+  if (overallStatus === 'rejected') return 'Rejected';
+  if (overallStatus === 'returned') return 'Returned';
+  if (overallStatus === 'archived') return 'Archived';
+
   const workflowStatus = String(
     submission.workflow_state?.status ||
       submission.workflow_status ||
@@ -270,7 +305,7 @@ const mapSubmissionsToRows = (submissions: StoredWorkOrderSubmission[]): WorkOrd
           (url: string, index: number) => ({
             id: `${item.id}-${index}`,
             name: `Photo ${index + 1}`,
-            preview: url,
+            preview: resolveWorkOrderPhotoUrl(url),
           }),
         );
         const normalizedCategory = normalizeCategoryName(submission.category);
@@ -297,6 +332,7 @@ const mapSubmissionsToRows = (submissions: StoredWorkOrderSubmission[]): WorkOrd
           },
           status: normalizeStatus(item.status || submission.status || 'Pending'),
           approvalStatus: normalizeApprovalStatus(submission),
+          workflowStage: submission.workflow_state?.currentStage || submission.workflow_stage || null,
           description: item.description || '',
           targetDate: item.targetDate || '',
           reminderDate: item.reminderDate || '',
@@ -311,19 +347,22 @@ const mapSubmissionsToRows = (submissions: StoredWorkOrderSubmission[]): WorkOrd
           },
           submittedAt: submission.submittedAt || '',
           beneficiaryTag:
+            submission.beneficiary_value ||
             submission.beneficiary_tag ||
             submission.beneficiaryTag ||
-            submission.budget_tag ||
-            submission.budgetTag ||
             '',
         };
       }),
     )
     .sort((a, b) => {
-      const aIsReminder = isReminderStatus(a.status);
-      const bIsReminder = isReminderStatus(b.status);
-      if (aIsReminder && !bIsReminder) return -1;
-      if (!aIsReminder && bIsReminder) return 1;
+      // Keep the newest submitted work order at the top regardless of its
+      // approval/item status. `date` is request-date only and can be shared
+      // by multiple submissions, so use the full submission timestamp first.
+      const submittedAtDifference =
+        new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime();
+      if (submittedAtDifference !== 0) return submittedAtDifference;
+
+      // Deterministic fallback for legacy rows without a submission timestamp.
       return new Date(b.date).getTime() - new Date(a.date).getTime();
     });
 };
@@ -371,6 +410,10 @@ const CATEGORIES_TABS = [
 
 const WorkOrderDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const userRoles = [user?.role, ...(Array.isArray(user?.roles) ? user.roles : [])].map((role: any) => String(typeof role === 'object' ? role?.role || role?.role_code || role?.name : role).toLowerCase().replace(/[_-]/g, ''));
+  const userPermissions = Array.isArray(user?.permissions) ? user.permissions.map((permission: any) => String(permission).toLowerCase()) : [];
+  const isWorkOrderAdmin = Boolean(user?.is_super_admin || user?.isSuperAdmin || userRoles.some((role) => ['admin', 'workorderadmin'].includes(role)) || userPermissions.some((permission) => permission.includes('workorder') && permission.includes('workflow') && (permission.includes('admin') || permission.includes('workorder_admin'))));
   const [workOrders, setWorkOrders] = useState<WorkOrderItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('legacy-all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -384,9 +427,18 @@ const WorkOrderDashboard: React.FC = () => {
   // Modals state
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [selectedItemForInfo, setSelectedItemForInfo] = useState<WorkOrderItem | null>(null);
+  const [infoTimeline, setInfoTimeline] = useState<WorkOrderTimelineEntry[]>([]);
+  const [infoTimelineLoading, setInfoTimelineLoading] = useState(false);
+  const [showSubmissionLogModal, setShowSubmissionLogModal] = useState(false);
   const [reminderDateInput, setReminderDateInput] = useState('');
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [selectedItemForAssign, setSelectedItemForAssign] = useState<WorkOrderItem | null>(null);
+  const [assignees, setAssignees] = useState<{ employee_id: number; name: string; designation?: string }[]>([]);
+  const [assignValue, setAssignValue] = useState('');
+  const [assignStatus, setAssignStatus] = useState<WorkOrderStatus>('Pending');
 
   const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [expandedPendingOrders, setExpandedPendingOrders] = useState<Set<string>>(new Set());
   const [selectedItemForPhotos, setSelectedItemForPhotos] = useState<WorkOrderItem | null>(null);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
 
@@ -449,10 +501,83 @@ const WorkOrderDashboard: React.FC = () => {
     }
   };
 
-  const handleOpenInfo = (item: WorkOrderItem) => {
+  const handleOpenInfo = async (item: WorkOrderItem) => {
     setSelectedItemForInfo(item);
     setReminderDateInput(item.reminderDate || '');
+    setInfoTimeline([]);
     setShowInfoModal(true);
+    setInfoTimelineLoading(true);
+    try {
+      const response = await authenticityUtility.get(`/workorders/${encodeURIComponent(item.submissionId)}/timeline`) as any;
+      const approvalEntries = Array.isArray(response?.data) ? response.data : [];
+      setInfoTimeline([
+        {
+          id: `submitted-${item.submissionId}`,
+          stage: 'Submission',
+          decision: 'submitted',
+          actor_name: item.applicant.name || 'Submitted user',
+          actor_email: item.applicant.email,
+          decided_at: item.submittedAt || item.date,
+        },
+        ...approvalEntries,
+      ]);
+    } catch (err) {
+      console.error('Failed to load work-order timeline:', err);
+    } finally {
+      setInfoTimelineLoading(false);
+    }
+  };
+
+  const handleOpenSubmissionLog = async (item: WorkOrderItem) => {
+    setSelectedItemForInfo(item);
+    setInfoTimeline([]);
+    setShowSubmissionLogModal(true);
+    setInfoTimelineLoading(true);
+    try {
+      const response = await authenticityUtility.get(`/workorders/${encodeURIComponent(item.submissionId)}/timeline`) as any;
+      const entries = Array.isArray(response?.data) ? response.data : [];
+      setInfoTimeline([
+        {
+          id: `submitted-${item.submissionId}`,
+          stage: 'Submission',
+          decision: 'submitted',
+          actor_name: item.applicant.name || 'Submitted user',
+          actor_email: item.applicant.email,
+          decided_at: item.submittedAt || item.date,
+        },
+        ...entries,
+      ]);
+    } catch (err) {
+      console.error('Failed to load submission log:', err);
+    } finally {
+      setInfoTimelineLoading(false);
+    }
+  };
+
+  const handleOpenAssign = async (item: WorkOrderItem) => {
+    try {
+      const json = await authenticityUtility.get('/workorders/assignees');
+      setAssignees(Array.isArray((json as any)?.data) ? (json as any).data : []);
+      setSelectedItemForAssign(item);
+      setAssignValue(item.assignee.name || '');
+      setAssignStatus(item.status);
+      setShowAssignModal(true);
+    } catch (err) { console.error('Failed to load assignees:', err); }
+  };
+
+  const handleSaveAssignment = async () => {
+    if (!selectedItemForAssign) return;
+    const employee = assignees.find((person) => person.name === assignValue);
+    await persistWorkOrderItemDashboard(selectedItemForAssign.itemId, {
+      status: assignStatus,
+      assignedTo: assignValue,
+      assignedToRole: employee?.designation || 'Staff',
+    });
+    setWorkOrders((prev) => prev.map((item) => item.id === selectedItemForAssign.id ? {
+      ...item, status: assignStatus,
+      assignee: { ...item.assignee, name: assignValue, role: employee?.designation || 'Staff', initials: getInitials(assignValue) },
+    } : item));
+    setShowAssignModal(false);
   };
 
   const handleSaveReminder = async () => {
@@ -542,7 +667,7 @@ const WorkOrderDashboard: React.FC = () => {
     };
   }, [filteredByFYAndCategory]);
 
-  const formatCount = (count: number) => String(count).padStart(2, '0');
+  const formatCount = (count: number) => String(count);
 
   // Filter based on selected KPI status and SearchTerm
   const filteredWorkOrders = useMemo(() => {
@@ -740,6 +865,10 @@ const WorkOrderDashboard: React.FC = () => {
             ) : (
               <div className="workorderdashboard-list-container">
                 {paginatedWorkOrders.map((item) => {
+                  const workflowStages = ['level1', 'incharge', 'principal', 'workorder_admin'];
+                  const workflowStageLabels = ['Level 1', 'In-charge', 'Principal', 'WO Admin'];
+                  const pendingStageIndex = Math.max(0, workflowStages.indexOf(String(item.workflowStage || 'level1').toLowerCase()));
+                  const isPendingExpanded = expandedPendingOrders.has(item.id);
                   return (
                     <div key={item.id} className="workorderdashboard-item-card">
                       <div className="card-row-top">
@@ -747,6 +876,9 @@ const WorkOrderDashboard: React.FC = () => {
                           <span className="card-id-pill">#{item.workOrderId}</span>
                           <span className="card-applicant-name">{item.applicant.name}</span>
                           <span className="card-category-tag">{item.nature}</span>
+                          {item.approvalStatus === 'Approved' && item.status && (
+                            <span className={`card-assignment-status-tag card-assignment-status-tag--${String(item.status).toLowerCase().replace(/\s+/g, '-')}`}>{item.status}</span>
+                          )}
                         </div>
 
                         <div className="card-header-right">
@@ -755,30 +887,47 @@ const WorkOrderDashboard: React.FC = () => {
                             <span className="amount-value">{formatShortDate(item.targetDate)}</span>
                           </div>
                           <div className="card-actions-main">
-                            {item.photos.length > 0 && (
-                              <button
-                                type="button"
-                                className="icon-btn-subtle"
-                                title="View photos"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  handleOpenPhotos(item);
-                                }}
-                              >
-                                <ImageIcon size={18} />
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              className="icon-btn-subtle"
+                              title="Submission Logs"
+                              aria-label="Submission Logs"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleOpenSubmissionLog(item);
+                              }}
+                            >
+                              <Info size={18} />
+                            </button>
                             <button
                               type="button"
                               className="icon-btn-subtle"
                               title="View work order info"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                handleOpenInfo(item);
+                                navigate(`/workorder/${encodeURIComponent(item.submissionId)}`);
                               }}
                             >
                               <Eye size={18} />
                             </button>
+                            {!isWorkOrderAdmin && item.approvalStatus !== 'Approved' && (
+                              <button
+                                type="button"
+                                className="icon-btn-subtle"
+                                title="Edit submitted work order"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(`/workorder/${encodeURIComponent(item.submissionId)}/edit`);
+                                }}
+                              >
+                                <Pencil size={18} />
+                              </button>
+                            )}
+                            {item.approvalStatus === 'Approved' && (
+                              <button type="button" className="icon-btn-subtle" title={isWorkOrderAdmin ? 'Assign work and update status' : 'View assignment'} onClick={(event) => { event.stopPropagation(); handleOpenAssign(item); }}>
+                                <UserCheck size={18} />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -787,14 +936,39 @@ const WorkOrderDashboard: React.FC = () => {
                         <div className="card-row-middle">
                           <span className="beneficiary-label">Beneficiary :</span>
                           <span className="beneficiary-value">
-                            {item.applicant.department || 'N/A'}
+                            {item.beneficiaryTag
+                              ? item.beneficiaryTag.replace(/^(department|staff)\s*[:-]\s*/i, '')
+                              : 'N/A'}
                           </span>
                         </div>
-                        <span
-                          className={`card-approval-status card-approval-status--${item.approvalStatus.toLowerCase().replace(/\s+/g, '-')}`}
-                        >
-                          {item.approvalStatus}
-                        </span>
+                      {(item.approvalStatus === 'Pending' || item.approvalStatus === 'Approved') && (
+                        <div className="workorder-status-progress-row" aria-label="Approval progress">
+                          <button
+                            type="button"
+                            className={`workorder-status-progress-badge ${item.approvalStatus === 'Approved' ? 'approved' : ''}`}
+                            onClick={() => {
+                              if (item.approvalStatus !== 'Pending' && item.approvalStatus !== 'Approved') return;
+                              setExpandedPendingOrders((previous) => {
+                                const next = new Set(previous);
+                                if (next.has(item.id)) next.delete(item.id); else next.add(item.id);
+                                return next;
+                              });
+                            }}
+                            aria-expanded={isPendingExpanded}
+                          >
+                            {item.approvalStatus}
+                          </button>
+                          {isPendingExpanded && <div className="workorder-pending-progress">
+                          {workflowStages.map((stage, index) => (
+                            <React.Fragment key={stage}>
+                              <div className={`workorder-progress-node ${item.approvalStatus === 'Approved' || index < pendingStageIndex ? 'completed' : ''} ${item.approvalStatus !== 'Approved' && index === pendingStageIndex ? 'current' : ''}`} title={workflowStageLabels[index]}>
+                              </div>
+                              {index < workflowStages.length - 1 && <div className={`workorder-progress-line ${item.approvalStatus === 'Approved' || index < pendingStageIndex ? 'completed' : ''}`} />}
+                            </React.Fragment>
+                          ))}
+                          </div>}
+                        </div>
+                      )}
                       </div>
                     </div>
                   );
@@ -855,6 +1029,25 @@ const WorkOrderDashboard: React.FC = () => {
       </div>
 
       {/* Info Details Modal */}
+      <CustomModal show={showAssignModal} onHide={() => setShowAssignModal(false)} title="Assign Work" size="sm" footer={<><button type="button" className="wo-info-btn-close" onClick={() => setShowAssignModal(false)}>Close</button>{isWorkOrderAdmin && <button type="button" className="wo-info-btn-save" onClick={handleSaveAssignment}>Save</button>}</>}>
+        <div className="wo-info-modal-body">
+          {selectedItemForAssign && (
+            <div className="workorder-assignment-details">
+              <div><span>Type of Work</span><strong>{selectedItemForAssign.workType || selectedItemForAssign.nature || 'N/A'}</strong></div>
+              <div><span>Subtype</span><strong>{selectedItemForAssign.subType || 'N/A'}</strong></div>
+            </div>
+          )}
+          <label className="wo-info-field-label">Assign to</label>
+          <select className="form-select mb-3" value={assignValue} disabled={!isWorkOrderAdmin} onChange={(event) => setAssignValue(event.target.value)}>
+            <option value="">Not assigned</option>
+            {assignees.map((person) => <option key={person.employee_id} value={person.name}>{person.name} {person.designation ? `(${person.designation})` : ''}</option>)}
+          </select>
+          <label className="wo-info-field-label">Work status</label>
+          <select className="form-select" value={assignStatus} disabled={!isWorkOrderAdmin} onChange={(event) => setAssignStatus(event.target.value as WorkOrderStatus)}>
+            {['Pending', 'Assigned', 'Procurement', 'On Hold', 'Completed'].map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </div>
+      </CustomModal>
       <CustomModal
         show={showInfoModal}
         onHide={() => setShowInfoModal(false)}
@@ -882,6 +1075,14 @@ const WorkOrderDashboard: React.FC = () => {
         {selectedItemForInfo && (
           <div className="wo-info-modal-body">
             {/* Applicant Details Section */}
+            <div className="wo-info-section">
+              <div className="wo-info-section-heading"><span className="wo-info-section-icon" /><span>Work Assignment</span></div>
+              <div className="wo-info-description-card">
+                <strong>Assigned to:</strong> {selectedItemForInfo.assignee.name || 'Not assigned'}<br />
+                <strong>Status:</strong> {selectedItemForInfo.status}
+              </div>
+            </div>
+
             <div className="wo-info-section">
               <div className="wo-info-section-heading">
                 <span className="wo-info-section-icon" />
@@ -956,6 +1157,40 @@ const WorkOrderDashboard: React.FC = () => {
               </div>
             </div>
 
+            <div className="wo-info-section">
+              <div className="wo-info-section-heading">
+                <span className="wo-info-section-icon" />
+                <span>Submission Log</span>
+              </div>
+              {infoTimelineLoading ? (
+                <div className="wo-info-description-card">Loading timeline...</div>
+              ) : infoTimeline.length === 0 ? (
+                <div className="wo-info-description-card">No approval history available.</div>
+              ) : (
+                <div className="wo-info-timeline">
+                  {infoTimeline.map((entry) => (
+                    <div className="wo-info-timeline-entry" key={String(entry.id)}>
+                      <div className="wo-info-timeline-entry-top">
+                        <span className={`wo-info-timeline-status ${String(entry.decision || '').toLowerCase()}`}>
+                          {String(entry.decision || 'submitted').toUpperCase()}
+                        </span>
+                        <strong>{entry.stage || 'Workflow'}</strong>
+                      </div>
+                      <div className="wo-info-timeline-entry-by">
+                        {entry.actor_name || entry.actor_email || 'System'}
+                      </div>
+                      <div className="wo-info-timeline-submitted-from">
+                        <strong>Submitted from:</strong>{' '}
+                        {selectedItemForInfo?.applicant.name || selectedItemForInfo?.applicant.email || 'N/A'}
+                      </div>
+                      {entry.feedback && <div className="wo-info-timeline-feedback">{entry.feedback}</div>}
+                      {entry.decided_at && <time>{new Date(entry.decided_at).toLocaleString('en-GB')}</time>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Description Section */}
             <div className="wo-info-section">
               <div className="wo-info-section-heading">
@@ -968,6 +1203,45 @@ const WorkOrderDashboard: React.FC = () => {
             </div>
           </div>
         )}
+      </CustomModal>
+
+      <CustomModal
+        show={showSubmissionLogModal}
+        onHide={() => setShowSubmissionLogModal(false)}
+        title="Submission Logs"
+        size="lg"
+        className="wo-submission-log-modal"
+      >
+        <div className="wo-info-modal-body">
+          <div className="wo-submission-log-proposal">
+            <span>Proposal:</span>
+            <strong>#{selectedItemForInfo?.workOrderId || '--'}</strong>
+          </div>
+          {infoTimelineLoading ? (
+            <div className="wo-info-description-card">Loading updates...</div>
+          ) : infoTimeline.length === 0 ? (
+            <div className="wo-info-description-card">No submission log entries available.</div>
+          ) : (
+            <div className="wo-info-timeline">
+              {infoTimeline.map((entry) => (
+                <div className="wo-info-timeline-entry" key={String(entry.id)}>
+                  <div className="wo-info-timeline-entry-top">
+                    <span className={`wo-info-timeline-status ${String(entry.decision || '').toLowerCase()}`}>
+                      {String(entry.decision || 'update').toUpperCase()}
+                    </span>
+                    <strong>{entry.stage || 'Workflow'}</strong>
+                  </div>
+                  <div className="wo-info-timeline-entry-by">
+                    By: {entry.actor_name || entry.actor_email || 'Unknown'}
+                    {entry.actor_name && entry.actor_email ? ` (${entry.actor_email})` : ''}
+                  </div>
+                  {entry.feedback && <div className="wo-info-timeline-feedback">Remarks: {entry.feedback}</div>}
+                  {entry.decided_at && <time>{new Date(entry.decided_at).toLocaleString('en-GB')}</time>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </CustomModal>
 
       {/* Photo Viewer Modal */}

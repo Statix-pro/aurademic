@@ -311,6 +311,35 @@ const expenditureCsvExportMapper = (
 };
 
 export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfig> = {
+  workorder: {
+    moduleKey: 'workorder',
+    title: 'Work Order Requests',
+    apiBasePath: '/workorders',
+    stageLabels: {
+      level1: 'HOD',
+      incharge: 'Incharge',
+      principal: 'Principal',
+      workorder_admin: 'Work Order Admin',
+    },
+    getTimelineEndpoint: (id) => `/workorders/${id}/timeline`,
+    getViewRoute: (id) => `/workorder/${id}?admin=true`,
+    getEditRoute: (id) => `/workorder/${id}/edit?admin=true`,
+    enableSuperAdminDelete: true,
+    enableSuperAdminAllProposals: true,
+    enableSecondaryFilter: false,
+    columns: [
+      { key: 'applicant_name', label: 'Applicant' },
+      {
+        key: 'beneficiary_type',
+        label: 'Beneficiary',
+        render: (record) => {
+          const value = String(record?.beneficiary_value || '').trim();
+          return value || String(record?.beneficiary_type || '').trim() || '-';
+        },
+      },
+    ],
+    queueDefaultLimit: 20,
+  },
   finance: {
     moduleKey: 'finance',
     title: 'Finance Requests',

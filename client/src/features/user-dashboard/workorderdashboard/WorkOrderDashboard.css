@@ -1919,6 +1919,109 @@
   font-size: 0.78rem;
   font-weight: 700;
   border: 1px solid #d8e4f0;
+  cursor: default;
+  font-family: inherit;
+}
+
+button.card-approval-status--pending { cursor: pointer; }
+
+.workorder-status-progress-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0;
+  margin-left: auto;
+}
+
+.workorder-assignment-details {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  border: 1px solid #e1e8f0;
+  border-radius: 10px;
+  background: #f8fbff;
+}
+
+.workorder-assignment-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.workorder-assignment-details span {
+  color: #71839a;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.workorder-assignment-details strong {
+  color: #17355a;
+  font-size: 0.82rem;
+  text-align: right;
+}
+
+.workorder-status-progress-badge {
+  appearance: none;
+  font-family: inherit;
+  padding: 9px 18px;
+  border: 1px solid #f0d897;
+  border-radius: 999px;
+  background: #fff7df;
+  color: #9a6200;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.workorder-status-progress-badge.approved {
+  border-color: #bce8cc;
+  background: #e4f8ec;
+  color: #087236;
+  cursor: pointer;
+}
+
+.workorder-pending-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #6b7280;
+}
+
+.workorder-progress-node {
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border: 3px solid #d1d5db;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+}
+
+.workorder-progress-node.current {
+  border-color: #f0c875;
+  background: #fff7df;
+}
+
+.workorder-progress-node.completed {
+  border-color: #58b982;
+  background: #58b982;
+}
+
+.workorder-progress-line {
+  width: 26px;
+  height: 3px;
+  background: #d1d5db;
+}
+
+.workorder-progress-line.completed { background: #58b982; }
+
+@media (max-width: 640px) {
+  .workorder-status-progress-row { justify-content: flex-start; flex-wrap: wrap; }
 }
 
 .card-approval-status--approved {
@@ -2154,4 +2257,142 @@
 .filter-item select:focus {
   border-color: #0069ab;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
+}
+
+.wo-info-timeline {
+  display: grid;
+  gap: 10px;
+}
+
+.wo-info-timeline-entry {
+  padding: 12px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.wo-info-timeline-entry-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.wo-info-timeline-status {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.wo-info-timeline-status.approved { background: #dcfce7; color: #15803d; }
+.wo-info-timeline-status.rejected { background: #fee2e2; color: #b91c1c; }
+.wo-info-timeline-status.returned { background: #fef3c7; color: #b45309; }
+.wo-info-timeline-entry-by { color: #334155; font-size: 13px; font-weight: 600; }
+.wo-info-timeline-feedback { margin-top: 5px; color: #475569; font-size: 13px; }
+.wo-info-timeline-entry time { display: block; margin-top: 5px; color: #94a3b8; font-size: 11px; }
+
+.card-work-detail-tag,
+.card-assignee-tag,
+.card-assignment-status-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.card-work-detail-tag {
+  background: #eef5fb;
+  color: #315b7f;
+}
+
+.card-assignee-tag {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.card-assignment-status-tag {
+  background: #ecfdf5;
+  color: #047857;
+}
+.card-assignment-status-tag--assigned {
+  background: #dcfce7;
+  color: #15803d;
+}
+.card-assignment-status-tag--on-hold {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.card-assignment-status-tag--pending {
+  background: #fef3c7;
+  color: #a16207;
+}
+.card-assignment-status-tag--procurement {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+.card-assignment-status-tag--completed {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.wo-info-dates-row {
+  display: none;
+}
+.custom-modal.wo-submission-log-modal .modal-dialog.modal-lg {
+  max-width: 350px !important;
+  width: 350px !important;
+  margin: 1.75rem 24px 1.75rem auto;
+}
+
+.wo-submission-log-modal .modal-body {
+  padding: 0;
+}
+
+.wo-submission-log-modal .wo-info-modal-body {
+  padding: 12px;
+  max-height: calc(100vh - 7rem);
+  overflow-y: auto;
+}
+
+.wo-submission-log-proposal {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding: 0 2px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.wo-submission-log-proposal strong {
+  color: #1e293b;
+}
+
+.wo-submission-log-modal .wo-info-timeline-entry {
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  background: #fdfdfd;
+}
+
+.wo-submission-log-modal .wo-info-timeline-entry-top {
+  font-size: 13px;
+}
+
+.wo-submission-log-modal .wo-info-timeline-status {
+  font-size: 11px;
+  padding: 3px 7px;
+}
+
+.wo-submission-log-modal .wo-info-timeline-entry-by,
+.wo-submission-log-modal .wo-info-timeline-feedback,
+.wo-submission-log-modal time {
+  font-size: 12px;
 }

@@ -42,6 +42,8 @@ import participantAuthRoutes from './modules/participantAuth/participantAuthRout
 import participantRegistrationRoutes from './modules/participantRegistration/participantRegistrationRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
+import workorderRoutes from './modules/workorder/workorderRoutes.js';
+import './modules/workorder/workorderWorkflowAdapter.js';
 
 // FinanceCard routes
 // import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
@@ -204,6 +206,7 @@ app.use('/api/access-control', accessControlRoutes);
 app.use('/api/master-data', masterDataRoutes);
 app.use('/api/budget-catalog', budgetCatalogRoutes);
 app.use('/api/account-options', accountOptionsRoutes);
+app.use('/api/workorders', workorderRoutes);
 
 /* ================= 404 HANDLER ================= */
 

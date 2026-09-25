@@ -119,7 +119,7 @@ CREATE TABLE IF NOT EXISTS `work_orders` (
   `category_id` INT NOT NULL,
   `created_by` INT DEFAULT NULL,
   `overall_status` ENUM('pending','approved','rejected','archived','deleted') NOT NULL DEFAULT 'pending',
-  -- Drives the shared workflow engine (level1 -> dof -> principal).
+  -- Drives the shared workflow engine (level1 -> incharge -> principal -> workorder_admin).
   -- FIX: finance_requests exposes status/stage as STORED generated columns
   -- with indexes (not query-time JSON_EXTRACT as the original comment
   -- claimed); the queue/KPI filters and WorkOrderDashboard's `workflow_status`
@@ -1201,14 +1201,25 @@ ON DUPLICATE KEY UPDATE `is_active` = VALUES(`is_active`);
 -- happened in production: approval_flow_config holds three identical
 -- ('*', NULL, 'finance') rows (ids 8, 9, 10). Use explicit
 -- UPDATE-then-INSERT-if-absent instead, which is genuinely idempotent.
+-- Flow is level1 (HOD) -> incharge -> principal -> workorder_admin
+-- (final allocation stage that assigns approved work to staff).
+DELETE legacy FROM `approval_flow_config` legacy
+JOIN `approval_flow_config` canonical
+  ON canonical.`module_key` = 'workorder'
+ AND canonical.`beneficiary_type` = legacy.`beneficiary_type`
+ AND canonical.`entity_type_code` <=> legacy.`entity_type_code`
+WHERE legacy.`module_key` = 'work_order'
+  AND legacy.`beneficiary_type` = '*'
+  AND legacy.`entity_type_code` IS NULL;
+
 UPDATE `approval_flow_config`
-SET `flow` = '["level1", "dof", "principal"]', `is_active` = 1
+SET `flow` = '["level1", "incharge", "principal", "workorder_admin"]', `is_active` = 1
 WHERE `module_key` = 'work_order'
   AND `beneficiary_type` = '*'
   AND `entity_type_code` IS NULL;
 
 INSERT INTO `approval_flow_config` (`beneficiary_type`, `entity_type_code`, `flow`, `module_key`, `is_active`)
-SELECT '*', NULL, '["level1", "dof", "principal"]', 'work_order', 1
+SELECT '*', NULL, '["level1", "incharge", "principal", "workorder_admin"]', 'work_order', 1
 WHERE NOT EXISTS (
   SELECT 1 FROM `approval_flow_config` afc
   WHERE afc.`module_key` = 'work_order'
@@ -1217,13 +1228,50 @@ WHERE NOT EXISTS (
 );
 
 -- level1 is department-scoped with the same approver role codes finance and
--- expenditure use; dof and principal are institute-wide.
+-- expenditure use; incharge, principal, and workorder_admin are institute-wide.
+-- incharge is the review stage before Principal, and workorder_admin is the
+-- final allocation stage that assigns approved work to staff.
+-- Rename previously-seeded 'dof' rows to 'incharge' in place. This module
+-- already ran once with 'dof' naming (copied from the budget flow by
+-- mistake -- work_order has no DoF role). Renaming in place preserves any
+-- role_permissions grants already made against that permission_id instead
+-- of orphaning them under a key nothing points to anymore.
+DELETE legacy FROM `workflow_stage_policies` legacy
+JOIN `workflow_stage_policies` canonical
+  ON canonical.`module_key` = 'workorder'
+ AND canonical.`stage_key` = legacy.`stage_key`
+WHERE legacy.`module_key` = 'work_order'
+  AND legacy.`stage_key` IN ('level1', 'incharge', 'principal', 'workorder_admin');
+
+UPDATE `workflow_stage_policies`
+SET `stage_key` = 'incharge'
+WHERE `module_key` = 'work_order' AND `stage_key` = 'dof';
+
+UPDATE `permissions`
+SET `action_key` = 'incharge', `permission_key` = 'work_order.workflow.incharge'
+WHERE `module_key` = 'work_order_workflow' AND `action_key` = 'dof';
+
 INSERT INTO `workflow_stage_policies` (`module_key`, `stage_key`, `scope_type`, `meta`, `is_active`)
 VALUES
   ('work_order', 'level1', 'department', '{"requireAssignment": false, "assignmentRoleCodes": ["hod", "coordinator", "entity_approver"]}', 1),
-  ('work_order', 'dof', 'global', NULL, 1),
-  ('work_order', 'principal', 'global', NULL, 1)
+  ('work_order', 'incharge', 'global', NULL, 1),
+  ('work_order', 'principal', 'global', NULL, 1),
+  ('work_order', 'workorder_admin', 'global', NULL, 1)
 ON DUPLICATE KEY UPDATE `scope_type` = VALUES(`scope_type`), `meta` = VALUES(`meta`), `is_active` = 1;
+
+-- Runtime code registers and queries this module as `workorder`. Reconcile
+-- older migration rows that used `work_order` so workflow configuration is
+-- resolved from the same canonical module key on existing databases too.
+UPDATE `approval_flow_config`
+SET `module_key` = 'workorder'
+WHERE `module_key` = 'work_order'
+  AND `beneficiary_type` = '*'
+  AND `entity_type_code` IS NULL;
+
+UPDATE `workflow_stage_policies`
+SET `module_key` = 'workorder'
+WHERE `module_key` = 'work_order'
+  AND `stage_key` IN ('level1', 'incharge', 'principal', 'workorder_admin');
 
 -- =====================================================
 -- 5. PERMISSIONS
@@ -1244,9 +1292,10 @@ VALUES
   ('work_order', 'create', 'work_order.create', 'Raise new work orders', 1),
   ('work_order', 'edit', 'work_order.edit', 'Edit work orders and update item fulfilment', 1),
   ('work_order', 'manage', 'work_order.manage', 'Manage work order catalog and assignments', 1),
-  ('work_order_workflow', 'level1', 'work_order.workflow.level1', 'Process work order Level-1 approvals', 1),
-  ('work_order_workflow', 'dof', 'work_order.workflow.dof', 'Process work order DoF-stage approvals', 1),
-  ('work_order_workflow', 'principal', 'work_order.workflow.principal', 'Process work order Principal-stage approvals', 1)
+  ('work_order_workflow', 'level1', 'work_order.workflow.level1', 'Process work order Level-1 (HOD) approvals', 1),
+  ('work_order_workflow', 'incharge', 'work_order.workflow.incharge', 'Process work order Incharge-stage approvals', 1),
+  ('work_order_workflow', 'principal', 'work_order.workflow.principal', 'Process work order Principal-stage approvals', 1),
+  ('work_order_workflow', 'workorder_admin', 'work_order.workflow.workorder_admin', 'Process final work order allocation stage', 1)
 ON DUPLICATE KEY UPDATE `description` = VALUES(`description`);
 
 -- Grants. Keyed by role_code / permission_key rather than hardcoded ids so
@@ -1287,15 +1336,28 @@ ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
 INSERT INTO `role_permissions` (`role_id`, `permission_id`)
 SELECT r.id, p.id
 FROM `roles` r
-JOIN `permissions` p ON p.permission_key IN ('work_order.read', 'work_order.workflow.dof')
-WHERE r.role_code = 'finance_admin'
+JOIN `permissions` p ON p.permission_key IN ('work_order.read', 'work_order.workflow.principal')
+WHERE r.role_code = 'principal'
+ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
+
+-- Incharge and Workorder Admin are created through the Access Control UI
+-- (not seeded roles), so there's no fixed role_code to match here yet.
+-- Once those roles exist, check work_order.workflow.incharge on Incharge and
+-- work_order.workflow.workorder_admin on Workorder Admin from that screen.
+-- These inserts are no-ops (match zero rows) until a role with that exact
+-- role_code exists, so they're safe to keep for environments that do seed one.
+INSERT INTO `role_permissions` (`role_id`, `permission_id`)
+SELECT r.id, p.id
+FROM `roles` r
+JOIN `permissions` p ON p.permission_key IN ('work_order.read', 'work_order.workflow.incharge')
+WHERE r.role_code = 'incharge'
 ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
 
 INSERT INTO `role_permissions` (`role_id`, `permission_id`)
 SELECT r.id, p.id
 FROM `roles` r
-JOIN `permissions` p ON p.permission_key IN ('work_order.read', 'work_order.workflow.principal')
-WHERE r.role_code = 'principal'
+JOIN `permissions` p ON p.permission_key IN ('work_order.read', 'work_order.workflow.workorder_admin')
+WHERE r.role_code = 'workorder_admin'
 ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
 
 -- =====================================================

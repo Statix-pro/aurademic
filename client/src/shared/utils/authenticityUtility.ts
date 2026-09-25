@@ -47,6 +47,12 @@ const authenticityUtility = axios.create({
 
 authenticityUtility.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // Let the browser/Axios set the multipart boundary for file uploads.
+    // The instance default is JSON, which causes Multer to receive no file
+    // when the request body is FormData.
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      delete config.headers['Content-Type'];
+    }
     const token = localStorage.getItem('token');
     if (token) {
       // Check if token is expired before making the request

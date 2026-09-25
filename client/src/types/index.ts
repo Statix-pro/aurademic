@@ -15,6 +15,8 @@ export interface User {
   picture?: string;
   is_admin: boolean;
   is_super_admin?: boolean;
+  isSuperAdmin?: boolean;
+  role?: string;
   roles?: string[];
   permissions?: string[];
   // Employee fields from master_employees

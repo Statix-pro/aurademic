@@ -8,6 +8,7 @@ import Dashboard from '../features/admin/admindashboard';
 import AdminBudget from '../features/admin/budget/budget-approval/adminbudget';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
+import WorkOrderCatalogPage from '../features/admin/workorderCatalog/WorkOrderCatalogPage';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
 import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-approval/AdminGuesthouseApproval';
@@ -414,6 +415,44 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <EventDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/admin/workorder-catalog" element={<SuperAdminRoute><WorkOrderCatalogPage /></SuperAdminRoute>} />
+                  {/* WORK ORDERS */}
+                  <Route
+                    path="/workorderdashboard"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrderDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder"
+                    element={<Navigate to="/workorderdashboard" replace />}
+                  />
+                  <Route
+                    path="/workorder/new"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder/:id"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
                       </ProtectedRoute>
                     }
                   />

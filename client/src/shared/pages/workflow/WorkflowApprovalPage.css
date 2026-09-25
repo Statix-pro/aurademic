@@ -8,6 +8,7 @@
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+
 .fw-container {
   max-width: 1190px;
   margin: 0 auto;
@@ -50,6 +51,230 @@
 
 .fw-header-main .fw-export-csv-btn {
   margin-left: auto;
+}
+
+/* Work-order approval header: title/role on the left and filters on the same
+   horizontal line, matching the compact approval-page alignment. */
+.fw-card--workorder .fw-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center !important;
+  gap: 16px !important;
+}
+
+.fw-card--workorder .fw-header-main {
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.fw-card--workorder .fw-header-actions {
+  margin-left: 0;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+.fw-card--workorder .fw-role-tab {
+  white-space: nowrap;
+}
+
+.fw-workorder-filter-control {
+  width: 90px;
+  min-width: 90px;
+  max-width: 90px;
+  height: 36px;
+  padding: 6px 28px 6px 10px;
+  font-size: 13px;
+  border-color: #b9d3ec;
+  background: #f7fbff;
+  color: #17355a;
+  font-weight: 400;
+}
+
+.fw-card--workorder .fw-workorder-admin-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 18px;
+  border-radius: 10px;
+  background: #0878b8;
+  color: #fff;
+  font-weight: 700;
+}
+
+.fw-card--workorder-admin {
+  max-width: 1660px;
+  margin: 0 auto;
+}
+
+.fw-workorder-category-tabs {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  padding: 6px 24px 20px;
+}
+
+.fw-workorder-category-tabs button {
+  min-height: 38px;
+  border: 1px solid #cbdcf1;
+  border-radius: 12px;
+  background: #eef5ff;
+  color: #0878b8;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.fw-workorder-category-tabs button:hover {
+  background: #0878b8;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(0, 105, 171, .18);
+}
+
+.fw-card--workorder-admin .fw-stats {
+  display: none;
+}
+
+.fw-card--workorder-admin .fw-body {
+  display: none;
+}
+
+.fw-workorder-table-wrap {
+  margin: 0 24px 24px;
+  overflow: hidden;
+  border: 1px solid #cbdcf1;
+  border-radius: 16px;
+}
+
+.fw-workorder-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  color: #0a2540;
+}
+
+.fw-workorder-table th:first-child,
+.fw-workorder-table td:first-child { width: 9%; }
+.fw-workorder-table th:nth-child(2),
+.fw-workorder-table td:nth-child(2) { width: 9%; }
+.fw-workorder-table th:nth-child(3),
+.fw-workorder-table td:nth-child(3) { width: 10%; }
+.fw-workorder-table th:nth-child(4),
+.fw-workorder-table td:nth-child(4) { width: 14%; }
+.fw-workorder-table th:nth-child(5), .fw-workorder-table td:nth-child(5) { width: 12%; }
+.fw-workorder-table th:nth-child(6), .fw-workorder-table td:nth-child(6) { width: 15%; }
+.fw-workorder-table th:nth-child(7), .fw-workorder-table td:nth-child(7) { width: 12%; }
+.fw-workorder-table th:nth-child(8), .fw-workorder-table td:nth-child(8) { width: 9%; }
+
+.fw-workorder-table th {
+  padding: 14px 8px;
+  background: #0878b8;
+  color: #fff;
+  font-weight: 700;
+  text-align: left;
+  white-space: normal;
+  font-size: 13px;
+}
+
+.fw-workorder-table td {
+  height: 64px;
+  padding: 6px;
+  border-top: 1px solid #dbe7f4;
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-workorder-table th:nth-child(-n+4),
+.fw-workorder-table td:nth-child(-n+4) {
+  font-size: 13px;
+}
+
+.fw-workorder-row-clickable { cursor: pointer; }
+.fw-workorder-row-clickable:hover { background: #f7fbff; }
+
+.fw-workorder-id {
+  display: inline-block;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #0a2540;
+  font-weight: 700;
+}
+
+.fw-workorder-select,
+.fw-workorder-date {
+  height: 38px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 9px;
+  border: 1px solid #cbdcf1;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fw-workorder-approval { font-weight: 700; }
+.fw-workorder-approval {
+  border-color: #ead6ad;
+  background: #fff8df;
+  color: #9a6800;
+}
+.fw-workorder-approval--approved {
+  border-color: #b8e0c4;
+  background: #effaf1;
+  color: #176b2c;
+}
+.fw-workorder-approval--rejected {
+  border-color: #f0b8b8;
+  background: #fff0f0;
+  color: #b42318;
+}
+.fw-workorder-approval--returned {
+  border-color: #f2d29b;
+  background: #fff4df;
+  color: #9a5b00;
+}
+.fw-workorder-assigned {
+  border-color: #c8d9f2;
+  background: #f1f6ff;
+  color: #24558d;
+}
+.fw-workorder-status {
+  border-color: #cbdcf1;
+  background: #f7fbff;
+  color: #24558d;
+}
+.fw-workorder-date { min-width: 0; }
+.fw-workorder-date-text { display: inline-block; min-width: 80px; }
+.fw-workorder-assign {
+  width: 48px;
+  height: 48px;
+  border: 2px solid #cbd5e1;
+  border-radius: 50%;
+  background: #fff;
+  color: #cbd5e1;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+.fw-workorder-assign:hover { border-color: #0878b8; color: #0878b8; }
+
+@media (max-width: 1000px) {
+  .fw-workorder-category-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1050px) {
+  .fw-card--workorder .fw-header {
+    grid-template-columns: 1fr;
+  }
+
+  .fw-card--workorder .fw-header-actions {
+    justify-content: flex-start;
+  }
 }
 
 .fw-title {
@@ -399,6 +624,34 @@
     border-color 0.15s ease;
 }
 
+/* Keep principal work-order cards compact and aligned like the reference
+   approval layout without changing their actions or data. */
+.fw-item--workorder-principal {
+  padding: 14px 24px;
+  border-radius: 20px;
+}
+
+.fw-item--workorder-principal .fw-topbar {
+  min-height: 42px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e9eef5;
+}
+
+.fw-item--workorder-principal .fw-row {
+  min-height: 48px;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.fw-item--workorder-principal .fw-left {
+  align-items: center;
+}
+
+.fw-item--workorder-principal .fw-right {
+  align-items: center;
+  gap: 8px;
+}
+
 .fw-item--clickable:hover {
   transform: translateY(-1px);
   border-color: rgba(0, 105, 171, 0.35);
@@ -497,6 +750,14 @@
 .fw-icon-btn:hover {
   background: #e2e8f0;
   transform: translateY(-1px);
+}
+
+.fw-submission-log-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #f2f6fb;
+  color: #526b8c;
 }
 
 /* Amount Display */
@@ -631,6 +892,93 @@
   color: #334155;
   border: 1px solid #dbe4ff;
 }
+
+.fw-workorder-approval-actions {
+  display: inline-flex;
+  height: 36px;
+  border: 1px solid #cbdcf1;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.fw-workorder-approval-action {
+  width: 38px;
+  border: 0;
+  border-right: 1px solid #cbdcf1;
+  background: #fff;
+  color: #58718d;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.fw-workorder-approval-action:last-child { border-right: 0; }
+.fw-workorder-approval-action:hover { background: #f1f6fb; }
+
+.fw-workorder-approved-text {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid #a7dfbd;
+  border-radius: 18px;
+  background: #e7f8ef;
+  color: #075c2b;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.fw-workorder-high-priority-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-left: 7px;
+  border-radius: 50%;
+  background: #dc2626;
+  vertical-align: middle;
+}
+
+.fw-workorder-assign-empty {
+  width: 112px !important;
+  min-width: 112px;
+  max-width: 112px;
+  border-style: dashed;
+  border-radius: 18px;
+  background: #fff;
+  color: #0b6fb5;
+  padding-left: 14px;
+}
+
+.fw-workorder-assigned-name {
+  color: #17355a;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.fw-workorder-status {
+  box-sizing: border-box;
+  width: auto;
+  min-width: 136px;
+  height: 34px;
+  border: 0;
+  border-radius: 18px;
+  padding: 0 28px 0 16px;
+  font-weight: 500;
+  outline: none;
+  vertical-align: middle;
+}
+
+.fw-workorder-status:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.fw-workorder-status--pending { background: #eef2f6; color: #334155; }
+.fw-workorder-status--assigned { background: #dcecff; color: #075985; }
+.fw-workorder-status--on-hold { background: #fff0bf; color: #b45309; }
+.fw-workorder-status--procurement { background: #ffead8; color: #c2410c; }
+.fw-workorder-status--completed { background: #dcfce7; color: #15803d; }
 
 .fw-principal-indicator {
   display: inline-block;
@@ -826,6 +1174,24 @@
 }
 
 /* Log Modal Styles */
+.custom-modal.fw-log-modal .modal-dialog.modal-lg {
+  max-width: 280px;
+  width: 280px !important;
+  margin: 1.75rem 24px 1.75rem auto;
+}
+
+.fw-log-modal .modal-content {
+  max-height: calc(100vh - 3.5rem);
+}
+
+.fw-log-modal .modal-body {
+  padding: 0;
+}
+
+.fw-log-modal .modal-footer {
+  display: none;
+}
+
 .fw-log-header {
   background: #f8fafc;
   padding: 12px 16px;
@@ -836,8 +1202,8 @@
 }
 
 .fw-log-body {
-  padding: 16px;
-  max-height: 400px;
+  padding: 12px;
+  max-height: calc(100vh - 7rem);
   overflow-y: auto;
 }
 
@@ -859,8 +1225,8 @@
 }
 
 .fw-log-approvals {
-  margin-top: 16px;
-  padding-top: 16px;
+  margin-top: 12px;
+  padding-top: 12px;
   border-top: 1px solid #f1f5f9;
 }
 
@@ -869,8 +1235,8 @@
   background: #fdfdfd;
   border: 1px solid #f1f5f9;
   border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 10px;
+  padding: 8px;
+  margin-bottom: 8px;
 }
 
 .fw-log-approval-meta {
@@ -1339,4 +1705,49 @@
     grid-template-columns: repeat(3, auto);
     justify-content: start;
   }
+}
+.workorder-assignment-details {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid #dbe5ef;
+  border-radius: 10px;
+  background: #f8fbfe;
+}
+
+.workorder-assignment-details > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0;
+}
+
+.workorder-assignment-details span {
+  color: #64748b;
+  font-weight: 600;
+}
+
+.workorder-assignment-details strong {
+  color: #0f172a;
+  text-align: right;
+}
+
+.fw-workorder-detail-pill,
+.fw-workorder-assignment-pill,
+.fw-workorder-status-pill {
+  margin-left: 8px;
+  background: #f1f5f9;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.fw-workorder-assignment-pill {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.fw-workorder-status-pill {
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #a7f3d0;
 }
