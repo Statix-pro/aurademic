@@ -283,7 +283,7 @@ const assertWorkflowActionable = (state) => {
   };
 };
 
-const computeNextWorkflowState = ({ state, decision, feedback }) => {
+const computeNextWorkflowState = ({ state, decision, feedback, preserveStageOnArchive = false }) => {
   const nowIso = new Date().toISOString();
   const clonedState = {
     ...state,
@@ -346,7 +346,7 @@ const computeNextWorkflowState = ({ state, decision, feedback }) => {
 
   if (decision === 'archived') {
     clonedState.status = 'archived';
-    clonedState.currentStage = null;
+    if (!preserveStageOnArchive) clonedState.currentStage = null;
     clonedState.resolvedAt = nowIso;
     clonedState.isEditableByApplicant = false;
     return clonedState;
@@ -645,6 +645,7 @@ export async function actOnWorkflow({
       state: previousState,
       decision: normalizedDecision,
       feedback,
+      preserveStageOnArchive: moduleConfig.adapter?.preserveStageOnArchive === true,
     });
 
     const normalizedMeta = await validateAdapterModuleMeta({
@@ -740,6 +741,29 @@ export async function listQueue({ moduleKey, stage, actor, filters = {} }) {
       },
       { tx: conn },
     );
+  } finally {
+    conn.release();
+  }
+}
+
+export async function getQueueScopeFilters({ moduleKey, stage, actor, filters = {} }) {
+  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
+  const normalizedStage = normalizeText(stage).toLowerCase();
+  const normalizedActor = normalizeActorPayload(actor);
+  const conn = await db.getConnection();
+
+  try {
+    const stagePolicy = await resolveStagePolicy(conn, {
+      moduleKey: normalizedModuleKey,
+      stageKey: normalizedStage,
+    });
+
+    return await resolveQueueScopeFilters({
+      conn,
+      actor: normalizedActor,
+      stagePolicy,
+      filters,
+    });
   } finally {
     conn.release();
   }
@@ -936,6 +960,7 @@ export default {
   startWorkflow,
   actOnWorkflow,
   listQueue,
+  getQueueScopeFilters,
   getTimeline,
   getWorkflow,
   logWorkflowResubmission,
