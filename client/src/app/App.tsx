@@ -235,6 +235,24 @@ function App() {
                     }
                   />
 
+                  {/* DIRECTORIES */}
+                  <Route
+                    path="/organizationdirectorydashboard"
+                    element={
+                      <ProtectedRoute>
+                        <OrganizationDirectoryDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/resourcepersondirectorydashboard"
+                    element={
+                      <ProtectedRoute>
+                        <ResourcePersonDirectoryDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+
                   {/* BUDGET */}
                   <Route
                     path="/budgetcard"
