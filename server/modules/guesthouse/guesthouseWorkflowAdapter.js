@@ -2,8 +2,12 @@ import guesthouseModel from './guesthouseModel.js';
 import { registerWorkflowModule } from '../shared/workflow/workflowModuleRegistry.js';
 
 const guesthouseWorkflowAdapter = {
+  // Keep archived bookings in their original scoped queue so they can be
+  // unarchived by the actor who archived them (or by a super admin).
+  preserveStageOnArchive: true,
+
   resolveStartFlow() {
-    // Keep this in sync with 20260804_create_guesthouse_module.sql.
+    // Keep this in sync with 20260925_create_guesthouse_module.sql.
     return ['hod', 'guesthouse_incharge', 'principal', 'guesthouse_admin'];
   },
 

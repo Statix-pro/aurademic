@@ -58,7 +58,7 @@ const buildDateRange = (checkInDate, checkOutDate) => {
   return dates;
 };
 
-const assertRoomAvailable = async (tx, { bookingId, roomId, block, roomNumber }) => {
+const assertRoomAvailable = async (tx, { bookingId, roomId, block, roomNumber, excludeBookingId = bookingId }) => {
   const normalizedRoomId = toPositiveInt(roomId);
   const [roomRows] = await tx.query(
     normalizedRoomId
@@ -66,7 +66,11 @@ const assertRoomAvailable = async (tx, { bookingId, roomId, block, roomNumber })
       : 'SELECT id FROM guesthouse_rooms WHERE block = ? AND room_number = ? AND status = \'Active\' FOR UPDATE',
     normalizedRoomId ? [normalizedRoomId] : [normalizeText(block), normalizeText(roomNumber)],
   );
-  if (!roomRows.length) throw new Error('Selected room is unavailable');
+  if (!roomRows.length) {
+    const error = new Error('Selected room is unavailable');
+    error.statusCode = 409;
+    throw error;
+  }
   const lockedRoomId = Number(roomRows[0].id);
   const roomFilter = '(grar.room_id = ? OR (grar.room_id IS NULL AND grar.block = ? AND grar.room_number = ?))';
   const roomParams = [lockedRoomId, normalizeText(block), normalizeText(roomNumber)];
@@ -79,9 +83,13 @@ const assertRoomAvailable = async (tx, { bookingId, roomId, block, roomNumber })
        AND gb.check_in_date < (SELECT check_out_date FROM guesthouse_bookings WHERE id = ?)
        AND gb.check_out_date > (SELECT check_in_date FROM guesthouse_bookings WHERE id = ?)
      LIMIT 1`,
-    [...roomParams, bookingId, bookingId, bookingId],
+    [...roomParams, excludeBookingId, bookingId, bookingId],
   );
-  if (conflicts.length) throw new Error('Selected room is already allotted for an overlapping stay');
+  if (conflicts.length) {
+    const error = new Error('Selected room is already allotted for an overlapping stay');
+    error.statusCode = 409;
+    throw error;
+  }
   return lockedRoomId;
 };
 
@@ -104,12 +112,39 @@ const guesthouseModel = {
         );
         if (employeeRows.length) employeeId = requestedEmployeeId;
       }
-      const workflowDepartmentId =
+      const beneficiaryType = normalizeText(beneficiary.beneficiaryType);
+      const beneficiaryDepartmentName =
+        beneficiaryType.toLowerCase() === 'department'
+          ? normalizeText(beneficiary.staffName)
+          : normalizeText(beneficiary.department);
+      const requestedDepartmentId =
         toPositiveInt(beneficiary.departmentId) || toPositiveInt(applicant.departmentId);
-      const workflowDepartmentName =
-        normalizeText(beneficiary.department) ||
-        normalizeText(applicant.department) ||
-        null;
+      let departmentRows = [];
+      if (requestedDepartmentId) {
+        [departmentRows] = await tx.query(
+          `SELECT id, name FROM master_departments WHERE id = ? AND is_active = 1 LIMIT 1`,
+          [requestedDepartmentId],
+        );
+      }
+      if (!departmentRows.length && beneficiaryDepartmentName) {
+        [departmentRows] = await tx.query(
+          `SELECT id, name FROM master_departments
+           WHERE is_active = 1 AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+           ORDER BY id ASC LIMIT 1`,
+          [beneficiaryDepartmentName],
+        );
+      }
+      if (!departmentRows.length && applicant.department) {
+        [departmentRows] = await tx.query(
+          `SELECT id, name FROM master_departments
+           WHERE is_active = 1 AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+           ORDER BY id ASC LIMIT 1`,
+          [normalizeText(applicant.department)],
+        );
+      }
+      const workflowDepartmentId = toPositiveInt(departmentRows[0]?.id);
+      const workflowDepartmentName = normalizeText(departmentRows[0]?.name) ||
+        beneficiaryDepartmentName || normalizeText(applicant.department) || null;
       const guests = Array.isArray(payload.guests) ? payload.guests : [];
       const datedGuests = guests.filter((guest) => guest?.travel?.checkInDate && guest?.travel?.checkOutDate);
       const firstStay = [...datedGuests].sort((a, b) => a.travel.checkInDate.localeCompare(b.travel.checkInDate))[0];
@@ -259,6 +294,7 @@ const guesthouseModel = {
     return withTransaction(async (tx) => {
       const applicant = payload.applicant || {};
       const beneficiary = payload.beneficiary || {};
+      const beneficiaryType = normalizeText(beneficiary.beneficiaryType);
       const guests = Array.isArray(payload.guests) ? payload.guests : [];
       const datedGuests = guests.filter((guest) => guest?.travel?.checkInDate && guest?.travel?.checkOutDate);
       const firstStay = [...datedGuests].sort((a, b) => a.travel.checkInDate.localeCompare(b.travel.checkInDate))[0];
@@ -288,7 +324,7 @@ const guesthouseModel = {
           normalizeText(applicant.email) || null,
           normalizeText(applicant.mobile) || null,
           applicant.date || new Date().toISOString().slice(0, 10),
-          normalizeText(beneficiary.beneficiaryType) || null,
+          beneficiaryType || null,
           normalizeText(beneficiary.staffName) || null,
           normalizeText(beneficiary.tag) || null,
           firstStay?.travel?.checkInDate || null,
@@ -562,6 +598,54 @@ const guesthouseModel = {
     return result.affectedRows > 0;
   },
 
+  async canAccessGuesthouseBookingInQueue(recordId, stage, scopeFilters = {}) {
+    const normalizedId = toPositiveInt(recordId);
+    const normalizedStage = normalizeText(stage).toLowerCase();
+    if (!normalizedId || !normalizedStage) return false;
+
+    const whereParts = [
+      'gb.id = ?',
+      `(COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(gb.workflow_state, '$.currentStage')), 'null'),
+        NULLIF(TRIM(gb.workflow_stage), ''),
+        'hod'
+      ) = ? OR stage_action.id IS NOT NULL)`,
+    ];
+    const params = [normalizedId, normalizedStage];
+    const scopeType = normalizeText(scopeFilters.scopeType).toLowerCase();
+
+    if (!scopeFilters.forceAll && scopeType === 'department') {
+      const departmentIds = Array.from(scopeFilters.departmentIds || [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean);
+      if (scopeFilters.forceEmpty || departmentIds.length === 0) return false;
+
+      whereParts.push('gb.department_id IN (?)');
+      params.push(departmentIds);
+    }
+
+    const [rows] = await db.query(
+      `SELECT gb.id
+         FROM guesthouse_bookings gb
+         LEFT JOIN (
+           SELECT wa.record_id, wa.stage, wa.id
+             FROM workflow_actions wa
+             INNER JOIN (
+               SELECT record_id, stage, MAX(id) AS latest_id
+                 FROM workflow_actions
+                WHERE module_key = 'guesthouse'
+                GROUP BY record_id, stage
+             ) latest ON latest.latest_id = wa.id
+         ) stage_action
+           ON stage_action.record_id = gb.id
+          AND stage_action.stage COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci
+        WHERE ${whereParts.join(' AND ')}`,
+      [normalizedStage, ...params],
+    );
+
+    return rows.length > 0;
+  },
+
   async listGuesthouseQueueRecords(stage, filters = {}, { tx = db } = {}) {
     const normalizedStage = normalizeText(stage).toLowerCase();
     const workflowStatus = normalizeText(filters.workflowStatus).toLowerCase() || 'in_progress';
@@ -570,26 +654,45 @@ const guesthouseModel = {
     const limit = Math.min(Math.max(Number.parseInt(filters.limit, 10) || 20, 1), 100);
     const offset = (page - 1) * limit;
 
+    const stageActionJoin = `LEFT JOIN (
+      SELECT wa.record_id, wa.stage, wa.decision, wa.id
+        FROM workflow_actions wa
+        INNER JOIN (
+          SELECT record_id, stage, MAX(id) AS latest_id
+            FROM workflow_actions
+           WHERE module_key = 'guesthouse'
+           GROUP BY record_id, stage
+        ) latest ON latest.latest_id = wa.id
+    ) stage_action
+      ON stage_action.record_id = gb.id
+     AND stage_action.stage COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci`;
     const whereParts = [
-      `COALESCE(
-        JSON_UNQUOTE(JSON_EXTRACT(gb.workflow_state, '$.currentStage')),
+      `(COALESCE(
+        NULLIF(JSON_UNQUOTE(JSON_EXTRACT(gb.workflow_state, '$.currentStage')), 'null'),
         NULLIF(TRIM(gb.workflow_stage), ''),
         'hod'
-      ) = ?`,
-      `CASE
+      ) = ? OR stage_action.id IS NOT NULL)`,
+    ];
+    const whereParams = [normalizedStage];
+
+    if (workflowStatus !== 'all') {
+      whereParts.push(`CASE
         WHEN COALESCE(
-          JSON_UNQUOTE(JSON_EXTRACT(gb.workflow_state, '$.status')),
+          NULLIF(JSON_UNQUOTE(JSON_EXTRACT(gb.workflow_state, '$.status')), 'null'),
           NULLIF(TRIM(gb.workflow_status), ''),
           'in_progress'
         ) IN ('pending', 'submitted') THEN 'in_progress'
         ELSE COALESCE(
-          JSON_UNQUOTE(JSON_EXTRACT(gb.workflow_state, '$.status')),
+          NULLIF(JSON_UNQUOTE(JSON_EXTRACT(gb.workflow_state, '$.status')), 'null'),
           NULLIF(TRIM(gb.workflow_status), ''),
           'in_progress'
         )
-      END = ?`,
-    ];
-    const whereParams = [normalizedStage, workflowStatus];
+      END = ?`);
+      whereParams.push(workflowStatus);
+    }
+
+    const unscopedWhereParts = [...whereParts];
+    const unscopedWhereParams = [...whereParams];
 
     const scopeFilters = filters.scopeFilters || {};
     if (!scopeFilters.forceAll && scopeFilters.scopeType === 'department') {
@@ -609,6 +712,7 @@ const guesthouseModel = {
       );
       const likeTerm = `%${searchTerm}%`;
       whereParams.push(likeTerm, likeTerm);
+      unscopedWhereParams.push(likeTerm, likeTerm);
     }
 
     const whereClause = `WHERE ${whereParts.join(' AND ')}`;
@@ -616,16 +720,38 @@ const guesthouseModel = {
     const [countRows] = await tx.query(
       `SELECT COUNT(*) AS total
          FROM guesthouse_bookings gb
+       ${stageActionJoin}
        ${whereClause}`,
-      whereParams,
+      [normalizedStage, ...whereParams],
     );
 
+    let scopeWarning;
+    if (
+      Number(countRows?.[0]?.total || 0) === 0 &&
+      !scopeFilters.forceAll &&
+      scopeFilters.scopeType === 'department' &&
+      Array.from(scopeFilters.departmentIds || []).length > 0
+    ) {
+      const [unscopedRows] = await tx.query(
+        `SELECT COUNT(*) AS total
+         FROM guesthouse_bookings gb
+         ${stageActionJoin}
+         WHERE ${unscopedWhereParts.join(' AND ')}`,
+        [normalizedStage, ...unscopedWhereParams],
+      );
+      if (Number(unscopedRows?.[0]?.total || 0) > 0) {
+        scopeWarning = 'Guest House requests exist at this workflow stage but do not match your department assignment. Check the Guest House department ID mapping.';
+      }
+    }
+
     const [rows] = await tx.query(
-      `SELECT gb.* FROM guesthouse_bookings gb
+      `SELECT gb.*, stage_action.decision AS stage_decision
+         FROM guesthouse_bookings gb
+       ${stageActionJoin}
        ${whereClause}
        ORDER BY gb.created_at ASC
        LIMIT ? OFFSET ?`,
-      [...whereParams, limit, offset],
+      [normalizedStage, ...whereParams, limit, offset],
     );
 
     const parsedRows = rows.map((row) => ({
@@ -639,24 +765,72 @@ const guesthouseModel = {
       total: Number(countRows?.[0]?.total || 0),
       page,
       limit,
+      ...(scopeWarning ? { scopeWarning } : {}),
     };
   },
 
-  async getGuesthouseKpiStats(stage) {
+  async getGuesthouseKpiStats(stage, scopeFilters = {}) {
     const normalizedStage = normalizeText(stage).toLowerCase();
+    const workflowStage = `COALESCE(
+      NULLIF(JSON_UNQUOTE(JSON_EXTRACT(workflow_state, '$.currentStage')), 'null'),
+      NULLIF(TRIM(workflow_stage), ''),
+      'hod'
+    )`;
+    const workflowStatus = `COALESCE(
+      NULLIF(JSON_UNQUOTE(JSON_EXTRACT(workflow_state, '$.status')), 'null'),
+      NULLIF(TRIM(workflow_status), ''),
+      'in_progress'
+    )`;
+    const whereParts = [`(${workflowStage} = ? OR stage_action.id IS NOT NULL)`];
+    const whereParams = [normalizedStage];
+
+    if (!scopeFilters.forceAll && scopeFilters.scopeType === 'department') {
+      const departmentIds = Array.from(scopeFilters.departmentIds || [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean);
+      if (scopeFilters.forceEmpty || departmentIds.length === 0) {
+        return { total: 0, pending: 0, returned: 0, rejected: 0, approved: 0, archived: 0 };
+      }
+      whereParts.push('gb.department_id IN (?)');
+      whereParams.push(departmentIds);
+    }
+
     const [rows] = await db.query(
-      `SELECT COUNT(*) AS total,
-        SUM(workflow_status IN ('in_progress', 'pending', 'submitted')) AS pending,
-        SUM(workflow_status = 'returned') AS returned,
-        SUM(workflow_status = 'rejected') AS rejected,
-        SUM(workflow_status IN ('approved', 'completed')) AS approved,
-        SUM(workflow_status = 'archived') AS archived
-       FROM guesthouse_bookings WHERE workflow_stage = ?`,
-      [normalizedStage],
+      `SELECT CASE
+          WHEN stage_action.decision = 'returned' THEN 'returned'
+          WHEN stage_action.decision = 'rejected' THEN 'rejected'
+          WHEN stage_action.decision = 'approved' THEN 'approved'
+          WHEN stage_action.decision = 'archived' THEN 'archived'
+          WHEN ${workflowStage} = ? AND ${workflowStatus} IN ('in_progress', 'pending', 'submitted') THEN 'pending'
+          ELSE 'other'
+        END AS status,
+        COUNT(*) AS total
+       FROM guesthouse_bookings gb
+       LEFT JOIN (
+         SELECT wa.record_id, wa.stage, wa.decision, wa.id
+           FROM workflow_actions wa
+           INNER JOIN (
+             SELECT record_id, stage, MAX(id) AS latest_id
+               FROM workflow_actions
+              WHERE module_key = 'guesthouse'
+              GROUP BY record_id, stage
+           ) latest ON latest.latest_id = wa.id
+       ) stage_action
+         ON stage_action.record_id = gb.id
+        AND stage_action.stage COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci
+       WHERE ${whereParts.join(' AND ')}
+       GROUP BY status`,
+      [normalizedStage, normalizedStage, ...whereParams],
     );
-    const stats = rows[0] || {};
-    return Object.fromEntries(['total', 'pending', 'returned', 'rejected', 'approved', 'archived']
-      .map((key) => [key, Number(stats[key] || 0)]));
+    const stats = { total: 0, pending: 0, returned: 0, rejected: 0, approved: 0, archived: 0 };
+    rows.forEach((row) => {
+      const count = Number(row.total || 0);
+      stats.total += count;
+      if (Object.hasOwn(stats, row.status) && row.status !== 'total') {
+        stats[row.status] += count;
+      }
+    });
+    return stats;
   },
 
   // Decisions are written by the shared workflow service to workflow_actions.
@@ -775,6 +949,20 @@ const guesthouseModel = {
         block: payload.block,
         roomNumber: payload.roomNumber,
       });
+      const [sameBookingRoom] = await tx.query(
+        `SELECT 1
+           FROM guesthouse_room_allotment_rows grar
+           INNER JOIN guesthouse_room_allotments gra ON gra.id = grar.allotment_id
+          WHERE gra.booking_id = ?
+            AND (grar.room_id = ? OR (grar.room_id IS NULL AND grar.block = ? AND grar.room_number = ?))
+          LIMIT 1 FOR UPDATE`,
+        [allotments[0].booking_id, roomId, normalizeText(payload.block), normalizeText(payload.roomNumber)],
+      );
+      if (sameBookingRoom.length) {
+        const error = new Error('This room is already assigned to another guest in this booking');
+        error.statusCode = 409;
+        throw error;
+      }
       const [result] = await tx.query(
         `INSERT INTO guesthouse_room_allotment_rows
            (allotment_id, room_id, room_type, block, room_number, remarks, sort_order)
@@ -814,6 +1002,144 @@ const guesthouseModel = {
     return result.affectedRows > 0;
   },
 
+  async unarchiveGuesthouseBooking(bookingId, actor = {}) {
+    const normalizedId = toPositiveInt(bookingId);
+    if (!normalizedId) throw new Error('Invalid booking ID');
+
+    return withTransaction(async (tx) => {
+      const [bookingRows] = await tx.query(
+        `SELECT workflow_state FROM guesthouse_bookings WHERE id = ? FOR UPDATE`,
+        [normalizedId],
+      );
+      if (!bookingRows.length) throw new Error('Guest house booking not found');
+
+      const currentState = safeParseJSON(bookingRows[0].workflow_state, null);
+      if (String(currentState?.status || '').toLowerCase() !== 'archived') {
+        throw new Error('Guest House request is not archived');
+      }
+
+      const [archiveRows] = await tx.query(
+        `SELECT stage, actor_user_id, actor_email, snapshot_before
+           FROM workflow_actions
+          WHERE module_key = 'guesthouse' AND record_id = ? AND decision = 'archived'
+          ORDER BY decided_at DESC, id DESC LIMIT 1`,
+        [normalizedId],
+      );
+      if (!archiveRows.length) throw new Error('Cannot unarchive: archive record not found');
+
+      const archive = archiveRows[0];
+      const actorId = toPositiveInt(actor.userId || actor.id);
+      const archivedById = toPositiveInt(archive.actor_user_id);
+      const actorEmail = normalizeText(actor.email).toLowerCase();
+      const archivedByEmail = normalizeText(archive.actor_email).toLowerCase();
+      if (
+        !actor.isSuperAdmin &&
+        !(actorId && archivedById && actorId === archivedById) &&
+        !(actorEmail && archivedByEmail && actorEmail === archivedByEmail)
+      ) {
+        const error = new Error('Only the user who archived this request can unarchive it (or a super admin)');
+        error.statusCode = 403;
+        throw error;
+      }
+
+      const restoreState = safeParseJSON(archive.snapshot_before, null);
+      if (!restoreState?.currentStage || !restoreState?.flow) {
+        throw new Error('Cannot unarchive: original workflow state is missing');
+      }
+
+      await this.updateGuesthouseWorkflowSnapshot(normalizedId, restoreState, { tx });
+      await tx.query(
+        `INSERT INTO workflow_actions (
+           module_key, record_id, stage, decision, feedback, actor_user_id,
+           actor_email, actor_role, snapshot_before, meta
+         ) VALUES ('guesthouse', ?, ?, 'unarchived', ?, ?, ?, ?, ?, ?)`,
+        [
+          normalizedId,
+          normalizeText(archive.stage) || normalizeText(restoreState.currentStage),
+          `Restored to ${restoreState.currentStage}`,
+          actorId,
+          normalizeText(actor.email) || null,
+          normalizeText(actor.role) || null,
+          JSON.stringify(currentState),
+          JSON.stringify({ origin: 'api', action: 'archive-toggle' }),
+        ],
+      );
+
+      return restoreState;
+    });
+  },
+
+  async archiveGuesthouseBooking(bookingId, actor = {}, allowedDepartmentIds = null) {
+    const normalizedId = toPositiveInt(bookingId);
+    if (!normalizedId) throw new Error('Invalid booking ID');
+
+    return withTransaction(async (tx) => {
+      const [bookingRows] = await tx.query(
+        `SELECT workflow_state, workflow_stage, workflow_status, department_id,
+                department, beneficiary_type, beneficiary_value
+           FROM guesthouse_bookings WHERE id = ? FOR UPDATE`,
+        [normalizedId],
+      );
+      if (!bookingRows.length) throw new Error('Guest House booking not found');
+
+      const booking = bookingRows[0];
+      const currentState = safeParseJSON(booking.workflow_state, null);
+      if (!currentState?.flow || !currentState?.currentStage) {
+        throw new Error('Guest House workflow state is missing');
+      }
+      const currentStatus = normalizeText(
+        currentState.status || booking.workflow_status,
+      ).toLowerCase();
+      if (currentStatus === 'archived') throw new Error('Guest House request is already archived');
+      if (['completed', 'approved', 'rejected', 'returned'].includes(currentStatus)) {
+        throw new Error(`Archive not allowed for request status: ${currentStatus}`);
+      }
+
+      const departmentIds = Array.from(allowedDepartmentIds || [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean);
+      if (allowedDepartmentIds !== null) {
+        const inScope = departmentIds.includes(toPositiveInt(booking.department_id));
+        if (!inScope) {
+          const error = new Error('Record is outside your department workflow scope');
+          error.statusCode = 403;
+          throw error;
+        }
+      }
+
+      const now = new Date().toISOString();
+      const archivedState = {
+        ...currentState,
+        status: 'archived',
+        lastDecision: 'archived',
+        lastFeedback: null,
+        updatedAt: now,
+        resolvedAt: now,
+        isEditableByApplicant: false,
+      };
+      const actorId = toPositiveInt(actor.userId || actor.id);
+
+      await tx.query(
+        `INSERT INTO workflow_actions (
+           module_key, record_id, stage, decision, feedback, actor_user_id,
+           actor_email, actor_role, snapshot_before, meta
+         ) VALUES ('guesthouse', ?, ?, 'archived', ?, ?, ?, ?, ?, ?)`,
+        [
+          normalizedId,
+          normalizeText(currentState.currentStage),
+          normalizeText(actor.feedback) || null,
+          actorId,
+          normalizeText(actor.email) || null,
+          normalizeText(actor.role) || null,
+          JSON.stringify(currentState),
+          JSON.stringify({ origin: 'api', action: 'archive-toggle' }),
+        ],
+      );
+      await this.updateGuesthouseWorkflowSnapshot(normalizedId, archivedState, { tx });
+      return archivedState;
+    });
+  },
+
   async getAllotmentBookingId(allotmentId) {
     const [rows] = await db.query('SELECT booking_id FROM guesthouse_room_allotments WHERE id = ?', [toPositiveInt(allotmentId)]);
     return toPositiveInt(rows[0]?.booking_id);
@@ -834,6 +1160,20 @@ const guesthouseModel = {
     if (!normalizedBookingId) throw new Error('A valid booking is required');
 
     return withTransaction(async (tx) => {
+      const roomAssignments = new Set();
+      for (const allocation of Array.isArray(allotments) ? allotments : []) {
+        for (const room of Array.isArray(allocation?.rows) ? allocation.rows : []) {
+          const block = normalizeText(room?.block).toLowerCase();
+          const roomNumber = normalizeText(room?.roomNumber).toLowerCase();
+          if (!block || !roomNumber) continue;
+          const key = `${block}::${roomNumber}`;
+          if (roomAssignments.has(key)) {
+            throw new Error(`Room ${normalizeText(room.roomNumber)} in ${normalizeText(room.block)} is assigned more than once in this booking`);
+          }
+          roomAssignments.add(key);
+        }
+      }
+
       const [guestRows] = await tx.query(
         'SELECT id FROM guesthouse_guests WHERE booking_id = ?',
         [normalizedBookingId],
@@ -929,8 +1269,24 @@ const guesthouseModel = {
     }
     const whereClause = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
     const [rows] = await db.query(
-      `SELECT * FROM guesthouse_rooms ${whereClause} ORDER BY block ASC, room_number ASC`,
-      whereParams,
+      `SELECT gr.*,
+              CASE WHEN EXISTS (
+                SELECT 1
+                FROM guesthouse_room_allotment_rows grar
+                INNER JOIN guesthouse_room_allotments gra ON gra.id = grar.allotment_id
+                INNER JOIN guesthouse_bookings gb ON gb.id = gra.booking_id
+                WHERE (grar.room_id = gr.id OR (grar.room_id IS NULL AND grar.block = gr.block AND grar.room_number = gr.room_number))
+                  AND gb.overall_status NOT IN ('rejected', 'archived')
+                  AND (? IS NULL OR gb.id <> ?)
+                  AND (? IS NULL OR ? IS NULL OR (gb.check_in_date < ? AND gb.check_out_date > ?))
+              ) THEN 1 ELSE 0 END AS is_unavailable
+         FROM guesthouse_rooms gr ${whereClause.replace(/\bstatus\b/g, 'gr.status')} ORDER BY gr.block ASC, gr.room_number ASC`,
+      [
+        toPositiveInt(filters.excludeBookingId), toPositiveInt(filters.excludeBookingId),
+        normalizeText(filters.checkInDate) || null, normalizeText(filters.checkOutDate) || null,
+        normalizeText(filters.checkOutDate) || null, normalizeText(filters.checkInDate) || null,
+        ...whereParams,
+      ],
     );
     return rows.map((row) => ({ ...row, facilities: safeParseJSON(row.facilities, null) }));
   },
@@ -1104,96 +1460,6 @@ const guesthouseModel = {
     return result.affectedRows > 0 || result.changedRows === 0;
   },
 
-  async getStatusUpdates(bookingId) {
-    const normalizedId = toPositiveInt(bookingId);
-    if (!normalizedId) return [];
-
-    const [requestRows] = await db.query(
-      `SELECT
-        gb.id AS booking_id,
-        gb.created_by AS user_id,
-        gb.created_at,
-        COALESCE(
-          NULLIF(
-            TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))),
-            ''
-          ),
-          NULLIF(TRIM(gb.applicant_name), ''),
-          u.name,
-          gb.email
-        ) AS user_name,
-        COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(gb.email), '')) AS actor_email
-       FROM guesthouse_bookings gb
-       LEFT JOIN users u ON u.id = gb.created_by
-       LEFT JOIN master_employees emp
-         ON emp.email COLLATE utf8mb4_unicode_ci =
-            COALESCE(NULLIF(TRIM(u.email), ''), NULLIF(TRIM(gb.email), '')) COLLATE utf8mb4_unicode_ci
-       WHERE gb.id = ?
-       LIMIT 1`,
-      [normalizedId],
-    );
-
-    const submissionRows = requestRows.map((row) => ({
-      id: -Number(normalizedId),
-      booking_id: row.booking_id,
-      user_id: row.user_id,
-      role: 'submitted',
-      stage: 'submitted',
-      status: 'submitted',
-      decision: 'submitted',
-      comment: 'Initial guest house booking submitted',
-      feedback: 'Initial guest house booking submitted',
-      created_at: row.created_at,
-      decided_at: row.created_at,
-      user_name: row.user_name,
-      actor_email: row.actor_email,
-      actor_role: 'user',
-      snapshot_before: null,
-      meta: null,
-      details: null,
-    }));
-
-    const [workflowRows] = await db.query(
-      `SELECT
-        wa.id,
-        wa.record_id AS booking_id,
-        wa.actor_user_id AS user_id,
-        wa.stage AS role,
-        wa.stage,
-        wa.decision AS status,
-        wa.decision,
-        wa.feedback AS comment,
-        wa.feedback,
-        wa.decided_at AS created_at,
-        wa.decided_at,
-        COALESCE(
-          NULLIF(
-            TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))),
-            ''
-          ),
-          u.name
-        ) AS user_name,
-        wa.actor_email,
-        wa.actor_role,
-        wa.snapshot_before,
-        wa.meta
-     FROM workflow_actions wa
-     LEFT JOIN users u ON u.id = wa.actor_user_id
-     LEFT JOIN master_employees emp
-       ON emp.email COLLATE utf8mb4_unicode_ci =
-          wa.actor_email COLLATE utf8mb4_unicode_ci
-     WHERE wa.module_key = 'guesthouse'
-       AND wa.record_id = ?
-     ORDER BY wa.decided_at ASC, wa.id ASC`,
-      [normalizedId],
-    );
-
-    const allTimeline = [...submissionRows, ...workflowRows].sort(
-      (a, b) => new Date(a.decided_at || a.created_at) - new Date(b.decided_at || b.created_at)
-    );
-
-    return allTimeline;
-  },
 };
 
 export default guesthouseModel;

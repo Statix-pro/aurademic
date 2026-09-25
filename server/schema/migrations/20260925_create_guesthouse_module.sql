@@ -1,10 +1,10 @@
 -- ============================================================
--- Migration: Create Guest House booking module
--- Date: 2026-08-04
+-- Migration: Create and reconcile Guest House booking module
+-- Date: 2026-09-25
 -- ============================================================
 
 -- Description:
--- Creates the guesthouse_* tables backing client/src/features/guesthouse
+-- Creates/reconciles the guesthouse_* tables backing client/src/features/guesthouse
 -- (booking form, PR #53) and the admin approval dashboard, plus the
 -- workflow/RBAC rows the frontend already expects.
 --
@@ -412,6 +412,38 @@ SELECT
 FROM guesthouse_bookings gb
 LEFT JOIN master_employees e ON gb.employee_id = e.id
 LEFT JOIN master_departments d ON gb.department_id = d.id;
+
+-- ============================================================
+-- 13. Guest House workflow audit and department reconciliation
+-- ============================================================
+-- Keep the shared workflow audit enum compatible with the guesthouse archive
+-- and unarchive actions. This is safe to rerun on existing installations.
+ALTER TABLE `workflow_actions`
+MODIFY COLUMN `decision` ENUM(
+  'approved', 'rejected', 'returned', 'archived', 'unarchived', 'deleted', 'resubmitted'
+) NOT NULL;
+
+-- Backfill department IDs so HOD scoping uses the canonical department FK.
+-- Only exact, unambiguous matches are selected; reruns only repair missing or
+-- stale IDs and leave unmatched bookings unchanged.
+UPDATE `guesthouse_bookings` AS gb
+JOIN (
+  SELECT LOWER(TRIM(name)) AS normalized_name, MIN(id) AS department_id
+  FROM `master_departments`
+  WHERE is_active = 1
+  GROUP BY LOWER(TRIM(name))
+  HAVING COUNT(*) = 1
+) AS unique_departments
+  ON unique_departments.normalized_name = LOWER(TRIM(
+    CASE
+      WHEN LOWER(TRIM(gb.beneficiary_type)) = 'department'
+        THEN gb.beneficiary_value
+      ELSE gb.department
+    END
+  ))
+SET gb.department_id = unique_departments.department_id
+WHERE gb.department_id IS NULL
+   OR gb.department_id <> unique_departments.department_id;
 
 -- ============================================================
 -- ROLLBACK (keep commented; use if you need to undo)

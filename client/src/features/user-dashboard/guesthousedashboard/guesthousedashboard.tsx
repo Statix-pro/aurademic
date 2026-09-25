@@ -134,6 +134,8 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   const getCurrentFiscalYearStart = () => Number.parseInt(getCurrentFiscalYear().split('-')[0], 10);
   const [data, setData] = useState<GuesthouseCardItem[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
+  const [queueError, setQueueError] = useState('');
+  const [statsError, setStatsError] = useState('');
   const [kpiStats, setKpiStats] = useState({
     total: 0,
     pending: 0,
@@ -146,7 +148,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     approvalMode ? 'pending' : 'all',
   );
   const [selectedFiscalYear, setSelectedFiscalYear] = useState<string>(() =>
-    getCurrentFiscalYear(),
+    approvalMode ? 'all' : getCurrentFiscalYear(),
   );
   const [selectedBeneficiary, setSelectedBeneficiary] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
@@ -176,6 +178,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     id: number;
     decision: 'returned' | 'rejected';
   } | null>(null);
+  const [pendingArchive, setPendingArchive] = useState<GuesthouseCardItem | null>(null);
   useEffect(() => {
     fetchDashboard();
   }, [approvalMode, approvalStage]);
@@ -252,20 +255,33 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   const fetchDashboard = async () => {
     try {
       setLoading(true);
+      setQueueError('');
       setStatusUpdatesById({});
       if (approvalMode && !approvalStage) {
         setData([]);
+        setQueueError('No Guest House workflow stage is assigned to this account.');
         return;
       }
       const res = (await authenticityUtility.get(approvalMode
-        ? `/guesthouse/queue/${approvalStage}?status=in_progress&limit=100`
+        ? `/guesthouse/queue/${approvalStage}?status=all&limit=100`
         : '/guesthouse?mine=true')) as {
         success?: boolean;
         items?: GuesthouseCardItem[];
+        scopeWarning?: string;
       };
+      if (res.success === false) {
+        throw new Error((res as any).message || 'Guest House queue request failed.');
+      }
       setData(Array.isArray(res.items) ? res.items : []);
+      if (res.scopeWarning) setQueueError(res.scopeWarning);
     } catch (err) {
       console.error('Guesthouse dashboard error', err);
+      setData([]);
+      setQueueError(
+        (err as any)?.response?.data?.message ||
+          (err as any)?.message ||
+          'Unable to load Guest House requests. Check the server API.',
+      );
     } finally {
       setLoading(false);
     }
@@ -299,14 +315,16 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
 
   const getNormalizedStatus = (item: GuesthouseCardItem) => {
     const stageDecision = String(item.stage_decision || '').toLowerCase();
+    const status = getWorkflowStatus(item);
+    // The live workflow state wins over an older stage decision. In particular,
+    // an archived request may have been approved at an earlier workflow stage.
+    if (status === 'archived' || status === 'archive') return 'archived';
     if (stageDecision === 'archived' || stageDecision === 'archive') return 'archived';
     if (stageDecision === 'returned') return 'returned';
     if (stageDecision === 'rejected') return 'rejected';
     if (stageDecision === 'approved' || stageDecision === 'completed') return 'approved';
-    const status = getWorkflowStatus(item);
     const currentStage = getCurrentStage(item);
     const lastDecision = String(item.workflow_state?.lastDecision || '').toLowerCase();
-    if (status === 'archived' || status === 'archive') return 'archived';
     if (status === 'returned') return 'returned';
     if (status === 'rejected') return 'rejected';
     if (status === 'completed' || status === 'approved') return 'approved';
@@ -362,13 +380,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
 
   const isPendingLikeStatus = (item: GuesthouseCardItem) => {
     const normalizedStatus = getNormalizedStatus(item);
-    const currentStage = getCurrentStage(item);
-    return (
-      normalizedStatus === 'pending' ||
-      normalizedStatus === 'submitted' ||
-      normalizedStatus === 'resubmitted' ||
-      currentStage === 'hod'
-    );
+    return ['pending', 'submitted', 'resubmitted'].includes(normalizedStatus);
   };
 
   const canActOnApprovalItem = (item: GuesthouseCardItem) =>
@@ -653,20 +665,30 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     }
 
     try {
+      setStatsError('');
       const response = (await authenticityUtility.get(
         `/guesthouse/queue/${approvalStage}/kpi-stats`,
       )) as {
         success?: boolean;
         data?: Partial<typeof kpiStats>;
         stats?: Partial<typeof kpiStats>;
+        scopeWarning?: string;
       };
 
       const nextStats = response?.stats || response?.data;
       if (response?.success && nextStats) {
         setKpiStats((prev) => ({ ...prev, ...nextStats }));
+        if (response.scopeWarning) setStatsError(response.scopeWarning);
+      } else {
+        throw new Error((response as any)?.message || 'Guest House queue statistics request failed.');
       }
     } catch (error) {
       console.error('Guesthouse KPI stats error', error);
+      setStatsError(
+        (error as any)?.response?.data?.message ||
+          (error as any)?.message ||
+          'Unable to load Guest House queue statistics.',
+      );
     }
   };
 
@@ -923,12 +945,15 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   };
 
   const handleViewClick = (requestId: number) => {
-    navigate(`/guesthouse/${requestId}`);
+    navigate(`/guesthouse/${requestId}${approvalMode ? '?admin=true' : ''}`);
   };
 
   const canEditRequest = (item: GuesthouseCardItem) => {
     // The dashboard lists the current user's requests; every one can be
     // reopened for editing. The API independently verifies ownership.
+    if (approvalMode && ['approved', 'rejected', 'archived'].includes(getNormalizedStatus(item))) {
+      return false;
+    }
     return Boolean(item) || isSuperAdmin(user);
   };
 
@@ -937,41 +962,43 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     navigate(`/guesthouse/${item.id}/edit`);
   };
 
-  const canDeleteRequest = (item: GuesthouseCardItem) => {
+  const canToggleArchiveRequest = (item: GuesthouseCardItem) => {
+    if (!approvalMode || getCurrentStage(item) !== String(approvalStage || '').toLowerCase()) {
+      return false;
+    }
     const normalizedStatus = getNormalizedStatus(item);
-    const currentStage = getCurrentStage(item);
-
-    return (
-      currentStage === 'hod' &&
-      !['approved', 'rejected', 'returned', 'archived'].includes(normalizedStatus)
-    );
+    return normalizedStatus === 'archived' ||
+      !['approved', 'rejected', 'returned'].includes(normalizedStatus);
   };
 
-  const handleDeleteClick = async (item: GuesthouseCardItem) => {
-    if (!canDeleteRequest(item)) return;
-
-    const confirmed = window.confirm('Delete this Guest House request? This action cannot be undone.');
-    if (!confirmed) return;
-
+  const handleArchiveToggle = async () => {
+    const item = pendingArchive;
+    if (!item || !canToggleArchiveRequest(item) || approvalBusyId !== null) return;
+    const isArchived = getNormalizedStatus(item) === 'archived';
+    setApprovalBusyId(item.id);
     try {
-      const response = (await authenticityUtility.delete(`/guesthouse/${item.id}`)) as {
+      const response = (await authenticityUtility.patch(
+        `/guesthouse/${item.id}/archive-toggle`,
+        {},
+      )) as {
         success?: boolean;
-        status?: string;
         message?: string;
       };
-      if (response.success !== true && response.status !== 'success') {
-        setDialogMessage(response.message || 'Failed to delete Guest House request');
-        return;
+      if (!response.success) {
+        throw new Error(response.message || `Failed to ${isArchived ? 'unarchive' : 'archive'} request`);
       }
-
-      if (activeInfoId === item.id) {
-        setActiveInfoId(null);
-      }
-
       await fetchDashboard();
+      if (approvalMode) await fetchKpiStats();
+      setPendingArchive(null);
     } catch (error) {
-      console.error('Failed to delete guesthouse request', error);
-      setDialogMessage((error as any)?.response?.data?.message || 'Failed to delete Guest House request');
+      console.error('Failed to toggle Guest House archive state', error);
+      setDialogMessage(
+        (error as any)?.response?.data?.message ||
+          (error as Error).message ||
+          'Failed to update archive state',
+      );
+    } finally {
+      setApprovalBusyId(null);
     }
   };
 
@@ -980,7 +1007,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
 
     if (selectedStatus === 'pending') {
       result = result.filter((item) => isPendingLikeStatus(item));
-    } else if (selectedStatus !== 'all') {
+    } else if (selectedStatus !== 'all' && selectedStatus !== 'total') {
       result = result.filter((item) => getNormalizedStatus(item) === selectedStatus);
     }
 
@@ -1085,6 +1112,15 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       : approvalStage
         ? approvalStage.toUpperCase()
         : '';
+  const pendingArchiveStatus = pendingArchive ? getNormalizedStatus(pendingArchive) : '';
+  const pendingApprovalItem = pendingApproval
+    ? data.find((item) => item.id === pendingApproval.id)
+    : undefined;
+  const pendingApprovalReference = pendingApproval
+    ? pendingApprovalItem
+      ? getProposalRef(pendingApprovalItem)
+      : `#GH-${new Date().getFullYear()}-${String(pendingApproval.id).padStart(4, '0')}`
+    : '';
 
   return (
     <>
@@ -1225,11 +1261,23 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
               ))}
             </div>
 
+            {approvalMode && statsError && (
+              <div className="guesthousedashboard-state guesthousedashboard-state--error" role="alert">
+                Queue counts: {statsError}
+              </div>
+            )}
+
             {/* CONTENT */}
             <div className="guesthousedashboard-body">
               {loading && <div className="guesthousedashboard-state">Loading Guest House requests...</div>}
 
-              {!loading && filteredData.length === 0 && (
+              {!loading && queueError && (
+                <div className="guesthousedashboard-state guesthousedashboard-state--error" role="alert">
+                  {queueError}
+                </div>
+              )}
+
+              {!loading && !queueError && filteredData.length === 0 && (
                 <div
                   className="guesthousedashboard-state"
                   style={{ padding: '60px 20px', fontSize: '15px' }}
@@ -1244,7 +1292,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                     const status = getNormalizedStatus(item);
                     const canEdit = canEditRequest(item);
                     const hasRoomAllocation = Number(item.has_room_allocation) === 1;
-                    const canDelete = canDeleteRequest(item);
+                    const canToggleArchive = canToggleArchiveRequest(item);
                     const isStatusExpanded = Boolean(showGuesthouseStatusDetail[item.id]);
                     const principalDocument = getPrincipalDocument(item);
                     const principalDocumentUrl = getPrincipalDocumentUrl(item);
@@ -1272,7 +1320,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                         onKeyDown={(event) => {
                           if (event.key === 'Enter' || event.key === ' ') {
                             event.preventDefault();
-                            handleEditClick(item);
+                            handleViewClick(item.id);
                           }
                         }}
                       >
@@ -1305,15 +1353,16 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                               >
                                 <Eye size={18} />
                               </button>
-                              <button
-                                type="button"
-                                className="icon-btn-subtle"
-                                title={canEdit ? 'Edit' : 'Edit unavailable in current status'}
-                                onClick={() => handleEditClick(item)}
-                                disabled={!canEdit}
-                              >
-                                <Edit2 size={18} />
-                              </button>
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  className="icon-btn-subtle"
+                                  title="Edit"
+                                  onClick={() => handleEditClick(item)}
+                                >
+                                  <Edit2 size={18} />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1430,9 +1479,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                               >
                                 {getGuesthouseStatusLabel(item)}
                               </button>
-                              {canActOnApprovalItem(item) && (
+                              {(canActOnApprovalItem(item) || canToggleArchive) && (
                                 <div className="guesthousedashboard-approval-actions">
-                                  <button
+                                  {canActOnApprovalItem(item) && <button
                                     type="button"
                                     className="guesthousedashboard-action-btn guesthousedashboard-action-btn--approve"
                                     title="Approve"
@@ -1440,8 +1489,8 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                                     onClick={() => void handleApprovalDecision(item.id, 'approved')}
                                   >
                                     <CheckCircle size={18} />
-                                  </button>
-                                  <button
+                                  </button>}
+                                  {canActOnApprovalItem(item) && <button
                                     type="button"
                                     className="guesthousedashboard-action-btn guesthousedashboard-action-btn--return"
                                     title="Return"
@@ -1449,8 +1498,8 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                                     onClick={() => void handleApprovalDecision(item.id, 'returned')}
                                   >
                                     <RotateCcw size={18} />
-                                  </button>
-                                  <button
+                                  </button>}
+                                  {canActOnApprovalItem(item) && <button
                                     type="button"
                                     className="guesthousedashboard-action-btn guesthousedashboard-action-btn--reject"
                                     title="Reject"
@@ -1458,15 +1507,16 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                                     onClick={() => void handleApprovalDecision(item.id, 'rejected')}
                                   >
                                     <XCircle size={18} />
-                                  </button>
-                                  {canDelete && (
+                                  </button>}
+                                  {canToggleArchive && (
                                     <button
                                       type="button"
                                       className="guesthousedashboard-action-btn guesthousedashboard-action-btn--archive"
-                                      title="Delete"
-                                      onClick={() => handleDeleteClick(item)}
+                                      title={getNormalizedStatus(item) === 'archived' ? 'Unarchive' : 'Archive'}
+                                      disabled={approvalBusyId !== null}
+                                      onClick={() => setPendingArchive(item)}
                                     >
-                                      <Trash2 size={18} />
+                                      <Archive size={18} />
                                     </button>
                                   )}
                                 </div>
@@ -1619,7 +1669,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       <CustomModal
         show={pendingApproval !== null}
         onHide={() => setPendingApproval(null)}
-        title={`${pendingApproval?.decision === 'rejected' ? 'Reject' : 'Return'} request`}
+        title={`${pendingApproval?.decision === 'rejected' ? 'Reject' : 'Return'} Guest House - Comments`}
         size="sm"
         footer={
           <>
@@ -1628,7 +1678,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
             </button>
             <button
               type="button"
-              className="btn btn-primary"
+              className={`btn ${pendingApproval?.decision === 'rejected' ? 'btn-danger' : 'btn-primary'}`}
               disabled={!approvalComment.trim()}
               onClick={() => {
                 if (!pendingApproval) return;
@@ -1641,15 +1691,46 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
           </>
         }
       >
-        <label htmlFor="guesthouse-approval-comment">Reason</label>
+        <div className="mb-2" style={{ fontSize: 13, color: '#666' }}>
+          Guest House ID: <strong>{pendingApprovalReference}</strong>
+        </div>
         <textarea
           id="guesthouse-approval-comment"
           className="form-control"
           value={approvalComment}
           onChange={(event) => setApprovalComment(event.target.value)}
           rows={4}
+          placeholder="Enter comments (required)..."
+          aria-label="Comments (required)"
           autoFocus
         />
+      </CustomModal>
+      <CustomModal
+        show={pendingArchive !== null}
+        onHide={() => setPendingArchive(null)}
+        title={pendingArchiveStatus === 'archived' ? 'Confirm Unarchive' : 'Confirm Archive'}
+        size="sm"
+        footer={
+          <>
+            <button type="button" className="btn btn-secondary" onClick={() => setPendingArchive(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={approvalBusyId !== null}
+              onClick={() => void handleArchiveToggle()}
+            >
+              {pendingArchiveStatus === 'archived' ? 'Unarchive' : 'Archive'}
+            </button>
+          </>
+        }
+      >
+        <p>
+          {pendingArchiveStatus === 'archived'
+            ? 'Are you sure you want to unarchive this Guest House request?'
+            : 'Are you sure you want to archive this Guest House request?'}
+        </p>
       </CustomModal>
       <CustomModal
         show={Boolean(dialogMessage)}

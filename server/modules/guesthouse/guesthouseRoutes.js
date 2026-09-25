@@ -135,6 +135,11 @@ router.patch(
   canAccessGuesthouseWorkflow,
   guesthouseController.approveGuesthouseWorkflow,
 );
+router.patch(
+  '/:id/archive-toggle',
+  canAccessGuesthouseWorkflow,
+  guesthouseController.toggleGuesthouseArchive,
+);
 router.patch('/:id/travel-schedule', guesthouseController.updateTravelSchedule);
 router.put(
   '/:id/room-allotments',

@@ -388,6 +388,16 @@
   color: #6b7280;
 }
 
+.guesthousedashboard-state--error {
+  margin: 12px 24px;
+  padding: 14px 18px;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #b91c1c;
+  text-align: left;
+}
+
 /* List Container */
 .guesthousedashboard-list-container {
   display: flex;

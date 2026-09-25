@@ -1,11 +1,12 @@
 import guesthouseModel from './guesthouseModel.js';
 import './guesthouseWorkflowAdapter.js';
-import { actOnWorkflow, startWorkflow, listQueue, getTimeline, getWorkflowMetadata } from '../shared/workflow/workflowService.js';
+import { actOnWorkflow, startWorkflow, listQueue, getQueueScopeFilters, getTimeline, getWorkflowMetadata } from '../shared/workflow/workflowService.js';
 import fs from 'fs';
 import path from 'path';
 import { safeResolvePath } from '../../utils/pathSecurity.js';
 
 const normalizeText = (value) => String(value ?? '').trim();
+const isPersonBeneficiary = (value) => ['faculty', 'staff'].includes(normalizeText(value).toLowerCase());
 
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -68,13 +69,43 @@ const hasGuesthouseStagePermission = (req, stage) => {
   return normalizedRoles.includes(normalizedStage);
 };
 
-const canAccessGuesthouseRecord = (req, booking) => {
+const canAccessGuesthouseRecord = async (req, booking) => {
   if (!booking) return false;
   if (isSuperAdminRequest(req)) return true;
+  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
+  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
+  if (normalizedPermissions.includes('guesthouse.read')) return true;
   const actorUserId = toPositiveInt(req.user?.id);
   if (actorUserId && actorUserId === toPositiveInt(booking.created_by)) return true;
-  const currentStage = normalizeText(booking.workflow_state?.currentStage || booking.workflow_stage).toLowerCase();
-  return currentStage && hasGuesthouseStagePermission(req, currentStage);
+
+  // A queue may include records already acted on at the user's stage. Allow
+  // detail access when the record is visible in any stage queue assigned to
+  // this actor, using the same department scope as the queue itself.
+  const workflowStages = Array.isArray(booking.workflow_state?.flow)
+    ? booking.workflow_state.flow
+    : ['hod', 'guesthouse_incharge', 'principal', 'guesthouse_admin'];
+  const actor = normalizeActor(req);
+  for (const stageValue of workflowStages) {
+    const stage = normalizeText(stageValue).toLowerCase();
+    if (!hasGuesthouseStagePermission(req, stage)) continue;
+    if (await canAccessGuesthouseBookingAtStage(req, booking, stage, actor)) return true;
+  }
+  return false;
+};
+
+const canAccessGuesthouseBookingAtStage = async (
+  req,
+  booking,
+  stage,
+  actor = normalizeActor(req),
+) => {
+  if (!hasGuesthouseStagePermission(req, stage)) return false;
+  const scopeFilters = await getQueueScopeFilters({
+    moduleKey: 'guesthouse',
+    stage,
+    actor,
+  });
+  return guesthouseModel.canAccessGuesthouseBookingInQueue(booking.id, stage, scopeFilters);
 };
 
 const isApplicantEditable = (booking) => {
@@ -149,7 +180,11 @@ const guesthouseController = {
     let bookingId = null;
     try {
       const payload = req.body || {};
-      if (!normalizeText(payload.applicant?.name) || !normalizeText(payload.beneficiary?.beneficiaryType) || !normalizeText(payload.beneficiary?.staffName)) {
+      if (
+        !normalizeText(payload.applicant?.name) ||
+        !normalizeText(payload.beneficiary?.beneficiaryType) ||
+        (isPersonBeneficiary(payload.beneficiary?.beneficiaryType) && !normalizeText(payload.beneficiary?.staffName))
+      ) {
         return res.status(400).json({ success: false, message: 'Applicant and beneficiary details are required' });
       }
       if (!Array.isArray(payload.guests) || !payload.guests.length) {
@@ -218,19 +253,46 @@ const guesthouseController = {
   async updateGuesthouseBooking(req, res) {
     try {
       const bookingId = toPositiveInt(req.params.id);
-      const owner = await guesthouseModel.getGuesthouseOwner(bookingId);
-      if (!owner) return res.status(404).json({ success: false, message: 'Guest house booking not found' });
-      if (!isSuperAdminRequest(req) && toPositiveInt(owner.created_by) !== toPositiveInt(req.user?.id)) {
-        return res.status(403).json({ success: false, message: 'Only the booking owner can edit this request' });
-      }
       const currentBooking = await guesthouseModel.getGuesthouseBookingById(bookingId);
       if (!currentBooking) return res.status(404).json({ success: false, message: 'Guest house booking not found' });
-      if (!isSuperAdminRequest(req) && !isApplicantEditable(currentBooking)) {
+
+      const isOwner = toPositiveInt(currentBooking.created_by) === toPositiveInt(req.user?.id);
+      const status = normalizeText(
+        currentBooking.workflow_state?.status || currentBooking.workflow_status || currentBooking.overall_status,
+      ).toLowerCase();
+      const stage = normalizeText(
+        currentBooking.workflow_state?.currentStage || currentBooking.workflow_stage,
+      ).toLowerCase();
+      const isApprover = stage
+        ? await canAccessGuesthouseBookingAtStage(req, currentBooking, stage)
+        : false;
+
+      if (!isSuperAdminRequest(req) && !isOwner && !isApprover) {
+        return res.status(403).json({
+          success: false,
+          message: 'Only the booking owner or the assigned Guest House approver can edit this request',
+        });
+      }
+      if (!isSuperAdminRequest(req) && isOwner && !isApplicantEditable(currentBooking) && !isApprover) {
         return res.status(409).json({ success: false, message: 'This booking can only be edited before HOD approval' });
+      }
+      if (
+        !isSuperAdminRequest(req) &&
+        isApprover &&
+        !['in_progress', 'pending', 'submitted', 'returned'].includes(status)
+      ) {
+        return res.status(409).json({
+          success: false,
+          message: 'This request can only be edited while it is active in your approval stage',
+        });
       }
 
       const payload = req.body || {};
-      if (!normalizeText(payload.applicant?.name) || !normalizeText(payload.beneficiary?.beneficiaryType) || !normalizeText(payload.beneficiary?.staffName || payload.beneficiary?.value)) {
+      if (
+        !normalizeText(payload.applicant?.name) ||
+        !normalizeText(payload.beneficiary?.beneficiaryType) ||
+        (isPersonBeneficiary(payload.beneficiary?.beneficiaryType) && !normalizeText(payload.beneficiary?.staffName))
+      ) {
         return res.status(400).json({ success: false, message: 'Applicant and beneficiary details are required' });
       }
       if (!Array.isArray(payload.guests) || !payload.guests.length) {
@@ -264,7 +326,7 @@ const guesthouseController = {
       if (!booking) {
         return res.status(404).json({ success: false, message: 'Guest house booking not found' });
       }
-      if (!canAccessGuesthouseRecord(req, booking)) {
+      if (!(await canAccessGuesthouseRecord(req, booking))) {
         return res.status(403).json({ success: false, message: 'Insufficient permissions' });
       }
 
@@ -334,6 +396,76 @@ const guesthouseController = {
     }
   },
 
+  async toggleGuesthouseArchive(req, res) {
+    try {
+      const bookingId = toPositiveInt(req.params.id);
+      if (!bookingId) {
+        return res.status(400).json({ success: false, message: 'Invalid booking ID' });
+      }
+
+      const booking = await guesthouseModel.getGuesthouseBookingById(bookingId);
+      if (!booking) {
+        return res.status(404).json({ success: false, message: 'Guest house booking not found' });
+      }
+
+      const state = booking.workflow_state || {};
+      if (normalizeText(state.status).toLowerCase() === 'archived') {
+        const restoredState = await guesthouseModel.unarchiveGuesthouseBooking(
+          bookingId,
+          normalizeActor(req),
+        );
+        return res.json({
+          success: true,
+          message: 'Guest House request unarchived successfully',
+          data: { action: 'unarchived', workflow_state: restoredState },
+        });
+      }
+
+      const currentStatus = normalizeText(state.status || booking.workflow_status).toLowerCase();
+      if (['completed', 'approved', 'rejected', 'returned'].includes(currentStatus)) {
+        return res.status(400).json({
+          success: false,
+          message: `Archive not allowed for request status: ${currentStatus}`,
+        });
+      }
+
+      const actor = normalizeActor(req);
+      const stage = normalizeText(state.currentStage || booking.workflow_stage).toLowerCase();
+      if (!stage || !hasGuesthouseStagePermission(req, stage)) {
+        return res.status(403).json({ success: false, message: 'Insufficient permissions for this Guest House workflow stage' });
+      }
+
+      const isElevatedActor = isSuperAdminRequest(req) || Boolean(req.user?.is_admin || req.user?.isAdmin);
+      let allowedDepartmentIds = null;
+      if (stage === 'hod' && !isElevatedActor) {
+        const scopeFilters = await getQueueScopeFilters({
+          moduleKey: 'guesthouse',
+          stage,
+          actor,
+        });
+        if (!scopeFilters.forceAll && scopeFilters.scopeType === 'department') {
+          allowedDepartmentIds = scopeFilters.forceEmpty
+            ? []
+            : Array.from(scopeFilters.departmentIds || []);
+        }
+      }
+
+      const archivedState = await guesthouseModel.archiveGuesthouseBooking(
+        bookingId,
+        { ...actor, feedback: normalizeText(req.body?.feedback) || null },
+        allowedDepartmentIds,
+      );
+
+      return res.json({
+        success: true,
+        message: 'Guest House request archived successfully',
+        data: { action: 'archived', workflow_state: archivedState },
+      });
+    } catch (error) {
+      return handleError(res, error, 'Error in toggleGuesthouseArchive');
+    }
+  },
+
 
   async getGuesthouseKpiStats(req, res) {
     try {
@@ -342,9 +474,21 @@ const guesthouseController = {
         return res.status(403).json({ success: false, message: 'Insufficient permissions' });
       }
 
-      const stats = await guesthouseModel.getGuesthouseKpiStats(stage);
+      const actor = normalizeActor(req);
+      const scopeFilters = await getQueueScopeFilters({
+        moduleKey: 'guesthouse',
+        stage,
+        actor,
+      });
+      const stats = await guesthouseModel.getGuesthouseKpiStats(stage, scopeFilters);
 
-      return res.json({ success: true, data: stats });
+      return res.json({
+        success: true,
+        data: stats,
+        ...(scopeFilters.forceEmpty
+          ? { scopeWarning: 'No department assignment was found for this HOD account.' }
+          : {}),
+      });
     } catch (error) {
       return handleError(res, error, 'Error in getGuesthouseKpiStats');
     }
@@ -357,14 +501,53 @@ const guesthouseController = {
         return res.status(403).json({ success: false, message: 'Insufficient permissions' });
       }
 
+      const scopeFilters = await getQueueScopeFilters({
+        moduleKey: 'guesthouse',
+        stage,
+        actor: normalizeActor(req),
+      });
+      if (scopeFilters.forceEmpty) {
+        return res.json({
+          success: true,
+          data: [],
+          pagination: {
+            total: 0,
+            page: Number.parseInt(req.query.page, 10) || 1,
+            limit: Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 100),
+          },
+          // Keep the established queue fields for existing guesthouse clients.
+          items: [],
+          total: 0,
+          page: Number.parseInt(req.query.page, 10) || 1,
+          limit: Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 100),
+          scopeWarning: 'No department assignment was found for this HOD account.',
+        });
+      }
+
       const result = await listQueue({ moduleKey: 'guesthouse', stage, actor: normalizeActor(req), filters: {
+        workflowStatus: req.query.status || req.query.workflowStatus,
         q: req.query.q,
         search: req.query.search,
         page: req.query.page,
         limit: req.query.limit,
       }});
 
-      return res.json({ success: true, ...result });
+      return res.json({
+        success: true,
+        data: result.items,
+        pagination: {
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          statusCounts: result.statusCounts,
+        },
+        // Keep the established queue fields for existing guesthouse clients.
+        items: result.items,
+        total: result.total,
+        page: result.page,
+        limit: result.limit,
+        ...(result.scopeWarning ? { scopeWarning: result.scopeWarning } : {}),
+      });
     } catch (error) {
       return handleError(res, error, 'Error in getGuesthouseQueue');
     }
@@ -462,11 +645,19 @@ const guesthouseController = {
       }
       const booking = await guesthouseModel.getGuesthouseBookingById(bookingId);
       if (!booking) return res.status(404).json({ success: false, message: 'Guest house booking not found' });
-      if (!isSuperAdminRequest(req) && toPositiveInt(booking.created_by) !== toPositiveInt(req.user?.id)) {
-        return res.status(403).json({ success: false, message: 'Only the booking owner can update travel details' });
+      const isOwner = toPositiveInt(booking.created_by) === toPositiveInt(req.user?.id);
+      const stage = normalizeText(booking.workflow_state?.currentStage || booking.workflow_stage).toLowerCase();
+      const isAssignedWorkflowActor = stage
+        ? await canAccessGuesthouseBookingAtStage(req, booking, stage)
+        : false;
+      if (!isSuperAdminRequest(req) && !isOwner && !isAssignedWorkflowActor) {
+        return res.status(403).json({ success: false, message: 'Only the booking owner or assigned workflow approver can update travel details' });
       }
-      if (!isSuperAdminRequest(req) && !isApplicantEditable(booking)) {
-        return res.status(409).json({ success: false, message: 'Travel schedule can only be changed before HOD approval' });
+      const status = normalizeText(booking.workflow_state?.status || booking.workflow_status || booking.overall_status).toLowerCase();
+      const ownerCanEdit = isOwner && isApplicantEditable(booking);
+      const approverCanEdit = isAssignedWorkflowActor && ['in_progress', 'pending', 'submitted', 'returned'].includes(status);
+      if (!isSuperAdminRequest(req) && !ownerCanEdit && !approverCanEdit) {
+        return res.status(409).json({ success: false, message: 'Travel schedule can only be changed while the booking is editable in its current workflow stage' });
       }
       await guesthouseModel.updateGuesthouseTravelSchedule(bookingId, schedule);
       return res.json({ success: true, message: 'Travel schedule updated' });
@@ -486,7 +677,12 @@ const guesthouseController = {
 
   async getRoomOptions(req, res) {
     try {
-      const rooms = await guesthouseModel.listGuesthouseRooms({ status: 'Active' });
+      const rooms = await guesthouseModel.listGuesthouseRooms({
+        status: 'Active',
+        checkInDate: req.query.checkInDate,
+        checkOutDate: req.query.checkOutDate,
+        excludeBookingId: req.query.bookingId,
+      });
       return res.json({ success: true, data: rooms });
     } catch (error) {
       return handleError(res, error, 'Error in getRoomOptions');
@@ -808,7 +1004,7 @@ const guesthouseController = {
         return res.status(404).json({ success: false, message: 'Guest house booking not found' });
       }
 
-      if (!canAccessGuesthouseRecord(req, booking)) {
+      if (!(await canAccessGuesthouseRecord(req, booking))) {
         return res.status(403).json({ success: false, message: 'Insufficient permissions' });
       }
 
