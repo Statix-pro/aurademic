@@ -127,7 +127,8 @@ const handleWorkflowError = (res, error, fallbackMessage) => {
 
 // Upload directory for work order photos
 const WORKORDER_PHOTO_DIR = path.resolve(process.cwd(), 'uploads', 'workorder-photos');
-const WORKORDER_PHOTO_PUBLIC_PREFIX = '/uploads/workorder-photos/';
+const WORKORDER_PHOTO_PUBLIC_PREFIX = '/api/workorders/photo/';
+const LEGACY_WORKORDER_PHOTO_PREFIX = '/uploads/workorder-photos/';
 const pendingWorkorderUploads = new Map();
 setInterval(() => {
   const expiry = Date.now() - 60 * 60 * 1000;
@@ -150,8 +151,31 @@ const cleanupPreSubmitPhotos = (payload) => {
       if (!publicPath.startsWith(WORKORDER_PHOTO_PUBLIC_PREFIX)) continue;
       const filename = path.basename(publicPath);
       if (!filename || filename === '.' || filename.includes('..')) continue;
+      const pending = pendingWorkorderUploads.get(filename);
+      if (!pending) continue;
+      pendingWorkorderUploads.delete(filename);
       try { fs.unlinkSync(path.join(WORKORDER_PHOTO_DIR, filename)); } catch (error) {
         if (error?.code !== 'ENOENT') console.error('Failed to clean up workorder photo', error);
+      }
+    }
+  }
+};
+
+const assertPreSubmitPhotosBelongToUser = (payload, userId) => {
+  const items = Array.isArray(payload?.workItems) ? payload.workItems : payload?.items;
+  if (!Array.isArray(items)) return;
+  for (const item of items) {
+    const photos = Array.isArray(item?.locationPhotos) ? item.locationPhotos : [];
+    for (const photo of photos) {
+      const publicPath = normalizeText(typeof photo === 'string' ? photo : photo?.file_path || photo?.url);
+      if (publicPath.startsWith(LEGACY_WORKORDER_PHOTO_PREFIX)) {
+        throw new WorkflowError('Legacy work-order photo URLs are not accepted', 400, 'LEGACY_PHOTO_URL');
+      }
+      if (!publicPath.startsWith(WORKORDER_PHOTO_PUBLIC_PREFIX)) continue;
+      const filename = path.basename(publicPath);
+      const pending = pendingWorkorderUploads.get(filename);
+      if (!pending || pending.userId !== userId) {
+        throw new WorkflowError('Photo upload is not owned by the current user', 403, 'PHOTO_OWNER_MISMATCH');
       }
     }
   }
@@ -203,6 +227,8 @@ const workorderController = {
       if (!userId) {
         return res.status(401).json({ success: false, message: 'Invalid user context' });
       }
+
+      assertPreSubmitPhotosBelongToUser(data, userId);
       const employee = await workorderModel.getCurrentEmployeeInfo(userId);
       return res.json({ success: true, data: employee || null });
     } catch (error) {
@@ -267,6 +293,7 @@ const workorderController = {
         await workflowService.startWorkflow({
           moduleKey: 'workorder',
           recordId: workOrderId,
+          actor,
           metadata: {
             origin: 'system',
             requestId: null,
@@ -546,21 +573,19 @@ const workorderController = {
       // The workflow service treats archived records as terminal. Make a repeated
       // archive click restore the state captured immediately before archiving.
       if (currentStatus === 'archived' || currentStatus === 'archive') {
-        const restoredState = await workorderModel.restoreWorkOrderFromArchive(workOrderId);
-        if (restoredState) {
-          return res.json({
-            success: true,
-            message: 'Work order unarchived successfully',
-            data: {
-              workflowResult: { action: 'unarchived', currentState: restoredState },
-              workOrder: await workorderModel.getWorkOrderById(workOrderId),
-            },
-          });
-        }
+        const result = await workflowService.restoreWorkflow({
+          moduleKey: 'workorder',
+          recordId: workOrderId,
+          actor,
+          metadata: {
+            origin: 'api',
+            moduleMeta: { trigger: 'restore_work_order' },
+          },
+        });
         return res.json({
           success: true,
-          message: 'Work order is already archived',
-          data: { workOrder: await workorderModel.getWorkOrderById(workOrderId) },
+          message: 'Work order unarchived successfully',
+          data: { workflowResult: result, workOrder: await workorderModel.getWorkOrderById(workOrderId) },
         });
       }
 

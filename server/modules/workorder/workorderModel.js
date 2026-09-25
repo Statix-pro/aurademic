@@ -1,6 +1,7 @@
 import db from '../../config/connection.js';
 
 const normalizeText = (value) => String(value || '').trim();
+const WORKORDER_PHOTO_PUBLIC_PREFIX = '/api/workorders/photo/';
 
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -155,7 +156,7 @@ const workorderModel = {
          JOIN work_orders wo ON wo.id = woi.work_order_id
         WHERE p.storage_name = ? OR p.file_path = ?
         LIMIT 1`,
-      [safeName, `/uploads/workorder-photos/${safeName}`],
+      [safeName, `${WORKORDER_PHOTO_PUBLIC_PREFIX}${safeName}`],
     );
     return rows[0] || null;
   },
@@ -382,7 +383,7 @@ const workorderModel = {
         for (let photoIndex = 0; photoIndex < uploadedPhotos.length; photoIndex++) {
             const photo = uploadedPhotos[photoIndex];
             const filePath = normalizeText(typeof photo === 'string' ? photo : photo?.file_path || photo?.url);
-            if (!filePath.startsWith('/uploads/workorder-photos/')) continue;
+            if (!filePath.startsWith(WORKORDER_PHOTO_PUBLIC_PREFIX)) continue;
             const storageName = normalizeText(typeof photo === 'string' ? filePath.split('/').pop() : photo?.storage_name || photo?.storageName || filePath.split('/').pop()) || null;
             const fileName = normalizeText(typeof photo === 'string' ? storageName : photo?.file_name || photo?.fileName) || storageName;
             const mimeType = normalizeText(typeof photo === 'string' ? '' : photo?.mime_type || photo?.mimeType) || null;

@@ -102,6 +102,13 @@ if (process.env.NODE_ENV !== 'production') {
 
 console.log('Attempting to serve static files from:', path.join(__dirname, '..', 'uploads'));
 
+// Work-order photos are protected by the authenticated work-order controller.
+// Keep this directory out of the general static mount; otherwise a guessed URL
+// bypasses the controller's owner and workflow checks.
+app.use('/uploads/workorder-photos', (req, res) => {
+  res.status(404).json({ success: false, message: 'Not found' });
+});
+
 app.use(
   '/uploads',
   express.static(path.join(process.cwd(), 'uploads'), {
