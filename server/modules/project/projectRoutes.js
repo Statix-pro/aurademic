@@ -44,6 +44,12 @@ const handleUploadErrors = (req, res, next) =>
 router.get('/project-lookups', projectController.getFormLookups);
 router.get('/project-options/organizations', projectController.searchOrganizations);
 router.get('/project-options/schemes', projectController.listSchemes);
+// Sign-in only, like every route in this file: faculty (role `user`) hold no
+// `projects.*` permission, yet they are the ones filling in project forms, so a
+// permission gate would take Fetch away from them. The repo owner approved this
+// exception to AGENTS.md hard rule 1 on 2026-09-30. It returns only public
+// publication metadata (title, venue, year) for the DOI asked about.
+router.get('/project-options/doi', projectController.lookupDoi);
 
 // ---------------------------------------------------------------------------
 // Master-data add requests

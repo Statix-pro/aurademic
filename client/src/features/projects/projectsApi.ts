@@ -7,12 +7,13 @@
  * `disbursement__<key>__<slot>` part names the server parses.
  */
 
-import { DISBURSEMENT_SLOTS } from './constants';
+import { DISBURSEMENT_SLOTS, MANPOWER_SLOTS, OUTCOME_DOCUMENT_SLOTS } from './constants';
 import { PROJECT_DOCUMENT_TYPES, allotmentKey } from './projectFormState';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 import type {
   DocumentSlotState,
+  DoiLookupResult,
   EmployeeSearchResult,
   FinanceRow,
   ProjectFieldError,
@@ -151,12 +152,8 @@ export function buildProjectPayload(form: ProjectFormState) {
     project_closing_date: form.projectClosingDate || null,
     project_status: form.projectStatus || null,
 
-    outcome_journal_articles: count(form.outcome.journalArticles),
-    outcome_conferences: count(form.outcome.conferences),
-    outcome_iprs: count(form.outcome.iprs),
-    outcome_products: count(form.outcome.products),
-    outcome_tech_transfers: count(form.outcome.techTransfers),
-    outcome_startups: count(form.outcome.startups),
+    // The six typed outcome counts are not sent: the Outcomes tab's rows
+    // replaced them, and the server keeps the counts older projects stored.
 
     income_heads: form.incomeHeads,
 
@@ -207,6 +204,87 @@ export function buildProjectPayload(form: ProjectFormState) {
       })),
     })),
 
+    // Blank rows are sent as they stand, like the ledger's: the server drops
+    // them, and keeping the form's indices keeps its errors on the right row.
+    facilities: form.facilities.map((row) => ({
+      facility_name: row.facilityName || null,
+      facility_type: row.facilityType || null,
+      installation_date: row.installationDate || null,
+      cost: nullableNumber(row.cost),
+      make: row.make || null,
+      model: row.model || null,
+      serial_no: row.serialNo || null,
+      stock_register_ref: row.stockRegisterRef || null,
+      istem_listed: row.istemListed,
+      istem_id: row.istemListed ? row.istemId || null : null,
+      supplier_details: row.supplierDetails || null,
+    })),
+
+    // Sent with their ids and keys like the disbursements: the id keeps a row's
+    // stored profile attached across edits, and the key names its file part.
+    manpower: form.manpower.map((row) => ({
+      id: row.id,
+      key: row.key,
+      role: row.role || null,
+      name: row.name || null,
+      qualification: row.qualification || null,
+      salary: nullableNumber(row.salary),
+      joining_date: row.joiningDate || null,
+      mobile: row.mobile || null,
+      email: row.email || null,
+      remarks: row.remarks || null,
+      relieving_date: row.relievingDate || null,
+      removed_documents: clearedSlots(row.documents, MANPOWER_SLOTS),
+    })),
+
+    publications: form.publications.map((row) => ({
+      publication_type: row.publicationType || null,
+      doi: row.doi || null,
+      journal_id: row.journalId,
+      title: row.title || null,
+      venue: row.venue || null,
+      publication_year: row.publicationYear || null,
+    })),
+
+    iprs: form.iprs.map((row) => ({
+      ipr_type: row.iprType || null,
+      ipr_number: row.iprNumber || null,
+      status: row.status || null,
+      title: row.title || null,
+      filing_date: row.filingDate || null,
+      grant_date: row.grantDate || null,
+    })),
+
+    // Sent with ids and keys, like the manpower rows, so each row's stored
+    // document stays attached and its file part can be named.
+    tech_transfers: form.techTransfers.map((row) => ({
+      id: row.id,
+      key: row.key,
+      category: row.category || null,
+      description: row.description || null,
+      trl: row.trl || null,
+      removed_documents: clearedSlots(row.documents, OUTCOME_DOCUMENT_SLOTS),
+    })),
+
+    outcome_candidates: form.outcomeCandidates.map((row) => ({
+      id: row.id,
+      key: row.key,
+      candidate_name: row.candidateName || null,
+      degree: row.degree || null,
+      university: row.university || null,
+      removed_documents: clearedSlots(row.documents, OUTCOME_DOCUMENT_SLOTS),
+    })),
+
+    document_transactions: form.documentTransactions.map((row) => ({
+      id: row.id,
+      key: row.key,
+      transaction_date: row.transactionDate || null,
+      direction: row.direction || null,
+      document_kind: row.documentKind || null,
+      description: row.description || null,
+      removed_documents: clearedSlots(row.documents, OUTCOME_DOCUMENT_SLOTS),
+    })),
+
     removed_documents: clearedSlots(form.documents, PROJECT_DOCUMENT_TYPES),
 
     remarks: form.remarks || null,
@@ -226,6 +304,36 @@ export function buildProjectFormData(form: ProjectFormState): FormData {
     DISBURSEMENT_SLOTS.forEach((slot) => {
       const document = row.documents[slot];
       if (document.file) formData.append(`disbursement__${row.key}__${slot}`, document.file);
+    });
+  });
+
+  form.manpower.forEach((row) => {
+    MANPOWER_SLOTS.forEach((slot) => {
+      const document = row.documents[slot];
+      if (document.file) formData.append(`manpower__${row.key}__${slot}`, document.file);
+    });
+  });
+
+  form.techTransfers.forEach((row) => {
+    OUTCOME_DOCUMENT_SLOTS.forEach((slot) => {
+      const document = row.documents[slot];
+      if (document.file) formData.append(`tech_transfer__${row.key}__${slot}`, document.file);
+    });
+  });
+
+  form.outcomeCandidates.forEach((row) => {
+    OUTCOME_DOCUMENT_SLOTS.forEach((slot) => {
+      const document = row.documents[slot];
+      if (document.file) formData.append(`candidate__${row.key}__${slot}`, document.file);
+    });
+  });
+
+  form.documentTransactions.forEach((row) => {
+    OUTCOME_DOCUMENT_SLOTS.forEach((slot) => {
+      const document = row.documents[slot];
+      if (document.file) {
+        formData.append(`document_transaction__${row.key}__${slot}`, document.file);
+      }
     });
   });
 
@@ -272,6 +380,23 @@ const projectsApi = {
     })) as unknown as Envelope<ProjectScheme[]>;
 
     return response.data ?? [];
+  },
+
+  /**
+   * Publication details for a DOI, for the Outcomes tab's Fetch button. Rejects
+   * with the server's message — "not found" and "could not reach the DOI
+   * service" read differently to the user.
+   */
+  async lookupDoi(doi: string): Promise<DoiLookupResult> {
+    try {
+      const response = (await authenticityUtility.get('/project-options/doi', {
+        params: { doi },
+      })) as unknown as Envelope<DoiLookupResult>;
+      if (!response.data) throw new Error('No publication was found for this DOI.');
+      return response.data;
+    } catch (error) {
+      throw toSaveError(error, 'Failed to look up the DOI.');
+    }
   },
 
   /** Faculty lookup for the investigator rows, shared with the journal form. */

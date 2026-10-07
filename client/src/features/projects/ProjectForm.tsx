@@ -5,6 +5,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import RequestOptionModal from './components/RequestOptionModal';
 import {
   DOCUMENT_ACCEPT,
+  FINAL_DOCUMENT_TYPES,
   MAX_DOCUMENT_BYTES,
   PROJECT_FORM_TABS,
   hasReachedProposalStage,
@@ -20,18 +21,25 @@ import projectsApi, { ProjectSaveError } from './projectsApi';
 import BudgetAllotmentSection from './sections/BudgetAllotmentSection';
 import CallForDetailsSection from './sections/CallForDetailsSection';
 import CollaboratorsSection from './sections/CollaboratorsSection';
+import DocumentTransactionsSection from './sections/DocumentTransactionsSection';
+import FacilitiesSection from './sections/FacilitiesSection';
 import FinalDocumentsSection from './sections/FinalDocumentsSection';
 import FinanceRowsSection from './sections/FinanceRowsSection';
 import GrantDisbursementSection from './sections/GrantDisbursementSection';
 import IncomeHeadsSection from './sections/IncomeHeadsSection';
 import InvestigatorsSection from './sections/InvestigatorsSection';
-import OutcomeSection from './sections/OutcomeSection';
+import IprsSection from './sections/IprsSection';
+import ManpowerSection from './sections/ManpowerSection';
+import OutcomeCandidatesSection from './sections/OutcomeCandidatesSection';
+import OutcomeSummarySection from './sections/OutcomeSummarySection';
 import PresentationSection from './sections/PresentationSection';
 import ProjectStatusSection from './sections/ProjectStatusSection';
 import ProposalDetailsSection from './sections/ProposalDetailsSection';
+import PublicationsSection from './sections/PublicationsSection';
 import ResultAnnouncementSection from './sections/ResultAnnouncementSection';
 import SanctionDetailsSection from './sections/SanctionDetailsSection';
 import SubmissionDetailsSection from './sections/SubmissionDetailsSection';
+import TechTransfersSection from './sections/TechTransfersSection';
 import TransactionAccountsSection from './sections/TransactionAccountsSection';
 import TransactionSummarySection from './sections/TransactionSummarySection';
 import { financeOrganizations } from './selectOptions';
@@ -41,6 +49,7 @@ import ViewModeBanner from '../../shared/components/ui/ViewModeBanner';
 import type { ProjectFormTab } from './constants';
 import type {
   DisbursementSlot,
+  DocumentSlotState,
   ProjectAccess,
   ProjectDocumentType,
   ProjectFormState,
@@ -66,6 +75,19 @@ function tabForField(field: string): ProjectFormTab {
   // Budget Sharing sits on the Budget tab, beside the allotment it shares out.
   if (field.startsWith('sharing_rows')) return 'budget';
   if (field.startsWith('transaction_accounts')) return 'transaction';
+  if (field.startsWith('facilities')) return 'facility';
+  if (field.startsWith('manpower')) return 'manpower';
+  if (
+    ['publications', 'iprs', 'tech_transfers', 'outcome_candidates'].some((prefix) =>
+      field.startsWith(prefix),
+    )
+  ) {
+    return 'outcomes';
+  }
+  if (field.startsWith('document_transactions')) return 'documents';
+  // The final documents sit on the Documents tab; the presentation and
+  // sanction order slots stay on Details beside the sections they belong to.
+  if (FINAL_DOCUMENT_TYPES.some((type) => field === `document__${type}`)) return 'documents';
   return 'details';
 }
 
@@ -148,8 +170,153 @@ function validate(form: ProjectFormState): Record<string, string> {
     });
   });
 
+  form.facilities.forEach((row, index) => {
+    // The fields the server's blank-row filter counts, so both sides agree on
+    // which rows have been started. A cost of 0 is blank there too.
+    const started =
+      row.facilityName.trim() ||
+      row.facilityType ||
+      row.installationDate ||
+      toAmount(row.cost) > 0 ||
+      row.make.trim() ||
+      row.model.trim() ||
+      row.serialNo.trim() ||
+      row.stockRegisterRef.trim() ||
+      row.istemListed ||
+      row.supplierDetails.trim();
+    if (!started) return;
+
+    const field = `facilities[${index}]`;
+    if (!row.facilityName.trim()) errors[`${field}.facility_name`] = 'Facility name is required.';
+    if (row.istemListed && !row.istemId.trim())
+      errors[`${field}.istem_id`] = 'Enter the I-STEM ID.';
+  });
+
+  form.manpower.forEach((row, index) => {
+    // The fields the server's blank-row filter counts. A saved row (one with
+    // an id) or one carrying a profile counts as started there too.
+    const started =
+      row.id ||
+      row.role ||
+      row.name.trim() ||
+      row.qualification.trim() ||
+      toAmount(row.salary) > 0 ||
+      row.joiningDate ||
+      row.mobile.trim() ||
+      row.email.trim() ||
+      row.remarks.trim() ||
+      row.relievingDate ||
+      row.documents.profile.file;
+    if (!started) return;
+
+    const field = `manpower[${index}]`;
+    if (!row.role) errors[`${field}.role`] = 'Select a role.';
+    if (!row.name.trim()) errors[`${field}.name`] = 'Name is required.';
+    const mobileDigits = row.mobile.replace(/[\s-]/g, '').replace(/^\+91/, '');
+    if (row.mobile.trim() && !/^\d{10}$/.test(mobileDigits)) {
+      errors[`${field}.mobile`] = 'Enter a 10-digit mobile number.';
+    }
+    if (row.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email.trim())) {
+      errors[`${field}.email`] = 'Enter a valid email address.';
+    }
+    if (row.joiningDate && row.relievingDate && row.relievingDate < row.joiningDate) {
+      errors[`${field}.relieving_date`] = 'Date of relieving cannot be before the date of joining.';
+    }
+  });
+
+  // The Outcomes tab: the same started-row tests and required fields as the
+  // server's normalizers.
+  form.publications.forEach((row, index) => {
+    const started =
+      row.publicationType ||
+      row.doi.trim() ||
+      row.journalId ||
+      row.title.trim() ||
+      row.venue.trim() ||
+      row.publicationYear.trim();
+    if (!started) return;
+
+    const field = `publications[${index}]`;
+    if (!row.publicationType) errors[`${field}.publication_type`] = 'Select a type.';
+    if (!row.doi.trim() && !row.title.trim()) {
+      errors[`${field}.doi`] = 'Enter the DOI or the title.';
+    }
+  });
+
+  form.iprs.forEach((row, index) => {
+    const started =
+      row.iprType ||
+      row.iprNumber.trim() ||
+      row.status ||
+      row.title.trim() ||
+      row.filingDate ||
+      row.grantDate;
+    if (!started) return;
+
+    const field = `iprs[${index}]`;
+    if (!row.iprType) errors[`${field}.ipr_type`] = 'Select a type.';
+    if (!row.iprNumber.trim() && !row.title.trim()) {
+      errors[`${field}.ipr_number`] = 'Enter the IPR number or the title.';
+    }
+    if (row.filingDate && row.grantDate && row.grantDate < row.filingDate) {
+      errors[`${field}.grant_date`] = 'Grant date cannot be before the filing date.';
+    }
+  });
+
+  form.techTransfers.forEach((row, index) => {
+    const started =
+      row.id || row.category || row.description.trim() || row.trl || row.documents.document.file;
+    if (started && !row.category) {
+      errors[`tech_transfers[${index}].category`] = 'Select a category.';
+    }
+  });
+
+  form.outcomeCandidates.forEach((row, index) => {
+    const started =
+      row.id ||
+      row.candidateName.trim() ||
+      row.degree ||
+      row.university.trim() ||
+      row.documents.document.file;
+    if (!started) return;
+
+    const field = `outcome_candidates[${index}]`;
+    if (!row.candidateName.trim())
+      errors[`${field}.candidate_name`] = 'Candidate name is required.';
+    if (!row.degree) errors[`${field}.degree`] = 'Select a degree.';
+  });
+
+  form.documentTransactions.forEach((row, index) => {
+    const started =
+      row.id ||
+      row.transactionDate ||
+      row.direction ||
+      row.documentKind ||
+      row.description.trim() ||
+      row.documents.document.file;
+    if (!started) return;
+
+    const field = `document_transactions[${index}]`;
+    if (!row.transactionDate) errors[`${field}.transaction_date`] = 'Enter the date.';
+    if (!row.direction) errors[`${field}.direction`] = 'Select inward or outward.';
+    if (!row.documentKind) errors[`${field}.document_kind`] = 'Select the document.';
+  });
+
   return errors;
 }
+
+/**
+ * The row lists whose rows each carry their own uploads, with the prefix their
+ * error paths use — `manpower[0].profile`, `tech_transfers[2].document`.
+ */
+const ROW_DOCUMENT_LISTS = {
+  manpower: 'manpower',
+  techTransfers: 'tech_transfers',
+  outcomeCandidates: 'outcome_candidates',
+  documentTransactions: 'document_transactions',
+} as const;
+
+type RowDocumentList = keyof typeof ROW_DOCUMENT_LISTS;
 
 /** Error paths whose first segment does not name the form-state key it belongs to. */
 const ERROR_SECTION_ALIASES: Record<string, (keyof ProjectFormState)[]> = {
@@ -167,7 +334,6 @@ const ERROR_SECTION_ALIASES: Record<string, (keyof ProjectFormState)[]> = {
 function errorSections(key: string, form: ProjectFormState): (keyof ProjectFormState)[] | null {
   const head = key.split(/[.[]/)[0];
   if (ERROR_SECTION_ALIASES[head]) return ERROR_SECTION_ALIASES[head];
-  if (head.startsWith('outcome_')) return ['outcome'];
   const camel = head.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase());
   return camel in form ? [camel as keyof ProjectFormState] : null;
 }
@@ -285,11 +451,11 @@ const ProjectForm: React.FC = () => {
   // corrected back to Selected finds its sanction details intact.
   const isSelected = form.finalResult === 'selected';
 
-  // Outcomes and final documents are what a project leaves behind, so they stay
-  // hidden until it has finished. `isSelected` is carried through rather than assumed
-  // from the status: a project recorded as Completed and then corrected to Not
-  // Selected would otherwise keep these two open while everything above them
-  // locked.
+  // The final documents (on the Documents tab) are what a project leaves
+  // behind, so they stay hidden until it has finished. `isSelected` is carried
+  // through rather than assumed from the status: a project recorded as
+  // Completed and then corrected to Not Selected would otherwise keep them open
+  // while everything that led to them locked.
   const isConcluded =
     isSelected && (form.projectStatus === 'completed' || form.projectStatus === 'closed');
 
@@ -432,6 +598,52 @@ const ProjectForm: React.FC = () => {
         documents: {
           ...row.documents,
           [slot]: { file, filePath: '', originalName: file.name, removed: false },
+        },
+      }),
+    });
+  };
+
+  // Rows that carry their own uploads — a manpower profile, a tech-transfer or
+  // candidate document. Unlike the tranche slots, these cells show their error,
+  // so a good pick has to take the last bad one's message away with it.
+  const selectRowDocument = (list: RowDocumentList, rowIndex: number, slot: string, file: File) => {
+    const problem = checkFile(file);
+    const errorKey = `${ROW_DOCUMENT_LISTS[list]}[${rowIndex}].${slot}`;
+    if (problem) {
+      setErrors((previous) => ({ ...previous, [errorKey]: problem }));
+      return;
+    }
+
+    setErrors((previous) => {
+      const next = { ...previous };
+      delete next[errorKey];
+      return next;
+    });
+
+    const rows = form[list] as Array<{ documents: Record<string, DocumentSlotState> }>;
+    patch({
+      [list]: replaceAt(rows, rowIndex, {
+        documents: {
+          ...rows[rowIndex].documents,
+          [slot]: { file, filePath: '', originalName: file.name, removed: false },
+        },
+      }),
+    });
+  };
+
+  const clearRowDocument = (list: RowDocumentList, rowIndex: number, slot: string) => {
+    const rows = form[list] as Array<{ documents: Record<string, DocumentSlotState> }>;
+    const current = rows[rowIndex].documents[slot];
+
+    patch({
+      [list]: replaceAt(rows, rowIndex, {
+        documents: {
+          ...rows[rowIndex].documents,
+          // A stored file is only deleted on save, so the path is kept and the
+          // slot is marked as cleared.
+          [slot]: current.filePath
+            ? { ...emptyDocumentSlot(), filePath: current.filePath, removed: true }
+            : emptyDocumentSlot(),
         },
       }),
     });
@@ -680,8 +892,8 @@ const ProjectForm: React.FC = () => {
             {!showPresentation && (
               <p className="pf-stage-note">
                 Set the status to <strong>Shortlisted for Presentation</strong> to record the
-                presentation, and to <strong>Result Announced</strong> for the sanction,
-                disbursements, outcomes and final documents.
+                presentation, and to <strong>Result Announced</strong> for the sanction and the
+                disbursements.
               </p>
             )}
 
@@ -698,8 +910,8 @@ const ProjectForm: React.FC = () => {
 
             {showPresentation && !showOutcome && (
               <p className="pf-stage-note">
-                Set the status to <strong>Result Announced</strong> to record the sanction,
-                disbursements, outcomes and final documents.
+                Set the status to <strong>Result Announced</strong> to record the sanction and the
+                disbursements.
               </p>
             )}
 
@@ -743,27 +955,6 @@ const ProjectForm: React.FC = () => {
                     <ProjectStatusSection
                       form={form}
                       patch={patch}
-                      errors={errors}
-                      disabled={isReadOnly}
-                    />
-                  </>
-                )}
-
-                {isSelected && !isConcluded && (
-                  <p className="pf-stage-note">
-                    Set <strong>Status</strong> to <strong>Completed</strong> or{' '}
-                    <strong>Closed</strong> to record the outcomes and the final documents.
-                  </p>
-                )}
-
-                {isConcluded && (
-                  <>
-                    <OutcomeSection form={form} patch={patch} disabled={isReadOnly} />
-
-                    <FinalDocumentsSection
-                      form={form}
-                      onSelectDocument={selectDocument}
-                      onClearDocument={clearDocument}
                       errors={errors}
                       disabled={isReadOnly}
                     />
@@ -843,9 +1034,129 @@ const ProjectForm: React.FC = () => {
             />
           </div>
 
+          <div
+            role="tabpanel"
+            id="pf-panel-facility"
+            aria-labelledby="pf-tab-facility"
+            hidden={activeTab !== 'facility'}
+            className="pf-panel"
+          >
+            <FacilitiesSection
+              rows={form.facilities}
+              patch={patch}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+          </div>
+
+          <div
+            role="tabpanel"
+            id="pf-panel-manpower"
+            aria-labelledby="pf-tab-manpower"
+            hidden={activeTab !== 'manpower'}
+            className="pf-panel"
+          >
+            <ManpowerSection
+              rows={form.manpower}
+              patch={patch}
+              onSelectDocument={(rowIndex, slot, file) =>
+                selectRowDocument('manpower', rowIndex, slot, file)
+              }
+              onClearDocument={(rowIndex, slot) => clearRowDocument('manpower', rowIndex, slot)}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+          </div>
+
+          {/* Open at every stage, unlike the Details tab's later sections: a
+              paper or a patent filing can come out of a project long before it
+              is completed. */}
+          <div
+            role="tabpanel"
+            id="pf-panel-outcomes"
+            aria-labelledby="pf-tab-outcomes"
+            hidden={activeTab !== 'outcomes'}
+            className="pf-panel"
+          >
+            <OutcomeSummarySection form={form} />
+
+            <PublicationsSection
+              rows={form.publications}
+              patch={patch}
+              errors={errors}
+              disabled={isReadOnly}
+            />
+
+            <IprsSection rows={form.iprs} patch={patch} errors={errors} disabled={isReadOnly} />
+
+            <TechTransfersSection
+              rows={form.techTransfers}
+              patch={patch}
+              onSelectDocument={(rowIndex, slot, file) =>
+                selectRowDocument('techTransfers', rowIndex, slot, file)
+              }
+              onClearDocument={(rowIndex, slot) =>
+                clearRowDocument('techTransfers', rowIndex, slot)
+              }
+              errors={errors}
+              disabled={isReadOnly}
+            />
+
+            <OutcomeCandidatesSection
+              rows={form.outcomeCandidates}
+              patch={patch}
+              onSelectDocument={(rowIndex, slot, file) =>
+                selectRowDocument('outcomeCandidates', rowIndex, slot, file)
+              }
+              onClearDocument={(rowIndex, slot) =>
+                clearRowDocument('outcomeCandidates', rowIndex, slot)
+              }
+              errors={errors}
+              disabled={isReadOnly}
+            />
+          </div>
+
+          <div
+            role="tabpanel"
+            id="pf-panel-documents"
+            aria-labelledby="pf-tab-documents"
+            hidden={activeTab !== 'documents'}
+            className="pf-panel"
+          >
+            <DocumentTransactionsSection
+              rows={form.documentTransactions}
+              patch={patch}
+              onSelectDocument={(rowIndex, slot, file) =>
+                selectRowDocument('documentTransactions', rowIndex, slot, file)
+              }
+              onClearDocument={(rowIndex, slot) =>
+                clearRowDocument('documentTransactions', rowIndex, slot)
+              }
+              errors={errors}
+              disabled={isReadOnly}
+            />
+
+            {/* Still what a project leaves behind, so still held until it has
+                finished — the same rule as when this card sat on Details. */}
+            {isConcluded ? (
+              <FinalDocumentsSection
+                form={form}
+                onSelectDocument={selectDocument}
+                onClearDocument={clearDocument}
+                errors={errors}
+                disabled={isReadOnly}
+              />
+            ) : (
+              <p className="pf-stage-note">
+                The final documents open once the project is <strong>Selected</strong> and its{' '}
+                <strong>Status</strong> is <strong>Completed</strong> or <strong>Closed</strong>.
+              </p>
+            )}
+          </div>
+
           {/* Nothing on this tab is an input: Budget comes from the allotment
-              matrix and Actuals from the ledger, so it reads the two tabs
-              before it rather than adding anything of its own to save. */}
+              matrix and Actuals from the ledger, so it reads the Budget and
+              Transaction tabs rather than adding anything of its own to save. */}
           <div
             role="tabpanel"
             id="pf-panel-summary"

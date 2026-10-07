@@ -5,7 +5,13 @@
  * hydrated from a saved project, and be diffed in tests without rendering.
  */
 
-import { DEFAULT_COUNTRY, DISBURSEMENT_SLOTS, HOST_ORGANIZATION_NAME } from './constants';
+import {
+  DEFAULT_COUNTRY,
+  DISBURSEMENT_SLOTS,
+  HOST_ORGANIZATION_NAME,
+  MANPOWER_SLOTS,
+  OUTCOME_DOCUMENT_SLOTS,
+} from './constants';
 
 import type {
   BudgetAllotmentMap,
@@ -15,11 +21,20 @@ import type {
   DisbursementRow,
   DisbursementSlot,
   DocumentSlotState,
+  DocumentTransactionRow,
+  FacilityRow,
   FinanceRow,
   InvestigatorRow,
+  IprRow,
+  ManpowerRow,
+  ManpowerSlot,
   MemberType,
+  OutcomeCandidateRow,
+  OutcomeDocumentSlot,
   ProjectDocumentType,
   ProjectFormState,
+  PublicationRow,
+  TechTransferRow,
   TransactionAccount,
   TransactionHeadKind,
   TransactionRow,
@@ -137,6 +152,98 @@ export function createTransactionRow(): TransactionRow {
   };
 }
 
+export function createFacilityRow(): FacilityRow {
+  return {
+    key: nextRowKey('facility'),
+    facilityName: '',
+    facilityType: '',
+    installationDate: '',
+    cost: '',
+    make: '',
+    model: '',
+    serialNo: '',
+    stockRegisterRef: '',
+    istemListed: false,
+    istemId: '',
+    supplierDetails: '',
+  };
+}
+
+export function createManpowerRow(): ManpowerRow {
+  return {
+    key: nextRowKey('manpower'),
+    id: null,
+    role: '',
+    name: '',
+    qualification: '',
+    salary: '',
+    joiningDate: '',
+    mobile: '',
+    email: '',
+    remarks: '',
+    relievingDate: '',
+    documents: emptyDocumentMap(MANPOWER_SLOTS),
+  };
+}
+
+export function createPublicationRow(): PublicationRow {
+  return {
+    key: nextRowKey('publication'),
+    publicationType: '',
+    doi: '',
+    journalId: null,
+    title: '',
+    venue: '',
+    publicationYear: '',
+  };
+}
+
+export function createIprRow(): IprRow {
+  return {
+    key: nextRowKey('ipr'),
+    iprType: '',
+    iprNumber: '',
+    status: '',
+    title: '',
+    filingDate: '',
+    grantDate: '',
+  };
+}
+
+export function createTechTransferRow(): TechTransferRow {
+  return {
+    key: nextRowKey('tech-transfer'),
+    id: null,
+    category: '',
+    description: '',
+    trl: '',
+    documents: emptyDocumentMap(OUTCOME_DOCUMENT_SLOTS),
+  };
+}
+
+export function createOutcomeCandidateRow(): OutcomeCandidateRow {
+  return {
+    key: nextRowKey('candidate'),
+    id: null,
+    candidateName: '',
+    degree: '',
+    university: '',
+    documents: emptyDocumentMap(OUTCOME_DOCUMENT_SLOTS),
+  };
+}
+
+export function createDocumentTransactionRow(): DocumentTransactionRow {
+  return {
+    key: nextRowKey('document-transaction'),
+    id: null,
+    transactionDate: '',
+    direction: '',
+    documentKind: '',
+    description: '',
+    documents: emptyDocumentMap(OUTCOME_DOCUMENT_SLOTS),
+  };
+}
+
 export function createTransactionAccount(): TransactionAccount {
   return {
     key: nextRowKey('account'),
@@ -232,6 +339,17 @@ export function createEmptyProjectForm(): ProjectFormState {
     budgetAllotments: {},
 
     transactionAccounts: [createTransactionAccount()],
+
+    facilities: [createFacilityRow()],
+
+    manpower: [createManpowerRow()],
+
+    publications: [createPublicationRow()],
+    iprs: [createIprRow()],
+    techTransfers: [createTechTransferRow()],
+    outcomeCandidates: [createOutcomeCandidateRow()],
+
+    documentTransactions: [createDocumentTransactionRow()],
 
     documents: emptyDocumentMap(PROJECT_DOCUMENT_TYPES),
 
@@ -426,6 +544,115 @@ export function projectToFormState(project: any): ProjectFormState {
       })
     : [];
 
+  const facilities: FacilityRow[] = Array.isArray(project?.facilities)
+    ? project.facilities.map((row: any) => ({
+        ...createFacilityRow(),
+        facilityName: text(row.facility_name),
+        facilityType: text(row.facility_type),
+        installationDate: dateInput(row.installation_date),
+        cost: amountInput(row.cost),
+        make: text(row.make),
+        model: text(row.model),
+        serialNo: text(row.serial_no),
+        stockRegisterRef: text(row.stock_register_ref),
+        istemListed: flag(row.istem_listed),
+        istemId: text(row.istem_id),
+        supplierDetails: text(row.supplier_details),
+      }))
+    : [];
+
+  const manpower: ManpowerRow[] = Array.isArray(project?.manpower)
+    ? project.manpower.map((row: any) => ({
+        ...createManpowerRow(),
+        id: row.id ?? null,
+        role: text(row.role),
+        name: text(row.name),
+        qualification: text(row.qualification),
+        salary: amountInput(row.salary),
+        joiningDate: dateInput(row.joining_date),
+        mobile: text(row.mobile),
+        email: text(row.email),
+        remarks: text(row.remarks),
+        relievingDate: dateInput(row.relieving_date),
+        documents: MANPOWER_SLOTS.reduce(
+          (map, slot) => {
+            map[slot] = storedDocumentSlot(row.documents?.[slot]);
+            return map;
+          },
+          {} as Record<ManpowerSlot, DocumentSlotState>,
+        ),
+      }))
+    : [];
+
+  const outcomeDocuments = (row: any) =>
+    OUTCOME_DOCUMENT_SLOTS.reduce(
+      (map, slot) => {
+        map[slot] = storedDocumentSlot(row.documents?.[slot]);
+        return map;
+      },
+      {} as Record<OutcomeDocumentSlot, DocumentSlotState>,
+    );
+
+  const publications: PublicationRow[] = Array.isArray(project?.publications)
+    ? project.publications.map((row: any) => ({
+        ...createPublicationRow(),
+        publicationType: text(row.publication_type),
+        doi: text(row.doi),
+        journalId: row.journal_id ?? null,
+        title: text(row.title),
+        venue: text(row.venue),
+        publicationYear: text(row.publication_year),
+      }))
+    : [];
+
+  const iprs: IprRow[] = Array.isArray(project?.iprs)
+    ? project.iprs.map((row: any) => ({
+        ...createIprRow(),
+        iprType: text(row.ipr_type),
+        iprNumber: text(row.ipr_number),
+        status: text(row.status),
+        title: text(row.title),
+        filingDate: dateInput(row.filing_date),
+        grantDate: dateInput(row.grant_date),
+      }))
+    : [];
+
+  const techTransfers: TechTransferRow[] = Array.isArray(project?.tech_transfers)
+    ? project.tech_transfers.map((row: any) => ({
+        ...createTechTransferRow(),
+        id: row.id ?? null,
+        category: text(row.category),
+        description: text(row.description),
+        trl: text(row.trl),
+        documents: outcomeDocuments(row),
+      }))
+    : [];
+
+  const outcomeCandidates: OutcomeCandidateRow[] = Array.isArray(project?.outcome_candidates)
+    ? project.outcome_candidates.map((row: any) => ({
+        ...createOutcomeCandidateRow(),
+        id: row.id ?? null,
+        candidateName: text(row.candidate_name),
+        degree: text(row.degree),
+        university: text(row.university),
+        documents: outcomeDocuments(row),
+      }))
+    : [];
+
+  const documentTransactions: DocumentTransactionRow[] = Array.isArray(
+    project?.document_transactions,
+  )
+    ? project.document_transactions.map((row: any) => ({
+        ...createDocumentTransactionRow(),
+        id: row.id ?? null,
+        transactionDate: dateInput(row.transaction_date),
+        direction: text(row.direction),
+        documentKind: text(row.document_kind),
+        description: text(row.description),
+        documents: outcomeDocuments(row),
+      }))
+    : [];
+
   const disbursements: DisbursementRow[] = Array.isArray(project?.disbursements)
     ? project.disbursements.map((row: any) => ({
         ...createDisbursementRow(),
@@ -527,6 +754,18 @@ export function projectToFormState(project: any): ProjectFormState {
     transactionAccounts:
       transactionAccounts.length > 0 ? transactionAccounts : empty.transactionAccounts,
 
+    facilities: facilities.length > 0 ? facilities : empty.facilities,
+
+    manpower: manpower.length > 0 ? manpower : empty.manpower,
+
+    publications: publications.length > 0 ? publications : empty.publications,
+    iprs: iprs.length > 0 ? iprs : empty.iprs,
+    techTransfers: techTransfers.length > 0 ? techTransfers : empty.techTransfers,
+    outcomeCandidates: outcomeCandidates.length > 0 ? outcomeCandidates : empty.outcomeCandidates,
+
+    documentTransactions:
+      documentTransactions.length > 0 ? documentTransactions : empty.documentTransactions,
+
     documents: PROJECT_DOCUMENT_TYPES.reduce(
       (map, type) => {
         map[type] = storedDocumentSlot(project?.documents?.[type]);
@@ -550,6 +789,16 @@ export function replaceAt<T>(rows: T[], index: number, changes: Partial<T>): T[]
 
 export function removeAt<T>(rows: T[], index: number): T[] {
   return rows.filter((_, position) => position !== index);
+}
+
+/**
+ * Removes a row from a list that may be left empty, keeping one blank row on
+ * screen to type into. Removing the only row resets it rather than being
+ * refused: a saved row counts as filled in however blank it is made, so without
+ * this the last saved manpower or outcome row could never be deleted.
+ */
+export function withoutRow<T>(rows: T[], index: number, createRow: () => T): T[] {
+  return rows.length > 1 ? removeAt(rows, index) : [createRow()];
 }
 
 /** Moves a row, used by the investigator drag handle. */

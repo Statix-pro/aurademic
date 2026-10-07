@@ -39,6 +39,11 @@ export type ProjectDocumentType =
 
 export type DisbursementSlot = 'sanction' | 'uc_soe' | 'report';
 
+export type ManpowerSlot = 'profile';
+
+/** The one upload on a Technology Transfer or outcome candidate row. */
+export type OutcomeDocumentSlot = 'document';
+
 /** One upload control: a newly picked file, an already stored one, or neither. */
 export interface DocumentSlotState {
   file: File | null;
@@ -163,6 +168,116 @@ export interface TransactionRow {
   countsAsActual: boolean;
 }
 
+/** One entry in the Documents tab's correspondence log. */
+export interface DocumentTransactionRow {
+  key: string;
+  /** Stored row id; null until the row has been saved once. */
+  id: number | null;
+  transactionDate: string;
+  /** `'inward'` or `'outward'`; '' until picked. */
+  direction: string;
+  /** A `DOCUMENT_TRANSACTION_KIND_OPTIONS` value; '' until picked. */
+  documentKind: string;
+  description: string;
+  documents: Record<OutcomeDocumentSlot, DocumentSlotState>;
+}
+
+/** One publication on the Outcomes tab. */
+export interface PublicationRow {
+  key: string;
+  /** A `PUBLICATION_TYPE_OPTIONS` value; '' until picked. */
+  publicationType: string;
+  doi: string;
+  /** The portal `journals` record the DOI matched on Fetch; null otherwise. */
+  journalId: number | null;
+  title: string;
+  venue: string;
+  publicationYear: string;
+}
+
+/** What `GET /project-options/doi` found for a DOI. */
+export interface DoiLookupResult {
+  doi: string;
+  /** `portal` when it matched a Journals record, `crossref` otherwise. */
+  source: 'portal' | 'crossref';
+  journal_id: number | null;
+  publication_type: string | null;
+  title: string | null;
+  venue: string | null;
+  publication_year: number | null;
+}
+
+/** One IPR on the Outcomes tab. */
+export interface IprRow {
+  key: string;
+  iprType: string;
+  iprNumber: string;
+  status: string;
+  title: string;
+  filingDate: string;
+  grantDate: string;
+}
+
+/** One technology transfer on the Outcomes tab. */
+export interface TechTransferRow {
+  key: string;
+  /** Stored row id; null until the row has been saved once. */
+  id: number | null;
+  category: string;
+  description: string;
+  /** The level as a string, `'3'` to `'9'`; '' when unstated. */
+  trl: string;
+  documents: Record<OutcomeDocumentSlot, DocumentSlotState>;
+}
+
+/** One person who earned a degree or fellowship through the project. */
+export interface OutcomeCandidateRow {
+  key: string;
+  /** Stored row id; null until the row has been saved once. */
+  id: number | null;
+  candidateName: string;
+  degree: string;
+  university: string;
+  documents: Record<OutcomeDocumentSlot, DocumentSlotState>;
+}
+
+/** One person the project employs, on the Manpower tab. */
+export interface ManpowerRow {
+  key: string;
+  /** Stored row id; null until the row has been saved once. */
+  id: number | null;
+  /** A `MANPOWER_ROLE_OPTIONS` value; '' until picked. */
+  role: string;
+  name: string;
+  qualification: string;
+  salary: string;
+  joiningDate: string;
+  mobile: string;
+  email: string;
+  remarks: string;
+  relievingDate: string;
+  documents: Record<ManpowerSlot, DocumentSlotState>;
+}
+
+/** One facility the project set up, on the Facility tab. */
+export interface FacilityRow {
+  key: string;
+  facilityName: string;
+  /** A `FACILITY_TYPE_OPTIONS` value; '' when unstated. */
+  facilityType: string;
+  installationDate: string;
+  cost: string;
+  make: string;
+  model: string;
+  serialNo: string;
+  /** Where it is entered in the stock register — its S.No. and page no. */
+  stockRegisterRef: string;
+  /** Listed on the I-STEM portal; the ID is only asked for, and kept, while it is. */
+  istemListed: boolean;
+  istemId: string;
+  supplierDetails: string;
+}
+
 /** A bank account the project's money moves through, with its own ledger. */
 export interface TransactionAccount {
   key: string;
@@ -246,6 +361,11 @@ export interface ProjectFormState {
   projectClosingDate: string;
   projectStatus: ProjectStatus;
 
+  /**
+   * LEGACY: the six counts typed before the Outcomes tab existed. Read-only —
+   * the form shows them but no longer sends them, so an older project keeps
+   * its figures. Remove once no project carries a non-zero count.
+   */
   outcome: OutcomeCounts;
 
   // Budget tab
@@ -261,6 +381,21 @@ export interface ProjectFormState {
 
   // Transaction tab
   transactionAccounts: TransactionAccount[];
+
+  // Facility tab
+  facilities: FacilityRow[];
+
+  // Manpower tab
+  manpower: ManpowerRow[];
+
+  // Outcomes tab
+  publications: PublicationRow[];
+  iprs: IprRow[];
+  techTransfers: TechTransferRow[];
+  outcomeCandidates: OutcomeCandidateRow[];
+
+  // Documents tab
+  documentTransactions: DocumentTransactionRow[];
 
   documents: Record<ProjectDocumentType, DocumentSlotState>;
 

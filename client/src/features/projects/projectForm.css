@@ -313,13 +313,6 @@
   text-align: right;
 }
 
-/* The column the row's head does not normally use. Dimmed so the ordinary
-   entry lands in the other one, but not disabled: a returned advance is a
-   credit against an expenditure head and the ledger has to be able to say so.
-   Only ever applied while the field is empty (the class is dropped once it
-   holds a figure), and focusing it restores full contrast — past that point
-   the contra entry is what the user means and dimming it would just make a
-   real number hard to read. */
 .pf-textarea {
   height: auto;
   padding: 10px 12px;
@@ -1663,6 +1656,130 @@
   cursor: default;
 }
 
+/* Which side of the ledger a row's head is on, on the head and on the one
+   column it fills: green for an income head and its Credit, red for an
+   expenditure head and its Debit. A validation error still wins, so a red
+   Debit is never mistaken for a field that needs fixing only by its colour —
+   the error text beneath says that. */
+.pf-ledger__side--income .pf-select__control:not(.is-invalid),
+.pf-input.pf-ledger__side--income:not(.is-invalid) {
+  border-color: var(--success-color, #198754);
+}
+
+.pf-ledger__side--expenditure .pf-select__control:not(.is-invalid),
+.pf-input.pf-ledger__side--expenditure:not(.is-invalid) {
+  border-color: var(--error-color, #dc3545);
+}
+
+.pf-ledger__side--income .pf-select__control:not(.is-invalid):focus,
+.pf-input.pf-ledger__side--income:not(.is-invalid):focus {
+  box-shadow: 0 0 0 3px rgb(25 135 84 / 15%);
+}
+
+.pf-ledger__side--expenditure .pf-select__control:not(.is-invalid):focus,
+.pf-input.pf-ledger__side--expenditure:not(.is-invalid):focus {
+  box-shadow: 0 0 0 3px rgb(220 53 69 / 15%);
+}
+
+/* Facility tab. Its detail strip reuses the ledger's `pf-ledger__detail*`
+   styles; only the column widths and the strip's second line are its own. */
+.pf-facility {
+  min-width: 760px;
+}
+
+.pf-facility .pf-table__amount {
+  width: 150px;
+}
+
+.pf-facility__type {
+  width: 200px;
+  min-width: 170px;
+}
+
+/* Clears a native `dd-mm-yyyy` picker and its calendar button. */
+.pf-facility__date {
+  width: 170px;
+  min-width: 160px;
+}
+
+.pf-facility .pf-table__actions {
+  width: 132px;
+}
+
+/* The strip's first line is five fields that belong on one row, so it is a
+   grid rather than the ledger's wrapping flex: as flex, I-STEM ID dropped onto
+   a line of its own at a laptop width. The fields share the width instead of
+   holding the compact fields' fixed 150px. */
+.pf-ledger__detail.pf-facility__detail {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.3fr)
+    minmax(0, 1.25fr);
+  gap: 12px 18px;
+}
+
+.pf-facility__detail .pf-ledger__detail-field {
+  min-width: 0;
+}
+
+.pf-facility__detail .pf-ledger__detail-field--compact .pf-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+/* Supplier Details is a line of its own under the strip, split from it by the
+   same rule the design draws between the two. */
+.pf-facility__supplier-line {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f2;
+}
+
+/* Manpower tab. Same strip as the Facility tab; Email and Remarks are the two
+   free-length values on it, so they share whatever DoJ, Mobile and DOR leave. */
+.pf-manpower {
+  min-width: 860px;
+}
+
+.pf-manpower__role {
+  width: 220px;
+  min-width: 190px;
+}
+
+.pf-manpower__qualification {
+  width: 200px;
+}
+
+/* Holds the upload icon, plus a rejected pick's message under it. */
+.pf-manpower__profile {
+  width: 90px;
+  text-align: center;
+}
+
+.pf-manpower__profile .pf-field__error {
+  margin: 4px 0 0;
+  text-align: left;
+}
+
+.pf-manpower .pf-table__amount {
+  width: 140px;
+}
+
+.pf-manpower .pf-table__actions {
+  width: 132px;
+}
+
+.pf-manpower__email {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.pf-manpower__remarks {
+  flex: 1 1 180px;
+  min-width: 160px;
+}
+
 /* Derived, so it is shown rather than typed — but keeps the shape of the
    credit and debit fields beside it. */
 .pf-ledger__balance {
@@ -1777,35 +1894,143 @@
   gap: 14px;
 }
 
-/* -------------------------------------------------------------------- outcome */
+/* ------------------------------------------------------------------- outcomes */
 
-/* Even columns so every label/input pair sits on the same rhythm and the
-   inputs line up in a straight row. */
-.pf-outcome {
+/* The four count cards at the top of the Outcomes tab: an icon tile and a
+   figure, one card per table below. */
+.pf-outcome-cards {
   display: grid;
-  /* max-content floor so a long label ("Tech Transfer") is never clipped when
-     the page is held to its reading width. */
-  grid-template-columns: repeat(6, minmax(max-content, 1fr));
-  gap: 12px 18px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--pf-gap);
+}
+
+.pf-outcome-card {
+  display: flex;
   align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid #e2e8f2;
+  border-radius: var(--pf-radius);
+  background: #fff;
 }
 
-.pf-outcome__item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 78px;
-  gap: 8px;
+.pf-outcome-card__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: var(--primary-color, #0069ab);
+  color: #fff;
 }
 
-/* line-height matches the input height so label text and box share one
-   vertical centre across the whole row. */
-.pf-outcome__item .pf-inline-field__label {
-  line-height: var(--pf-field-height);
-  white-space: nowrap;
+.pf-outcome-card__label {
+  display: block;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.92rem;
 }
 
-.pf-outcome__item .pf-input--count {
-  width: 100%;
+.pf-outcome-card__value {
+  display: block;
+  color: var(--primary-color, #0069ab);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-outcome-legacy {
+  margin: 14px 0 0;
+  color: var(--text-muted, #6c757d);
+  font-size: 0.84rem;
+}
+
+/* Column widths shared by the Outcomes tab's four tables. The text column
+   with no class (DOI, IPR Number, Description, University) takes the rest. */
+.pf-outcome-table {
+  min-width: 720px;
+}
+
+.pf-outcome-table__type {
+  width: 230px;
+  min-width: 190px;
+}
+
+.pf-outcome-table__status {
+  width: 170px;
+  min-width: 150px;
+}
+
+.pf-outcome-table__trl {
+  width: 130px;
+  min-width: 120px;
+}
+
+.pf-outcome-table__candidate {
+  width: 260px;
+  min-width: 200px;
+}
+
+.pf-outcome-table__degree {
+  width: 170px;
+  min-width: 150px;
+}
+
+/* Holds the upload icon, plus a rejected pick's message under it. */
+.pf-outcome-table__document {
+  width: 100px;
+  text-align: center;
+}
+
+.pf-outcome-table__document .pf-field__error {
+  margin: 4px 0 0;
+  text-align: left;
+}
+
+/* Tech Transfer and candidate rows have no expand toggle, so their action
+   cell holds only add and remove. */
+.pf-outcome-table__actions {
+  width: 100px;
+}
+
+.pf-outcome-table .pf-table__actions {
+  width: 132px;
+}
+
+.pf-outcome-table__venue {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.pf-ledger__detail-field--compact.pf-outcome-table__year .pf-input {
+  width: 90px;
+  min-width: 90px;
+}
+
+/* The DOI field and its Fetch button share the cell. */
+.pf-outcome-lookup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pf-outcome-lookup .pf-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pf-outcome-lookup__fetch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.pf-outcome-lookup + .pf-field__hint,
+.pf-outcome-lookup + .pf-field__error {
+  margin: 6px 0 0;
 }
 
 /* --------------------------------------------------------------- stage notes */
@@ -1977,8 +2202,8 @@
     margin-left: 0;
   }
 
-  .pf-outcome {
-    grid-template-columns: repeat(3, minmax(max-content, 1fr));
+  .pf-outcome-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .pf-investigator-row,
@@ -1993,8 +2218,8 @@
 }
 
 @media (width <= 768px) {
-  .pf-outcome {
-    grid-template-columns: repeat(2, minmax(max-content, 1fr));
+  .pf-outcome-cards {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .pf-document-grid {
@@ -2026,4 +2251,20 @@
   .pf-grid--budget {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* Documents tab. Shares the Outcomes tables' column classes; only the date and
+   the direction are its own. */
+.pf-doc-transactions {
+  min-width: 860px;
+}
+
+.pf-doc-transactions__date {
+  width: 170px;
+  min-width: 160px;
+}
+
+.pf-doc-transactions__direction {
+  width: 150px;
+  min-width: 140px;
 }

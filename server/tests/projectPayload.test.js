@@ -4,6 +4,8 @@ import { formatProjectDates } from '../modules/project/projectDates.js';
 import {
   disbursementDocumentFieldName,
   documentFieldName,
+  manpowerDocumentFieldName,
+  normalizeDoi,
   normalizeProjectPayload,
   parseDocumentFieldName,
 } from '../modules/project/projectPayload.js';
@@ -33,7 +35,6 @@ describe('normalizeProjectPayload', () => {
       project_cost: null,
       duration_years: 0,
       collaborators_enabled: 0,
-      outcome_iprs: 0,
     });
     expect(aggregate.investigators).toHaveLength(1);
   });
@@ -52,7 +53,6 @@ describe('normalizeProjectPayload', () => {
         duration_months: '6',
         submitted_on: '2026-04-01',
         result_date: '01-04-2026',
-        outcome_journal_articles: '3',
       }),
     );
 
@@ -60,7 +60,6 @@ describe('normalizeProjectPayload', () => {
     expect(aggregate.project.duration_years).toBe(2);
     expect(aggregate.project.duration_months).toBe(6);
     expect(aggregate.project.submitted_on).toBe('2026-04-01');
-    expect(aggregate.project.outcome_journal_articles).toBe(3);
     expect(errorFields(errors)).toContain('result_date');
   });
 
@@ -1225,5 +1224,441 @@ describe('the ledger is stored in date order', () => {
 
     expect(errorFields(errors)).toContain('transaction_accounts[0].transactions[1].amount');
     expect(errorFields(errors)).not.toContain('transaction_accounts[0].transactions[0].amount');
+  });
+});
+
+// The Facility tab saves as one list with the project. These pin which rows it
+// keeps, what a kept row must carry, and that the I-STEM ID lives and dies with
+// its toggle — an ID left behind by a switched-off toggle would read as a
+// listing the facility does not have.
+describe('facility rows', () => {
+  it('maps a filled row onto project_facilities columns', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        facilities: [
+          {
+            facility_name: 'FTIR spectrometer',
+            facility_type: 'characterization',
+            installation_date: '2026-06-15',
+            cost: '1250000.50',
+            make: 'Bruker',
+            model: 'Alpha II',
+            serial_no: 'SN-4411',
+            stock_register_ref: '12 / 48',
+            istem_listed: true,
+            istem_id: 'ISTEM-0091',
+            supplier_details: 'Bruker India, Chennai',
+          },
+        ],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.facilities).toEqual([
+      {
+        facility_name: 'FTIR spectrometer',
+        facility_type: 'characterization',
+        installation_date: '2026-06-15',
+        cost: 1250000.5,
+        make: 'Bruker',
+        model: 'Alpha II',
+        serial_no: 'SN-4411',
+        stock_register_ref: '12 / 48',
+        istem_listed: 1,
+        istem_id: 'ISTEM-0091',
+        supplier_details: 'Bruker India, Chennai',
+        display_order: 0,
+      },
+    ]);
+  });
+
+  it('accepts the IT Product label spelling and rejects an unknown type', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        facilities: [
+          { facility_name: 'Lab server', facility_type: 'IT Product' },
+          { facility_name: 'Kiln', facility_type: 'pottery' },
+        ],
+      }),
+    );
+
+    expect(aggregate.facilities[0].facility_type).toBe('it_product');
+    expect(errorFields(errors)).toEqual(['facilities[1].facility_type']);
+  });
+
+  it('drops blank rows and reports a missing name under the submitted index', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        facilities: [{}, { istem_listed: false, istem_id: 'stale' }, { make: 'Bruker' }],
+      }),
+    );
+
+    expect(aggregate.facilities).toHaveLength(1);
+    expect(aggregate.facilities[0].display_order).toBe(0);
+    expect(errorFields(errors)).toEqual(['facilities[2].facility_name']);
+  });
+
+  it('requires the I-STEM ID only while the toggle is on, and drops it when off', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        facilities: [
+          { facility_name: 'Glovebox', istem_listed: true },
+          { facility_name: 'Furnace', istem_listed: false, istem_id: 'ISTEM-7' },
+        ],
+      }),
+    );
+
+    expect(errorFields(errors)).toEqual(['facilities[0].istem_id']);
+    expect(aggregate.facilities[1].istem_id).toBeNull();
+  });
+
+  it('rejects a malformed installation date and a negative cost', () => {
+    const { errors } = normalizeProjectPayload(
+      validPayload({
+        facilities: [{ facility_name: 'Drier', installation_date: '15/06/2026', cost: '-5' }],
+      }),
+    );
+
+    expect(errorFields(errors)).toEqual(
+      expect.arrayContaining(['facilities[0].installation_date', 'facilities[0].cost']),
+    );
+  });
+});
+
+// The Manpower tab. Rows are matched by id on save so a profile upload survives
+// an edit, which is why the id and key must come through untouched, and why a
+// row carrying only its profile is not blank.
+describe('manpower rows', () => {
+  const person = (overrides = {}) => ({
+    role: 'junior_research_fellow',
+    name: 'R Priya',
+    ...overrides,
+  });
+
+  it('maps a filled row, keeping its id and key and reducing the mobile to ten digits', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        manpower: [
+          person({
+            id: 7,
+            key: 'manpower-3',
+            qualification: 'M.Sc. Chemistry',
+            salary: '37000',
+            joining_date: '2026-04-01',
+            mobile: '+91 98765-43210',
+            email: 'priya@example.com',
+            remarks: 'Fellowship via CSIR',
+            relieving_date: '2027-03-31',
+          }),
+        ],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.manpower).toEqual([
+      {
+        id: 7,
+        key: 'manpower-3',
+        role: 'junior_research_fellow',
+        name: 'R Priya',
+        qualification: 'M.Sc. Chemistry',
+        salary: 37000,
+        joining_date: '2026-04-01',
+        mobile: '9876543210',
+        email: 'priya@example.com',
+        remarks: 'Fellowship via CSIR',
+        relieving_date: '2027-03-31',
+        removed_documents: [],
+        display_order: 0,
+      },
+    ]);
+  });
+
+  it('requires a role and a name on a started row, under the submitted index', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({ manpower: [{}, { qualification: 'B.E.' }, person({ role: 'intern' })] }),
+    );
+
+    expect(aggregate.manpower).toHaveLength(2);
+    expect(errorFields(errors)).toEqual(
+      expect.arrayContaining(['manpower[1].role', 'manpower[1].name', 'manpower[2].role']),
+    );
+  });
+
+  it('rejects a malformed mobile or email', () => {
+    const { errors } = normalizeProjectPayload(
+      validPayload({ manpower: [person({ mobile: '98765', email: 'priya@' })] }),
+    );
+
+    expect(errorFields(errors)).toEqual(['manpower[0].mobile', 'manpower[0].email']);
+  });
+
+  it('rejects a relieving date before the joining date', () => {
+    const { errors } = normalizeProjectPayload(
+      validPayload({
+        manpower: [person({ joining_date: '2026-04-01', relieving_date: '2026-03-31' })],
+      }),
+    );
+
+    expect(errorFields(errors)).toEqual(['manpower[0].relieving_date']);
+  });
+
+  it('keeps a row whose only content is an uploaded profile', () => {
+    const { aggregate } = normalizeProjectPayload(
+      validPayload({ manpower: [{ key: 'manpower-9' }] }),
+      { documentRowKeys: { manpower: ['manpower-9'] } },
+    );
+
+    expect(aggregate.manpower).toHaveLength(1);
+  });
+
+  it('keeps only the profile slot in removed_documents', () => {
+    const { aggregate } = normalizeProjectPayload(
+      validPayload({ manpower: [person({ removed_documents: ['profile', 'sanction'] })] }),
+    );
+
+    expect(aggregate.manpower[0].removed_documents).toEqual(['profile']);
+  });
+
+  it('round-trips the profile field name, including a key with a hyphen', () => {
+    const fieldName = manpowerDocumentFieldName('manpower-12', 'profile');
+
+    expect(fieldName).toBe('manpower__manpower-12__profile');
+    expect(parseDocumentFieldName(fieldName)).toEqual({
+      scope: 'manpower',
+      rowKey: 'manpower-12',
+      slot: 'profile',
+      documentType: 'manpower_profile',
+    });
+    expect(parseDocumentFieldName('manpower__manpower-12__resume')).toBeNull();
+  });
+});
+
+// The Outcomes tab. Its rows replaced the six typed counts, which the form must
+// no longer overwrite: an update that wrote them from an absent field would zero
+// every older project's figures.
+describe('outcome rows', () => {
+  it('no longer writes the six typed outcome counts, even when they are sent', () => {
+    const { aggregate } = normalizeProjectPayload(
+      validPayload({ outcome_journal_articles: '3', outcome_startups: '1' }),
+    );
+
+    expect(aggregate.project).not.toHaveProperty('outcome_journal_articles');
+    expect(aggregate.project).not.toHaveProperty('outcome_startups');
+  });
+
+  it('strips a pasted doi.org link down to the bare DOI', () => {
+    expect(normalizeDoi('https://doi.org/10.1016/J.FOO.2024.01.002')).toBe(
+      '10.1016/J.FOO.2024.01.002',
+    );
+    expect(normalizeDoi('http://dx.doi.org/10.1000/abc')).toBe('10.1000/abc');
+    expect(normalizeDoi('doi: 10.1000/abc')).toBe('10.1000/abc');
+    expect(normalizeDoi('  ')).toBe('');
+  });
+
+  it('keeps a publication by DOI or title, and rejects a malformed DOI', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        publications: [
+          {
+            publication_type: 'journal',
+            doi: 'https://doi.org/10.1000/xyz123',
+            journal_id: '4',
+            title: 'Solar drying',
+            venue: 'J. Food Eng.',
+            publication_year: '2026',
+          },
+          {},
+          { publication_type: 'conference', title: 'Paper without a DOI yet' },
+          { publication_type: 'book_chapter', doi: 'not-a-doi' },
+          { venue: 'Somewhere' },
+        ],
+      }),
+    );
+
+    expect(aggregate.publications).toHaveLength(4);
+    expect(aggregate.publications[0]).toEqual({
+      publication_type: 'journal',
+      doi: '10.1000/xyz123',
+      journal_id: 4,
+      title: 'Solar drying',
+      venue: 'J. Food Eng.',
+      publication_year: 2026,
+      display_order: 0,
+    });
+    expect(errorFields(errors)).toEqual([
+      'publications[3].doi',
+      'publications[4].publication_type',
+      'publications[4].doi',
+    ]);
+  });
+
+  it('bounds the publication year', () => {
+    const { errors } = normalizeProjectPayload(
+      validPayload({
+        publications: [{ publication_type: 'journal', title: 'Old', publication_year: '1850' }],
+      }),
+    );
+
+    expect(errorFields(errors)).toEqual(['publications[0].publication_year']);
+  });
+
+  it('requires an IPR type and a number or title, and a grant on or after filing', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        iprs: [
+          { ipr_type: 'Design Patent', ipr_number: '202641000123', status: 'Granted' },
+          { status: 'filed' },
+          {
+            ipr_type: 'patent',
+            title: 'Millet drier',
+            filing_date: '2026-05-01',
+            grant_date: '2026-04-01',
+          },
+        ],
+      }),
+    );
+
+    expect(aggregate.iprs[0]).toMatchObject({ ipr_type: 'design_patent', status: 'granted' });
+    expect(errorFields(errors)).toEqual([
+      'iprs[1].ipr_type',
+      'iprs[1].ipr_number',
+      'iprs[2].grant_date',
+    ]);
+  });
+
+  it('keeps a tech transfer by id and key, reads "TRL 6" and bounds the level', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        tech_transfers: [
+          { id: 3, key: 'tech-1', category: 'startup', description: 'Spin-off', trl: 'TRL 6' },
+          { category: 'product', trl: '2' },
+          { description: 'No category' },
+        ],
+      }),
+    );
+
+    expect(aggregate.techTransfers[0]).toEqual({
+      id: 3,
+      key: 'tech-1',
+      category: 'startup',
+      description: 'Spin-off',
+      trl: 6,
+      removed_documents: [],
+      display_order: 0,
+    });
+    expect(errorFields(errors)).toEqual(['tech_transfers[1].trl', 'tech_transfers[2].category']);
+  });
+
+  it('requires a candidate name and degree, and keeps a row carrying only its document', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        outcome_candidates: [
+          { candidate_name: 'S Arun', degree: 'phd', university: 'Anna University' },
+          { university: 'IIT Madras' },
+          { key: 'candidate-7' },
+        ],
+      }),
+      { documentRowKeys: { candidate: ['candidate-7'] } },
+    );
+
+    expect(aggregate.outcomeCandidates).toHaveLength(3);
+    expect(errorFields(errors)).toEqual(
+      expect.arrayContaining([
+        'outcome_candidates[1].candidate_name',
+        'outcome_candidates[1].degree',
+        'outcome_candidates[2].candidate_name',
+      ]),
+    );
+  });
+
+  it('parses the tech-transfer and candidate document field names', () => {
+    expect(parseDocumentFieldName('tech_transfer__tech-4__document')).toEqual({
+      scope: 'tech_transfer',
+      rowKey: 'tech-4',
+      slot: 'document',
+      documentType: 'tech_transfer_document',
+    });
+    expect(parseDocumentFieldName('candidate__candidate-2__document')).toMatchObject({
+      scope: 'candidate',
+      documentType: 'candidate_document',
+    });
+    expect(parseDocumentFieldName('candidate__candidate-2__profile')).toBeNull();
+  });
+});
+
+// The Documents tab's correspondence log. Each document kind belongs to one
+// direction — a sanction order only ever comes in — so a kind filed under the
+// other direction is refused rather than stored as a contradiction.
+describe('document transaction rows', () => {
+  it('maps a row, keeping its id and key', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        document_transactions: [
+          {
+            id: 5,
+            key: 'doc-tx-1',
+            transaction_date: '2026-07-10',
+            direction: 'outward',
+            document_kind: 'yearly_progress_report',
+            description: 'Courier | DTDC 1234',
+          },
+        ],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.documentTransactions).toEqual([
+      {
+        id: 5,
+        key: 'doc-tx-1',
+        transaction_date: '2026-07-10',
+        direction: 'outward',
+        document_kind: 'yearly_progress_report',
+        description: 'Courier | DTDC 1234',
+        removed_documents: [],
+        display_order: 0,
+      },
+    ]);
+  });
+
+  it('requires a date, a direction and a document, under the submitted index', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({ document_transactions: [{}, { description: 'Mail' }] }),
+    );
+
+    expect(aggregate.documentTransactions).toHaveLength(1);
+    expect(errorFields(errors)).toEqual([
+      'document_transactions[1].transaction_date',
+      'document_transactions[1].direction',
+      'document_transactions[1].document_kind',
+    ]);
+  });
+
+  it('refuses a document filed under the other direction', () => {
+    const { errors } = normalizeProjectPayload(
+      validPayload({
+        document_transactions: [
+          { transaction_date: '2026-07-10', direction: 'outward', document_kind: 'sanction_order' },
+        ],
+      }),
+    );
+
+    expect(errorFields(errors)).toEqual(['document_transactions[0].document_kind']);
+  });
+
+  it('keeps a row whose only content is its file, and parses that file field name', () => {
+    const { aggregate } = normalizeProjectPayload(
+      validPayload({ document_transactions: [{ key: 'doc-tx-9' }] }),
+      { documentRowKeys: { document_transaction: ['doc-tx-9'] } },
+    );
+
+    expect(aggregate.documentTransactions).toHaveLength(1);
+    expect(parseDocumentFieldName('document_transaction__doc-tx-9__document')).toEqual({
+      scope: 'document_transaction',
+      rowKey: 'doc-tx-9',
+      slot: 'document',
+      documentType: 'document_transaction_file',
+    });
   });
 });

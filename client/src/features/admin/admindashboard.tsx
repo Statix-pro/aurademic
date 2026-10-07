@@ -1607,7 +1607,26 @@ const Dashboard: React.FC = () => {
     const nationalInitiatives = (project.national_initiatives as string[]) || [];
     const sdgs = (project.sdgs as string[]) || [];
 
+    // Counted from the Outcomes tab's rows, which replaced the typed counts.
+    const publications = (project.publications as { publication_type?: string }[]) || [];
+    const publicationsOfType = (type: string) =>
+      publications.filter((row) => row.publication_type === type).length;
     const outcomes = [
+      { label: 'Journal Articles', value: publicationsOfType('journal') },
+      { label: 'Conferences', value: publicationsOfType('conference') },
+      { label: 'Book Chapters', value: publicationsOfType('book_chapter') },
+      { label: 'IPRs', value: ((project.iprs as unknown[]) || []).length },
+      { label: 'Tech Transfers', value: ((project.tech_transfers as unknown[]) || []).length },
+      {
+        label: 'Candidates',
+        value: ((project.outcome_candidates as unknown[]) || []).length,
+      },
+    ].filter((outcome) => outcome.value > 0);
+
+    // LEGACY: the six counts typed before the Outcomes tab existed, still
+    // stored on older projects. Shown apart so they are never added to the row
+    // counts above. Remove once no project carries a non-zero count.
+    const legacyOutcomes = [
       { label: 'Journal Articles', value: project.outcome_journal_articles },
       { label: 'Conferences', value: project.outcome_conferences },
       { label: 'IPRs', value: project.outcome_iprs },
@@ -1914,10 +1933,20 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {outcomes.length > 0 && (
+        {(outcomes.length > 0 || legacyOutcomes.length > 0) && (
           <div className="detail-section">
             <h4>Outcomes</h4>
-            <p>{outcomes.map((outcome) => `${outcome.label}: ${outcome.value}`).join('  ·  ')}</p>
+            {outcomes.length > 0 && (
+              <p>{outcomes.map((outcome) => `${outcome.label}: ${outcome.value}`).join('  ·  ')}</p>
+            )}
+            {legacyOutcomes.length > 0 && (
+              <p>
+                Recorded before the Outcomes tab:{' '}
+                {legacyOutcomes
+                  .map((outcome) => `${outcome.label}: ${outcome.value}`)
+                  .join('  ·  ')}
+              </p>
+            )}
           </div>
         )}
 

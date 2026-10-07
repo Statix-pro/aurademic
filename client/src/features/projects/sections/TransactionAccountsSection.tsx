@@ -53,21 +53,7 @@ interface TransactionAccountsSectionProps {
  */
 const DETAIL_ERROR_KEYS = ['transaction_date', 'payment_mode'];
 
-/** The Refund tick's hover text, which differs with the side of the ledger the head is on. */
-const REFUND_HINT = {
-  expenditure:
-    'Refund \u2014 money coming back under this expenditure head, such as a returned advance. It is entered as a Credit and subtracted from this head\u2019s Actuals.',
-  income:
-    'Refund \u2014 money paid back out of this income head, such as a refunded receipt. It is entered as a Debit and subtracted from this head\u2019s Actuals.',
-};
-
-/**
- * What the tick is and what unticking it does, on the control itself rather
- * than in a legend. It opens with the field's own name because the strip no
- * longer prints it: the box sits on a line of labelled fields and the word was
- * costing more width than it earned, so hovering is what says which tick this
- * is.
- */
+/** What the Actuals tick means and what unticking it does, on the control itself. */
 const ACTUALS_HINT =
   'Actuals \u2014 counted in the Transaction Summary\u2019s Actuals. Untick for money that moved through the account without being spent or received against the budget \u2014 the ledger Balance still includes it.';
 
@@ -108,25 +94,20 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   // account's only entry still needs the date and particulars that live in the
   // strip, and leaving it shut hides them behind a control the user has to
   // find first.
+  //
+  // A remembered key that no longer names a row falls back the same way: a save
+  // rebuilds the form with fresh row keys, and removing the open row takes its
+  // key with it, and either used to leave every strip shut.
+  const firstRowKey = blocks[0]?.transactions[0]?.key ?? null;
+  const expandedRowExists =
+    typeof expandedRow === 'string' &&
+    blocks.some((block) => block.transactions.some((row) => row.key === expandedRow));
   const openRow =
-    expandedRow === undefined ? (blocks[0]?.transactions[0]?.key ?? null) : expandedRow;
+    expandedRow === undefined || (expandedRow !== null && !expandedRowExists)
+      ? firstRowKey
+      : expandedRow;
 
   const toggleRow = (rowKey: string) => setExpandedRow(openRow === rowKey ? null : rowKey);
-
-  // Rows ticked as a refund before an amount was typed into them. A row with a
-  // figure says which way it runs by which column holds it, so this is only
-  // needed for the empty ones — and, once ticked, to keep the column open while
-  // its figure is cleared and retyped. Presentational, like `expandedRow`: what
-  // is saved is the credit or debit itself.
-  const [refundRows, setRefundRows] = useState<Set<string>>(() => new Set());
-
-  const setRefundRow = (rowKey: string, isRefund: boolean) =>
-    setRefundRows((current) => {
-      const next = new Set(current);
-      if (isRefund) next.add(rowKey);
-      else next.delete(rowKey);
-      return next;
-    });
 
   // The heads this project declared on the Budget tab: the ones it allotted a
   // budget to, and the income heads it ticked. A row already filed under a head
@@ -299,14 +280,9 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                     const isExpanded = openRow === row.key || hasDetailError;
                     const detailId = `${block.key}-${row.key}-detail`;
 
-                    // The head says which way money normally moves: in under an
-                    // income head, out under an expenditure one, and only that
-                    // column is open. The reverse is a real entry rather than a
-                    // mistake — a returned advance is a credit against an
-                    // expenditure head, a refunded receipt a debit against an
-                    // income one, and `buildTransactionSummary` nets both — so it
-                    // is recorded by ticking Refund on the row, which swaps the
-                    // open column. Leaving both open (6b2ec93) let an ordinary
+                    // The head says which way money moves: in under an income
+                    // head, out under an expenditure one, and only that column
+                    // is open. Leaving both open (6b2ec93) let an ordinary
                     // payment be typed into Credit by mistake.
                     const headPicked = Boolean(row.headName.trim());
                     // Which of the two identifying fields the detail strip
@@ -316,38 +292,21 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                     const isIncomeRow = row.headKind === 'income';
                     const creditFilled = Boolean(row.credit.trim());
                     const debitFilled = Boolean(row.debit.trim());
-                    const usualFilled = isIncomeRow ? creditFilled : debitFilled;
-                    const reverseFilled = isIncomeRow ? debitFilled : creditFilled;
-                    // Read from the figures first, so a saved refund opens as one
-                    // and re-picking a head never hides an amount behind a closed
-                    // column: whichever column holds the figure is the open one.
-                    const isRefund =
-                      headPicked && !usualFilled && (reverseFilled || refundRows.has(row.key));
-                    // A row carrying both figures (the server refuses it) keeps
-                    // both columns open so the user can clear the wrong one.
-                    const bothFilled = creditFilled && debitFilled;
-                    const creditOpen =
-                      !headPicked || bothFilled || (isIncomeRow ? !isRefund : isRefund);
-                    const debitOpen =
-                      !headPicked || bothFilled || (isIncomeRow ? isRefund : !isRefund);
-
-                    // Ticking moves the figure across rather than dropping it:
-                    // it is the same amount, only the direction has changed.
-                    const toggleRefund = (checked: boolean) => {
-                      setRefundRow(row.key, checked);
-                      const usualAmount = isIncomeRow ? row.credit : row.debit;
-                      const reverseAmount = isIncomeRow ? row.debit : row.credit;
-                      const amount = usualFilled ? usualAmount : reverseAmount;
-                      const refundGoesTo = isIncomeRow ? 'debit' : 'credit';
-                      const usualGoesTo = isIncomeRow ? 'credit' : 'debit';
-                      updateRow(
-                        blockIndex,
-                        rowIndex,
-                        checked
-                          ? { [refundGoesTo]: amount, [usualGoesTo]: '' }
-                          : { [usualGoesTo]: amount, [refundGoesTo]: '' },
-                      );
-                    };
+                    // LEGACY: rows saved while the form had a Refund tick can
+                    // hold a figure in the other column (a credit under an
+                    // expenditure head, a debit under an income one). A column
+                    // holding a figure stays open so that amount is never stuck
+                    // behind a disabled field and can still be corrected or
+                    // cleared. Remove once no saved row carries a contra figure.
+                    const creditOpen = !headPicked || isIncomeRow || creditFilled;
+                    const debitOpen = !headPicked || !isIncomeRow || debitFilled;
+                    // The head's side of the ledger, shown on the head and on the
+                    // column it fills: green for money in, red for money out.
+                    const sideClass = headPicked
+                      ? isIncomeRow
+                        ? 'pf-ledger__side--income'
+                        : 'pf-ledger__side--expenditure'
+                      : '';
 
                     return (
                       <React.Fragment key={row.key}>
@@ -370,6 +329,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
 
                           <td className="pf-ledger__head">
                             <SelectField
+                              className={sideClass}
                               value={selectedHead}
                               onChange={(value) => {
                                 const option = headOptions.find((item) => item.value === value);
@@ -411,15 +371,9 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
 
                           <td className="pf-table__amount">
                             <AmountInput
-                              className={`pf-input pf-input--amount ${errors[`${field}.amount`] || errors[`${field}.credit`] ? 'is-invalid' : ''}`.trim()}
+                              className={`pf-input pf-input--amount ${isIncomeRow ? sideClass : ''} ${errors[`${field}.amount`] || errors[`${field}.credit`] ? 'is-invalid' : ''}`.trim()}
                               value={row.credit}
-                              onChange={(credit) => {
-                                // A refund read off its saved figure is pinned
-                                // as one, so clearing the figure to retype it
-                                // does not close the column mid-edit.
-                                if (isRefund) setRefundRow(row.key, true);
-                                updateRow(blockIndex, rowIndex, { credit });
-                              }}
+                              onChange={(credit) => updateRow(blockIndex, rowIndex, { credit })}
                               disabled={disabled || !creditOpen}
                               aria-label="Credit"
                             />
@@ -427,12 +381,9 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
 
                           <td className="pf-table__amount">
                             <AmountInput
-                              className={`pf-input pf-input--amount ${errors[`${field}.amount`] || errors[`${field}.debit`] ? 'is-invalid' : ''}`.trim()}
+                              className={`pf-input pf-input--amount ${isIncomeRow ? '' : sideClass} ${errors[`${field}.amount`] || errors[`${field}.debit`] ? 'is-invalid' : ''}`.trim()}
                               value={row.debit}
-                              onChange={(debit) => {
-                                if (isRefund) setRefundRow(row.key, true);
-                                updateRow(blockIndex, rowIndex, { debit });
-                              }}
+                              onChange={(debit) => updateRow(blockIndex, rowIndex, { debit })}
                               disabled={disabled || !debitOpen}
                               aria-label="Debit"
                             />
@@ -629,33 +580,6 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                 />
                               </div>
 
-                              {/* Off unless the row is a refund, and unavailable
-                                  until a head says which way the row normally
-                                  runs — or while both columns hold a figure,
-                                  when neither direction is the one to flip.
-
-                                  Expenditure rows only, once the head is
-                                  picked: an income row takes its receipt as a
-                                  Credit and nothing else, and a row with no head
-                                  yet has no direction to reverse. A row already
-                                  carrying a refund keeps the box, so it can be
-                                  turned back into an ordinary entry. */}
-                              {((headPicked && !isIncomeRow) || isRefund) && (
-                                <label
-                                  className="pf-ledger__detail-field pf-ledger__detail-field--check"
-                                  title={REFUND_HINT[isIncomeRow ? 'income' : 'expenditure']}
-                                >
-                                  <input
-                                    type="checkbox"
-                                    className="pf-checkbox"
-                                    checked={isRefund}
-                                    onChange={(event) => toggleRefund(event.target.checked)}
-                                    disabled={disabled || !headPicked || bothFilled}
-                                  />
-                                  <span className="pf-ledger__detail-label">Refund</span>
-                                </label>
-                              )}
-
                               {/* On by default, so the ordinary entry needs no
                                   thought: unticking is the exception, for money
                                   that moved through the account without being
@@ -684,9 +608,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                     }
                                     disabled={disabled}
                                   />
-                                  <span className="pf-ledger__detail-label pf-visually-hidden">
-                                    Actuals
-                                  </span>
+                                  <span className="pf-ledger__detail-label">Actuals</span>
                                 </label>
                               )}
                             </div>

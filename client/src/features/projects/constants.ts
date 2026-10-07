@@ -6,7 +6,13 @@
  * instead of in a master table an admin would have to seed.
  */
 
-import type { DisbursementSlot, ProjectDocumentType, ProposalStatus } from './types';
+import type {
+  DisbursementSlot,
+  ManpowerSlot,
+  OutcomeDocumentSlot,
+  ProjectDocumentType,
+  ProposalStatus,
+} from './types';
 
 export const HOST_ORGANIZATION_NAME = 'K.S.Rangasamy College of Technology';
 export const DEFAULT_COUNTRY = 'India';
@@ -19,6 +25,10 @@ export const MAX_BUDGET_YEARS = 15;
 export const MAX_BUDGET_HEAD_ROWS = 40;
 export const MAX_TRANSACTION_ACCOUNTS = 10;
 export const MAX_TRANSACTIONS_PER_ACCOUNT = 500;
+export const MAX_FACILITIES = 50;
+export const MAX_MANPOWER = 50;
+/** Per table on the Outcomes tab. */
+export const MAX_OUTCOME_ROWS = 100;
 
 /**
  * The income side of the transaction ledger: the four ways money reaches a
@@ -94,6 +104,105 @@ export const TRANSACTION_MODE_OPTIONS = [
   { value: 'upi', label: 'UPI' },
   { value: 'cash', label: 'Cash' },
   { value: 'pfms', label: 'PFMS' },
+];
+
+/** What a Facility-tab row records, valued to match `project_facilities.facility_type`. */
+export const FACILITY_TYPE_OPTIONS = [
+  { value: 'synthesis', label: 'Synthesis' },
+  { value: 'manufacturing', label: 'Manufacturing' },
+  { value: 'characterization', label: 'Characterization' },
+  { value: 'analysis', label: 'Analysis' },
+  { value: 'software', label: 'Software' },
+  { value: 'it_product', label: 'IT Product' },
+];
+
+/** The role a Manpower-tab row is employed in, valued to match `project_manpower.role`. */
+export const MANPOWER_ROLE_OPTIONS = [
+  { value: 'project_associate', label: 'Project Associate' },
+  { value: 'research_associate', label: 'Research Associate' },
+  { value: 'senior_research_fellow', label: 'Senior Research Fellow' },
+  { value: 'junior_research_fellow', label: 'Junior Research Fellow' },
+  { value: 'field_investigator', label: 'Field Investigator' },
+  { value: 'field_worker', label: 'Field Worker' },
+  { value: 'lab_technician', label: 'Lab Technician' },
+];
+
+/*
+ * The Outcomes tab's closed lists, valued to match their columns' enums
+ * (`project_publications.publication_type` and the rest).
+ */
+export const PUBLICATION_TYPE_OPTIONS = [
+  { value: 'journal', label: 'Journal' },
+  { value: 'conference', label: 'Conference' },
+  { value: 'book_chapter', label: 'Book Chapter' },
+];
+
+export const IPR_TYPE_OPTIONS = [
+  { value: 'patent', label: 'Patent' },
+  { value: 'copyright', label: 'Copyright' },
+  { value: 'design_patent', label: 'Design Patent' },
+  { value: 'trademark', label: 'Trademark' },
+  { value: 'geographical_indication', label: 'Geographical Indication' },
+];
+
+export const IPR_STATUS_OPTIONS = [
+  { value: 'filed', label: 'Filed' },
+  { value: 'published', label: 'Published' },
+  { value: 'granted', label: 'Granted' },
+  { value: 'rejected', label: 'Rejected' },
+  { value: 'expired', label: 'Expired' },
+];
+
+export const TECH_TRANSFER_CATEGORY_OPTIONS = [
+  { value: 'startup', label: 'Start-up' },
+  { value: 'prototype', label: 'Prototype' },
+  { value: 'product', label: 'Product' },
+  { value: 'process', label: 'Process' },
+  { value: 'service', label: 'Service' },
+  { value: 'theory', label: 'Theory' },
+  { value: 'variety', label: 'Variety' },
+];
+
+/** TRL 3 to 9; below 3 there is nothing to transfer yet. */
+export const TRL_OPTIONS = [3, 4, 5, 6, 7, 8, 9].map((level) => ({
+  value: String(level),
+  label: `TRL ${level}`,
+}));
+
+export const CANDIDATE_DEGREE_OPTIONS = [
+  { value: 'me_mtech', label: 'M.E./ M.Tech.' },
+  { value: 'phd', label: 'Ph.D.' },
+  { value: 'pdf', label: 'PDF' },
+];
+
+export const DOCUMENT_TRANSACTION_DIRECTION_OPTIONS = [
+  { value: 'inward', label: 'Inward' },
+  { value: 'outward', label: 'Outward' },
+];
+
+/**
+ * The documents a project exchanges with its agency, filed under the direction
+ * they travel in — the server refuses a kind under the other one. The `group`
+ * is what the dropdown heads each list with.
+ */
+export const DOCUMENT_TRANSACTION_KIND_OPTIONS = [
+  { value: 'sanction_order', label: 'Sanction Order', group: 'Inward', direction: 'inward' },
+  { value: 'query', label: 'Query', group: 'Inward', direction: 'inward' },
+  { value: 'acknowledgement', label: 'Acknowledgement', group: 'Outward', direction: 'outward' },
+  {
+    value: 'yearly_progress_report',
+    label: 'Yearly Progress Report',
+    group: 'Outward',
+    direction: 'outward',
+  },
+  { value: 'revised_uc', label: 'Revised UC', group: 'Outward', direction: 'outward' },
+  { value: 'clarification', label: 'Clarification', group: 'Outward', direction: 'outward' },
+  {
+    value: 'final_report_submission',
+    label: 'Final Report Submission',
+    group: 'Outward',
+    direction: 'outward',
+  },
 ];
 
 export const SUBMISSION_MODE_OPTIONS = [
@@ -229,6 +338,17 @@ export const DISBURSEMENT_SLOT_LABELS: Record<DisbursementSlot, string> = {
 
 export const DISBURSEMENT_SLOTS: DisbursementSlot[] = ['sanction', 'uc_soe', 'report'];
 
+/** Mirrors `MANPOWER_SLOTS` on the server; the file part is `manpower__<key>__<slot>`. */
+export const MANPOWER_SLOTS: ManpowerSlot[] = ['profile'];
+
+/**
+ * The one upload on a row that carries a single document. Mirrors
+ * `TECH_TRANSFER_SLOTS`, `CANDIDATE_SLOTS` and `DOCUMENT_TRANSACTION_SLOTS` on
+ * the server; the file part is `<scope>__<key>__document`.
+ */
+export const OUTCOME_DOCUMENT_SLOTS: OutcomeDocumentSlot[] = ['document'];
+
+/** LEGACY: labels for the six typed counts older projects still show. */
 export const OUTCOME_FIELDS = [
   { key: 'journalArticles', label: 'Journal Article' },
   { key: 'conferences', label: 'Conference' },
@@ -294,8 +414,12 @@ export const PROJECT_FORM_TABS = [
   { id: 'details', label: 'Project Details' },
   { id: 'budget', label: 'Budget' },
   { id: 'transaction', label: 'Transaction' },
-  // Last, and read-only: every figure on it is derived from the two tabs
-  // before it, so it is where you go once the budget and the ledger are in.
+  { id: 'facility', label: 'Facility' },
+  { id: 'manpower', label: 'Manpower' },
+  { id: 'outcomes', label: 'Outcomes' },
+  { id: 'documents', label: 'Documents' },
+  // Last, and read-only: every figure on it is derived from the Budget and
+  // Transaction tabs, so it is where you go once the budget and the ledger are in.
   { id: 'summary', label: 'Summary' },
 ] as const;
 

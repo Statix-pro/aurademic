@@ -54,7 +54,22 @@ export const DISBURSEMENT_DOCUMENT_TYPES = [
   'disbursement_report',
 ];
 
-export const DOCUMENT_TYPES = [...PROJECT_DOCUMENT_TYPES, ...DISBURSEMENT_DOCUMENT_TYPES];
+/** Document slots that hang off a single manpower row. */
+export const MANPOWER_DOCUMENT_TYPES = ['manpower_profile'];
+
+/** Document slots that hang off an Outcomes-tab row. */
+export const OUTCOME_DOCUMENT_TYPES = ['tech_transfer_document', 'candidate_document'];
+
+/** The scanned copy on a Documents-tab row. */
+export const DOCUMENT_TRANSACTION_DOCUMENT_TYPES = ['document_transaction_file'];
+
+export const DOCUMENT_TYPES = [
+  ...PROJECT_DOCUMENT_TYPES,
+  ...DISBURSEMENT_DOCUMENT_TYPES,
+  ...MANPOWER_DOCUMENT_TYPES,
+  ...OUTCOME_DOCUMENT_TYPES,
+  ...DOCUMENT_TRANSACTION_DOCUMENT_TYPES,
+];
 
 /**
  * Short slot names used inside a disbursement row (`row.documents.sanction`)
@@ -64,6 +79,36 @@ export const DISBURSEMENT_SLOTS = {
   sanction: 'disbursement_sanction',
   uc_soe: 'disbursement_uc_soe',
   report: 'disbursement_report',
+};
+
+/** Short slot names used inside a manpower row, mapped to the stored `document_type`. */
+export const MANPOWER_SLOTS = {
+  profile: 'manpower_profile',
+};
+
+export const TECH_TRANSFER_SLOTS = {
+  document: 'tech_transfer_document',
+};
+
+export const CANDIDATE_SLOTS = {
+  document: 'candidate_document',
+};
+
+export const DOCUMENT_TRANSACTION_SLOTS = {
+  document: 'document_transaction_file',
+};
+
+/**
+ * Every kind of row that carries its own documents, by the scope name its
+ * multipart fields start with (`<scope>__<rowKey>__<slot>`). The model reads
+ * the same scope names to find the row each file belongs to.
+ */
+export const ROW_DOCUMENT_SCOPES = {
+  disbursement: DISBURSEMENT_SLOTS,
+  manpower: MANPOWER_SLOTS,
+  tech_transfer: TECH_TRANSFER_SLOTS,
+  candidate: CANDIDATE_SLOTS,
+  document_transaction: DOCUMENT_TRANSACTION_SLOTS,
 };
 
 /** Directory under `uploads/` each document type is stored in. */
@@ -77,6 +122,10 @@ export const DOCUMENT_UPLOAD_DIRS = {
   disbursement_sanction: 'sanctionLetter',
   disbursement_uc_soe: 'ucAndSoE',
   disbursement_report: 'projectReport',
+  manpower_profile: 'project-manpower-profile',
+  tech_transfer_document: 'project-tech-transfer',
+  candidate_document: 'project-outcome-candidate',
+  document_transaction_file: 'project-document-transaction',
 };
 
 /** Which side of the Transaction Summary a ledger row is counted on. */
@@ -132,6 +181,86 @@ export function budgetHeadCanonicalizer(budgetHeadNames = []) {
   };
 }
 
+/**
+ * What kind of facility a Facility-tab row records, matching the
+ * `project_facilities.facility_type` enum. A closed list the form offers as
+ * fixed options; the form renders the labels (Characterization, IT Product).
+ */
+export const FACILITY_TYPES = [
+  'synthesis',
+  'manufacturing',
+  'characterization',
+  'analysis',
+  'software',
+  'it_product',
+];
+
+/**
+ * The role a Manpower-tab row is employed in, matching the
+ * `project_manpower.role` enum. A closed list the form offers as fixed options.
+ */
+export const MANPOWER_ROLES = [
+  'project_associate',
+  'research_associate',
+  'senior_research_fellow',
+  'junior_research_fellow',
+  'field_investigator',
+  'field_worker',
+  'lab_technician',
+];
+
+/**
+ * The Outcomes tab's closed lists, each matching its column's enum. The form
+ * offers them as fixed options and renders the labels.
+ */
+export const PUBLICATION_TYPES = ['journal', 'conference', 'book_chapter'];
+
+export const IPR_TYPES = [
+  'patent',
+  'copyright',
+  'design_patent',
+  'trademark',
+  'geographical_indication',
+];
+
+export const IPR_STATUSES = ['filed', 'published', 'granted', 'rejected', 'expired'];
+
+export const TECH_TRANSFER_CATEGORIES = [
+  'startup',
+  'prototype',
+  'product',
+  'process',
+  'service',
+  'theory',
+  'variety',
+];
+
+/** The Technology Readiness Levels the form offers; 1 and 2 are not a transfer yet. */
+export const MIN_TRL = 3;
+export const MAX_TRL = 9;
+
+export const CANDIDATE_DEGREES = ['me_mtech', 'phd', 'pdf'];
+
+/**
+ * The Documents tab's correspondence log: which documents can come in from the
+ * agency and which go out to it. Each kind belongs to one direction, and a row
+ * is refused when its kind is filed under the other.
+ */
+export const DOCUMENT_TRANSACTION_KINDS = {
+  inward: ['sanction_order', 'query'],
+  outward: [
+    'acknowledgement',
+    'yearly_progress_report',
+    'revised_uc',
+    'clarification',
+    'final_report_submission',
+  ],
+};
+
+export const DOCUMENT_TRANSACTION_DIRECTIONS = Object.keys(DOCUMENT_TRANSACTION_KINDS);
+
+const ALL_DOCUMENT_TRANSACTION_KINDS = Object.values(DOCUMENT_TRANSACTION_KINDS).flat();
+
 export const MAX_INVESTIGATORS = 15;
 export const MAX_COLLABORATORS = 20;
 export const MAX_FINANCE_ROWS = 30;
@@ -140,8 +269,14 @@ export const MAX_BUDGET_YEARS = 15;
 export const MAX_BUDGET_HEAD_ROWS = 40;
 export const MAX_TRANSACTION_ACCOUNTS = 10;
 export const MAX_TRANSACTIONS_PER_ACCOUNT = 500;
+export const MAX_FACILITIES = 50;
+export const MAX_MANPOWER = 50;
+/** Per table on the Outcomes tab. */
+export const MAX_OUTCOME_ROWS = 100;
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MOBILE_PATTERN = /^\d{10}$/;
+const DOI_PATTERN = /^10\.\d{4,9}\/\S+$/;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const FINANCIAL_YEAR = /^\d{4}-\d{2}$/;
 
@@ -920,6 +1055,436 @@ function normalizeTransactionAccounts(raw, errors, canonicalBudgetHead) {
   );
 }
 
+function normalizeFacilities(raw, errors) {
+  const rows = Array.isArray(raw) ? raw : [];
+  if (rows.length > MAX_FACILITIES) {
+    errors.push({
+      field: 'facilities',
+      message: `A project can have at most ${MAX_FACILITIES} facilities.`,
+    });
+  }
+
+  return (
+    rows
+      .slice(0, MAX_FACILITIES)
+      .map((row, index) => {
+        const field = `facilities[${index}]`;
+        const istemListed = toBoolean(row?.istem_listed ?? row?.istemListed);
+
+        return {
+          facility_name: toNullableString(row?.facility_name ?? row?.facilityName, 255),
+          facility_type: toEnum(
+            row?.facility_type ?? row?.facilityType,
+            FACILITY_TYPES,
+            `${field}.facility_type`,
+            errors,
+          ),
+          installation_date: toDate(
+            row?.installation_date ?? row?.installationDate,
+            `${field}.installation_date`,
+            errors,
+          ),
+          cost: toAmount(row?.cost, `${field}.cost`, errors),
+          make: toNullableString(row?.make, 150),
+          model: toNullableString(row?.model, 150),
+          serial_no: toNullableString(row?.serial_no ?? row?.serialNo, 150),
+          stock_register_ref: toNullableString(
+            row?.stock_register_ref ?? row?.stockRegisterRef,
+            150,
+          ),
+          istem_listed: istemListed,
+          // The ID belongs to the listing: switching the toggle off says the
+          // facility is not on I-STEM, so an ID typed before that is not kept.
+          istem_id: istemListed ? toNullableString(row?.istem_id ?? row?.istemId, 100) : null,
+          supplier_details: toNullableString(row?.supplier_details ?? row?.supplierDetails, 1000),
+          // The form keys its inline errors by the index it rendered the row at,
+          // so validation below must report the submitted index and not the one
+          // left after blank rows are dropped.
+          sourceIndex: index,
+        };
+      })
+      // A row the user added but never filled in is dropped instead of failing the save.
+      .filter(({ sourceIndex: _sourceIndex, ...row }) =>
+        Object.values(row).some((value) => value !== null && value !== 0),
+      )
+      .map(({ sourceIndex, ...row }, index) => {
+        const field = `facilities[${sourceIndex}]`;
+        if (!row.facility_name) {
+          errors.push({ field: `${field}.facility_name`, message: 'Facility name is required.' });
+        }
+        if (row.istem_listed && !row.istem_id) {
+          errors.push({ field: `${field}.istem_id`, message: 'Enter the I-STEM ID.' });
+        }
+        return { ...row, display_order: index };
+      })
+  );
+}
+
+/**
+ * A mobile number as the office writes it — spaces, hyphens and a +91 prefix
+ * allowed — reduced to its ten digits. Anything that is not ten digits once
+ * those are stripped is returned as typed, for the caller to reject.
+ */
+function toMobile(value) {
+  const text = trimmed(value);
+  if (!text) return null;
+  const digits = text.replace(/[\s-]/g, '').replace(/^\+91/, '');
+  return MOBILE_PATTERN.test(digits) ? digits : text.slice(0, 20);
+}
+
+/**
+ * @param {Set<string>} keysWithDocuments row keys that carry an uploaded file in
+ *   this request, so a row whose only content so far is its profile is not
+ *   dropped as blank and the file keeps a row to attach to.
+ */
+function normalizeManpower(raw, errors, keysWithDocuments = new Set()) {
+  const rows = Array.isArray(raw) ? raw : [];
+  if (rows.length > MAX_MANPOWER) {
+    errors.push({
+      field: 'manpower',
+      message: `A project can have at most ${MAX_MANPOWER} manpower rows.`,
+    });
+  }
+
+  return rows
+    .slice(0, MAX_MANPOWER)
+    .map((row, index) => {
+      const field = `manpower[${index}]`;
+
+      return {
+        // Existing row id, so an update keeps the row (and the profile that
+        // hangs off it) instead of recreating it.
+        id: toId(row?.id),
+        // Stable client-side key: names the file field for this row's profile.
+        key: toNullableString(row?.key, 64) || `row-${index}`,
+        role: toEnum(row?.role, MANPOWER_ROLES, `${field}.role`, errors),
+        name: toNullableString(row?.name, 255),
+        qualification: toNullableString(row?.qualification, 255),
+        salary: toAmount(row?.salary, `${field}.salary`, errors),
+        joining_date: toDate(
+          row?.joining_date ?? row?.joiningDate,
+          `${field}.joining_date`,
+          errors,
+        ),
+        mobile: toMobile(row?.mobile),
+        email: toNullableString(row?.email, 255),
+        remarks: toNullableString(row?.remarks, 1000),
+        relieving_date: toDate(
+          row?.relieving_date ?? row?.relievingDate,
+          `${field}.relieving_date`,
+          errors,
+        ),
+        removed_documents: toStringArray(row?.removed_documents ?? row?.removedDocuments).filter(
+          (slot) => Object.hasOwn(MANPOWER_SLOTS, slot),
+        ),
+        // The form keys its inline errors by the index it rendered the row at,
+        // so validation below must report the submitted index and not the one
+        // left after blank rows are dropped.
+        sourceIndex: index,
+      };
+    })
+    .filter(
+      (row) =>
+        row.id ||
+        row.role ||
+        row.name ||
+        row.qualification ||
+        row.salary ||
+        row.joining_date ||
+        row.mobile ||
+        row.email ||
+        row.remarks ||
+        row.relieving_date ||
+        keysWithDocuments.has(row.key),
+    )
+    .map(({ sourceIndex, ...row }, index) => {
+      const field = `manpower[${sourceIndex}]`;
+      if (!row.role) errors.push({ field: `${field}.role`, message: 'Select a role.' });
+      if (!row.name) errors.push({ field: `${field}.name`, message: 'Name is required.' });
+      if (row.mobile && !MOBILE_PATTERN.test(row.mobile)) {
+        errors.push({ field: `${field}.mobile`, message: 'Enter a 10-digit mobile number.' });
+      }
+      if (row.email && !EMAIL_PATTERN.test(row.email)) {
+        errors.push({ field: `${field}.email`, message: 'Enter a valid email address.' });
+      }
+      if (row.joining_date && row.relieving_date && row.relieving_date < row.joining_date) {
+        errors.push({
+          field: `${field}.relieving_date`,
+          message: 'Date of relieving cannot be before the date of joining.',
+        });
+      }
+      return { ...row, display_order: index };
+    });
+}
+
+/**
+ * A DOI as people paste it — bare, as a doi.org link, or with a `doi:` prefix —
+ * reduced to the bare `10.xxxx/...` form it is stored and matched in. Returns ''
+ * for an empty value; anything else is returned stripped but unchecked, for the
+ * caller to validate against `isValidDoi`.
+ */
+export function normalizeDoi(value) {
+  return trimmed(value)
+    .replace(/^(https?:\/\/)?(dx\.|www\.)?doi\.org\//i, '')
+    .replace(/^doi:\s*/i, '')
+    .trim();
+}
+
+export function isValidDoi(doi) {
+  return DOI_PATTERN.test(doi);
+}
+
+/** A four-digit year from 1900 to next year, or null; anything else is reported. */
+function toYear(value, field, errors) {
+  const text = trimmed(value);
+  if (!text) return null;
+  const year = Number(text);
+  const latest = new Date().getFullYear() + 1;
+  if (!Number.isInteger(year) || year < 1900 || year > latest) {
+    errors.push({ field, message: `Enter a year from 1900 to ${latest}.` });
+    return null;
+  }
+  return year;
+}
+
+function capRows(raw, field, label, errors) {
+  const rows = Array.isArray(raw) ? raw : [];
+  if (rows.length > MAX_OUTCOME_ROWS) {
+    errors.push({ field, message: `At most ${MAX_OUTCOME_ROWS} ${label} are supported.` });
+  }
+  return rows.slice(0, MAX_OUTCOME_ROWS);
+}
+
+function normalizePublications(raw, errors) {
+  return (
+    capRows(raw, 'publications', 'publications', errors)
+      .map((row, index) => {
+        const field = `publications[${index}]`;
+        return {
+          publication_type: toEnum(
+            row?.publication_type ?? row?.publicationType,
+            PUBLICATION_TYPES,
+            `${field}.publication_type`,
+            errors,
+          ),
+          doi: toNullableString(normalizeDoi(row?.doi), 255),
+          journal_id: toId(row?.journal_id ?? row?.journalId),
+          title: toNullableString(row?.title, 500),
+          venue: toNullableString(row?.venue, 255),
+          publication_year: toYear(
+            row?.publication_year ?? row?.publicationYear,
+            `${field}.publication_year`,
+            errors,
+          ),
+          // The form keys its inline errors by the index it rendered the row
+          // at, so validation below reports the submitted index.
+          sourceIndex: index,
+        };
+      })
+      // A row the user added but never filled in is dropped instead of failing the save.
+      .filter(({ sourceIndex: _sourceIndex, ...row }) =>
+        Object.values(row).some((value) => value !== null),
+      )
+      .map(({ sourceIndex, ...row }, index) => {
+        const field = `publications[${sourceIndex}]`;
+        if (!row.publication_type) {
+          errors.push({ field: `${field}.publication_type`, message: 'Select a type.' });
+        }
+        if (!row.doi && !row.title) {
+          errors.push({ field: `${field}.doi`, message: 'Enter the DOI or the title.' });
+        }
+        if (row.doi && !isValidDoi(row.doi)) {
+          errors.push({ field: `${field}.doi`, message: 'Enter a DOI such as 10.1000/xyz123.' });
+        }
+        return { ...row, display_order: index };
+      })
+  );
+}
+
+function normalizeIprs(raw, errors) {
+  return capRows(raw, 'iprs', 'IPRs', errors)
+    .map((row, index) => {
+      const field = `iprs[${index}]`;
+      return {
+        ipr_type: toEnum(row?.ipr_type ?? row?.iprType, IPR_TYPES, `${field}.ipr_type`, errors),
+        ipr_number: toNullableString(row?.ipr_number ?? row?.iprNumber, 100),
+        status: toEnum(row?.status, IPR_STATUSES, `${field}.status`, errors),
+        title: toNullableString(row?.title, 500),
+        filing_date: toDate(row?.filing_date ?? row?.filingDate, `${field}.filing_date`, errors),
+        grant_date: toDate(row?.grant_date ?? row?.grantDate, `${field}.grant_date`, errors),
+        sourceIndex: index,
+      };
+    })
+    .filter(({ sourceIndex: _sourceIndex, ...row }) =>
+      Object.values(row).some((value) => value !== null),
+    )
+    .map(({ sourceIndex, ...row }, index) => {
+      const field = `iprs[${sourceIndex}]`;
+      if (!row.ipr_type) errors.push({ field: `${field}.ipr_type`, message: 'Select a type.' });
+      if (!row.ipr_number && !row.title) {
+        errors.push({
+          field: `${field}.ipr_number`,
+          message: 'Enter the IPR number or the title.',
+        });
+      }
+      if (row.filing_date && row.grant_date && row.grant_date < row.filing_date) {
+        errors.push({
+          field: `${field}.grant_date`,
+          message: 'Grant date cannot be before the filing date.',
+        });
+      }
+      return { ...row, display_order: index };
+    });
+}
+
+/** A Technology Readiness Level from `MIN_TRL` to `MAX_TRL`, or null. */
+function toTrl(value, field, errors) {
+  const text = trimmed(value).replace(/^trl\s*/i, '');
+  if (!text) return null;
+  const level = Number(text);
+  if (!Number.isInteger(level) || level < MIN_TRL || level > MAX_TRL) {
+    errors.push({ field, message: `Select a TRL from ${MIN_TRL} to ${MAX_TRL}.` });
+    return null;
+  }
+  return level;
+}
+
+/**
+ * @param {Set<string>} keysWithDocuments row keys that carry an uploaded file in
+ *   this request, so a row whose only content so far is its document is kept.
+ */
+function normalizeTechTransfers(raw, errors, keysWithDocuments = new Set()) {
+  return capRows(raw, 'tech_transfers', 'technology transfers', errors)
+    .map((row, index) => {
+      const field = `tech_transfers[${index}]`;
+      return {
+        // Existing row id and stable client key, so an update keeps the row and
+        // the document that hangs off it.
+        id: toId(row?.id),
+        key: toNullableString(row?.key, 64) || `row-${index}`,
+        category: toEnum(row?.category, TECH_TRANSFER_CATEGORIES, `${field}.category`, errors),
+        description: toNullableString(row?.description, 1000),
+        trl: toTrl(row?.trl, `${field}.trl`, errors),
+        removed_documents: toStringArray(row?.removed_documents ?? row?.removedDocuments).filter(
+          (slot) => Object.hasOwn(TECH_TRANSFER_SLOTS, slot),
+        ),
+        sourceIndex: index,
+      };
+    })
+    .filter(
+      (row) =>
+        row.id || row.category || row.description || row.trl || keysWithDocuments.has(row.key),
+    )
+    .map(({ sourceIndex, ...row }, index) => {
+      if (!row.category) {
+        errors.push({
+          field: `tech_transfers[${sourceIndex}].category`,
+          message: 'Select a category.',
+        });
+      }
+      return { ...row, display_order: index };
+    });
+}
+
+/** @param {Set<string>} keysWithDocuments as for `normalizeTechTransfers`. */
+function normalizeOutcomeCandidates(raw, errors, keysWithDocuments = new Set()) {
+  return capRows(raw, 'outcome_candidates', 'candidates', errors)
+    .map((row, index) => {
+      const field = `outcome_candidates[${index}]`;
+      return {
+        id: toId(row?.id),
+        key: toNullableString(row?.key, 64) || `row-${index}`,
+        candidate_name: toNullableString(row?.candidate_name ?? row?.candidateName, 255),
+        degree: toEnum(row?.degree, CANDIDATE_DEGREES, `${field}.degree`, errors),
+        university: toNullableString(row?.university, 255),
+        removed_documents: toStringArray(row?.removed_documents ?? row?.removedDocuments).filter(
+          (slot) => Object.hasOwn(CANDIDATE_SLOTS, slot),
+        ),
+        sourceIndex: index,
+      };
+    })
+    .filter(
+      (row) =>
+        row.id ||
+        row.candidate_name ||
+        row.degree ||
+        row.university ||
+        keysWithDocuments.has(row.key),
+    )
+    .map(({ sourceIndex, ...row }, index) => {
+      const field = `outcome_candidates[${sourceIndex}]`;
+      if (!row.candidate_name) {
+        errors.push({ field: `${field}.candidate_name`, message: 'Candidate name is required.' });
+      }
+      if (!row.degree) errors.push({ field: `${field}.degree`, message: 'Select a degree.' });
+      return { ...row, display_order: index };
+    });
+}
+
+/** @param {Set<string>} keysWithDocuments as for `normalizeTechTransfers`. */
+function normalizeDocumentTransactions(raw, errors, keysWithDocuments = new Set()) {
+  return capRows(raw, 'document_transactions', 'document transactions', errors)
+    .map((row, index) => {
+      const field = `document_transactions[${index}]`;
+      return {
+        id: toId(row?.id),
+        key: toNullableString(row?.key, 64) || `row-${index}`,
+        transaction_date: toDate(
+          row?.transaction_date ?? row?.transactionDate,
+          `${field}.transaction_date`,
+          errors,
+        ),
+        direction: toEnum(
+          row?.direction,
+          DOCUMENT_TRANSACTION_DIRECTIONS,
+          `${field}.direction`,
+          errors,
+        ),
+        document_kind: toEnum(
+          row?.document_kind ?? row?.documentKind,
+          ALL_DOCUMENT_TRANSACTION_KINDS,
+          `${field}.document_kind`,
+          errors,
+        ),
+        description: toNullableString(row?.description, 500),
+        removed_documents: toStringArray(row?.removed_documents ?? row?.removedDocuments).filter(
+          (slot) => Object.hasOwn(DOCUMENT_TRANSACTION_SLOTS, slot),
+        ),
+        sourceIndex: index,
+      };
+    })
+    .filter(
+      (row) =>
+        row.id ||
+        row.transaction_date ||
+        row.direction ||
+        row.document_kind ||
+        row.description ||
+        keysWithDocuments.has(row.key),
+    )
+    .map(({ sourceIndex, ...row }, index) => {
+      const field = `document_transactions[${sourceIndex}]`;
+      if (!row.transaction_date) {
+        errors.push({ field: `${field}.transaction_date`, message: 'Enter the date.' });
+      }
+      if (!row.direction) {
+        errors.push({ field: `${field}.direction`, message: 'Select inward or outward.' });
+      }
+      if (!row.document_kind) {
+        errors.push({ field: `${field}.document_kind`, message: 'Select the document.' });
+      } else if (
+        row.direction &&
+        !DOCUMENT_TRANSACTION_KINDS[row.direction].includes(row.document_kind)
+      ) {
+        errors.push({
+          field: `${field}.document_kind`,
+          message: `This document is not an ${row.direction} one.`,
+        });
+      }
+      return { ...row, display_order: index };
+    });
+}
+
 /**
  * Turns the request body into `{ project, investigators, tags, ... }` plus the
  * list of validation errors. `project` maps 1:1 onto `research_projects`
@@ -931,6 +1496,9 @@ function normalizeTransactionAccounts(raw, errors, canonicalBudgetHead) {
  * @param {string[]} [options.rowKeysWithDocuments] disbursement row keys that
  *   have a file attached in this request, so those rows are not mistaken for
  *   blank ones.
+ * @param {Record<string, string[]>} [options.documentRowKeys] the same for the
+ *   other row kinds that carry documents, keyed by their `ROW_DOCUMENT_SCOPES`
+ *   scope: `manpower`, `tech_transfer`, `candidate`, `document_transaction`.
  * @param {string[]} [options.budgetHeadNames] the curated budget head
  *   vocabulary, from `project_budget_head_options`. Heads are stored by name,
  *   so this only settles the case a submitted head is stored in; a name the
@@ -938,7 +1506,7 @@ function normalizeTransactionAccounts(raw, errors, canonicalBudgetHead) {
  */
 export function normalizeProjectPayload(
   input = {},
-  { rowKeysWithDocuments = [], budgetHeadNames = [] } = {},
+  { rowKeysWithDocuments = [], documentRowKeys = {}, budgetHeadNames = [] } = {},
 ) {
   const errors = [];
   const body = input && typeof input === 'object' ? input : {};
@@ -1056,32 +1624,10 @@ export function normalizeProjectPayload(
       errors,
     ),
 
-    outcome_journal_articles: toCount(
-      body.outcome_journal_articles ?? body.outcomeJournalArticles,
-      'outcome_journal_articles',
-      errors,
-    ),
-    outcome_conferences: toCount(
-      body.outcome_conferences ?? body.outcomeConferences,
-      'outcome_conferences',
-      errors,
-    ),
-    outcome_iprs: toCount(body.outcome_iprs ?? body.outcomeIprs, 'outcome_iprs', errors),
-    outcome_products: toCount(
-      body.outcome_products ?? body.outcomeProducts,
-      'outcome_products',
-      errors,
-    ),
-    outcome_tech_transfers: toCount(
-      body.outcome_tech_transfers ?? body.outcomeTechTransfers,
-      'outcome_tech_transfers',
-      errors,
-    ),
-    outcome_startups: toCount(
-      body.outcome_startups ?? body.outcomeStartups,
-      'outcome_startups',
-      errors,
-    ),
+    // The six typed outcome counts are no longer written from the form: the
+    // Outcomes tab's rows are the record now. Leaving the columns out of the
+    // aggregate (and out of `PROJECT_COLUMNS`) keeps the counts already stored
+    // on older projects exactly as they are.
 
     remarks: toNullableString(body.remarks),
   };
@@ -1142,6 +1688,25 @@ export function normalizeProjectPayload(
       errors,
       canonicalBudgetHead,
     ),
+    facilities: normalizeFacilities(body.facilities, errors),
+    manpower: normalizeManpower(body.manpower, errors, new Set(documentRowKeys.manpower ?? [])),
+    publications: normalizePublications(body.publications, errors),
+    iprs: normalizeIprs(body.iprs, errors),
+    techTransfers: normalizeTechTransfers(
+      body.tech_transfers ?? body.techTransfers,
+      errors,
+      new Set(documentRowKeys.tech_transfer ?? []),
+    ),
+    outcomeCandidates: normalizeOutcomeCandidates(
+      body.outcome_candidates ?? body.outcomeCandidates,
+      errors,
+      new Set(documentRowKeys.candidate ?? []),
+    ),
+    documentTransactions: normalizeDocumentTransactions(
+      body.document_transactions ?? body.documentTransactions,
+      errors,
+      new Set(documentRowKeys.document_transaction ?? []),
+    ),
     // Project-level document slots the user cleared. Files themselves arrive as
     // multipart parts and are handled by the controller. Slots that are neither
     // cleared nor re-uploaded keep whatever is already stored.
@@ -1167,8 +1732,17 @@ export function documentFieldName(documentType) {
   return `document__${documentType}`;
 }
 
+/** Field name for a slot on a row: `<scope>__<rowKey>__<slot>`. */
+export function rowDocumentFieldName(scope, rowKey, slot) {
+  return `${scope}__${rowKey}__${slot}`;
+}
+
 export function disbursementDocumentFieldName(rowKey, slot) {
-  return `disbursement__${rowKey}__${slot}`;
+  return rowDocumentFieldName('disbursement', rowKey, slot);
+}
+
+export function manpowerDocumentFieldName(rowKey, slot) {
+  return rowDocumentFieldName('manpower', rowKey, slot);
 }
 
 /** Parses a multipart field name back into the slot it targets. */
@@ -1182,16 +1756,19 @@ export function parseDocumentFieldName(fieldName) {
       : null;
   }
 
-  if (name.startsWith('disbursement__')) {
-    const rest = name.slice('disbursement__'.length);
+  for (const [scope, slots] of Object.entries(ROW_DOCUMENT_SCOPES)) {
+    const prefix = `${scope}__`;
+    if (!name.startsWith(prefix)) continue;
+
+    // The key sits between the prefix and the last separator, so a key that
+    // itself contains `__` still parses.
+    const rest = name.slice(prefix.length);
     const separator = rest.lastIndexOf('__');
     if (separator <= 0) return null;
 
     const rowKey = rest.slice(0, separator);
     const slot = rest.slice(separator + 2);
-    return Object.hasOwn(DISBURSEMENT_SLOTS, slot)
-      ? { scope: 'disbursement', rowKey, slot, documentType: DISBURSEMENT_SLOTS[slot] }
-      : null;
+    return Object.hasOwn(slots, slot) ? { scope, rowKey, slot, documentType: slots[slot] } : null;
   }
 
   return null;

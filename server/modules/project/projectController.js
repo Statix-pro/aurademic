@@ -11,9 +11,12 @@
 import fs from 'fs';
 import path from 'path';
 
+import { DoiLookupUnavailableError, lookupCrossref } from './doiLookup.js';
 import projectModel, { ProjectValidationError } from './projectModel.js';
 import {
   DOCUMENT_UPLOAD_DIRS,
+  isValidDoi,
+  normalizeDoi,
   normalizeProjectPayload,
   parseDocumentFieldName,
 } from './projectPayload.js';
@@ -230,6 +233,44 @@ const projectController = {
     }
   },
 
+  /**
+   * GET /project-options/doi?doi= — details for the Outcomes tab's publication
+   * Fetch button. The portal's own `journals` record wins, so a publication
+   * already entered there links to it rather than being typed twice; Crossref
+   * answers for any other DOI.
+   */
+  async lookupDoi(req, res) {
+    const doi = normalizeDoi(req.query.doi);
+    if (!isValidDoi(doi)) {
+      return res
+        .status(400)
+        .json({ success: false, message: 'Enter a DOI such as 10.1000/xyz123.' });
+    }
+
+    try {
+      const portalMatch = await projectModel.findPublicationByDoi(doi);
+      if (portalMatch) return res.json({ success: true, data: { doi, ...portalMatch } });
+
+      const crossrefMatch = await lookupCrossref(doi);
+      if (!crossrefMatch) {
+        return res
+          .status(404)
+          .json({ success: false, message: 'No publication was found for this DOI.' });
+      }
+      return res.json({ success: true, data: { doi, ...crossrefMatch } });
+    } catch (error) {
+      if (error instanceof DoiLookupUnavailableError) {
+        console.error('DOI lookup could not reach Crossref:', error.message);
+        return res.status(502).json({
+          success: false,
+          message: 'The DOI service could not be reached. Enter the details by hand.',
+        });
+      }
+      console.error('Error looking up a DOI:', error);
+      return res.status(500).json({ success: false, message: 'Failed to look up the DOI.' });
+    }
+  },
+
   /** POST /projects */
   async createProject(req, res) {
     await projectController.saveProject(req, res, { projectId: null });
@@ -273,9 +314,8 @@ const projectController = {
     try {
       const payload = readPayload(req);
 
-      // Files are staged first so the normalizer knows which disbursement rows
-      // carry one: a tranche whose only content is an uploaded document is a
-      // real row, and dropping it as blank would strand the file.
+      // Files are staged first so the normalizer knows which rows carry one: a row whose only content is an uploaded
+      // document is a real row, and dropping it as blank would strand the file.
       const staged = await stageDocumentUploads(req.files);
       stagedPaths = staged.writtenPaths;
 
@@ -283,6 +323,13 @@ const projectController = {
         rowKeysWithDocuments: staged.documents
           .filter((document) => document.scope === 'disbursement' && document.rowKey)
           .map((document) => document.rowKey),
+        // Every other row kind that carries documents, by scope.
+        documentRowKeys: staged.documents
+          .filter((document) => document.scope !== 'disbursement' && document.rowKey)
+          .reduce((keysByScope, document) => {
+            (keysByScope[document.scope] ??= []).push(document.rowKey);
+            return keysByScope;
+          }, {}),
         // The curated vocabulary decides the case a submitted head is stored
         // in, so a project's allotment row and its ledger lines group together
         // however the client cased them.

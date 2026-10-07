@@ -12,7 +12,7 @@
  * commit succeeds.
  */
 
-import { DISBURSEMENT_SLOTS, PROJECT_DOCUMENT_TYPES } from './projectPayload.js';
+import { PROJECT_DOCUMENT_TYPES, ROW_DOCUMENT_SCOPES } from './projectPayload.js';
 import db from '../../config/connection.js';
 
 /** Raised for input the pure normalizer cannot check without the database. */
@@ -25,6 +25,9 @@ export class ProjectValidationError extends Error {
 }
 
 const HOST_ORGANIZATION_NAME = 'K.S.Rangasamy College of Technology';
+
+/** The prefixes the journal form may have stored a DOI with, for `findPublicationByDoi`. */
+const STORED_DOI_PREFIX_PATTERN = '^((https?://)?(dx\\.|www\\.)?doi\\.org/|doi:\\s*)';
 
 const PROJECT_COLUMNS = [
   'driven_by',
@@ -57,12 +60,10 @@ const PROJECT_COLUMNS = [
   'project_start_date',
   'project_closing_date',
   'project_status',
-  'outcome_journal_articles',
-  'outcome_conferences',
-  'outcome_iprs',
-  'outcome_products',
-  'outcome_tech_transfers',
-  'outcome_startups',
+  // LEGACY: the six `outcome_*` counts are no longer written — the Outcomes
+  // tab's rows replaced them — so an update leaves the counts stored on older
+  // projects untouched, and `getProjectById` still reads them for display.
+  // Remove once no project carries a non-zero count.
   'remarks',
 ];
 
@@ -459,6 +460,35 @@ async function replaceTransactionAccounts(connection, projectId, accounts) {
   }
 }
 
+async function replaceFacilities(connection, projectId, facilities) {
+  await connection.query('DELETE FROM project_facilities WHERE project_id = ?', [projectId]);
+  if (facilities.length === 0) return;
+
+  await connection.query(
+    `INSERT INTO project_facilities
+      (project_id, facility_name, facility_type, installation_date, cost, make, model,
+       serial_no, stock_register_ref, istem_listed, istem_id, supplier_details, display_order)
+     VALUES ?`,
+    [
+      facilities.map((row) => [
+        projectId,
+        row.facility_name,
+        row.facility_type,
+        row.installation_date,
+        row.cost,
+        row.make,
+        row.model,
+        row.serial_no,
+        row.stock_register_ref,
+        row.istem_listed,
+        row.istem_id,
+        row.supplier_details,
+        row.display_order,
+      ]),
+    ],
+  );
+}
+
 /**
  * Disbursements are matched by id rather than replaced, so the document rows
  * that hang off a tranche survive an edit to its amount or date.
@@ -524,14 +554,196 @@ async function upsertDisbursements(connection, projectId, disbursements) {
   return { rowIdByKey, staleFilePaths };
 }
 
-/** Clears a document slot and returns the stored path, if any. */
-async function clearDocumentSlot(connection, { projectId, disbursementId, documentType }) {
-  const where =
-    disbursementId === null
-      ? 'project_id = ? AND document_type = ? AND disbursement_id IS NULL'
-      : 'disbursement_id = ? AND document_type = ?';
-  const params =
-    disbursementId === null ? [projectId, documentType] : [disbursementId, documentType];
+/**
+ * The row kinds that carry their own documents, keyed by the scope their
+ * multipart fields use (see `ROW_DOCUMENT_SCOPES`): the `project_documents`
+ * column that points at the row, where the aggregate keeps the rows, and — for
+ * the kinds `upsertRowsWithDocuments` writes — the table and its columns.
+ * Every table and column name here is fixed in code, which is what lets the
+ * queries below interpolate them.
+ *
+ * Disbursements keep their own `upsertDisbursements`, which predates this.
+ */
+const DOCUMENT_PARENTS = {
+  disbursement: { documentColumn: 'disbursement_id', aggregateKey: 'disbursements' },
+  manpower: {
+    documentColumn: 'manpower_id',
+    aggregateKey: 'manpower',
+    table: 'project_manpower',
+    columns: [
+      'role',
+      'name',
+      'qualification',
+      'salary',
+      'joining_date',
+      'mobile',
+      'email',
+      'remarks',
+      'relieving_date',
+      'display_order',
+    ],
+  },
+  tech_transfer: {
+    documentColumn: 'tech_transfer_id',
+    aggregateKey: 'techTransfers',
+    table: 'project_tech_transfers',
+    columns: ['category', 'description', 'trl', 'display_order'],
+  },
+  candidate: {
+    documentColumn: 'candidate_id',
+    aggregateKey: 'outcomeCandidates',
+    table: 'project_outcome_candidates',
+    columns: ['candidate_name', 'degree', 'university', 'display_order'],
+  },
+  document_transaction: {
+    documentColumn: 'document_transaction_id',
+    aggregateKey: 'documentTransactions',
+    table: 'project_document_transactions',
+    columns: ['transaction_date', 'direction', 'document_kind', 'description', 'display_order'],
+  },
+};
+
+const DOCUMENT_PARENT_COLUMNS = Object.values(DOCUMENT_PARENTS).map(
+  (parent) => parent.documentColumn,
+);
+
+/**
+ * Rows that carry documents are matched by id like disbursements, so a file
+ * survives an edit to the rest of its row. Returns a map from the client's row
+ * key to the stored row id, plus the paths of files that belonged to rows the
+ * user deleted.
+ */
+async function upsertRowsWithDocuments(connection, projectId, scope, rows) {
+  const { table, columns, documentColumn } = DOCUMENT_PARENTS[scope];
+
+  const [existingRows] = await connection.query(`SELECT id FROM ${table} WHERE project_id = ?`, [
+    projectId,
+  ]);
+  const existingIds = new Set(existingRows.map((row) => row.id));
+
+  const rowIdByKey = new Map();
+  const keptIds = new Set();
+
+  for (const row of rows) {
+    const values = columns.map((column) => row[column]);
+
+    if (row.id && existingIds.has(row.id)) {
+      await connection.query(
+        `UPDATE ${table}
+            SET ${columns.map((column) => `${column} = ?`).join(', ')}
+          WHERE id = ? AND project_id = ?`,
+        [...values, row.id, projectId],
+      );
+      keptIds.add(row.id);
+      rowIdByKey.set(row.key, row.id);
+      continue;
+    }
+
+    const [inserted] = await connection.query(
+      `INSERT INTO ${table} (project_id, ${columns.join(', ')})
+       VALUES (?, ${columns.map(() => '?').join(', ')})`,
+      [projectId, ...values],
+    );
+    rowIdByKey.set(row.key, inserted.insertId);
+  }
+
+  const removedIds = [...existingIds].filter((id) => !keptIds.has(id));
+  const staleFilePaths = [];
+
+  if (removedIds.length > 0) {
+    const [documents] = await connection.query(
+      `SELECT file_path FROM project_documents WHERE ${documentColumn} IN (?)`,
+      [removedIds],
+    );
+    staleFilePaths.push(...documents.map((document) => document.file_path));
+
+    // The document column cascades, so the document rows go with the row.
+    await connection.query(`DELETE FROM ${table} WHERE id IN (?)`, [removedIds]);
+  }
+
+  return { rowIdByKey, staleFilePaths };
+}
+
+/** Publications and IPRs carry no documents, so they are rewritten like facilities. */
+async function replacePublications(connection, projectId, publications) {
+  await connection.query('DELETE FROM project_publications WHERE project_id = ?', [projectId]);
+  if (publications.length === 0) return;
+
+  await connection.query(
+    `INSERT INTO project_publications
+      (project_id, publication_type, doi, journal_id, title, venue, publication_year,
+       display_order)
+     VALUES ?`,
+    [
+      publications.map((row) => [
+        projectId,
+        row.publication_type,
+        row.doi,
+        row.journal_id,
+        row.title,
+        row.venue,
+        row.publication_year,
+        row.display_order,
+      ]),
+    ],
+  );
+}
+
+async function replaceIprs(connection, projectId, iprs) {
+  await connection.query('DELETE FROM project_iprs WHERE project_id = ?', [projectId]);
+  if (iprs.length === 0) return;
+
+  await connection.query(
+    `INSERT INTO project_iprs
+      (project_id, ipr_type, ipr_number, status, title, filing_date, grant_date, display_order)
+     VALUES ?`,
+    [
+      iprs.map((row) => [
+        projectId,
+        row.ipr_type,
+        row.ipr_number,
+        row.status,
+        row.title,
+        row.filing_date,
+        row.grant_date,
+        row.display_order,
+      ]),
+    ],
+  );
+}
+
+/**
+ * A publication may name the portal `journals` record its DOI matched. The id
+ * comes from the client, so one that no longer exists is dropped rather than
+ * failing the save on the foreign key — the row keeps its own title and venue.
+ */
+async function dropMissingJournalLinks(connection, publications) {
+  const ids = [...new Set(publications.map((row) => row.journal_id).filter(Boolean))];
+  if (ids.length === 0) return;
+
+  const [rows] = await connection.query('SELECT id FROM journals WHERE id IN (?)', [ids]);
+  const existing = new Set(rows.map((row) => row.id));
+  publications.forEach((row) => {
+    if (row.journal_id && !existing.has(row.journal_id)) row.journal_id = null;
+  });
+}
+
+/**
+ * Clears a document slot and returns the stored path, if any. A slot belongs
+ * to one row (`scope` + `parentId`) or — with neither — to the project.
+ */
+async function clearDocumentSlot(
+  connection,
+  { projectId, scope = null, parentId = null, documentType },
+) {
+  let where = `project_id = ? AND document_type = ? AND ${DOCUMENT_PARENT_COLUMNS.map(
+    (column) => `${column} IS NULL`,
+  ).join(' AND ')}`;
+  let params = [projectId, documentType];
+  if (scope) {
+    where = `${DOCUMENT_PARENTS[scope].documentColumn} = ? AND document_type = ?`;
+    params = [parentId, documentType];
+  }
 
   const [existing] = await connection.query(
     `SELECT id, file_path FROM project_documents WHERE ${where}`,
@@ -545,59 +757,70 @@ async function clearDocumentSlot(connection, { projectId, disbursementId, docume
   return existing.map((row) => row.file_path);
 }
 
-async function writeDocuments(connection, { projectId, aggregate, documents, rowIdByKey, userId }) {
+/**
+ * @param {Record<string, Map<string, number>>} params.rowIdsByScope the stored id
+ *   of every row that carries documents, by scope and then by client row key.
+ */
+async function writeDocuments(
+  connection,
+  { projectId, aggregate, documents, rowIdsByScope, userId },
+) {
   const staleFilePaths = [];
   const orphanFilePaths = [];
 
   for (const documentType of aggregate.removedDocuments) {
-    staleFilePaths.push(
-      ...(await clearDocumentSlot(connection, { projectId, disbursementId: null, documentType })),
-    );
+    staleFilePaths.push(...(await clearDocumentSlot(connection, { projectId, documentType })));
   }
 
-  for (const row of aggregate.disbursements) {
-    const disbursementId = rowIdByKey.get(row.key);
-    if (!disbursementId) continue;
+  for (const [scope, { aggregateKey }] of Object.entries(DOCUMENT_PARENTS)) {
+    for (const row of aggregate[aggregateKey]) {
+      const parentId = rowIdsByScope[scope].get(row.key);
+      if (!parentId) continue;
 
-    for (const slot of row.removed_documents) {
-      staleFilePaths.push(
-        ...(await clearDocumentSlot(connection, {
-          projectId,
-          disbursementId,
-          documentType: DISBURSEMENT_SLOTS[slot],
-        })),
-      );
+      for (const slot of row.removed_documents) {
+        staleFilePaths.push(
+          ...(await clearDocumentSlot(connection, {
+            projectId,
+            scope,
+            parentId,
+            documentType: ROW_DOCUMENT_SCOPES[scope][slot],
+          })),
+        );
+      }
     }
   }
 
   for (const document of documents) {
-    let disbursementId = null;
+    const scope = document.scope === 'project' ? null : document.scope;
+    const parentId = scope ? (rowIdsByScope[scope].get(document.rowKey) ?? null) : null;
 
-    if (document.scope === 'disbursement') {
-      disbursementId = rowIdByKey.get(document.rowKey) ?? null;
-      if (!disbursementId) {
-        // The tranche the file was attached to was removed in the same save.
-        orphanFilePaths.push(document.file_path);
-        continue;
-      }
+    if (scope && !parentId) {
+      // The row the file was attached to was removed in the same save.
+      orphanFilePaths.push(document.file_path);
+      continue;
     }
 
     staleFilePaths.push(
       ...(await clearDocumentSlot(connection, {
         projectId,
-        disbursementId,
+        scope,
+        parentId,
         documentType: document.documentType,
       })),
     );
 
+    const parentValues = Object.entries(DOCUMENT_PARENTS).map(([parentScope]) =>
+      parentScope === scope ? parentId : null,
+    );
+
     await connection.query(
       `INSERT INTO project_documents
-        (project_id, disbursement_id, document_type, file_path, original_name, file_size,
-         mime_type, uploaded_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        (project_id, ${DOCUMENT_PARENT_COLUMNS.join(', ')}, document_type, file_path,
+         original_name, file_size, mime_type, uploaded_by)
+       VALUES (?, ${DOCUMENT_PARENT_COLUMNS.map(() => '?').join(', ')}, ?, ?, ?, ?, ?, ?)`,
       [
         projectId,
-        disbursementId,
+        ...parentValues,
         document.documentType,
         document.file_path,
         document.original_name,
@@ -609,6 +832,22 @@ async function writeDocuments(connection, { projectId, aggregate, documents, row
   }
 
   return { staleFilePaths, orphanFilePaths };
+}
+
+/** The documents stored against one row, keyed by slot name. */
+function documentsForRow(documentRows, scope, rowId) {
+  const { documentColumn } = DOCUMENT_PARENTS[scope];
+  const slotByDocumentType = Object.fromEntries(
+    Object.entries(ROW_DOCUMENT_SCOPES[scope]).map(([slot, documentType]) => [documentType, slot]),
+  );
+
+  return documentRows
+    .filter((document) => document[documentColumn] === rowId)
+    .reduce((map, document) => {
+      const slot = slotByDocumentType[document.document_type];
+      if (slot) map[slot] = document;
+      return map;
+    }, {});
 }
 
 const projectModel = {
@@ -664,18 +903,36 @@ const projectModel = {
       await replaceIncomeHeads(connection, savedId, aggregate.incomeHeads);
       await replaceBudgetAllotment(connection, savedId, aggregate.budget);
       await replaceTransactionAccounts(connection, savedId, aggregate.transactionAccounts);
+      await replaceFacilities(connection, savedId, aggregate.facilities);
+      await dropMissingJournalLinks(connection, aggregate.publications);
+      await replacePublications(connection, savedId, aggregate.publications);
+      await replaceIprs(connection, savedId, aggregate.iprs);
 
-      const { rowIdByKey, staleFilePaths: disbursementStale } = await upsertDisbursements(
+      const disbursementResult = await upsertDisbursements(
         connection,
         savedId,
         aggregate.disbursements,
       );
+      const rowIdsByScope = { disbursement: disbursementResult.rowIdByKey };
+      const rowStaleFilePaths = [...disbursementResult.staleFilePaths];
+
+      for (const [scope, { aggregateKey }] of Object.entries(DOCUMENT_PARENTS)) {
+        if (scope === 'disbursement') continue;
+        const result = await upsertRowsWithDocuments(
+          connection,
+          savedId,
+          scope,
+          aggregate[aggregateKey],
+        );
+        rowIdsByScope[scope] = result.rowIdByKey;
+        rowStaleFilePaths.push(...result.staleFilePaths);
+      }
 
       const { staleFilePaths, orphanFilePaths } = await writeDocuments(connection, {
         projectId: savedId,
         aggregate,
         documents,
-        rowIdByKey,
+        rowIdsByScope,
         userId,
       });
 
@@ -683,7 +940,7 @@ const projectModel = {
 
       return {
         projectId: savedId,
-        staleFilePaths: [...disbursementStale, ...staleFilePaths, ...orphanFilePaths].filter(
+        staleFilePaths: [...rowStaleFilePaths, ...staleFilePaths, ...orphanFilePaths].filter(
           Boolean,
         ),
       };
@@ -774,6 +1031,13 @@ const projectModel = {
       budgetAllotments,
       transactionAccounts,
       transactions,
+      facilities,
+      manpower,
+      publications,
+      iprs,
+      techTransfers,
+      outcomeCandidates,
+      documentTransactions,
     ] = await Promise.all([
       db.query(
         `SELECT
@@ -831,7 +1095,9 @@ const projectModel = {
         [projectId],
       ),
       db.query(
-        `SELECT id, disbursement_id, document_type, file_path, original_name, file_size, mime_type, uploaded_at
+        `SELECT id, disbursement_id, manpower_id, tech_transfer_id, candidate_id,
+                  document_transaction_id, document_type,
+                  file_path, original_name, file_size, mime_type, uploaded_at
              FROM project_documents
             WHERE project_id = ?
             ORDER BY id`,
@@ -895,6 +1161,63 @@ const projectModel = {
             ORDER BY pt.display_order, pt.id`,
         [projectId],
       ),
+      db.query(
+        `SELECT id, facility_name, facility_type, cost, make, model, serial_no,
+                  stock_register_ref, istem_listed, istem_id, supplier_details, display_order,
+                  DATE_FORMAT(installation_date, '%Y-%m-%d') AS installation_date
+             FROM project_facilities
+            WHERE project_id = ?
+            ORDER BY display_order, id`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT id, role, name, qualification, salary, mobile, email, remarks, display_order,
+                  DATE_FORMAT(joining_date, '%Y-%m-%d') AS joining_date,
+                  DATE_FORMAT(relieving_date, '%Y-%m-%d') AS relieving_date
+             FROM project_manpower
+            WHERE project_id = ?
+            ORDER BY display_order, id`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT id, publication_type, doi, journal_id, title, venue, publication_year,
+                  display_order
+             FROM project_publications
+            WHERE project_id = ?
+            ORDER BY display_order, id`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT id, ipr_type, ipr_number, status, title, display_order,
+                  DATE_FORMAT(filing_date, '%Y-%m-%d') AS filing_date,
+                  DATE_FORMAT(grant_date, '%Y-%m-%d') AS grant_date
+             FROM project_iprs
+            WHERE project_id = ?
+            ORDER BY display_order, id`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT id, category, description, trl, display_order
+             FROM project_tech_transfers
+            WHERE project_id = ?
+            ORDER BY display_order, id`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT id, candidate_name, degree, university, display_order
+             FROM project_outcome_candidates
+            WHERE project_id = ?
+            ORDER BY display_order, id`,
+        [projectId],
+      ),
+      db.query(
+        `SELECT id, direction, document_kind, description, display_order,
+                  DATE_FORMAT(transaction_date, '%Y-%m-%d') AS transaction_date
+             FROM project_document_transactions
+            WHERE project_id = ?
+            ORDER BY display_order, id`,
+        [projectId],
+      ),
     ]);
 
     const headsByRow = financeHeads[0].reduce((map, head) => {
@@ -905,13 +1228,12 @@ const projectModel = {
     }, new Map());
 
     const documentRows = documents[0];
-    const slotByDocumentType = Object.fromEntries(
-      Object.entries(DISBURSEMENT_SLOTS).map(([slot, documentType]) => [documentType, slot]),
-    );
 
     const projectDocuments = PROJECT_DOCUMENT_TYPES.reduce((map, documentType) => {
       const row = documentRows.find(
-        (document) => document.disbursement_id === null && document.document_type === documentType,
+        (document) =>
+          DOCUMENT_PARENT_COLUMNS.every((column) => document[column] === null) &&
+          document.document_type === documentType,
       );
       if (row) map[documentType] = row;
       return map;
@@ -933,13 +1255,7 @@ const projectModel = {
         .map((row) => ({ ...row, heads: headsByRow.get(row.id) ?? [] })),
       disbursements: disbursements[0].map((row) => ({
         ...row,
-        documents: documentRows
-          .filter((document) => document.disbursement_id === row.id)
-          .reduce((map, document) => {
-            const slot = slotByDocumentType[document.document_type];
-            if (slot) map[slot] = document;
-            return map;
-          }, {}),
+        documents: documentsForRow(documentRows, 'disbursement', row.id),
       })),
       documents: projectDocuments,
       income_heads: incomeHeads[0].map((row) => row.income_head_name),
@@ -954,6 +1270,72 @@ const projectModel = {
         ...account,
         transactions: transactions[0].filter((row) => row.account_id === account.id),
       })),
+      facilities: facilities[0],
+      manpower: manpower[0].map((row) => ({
+        ...row,
+        documents: documentsForRow(documentRows, 'manpower', row.id),
+      })),
+      publications: publications[0],
+      iprs: iprs[0],
+      tech_transfers: techTransfers[0].map((row) => ({
+        ...row,
+        documents: documentsForRow(documentRows, 'tech_transfer', row.id),
+      })),
+      outcome_candidates: outcomeCandidates[0].map((row) => ({
+        ...row,
+        documents: documentsForRow(documentRows, 'candidate', row.id),
+      })),
+      document_transactions: documentTransactions[0].map((row) => ({
+        ...row,
+        documents: documentsForRow(documentRows, 'document_transaction', row.id),
+      })),
+    };
+  },
+
+  /**
+   * The portal's own publication record for a bare DOI, for the Outcomes tab's
+   * Fetch button. Matched case-insensitively and whatever prefix the journal
+   * form stored it with (`https://doi.org/`, `doi:`), and never a rejected
+   * record. Returns null when the portal holds none.
+   */
+  async findPublicationByDoi(doi) {
+    const [[row]] = await db.query(
+      `SELECT j.id, j.title, j.type, j.year, j.book_chapter_title, jo.journal_name
+         FROM journals j
+         LEFT JOIN journal_options jo ON j.journal_options_id = jo.id
+        WHERE LOWER(REGEXP_REPLACE(TRIM(j.doi), ?, '')) = LOWER(?)
+          AND j.admin_approval_status <> 'rejected'
+        ORDER BY j.id DESC
+        LIMIT 1`,
+      // The pattern travels as a parameter: inside a SQL string literal MySQL
+      // would strip its backslashes before the regex engine saw them.
+      [STORED_DOI_PREFIX_PATTERN, doi],
+    );
+    if (!row) return null;
+
+    // `journals.type` is free text from the journal form; its three
+    // non-journal types are the ones stored against a placeholder registry
+    // row. A book is none of the Outcomes tab's types, so it is left for the
+    // user to pick.
+    // `in`, not `??`: a Book's explicit null must survive, not fall back to journal.
+    const nonJournalTypes = {
+      'Conference paper': 'conference',
+      'Book Chapter': 'book_chapter',
+      Book: null,
+    };
+    const publicationType = row.type in nonJournalTypes ? nonJournalTypes[row.type] : 'journal';
+    const year = Number(row.year);
+
+    return {
+      source: 'portal',
+      journal_id: row.id,
+      publication_type: publicationType,
+      title: row.title,
+      // A chapter's title is the row's own title and the book it sits in is
+      // `book_chapter_title`; everything else appeared in a registry journal
+      // (or a conference's stand-in row, named after the conference).
+      venue: row.type === 'Book Chapter' ? row.book_chapter_title : row.journal_name,
+      publication_year: Number.isInteger(year) && year > 0 ? year : null,
     };
   },
 
