@@ -4699,6 +4699,43 @@ const ExpenditureApproval: React.FC = () => {
       .filter((row) => row.amount > 0 && !row.budgetLineId)
       .map((row) => row.rowNumber);
 
+  // Unplanned spend has no Head of Accounts picker of its own: it is charged to the planned
+  // Head of Accounts chosen in the rows above (first row with an amount, else the first row
+  // with an approved line), and the server deducts it from that line's balance.
+  const plannedRowsWithBudgetLine = getRowsForActiveTab().filter((row) =>
+    Boolean(parsePositiveIntLike(row.budgetLineId)),
+  );
+  const plannedHeadOfAccountBudgetLineId = parsePositiveIntLike(
+    (
+      plannedRowsWithBudgetLine.find((row) => getWorkflowRowEnteredAmount(row, activeTab) > 0) ||
+      plannedRowsWithBudgetLine[0]
+    )?.budgetLineId,
+  );
+
+  useEffect(() => {
+    if (!showUnplannedBudget || isReadOnlyView) return;
+
+    const plannedOption = plannedHeadOfAccountBudgetLineId
+      ? getUnplannedHeadOfAccountOptions().find(
+          (option) =>
+            parsePositiveIntLike(option.budgetLineId) === plannedHeadOfAccountBudgetLineId,
+        ) || null
+      : null;
+    // Approved lines still loading: keep the current value until the planned line resolves.
+    if (plannedHeadOfAccountBudgetLineId && !plannedOption) return;
+    if (parsePositiveIntLike(plannedOption?.budgetLineId) === unplannedHeadOfAccountBudgetLineId) {
+      return;
+    }
+
+    handleUnplannedHeadOfAccountForFormChange(plannedOption);
+  }, [
+    showUnplannedBudget,
+    isReadOnlyView,
+    plannedHeadOfAccountBudgetLineId,
+    unplannedHeadOfAccountBudgetLineId,
+    approvedBudgetOptions,
+  ]);
+
   const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     if (!/^\d*\.?\d*$/.test(nextValue)) return;
 
@@ -4843,7 +4880,10 @@ const ExpenditureApproval: React.FC = () => {
           return;
         }
         if (!unplannedHeadOfAccount.trim() || !unplannedHeadOfAccountBudgetLineId) {
-          showAlert('Please select Head of Accounts for Unplanned Expenditure.', 'warning');
+          showAlert(
+            'Unplanned Expenditure is charged to the planned Head of Accounts. Please select an approved budget head and sub head in the planned rows first.',
+            'warning',
+          );
           return;
         }
 
