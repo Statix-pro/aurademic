@@ -40,10 +40,11 @@
   font-size: 1.4rem;
 }
 
-/* Stats Row - Inside Card */
+/* Stats Row - Inside Card. Eight chips (one per card state plus Total) lay out as two
+   even rows of four; a single row of eight squeezes the count and label together. */
 .financecard-stats-row-inside {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
   padding: 18px 24px 26px;
   background: transparent;
@@ -943,11 +944,6 @@
   box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.12);
 }
 
-.status-submitted {
-  background: #eaf3ff;
-  color: #1661a9;
-  border-color: #b8d4ef;
-}
 .status-pending {
   background: #fff4d6;
   color: #a97900;
@@ -957,6 +953,18 @@
   background: #e7f8ef;
   color: #137a3a;
   border-color: #b9e5c6;
+}
+/* Expenditure in process against an approved card. */
+.status-opened {
+  background: #eaf3ff;
+  color: #1661a9;
+  border-color: #b8d4ef;
+}
+/* Finalized and closed from the Expenditure module. */
+.status-closed {
+  background: #eef1f4;
+  color: #5e6b7a;
+  border-color: #d5dce3;
 }
 .status-rejected {
   background: #fdecec;

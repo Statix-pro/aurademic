@@ -9,6 +9,8 @@ import {
   XCircle,
   CheckCircle,
   Archive,
+  FolderOpen,
+  CheckCheck,
   Search,
   Info,
   Trash2,
@@ -39,6 +41,9 @@ interface FinanceCardItem {
   // Derived server-side from the expenditure requests under this card. null means the
   // card has no expenditure requests at all, so nothing has been claimed yet.
   claimed_amount?: number | string | null;
+  // Live expenditure requests raised against this card (rejected/deleted/archived ones
+  // are excluded server-side), so 0 means nothing has been opened against it yet.
+  expenditure_request_count?: number | null;
   topup_amount?: number | string | null;
   overall_status: string;
   workflow_status?: string;
@@ -283,38 +288,44 @@ const FinanceCard: React.FC = () => {
     return Number.isFinite(legacyTopupAmount) ? legacyTopupAmount : 0;
   };
 
-  const isFullyClaimed = (item: FinanceCardItem) => {
-    const approvedAmount = getApprovedAmount(item);
-    if (!(approvedAmount > 0)) return false;
-    const claimedAmount = getClaimedAmount(item);
-    if (claimedAmount === null) return false;
-    return claimedAmount >= approvedAmount;
+  // True once at least one live (not rejected/deleted/archived) expenditure request has
+  // been raised against the card, which the server counts into expenditure_request_count.
+  const hasExpenditureInProcess = (item: FinanceCardItem) =>
+    Number(item.expenditure_request_count ?? 0) > 0;
+
+  /**
+   * The card life-cycle, in the order a request travels through it:
+   *   Pending  - anywhere in the approval chain, up to Principal/Chairman
+   *   Approved - approved, with no expenditure raised against it yet
+   *   Opened   - expenditure is in process against the approved card
+   *   Closed   - finalized and closed from the Expenditure module
+   * Returned/Rejected/Archive keep their own labels.
+   */
+  const getFinanceCardState = (item: FinanceCardItem) => {
+    const normalizedStatus = getNormalizedStatus(item);
+    if (normalizedStatus === 'approved') {
+      if (isCardClosed(item)) return 'closed';
+      if (hasExpenditureInProcess(item)) return 'opened';
+      return 'approved';
+    }
+    if (['rejected', 'returned', 'archived'].includes(normalizedStatus)) return normalizedStatus;
+    // submitted/resubmitted are just points inside the approval chain, so they read as
+    // one Pending state instead of a colour per hop.
+    return 'pending';
   };
 
   // A top-up restarts the approval workflow, so the status must keep tracking the
-  // workflow itself (Proposed while pending, Approved once approved). The top-up is
+  // workflow itself (Pending while in the chain, Approved once approved). The top-up is
   // surfaced through the "Top-up" badge and amount boxes instead of the status label.
   const getFinanceStatusLabel = (item: FinanceCardItem) => {
-    const normalizedStatus = getNormalizedStatus(item);
-    if (normalizedStatus === 'submitted') return 'Proposed';
-    if (normalizedStatus === 'pending') return 'Proposed';
-    if (normalizedStatus === 'approved') return isFullyClaimed(item) ? 'Claimed' : 'Approved';
-    if (normalizedStatus === 'rejected') return 'Rejected';
-    if (normalizedStatus === 'returned') return 'Returned';
-    if (normalizedStatus === 'archived') return 'Archive';
-    if (normalizedStatus === 'resubmitted') return 'Proposed';
-    return 'Proposed';
-  };
-
-  const isPendingLikeStatus = (item: FinanceCardItem) => {
-    const normalizedStatus = getNormalizedStatus(item);
-    const currentStage = getCurrentStage(item);
-    return (
-      normalizedStatus === 'pending' ||
-      normalizedStatus === 'submitted' ||
-      normalizedStatus === 'resubmitted' ||
-      currentStage === 'level1'
-    );
+    const cardState = getFinanceCardState(item);
+    if (cardState === 'approved') return 'Approved';
+    if (cardState === 'opened') return 'Opened';
+    if (cardState === 'closed') return 'Closed';
+    if (cardState === 'rejected') return 'Rejected';
+    if (cardState === 'returned') return 'Returned';
+    if (cardState === 'archived') return 'Archive';
+    return 'Pending';
   };
 
   const getDisplayAmount = (item: FinanceCardItem) => {
@@ -996,10 +1007,10 @@ const FinanceCard: React.FC = () => {
   const applyFilters = () => {
     let result = [...data];
 
-    if (selectedStatus === 'pending') {
-      result = result.filter((item) => isPendingLikeStatus(item));
-    } else if (selectedStatus !== 'all') {
-      result = result.filter((item) => getNormalizedStatus(item) === selectedStatus);
+    // Every stat card key is a card state, so a chip can only ever select cards whose
+    // status pill carries that same label.
+    if (selectedStatus !== 'all') {
+      result = result.filter((item) => getFinanceCardState(item) === selectedStatus);
     }
 
     if (selectedFiscalYear !== 'all') {
@@ -1022,22 +1033,23 @@ const FinanceCard: React.FC = () => {
     setFilteredData(result);
   };
 
-  const stats = {
-    total: data.length,
-    pending: data.filter((item) => isPendingLikeStatus(item)).length,
-    returned: data.filter((item) => getNormalizedStatus(item) === 'returned').length,
-    rejected: data.filter((item) => getNormalizedStatus(item) === 'rejected').length,
-    approved: data.filter((item) => getNormalizedStatus(item) === 'approved').length,
-    archived: data.filter((item) => getNormalizedStatus(item) === 'archived').length,
-  };
+  // One pass over the cards, keyed by the same state the pill renders, so a chip count can
+  // never drift from the number of cards the chip selects.
+  const stateCounts = data.reduce<Record<string, number>>((counts, item) => {
+    const cardState = getFinanceCardState(item);
+    counts[cardState] = (counts[cardState] || 0) + 1;
+    return counts;
+  }, {});
 
   const statCards = [
-    { key: 'all', label: 'Total', count: stats.total, icon: Briefcase },
-    { key: 'pending', label: 'Pending', count: stats.pending, icon: Clock },
-    { key: 'returned', label: 'Return', count: stats.returned, icon: RotateCcw },
-    { key: 'rejected', label: 'Reject', count: stats.rejected, icon: XCircle },
-    { key: 'approved', label: 'Approved', count: stats.approved, icon: CheckCircle },
-    { key: 'archived', label: 'Archive', count: stats.archived, icon: Archive },
+    { key: 'all', label: 'Total', count: data.length, icon: Briefcase },
+    { key: 'pending', label: 'Pending', count: stateCounts.pending || 0, icon: Clock },
+    { key: 'returned', label: 'Return', count: stateCounts.returned || 0, icon: RotateCcw },
+    { key: 'rejected', label: 'Reject', count: stateCounts.rejected || 0, icon: XCircle },
+    { key: 'approved', label: 'Approved', count: stateCounts.approved || 0, icon: CheckCircle },
+    { key: 'opened', label: 'Opened', count: stateCounts.opened || 0, icon: FolderOpen },
+    { key: 'closed', label: 'Closed', count: stateCounts.closed || 0, icon: CheckCheck },
+    { key: 'archived', label: 'Archive', count: stateCounts.archived || 0, icon: Archive },
   ] as const;
 
   const currentFiscalYear = getCurrentFiscalYear();
@@ -1203,7 +1215,7 @@ const FinanceCard: React.FC = () => {
               {!loading && filteredData.length > 0 && (
                 <div className="financecard-list-container">
                   {paginatedData.map((item) => {
-                    const status = getNormalizedStatus(item);
+                    const status = getFinanceCardState(item);
                     const canEdit = canEditRequest(item);
                     const canDelete = canDeleteRequest(item);
                     const isStatusExpanded = Boolean(showFinanceStatusDetail[item.id]);
