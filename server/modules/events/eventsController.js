@@ -738,12 +738,10 @@ const eventsController = {
       return res.json(result);
     } catch (err) {
       console.error('[eventsController] submitWorkflow error:', err);
-      return res
-        .status(err.status || 500)
-        .json({
-          error: err.message || 'Failed to submit event for approval',
-          details: err.message,
-        });
+      return res.status(err.status || 500).json({
+        error: err.message || 'Failed to submit event for approval',
+        details: err.message,
+      });
     }
   },
 
