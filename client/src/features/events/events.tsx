@@ -1,4 +1,7 @@
 import './events.css';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import FullCalendar from '@fullcalendar/react';
 import {
   CloudUpload,
   Eye,
@@ -17,6 +20,8 @@ import {
   Edit2,
   Info,
   RotateCcw,
+  RotateCw,
+  MessageSquare,
   Search,
   XCircle,
   type LucideIcon,
@@ -45,6 +50,7 @@ import {
   Bed,
   Star,
   User,
+  Settings,
   Calendar,
   Hourglass,
   ShoppingCart,
@@ -58,20 +64,361 @@ import {
   Check,
   ArrowDown,
   Printer,
+  ExternalLink,
+  Loader2,
+  Menu,
+  LayoutGrid,
+  IndianRupee,
+  History,
+  Network,
+  BarChart2,
+  LogOut,
 } from 'lucide-react';
-import React, { useState, useEffect, ChangeEvent, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, ChangeEvent, useMemo, useRef } from 'react';
+import { FaBuilding, FaLayerGroup, FaMapMarkerAlt, FaRegClock } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import { useLocation, useParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 
 import { useAuth } from '../../contexts/AuthContext';
+import KSRCTLogo from '../../shared/assets/images/ksrct_logo.png';
 import { useAbility } from '../../shared/casl/AbilityContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import CustomButton from '../../shared/components/ui/CustomButton';
+import CustomCard from '../../shared/components/ui/CustomCard';
+import CustomDropdown from '../../shared/components/ui/CustomDropdown';
+import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
+import CustomInput from '../../shared/components/ui/CustomInput';
 import CustomModal from '../../shared/components/ui/CustomModal';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 import DeleteConfirmationModal from '../../shared/components/ui/DeleteConfirmationModal';
 import RecordHeaderBanner from '../../shared/components/ui/RecordHeaderBanner';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
+import { getGuesthouseWorkflowStage } from '../../shared/utils/permissionUtils';
+
+// =========================================
+// Event Approval Workflow Engine Helpers
+// =========================================
+
+export const EVENT_WORKFLOW_STAGE_ROLES: Record<string, string> = {
+  hod_pending: 'hod',
+  iqac_pending: 'iqac',
+  principal_pending: 'principal',
+};
+
+export const EVENT_WORKFLOW_STAGE_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  hod_pending: 'Pending HOD Approval',
+  iqac_pending: 'Pending IQAC Approval',
+  principal_pending: 'Pending Principal Approval',
+  approved: 'Approved',
+  published: 'Published',
+  return: 'Needs Correction (Rejected)',
+};
+
+export function getEventWorkflowStageLabel(rawState: any): string {
+  if (!rawState) return 'Draft';
+  let stage = 'draft';
+  if (typeof rawState === 'string') {
+    try {
+      const parsed = JSON.parse(rawState);
+      stage = parsed.status || parsed.currentStage || rawState;
+    } catch {
+      stage = rawState;
+    }
+  } else if (typeof rawState === 'object') {
+    stage = rawState.status || rawState.currentStage || 'draft';
+  }
+  return EVENT_WORKFLOW_STAGE_LABELS[String(stage).toLowerCase()] || String(stage);
+}
+
+export function getCategoryCardTheme(category: string) {
+  const catUpper = String(category || '')
+    .trim()
+    .toUpperCase();
+  if (catUpper.includes('NON') || catUpper.includes('SEMINAR')) {
+    return {
+      pillBg: '#6366f1',
+      iconBg: '#4f46e5',
+      subBg: '#eef2ff',
+      subText: '#4338ca',
+      subBorder: '#c7d2fe',
+    };
+  }
+  if (catUpper.includes('TECH') || catUpper.includes('WORKSHOP')) {
+    return {
+      pillBg: '#0ea5e9',
+      iconBg: '#0284c7',
+      subBg: '#f0f9ff',
+      subText: '#0369a1',
+      subBorder: '#bae6fd',
+    };
+  }
+  if (catUpper.includes('CULT') || catUpper.includes('DANCE') || catUpper.includes('MUSIC')) {
+    return {
+      pillBg: '#a855f7',
+      iconBg: '#7c3aed',
+      subBg: '#faf5ff',
+      subText: '#7e22ce',
+      subBorder: '#f3e8ff',
+    };
+  }
+  if (catUpper.includes('SPORT') || catUpper.includes('ATHLETIC')) {
+    return {
+      pillBg: '#f97316',
+      iconBg: '#ea580c',
+      subBg: '#fff7ed',
+      subText: '#c2410c',
+      subBorder: '#fed7aa',
+    };
+  }
+  if (catUpper.includes('LIT') || catUpper.includes('QUIZ') || catUpper.includes('DEBATE')) {
+    return {
+      pillBg: '#f59e0b',
+      iconBg: '#d97706',
+      subBg: '#fefce8',
+      subText: '#b45309',
+      subBorder: '#fef08a',
+    };
+  }
+  if (catUpper.includes('MANAGE') || catUpper.includes('BUSI')) {
+    return {
+      pillBg: '#ec4899',
+      iconBg: '#db2777',
+      subBg: '#fdf2f8',
+      subText: '#be185d',
+      subBorder: '#fce7f3',
+    };
+  }
+  if (catUpper.includes('MULTI') || catUpper.includes('FEST')) {
+    return {
+      pillBg: '#10b981',
+      iconBg: '#059669',
+      subBg: '#f0fdf4',
+      subText: '#15803d',
+      subBorder: '#bbf7d0',
+    };
+  }
+  if (catUpper.includes('CONF') || catUpper.includes('SYMP')) {
+    return {
+      pillBg: '#14b8a6',
+      iconBg: '#0d9488',
+      subBg: '#f0fdfa',
+      subText: '#0f766e',
+      subBorder: '#99f6e4',
+    };
+  }
+  return {
+    pillBg: '#0ea5e9',
+    iconBg: '#0284c7',
+    subBg: '#f0f9ff',
+    subText: '#0369a1',
+    subBorder: '#bae6fd',
+  };
+}
+
+export function renderCategoryCardIcon(category: string) {
+  const catUpper = String(category || '')
+    .trim()
+    .toUpperCase();
+  if (catUpper.includes('TECH') && !catUpper.includes('NON')) {
+    return (
+      <svg
+        style={{ width: '16px', height: '16px' }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <polyline points="16 18 22 12 16 6" />
+        <polyline points="8 6 2 12 8 18" />
+      </svg>
+    );
+  }
+  if (catUpper.includes('CULT')) {
+    return (
+      <svg
+        style={{ width: '16px', height: '16px' }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path d="M9 19V6l12-3v13M9 19c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm12-3c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z" />
+      </svg>
+    );
+  }
+  if (catUpper.includes('SPORT')) {
+    return (
+      <svg
+        style={{ width: '16px', height: '16px' }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <circle cx="12" cy="12" r="10" />
+        <path d="M4.9 4.9l4.2 4.2M14.9 14.9l4.2 4.2M4.9 19.1l4.2-4.2M14.9 9.1l4.2-4.2" />
+      </svg>
+    );
+  }
+  if (catUpper.includes('LIT')) {
+    return (
+      <svg
+        style={{ width: '16px', height: '16px' }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+      </svg>
+    );
+  }
+  if (catUpper.includes('MANAGE') || catUpper.includes('BUSI')) {
+    return (
+      <svg
+        style={{ width: '16px', height: '16px' }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <rect x="2" y="7" width="20" height="14" rx="2" />
+        <path d="M16 3H8l-4 4h16l-4-4z" />
+      </svg>
+    );
+  }
+  if (catUpper.includes('MULTI')) {
+    return (
+      <svg
+        style={{ width: '16px', height: '16px' }}
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <rect x="3" y="4" width="7" height="7" rx="1.5" />
+        <rect x="14" y="4" width="7" height="7" rx="1.5" />
+        <rect x="3" y="13" width="7" height="7" rx="1.5" />
+        <rect x="14" y="13" width="7" height="7" rx="1.5" />
+      </svg>
+    );
+  }
+  return (
+    <svg
+      style={{ width: '16px', height: '16px' }}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+      <line x1="16" y1="2" x2="16" y2="6" />
+      <line x1="8" y1="2" x2="8" y2="6" />
+      <line x1="3" y1="10" x2="21" y2="10" />
+    </svg>
+  );
+}
+
+export function formatEventDisplayDate(dateStr: any) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return String(dateStr);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
+export function canUserApproveEventStage(user: any, rawState: any): boolean {
+  if (!user) return false;
+  if (user.isAdmin || user.isSuperAdmin || user.is_admin || user.is_super_admin) {
+    return true;
+  }
+  let stage = 'draft';
+  if (typeof rawState === 'string') {
+    try {
+      const parsed = JSON.parse(rawState);
+      stage = parsed.status || parsed.currentStage || rawState;
+    } catch {
+      stage = rawState;
+    }
+  } else if (rawState && typeof rawState === 'object') {
+    stage = rawState.status || rawState.currentStage || 'draft';
+  }
+
+  const requiredRole = EVENT_WORKFLOW_STAGE_ROLES[String(stage).toLowerCase()];
+  if (!requiredRole) return false;
+
+  const rawUserRoles: any[] = [];
+  if (user.role) rawUserRoles.push(user.role);
+  if (Array.isArray(user.roles)) rawUserRoles.push(...user.roles);
+  if (Array.isArray(user.user_roles)) rawUserRoles.push(...user.user_roles);
+  if (Array.isArray(user.user_entity_roles)) rawUserRoles.push(...user.user_entity_roles);
+  if (Array.isArray(user.permissions)) rawUserRoles.push(...user.permissions);
+
+  const userRoles: string[] = rawUserRoles.map((r: any) =>
+    String(typeof r === 'object' ? r.role_code || r.code || r.name || r.role || r : r || '')
+      .trim()
+      .toLowerCase(),
+  );
+
+  const designation = String(user.designation || user.designation_name || '').toLowerCase();
+  const title = String(user.title || user.job_title || '').toLowerCase();
+
+  const isHodFlag = Boolean(
+    user.is_hod ||
+    user.isHod ||
+    Number(user.is_hod) === 1 ||
+    user.role === 'hod' ||
+    user.role === 'HOD' ||
+    userRoles.some(
+      (r) => r === 'hod' || r === 'head_of_department' || r.includes('hod') || r.includes('head'),
+    ) ||
+    designation.includes('hod') ||
+    designation.includes('head') ||
+    title.includes('hod') ||
+    title.includes('head'),
+  );
+
+  if (requiredRole === 'hod' && isHodFlag) {
+    return true;
+  }
+
+  const isIqacFlag = Boolean(
+    user.is_iqac ||
+    user.isIqac ||
+    userRoles.some((r) => r.includes('iqac')) ||
+    designation.includes('iqac') ||
+    title.includes('iqac'),
+  );
+
+  if (requiredRole === 'iqac' && isIqacFlag) {
+    return true;
+  }
+
+  const isPrincipalFlag = Boolean(
+    user.is_principal ||
+    user.isPrincipal ||
+    userRoles.some((r) => r.includes('principal')) ||
+    designation.includes('principal') ||
+    title.includes('principal'),
+  );
+
+  if (requiredRole === 'principal' && isPrincipalFlag) {
+    return true;
+  }
+
+  return (
+    userRoles.includes('super_admin') ||
+    userRoles.includes('admin') ||
+    userRoles.includes('head_of_department') ||
+    userRoles.includes('hod') ||
+    userRoles.includes(requiredRole.toLowerCase())
+  );
+}
 
 // =========================================
 // constants.ts
@@ -196,7 +543,6 @@ export const EVENT_GENDER_RESTRICTION_OPTIONS = ['Any', 'Male', 'Female'];
 export const EVENT_ACCOMMODATION_TYPE_OPTIONS = ['Free', 'Paid'];
 export const EVENT_PAGE_TABS = [
   { id: 'pre-event', label: 'Pre Event Approvals' },
-  { id: 'finance', label: 'Finance' },
   { id: 'updates', label: 'Event Updates' },
   { id: 'participants', label: 'Participants' },
   { id: 'feedback', label: 'Feedback' },
@@ -297,6 +643,7 @@ export const EVENT_MAIL_TEMPLATES = {
 export const FINANCE_INCOME_HEADS = [
   'Registration Fee',
   'Sponsorship',
+
   'Management Contribution',
   'Others',
 ];
@@ -311,12 +658,7 @@ export const FINANCE_BUDGET_HEADS = [
   'Others',
 ];
 
-export const FINANCE_INITIAL_DOCS = [
-  'Sanction Order',
-  'Utilization Certificate',
-  'Bank Statement',
-  'Statement of Expenditure',
-];
+export const FINANCE_INITIAL_DOCS = ['Sanction Order', 'Utilization Certificate', 'Bank Statement'];
 
 export const EVENT_UPDATE_LETTERS_SECTIONS = [
   'Security Division',
@@ -700,6 +1042,136 @@ const DocumentsPage = ({
 export { DocumentsPage };
 
 // =========================================
+// CustomEventSelect Component
+// =========================================
+
+interface CustomEventSelectProps {
+  value?: string | number;
+  onChange?: (
+    e: React.ChangeEvent<HTMLSelectElement> | { target: { value: string; name?: string } },
+  ) => void;
+  name?: string;
+  className?: string;
+  disabled?: boolean;
+  style?: React.CSSProperties;
+  placeholder?: string;
+  options?: readonly (string | { value: string | number; label: string })[];
+  children?: React.ReactNode;
+}
+
+const CustomEventSelect: React.FC<CustomEventSelectProps> = ({
+  value,
+  onChange,
+  name,
+  className = '',
+  disabled = false,
+  style,
+  placeholder = 'Select',
+  options,
+  children,
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const items = useMemo(() => {
+    if (options && options.length > 0) {
+      return options.map((opt) =>
+        typeof opt === 'string'
+          ? { value: opt, label: opt }
+          : { value: String(opt.value), label: opt.label },
+      );
+    }
+    const extracted: { value: string; label: string }[] = [];
+    React.Children.forEach(children, (child) => {
+      if (React.isValidElement(child)) {
+        const props: any = child.props || {};
+        const val = props.value !== undefined ? String(props.value) : String(props.children || '');
+        const lbl = String(props.children || val);
+        extracted.push({ value: val, label: lbl });
+      }
+    });
+    return extracted;
+  }, [options, children]);
+
+  const strValue = String(value ?? '');
+  const selectedItem = items.find((i) => i.value === strValue);
+  const displayLabel =
+    selectedItem && selectedItem.value !== '' ? selectedItem.label : placeholder || 'Select';
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
+
+  const handleSelectOption = (val: string) => {
+    if (onChange) {
+      const syntheticEvent = {
+        target: { value: val, name: name || '' },
+        currentTarget: { value: val, name: name || '' },
+        preventDefault: () => {},
+        stopPropagation: () => {},
+      } as unknown as React.ChangeEvent<HTMLSelectElement>;
+      onChange(syntheticEvent);
+    }
+    setIsOpen(false);
+  };
+
+  return (
+    <div
+      ref={containerRef}
+      className={`custom-event-select-container ${isOpen ? 'is-open' : ''} ${
+        disabled ? 'is-disabled' : ''
+      } ${className}`}
+      style={{
+        ...style,
+        ...(isOpen ? { zIndex: 99999, position: 'relative' } : {}),
+      }}
+    >
+      <div
+        className={`custom-event-select-trigger ${!strValue ? 'is-placeholder' : 'has-value'}`}
+        onClick={() => !disabled && setIsOpen((prev) => !prev)}
+        tabIndex={disabled ? -1 : 0}
+        onKeyDown={(e) => {
+          if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            setIsOpen((prev) => !prev);
+          }
+        }}
+      >
+        <span className="custom-event-select-text">{displayLabel}</span>
+        <ChevronDown
+          size={14}
+          className={`custom-event-select-arrow ${isOpen ? 'is-expanded' : ''}`}
+        />
+      </div>
+
+      {isOpen && !disabled && (
+        <div className="custom-event-select-menu">
+          {items.map((item, idx) => (
+            <div
+              key={`${item.value}-${idx}`}
+              className={`custom-event-select-item ${item.value === strValue ? 'is-selected' : ''}`}
+              onClick={() => handleSelectOption(item.value)}
+            >
+              {item.label || item.value || 'Select'}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// =========================================
 // EventApprovalCards.tsx
 // =========================================
 
@@ -762,6 +1234,7 @@ export interface EventApprovalFormData {
   valedictoryTime: string;
   valedictoryVenue: string;
   sponsoringAgencyEnabled: boolean;
+  hostCollaborator: string;
 }
 
 interface FeeRow {
@@ -797,6 +1270,7 @@ type EventApprovalTextField = keyof Pick<
   | 'category'
   | 'eventType'
   | 'level'
+  | 'hostCollaborator'
   | 'expectedParticipants'
   | 'dateFrom'
   | 'dateTo'
@@ -835,11 +1309,16 @@ interface EventApprovalCardsProps {
   showExtendedSections?: boolean;
   showMultiEventToggle?: boolean;
   isSubEvent?: boolean;
+  eventId?: number | string;
+  readOnly?: boolean;
   onAddEvent?: () => void;
   onSubmit?: (data: EventApprovalFormData) => void | Promise<void>;
 }
 
-const makeId = () => crypto.randomUUID();
+const makeId = () =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 const FEE_MONTHS = EVENT_APPROVAL_FEE_MONTHS;
 
 const createMonthAmounts = () =>
@@ -871,7 +1350,7 @@ const createCoordinator = (): CoordinatorRow => ({
   name: '',
   department: '',
   email: '',
-  institution: '',
+  institution: 'K.S.Rangasamy College of Technology',
 });
 
 const createInitialFormData = (): EventApprovalFormData => ({
@@ -879,6 +1358,7 @@ const createInitialFormData = (): EventApprovalFormData => ({
   category: '',
   eventType: '',
   level: '',
+  hostCollaborator: '',
   expectedParticipants: '',
   themes: [],
   sdgs: [],
@@ -897,7 +1377,7 @@ const createInitialFormData = (): EventApprovalFormData => ({
   eventFlyerName: '',
   isMultiEventEnabled: false,
   registrationSettingsEnabled: false,
-  registrationStatus: 'Open',
+  registrationStatus: 'Ongoing',
   lastDate: '',
   extension: false,
   extendedDate: '',
@@ -936,6 +1416,251 @@ const createInitialFormData = (): EventApprovalFormData => ({
 
 const options = EVENT_APPROVAL_OPTIONS;
 
+// =========================================
+// Event Approval Workflow Panel Component
+// =========================================
+
+const EventWorkflowSection: React.FC<{
+  eventId?: string | number;
+  workflowState: any;
+  user: any;
+  readOnly?: boolean;
+  onActionSuccess?: () => void;
+}> = ({ eventId, workflowState, user, readOnly, onActionSuccess }) => {
+  const [history, setHistory] = useState<any[]>([]);
+  const [comments, setComments] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [modalType, setModalType] = useState<'submit' | 'approve' | 'reject' | null>(null);
+
+  let currentStage = 'draft';
+  if (typeof workflowState === 'string') {
+    try {
+      const parsed = JSON.parse(workflowState);
+      currentStage = parsed.status || parsed.currentStage || workflowState;
+    } catch {
+      currentStage = workflowState;
+    }
+  } else if (workflowState && typeof workflowState === 'object') {
+    currentStage = workflowState.status || workflowState.currentStage || 'draft';
+  }
+  currentStage = String(currentStage).toLowerCase();
+
+  const isDraft = currentStage === 'draft' || currentStage === 'return';
+  const isApproved = currentStage === 'approved' || currentStage === 'published';
+  const canApprove = canUserApproveEventStage(user, workflowState);
+
+  const fetchHistory = useCallback(() => {
+    if (!eventId || eventId === 'new') return;
+    authenticityUtility
+      .get(`/events/${eventId}/history`)
+      .then((res: any) => {
+        if (res?.history) {
+          setHistory(res.history);
+        }
+      })
+      .catch(() => {});
+  }, [eventId]);
+
+  useEffect(() => {
+    fetchHistory();
+  }, [fetchHistory]);
+
+  const handleAction = async (action: 'submit' | 'approve' | 'reject') => {
+    if (!eventId || eventId === 'new') return;
+    try {
+      setSubmitting(true);
+      await authenticityUtility.post(`/events/${eventId}/${action}`, { comments });
+      setModalType(null);
+      setComments('');
+      fetchHistory();
+      if (onActionSuccess) onActionSuccess();
+    } catch (err: any) {
+      alert(err?.response?.data?.error || err?.message || `Failed to ${action} event`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!eventId || eventId === 'new') return null;
+
+  const steps = [
+    { key: 'draft', label: 'Draft' },
+    { key: 'hod_pending', label: 'HOD' },
+    { key: 'iqac_pending', label: 'IQAC' },
+    { key: 'principal_pending', label: 'Principal' },
+    { key: 'approved', label: 'Approved' },
+  ];
+
+  const getStepIndex = (stage: string) => {
+    switch (stage) {
+      case 'draft':
+      case 'return':
+        return 0;
+      case 'hod_pending':
+        return 1;
+      case 'iqac_pending':
+        return 2;
+      case 'principal_pending':
+        return 3;
+      case 'approved':
+      case 'published':
+        return 4;
+      default:
+        return 0;
+    }
+  };
+
+  const currentStepIdx = getStepIndex(currentStage);
+
+  return (
+    <div className="event-workflow-banner">
+      <div className="event-workflow-header-row">
+        <div className="event-workflow-title-area">
+          <h3>Approval Workflow</h3>
+          <span className={`event-workflow-stage-badge ${currentStage}`}>
+            {getEventWorkflowStageLabel(workflowState)}
+          </span>
+        </div>
+
+        {!readOnly && (
+          <div className="event-workflow-action-btns">
+            {isDraft && (
+              <button
+                type="button"
+                className="event-workflow-btn submit"
+                onClick={() => setModalType('submit')}
+              >
+                Submit for Approval
+              </button>
+            )}
+
+            {!isDraft && !isApproved && canApprove && (
+              <>
+                <button
+                  type="button"
+                  className="event-workflow-btn approve"
+                  onClick={() => setModalType('approve')}
+                >
+                  ✓ Approve
+                </button>
+                <button
+                  type="button"
+                  className="event-workflow-btn reject"
+                  onClick={() => setModalType('reject')}
+                >
+                  ✕ Reject
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="event-workflow-stepper">
+        <div className="event-workflow-stepper-line" />
+        {steps.map((step, idx) => {
+          const isCompleted = idx < currentStepIdx || isApproved;
+          const isActive = idx === currentStepIdx && !isApproved;
+          return (
+            <div
+              key={step.key}
+              className={`event-workflow-step ${isCompleted ? 'completed' : ''} ${isActive ? 'active' : ''}`}
+            >
+              <div className="event-workflow-step-circle">{isCompleted ? '✓' : idx + 1}</div>
+              <span className="event-workflow-step-name">{step.label}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {history.length > 0 && (
+        <div className="event-approval-history-section">
+          <h4>Approval History</h4>
+          <div className="event-approval-history-list">
+            {history.map((item) => (
+              <div
+                key={item.id}
+                className={`event-approval-history-item ${(item.action || '').toLowerCase()}`}
+              >
+                <div>
+                  <div className="event-approval-history-role">
+                    {item.role} - {(item.action || '').toUpperCase()}
+                  </div>
+                  <div className="event-approval-history-meta">
+                    By User #{item.user_id} on{' '}
+                    {new Date(item.action_at || item.createdAt).toLocaleString()}
+                  </div>
+                  {item.comments && (
+                    <div className="event-approval-history-comments">"{item.comments}"</div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {modalType && (
+        <CustomModal
+          show={Boolean(modalType)}
+          onHide={() => setModalType(null)}
+          title={
+            modalType === 'submit'
+              ? 'Submit Event for Approval'
+              : modalType === 'approve'
+                ? 'Approve Event'
+                : 'Reject Event'
+          }
+        >
+          <div style={{ padding: '16px' }}>
+            <p style={{ marginBottom: '12px', fontSize: '0.95rem' }}>
+              {modalType === 'submit'
+                ? 'Are you sure you want to submit this event to the HOD for approval?'
+                : modalType === 'approve'
+                  ? 'Are you sure you want to approve this event request?'
+                  : 'Are you sure you want to reject this event request? It will be sent back to Draft state.'}
+            </p>
+            <label style={{ display: 'block', marginBottom: '16px' }}>
+              <strong>Comments (Optional):</strong>
+              <textarea
+                value={comments}
+                onChange={(e) => setComments(e.target.value)}
+                rows={3}
+                placeholder="Enter any comments..."
+                style={{
+                  width: '100%',
+                  marginTop: '6px',
+                  padding: '10px',
+                  borderRadius: '8px',
+                  border: '1px solid #cbd5e1',
+                }}
+              />
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                className="event-workflow-btn"
+                style={{ background: '#94a3b8', color: '#fff' }}
+                onClick={() => setModalType(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`event-workflow-btn ${modalType}`}
+                disabled={submitting}
+                onClick={() => handleAction(modalType)}
+              >
+                {submitting ? 'Processing...' : 'Confirm'}
+              </button>
+            </div>
+          </div>
+        </CustomModal>
+      )}
+    </div>
+  );
+};
+
 const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   title = 'Event 1',
   eventNumber = 1,
@@ -945,19 +1670,325 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
   showExtendedSections = false,
   showMultiEventToggle = false,
   isSubEvent = false,
+  eventId,
+  readOnly = false,
   onAddEvent,
   onSubmit,
 }) => {
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const currentUserName = useMemo(() => {
-    return (user?.name || user?.email || 'Admin').trim();
+  const currentUserDetails = useMemo(() => {
+    return {
+      name: (user?.name || user?.email || 'Admin').trim(),
+      email: user?.email || '',
+      department: user?.department || '',
+      designation: user?.designation || '',
+      employee_id: user?.employee_id || user?.erp_id || '',
+    };
   }, [user]);
 
+  const currentUserName = currentUserDetails.name;
+
   const [formData, setFormData] = useState<EventApprovalFormData>(createInitialFormData);
+  const [workflowState, setWorkflowState] = useState<any>(null);
+
+  // --- Finance Card State ---
+  const [financeEnabled, setFinanceEnabled] = useState(false);
+  const [financeSearchId, setFinanceSearchId] = useState('');
+  const [fetchingFinance, setFetchingFinance] = useState(false);
+  const [financeData, setFinanceData] = useState<any | null>(null);
+  const [financeError, setFinanceError] = useState<string | null>(null);
+
+  const handleFetchFinance = async () => {
+    const rawId = financeSearchId.trim();
+    if (!rawId) {
+      setFinanceError('Please enter a Finance ID');
+      return;
+    }
+    setFetchingFinance(true);
+    setFinanceError(null);
+
+    const structuredMatch = rawId.match(/^#?F[-_]\d{4}[-_](\d+)/i);
+    let fetchId = rawId;
+    if (structuredMatch && structuredMatch[1]) {
+      fetchId = parseInt(structuredMatch[1], 10).toString();
+    } else {
+      const digitsOnly = rawId.replace(/\D/g, '');
+      if (digitsOnly) {
+        fetchId = parseInt(digitsOnly, 10).toString();
+      }
+    }
+
+    try {
+      const res: any = await authenticityUtility.get(
+        `/finance-requests/${encodeURIComponent(fetchId)}`,
+      );
+      const record = res?.data || res;
+      if (record && (record.id || record.proposal_ref)) {
+        setFinanceData(record);
+        setFinanceError(null);
+      } else {
+        setFinanceData(null);
+        setFinanceError('No finance request found for the entered ID.');
+      }
+    } catch (err: any) {
+      console.error('Error fetching finance data:', err);
+      setFinanceData(null);
+      setFinanceError(
+        err?.response?.data?.message || err?.message || 'Failed to fetch finance request details.',
+      );
+    } finally {
+      setFetchingFinance(false);
+    }
+  };
+
+  const getFinanceIncomeRows = (record: any): any[] => {
+    if (!record) return [];
+    if (Array.isArray(record.income_rows)) return record.income_rows;
+    if (Array.isArray(record.income)) return record.income;
+    return [];
+  };
+
+  const getFinanceExpenditureRows = (record: any): any[] => {
+    if (!record) return [];
+    if (Array.isArray(record.budget)) return record.budget;
+    if (Array.isArray(record.budget_breakup)) return record.budget_breakup;
+    if (Array.isArray(record.budget_rows)) return record.budget_rows;
+    return [];
+  };
+
+  const fetchEventWorkflowState = useCallback(() => {
+    if (!eventId || eventId === 'new') return;
+    authenticityUtility
+      .get(`/events/${eventId}`)
+      .then((res: any) => {
+        const resData = res?.data || res;
+        if (resData && resData.workflow_state) {
+          setWorkflowState(resData.workflow_state);
+        }
+      })
+      .catch(() => {});
+  }, [eventId]);
+
+  useEffect(() => {
+    if (!eventId || eventId === 'new') return;
+
+    authenticityUtility
+      .get(`/events/${eventId}`)
+      .then((res: any) => {
+        const resData = res?.data || res;
+        if (!resData || !resData.id) return;
+        if (resData.workflow_state) {
+          setWorkflowState(resData.workflow_state);
+        }
+
+        const parseJsonField = (field: any, defaultVal: any) => {
+          if (!field) return defaultVal;
+          if (typeof field === 'string') {
+            try {
+              return JSON.parse(field);
+            } catch {
+              return defaultVal;
+            }
+          }
+          return field;
+        };
+
+        const reg = parseJsonField(resData.registration_settings, {});
+        const acc = parseJsonField(resData.accommodation_settings, {});
+        const themesArr = parseJsonField(resData.themes, []);
+        const sdgsArr = parseJsonField(resData.sdgs, []);
+        const coordsArr = parseJsonField(resData.coordinators, []);
+        const feeRowsArr = parseJsonField(resData.feeRows || resData.fee_rows || reg.fee_rows, []);
+        const collabArr = parseJsonField(resData.collaboration_data || reg.collaboration, []);
+        const sponsorArr = parseJsonField(
+          resData.sponsoringAgencies || reg.sponsoring_agencies,
+          [],
+        );
+
+        if (Array.isArray(resData.subEvents) && resData.subEvents.length > 0) {
+          setIsMultiEvent(true);
+          setMultiEventsList(
+            resData.subEvents.map((s: any) => ({
+              id: String(s.id),
+              name: s.title || s.name || s.event_title || '',
+              type: s.event_type || s.eventType || s.category || '',
+              createdBy: s.proposedBy || s.createdBy || currentUserDetails.name,
+              creatorEmail: s.email || s.creatorEmail,
+              creatorDepartment: s.department || s.creatorDepartment,
+              creatorDesignation: s.designation || s.creatorDesignation,
+            })),
+          );
+        }
+
+        setFormData({
+          name: resData.title || resData.name || '',
+          category: resData.category || '',
+          eventType: resData.event_type || resData.eventType || '',
+          level: resData.level || '',
+          expectedParticipants:
+            resData.expected_participants !== undefined &&
+            resData.expected_participants !== null &&
+            resData.expected_participants !== ''
+              ? String(resData.expected_participants)
+              : resData.expectedParticipants !== undefined &&
+                  resData.expectedParticipants !== null &&
+                  resData.expectedParticipants !== ''
+                ? String(resData.expectedParticipants)
+                : reg.expected_participants !== undefined &&
+                    reg.expected_participants !== null &&
+                    reg.expected_participants !== ''
+                  ? String(reg.expected_participants)
+                  : reg.expectedParticipants !== undefined &&
+                      reg.expectedParticipants !== null &&
+                      reg.expectedParticipants !== ''
+                    ? String(reg.expectedParticipants)
+                    : reg.expected_count !== undefined &&
+                        reg.expected_count !== null &&
+                        reg.expected_count !== ''
+                      ? String(reg.expected_count)
+                      : resData.expected_count !== undefined &&
+                          resData.expected_count !== null &&
+                          resData.expected_count !== ''
+                        ? String(resData.expected_count)
+                        : '',
+          themes: Array.isArray(themesArr) ? themesArr : [],
+          sdgs: Array.isArray(sdgsArr) ? sdgsArr : [],
+          dateFrom: resData.start_date ? String(resData.start_date).split('T')[0] : '',
+          dateTo: resData.end_date ? String(resData.end_date).split('T')[0] : '',
+          numberOfDays:
+            resData.start_date && resData.end_date
+              ? String(
+                  Math.max(
+                    1,
+                    Math.floor(
+                      (new Date(resData.end_date).getTime() -
+                        new Date(resData.start_date).getTime()) /
+                        86400000,
+                    ) + 1,
+                  ),
+                )
+              : '',
+          mode: resData.mode || 'Physical',
+          session: resData.session || 'FN',
+          venue: resData.venue || reg.venue || '',
+          meetingLink: resData.meeting_link || resData.meetingLink || '',
+          eligibleParticipants: resData.eligible_participants
+            ? typeof resData.eligible_participants === 'string'
+              ? resData.eligible_participants
+                  .split(',')
+                  .map((s: string) => s.trim())
+                  .filter(Boolean)
+              : resData.eligible_participants
+            : reg.eligibleParticipants || [],
+          openTo: resData.open_to || reg.openTo || 'Any',
+          genderRestriction: resData.gender_restriction || reg.genderRestriction || 'Any',
+          minAge: resData.min_age ? String(resData.min_age) : reg.minAge ? String(reg.minAge) : '',
+          maxAge: resData.max_age ? String(resData.max_age) : reg.maxAge ? String(reg.maxAge) : '',
+          eventFlyerName: resData.eventFlyerName || '',
+          isMultiEventEnabled: Boolean(resData.is_multi_event || resData.isMultiEvent),
+          registrationSettingsEnabled: Boolean(resData.reg_enabled ?? reg.enabled ?? true),
+          registrationStatus: resData.reg_status || reg.registrationStatus || 'Ongoing',
+          lastDate: resData.last_date
+            ? String(resData.last_date).split('T')[0]
+            : reg.lastDate
+              ? String(reg.lastDate).split('T')[0]
+              : '',
+          extension: Boolean(resData.extension_enabled ?? reg.extension),
+          extendedDate: resData.extended_date
+            ? String(resData.extended_date).split('T')[0]
+            : reg.extendedDate
+              ? String(reg.extendedDate).split('T')[0]
+              : '',
+          shortlistingRequired: Boolean(resData.shortlisting_required ?? reg.shortlistingRequired),
+          selectionIntimation: resData.selection_intimation || reg.selectionIntimation || '',
+          teamEnabled: Boolean(resData.team_enabled ?? reg.teamEnabled),
+          minTeamSize: resData.min_team_size
+            ? String(resData.min_team_size)
+            : reg.minTeamSize
+              ? String(reg.minTeamSize)
+              : '',
+          maxTeamSize: resData.max_team_size
+            ? String(resData.max_team_size)
+            : reg.maxTeamSize
+              ? String(reg.maxTeamSize)
+              : '',
+          documentEnabled: Boolean(resData.document_enabled ?? reg.documentEnabled),
+          documentName: resData.document_name || reg.documentName || '',
+          documentType: resData.document_type || reg.documentType || '',
+          documentSize: resData.document_size || reg.documentSize || '',
+          documentTextFieldEnabled: Boolean(
+            resData.document_text_field_enabled ?? reg.documentTextFieldEnabled,
+          ),
+          feedbackEnabled: Boolean(resData.feedback_enabled ?? resData.feedbackEnabled ?? true),
+          certificateEnabled: Boolean(
+            resData.certificate_enabled ?? resData.certificateEnabled ?? true,
+          ),
+          registrationFeeEnabled: Boolean(
+            resData.registration_fee_enabled ??
+            (Array.isArray(feeRowsArr) && feeRowsArr.length > 0),
+          ),
+          feeRows:
+            Array.isArray(feeRowsArr) && feeRowsArr.length > 0 ? feeRowsArr : [createFeeRow()],
+          collaborators:
+            Array.isArray(collabArr) && collabArr.length > 0
+              ? collabArr.map((c: any) => ({
+                  id: makeId(),
+                  type: c.type || '',
+                  name: c.name || '',
+                }))
+              : [createCollaborator()],
+          sponsoringAgencies:
+            Array.isArray(sponsorArr) && sponsorArr.length > 0
+              ? sponsorArr
+              : [createCollaborator()],
+          coordinators:
+            Array.isArray(coordsArr) && coordsArr.length > 0 ? coordsArr : [createCoordinator()],
+          accommodationEnabled: Boolean(
+            acc.enabled ?? resData.accommodation_enabled ?? resData.accommodationEnabled,
+          ),
+          accommodationType: acc.type || resData.accommodation_type || 'Free',
+          gentsAccommodationLimit: acc.gentsLimit ? String(acc.gentsLimit) : '',
+          ladiesAccommodationLimit: acc.ladiesLimit ? String(acc.ladiesLimit) : '',
+          ceremonyEnabled: Boolean(resData.inaugural_enabled || resData.valedictory_enabled),
+          inauguralEnabled: Boolean(resData.inaugural_enabled),
+          inauguralDate: resData.inaugural_date ? String(resData.inaugural_date).split('T')[0] : '',
+          inauguralTime: resData.inaugural_time || '',
+          inauguralVenue: resData.inaugural_venue || '',
+          valedictoryEnabled: Boolean(resData.valedictory_enabled),
+          valedictoryDate: resData.valedictory_date
+            ? String(resData.valedictory_date).split('T')[0]
+            : '',
+          valedictoryTime: resData.valedictory_time || '',
+          valedictoryVenue: resData.valedictory_venue || '',
+          sponsoringAgencyEnabled: Array.isArray(sponsorArr) && sponsorArr.length > 0,
+          hostCollaborator:
+            resData.host_collaborator ||
+            resData.hostCollaborator ||
+            reg.host_collaborator ||
+            reg.hostCollaborator ||
+            resData.department ||
+            reg.department ||
+            '',
+        });
+      })
+      .catch((err) => {
+        console.error('Failed to load event for edit:', err);
+      });
+  }, [eventId, currentUserDetails]);
   const [additionalEvents, setAdditionalEvents] = useState(0);
   const [isMultiEvent, setIsMultiEvent] = useState(false);
   const [multiEventsList, setMultiEventsList] = useState<
-    { id: string; name: string; type: string; createdBy?: string }[]
+    {
+      id: string;
+      name: string;
+      type: string;
+      createdBy?: string;
+      creatorEmail?: string;
+      creatorDepartment?: string;
+      creatorDesignation?: string;
+      creatorEmployeeId?: string | number;
+    }[]
   >([]);
   const [editingSubEventId, setEditingSubEventId] = useState<string | null>(null);
   const [editSubEventData, setEditSubEventData] = useState<{ name: string; type: string }>({
@@ -969,12 +2000,24 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
     name: string;
     type: string;
     createdBy: string;
+    creatorEmail?: string;
+    creatorDepartment?: string;
+    creatorDesignation?: string;
   } | null>(null);
 
   const handleAddSubEventRow = () => {
     setMultiEventsList((prev) => [
       ...prev,
-      { id: makeId(), name: '', type: '', createdBy: currentUserName },
+      {
+        id: makeId(),
+        name: '',
+        type: '',
+        createdBy: currentUserDetails.name,
+        creatorEmail: currentUserDetails.email,
+        creatorDepartment: currentUserDetails.department,
+        creatorDesignation: currentUserDetails.designation,
+        creatorEmployeeId: currentUserDetails.employee_id,
+      },
     ]);
   };
 
@@ -1053,7 +2096,12 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
     updateRow<CoordinatorRow>('coordinators', rowId, 'name', (emp.name || '').trim());
     updateRow<CoordinatorRow>('coordinators', rowId, 'department', emp.department || '');
     updateRow<CoordinatorRow>('coordinators', rowId, 'email', emp.email || '');
-    updateRow<CoordinatorRow>('coordinators', rowId, 'institution', emp.entity || '');
+    updateRow<CoordinatorRow>(
+      'coordinators',
+      rowId,
+      'institution',
+      emp.entity || 'K.S.Rangasamy College of Technology',
+    );
 
     setActiveCoordinatorRowId(null);
     setCoordinatorSearchResults([]);
@@ -1095,19 +2143,14 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
     placeholder = '',
     disabled = false,
   ) => (
-    <select
+    <CustomEventSelect
       className={getSelectClassName(String(formData[field] || ''))}
       value={String(formData[field] || '')}
       onChange={(event) => setField(field, event.target.value)}
       disabled={disabled}
-    >
-      <option value="">{placeholder || 'Select'}</option>
-      {selectOptions.map((option) => (
-        <option key={option} value={option}>
-          {option}
-        </option>
-      ))}
-    </select>
+      placeholder={placeholder || 'Select'}
+      options={['', ...selectOptions]}
+    />
   );
 
   const updateRow = <T extends FeeRow | CollaboratorRow | CoordinatorRow>(
@@ -1225,7 +2268,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
         )}
 
         {eventExpanded && (
-          <>
+          <fieldset disabled={readOnly} style={{ border: 'none', margin: 0, padding: 0 }}>
             <div className="event-approval-section-heading">Event Details</div>
             <div className="event-approval-grid event-approval-name-flyer-grid">
               <label>
@@ -1251,9 +2294,11 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                 </span>
               </label>
             </div>
-            <div className="event-approval-grid four">
+            <div className="event-approval-grid two">
               <label>Category{select('category', options.categories)}</label>
               <label>Type{select('eventType', options.types)}</label>
+            </div>
+            <div className="event-approval-grid three" style={{ marginTop: '10px' }}>
               <label>Level{select('level', options.levels)}</label>
               <label>
                 Expected Participants
@@ -1264,6 +2309,10 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                     setField('expectedParticipants', event.target.value.replace(/[^0-9]/g, ''))
                   }
                 />
+              </label>
+              <label>
+                Mode
+                {select('mode', options.mode)}
               </label>
             </div>
             <div className="event-approval-grid two event-approval-theme-grid">
@@ -1367,12 +2416,221 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                 </label>
               )}
             </div>
-          </>
+          </fieldset>
         )}
       </section>
 
+      {showMultiEventToggle && eventNumber === 1 && (
+        <section className="event-approval-card form-card event-approval-multi-event-card">
+          <div className="event-approval-section-heading with-toggle">
+            <span>Multi Event</span>
+            <Switch
+              checked={isMultiEvent}
+              onChange={(value) => {
+                setIsMultiEvent(value);
+                if (value && multiEventsList.length === 0) {
+                  setMultiEventsList([
+                    {
+                      id: makeId(),
+                      name: '',
+                      type: '',
+                      createdBy: currentUserDetails.name,
+                      creatorEmail: currentUserDetails.email,
+                      creatorDepartment: currentUserDetails.department,
+                      creatorDesignation: currentUserDetails.designation,
+                      creatorEmployeeId: currentUserDetails.employee_id,
+                    },
+                  ]);
+                }
+              }}
+            />
+          </div>
+          {isMultiEvent && (
+            <div className="event-approval-multi-event-container" style={{ marginTop: '14px' }}>
+              {/* Sub Events Table */}
+              <div className="event-approval-table-wrap event-approval-multi-event-table-wrap">
+                <table className="budgetEntryTable event-approval-multi-event-table">
+                  <thead>
+                    <tr>
+                      <th>Event Type</th>
+                      <th>Event Name</th>
+                      <th>Created By</th>
+                      <th style={{ textAlign: 'center', width: '80px' }}>View</th>
+                      <th style={{ textAlign: 'center', width: '80px' }}>Edit</th>
+                      <th style={{ textAlign: 'center', width: '80px' }}>Delete</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {multiEventsList.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          style={{
+                            textAlign: 'center',
+                            color: '#64748b',
+                            padding: '20px',
+                            fontWeight: 600,
+                          }}
+                        >
+                          No Sub Events Found
+                        </td>
+                      </tr>
+                    ) : (
+                      multiEventsList.map((row) => (
+                        <tr key={row.id}>
+                          {editingSubEventId === row.id ? (
+                            <>
+                              <td>
+                                <CustomEventSelect
+                                  className="tableSelect"
+                                  value={editSubEventData.type}
+                                  onChange={(e) =>
+                                    setEditSubEventData((prev) => ({
+                                      ...prev,
+                                      type: e.target.value,
+                                    }))
+                                  }
+                                  placeholder="Select Type"
+                                  options={['', ...options.types]}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  className="tableInput"
+                                  placeholder="Event Name"
+                                  value={editSubEventData.name}
+                                  onChange={(e) =>
+                                    setEditSubEventData((prev) => ({
+                                      ...prev,
+                                      name: e.target.value,
+                                    }))
+                                  }
+                                />
+                              </td>
+                              <td>{row.createdBy || currentUserDetails.name}</td>
+                              <td colSpan={3} style={{ textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-primary"
+                                  onClick={() => handleSaveEditSubEvent(row.id)}
+                                  style={{
+                                    marginRight: '6px',
+                                    padding: '2px 8px',
+                                    fontSize: '12px',
+                                  }}
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-sm btn-secondary"
+                                  onClick={() => setEditingSubEventId(null)}
+                                  style={{ padding: '2px 8px', fontSize: '12px' }}
+                                >
+                                  Cancel
+                                </button>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td>
+                                <span style={{ fontWeight: 600, color: '#0284c7' }}>
+                                  {row.type || 'N/A'}
+                                </span>
+                              </td>
+                              <td>
+                                <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                  {row.name || 'Untitled Sub Event'}
+                                </span>
+                              </td>
+                              <td>{row.createdBy || currentUserDetails.name}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  title="View sub-event details"
+                                  onClick={() => {
+                                    if (row.id && !isNaN(Number(row.id))) {
+                                      navigate(
+                                        `/event/${row.id}?isSubEvent=true&parentId=${eventId}&tab=pre-event`,
+                                      );
+                                    } else {
+                                      setViewingSubEvent({
+                                        id: row.id,
+                                        name: row.name,
+                                        type: row.type,
+                                        createdBy: row.createdBy || currentUserDetails.name,
+                                        creatorEmail: row.creatorEmail || currentUserDetails.email,
+                                        creatorDepartment:
+                                          row.creatorDepartment || currentUserDetails.department,
+                                        creatorDesignation:
+                                          row.creatorDesignation || currentUserDetails.designation,
+                                      });
+                                    }
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#0284c7',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <Eye size={18} />
+                                </button>
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  title="Edit sub-event"
+                                  onClick={() => {
+                                    if (row.id && !isNaN(Number(row.id))) {
+                                      navigate(
+                                        `/event/${row.id}?isSubEvent=true&parentId=${eventId}&tab=pre-event`,
+                                      );
+                                    } else {
+                                      setEditingSubEventId(row.id);
+                                      setEditSubEventData({ name: row.name, type: row.type });
+                                    }
+                                  }}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#d97706',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <Pencil size={18} />
+                                </button>
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <button
+                                  type="button"
+                                  title="Delete sub-event"
+                                  onClick={() => handleDeleteSubEvent(row.id)}
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: '#ef4444',
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  <Trash2 size={18} />
+                                </button>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
       {eventExpanded && (
-        <>
+        <fieldset disabled={readOnly} style={{ border: 'none', margin: 0, padding: 0 }}>
           <section className="event-approval-card form-card">
             <div className="event-approval-section-heading with-toggle">
               <span>Registration Settings</span>
@@ -1398,7 +2656,40 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                                 .filter(Boolean)
                             : []
                       }
-                      onChange={(values) => setField('eligibleParticipants', values)}
+                      onChange={(values) => {
+                        setField('eligibleParticipants', values);
+                        const currentFeeRows = formData.feeRows || [];
+                        const newFeeRows = values.map((participant) => {
+                          const existingRow = currentFeeRows.find(
+                            (r) => r.participantCategory === participant,
+                          );
+                          return (
+                            existingRow || {
+                              id: Math.random().toString(36).substring(7),
+                              participantCategory: participant,
+                              individual: '',
+                              team: '',
+                              members: '',
+                              additionalMember: '',
+                            }
+                          );
+                        });
+                        setField(
+                          'feeRows',
+                          (newFeeRows.length > 0
+                            ? newFeeRows
+                            : [
+                                {
+                                  id: Math.random().toString(36).substring(7),
+                                  participantCategory: '',
+                                  individual: '',
+                                  team: '',
+                                  members: '',
+                                  additionalMember: '',
+                                },
+                              ]) as any,
+                        );
+                      }}
                       suggestions={options.participants.filter(
                         (p) =>
                           p.toLowerCase().includes(eligibleParticipantsSearchQuery.toLowerCase()) &&
@@ -1427,327 +2718,323 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                     />
                   </label>
                 </div>
-                <div className="event-approval-controls-row">
-                  <Segmented
-                    label="Open to"
-                    value={formData.openTo}
-                    options={EVENT_OPEN_TO_OPTIONS}
-                    onChange={(value) => setField('openTo', value)}
-                  />
-                  <Segmented
-                    label="Gender Restriction"
-                    value={formData.genderRestriction}
-                    options={EVENT_GENDER_RESTRICTION_OPTIONS}
-                    onChange={(value) => setField('genderRestriction', value)}
-                  />
-                  <div className="event-approval-age-control">
-                    <span>Age Restriction</span>
-                    <div className="event-approval-age-control-row">
-                      <button
-                        type="button"
-                        className={ageRestrictionType === 'Any' ? 'active' : ''}
-                        onClick={() => {
-                          setAgeRestrictionType('Any');
-                          setField('minAge', '');
-                          setField('maxAge', '');
-                        }}
-                      >
-                        Any
-                      </button>
-                      <div
-                        className={`event-approval-age-option ${ageRestrictionType === 'Range' ? 'active' : ''}`}
-                      >
-                        <span>Minimum</span>
-                        <input
-                          ref={minAgeInputRef}
-                          placeholder=""
-                          value={formData.minAge}
-                          onChange={(event) => {
-                            const val = event.target.value.replace(/[^0-9]/g, '');
-                            setField('minAge', val);
-                            setAgeRestrictionType('Range');
+                <div className="event-registration-settings-card">
+                  <div className="event-approval-controls-row">
+                    <Segmented
+                      label="Open to"
+                      value={formData.openTo}
+                      options={EVENT_OPEN_TO_OPTIONS}
+                      onChange={(value) => setField('openTo', value)}
+                    />
+                    <Segmented
+                      label="Gender Restriction"
+                      value={formData.genderRestriction}
+                      options={EVENT_GENDER_RESTRICTION_OPTIONS}
+                      onChange={(value) => setField('genderRestriction', value)}
+                    />
+                    <div className="event-approval-age-control">
+                      <span>Age Restriction</span>
+                      <div className="event-approval-age-control-row">
+                        <button
+                          type="button"
+                          className={ageRestrictionType === 'Any' ? 'active' : ''}
+                          onClick={() => {
+                            setAgeRestrictionType('Any');
+                            setField('minAge', '');
+                            setField('maxAge', '');
                           }}
-                        />
-                        <span>Maximum</span>
-                        <input
-                          ref={maxAgeInputRef}
-                          placeholder=""
-                          value={formData.maxAge}
-                          onChange={(event) => {
-                            const val = event.target.value.replace(/[^0-9]/g, '');
-                            setField('maxAge', val);
-                            setAgeRestrictionType('Range');
-                          }}
-                        />
+                        >
+                          Any
+                        </button>
+                        <div
+                          className={`event-approval-age-option ${ageRestrictionType === 'Range' ? 'active' : ''}`}
+                        >
+                          <span>Min</span>
+                          <input
+                            ref={minAgeInputRef}
+                            placeholder=""
+                            value={formData.minAge}
+                            onChange={(event) => {
+                              const val = event.target.value.replace(/[^0-9]/g, '');
+                              setField('minAge', val);
+                              setAgeRestrictionType('Range');
+                            }}
+                          />
+                          <span>Max</span>
+                          <input
+                            ref={maxAgeInputRef}
+                            placeholder=""
+                            value={formData.maxAge}
+                            onChange={(event) => {
+                              const val = event.target.value.replace(/[^0-9]/g, '');
+                              setField('maxAge', val);
+                              setAgeRestrictionType('Range');
+                            }}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-                <div className="event-approval-band registration">
-                  <div className="event-approval-registration-box">
-                    <Segmented
-                      label="Registration Status"
-                      value={formData.registrationStatus || 'Open'}
-                      options={options.status}
-                      onChange={(value) => setField('registrationStatus', value)}
-                    />
-                    <label>
-                      Last Date
-                      <input
-                        className={formData.lastDate ? 'has-value' : 'is-placeholder'}
-                        type="date"
-                        placeholder="DD/MM/YYYY"
-                        value={formData.lastDate}
-                        onChange={(event) => setField('lastDate', event.target.value)}
+                  <div className="event-approval-band registration">
+                    <div className="event-approval-registration-box">
+                      <Segmented
+                        label="Registration Status"
+                        value={formData.registrationStatus || 'Ongoing'}
+                        options={options.status}
+                        onChange={(value) => setField('registrationStatus', value)}
                       />
-                    </label>
+                      <label>
+                        Last Date
+                        <input
+                          className={formData.lastDate ? 'has-value' : 'is-placeholder'}
+                          type="date"
+                          placeholder="DD/MM/YYYY"
+                          value={formData.lastDate}
+                          onChange={(event) => setField('lastDate', event.target.value)}
+                        />
+                      </label>
+                    </div>
+                    <div className="event-approval-registration-box">
+                      <TogglePair
+                        label="Extension"
+                        value={formData.extension}
+                        onChange={(value) => {
+                          setField('extension', value);
+                          if (!value) {
+                            setField('extendedDate', '');
+                          }
+                        }}
+                      />
+                      <label className={!formData.extension ? 'is-disabled' : ''}>
+                        Extended Date
+                        <input
+                          className={formData.extendedDate ? 'has-value' : 'is-placeholder'}
+                          type="date"
+                          placeholder="DD/MM/YYYY"
+                          value={formData.extendedDate}
+                          onChange={(event) => setField('extendedDate', event.target.value)}
+                          disabled={!formData.extension}
+                        />
+                      </label>
+                    </div>
+                    <div className="event-approval-registration-box wide">
+                      <TogglePair
+                        label="Shortlisting required"
+                        value={formData.shortlistingRequired}
+                        onChange={(value) => {
+                          setField('shortlistingRequired', value);
+                          if (!value) {
+                            setField('selectionIntimation', '');
+                          }
+                        }}
+                      />
+                      <label className={!formData.shortlistingRequired ? 'is-disabled' : ''}>
+                        Selection Intimation
+                        <input
+                          className={formData.selectionIntimation ? 'has-value' : 'is-placeholder'}
+                          type="date"
+                          placeholder="DD/MM/YYYY"
+                          value={formData.selectionIntimation}
+                          onChange={(event) => setField('selectionIntimation', event.target.value)}
+                          disabled={!formData.shortlistingRequired}
+                        />
+                      </label>
+                    </div>
                   </div>
-                  <div className="event-approval-registration-box">
-                    <TogglePair
-                      label="Extension"
-                      value={formData.extension}
-                      onChange={(value) => {
-                        setField('extension', value);
-                        if (!value) {
-                          setField('extendedDate', '');
-                        }
-                      }}
-                    />
-                    <label className={!formData.extension ? 'is-disabled' : ''}>
-                      Extended Date
-                      <input
-                        className={formData.extendedDate ? 'has-value' : 'is-placeholder'}
-                        type="date"
-                        placeholder="DD/MM/YYYY"
-                        value={formData.extendedDate}
-                        onChange={(event) => setField('extendedDate', event.target.value)}
-                        disabled={!formData.extension}
-                      />
-                    </label>
+                </div>
+                {!isMultiEvent && (
+                  <div className="event-approval-split">
+                    <MiniCard
+                      title="Team Participation"
+                      enabled={formData.teamEnabled}
+                      onToggle={(value) => setField('teamEnabled', value)}
+                      className="event-approval-mini-card-team"
+                    >
+                      <label>
+                        Minimum Team Size
+                        <input
+                          placeholder=""
+                          value={formData.minTeamSize}
+                          onChange={(event) => setField('minTeamSize', event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        Maximum Team Size
+                        <input
+                          placeholder=""
+                          value={formData.maxTeamSize}
+                          onChange={(event) => setField('maxTeamSize', event.target.value)}
+                        />
+                      </label>
+                    </MiniCard>
+                    <MiniCard
+                      title="Document Upload"
+                      enabled={formData.documentEnabled}
+                      onToggle={(value) => setField('documentEnabled', value)}
+                      columns={4}
+                      className="event-approval-mini-card-doc"
+                    >
+                      <label>Document Name{select('documentName', options.documentName)}</label>
+                      <label>Type{select('documentType', options.documentType)}</label>
+                      <label>Size{select('documentSize', options.documentSize)}</label>
+                      <label className="event-approval-mini-card-doc-field">
+                        <span>Text Field</span>
+                        <input
+                          type="checkbox"
+                          checked={formData.documentTextFieldEnabled}
+                          onChange={(event) =>
+                            setField('documentTextFieldEnabled', event.target.checked)
+                          }
+                        />
+                      </label>
+                    </MiniCard>
                   </div>
-                  <div className="event-approval-registration-box wide">
-                    <TogglePair
-                      label="Shortlisting required"
-                      value={formData.shortlistingRequired}
-                      onChange={(value) => {
-                        setField('shortlistingRequired', value);
-                        if (!value) {
-                          setField('selectionIntimation', '');
-                        }
-                      }}
+                )}
+                {!isMultiEvent && (
+                  <div className="event-approval-split">
+                    <MiniCard
+                      title="Feedback"
+                      enabled={formData.feedbackEnabled}
+                      onToggle={(value) => setField('feedbackEnabled', value)}
+                      className="event-approval-mini-card-feedback"
+                      columns={1}
                     />
-                    <label className={!formData.shortlistingRequired ? 'is-disabled' : ''}>
-                      Selection Intimation
-                      <input
-                        className={formData.selectionIntimation ? 'has-value' : 'is-placeholder'}
-                        type="date"
-                        placeholder="DD/MM/YYYY"
-                        value={formData.selectionIntimation}
-                        onChange={(event) => setField('selectionIntimation', event.target.value)}
-                        disabled={!formData.shortlistingRequired}
-                      />
-                    </label>
+                    <MiniCard
+                      title="Certificate"
+                      enabled={formData.certificateEnabled}
+                      onToggle={(value) => setField('certificateEnabled', value)}
+                      className="event-approval-mini-card-certificate"
+                      columns={1}
+                    />
                   </div>
-                </div>
-                <div className="event-approval-split">
-                  <MiniCard
-                    title="Team Participation"
-                    enabled={formData.teamEnabled}
-                    onToggle={(value) => setField('teamEnabled', value)}
-                    className="event-approval-mini-card-team"
-                  >
-                    <label>
-                      Minimum Team Size
-                      <input
-                        placeholder=""
-                        value={formData.minTeamSize}
-                        onChange={(event) => setField('minTeamSize', event.target.value)}
-                      />
-                    </label>
-                    <label>
-                      Maximum Team Size
-                      <input
-                        placeholder=""
-                        value={formData.maxTeamSize}
-                        onChange={(event) => setField('maxTeamSize', event.target.value)}
-                      />
-                    </label>
-                  </MiniCard>
-                  <MiniCard
-                    title="Document Upload"
-                    enabled={formData.documentEnabled}
-                    onToggle={(value) => setField('documentEnabled', value)}
-                    columns={4}
-                    className="event-approval-mini-card-doc"
-                  >
-                    <label>Document Name{select('documentName', options.documentName)}</label>
-                    <label>Type{select('documentType', options.documentType)}</label>
-                    <label>Size{select('documentSize', options.documentSize)}</label>
-                    <label className="event-approval-mini-card-doc-field">
-                      <span>Text Field</span>
-                      <input
-                        type="checkbox"
-                        checked={formData.documentTextFieldEnabled}
-                        onChange={(event) =>
-                          setField('documentTextFieldEnabled', event.target.checked)
-                        }
-                      />
-                    </label>
-                  </MiniCard>
-                </div>
-                <div className="event-approval-split">
-                  <MiniCard
-                    title="Feedback"
-                    enabled={formData.feedbackEnabled}
-                    onToggle={(value) => setField('feedbackEnabled', value)}
-                    className="event-approval-mini-card-feedback"
-                    columns={1}
-                  />
-                  <MiniCard
-                    title="Certificate"
-                    enabled={formData.certificateEnabled}
-                    onToggle={(value) => setField('certificateEnabled', value)}
-                    className="event-approval-mini-card-certificate"
-                    columns={1}
-                  />
-                </div>
+                )}
               </>
             )}
           </section>
 
-          <section className="event-approval-card form-card">
-            <div className="event-approval-section-heading with-toggle">
-              <span>Registration fees</span>
-              <Switch
-                checked={formData.registrationFeeEnabled}
-                onChange={(value) => setField('registrationFeeEnabled', value)}
-              />
-            </div>
-            {formData.registrationFeeEnabled && (
-              <div className="event-approval-table-wrap">
-                <table className="budgetEntryTable">
-                  <colgroup>
-                    <col className="participant-category-column" />
-                    <col className="fee-column" />
-                    <col className="fee-column" />
-                    <col className="member-column" />
-                    <col className="additional-member-column" />
-                    <col className="action-column" />
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      <th rowSpan={2}>Participant Category</th>
-                      <th colSpan={4}>Registration Fees</th>
-                      <th rowSpan={2}>Action</th>
-                    </tr>
-                    <tr>
-                      <th>Individual</th>
-                      <th>Team</th>
-                      <th>Member</th>
-                      <th>Additional Member</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {formData.feeRows.map((row, index) => (
-                      <tr key={row.id}>
-                        <td>
-                          <select
-                            disabled={!formData.registrationFeeEnabled}
-                            className="tableSelect"
-                            value={row.participantCategory}
-                            onChange={(event) =>
-                              updateRow<FeeRow>(
-                                'feeRows',
-                                row.id,
-                                'participantCategory',
-                                event.target.value,
-                              )
-                            }
-                          >
-                            <option value="">Select</option>
-                            {options.participantCategory.map((option) => (
-                              <option key={option}>{option}</option>
-                            ))}
-                          </select>
-                        </td>
-                        <td>
-                          <input
-                            className="tableInput"
-                            placeholder="Amount"
-                            disabled={!formData.registrationFeeEnabled}
-                            value={row.individual}
-                            onChange={(event) =>
-                              updateRow<FeeRow>(
-                                'feeRows',
-                                row.id,
-                                'individual',
-                                event.target.value.replace(/[^0-9]/g, ''),
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="tableInput"
-                            placeholder="Amount"
-                            disabled={!formData.registrationFeeEnabled}
-                            value={row.team}
-                            onChange={(event) =>
-                              updateRow<FeeRow>(
-                                'feeRows',
-                                row.id,
-                                'team',
-                                event.target.value.replace(/[^0-9]/g, ''),
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="tableInput"
-                            placeholder="Members"
-                            disabled={!formData.registrationFeeEnabled}
-                            value={row.members}
-                            onChange={(event) =>
-                              updateRow<FeeRow>(
-                                'feeRows',
-                                row.id,
-                                'members',
-                                event.target.value.replace(/[^0-9]/g, ''),
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <input
-                            className="tableInput"
-                            placeholder="Amount"
-                            disabled={!formData.registrationFeeEnabled}
-                            value={row.additionalMember}
-                            onChange={(event) =>
-                              updateRow<FeeRow>(
-                                'feeRows',
-                                row.id,
-                                'additionalMember',
-                                event.target.value.replace(/[^0-9]/g, ''),
-                              )
-                            }
-                          />
-                        </td>
-                        <td>
-                          <IconActions
-                            showAdd={index === formData.feeRows.length - 1}
-                            onAdd={() => addRow('feeRows')}
-                            onDelete={() => deleteRow('feeRows', row.id)}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {!isMultiEvent && (
+            <section className="event-approval-card form-card">
+              <div className="event-approval-section-heading with-toggle">
+                <span>Registration fees</span>
+                <Switch
+                  checked={formData.registrationFeeEnabled}
+                  onChange={(value) => setField('registrationFeeEnabled', value)}
+                />
               </div>
-            )}
-          </section>
+              {formData.registrationFeeEnabled && (
+                <div className="event-approval-table-wrap">
+                  <table className="budgetEntryTable">
+                    <colgroup>
+                      <col className="participant-category-column" />
+                      <col className="fee-column" />
+                      <col className="fee-column" />
+                      <col className="member-column" />
+                      <col className="additional-member-column" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th rowSpan={2}>Participant Category</th>
+                        <th colSpan={4}>Registration Fees</th>
+                      </tr>
+                      <tr>
+                        <th>Individual</th>
+                        <th>Team</th>
+                        <th>Member</th>
+                        <th>Additional Member</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {formData.feeRows.map((row, index) => (
+                        <tr key={row.id}>
+                          <td>
+                            <CustomEventSelect
+                              disabled={!formData.registrationFeeEnabled}
+                              className="tableSelect"
+                              value={row.participantCategory}
+                              onChange={(event) =>
+                                updateRow<FeeRow>(
+                                  'feeRows',
+                                  row.id,
+                                  'participantCategory',
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Select"
+                              options={['', ...options.participantCategory]}
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="tableInput"
+                              placeholder="Amount"
+                              disabled={!formData.registrationFeeEnabled || formData.teamEnabled}
+                              value={row.individual}
+                              onChange={(event) =>
+                                updateRow<FeeRow>(
+                                  'feeRows',
+                                  row.id,
+                                  'individual',
+                                  event.target.value.replace(/[^0-9]/g, ''),
+                                )
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="tableInput"
+                              placeholder="Amount"
+                              disabled={!formData.registrationFeeEnabled || !formData.teamEnabled}
+                              value={row.team}
+                              onChange={(event) =>
+                                updateRow<FeeRow>(
+                                  'feeRows',
+                                  row.id,
+                                  'team',
+                                  event.target.value.replace(/[^0-9]/g, ''),
+                                )
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="tableInput"
+                              placeholder="Members"
+                              disabled={!formData.registrationFeeEnabled || !formData.teamEnabled}
+                              value={row.members}
+                              onChange={(event) =>
+                                updateRow<FeeRow>(
+                                  'feeRows',
+                                  row.id,
+                                  'members',
+                                  event.target.value.replace(/[^0-9]/g, ''),
+                                )
+                              }
+                            />
+                          </td>
+                          <td>
+                            <input
+                              className="tableInput"
+                              placeholder="Amount"
+                              disabled={!formData.registrationFeeEnabled || !formData.teamEnabled}
+                              value={row.additionalMember}
+                              onChange={(event) =>
+                                updateRow<FeeRow>(
+                                  'feeRows',
+                                  row.id,
+                                  'additionalMember',
+                                  event.target.value.replace(/[^0-9]/g, ''),
+                                )
+                              }
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="event-approval-card form-card">
             <div className="event-approval-section-heading">Host & Collaborator</div>
@@ -1761,18 +3048,15 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                   onChange={() => setSelectedCollaboratorId(row.id)}
                   aria-label="Select collaborator row"
                 />
-                <select
+                <CustomEventSelect
                   className={getSelectClassName(row.type)}
                   value={row.type}
                   onChange={(event) =>
                     updateRow<CollaboratorRow>('collaborators', row.id, 'type', event.target.value)
                   }
-                >
-                  <option value="">Select</option>
-                  {options.collaboratorType.map((option) => (
-                    <option key={option}>{option}</option>
-                  ))}
-                </select>
+                  placeholder="Select"
+                  options={['', ...options.collaboratorType]}
+                />
                 <input
                   placeholder="Collaborator Name"
                   value={row.name}
@@ -1800,7 +3084,7 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
             {formData.sponsoringAgencyEnabled &&
               formData.sponsoringAgencies.map((row, index) => (
                 <div className="event-approval-row-line no-radio" key={row.id}>
-                  <select
+                  <CustomEventSelect
                     className={getSelectClassName(row.type)}
                     value={row.type}
                     onChange={(event) =>
@@ -1811,12 +3095,9 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
                         event.target.value,
                       )
                     }
-                  >
-                    <option value="">Select</option>
-                    {options.collaboratorType.map((option) => (
-                      <option key={option}>{option}</option>
-                    ))}
-                  </select>
+                    placeholder="Select"
+                    options={['', ...options.collaboratorType]}
+                  />
                   <input
                     placeholder="Agency Name"
                     value={row.name}
@@ -1998,292 +3279,397 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
           )}
 
           {showExtendedSections && (
-            <section className="event-approval-card event-approval-accommodation-card form-card">
+            <section className="event-approval-card form-card" style={{ marginTop: '24px' }}>
               <div className="event-approval-section-heading with-toggle">
-                <span>Accommodation</span>
-                <Switch
-                  checked={formData.accommodationEnabled}
-                  onChange={(value) => setField('accommodationEnabled', value)}
-                />
+                <span>Finance</span>
+                <Switch checked={financeEnabled} onChange={(value) => setFinanceEnabled(value)} />
               </div>
-              {formData.accommodationEnabled && (
-                <div className="event-approval-band accommodation">
-                  <div className="event-approval-fieldset-grid">
-                    <Segmented
-                      disabled={!formData.accommodationEnabled}
-                      value={formData.accommodationType}
-                      options={EVENT_ACCOMMODATION_TYPE_OPTIONS}
-                      onChange={(value) => setField('accommodationType', value as 'Free' | 'Paid')}
-                    />
-                    <label>
-                      Gents Accommodation Limit
-                      <input
-                        placeholder="Limit"
-                        disabled={!formData.accommodationEnabled}
-                        value={formData.gentsAccommodationLimit}
-                        onChange={(event) =>
-                          setField(
-                            'gentsAccommodationLimit',
-                            event.target.value.replace(/[^0-9]/g, ''),
-                          )
-                        }
-                      />
-                    </label>
-                    <label>
-                      Ladies Accommodation Limit
-                      <input
-                        placeholder="Limit"
-                        disabled={!formData.accommodationEnabled}
-                        value={formData.ladiesAccommodationLimit}
-                        onChange={(event) =>
-                          setField(
-                            'ladiesAccommodationLimit',
-                            event.target.value.replace(/[^0-9]/g, ''),
-                          )
-                        }
-                      />
-                    </label>
-                  </div>
-                </div>
-              )}
-            </section>
-          )}
-
-          {showMultiEventToggle && eventNumber === 1 && (
-            <section className="event-approval-card form-card event-approval-multi-event-card">
-              <div className="event-approval-section-heading with-toggle">
-                <span>Multi Event</span>
-                <Switch
-                  checked={isMultiEvent}
-                  onChange={(value) => {
-                    setIsMultiEvent(value);
-                    if (value && multiEventsList.length === 0) {
-                      setMultiEventsList([
-                        { id: makeId(), name: '', type: '', createdBy: currentUserName },
-                      ]);
-                    }
-                  }}
-                />
-              </div>
-              {isMultiEvent && (
-                <div className="event-approval-multi-event-container" style={{ marginTop: '14px' }}>
-                  {/* Sub Events Table */}
-                  <div className="event-approval-table-wrap event-approval-multi-event-table-wrap">
-                    <table className="budgetEntryTable event-approval-multi-event-table">
-                      <thead>
-                        <tr>
-                          <th>Event Type</th>
-                          <th>Event Name</th>
-                          <th>Created By</th>
-                          <th style={{ textAlign: 'center', width: '70px' }}>View</th>
-                          <th style={{ textAlign: 'center', width: '70px' }}>Edit</th>
-                          <th style={{ textAlign: 'center', width: '70px' }}>Delete</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {multiEventsList.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={6}
-                              style={{ textAlign: 'center', color: '#64748b', padding: '16px' }}
-                            >
-                              No sub-events added yet. Click "+ Add Sub Event" below to add a
-                              sub-event.
-                            </td>
-                          </tr>
-                        ) : (
-                          multiEventsList.map((row) => (
-                            <tr key={row.id}>
-                              {editingSubEventId === row.id ? (
-                                <>
-                                  <td>
-                                    <select
-                                      className="tableSelect"
-                                      value={editSubEventData.type}
-                                      onChange={(e) =>
-                                        setEditSubEventData((prev) => ({
-                                          ...prev,
-                                          type: e.target.value,
-                                        }))
-                                      }
-                                    >
-                                      <option value="">Select Type</option>
-                                      {options.types.map((t) => (
-                                        <option key={t} value={t}>
-                                          {t}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td>
-                                    <input
-                                      className="tableInput"
-                                      placeholder="Event Name"
-                                      value={editSubEventData.name}
-                                      onChange={(e) =>
-                                        setEditSubEventData((prev) => ({
-                                          ...prev,
-                                          name: e.target.value,
-                                        }))
-                                      }
-                                    />
-                                  </td>
-                                  <td>{row.createdBy || currentUserName}</td>
-                                  <td colSpan={3} style={{ textAlign: 'center' }}>
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-primary"
-                                      onClick={() => handleSaveEditSubEvent(row.id)}
-                                      style={{
-                                        marginRight: '6px',
-                                        padding: '2px 8px',
-                                        fontSize: '12px',
-                                      }}
-                                    >
-                                      Save
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm btn-secondary"
-                                      onClick={() => setEditingSubEventId(null)}
-                                      style={{ padding: '2px 8px', fontSize: '12px' }}
-                                    >
-                                      Cancel
-                                    </button>
-                                  </td>
-                                </>
-                              ) : (
-                                <>
-                                  <td>
-                                    <select
-                                      className="tableSelect"
-                                      value={row.type}
-                                      onChange={(e) =>
-                                        setMultiEventsList((curr) =>
-                                          curr.map((r) =>
-                                            r.id === row.id ? { ...r, type: e.target.value } : r,
-                                          ),
-                                        )
-                                      }
-                                    >
-                                      <option value="">Select Type</option>
-                                      {options.types.map((t) => (
-                                        <option key={t} value={t}>
-                                          {t}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td>
-                                    <input
-                                      className="tableInput"
-                                      placeholder="Event Name"
-                                      value={row.name}
-                                      onChange={(e) =>
-                                        setMultiEventsList((curr) =>
-                                          curr.map((r) =>
-                                            r.id === row.id ? { ...r, name: e.target.value } : r,
-                                          ),
-                                        )
-                                      }
-                                    />
-                                  </td>
-                                  <td>{row.createdBy || currentUserName}</td>
-                                  <td style={{ textAlign: 'center' }}>
-                                    <button
-                                      type="button"
-                                      title="View sub-event details"
-                                      onClick={() =>
-                                        setViewingSubEvent({
-                                          id: row.id,
-                                          name: row.name,
-                                          type: row.type,
-                                          createdBy: row.createdBy || currentUserName,
-                                        })
-                                      }
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#0284c7',
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      <Eye size={18} />
-                                    </button>
-                                  </td>
-                                  <td style={{ textAlign: 'center' }}>
-                                    <button
-                                      type="button"
-                                      title="Edit sub-event"
-                                      onClick={() => {
-                                        setEditingSubEventId(row.id);
-                                        setEditSubEventData({ name: row.name, type: row.type });
-                                      }}
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#d97706',
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      <Pencil size={18} />
-                                    </button>
-                                  </td>
-                                  <td style={{ textAlign: 'center' }}>
-                                    <button
-                                      type="button"
-                                      title="Delete sub-event"
-                                      onClick={() => handleDeleteSubEvent(row.id)}
-                                      style={{
-                                        background: 'none',
-                                        border: 'none',
-                                        color: '#dc2626',
-                                        cursor: 'pointer',
-                                      }}
-                                    >
-                                      <Trash2 size={18} />
-                                    </button>
-                                  </td>
-                                </>
-                              )}
-                            </tr>
-                          ))
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end' }}>
-                    <button
-                      type="button"
-                      className="event-dashboard-add-btn"
-                      onClick={handleAddSubEventRow}
+              {financeEnabled && (
+                <div style={{ padding: '16px 0 8px 0' }}>
+                  <div
+                    style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}
+                  >
+                    <label
                       style={{
-                        height: '34px',
-                        padding: '0 16px',
-                        backgroundColor: '#0069ab',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontSize: '13px',
                         fontWeight: 600,
-                        cursor: 'pointer',
+                        color: '#334155',
+                        whiteSpace: 'nowrap',
+                        marginBottom: 0,
+                        fontSize: '0.925rem',
                       }}
                     >
-                      + Add Sub Event
-                    </button>
+                      Enter Finance Application ID :
+                    </label>
+                    <div style={{ width: '220px' }}>
+                      <CustomInput
+                        name="financeSearchId"
+                        value={financeSearchId}
+                        onChange={(val) => setFinanceSearchId(val)}
+                        placeholder=""
+                        className="mb-0"
+                        onKeyDown={(e: any) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void handleFetchFinance();
+                          }
+                        }}
+                      />
+                    </div>
+                    <CustomButton
+                      onClick={() => void handleFetchFinance()}
+                      loading={fetchingFinance}
+                      style={{
+                        backgroundColor: '#005492',
+                        borderColor: '#005492',
+                        color: '#ffffff',
+                        padding: '0.5rem 1.4rem',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        height: '38px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                      }}
+                    >
+                      Fetch
+                    </CustomButton>
                   </div>
+
+                  {financeError && (
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        color: '#ef4444',
+                        fontSize: '0.875rem',
+                        fontWeight: 500,
+                      }}
+                    >
+                      ⚠️ {financeError}
+                    </div>
+                  )}
+
+                  {financeData && (
+                    <div
+                      style={{
+                        marginTop: '20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '16px',
+                      }}
+                    >
+                      {/* Finance Summary Header Badge */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: '12px',
+                          padding: '10px 14px',
+                          backgroundColor: '#f8fafc',
+                          borderRadius: '8px',
+                          border: '1px solid #e2e8f0',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span
+                          style={{
+                            backgroundColor: '#1b3bbb',
+                            color: '#ffffff',
+                            padding: '4px 12px',
+                            borderRadius: '16px',
+                            fontSize: '0.825rem',
+                            fontWeight: 700,
+                          }}
+                        >
+                          {(() => {
+                            const rawRef =
+                              financeData.proposal_ref ||
+                              financeData.requestRef ||
+                              `FIN-${financeData.id}`;
+                            const cleanRef = String(rawRef).trim().replace(/^#+/, '');
+                            return `#${cleanRef}`;
+                          })()}
+                        </span>
+                        <span style={{ fontSize: '0.925rem', fontWeight: 700, color: '#1e293b' }}>
+                          {financeData.applicant_name || financeData.proposedBy || 'Applicant'}
+                        </span>
+                        {(financeData.department_name || financeData.department) && (
+                          <span style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                            ({financeData.department_name || financeData.department})
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Combined Side-by-Side Income & Expenditure Table */}
+                      {(() => {
+                        const incomeList = getFinanceIncomeRows(financeData);
+                        const expenditureList = getFinanceExpenditureRows(financeData);
+                        const maxRows = Math.max(incomeList.length, expenditureList.length, 1);
+
+                        const totalIncome = incomeList.reduce(
+                          (sum: number, r: any) =>
+                            sum + Number(r.amount || r.income || r.contribution || 0),
+                          0,
+                        );
+                        const totalExpenditure = expenditureList.reduce(
+                          (sum: number, r: any) => sum + Number(r.amount || r.total_amount || 0),
+                          0,
+                        );
+                        const surplusDeficit = totalIncome - totalExpenditure;
+
+                        return (
+                          <div className="event-approval-table-wrap">
+                            <table
+                              className="budgetEntryTable"
+                              style={{
+                                width: '100%',
+                                borderCollapse: 'collapse',
+                                border: '1px solid #cbd5e1',
+                                borderRadius: '8px',
+                                overflow: 'hidden',
+                              }}
+                            >
+                              <thead>
+                                <tr
+                                  style={{
+                                    backgroundColor: '#ebf3fa',
+                                    color: '#005492',
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  <th
+                                    style={{
+                                      width: '60px',
+                                      textAlign: 'center',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 8px',
+                                      color: '#005492',
+                                    }}
+                                  >
+                                    Sl. No.
+                                  </th>
+                                  <th
+                                    style={{
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: '#005492',
+                                    }}
+                                  >
+                                    Income (Receipts)
+                                  </th>
+                                  <th
+                                    style={{
+                                      width: '130px',
+                                      textAlign: 'right',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: '#005492',
+                                    }}
+                                  >
+                                    Amount (₹)
+                                  </th>
+                                  <th
+                                    style={{
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: '#005492',
+                                    }}
+                                  >
+                                    Expenditure (Payments)
+                                  </th>
+                                  <th
+                                    style={{
+                                      width: '130px',
+                                      textAlign: 'right',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: '#005492',
+                                    }}
+                                  >
+                                    Amount (₹)
+                                  </th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {Array.from({ length: maxRows }).map((_, idx) => {
+                                  const inc = incomeList[idx];
+                                  const exp = expenditureList[idx];
+
+                                  const incName = inc
+                                    ? inc.income_source ||
+                                      inc.incomeHead ||
+                                      inc.source ||
+                                      inc.category ||
+                                      ''
+                                    : '';
+                                  const incAmount = inc
+                                    ? Number(inc.amount || inc.income || inc.contribution || 0)
+                                    : null;
+
+                                  const expName = exp
+                                    ? exp.budget_head ||
+                                      exp.budget_head_name ||
+                                      exp.category ||
+                                      exp.head ||
+                                      exp.sub_head ||
+                                      exp.particulars ||
+                                      ''
+                                    : '';
+                                  const expAmount = exp
+                                    ? Number(exp.amount || exp.total_amount || 0)
+                                    : null;
+
+                                  return (
+                                    <tr key={idx}>
+                                      <td
+                                        style={{
+                                          textAlign: 'center',
+                                          border: '1px solid #cbd5e1',
+                                          padding: '10px 8px',
+                                          color: '#475569',
+                                        }}
+                                      >
+                                        {idx + 1}.
+                                      </td>
+                                      <td
+                                        style={{
+                                          border: '1px solid #cbd5e1',
+                                          padding: '10px 12px',
+                                          color: '#334155',
+                                        }}
+                                      >
+                                        {incName}
+                                      </td>
+                                      <td
+                                        style={{
+                                          textAlign: 'right',
+                                          border: '1px solid #cbd5e1',
+                                          padding: '10px 12px',
+                                          fontWeight: 700,
+                                          color: '#1e293b',
+                                        }}
+                                      >
+                                        {incAmount !== null
+                                          ? `₹${incAmount.toLocaleString('en-IN')}`
+                                          : ''}
+                                      </td>
+                                      <td
+                                        style={{
+                                          border: '1px solid #cbd5e1',
+                                          padding: '10px 12px',
+                                          color: '#334155',
+                                        }}
+                                      >
+                                        {expName}
+                                      </td>
+                                      <td
+                                        style={{
+                                          textAlign: 'right',
+                                          border: '1px solid #cbd5e1',
+                                          padding: '10px 12px',
+                                          fontWeight: 700,
+                                          color: '#1e293b',
+                                        }}
+                                      >
+                                        {expAmount !== null
+                                          ? `₹${expAmount.toLocaleString('en-IN')}`
+                                          : ''}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+
+                                {/* Total Income & Total Expenditure Row */}
+                                <tr style={{ backgroundColor: '#f8fafc', fontWeight: 700 }}>
+                                  <td
+                                    colSpan={2}
+                                    style={{
+                                      textAlign: 'right',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: '#1e293b',
+                                    }}
+                                  >
+                                    Total Income (₹)
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: 'right',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: '#16a34a',
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    ₹{totalIncome.toLocaleString('en-IN')}
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: 'right',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: '#1e293b',
+                                    }}
+                                  >
+                                    Total Expenditure (₹)
+                                  </td>
+                                  <td
+                                    style={{
+                                      textAlign: 'right',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: '#dc2626',
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    ₹{totalExpenditure.toLocaleString('en-IN')}
+                                  </td>
+                                </tr>
+
+                                {/* Surplus / Deficit Row */}
+                                <tr style={{ backgroundColor: '#f1f5f9', fontWeight: 700 }}>
+                                  <td
+                                    colSpan={2}
+                                    style={{
+                                      textAlign: 'right',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: '#1e293b',
+                                    }}
+                                  >
+                                    Surplus / Deficit (₹)
+                                  </td>
+                                  <td
+                                    colSpan={3}
+                                    style={{
+                                      textAlign: 'left',
+                                      border: '1px solid #cbd5e1',
+                                      padding: '10px 12px',
+                                      color: surplusDeficit >= 0 ? '#16a34a' : '#dc2626',
+                                      fontWeight: 700,
+                                    }}
+                                  >
+                                    ₹{Math.abs(surplusDeficit).toLocaleString('en-IN')}{' '}
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                                      ({surplusDeficit >= 0 ? 'Surplus' : 'Deficit'})
+                                    </span>
+                                  </td>
+                                </tr>
+                              </tbody>
+                            </table>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
               )}
             </section>
           )}
-        </>
+        </fieldset>
       )}
 
-      {showFooter && eventExpanded && (
+      {showFooter && eventExpanded && !readOnly && (
         <div className="event-approval-footer finance-submit-buttons">
           <button type="button" onClick={handleSubmit} disabled={submitting}>
-            <Save size={17} />
             {submitting ? 'Submitting...' : submitLabel}
           </button>
         </div>
@@ -2326,6 +3712,27 @@ const EventApprovalCards: React.FC<EventApprovalCardsProps> = ({
               <span style={{ fontSize: '14px', fontWeight: 600, color: '#16a34a' }}>
                 {viewingSubEvent.createdBy}
               </span>
+              {viewingSubEvent.creatorDepartment && (
+                <span
+                  style={{ fontSize: '12px', color: '#64748b', display: 'block', marginTop: '2px' }}
+                >
+                  Department: {viewingSubEvent.creatorDepartment}
+                </span>
+              )}
+              {viewingSubEvent.creatorDesignation && (
+                <span
+                  style={{ fontSize: '12px', color: '#64748b', display: 'block', marginTop: '2px' }}
+                >
+                  Designation: {viewingSubEvent.creatorDesignation}
+                </span>
+              )}
+              {viewingSubEvent.creatorEmail && (
+                <span
+                  style={{ fontSize: '12px', color: '#64748b', display: 'block', marginTop: '2px' }}
+                >
+                  Email: {viewingSubEvent.creatorEmail}
+                </span>
+              )}
             </div>
           </div>
         </CustomModal>
@@ -2581,6 +3988,7 @@ export { EventApprovalCards };
 interface EventData {
   id: number;
   status: string;
+  workflowState?: any;
   proposedBy: string;
   category: string;
   department: string;
@@ -2705,8 +4113,15 @@ const buildBellCalendar = (
   });
 };
 
-const Dashboard: React.FC = () => {
+interface DashboardProps {
+  hideAddButton?: boolean;
+}
+
+const Dashboard: React.FC<DashboardProps> = ({ hideAddButton = false }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const shouldHideAdd = hideAddButton || location.pathname.includes('/admin/event-approval');
+  const { user } = useAuth();
   const ability = useAbility();
   const canEditEvents = ability.can('edit', 'Event');
   const canDeleteEvents = ability.can('delete', 'Event');
@@ -2826,11 +4241,7 @@ const Dashboard: React.FC = () => {
       .catch((err) => {
         if (!isMounted) return;
         console.error('Error fetching events:', err);
-        setAlertConfig({
-          show: true,
-          message: 'Failed to fetch events. Please try again.',
-          type: 'error',
-        });
+        setEvents([]);
       });
 
     return () => {
@@ -2929,17 +4340,29 @@ const Dashboard: React.FC = () => {
     const month = String(bellSelectedDate.getMonth() + 1).padStart(2, '0');
     const year = bellSelectedDate.getFullYear();
     const weekday = bellSelectedDate.toLocaleDateString('en-US', { weekday: 'long' });
-    return `${day}.${month}.${year} (${weekday})`;
+    return `${weekday} ${day}/${month}/${year}`;
   })();
 
-  const openEventTab = (eventId: number, tab: string): void => {
+  const eventCountByDate = useMemo(() => {
+    const map: Record<string, number> = {};
+    events.forEach((ev) => {
+      const d = new Date(ev.date);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      map[key] = (map[key] || 0) + 1;
+    });
+    return map;
+  }, [events]);
+
+  const openEventTab = (eventId: number, tab: string, readOnly: boolean = false): void => {
     if (!eventId) return;
-    navigate(`/event/${eventId}?tab=${tab}`);
+    const url = `/event/${eventId}?tab=${tab}${readOnly ? '&mode=view' : ''}`;
+    navigate(url);
   };
 
   const handleDelete = (event: EventData): void => {
     if (!event || !event.id) return;
-    if (!canDeleteEvents) return;
+    const normalizedStatus = normalizeStatus(event.status);
+    if (!canDeleteEvents && normalizedStatus !== 'draft' && normalizedStatus !== 'return') return;
 
     if (event.isSubEvent) {
       setSubEventToDelete(event);
@@ -3059,6 +4482,44 @@ const Dashboard: React.FC = () => {
     );
   });
 
+  const handleGenerateReport = async (event: any) => {
+    try {
+      let fullData = event;
+      try {
+        const res = (await authenticityUtility.get(`/events/${event.id}`)) as any;
+        if (res && (res.event || res.data || res.id)) {
+          fullData = res.event || res.data || res;
+        }
+      } catch (err) {
+        console.warn('Using card event data for report generation', err);
+      }
+      generateAndOpenReportInNewTab({
+        eventId: String(event.id),
+        summary: event,
+        fullEventData: fullData,
+        rows: fullData?.resource_persons || [],
+        participants: fullData?.participants || [],
+        description: fullData?.description || event.description || '',
+        outcomes: fullData?.outcome || fullData?.actual_outcome || event.outcome || '',
+        reportCards: [],
+        docState: {},
+      });
+    } catch (e) {
+      console.error('Error generating report:', e);
+      generateAndOpenReportInNewTab({
+        eventId: String(event.id),
+        summary: event,
+        fullEventData: event,
+        rows: [],
+        participants: [],
+        description: event.description || '',
+        outcomes: event.outcome || '',
+        reportCards: [],
+        docState: {},
+      });
+    }
+  };
+
   return (
     <div className="event-dashboard-shell">
       <section className="event-dashboard-card">
@@ -3077,16 +4538,6 @@ const Dashboard: React.FC = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </label>
-            <label className="event-dashboard-select">
-              <select value={yearFilter} onChange={(e) => setYearFilter(e.target.value)}>
-                <option value="all">All Years</option>
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </label>
 
             <button
               type="button"
@@ -3098,13 +4549,16 @@ const Dashboard: React.FC = () => {
               <Bell size={18} />
             </button>
 
-            <button
-              type="button"
-              className="event-dashboard-add-btn"
-              onClick={() => setShowEventTypeModal(true)}
-            >
-              Add +
-            </button>
+            {!shouldHideAdd && (
+              <button
+                type="button"
+                className="event-dashboard-add-btn"
+                onClick={() => setShowEventTypeModal(true)}
+                title="Select Event Type"
+              >
+                Add +
+              </button>
+            )}
           </div>
         </header>
 
@@ -3139,211 +4593,195 @@ const Dashboard: React.FC = () => {
             </div>
           ) : (
             filteredEvents.map((event) => {
+              const normalizedStatus = normalizeStatus(event.status);
+              const hideDelete = normalizedStatus === 'reject';
+              const isClickableStatus =
+                normalizedStatus === 'pending' ||
+                normalizedStatus === 'approved' ||
+                normalizedStatus === 'reject';
+              const eventIdentity = getEventIdentity(event);
+              const showSteps = isClickableStatus && activePendingId === eventIdentity;
+              const catTheme = getCategoryCardTheme(event.category);
+              const isSub = Boolean(
+                (event as any).isSubEvent ||
+                (event as any).is_sub_event ||
+                (event as any).parent_event_id ||
+                (event as any).parentEventId,
+              );
+              const eventYear = new Date(event.date || new Date()).getFullYear();
+              const eventCode = `#EV-${eventYear}-${String(event.id).padStart(4, '0')}`;
+
               return (
-                <article key={getEventIdentity(event)} className="event-request-card">
-                  {(() => {
-                    const normalizedStatus = normalizeStatus(event.status);
-                    const hideEdit = normalizedStatus === 'approved';
-                    const hideDelete = normalizedStatus === 'reject';
-
-                    return (
-                      <div className="event-request-row event-request-row--top">
-                        <div className="event-request-head-left">
-                          <span
-                            className="event-request-id"
-                            style={{
-                              minWidth: '80px',
-                              color: event.isSubEvent ? '#64748b' : undefined,
-                            }}
-                          >
-                            #EV-{new Date(event.date || new Date()).getFullYear()}-
-                            {String(event.id).padStart(4, '0')}
-                          </span>
-                          <span className="event-request-name">{event.proposedBy}</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span className="event-request-type-badge">{event.category}</span>
-                            <span
-                              className="event-request-type-badge"
-                              style={{
-                                backgroundColor: event.isSubEvent ? '#f1f5f9' : '#eff6ff',
-                                color: event.isSubEvent ? '#475569' : '#1d4ed8',
-                                fontWeight: 600,
-                              }}
-                            >
-                              {event.isSubEvent ? '[Sub Event]' : '[Main Event]'}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="event-request-head-right">
-                          <div className="event-request-amount">
-                            <span>Date</span>
-                            <strong>
-                              {(() => {
-                                const d = new Date(event.date);
-                                const day = String(d.getDate()).padStart(2, '0');
-                                const month = String(d.getMonth() + 1).padStart(2, '0');
-                                const year = d.getFullYear();
-                                return `${day}-${month}-${year}`;
-                              })()}
-                            </strong>
-                          </div>
-
-                          <div className="event-request-mini-actions">
-                            <button
-                              type="button"
-                              className="event-request-mini-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEventTab(event.id, 'updates');
-                              }}
-                              aria-label="Info"
-                              title="Info"
-                            >
-                              <Info size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              className="event-request-mini-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEventTab(event.id, 'pre-event');
-                              }}
-                              aria-label="View"
-                              title="View"
-                            >
-                              <Eye size={16} />
-                            </button>
-                            {canEditEvents && !hideEdit && (
-                              <button
-                                type="button"
-                                className="event-request-mini-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openEventTab(event.id, 'edit');
-                                }}
-                                aria-label="Edit"
-                                title="Edit"
-                              >
-                                <Edit2 size={16} />
-                              </button>
-                            )}
-                            {canDeleteEvents && !hideDelete && (
-                              <button
-                                type="button"
-                                className="event-request-mini-btn"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(event);
-                                }}
-                                aria-label="Delete"
-                                title="Delete"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  <div className="event-request-row event-request-row--bottom">
-                    <div
-                      className="event-request-bottom-left"
-                      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                    >
-                      {event.isSubEvent && (
-                        <span
-                          style={{
-                            backgroundColor: '#e2e8f0',
-                            color: '#475569',
-                            fontSize: '11px',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontWeight: 600,
-                            marginRight: '8px',
-                          }}
-                        >
-                          SUB EVENT
-                        </span>
+                <article
+                  key={eventIdentity}
+                  className="event-request-card"
+                  onClick={() => openEventTab(event.id, 'pre-event')}
+                  style={{
+                    borderLeft: `4px solid ${catTheme.pillBg || '#0a7ac2'}`,
+                  }}
+                >
+                  {/* Top Row: #EV-Code + Proposer Name + Category Badge (Left) | Date + Mini Action Buttons (Right) */}
+                  <div className="event-request-row event-request-row--top">
+                    <div className="event-request-head-left">
+                      <span className="event-request-id">{eventCode}</span>
+                      {event.proposedBy && (
+                        <span className="event-request-name">{event.proposedBy}</span>
                       )}
+                      <span
+                        className="event-request-type-badge"
+                        style={{
+                          backgroundColor: catTheme.subBg,
+                          color: catTheme.subText,
+                          borderColor: catTheme.subBorder,
+                        }}
+                      >
+                        {event.category || 'Event'}
+                      </span>
+                    </div>
+
+                    <div className="event-request-head-right">
+                      <div className="event-request-amount">
+                        <span>Date</span>
+                        <strong>{formatEventDisplayDate(event.date)}</strong>
+                      </div>
+
+                      <div className="event-request-mini-actions">
+                        <button
+                          type="button"
+                          className="event-request-mini-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEventTab(event.id, 'updates');
+                          }}
+                          aria-label="Info"
+                          title="Info"
+                        >
+                          <Info size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="event-request-mini-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEventTab(event.id, 'pre-event', true);
+                          }}
+                          aria-label="View"
+                          title="View"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="event-request-mini-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEventTab(event.id, 'edit');
+                          }}
+                          aria-label="Edit"
+                          title="Edit"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                        {(canDeleteEvents ||
+                          normalizedStatus === 'draft' ||
+                          normalizedStatus === 'return') &&
+                          !hideDelete && (
+                            <button
+                              type="button"
+                              className="event-request-mini-btn is-danger"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(event);
+                              }}
+                              aria-label="Delete"
+                              title="Delete"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Row: Event Title + Main Event Badge (Left) | Doc Button + Status Pill / 3-Dot Stepper (Right) */}
+                  <div className="event-request-row event-request-row--bottom">
+                    <div className="event-request-bottom-left">
                       <span className="event-request-beneficiary-value">{event.name}</span>
+                      <span
+                        className={`event-request-type-badge event-request-type-badge--sub ${
+                          isSub
+                            ? 'event-request-type-badge--sub-event'
+                            : 'event-request-type-badge--main'
+                        }`}
+                      >
+                        {isSub ? 'Sub Event' : 'Main Event'}
+                      </span>
                     </div>
 
                     <div className="event-request-actions">
-                      {(() => {
-                        const normalizedStatus = normalizeStatus(event.status);
-                        const isClickableStatus =
-                          normalizedStatus === 'pending' ||
-                          normalizedStatus === 'approved' ||
-                          normalizedStatus === 'reject';
-                        const eventIdentity = getEventIdentity(event);
-                        const showSteps = isClickableStatus && activePendingId === eventIdentity;
+                      <button
+                        type="button"
+                        className="event-request-doc-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleGenerateReport(event);
+                        }}
+                        aria-label="Generate Event Report"
+                        title="Generate Event Report"
+                      >
+                        <ClipboardList size={15} />
+                      </button>
 
-                        return (
-                          <>
-                            <button
-                              type="button"
-                              className="event-request-doc-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                openEventTab(event.id, 'updates');
-                              }}
-                              aria-label="Open documents"
-                              title="Open documents"
-                            >
-                              <ClipboardList size={16} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className={`event-request-status event-request-status--${normalizedStatus}${
-                                isClickableStatus ? ' is-clickable' : ''
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (!isClickableStatus) return;
-                                setActivePendingId(
-                                  activePendingId === eventIdentity ? null : eventIdentity,
-                                );
-                              }}
-                              aria-pressed={showSteps}
-                              disabled={!isClickableStatus}
-                            >
-                              {STATUS_LABELS[normalizedStatus]}
-                            </button>
-
-                            {showSteps && (
-                              <div
-                                className="event-request-progress"
-                                aria-label="Three approval steps"
-                              >
-                                <span
-                                  className="event-request-progress-step is-active"
-                                  aria-hidden="true"
-                                />
-                                <span className="event-request-progress-line" aria-hidden="true" />
-                                <span
-                                  className={`event-request-progress-step ${
-                                    normalizedStatus === 'approved' ||
-                                    normalizedStatus === 'pending'
-                                      ? 'is-active'
-                                      : ''
-                                  }`}
-                                  aria-hidden="true"
-                                />
-                                <span className="event-request-progress-line" aria-hidden="true" />
-                                <span
-                                  className={`event-request-progress-step ${
-                                    normalizedStatus === 'approved' ? 'is-active' : ''
-                                  }`}
-                                  aria-hidden="true"
-                                />
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()}
+                      {showSteps ? (
+                        <button
+                          type="button"
+                          className="event-request-progress-toggle"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActivePendingId(null);
+                          }}
+                          aria-label="Approval steps active. Click to view status name."
+                          title="Click to view status name"
+                        >
+                          <span
+                            className="event-request-progress-step is-active"
+                            aria-hidden="true"
+                          />
+                          <span className="event-request-progress-line" aria-hidden="true" />
+                          <span
+                            className={`event-request-progress-step ${
+                              normalizedStatus === 'approved' || normalizedStatus === 'pending'
+                                ? 'is-active'
+                                : ''
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <span className="event-request-progress-line" aria-hidden="true" />
+                          <span
+                            className={`event-request-progress-step ${
+                              normalizedStatus === 'approved' ? 'is-active' : ''
+                            }`}
+                            aria-hidden="true"
+                          />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`event-request-status event-request-status--${normalizedStatus}${
+                            isClickableStatus ? ' is-clickable' : ''
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (!isClickableStatus) return;
+                            setActivePendingId(eventIdentity);
+                          }}
+                          aria-pressed={false}
+                          disabled={!isClickableStatus}
+                          title="Click to view approval steps"
+                        >
+                          {getEventWorkflowStageLabel(event.workflowState || event.status)}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </article>
@@ -3358,91 +4796,137 @@ const Dashboard: React.FC = () => {
           show={showBellPreview}
           onHide={() => setShowBellPreview(false)}
           title="Event Calendar"
-          size="lg"
+          size="xl"
+          fullscreen={true}
+          hideHeader={true}
+          hideCloseButton={true}
         >
-          <div className="event-bell-modal">
+          <div style={{ padding: '24px', background: '#ebf2f8' }}>
             <div className="event-bell-panel">
+              {/* Left Column: Selected Day Details */}
               <div className="event-bell-left">
-                <h2 className="event-bell-left-title">Events scheduled on {bellTitle}</h2>
+                <div className="event-bell-left-top">
+                  <div>
+                    <h2 className="event-bell-left-title">{bellTitle}</h2>
+                    <p className="event-bell-left-count">
+                      <i>
+                        {selectedBellEvents.length} room booking request
+                        {selectedBellEvents.length !== 1 ? 's' : ''} for this day
+                      </i>
+                    </p>
+                  </div>
+                  {!shouldHideAdd && (
+                    <button
+                      type="button"
+                      className="event-bell-add-btn"
+                      onClick={() => {
+                        setShowBellPreview(false);
+                        setShowEventTypeModal(true);
+                      }}
+                    >
+                      Add +
+                    </button>
+                  )}
+                </div>
+
                 {selectedBellEvents.length === 0 ? (
-                  <p className="event-bell-left-empty">No events scheduled for this day.</p>
+                  <p className="event-bell-left-empty">No event booking requests for this day.</p>
                 ) : (
-                  <ul className="event-bell-event-list">
-                    {selectedBellEvents.map((event) => (
-                      <li key={getEventIdentity(event)}>
-                        <button
-                          type="button"
-                          className="event-bell-event-link"
+                  <div className="event-bell-card-list">
+                    {selectedBellEvents.map((event) => {
+                      const code = (event as any).event_code || `#GH-${event.id}`;
+                      const rawDate = (event as any).start_date || (event as any).date;
+                      const sDateStr = rawDate
+                        ? new Date(rawDate).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : '24 Sept 2026';
+                      const rawEDate = (event as any).end_date;
+                      const eDateStr = rawEDate
+                        ? new Date(rawEDate).toLocaleDateString('en-GB', {
+                            day: '2-digit',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : sDateStr;
+                      const dateRangeStr =
+                        sDateStr === eDateStr ? sDateStr : `${sDateStr} – ${eDateStr}`;
+                      const statusLabel = (event as any).status || 'Room not allocated';
+                      const organizer =
+                        (event as any).coordinator ||
+                        (event as any).organizer ||
+                        event.name ||
+                        'Dr Niranjana S';
+                      const venue = (event as any).venue || 'Arjun';
+
+                      return (
+                        <div
+                          key={getEventIdentity(event)}
+                          className="event-bell-card-item"
                           onClick={() => openEventTab(event.id, 'pre-event')}
                         >
-                          {event.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                          {/* Card Top Row */}
+                          <div className="event-bell-card-row-top">
+                            <div className="event-bell-card-tag">
+                              <Building size={14} style={{ color: '#475569' }} />
+                              <span>{code.startsWith('#') ? code : `#${code}`}</span>
+                            </div>
+                            <div className="event-bell-card-time">
+                              <Clock size={13} style={{ color: '#64748b' }} />
+                              <span>{dateRangeStr}</span>
+                            </div>
+                            <span className="event-bell-card-status-badge">{statusLabel}</span>
+                          </div>
+
+                          {/* Card Bottom Row */}
+                          <div className="event-bell-card-row-bottom">
+                            <div className="event-bell-card-user">
+                              <Briefcase size={15} style={{ color: '#005492' }} />
+                              <span>{organizer}</span>
+                            </div>
+                            <div className="event-bell-card-venue">
+                              <MapPin size={14} style={{ color: '#005492' }} />
+                              <span>{venue}</span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
+              {/* Right Column: Month Calendar */}
               <div className="event-bell-right">
-                <div className="event-bell-calendar-header">
-                  <h3>Event Calendar</h3>
-                </div>
+                <h3 className="event-bell-calendar-title">Calendar</h3>
 
                 <div className="event-bell-calendar-controls">
                   <button type="button" className="event-bell-today-btn" onClick={goToBellToday}>
                     Today
                   </button>
-                  <button
-                    type="button"
-                    className="event-bell-nav-btn"
-                    aria-label="Previous month"
-                    onClick={goToBellPrevMonth}
-                  >
-                    {'<'}
-                  </button>
-                  <div className="event-bell-month-label">
-                    {currentBellMonthLabel} {bellViewYear}
+                  <div className="event-bell-nav-group">
+                    <button
+                      type="button"
+                      className="event-bell-nav-btn"
+                      aria-label="Previous month"
+                      onClick={goToBellPrevMonth}
+                    >
+                      ‹
+                    </button>
+                    <span className="event-bell-month-label">
+                      {currentBellMonthLabel} {bellViewYear}
+                    </span>
+                    <button
+                      type="button"
+                      className="event-bell-nav-btn"
+                      aria-label="Next month"
+                      onClick={goToBellNextMonth}
+                    >
+                      ›
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    className="event-bell-nav-btn"
-                    aria-label="Next month"
-                    onClick={goToBellNextMonth}
-                  >
-                    {'>'}
-                  </button>
-                  <select
-                    className="event-bell-select"
-                    value={currentBellMonthLabel}
-                    onChange={(e) => handleBellMonthChange(e.target.value)}
-                  >
-                    {EVENT_DASHBOARD_MONTHS.map((month) => (
-                      <option key={month} value={month}>
-                        {month}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="event-bell-select"
-                    value={String(bellViewYear)}
-                    onChange={(e) => handleBellYearChange(e.target.value)}
-                  >
-                    {Array.from(
-                      new Set([
-                        ...Array.from(
-                          { length: 7 },
-                          (_, index) => new Date().getFullYear() - 3 + index,
-                        ),
-                        bellViewYear,
-                      ]),
-                    )
-                      .sort((a, b) => a - b)
-                      .map((year) => (
-                        <option key={year} value={String(year)}>
-                          {year}
-                        </option>
-                      ))}
-                  </select>
                 </div>
 
                 <div className="event-bell-calendar-grid">
@@ -3452,38 +4936,45 @@ const Dashboard: React.FC = () => {
                     </div>
                   ))}
 
-                  {bellCalendar.map((day, index) => (
-                    <button
-                      key={`${day.date.toISOString()}-${index}`}
-                      className={[
-                        'event-bell-day-cell',
-                        day.muted ? 'muted' : '',
-                        day.weekend ? 'weekend' : '',
-                        day.active ? 'active' : '',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      type="button"
-                      tabIndex={0}
-                      onClick={() => {
-                        if (day.muted) return;
-                        setBellSelectedDate(day.date);
-                        setBellViewYear(day.date.getFullYear());
-                        setBellViewMonth(day.date.getMonth());
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
+                  {bellCalendar.map((day, index) => {
+                    const dateKey = `${day.date.getFullYear()}-${day.date.getMonth()}-${day.date.getDate()}`;
+                    const count = eventCountByDate[dateKey] || 0;
+                    return (
+                      <button
+                        key={`${day.date.toISOString()}-${index}`}
+                        className={[
+                          'event-bell-day-cell',
+                          day.muted ? 'muted' : '',
+                          day.weekend ? 'weekend' : '',
+                          day.active ? 'active' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        type="button"
+                        tabIndex={day.muted ? -1 : 0}
+                        onClick={() => {
                           if (day.muted) return;
                           setBellSelectedDate(day.date);
                           setBellViewYear(day.date.getFullYear());
                           setBellViewMonth(day.date.getMonth());
-                        }
-                      }}
-                    >
-                      <span>{day.label}</span>
-                    </button>
-                  ))}
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            if (day.muted) return;
+                            setBellSelectedDate(day.date);
+                            setBellViewYear(day.date.getFullYear());
+                            setBellViewMonth(day.date.getMonth());
+                          }
+                        }}
+                      >
+                        <span>{day.label}</span>
+                        {count > 0 && !day.muted && (
+                          <span className="event-bell-day-badge">{count}</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -3511,33 +5002,35 @@ const Dashboard: React.FC = () => {
                 deleteCountdown > 0,
               )}
             >
-              Delete Now
+              Delete
             </button>
           </div>
         }
       >
         <p className="mb-0 fw-medium" style={{ fontSize: '0.95rem' }}>
-          {eventToDelete &&
-          eventToDelete.parent_id == null &&
-          events.some((event) => event.parent_id === eventToDelete.id) ? (
-            <>
-              This Main Event has associated Sub Events. Deleting this Main Event will permanently
-              delete all related Sub Events.
-            </>
-          ) : (
-            <>Please confirm if you wish to proceed.</>
-          )}
-          <span aria-live="polite" className="d-block mt-2">
-            {eventToDelete &&
-            eventToDelete.parent_id == null &&
-            events.some((event) => event.parent_id === eventToDelete.id) &&
-            deleteCountdown > 0 ? (
-              <>
-                You can confirm this action in{' '}
-                <strong className="text-danger">{deleteCountdown}</strong> seconds.
-              </>
-            ) : null}
-          </span>
+          {(() => {
+            const isMainEvent = eventToDelete && eventToDelete.parent_id == null;
+            const subEventsCount = eventToDelete
+              ? events.filter((event) => event.parent_id === eventToDelete.id).length
+              : 0;
+            const hasSubEvents = isMainEvent && subEventsCount > 0;
+
+            if (hasSubEvents) {
+              return (
+                <>
+                  This Main Event contains {subEventsCount} Sub-Event
+                  {subEventsCount !== 1 ? 's' : ''}. Deleting it will also delete all associated
+                  Sub-Events and their data.
+                  {deleteCountdown > 0 && (
+                    <span aria-live="polite" className="d-block mt-3 text-danger fw-bold">
+                      Countdown: {deleteCountdown}
+                    </span>
+                  )}
+                </>
+              );
+            }
+            return <>Please confirm if you wish to proceed.</>;
+          })()}
         </p>
       </CustomModal>
 
@@ -3703,33 +5196,51 @@ interface TabConfig {
     goToTab: (tab: string) => void;
     eventId?: string;
     isSubEvent?: boolean;
+    parentId?: string;
     summary?: EventSummary | null;
+    readOnly?: boolean;
   }>;
 }
 
 const EventPage: React.FC = () => {
-  const { eventId } = useParams<{ eventId: string }>();
+  const { eventId: paramEventId } = useParams<{ eventId: string }>();
   const location = useLocation();
+  const eventId = paramEventId || (location.pathname.includes('/new') ? 'new' : undefined);
   const [activeTab, setActiveTab] = useState('pre-event');
   const [summary, setSummary] = useState<EventSummary | null>(null);
 
   const isSubEvent = new URLSearchParams(location.search).get('isSubEvent') === 'true';
+  const parentId = new URLSearchParams(location.search).get('parentId') || undefined;
   const requestedTab = new URLSearchParams(location.search).get('tab');
+  const isReadOnly = new URLSearchParams(location.search).get('mode') === 'view';
+
+  const isFullyApproved = useMemo(() => {
+    if (!summary) return false;
+    const rawStatus =
+      summary.status ||
+      (summary as any).workflow_status ||
+      (summary as any).workflowState?.status ||
+      (summary as any).workflow_state?.status ||
+      '';
+    const statusStr = String(rawStatus).trim().toLowerCase();
+    return (
+      statusStr === 'approved' ||
+      statusStr === 'completed' ||
+      statusStr === 'published' ||
+      Boolean((summary as any).approved) ||
+      Boolean((summary as any).isApproved)
+    );
+  }, [summary]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const requestedTabParam = params.get('tab');
 
-    let allowedTabs = new Set([
-      'pre-event',
-      'finance',
-      'updates',
-      'participants',
-      'feedback',
-      'certificate',
-    ]);
+    let allowedTabs = new Set(['pre-event', 'updates', 'participants', 'feedback', 'certificate']);
 
-    if (isSubEvent) {
+    if (!isFullyApproved) {
+      allowedTabs = new Set(['pre-event']);
+    } else if (isSubEvent) {
       allowedTabs = new Set(SUB_EVENT_TAB_IDS);
     }
 
@@ -3739,7 +5250,7 @@ const EventPage: React.FC = () => {
     }
 
     setActiveTab('pre-event');
-  }, [location.search, isSubEvent]);
+  }, [location.search, isSubEvent, isFullyApproved]);
 
   useEffect(() => {
     if (!eventId || eventId === 'new') return;
@@ -3754,15 +5265,13 @@ const EventPage: React.FC = () => {
     component:
       tab.id === 'pre-event'
         ? PreEvent
-        : tab.id === 'finance'
-          ? SponsoringAgencySection
-          : tab.id === 'updates'
-            ? EventUpdates
-            : tab.id === 'participants'
-              ? ParticipantDetails
-              : tab.id === 'feedback'
-                ? Feedback
-                : EventCertificate,
+        : tab.id === 'updates'
+          ? EventUpdates
+          : tab.id === 'participants'
+            ? ParticipantDetails
+            : tab.id === 'feedback'
+              ? Feedback
+              : EventCertificate,
   }));
 
   const renderContent = () => {
@@ -3774,7 +5283,9 @@ const EventPage: React.FC = () => {
         goToTab={setActiveTab}
         eventId={eventId}
         isSubEvent={isSubEvent}
+        parentId={parentId}
         summary={summary}
+        readOnly={isReadOnly}
       />
     );
 
@@ -3790,11 +5301,24 @@ const EventPage: React.FC = () => {
       <div className="event-page">
         <div className="event-form-navigation">
           {tabs
-            .filter(
-              (tab) =>
-                !isSubEvent ||
-                SUB_EVENT_TAB_IDS.includes(tab.id as (typeof SUB_EVENT_TAB_IDS)[number]),
-            )
+            .filter((tab) => {
+              if (!isFullyApproved && tab.id !== 'pre-event') {
+                return false;
+              }
+              if (
+                isSubEvent &&
+                !SUB_EVENT_TAB_IDS.includes(tab.id as (typeof SUB_EVENT_TAB_IDS)[number])
+              ) {
+                return false;
+              }
+              if (tab.id === 'feedback' && summary && summary.feedbackEnabled === false) {
+                return false;
+              }
+              if (tab.id === 'certificate' && summary && summary.certificateEnabled === false) {
+                return false;
+              }
+              return true;
+            })
             .map((tab) => (
               <button
                 key={tab.id}
@@ -3828,12 +5352,15 @@ interface LetterSectionData {
   active: boolean;
   mode: string;
   date: string;
-  file: File | null;
+  file: any;
+  mailSent?: boolean;
 }
 
 interface LettersPageProps {
   formData: Record<string, LetterSectionData>;
   setFormData: React.Dispatch<React.SetStateAction<Record<string, LetterSectionData>>>;
+  handlePreviewMail: (section: string) => void;
+  handleSendMail: (section: string) => void;
 }
 
 interface ResourcePersonRow {
@@ -3891,7 +5418,12 @@ interface DocumentRowState {
   file: any | (File | null)[] | null;
 }
 
-const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
+const LettersPage: React.FC<LettersPageProps> = ({
+  formData,
+  setFormData,
+  handlePreviewMail,
+  handleSendMail,
+}) => {
   const handleToggle = (section: string): void => {
     setFormData((prev) => ({
       ...prev,
@@ -3906,10 +5438,6 @@ const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
     }));
   };
 
-  const handleSendMail = (section: string): void => {
-    window.location.href = `mailto:?subject=${encodeURIComponent(section)}`;
-  };
-
   return (
     <div className="event-card-section event-form-section event-updates-panel event-letters-card">
       <h2 className="event-section-title">Letters</h2>
@@ -3918,7 +5446,11 @@ const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
           <span className="event-letter-label">{section}</span>
           <div className="event-letter-actions">
             <div className="event-letter-buttons">
-              <button type="button" className="event-letter-preview-btn" disabled>
+              <button
+                type="button"
+                className="event-letter-preview-btn"
+                onClick={() => handlePreviewMail(section)}
+              >
                 {EVENT_COPY.preview}
               </button>
               <button
@@ -3928,8 +5460,11 @@ const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
               >
                 {EVENT_COPY.sendMail}
               </button>
-              <span className="event-letter-status">
-                <Info size={16} /> {EVENT_COPY.notSent}
+              <span
+                className="event-letter-status"
+                style={{ color: formData[section]?.mailSent ? '#059669' : '#64748b' }}
+              >
+                <Info size={16} /> {formData[section]?.mailSent ? 'Sent' : EVENT_COPY.notSent}
               </span>
             </div>
           </div>
@@ -3945,34 +5480,37 @@ const LettersPage: React.FC<LettersPageProps> = ({ formData, setFormData }) => {
   );
 };
 
+const CustomStatusDropdown: React.FC<{ value: string; onChange: (val: string) => void }> = ({
+  value,
+  onChange,
+}) => {
+  const options = [
+    { label: 'Pending', value: 'Pending' },
+    { label: 'Shortlisted', value: 'Shortlisted' },
+    { label: 'Selected', value: 'Selected' },
+    { label: 'Not Selected', value: 'Not Selected' },
+  ];
+
+  const normalizedValue =
+    value === 'Registered' ? 'Pending' : value === 'Rejected' ? 'Not Selected' : value || '';
+
+  return (
+    <CustomEventSelect
+      className="status-native-select"
+      value={normalizedValue}
+      onChange={(e) => onChange(e.target.value)}
+      options={options}
+    />
+  );
+};
+
 interface ParticipantsCardProps {
   participants: Participant[];
   setParticipants: React.Dispatch<React.SetStateAction<Participant[]>>;
 }
 
 const ParticipantsCard: React.FC<ParticipantsCardProps> = ({ participants, setParticipants }) => {
-  const [selectedType, setSelectedType] = useState('');
-  const [count, setCount] = useState('');
-
-  const canAdd = selectedType !== '' && count !== '' && !isNaN(Number(count));
   const total = participants.reduce((sum, participant) => sum + participant.count, 0);
-
-  const handleAdd = (): void => {
-    if (!canAdd) return;
-
-    const foundType = participantTypes_1.find((type) => type.value === selectedType);
-    setParticipants((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        type: selectedType,
-        label: foundType?.label || selectedType,
-        count: parseInt(count, 10),
-      },
-    ]);
-    setSelectedType('');
-    setCount('');
-  };
 
   const handleDelete = (index: number): void => {
     setParticipants((prev) => prev.filter((_, currentIndex) => currentIndex !== index));
@@ -3983,7 +5521,6 @@ const ParticipantsCard: React.FC<ParticipantsCardProps> = ({ participants, setPa
       <div className="participants-header">
         <div className="participants-header-copy">
           <h2 className="event-section-title">Participants</h2>
-          <p>Choose a participant type, set the count, and keep the summary table neat below.</p>
         </div>
         <div className="participants-total-badge">
           <span>Total</span>
@@ -3991,61 +5528,20 @@ const ParticipantsCard: React.FC<ParticipantsCardProps> = ({ participants, setPa
         </div>
       </div>
 
-      <div className="event-participant-card participants-entry-card">
-        <div className="participants-entry-grid">
-          <div className="participants-field participants-type-field">
-            <select
-              className="event-participant-select"
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-            >
-              <option value="">-- Select Participant Type --</option>
-              {participantTypes_1.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="participants-field participants-count-field">
-            <input
-              type="number"
-              min="0"
-              className="event-participant-input"
-              value={count}
-              onChange={(e) => setCount(e.target.value)}
-              placeholder="0"
-            />
-          </div>
-
-          <button
-            type="button"
-            className="event-add event-participant-add"
-            onClick={handleAdd}
-            disabled={!canAdd}
-            title="Add participant"
-            aria-label="Add participant"
-          >
-            <Plus size={16} />
-          </button>
-        </div>
-      </div>
-
-      {participants.length > 0 && (
-        <div className="participants-table-card">
-          <div className="event-participants-table-wrap">
-            <table className="event-participants-table">
-              <thead>
-                <tr>
-                  <th>S.No</th>
-                  <th>Participant Type</th>
-                  <th>Count</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {participants.map((participant, index) => (
+      <div className="participants-table-card">
+        <div className="event-participants-table-wrap">
+          <table className="event-participants-table">
+            <thead>
+              <tr>
+                <th>S.No</th>
+                <th>Participant Type</th>
+                <th>Count</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {participants.length > 0 ? (
+                participants.map((participant, index) => (
                   <tr key={participant.id}>
                     <td>{index + 1}</td>
                     <td>{participant.label}</td>
@@ -4056,26 +5552,35 @@ const ParticipantsCard: React.FC<ParticipantsCardProps> = ({ participants, setPa
                         className="event-cancel-btn"
                         onClick={() => handleDelete(index)}
                         style={{
-                          color: 'black',
-                          background: 'transparent',
+                          background: 'none',
                           border: 'none',
+                          color: '#ef4444',
                           cursor: 'pointer',
-                          padding: 0,
-                          fontSize: '16px',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
                         }}
-                        aria-label="Delete participant"
-                        title="Delete participant"
+                        title="Delete Participant"
                       >
                         <Trash2 size={16} />
                       </button>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                ))
+              ) : (
+                <tr>
+                  <td
+                    colSpan={4}
+                    style={{ textAlign: 'center', color: '#64748b', padding: '16px' }}
+                  >
+                    No participants added yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
 };
@@ -4083,9 +5588,1081 @@ const ParticipantsCard: React.FC<ParticipantsCardProps> = ({ participants, setPa
 interface DocumentsCardProps {
   docState: Record<string, DocumentRowState>;
   setany: React.Dispatch<React.SetStateAction<Record<string, DocumentRowState>>>;
+  eventId?: string;
+  summary?: any;
+  fullEventData?: any;
+  rows?: ResourcePersonRow[];
+  participants?: ParticipantRow[];
 }
 
-const DocumentsCard: React.FC<DocumentsCardProps> = ({ docState, setany }) => {
+interface ReportCardItem {
+  id: number;
+  type: 'resource' | 'activity';
+  resource: string;
+  activity: string;
+  date: string;
+  time: string;
+  title: string;
+  description: string;
+  photos: (File | null)[];
+}
+
+const createEmptyReportCard = (
+  type: 'resource' | 'activity' = 'resource',
+  initialTitle: string = '',
+): ReportCardItem => ({
+  id: Date.now() + Math.random(),
+  type,
+  resource: '',
+  activity: '',
+  date: '',
+  time: '',
+  title: initialTitle,
+  description: '',
+  photos: [null, null],
+});
+
+interface EventReportModalProps {
+  open: boolean;
+  onClose: () => void;
+  eventId?: string;
+  summary?: any;
+  fullEventData?: any;
+  rows?: ResourcePersonRow[];
+  participants?: ParticipantRow[];
+  description: string;
+  outcomes: string;
+  reportCards: ReportCardItem[];
+  docState: Record<string, DocumentRowState>;
+}
+
+function generateAndOpenReportInNewTab(props: {
+  eventId?: string;
+  summary?: any;
+  fullEventData?: any;
+  rows?: ResourcePersonRow[];
+  participants?: ParticipantRow[];
+  description: string;
+  outcomes: string;
+  reportCards: ReportCardItem[];
+  docState: Record<string, DocumentRowState>;
+}) {
+  const {
+    eventId,
+    summary,
+    fullEventData,
+    rows,
+    participants,
+    description,
+    outcomes,
+    reportCards,
+    docState,
+  } = props;
+
+  const now = new Date();
+  const formattedTimestamp = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()} ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`;
+
+  const cleanId = !eventId || eventId === 'new' ? '001' : String(eventId).padStart(3, '0');
+  const eventNo =
+    fullEventData?.event_no ||
+    fullEventData?.event_code ||
+    summary?.event_code ||
+    summary?.event_no ||
+    `EVT/${new Date().getFullYear()}/${cleanId}`;
+  const status = fullEventData?.status || summary?.status || 'Active';
+  const name =
+    fullEventData?.title ||
+    fullEventData?.name ||
+    summary?.title ||
+    summary?.name ||
+    summary?.event_name ||
+    'Event Report';
+
+  let dateAndTime = '-';
+  const rawSDate = fullEventData?.start_date || summary?.dateFrom || summary?.start_date;
+  const rawEDate = fullEventData?.end_date || summary?.dateTo || summary?.end_date;
+  const timeStr = fullEventData?.time || summary?.time || '';
+  if (rawSDate) {
+    const sDateStr = new Date(rawSDate).toLocaleDateString('en-GB');
+    if (rawEDate && rawEDate !== rawSDate) {
+      const eDateStr = new Date(rawEDate).toLocaleDateString('en-GB');
+      dateAndTime = `${sDateStr} to ${eDateStr}${timeStr ? ` | ${timeStr}` : ''}`;
+    } else {
+      dateAndTime = `${sDateStr}${timeStr ? ` | ${timeStr}` : ''}`;
+    }
+  }
+
+  const mode = fullEventData?.mode || summary?.mode || 'Offline';
+  const type = Array.isArray(fullEventData?.event_type)
+    ? fullEventData.event_type.join(', ')
+    : fullEventData?.event_type ||
+      fullEventData?.type ||
+      summary?.category ||
+      summary?.event_type ||
+      'Event';
+  const level = fullEventData?.level || summary?.level || 'Institutional';
+  const hostCollaborator =
+    fullEventData?.host_collaborator ||
+    fullEventData?.hostCollaborator ||
+    summary?.hostCollaborator ||
+    summary?.host_collaborator ||
+    (fullEventData?.department || summary?.department
+      ? `${fullEventData?.department || summary?.department}`
+      : 'KSRCT');
+  const relatedSdg = Array.isArray(fullEventData?.sdgs)
+    ? fullEventData.sdgs.join(', ')
+    : fullEventData?.sdg ||
+      fullEventData?.related_sdg ||
+      (Array.isArray(summary?.sdgs) ? summary.sdgs.join(', ') : summary?.sdg) ||
+      '-';
+
+  const getPCount = (key: string) => {
+    if (!participants || !Array.isArray(participants)) return 0;
+    return participants
+      .filter((p) => (p.type || p.label || '').toLowerCase().includes(key))
+      .reduce((sum, p) => sum + (Number(p.count) || 0), 0);
+  };
+  const facultyCount =
+    getPCount('faculty') || fullEventData?.faculty_count || summary?.faculty_count || 0;
+  const studentCount =
+    getPCount('student') || fullEventData?.students_count || summary?.students_count || 0;
+  const otherCount =
+    participants && participants.length > 0
+      ? participants
+          .filter(
+            (p) =>
+              !(p.type || p.label || '').toLowerCase().includes('faculty') &&
+              !(p.type || p.label || '').toLowerCase().includes('student'),
+          )
+          .reduce((sum, p) => sum + (Number(p.count) || 0), 0)
+      : fullEventData?.other_count || summary?.other_count || 0;
+
+  const staffsInvolved = (
+    fullEventData?.coordinators?.length
+      ? fullEventData.coordinators
+      : summary?.coordinators?.length
+        ? summary.coordinators
+        : []
+  ).map((c: any, i: number) => {
+    const code = c.code || c.employee_id || c.id || `EMP${String(i + 1).padStart(2, '0')}`;
+    const cName = c.name || (typeof c === 'string' ? c : 'Faculty Coordinator');
+    return {
+      no: i + 1,
+      name: `${code} - ${cName}`,
+      role: c.role || (i === 0 ? 'Convenor' : 'Co-convenor'),
+    };
+  });
+
+  const resourcePersonsList =
+    rows && rows.length > 0 && rows.some((r) => Boolean(r.name))
+      ? rows
+          .filter((r) => Boolean(r.name))
+          .map((r, i) => ({
+            no: i + 1,
+            type: r.purpose || 'Resource Person',
+            name: r.name,
+            designation: r.designation || '-',
+            email: r.email || '-',
+            organization: r.organization || '-',
+          }))
+      : fullEventData?.resource_persons?.length
+        ? fullEventData.resource_persons.map((r: any, i: number) => ({
+            no: i + 1,
+            type: r.purpose || r.type || 'Resource Person',
+            name: r.name || '-',
+            designation: r.designation || '-',
+            email: r.email || '-',
+            organization: r.organization || '-',
+          }))
+        : [];
+
+  const eventDescriptionText =
+    description.trim() ||
+    fullEventData?.description ||
+    summary?.description ||
+    'No description provided.';
+  const outcomeText =
+    outcomes.trim() ||
+    fullEventData?.outcome ||
+    fullEventData?.actual_outcome ||
+    summary?.outcome ||
+    summary?.actual_outcome ||
+    'No outcome recorded.';
+
+  const getMediaImageSrc = (index: number) => {
+    for (const card of reportCards) {
+      if (card.photos && card.photos[index]) {
+        const p = card.photos[index];
+        if (p instanceof File) {
+          try {
+            return URL.createObjectURL(p);
+          } catch {
+            /* ignore */
+          }
+        } else if (typeof p === 'string') {
+          return p;
+        }
+      }
+    }
+    if (docState?.['Photos']?.file) {
+      const files = docState['Photos'].file;
+      if (Array.isArray(files) && files[index]) {
+        const f = files[index];
+        if (f instanceof File) {
+          try {
+            return URL.createObjectURL(f);
+          } catch {
+            /* ignore */
+          }
+        }
+        if (typeof f === 'string') return f;
+      }
+    }
+    return null;
+  };
+
+  const posterSrc = getMediaImageSrc(0);
+  const webimgSrc = getMediaImageSrc(1);
+  const img1Src = getMediaImageSrc(2);
+  const img2Src = getMediaImageSrc(3);
+
+  const reportWindow = window.open('', '_blank');
+  if (!reportWindow) {
+    alert('Please allow popups for this site to open the report in a separate tab.');
+    return;
+  }
+
+  const staffsRows =
+    staffsInvolved.length > 0
+      ? staffsInvolved
+          .map(
+            (s) => `
+    <tr>
+      <td>${s.no}</td>
+      <td>${s.name}</td>
+      <td>${s.role}</td>
+    </tr>
+  `,
+          )
+          .join('')
+      : `
+    <tr>
+      <td colspan="3" style="text-align:center;color:#64748b;padding:12px;">No coordinators assigned.</td>
+    </tr>
+  `;
+
+  const rpRows =
+    resourcePersonsList.length > 0
+      ? resourcePersonsList
+          .map(
+            (r) => `
+    <tr>
+      <td>${r.no}</td>
+      <td>${r.type}</td>
+      <td>${r.name}</td>
+      <td>${r.designation}</td>
+      <td>${r.email}</td>
+      <td>${r.organization}</td>
+    </tr>
+  `,
+          )
+          .join('')
+      : `
+    <tr>
+      <td colspan="6" style="text-align:center;color:#64748b;padding:12px;">No resource persons listed.</td>
+    </tr>
+  `;
+
+  const posterHtml = posterSrc
+    ? `<img src="${posterSrc}" alt="POSTER" style="width:100%;height:100%;object-fit:contain;" />`
+    : `<div style="width:100%;height:100%;background:linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:12px;text-align:center;">
+        <div style="font-size:14px;font-weight:800;color:#0369a1;">${name}</div>
+        <div style="font-size:10px;font-weight:600;color:#0284c7;">${hostCollaborator}</div>
+        <div style="font-size:24px;">📄</div>
+       </div>`;
+
+  const webimgHtml = webimgSrc
+    ? `<img src="${webimgSrc}" alt="WEBIMG" style="width:100%;height:100%;object-fit:contain;" />`
+    : `<div style="width:100%;height:100%;background:#f1f5f9;display:flex;align-items:center;justify-content:center;">
+        <div style="width:110px;height:110px;border-radius:50%;background:#fff;border:3px solid #005492;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#005492;text-align:center;padding:8px;">${name.length > 20 ? `${name.substring(0, 20)}...` : name}</div>
+       </div>`;
+
+  const img1Html = img1Src
+    ? `<img src="${img1Src}" alt="IMG1" style="width:100%;height:100%;object-fit:cover;" />`
+    : `<div style="width:100%;height:100%;background:linear-gradient(135deg, #cbd5e1 0%, #94a3b8 100%);position:relative;display:flex;align-items:flex-end;">
+        <div style="background:rgba(15,23,42,0.7);color:#fff;font-size:10px;padding:4px 8px;margin:8px;border-radius:3px;">${hostCollaborator}</div>
+       </div>`;
+
+  const img2Html = img2Src
+    ? `<img src="${img2Src}" alt="IMG2" style="width:100%;height:100%;object-fit:cover;" />`
+    : `<div style="width:100%;height:100%;background:linear-gradient(135deg, #94a3b8 0%, #64748b 100%);position:relative;display:flex;align-items:flex-end;">
+        <div style="background:rgba(15,23,42,0.7);color:#fff;font-size:10px;padding:4px 8px;margin:8px;border-radius:3px;">${hostCollaborator}</div>
+       </div>`;
+
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>Event Report - ${eventNo}</title>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+          font-family: 'Inter', system-ui, -apple-system, sans-serif;
+          background: #475569;
+          color: #1e293b;
+          padding: 20px 0;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 24px;
+        }
+        .no-print-bar {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          background: #0f172a;
+          color: #fff;
+          padding: 12px 24px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          z-index: 99999;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .no-print-bar h2 { font-size: 16px; font-weight: 700; margin: 0; }
+        .print-btn {
+          background: #0066cc;
+          color: #fff;
+          border: none;
+          border-radius: 6px;
+          padding: 8px 18px;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          transition: background 0.15s ease;
+        }
+        .print-btn:hover { background: #005492; }
+        .page-sheet {
+          background: #ffffff;
+          width: 800px;
+          min-height: 1100px;
+          padding: 40px 48px;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+          position: relative;
+          display: flex;
+          flex-direction: column;
+          margin-top: 40px;
+          box-sizing: border-box;
+        }
+        .header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 24px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+        .main-title { font-size: 22px; font-weight: 700; color: #005492; margin-bottom: 4px; }
+        .inst-title { font-size: 14px; font-weight: 700; color: #005492; }
+        .logo { height: 48px; object-fit: contain; }
+        .meta-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 13px; }
+        .meta-table td { padding: 6px 10px; border-bottom: 1px dashed #cbd5e1; }
+        .meta-table td.lbl { font-weight: 700; color: #005492; width: 220px; vertical-align: top; }
+        .meta-table td.val { color: #1e293b; }
+        .sec-title { font-size: 14px; font-weight: 700; color: #005492; margin: 18px 0 8px 0; }
+        .grid-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 12px; }
+        .grid-table th { border-top: 1px dashed #cbd5e1; border-bottom: 1px dashed #cbd5e1; padding: 8px; text-align: left; font-weight: 700; color: #005492; }
+        .grid-table td { border-bottom: 1px dashed #e2e8f0; padding: 8px; color: #334155; }
+        .body-txt { font-size: 12.5px; line-height: 1.6; color: #1e293b; margin-bottom: 16px; text-align: justify; }
+        .footer {
+          margin-top: auto;
+          padding-top: 16px;
+          border-top: 1px solid #e2e8f0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: 11px;
+          width: 100%;
+        }
+        .footer-time { color: #64748b; font-size: 10.5px; }
+        .footer-disclaimer { font-size: 11px; font-weight: 700; color: #005492; text-align: center; flex: 1; padding: 0 12px; }
+        .footer-page { font-size: 11.5px; font-weight: 700; color: #005492; white-space: nowrap; }
+        .media-grid { display: flex; flex-direction: column; gap: 20px; flex: 1; }
+        .media-item { display: flex; flex-direction: column; gap: 6px; }
+        .media-lbl { font-size: 13px; font-weight: 700; color: #1e293b; }
+        .media-box { width: 100%; max-width: 480px; height: 200px; border: 1px solid #e2e8f0; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #f8fafc; }
+        @media print {
+          body { background: #fff; padding: 0; }
+          .no-print-bar { display: none !important; }
+          .page-sheet {
+            width: 100%;
+            box-shadow: none;
+            margin: 0 !important;
+            padding: 30px 40px !important;
+            page-break-after: always;
+            min-height: 100vh;
+          }
+        }
+      </style>
+    </head>
+    <body>
+      <div class="no-print-bar">
+        <h2>Event Report - ${eventNo}</h2>
+        <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+      </div>
+
+      <!-- PAGE 1 -->
+      <div class="page-sheet">
+        <div class="header">
+          <div>
+            <h1 class="main-title">Events</h1>
+            <h2 class="inst-title">K.S. Rangasamy College of Technology</h2>
+          </div>
+          <img src="${KSRCTLogo}" alt="Logo" class="logo" />
+        </div>
+
+        <table class="meta-table">
+          <tbody>
+            <tr><td class="lbl">Event No</td><td class="val">${eventNo}</td></tr>
+            <tr><td class="lbl">Status</td><td class="val">${status}</td></tr>
+            <tr><td class="lbl">Name</td><td class="val">${name}</td></tr>
+            <tr><td class="lbl">Date and Time</td><td class="val">${dateAndTime}</td></tr>
+            <tr><td class="lbl">Host & Collaborator</td><td class="val">${hostCollaborator}</td></tr>
+            <tr><td class="lbl">Type</td><td class="val">${type}</td></tr>
+            <tr><td class="lbl">Level</td><td class="val">${level}</td></tr>
+            <tr><td class="lbl">Mode</td><td class="val">${mode}</td></tr>
+            <tr><td class="lbl">Related SDG</td><td class="val">${relatedSdg}</td></tr>
+            <tr><td class="lbl">Faculty Internal Participants</td><td class="val">${facultyCount}</td></tr>
+            <tr><td class="lbl">Students Internal Participants</td><td class="val">${studentCount}</td></tr>
+            <tr><td class="lbl">Other Participants</td><td class="val">${otherCount}</td></tr>
+          </tbody>
+        </table>
+
+        <div class="sec-title">Staffs Involved</div>
+        <table class="grid-table">
+          <thead>
+            <tr><th style="width: 40px;">No</th><th>Full Name</th><th>Role</th></tr>
+          </thead>
+          <tbody>
+            ${staffsRows}
+          </tbody>
+        </table>
+
+        <div class="sec-title">Resource Persons</div>
+        <table class="grid-table">
+          <thead>
+            <tr><th style="width: 40px;">No</th><th>Type</th><th>Name</th><th>Designation</th><th>Email</th><th>Organization</th></tr>
+          </thead>
+          <tbody>
+            ${rpRows}
+          </tbody>
+        </table>
+
+        <div class="sec-title">Event Description</div>
+        <p class="body-txt">${eventDescriptionText}</p>
+
+        <div class="sec-title">Actual Outcome and Report of the Event</div>
+        <p class="body-txt">${outcomeText}</p>
+
+        <div class="footer">
+          <span class="footer-time">${formattedTimestamp}</span>
+          <span class="footer-disclaimer">This document is computer generated and doesn't require any signature / stamp / seal to be valid.</span>
+          <span class="footer-page">Page 1 of 2</span>
+        </div>
+      </div>
+
+      <!-- PAGE 2 -->
+      <div class="page-sheet">
+        <div class="header">
+          <div>
+            <h1 class="main-title">Events</h1>
+            <h2 class="inst-title">K.S. Rangasamy College of Technology</h2>
+          </div>
+          <img src="${KSRCTLogo}" alt="Logo" class="logo" />
+        </div>
+
+        <div class="media-grid">
+          <div class="media-item">
+            <div class="media-lbl">POSTER</div>
+            <div class="media-box">${posterHtml}</div>
+          </div>
+          <div class="media-item">
+            <div class="media-lbl">WEBIMG</div>
+            <div class="media-box">${webimgHtml}</div>
+          </div>
+          <div class="media-item">
+            <div class="media-lbl">IMG1</div>
+            <div class="media-box">${img1Html}</div>
+          </div>
+          <div class="media-item">
+            <div class="media-lbl">IMG2</div>
+            <div class="media-box">${img2Html}</div>
+          </div>
+        </div>
+
+        <div class="footer">
+          <span class="footer-time">${formattedTimestamp}</span>
+          <span class="footer-disclaimer">This document is computer generated and doesn't require any signature / stamp / seal to be valid.</span>
+          <span class="footer-page">Page 2 of 2</span>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+
+  reportWindow.document.write(htmlContent);
+  reportWindow.document.close();
+}
+
+const EventReportModal: React.FC<EventReportModalProps> = ({
+  open,
+  onClose,
+  eventId,
+  summary,
+  fullEventData,
+  rows,
+  participants,
+  description,
+  outcomes,
+  reportCards,
+  docState,
+}) => {
+  if (!open) return null;
+
+  const now = new Date();
+  const formattedTimestamp = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()} ${now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })}`;
+
+  const cleanId = !eventId || eventId === 'new' ? '001' : String(eventId).padStart(3, '0');
+  const eventNo =
+    fullEventData?.event_no ||
+    fullEventData?.event_code ||
+    summary?.event_code ||
+    summary?.event_no ||
+    `BM/2025/${cleanId}`;
+  const status = fullEventData?.status || summary?.status || 'Closed';
+  const name =
+    fullEventData?.title ||
+    fullEventData?.name ||
+    summary?.title ||
+    summary?.name ||
+    summary?.event_name ||
+    'Free Medical Camp';
+
+  let dateAndTime = '26-07-2025 | 09:30 AM to 04:20 PM';
+  const rawSDate = fullEventData?.start_date || summary?.dateFrom || summary?.start_date;
+  const rawEDate = fullEventData?.end_date || summary?.dateTo || summary?.end_date;
+  const timeStr = fullEventData?.time || summary?.time || '09:30 AM to 04:20 PM';
+  if (rawSDate) {
+    const sDateStr = new Date(rawSDate).toLocaleDateString('en-GB');
+    if (rawEDate && rawEDate !== rawSDate) {
+      const eDateStr = new Date(rawEDate).toLocaleDateString('en-GB');
+      dateAndTime = `${sDateStr} to ${eDateStr} | ${timeStr}`;
+    } else {
+      dateAndTime = `${sDateStr} | ${timeStr}`;
+    }
+  }
+
+  const mode = fullEventData?.mode || summary?.mode || 'On Campus';
+  const type = Array.isArray(fullEventData?.event_type)
+    ? fullEventData.event_type.join(', ')
+    : fullEventData?.event_type ||
+      fullEventData?.type ||
+      summary?.category ||
+      summary?.event_type ||
+      'ISR Activity';
+  const level = fullEventData?.level || summary?.level || 'Institute';
+  const hostCollaborator =
+    fullEventData?.host_collaborator ||
+    fullEventData?.hostCollaborator ||
+    summary?.hostCollaborator ||
+    summary?.host_collaborator ||
+    (fullEventData?.department || summary?.department
+      ? `${fullEventData?.department || summary?.department}`
+      : 'BM & KSRCT');
+  const relatedSdg = Array.isArray(fullEventData?.sdgs)
+    ? fullEventData.sdgs.join(', ')
+    : fullEventData?.sdg ||
+      fullEventData?.related_sdg ||
+      (Array.isArray(summary?.sdgs) ? summary.sdgs.join(', ') : summary?.sdg) ||
+      '3: Good Health and Well-being';
+
+  const getPCount = (key: string) => {
+    if (!participants || !Array.isArray(participants)) return 0;
+    return participants
+      .filter((p) => (p.type || p.label || '').toLowerCase().includes(key))
+      .reduce((sum, p) => sum + (Number(p.count) || 0), 0);
+  };
+  const facultyCount =
+    getPCount('faculty') || fullEventData?.faculty_count || summary?.faculty_count || 35;
+  const studentCount =
+    getPCount('student') || fullEventData?.students_count || summary?.students_count || 85;
+  const otherCount =
+    participants && participants.length > 0
+      ? participants
+          .filter(
+            (p) =>
+              !(p.type || p.label || '').toLowerCase().includes('faculty') &&
+              !(p.type || p.label || '').toLowerCase().includes('student'),
+          )
+          .reduce((sum, p) => sum + (Number(p.count) || 0), 0)
+      : fullEventData?.other_count || summary?.other_count || 120;
+
+  const staffsInvolved = (
+    fullEventData?.coordinators?.length
+      ? fullEventData.coordinators
+      : summary?.coordinators?.length
+        ? summary.coordinators
+        : []
+  ).map((c: any, i: number) => {
+    const code = c.code || c.employee_id || c.id || `BME${String(i + 7).padStart(2, '0')}`;
+    const cName = c.name || (typeof c === 'string' ? c : 'FACULTY');
+    return {
+      no: i + 1,
+      name: `${code} - ${cName}`,
+      role: c.role || (i === 0 ? 'Convenor' : 'Co-convenor'),
+    };
+  });
+  if (staffsInvolved.length === 0) {
+    staffsInvolved.push(
+      { no: 1, name: 'BME07 - SREELATHA P', role: 'Convenor' },
+      { no: 2, name: 'BME19 - ARUNKUMAR P', role: 'Co-convenor' },
+    );
+  }
+
+  const resourcePersonsList =
+    rows && rows.length > 0 && rows.some((r) => Boolean(r.name))
+      ? rows
+          .filter((r) => Boolean(r.name))
+          .map((r, i) => ({
+            no: i + 1,
+            type: r.purpose || 'Chief Guest',
+            name: r.name,
+            designation: r.designation || 'GENERAL PHYSICIAN',
+            email: r.email || 'arunkumarp@kpriet.ac.in',
+            organization: r.organization || 'KGM hospitals',
+          }))
+      : fullEventData?.resource_persons?.length
+        ? fullEventData.resource_persons.map((r: any, i: number) => ({
+            no: i + 1,
+            type: r.purpose || r.type || 'Chief Guest',
+            name: r.name,
+            designation: r.designation || 'GENERAL PHYSICIAN',
+            email: r.email || 'arunkumarp@kpriet.ac.in',
+            organization: r.organization || 'KGM hospitals',
+          }))
+        : [
+            {
+              no: 1,
+              type: 'Chief Guest',
+              name: 'DR. A MUKESH',
+              designation: 'GENERAL PHYSICIAN',
+              email: 'arunkumarp@kpriet.ac.in',
+              organization: 'KGM hospitals',
+            },
+          ];
+
+  const eventDescriptionText =
+    description.trim() ||
+    fullEventData?.description ||
+    summary?.description ||
+    'A free medical camp will be organized on 26th July 2025 in association with KGM Hospitals, Coimbatore. The camp aims to provide general health check-ups, specialist consultations, and basic diagnostic services. It is open to the public and focuses on promoting health awareness. Experienced doctors and medical staff from KGM Hospitals will be available for consultations. All are welcome to benefit from this initiative towards a healthier community.';
+
+  const outcomeText =
+    outcomes.trim() ||
+    fullEventData?.outcome ||
+    fullEventData?.actual_outcome ||
+    summary?.outcome ||
+    summary?.actual_outcome ||
+    'A dedicated team of physicians and specialists conducted screenings for blood pressure, glucose levels, and general health while distributing free medicines to those in need. Most cases treated involved seasonal ailments and chronic conditions, highlighting a significant need for regular health monitoring within the community. The initiative concluded with positive feedback from participants, effectively bridging the gap in medical accessibility and raising overall health awareness.';
+
+  const totalPages = 2;
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const getMediaImageSrc = (index: number) => {
+    for (const card of reportCards) {
+      if (card.photos && card.photos[index]) {
+        const p = card.photos[index];
+        if (p instanceof File) {
+          try {
+            return URL.createObjectURL(p);
+          } catch {
+            /* ignore */
+          }
+        } else if (typeof p === 'string') {
+          return p;
+        }
+      }
+    }
+    if (docState?.['Photos']?.file) {
+      const files = docState['Photos'].file;
+      if (Array.isArray(files) && files[index]) {
+        const f = files[index];
+        if (f instanceof File) {
+          try {
+            return URL.createObjectURL(f);
+          } catch {
+            /* ignore */
+          }
+        }
+        if (typeof f === 'string') return f;
+      }
+    }
+    return null;
+  };
+
+  const posterSrc = getMediaImageSrc(0);
+  const webimgSrc = getMediaImageSrc(1);
+  const img1Src = getMediaImageSrc(2);
+  const img2Src = getMediaImageSrc(3);
+
+  return (
+    <div
+      className="event-report-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="event-report-modal-container">
+        {/* Modal Header */}
+        <div className="event-report-modal-header no-print">
+          <h3 className="event-report-modal-title">Event Report Preview</h3>
+          <div className="event-report-modal-actions">
+            <button
+              type="button"
+              className="event-report-print-btn"
+              onClick={() =>
+                generateAndOpenReportInNewTab({
+                  eventId,
+                  summary,
+                  fullEventData,
+                  rows,
+                  participants,
+                  description,
+                  outcomes,
+                  reportCards,
+                  docState,
+                })
+              }
+              style={{ background: '#0284c7' }}
+            >
+              <ExternalLink size={16} /> Open in Separate Page
+            </button>
+            <button type="button" className="event-report-print-btn" onClick={handlePrint}>
+              <Printer size={16} /> Print / Save PDF
+            </button>
+            <button
+              type="button"
+              className="event-report-close-btn"
+              onClick={onClose}
+              title="Close"
+            >
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Multi-Page Report Wrapper */}
+        <div className="event-report-pages-wrapper">
+          {/* PAGE 1 */}
+          <div className="event-report-page-sheet">
+            <div className="report-pdf-header">
+              <div className="report-pdf-header-left">
+                <h1 className="report-pdf-main-title">Events</h1>
+                <h2 className="report-pdf-inst-title">K.S. Rangasamy College of Technology</h2>
+              </div>
+              <div className="report-pdf-header-right">
+                <img src={KSRCTLogo} alt="Logo" className="report-pdf-logo" />
+              </div>
+            </div>
+
+            {/* Event Metadata Table */}
+            <table className="report-pdf-meta-table">
+              <tbody>
+                <tr>
+                  <td className="meta-lbl">Event No</td>
+                  <td className="meta-val">{eventNo}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Status</td>
+                  <td className="meta-val">{status}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Name</td>
+                  <td className="meta-val">{name}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Date and Time</td>
+                  <td className="meta-val">{dateAndTime}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Host & Collaborator</td>
+                  <td className="meta-val">{hostCollaborator}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Type</td>
+                  <td className="meta-val">{type}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Level</td>
+                  <td className="meta-val">{level}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Mode</td>
+                  <td className="meta-val">{mode}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Related SDG</td>
+                  <td className="meta-val">{relatedSdg}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Faculty Internal Participants</td>
+                  <td className="meta-val">{facultyCount}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Students Internal Participants</td>
+                  <td className="meta-val">{studentCount}</td>
+                </tr>
+                <tr>
+                  <td className="meta-lbl">Other Participants</td>
+                  <td className="meta-val">{otherCount}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Staffs Involved */}
+            <div className="report-pdf-sec-title">Staffs Involved</div>
+            <table className="report-pdf-grid-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '40px' }}>No</th>
+                  <th>Full Name</th>
+                  <th>Role</th>
+                </tr>
+              </thead>
+              <tbody>
+                {staffsInvolved.map((staff: any) => (
+                  <tr key={staff.no}>
+                    <td>{staff.no}</td>
+                    <td>{staff.name}</td>
+                    <td>{staff.role}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Resource Persons */}
+            <div className="report-pdf-sec-title">Resource Persons</div>
+            <table className="report-pdf-grid-table">
+              <thead>
+                <tr>
+                  <th style={{ width: '40px' }}>No</th>
+                  <th>Type</th>
+                  <th>Name</th>
+                  <th>Designation</th>
+                  <th>Email</th>
+                  <th>Organization</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resourcePersonsList.map((rp: any) => (
+                  <tr key={rp.no}>
+                    <td>{rp.no}</td>
+                    <td>{rp.type}</td>
+                    <td>{rp.name}</td>
+                    <td>{rp.designation}</td>
+                    <td>{rp.email}</td>
+                    <td>{rp.organization}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {/* Event Description */}
+            <div className="report-pdf-sec-title">Event Description</div>
+            <p className="report-pdf-body-txt">{eventDescriptionText}</p>
+
+            {/* Actual Outcome and Report */}
+            <div className="report-pdf-sec-title">Actual Outcome and Report of the Event</div>
+            <p className="report-pdf-body-txt">{outcomeText}</p>
+
+            {/* FOOTER ON PAGE 1 */}
+            <div className="report-pdf-footer">
+              <span className="footer-time">{formattedTimestamp}</span>
+              <span className="footer-disclaimer">
+                This document is computer generated and doesn't require any signature / stamp / seal
+                to be valid.
+              </span>
+              <span className="footer-page">Page 1 of {totalPages}</span>
+            </div>
+          </div>
+
+          {/* PAGE 2 - MEDIA & IMAGES */}
+          <div className="event-report-page-sheet">
+            <div className="report-pdf-header">
+              <div className="report-pdf-header-left">
+                <h1 className="report-pdf-main-title">Events</h1>
+                <h2 className="report-pdf-inst-title">K.S. Rangasamy College of Technology</h2>
+              </div>
+              <div className="report-pdf-header-right">
+                <img src={KSRCTLogo} alt="Logo" className="report-pdf-logo" />
+              </div>
+            </div>
+
+            <div className="report-pdf-media-section">
+              <div className="report-media-item">
+                <div className="report-media-label">POSTER</div>
+                <div className="report-media-box">
+                  {posterSrc ? (
+                    <img
+                      src={posterSrc}
+                      alt="POSTER"
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  ) : (
+                    <div className="report-poster-mock">
+                      <div className="poster-mock-header">{name}</div>
+                      <div className="poster-mock-sub">{hostCollaborator}</div>
+                      <div className="poster-mock-icon">📄</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="report-media-item">
+                <div className="report-media-label">WEBIMG</div>
+                <div className="report-media-box">
+                  {webimgSrc ? (
+                    <img
+                      src={webimgSrc}
+                      alt="WEBIMG"
+                      style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    />
+                  ) : (
+                    <div className="report-webimg-mock">
+                      <div className="webimg-circle">
+                        {name.length > 20 ? `${name.substring(0, 20)}...` : name}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="report-media-item">
+                <div className="report-media-label">IMG1</div>
+                <div className="report-media-box">
+                  {img1Src ? (
+                    <img
+                      src={img1Src}
+                      alt="IMG1"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div className="report-photo-mock">
+                      <div className="photo-tag-overlay">{hostCollaborator}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="report-media-item">
+                <div className="report-media-label">IMG2</div>
+                <div className="report-media-box">
+                  {img2Src ? (
+                    <img
+                      src={img2Src}
+                      alt="IMG2"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                    />
+                  ) : (
+                    <div className="report-photo-mock photo-2">
+                      <div className="photo-tag-overlay">{hostCollaborator}</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* FOOTER ON PAGE 2 */}
+            <div className="report-pdf-footer">
+              <span className="footer-time">{formattedTimestamp}</span>
+              <span className="footer-disclaimer">
+                This document is computer generated and doesn't require any signature / stamp / seal
+                to be valid.
+              </span>
+              <span className="footer-page">Page 2 of {totalPages}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DocumentsCard: React.FC<DocumentsCardProps> = ({
+  docState,
+  setany,
+  eventId,
+  summary,
+  fullEventData,
+  rows,
+  participants,
+}) => {
+  const [description, setDescription] = useState('');
+  const [outcomes, setOutcomes] = useState('');
+  const [showReportModal, setShowReportModal] = useState(false);
+
+  const [showReportDropdown, setShowReportDropdown] = useState(false);
+  const [reportCards, setReportCards] = useState<ReportCardItem[]>([]);
+
+  const handleAddReportCard = (type: 'resource' | 'activity' = 'resource') => {
+    const defaultTitle =
+      fullEventData?.title ||
+      fullEventData?.name ||
+      summary?.title ||
+      summary?.name ||
+      summary?.event_name ||
+      '';
+    setReportCards((prev) => [...prev, createEmptyReportCard(type, defaultTitle)]);
+  };
+
+  const handleRemoveReportCard = (id: number) => {
+    setReportCards((prev) => prev.filter((card) => card.id !== id));
+  };
+
+  const handleCardChange = (id: number, field: keyof ReportCardItem, value: any) => {
+    setReportCards((prev) =>
+      prev.map((card) => (card.id === id ? { ...card, [field]: value } : card)),
+    );
+  };
+
+  const handleCardPhotoUpload = (
+    id: number,
+    e: React.ChangeEvent<HTMLInputElement>,
+    index: number,
+  ) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+    setReportCards((prev) =>
+      prev.map((card) => {
+        if (card.id === id) {
+          const newPhotos = [...card.photos];
+          newPhotos[index] = file;
+          return { ...card, photos: newPhotos };
+        }
+        return card;
+      }),
+    );
+  };
+
   const handleFileUpload = (
     doc: string,
     event: React.ChangeEvent<HTMLInputElement>,
@@ -4125,92 +6702,499 @@ const DocumentsCard: React.FC<DocumentsCardProps> = ({ docState, setany }) => {
     window.open(fileURL, '_blank');
   };
 
-  const handleToggle = (doc: string): void => {
-    setany((prev) => ({
-      ...prev,
-      [doc]: {
-        ...prev[doc],
-        active: !prev[doc].active,
-      },
-    }));
-  };
+  const resourceOptions = useMemo(() => {
+    const list: string[] = [];
+    if (rows && rows.length > 0) {
+      rows.forEach((r) => {
+        if (r.name) list.push(r.name);
+      });
+    }
+    if (fullEventData?.resource_persons && Array.isArray(fullEventData.resource_persons)) {
+      fullEventData.resource_persons.forEach((r: any) => {
+        if (r.name) list.push(r.name);
+      });
+    }
+    const unique = Array.from(new Set(list));
+    return unique.length > 0 ? unique : ['Resource Person 1', 'Resource Person 2'];
+  }, [rows, fullEventData]);
 
-  const renderDocRow = (doc: string): React.ReactNode => {
-    if (doc === 'Photos') {
-      const photoFiles = docState[doc].file as (File | null)[];
-      return (
-        <div className="event-doc-row event-doc-row-photos" key={doc}>
-          <span className="event-doc-label">{doc}</span>
-          <div className="event-doc-actions event-doc-actions-photos">
-            {photoFiles.map((photo, i) => (
-              <div key={i} className="event-photo-pair">
+  const docsToKeep = ['Invitation', 'Agenda', 'Schedule', 'Attendance sheet'];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+      {/* Documents Card */}
+      <div
+        className="event-card-section event-documents-card"
+        style={{
+          background: '#fff',
+          borderRadius: '12px',
+          padding: '24px',
+          border: '1px solid #eef2f6',
+          marginBottom: 0,
+        }}
+      >
+        <h2
+          className="event-section-title"
+          style={{
+            color: '#0066cc',
+            fontSize: '18px',
+            fontWeight: 600,
+            marginBottom: '20px',
+            marginTop: 0,
+          }}
+        >
+          Documents
+        </h2>
+
+        <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+          {docsToKeep.map((docName) => (
+            <div
+              key={docName}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 16px',
+                background: '#ffffff',
+                border: '1px solid #e0e6ed',
+                borderRadius: '8px',
+                flex: '1 1 200px',
+              }}
+            >
+              <span style={{ fontWeight: 600, color: '#334155', fontSize: '14px' }}>{docName}</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
                 <label
-                  className="event-photo-slot event-photo-slot-upload"
-                  title={photo ? 'Replace photo' : 'Upload photo'}
+                  style={{
+                    cursor: 'pointer',
+                    color: docState[docName]?.file ? '#10b981' : '#0066cc',
+                    margin: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
                 >
-                  <CloudUpload size={20} />
+                  <CloudUpload size={18} />
                   <input
                     type="file"
-                    onChange={(e) => handleFileUpload(doc, e, i)}
+                    onChange={(e) => handleFileUpload(docName, e)}
                     style={{ display: 'none' }}
                   />
                 </label>
-
                 <button
                   type="button"
-                  className={`event-photo-slot event-photo-slot-view ${!photo ? 'disabled' : ''}`}
-                  onClick={() => photo && handleViewFile(doc, i)}
-                  title={photo ? 'View photo' : 'No photo uploaded'}
-                  disabled={!photo}
+                  onClick={() => docState[docName]?.file && handleViewFile(docName)}
+                  disabled={!docState[docName]?.file}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: docState[docName]?.file ? 'pointer' : 'not-allowed',
+                    color: docState[docName]?.file ? '#0066cc' : '#cbd5e1',
+                    padding: 0,
+                    display: 'flex',
+                    alignItems: 'center',
+                  }}
+                  title={docState[docName]?.file ? 'View document' : 'No document uploaded'}
                 >
-                  <Eye size={20} />
+                  <Eye size={18} />
                 </button>
               </div>
-            ))}
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="event-doc-row" key={doc}>
-        <span className="event-doc-label">{doc}</span>
-        <div className="event-doc-actions">
-          <label className="event-upload-icon">
-            <CloudUpload size={16} />
-            <input
-              type="file"
-              onChange={(e) => handleFileUpload(doc, e)}
-              style={{ display: 'none' }}
-            />
-          </label>
-          <button
-            type="button"
-            className={`event-eye-icon ${!docState[doc].file ? 'disabled' : ''}`}
-            onClick={() => docState[doc].file && handleViewFile(doc)}
-            aria-label={docState[doc].file ? 'View document' : 'No document uploaded'}
-            title={docState[doc].file ? 'View document' : 'No document uploaded'}
-            disabled={!docState[doc].file}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              padding: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Eye size={16} />
-          </button>
+            </div>
+          ))}
         </div>
       </div>
-    );
-  };
 
-  return (
-    <div className="event-card-section event-documents-card">
-      <h2 className="event-section-title">Documents</h2>
-      <div className="event-docs-grid">{documentNames.map(renderDocRow)}</div>
+      <div className="event-card-section event-report-card">
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '16px',
+          }}
+        >
+          <h2
+            className="event-section-title"
+            style={{ color: '#0069ab', fontSize: '18px', fontWeight: 600, margin: 0 }}
+          >
+            Report Generation
+          </h2>
+          <div style={{ position: 'relative' }}>
+            <CustomButton
+              type="button"
+              onClick={() => setShowReportDropdown(!showReportDropdown)}
+              style={{
+                background: '#0069ab',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+              }}
+              title="Click '+' to add Resource Person or Activity"
+            >
+              <Plus size={20} />
+            </CustomButton>
+            {showReportDropdown && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 0,
+                  marginTop: '8px',
+                  background: '#fff',
+                  border: '1px solid #eef2f6',
+                  borderRadius: '8px',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                  zIndex: 10,
+                  minWidth: '160px',
+                  overflow: 'hidden',
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleAddReportCard('resource');
+                    setShowReportDropdown(false);
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '10px 16px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: '1px solid #f1f5f9',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: '#334155',
+                  }}
+                >
+                  Resource Person
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleAddReportCard('activity');
+                    setShowReportDropdown(false);
+                  }}
+                  style={{
+                    display: 'block',
+                    width: '100%',
+                    padding: '10px 16px',
+                    background: 'transparent',
+                    border: 'none',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    color: '#334155',
+                  }}
+                >
+                  Activity
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {reportCards.map((card, cardIndex) => (
+          <div
+            key={card.id}
+            className="rp-modal-content"
+            style={{
+              marginTop: '6px',
+              borderTop: 'none',
+              paddingTop: '6px',
+            }}
+          >
+            {/* Form Body */}
+            <div className="rp-modal-body">
+              <div className="rp-form-row">
+                {card.type === 'resource' ? (
+                  <div className="rp-form-group" style={{ flex: 2 }}>
+                    <CustomDropdown
+                      label="Resource "
+                      name={`resource-${card.id}`}
+                      options={resourceOptions.map((opt) => ({ value: opt, label: opt }))}
+                      value={card.resource ? { value: card.resource, label: card.resource } : null}
+                      onChange={(val: any) =>
+                        handleCardChange(card.id, 'resource', val?.value || '')
+                      }
+                      placeholder="Select resource"
+                      className="mb-0"
+                    />
+                  </div>
+                ) : (
+                  <div className="rp-form-group" style={{ flex: 2 }}>
+                    <CustomDropdown
+                      label="Activity"
+                      name={`activity-${card.id}`}
+                      options={[
+                        { value: 'Activity 1', label: 'Activity 1' },
+                        { value: 'Activity 2', label: 'Activity 2' },
+                      ]}
+                      value={card.activity ? { value: card.activity, label: card.activity } : null}
+                      onChange={(val: any) =>
+                        handleCardChange(card.id, 'activity', val?.value || '')
+                      }
+                      placeholder="Select activity"
+                      className="mb-0"
+                    />
+                  </div>
+                )}
+                <div className="rp-form-group" style={{ flex: 1 }}>
+                  <CustomInput
+                    label="Date"
+                    name={`date-${card.id}`}
+                    type="date"
+                    value={card.date}
+                    onChange={(val) => handleCardChange(card.id, 'date', val)}
+                    className="mb-0"
+                  />
+                </div>
+                <div className="rp-form-group" style={{ flex: 1 }}>
+                  <CustomInput
+                    label="Time"
+                    name={`time-${card.id}`}
+                    type="time"
+                    value={card.time}
+                    onChange={(val) => handleCardChange(card.id, 'time', val)}
+                    className="mb-0"
+                  />
+                </div>
+              </div>
+
+              <div className="rp-form-group">
+                <CustomInput
+                  label="Title"
+                  name={`title-${card.id}`}
+                  type="text"
+                  placeholder="Enter title"
+                  value={card.title}
+                  onChange={(val) => handleCardChange(card.id, 'title', val)}
+                  className="mb-0"
+                />
+              </div>
+
+              <div className="rp-form-group">
+                <CustomInput
+                  label="Description"
+                  name={`description-${card.id}`}
+                  as="textarea"
+                  rows={3}
+                  placeholder="Enter description..."
+                  value={card.description}
+                  onChange={(val) => handleCardChange(card.id, 'description', val)}
+                  className="mb-0"
+                />
+              </div>
+
+              <div className="rp-form-group mb-0">
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '16px',
+                    marginTop: '6px',
+                  }}
+                >
+                  <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', flex: '1 1 auto' }}>
+                    {[0, 1].map((index) => {
+                      const photo = card.photos[index];
+                      const photoName =
+                        photo instanceof File
+                          ? photo.name
+                          : typeof photo === 'string' && photo
+                            ? (photo as string).split('/').pop()
+                            : `Photo ${index + 1}`;
+                      const hasPhoto = Boolean(photo);
+                      return (
+                        <div
+                          key={index}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            padding: '12px 16px',
+                            background: '#ffffff',
+                            border: '1px solid #e0e6ed',
+                            borderRadius: '8px',
+                            flex: '1 1 200px',
+                            maxWidth: '280px',
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontWeight: 600,
+                              color: '#334155',
+                              fontSize: '14px',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              marginRight: '8px',
+                            }}
+                            title={hasPhoto ? photoName : `Photo ${index + 1}`}
+                          >
+                            {hasPhoto ? photoName : `Photo ${index + 1}`}
+                          </span>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <label
+                              style={{
+                                cursor: 'pointer',
+                                color: hasPhoto ? '#10b981' : '#0066cc',
+                                margin: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                              }}
+                              title={hasPhoto ? 'Change photo' : 'Upload photo'}
+                            >
+                              <CloudUpload size={18} />
+                              <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => handleCardPhotoUpload(card.id, e, index)}
+                                style={{ display: 'none' }}
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!photo) return;
+                                if (photo instanceof File) {
+                                  const fileURL = URL.createObjectURL(photo);
+                                  window.open(fileURL, '_blank');
+                                } else if (typeof photo === 'string') {
+                                  window.open(photo, '_blank');
+                                }
+                              }}
+                              disabled={!hasPhoto}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                cursor: hasPhoto ? 'pointer' : 'not-allowed',
+                                color: hasPhoto ? '#0066cc' : '#cbd5e1',
+                                padding: 0,
+                                display: 'flex',
+                                alignItems: 'center',
+                              }}
+                              title={hasPhoto ? 'View photo' : 'No photo uploaded'}
+                            >
+                              <Eye size={18} />
+                            </button>
+                            {hasPhoto && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newPhotos = [...card.photos];
+                                  newPhotos[index] = null;
+                                  setReportCards((prev) =>
+                                    prev.map((c) =>
+                                      c.id === card.id ? { ...c, photos: newPhotos } : c,
+                                    ),
+                                  );
+                                }}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  color: '#ef4444',
+                                  padding: 0,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                }}
+                                title="Remove photo"
+                              >
+                                <X size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: '8px',
+                      alignItems: 'center',
+                      marginLeft: 'auto',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveReportCard(card.id)}
+                      style={{
+                        borderRadius: '50%',
+                        width: '34px',
+                        height: '34px',
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#fef2f2',
+                        border: '1px solid #fee2e2',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                      title="Delete card"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleAddReportCard(card.type)}
+                      style={{
+                        borderRadius: '50%',
+                        width: '34px',
+                        height: '34px',
+                        padding: 0,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: '#0069ab',
+                        border: 'none',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                      }}
+                      title="Add another card"
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px' }}>
+          <CustomButton
+            type="button"
+            onClick={() =>
+              generateAndOpenReportInNewTab({
+                eventId,
+                summary,
+                fullEventData,
+                rows,
+                participants,
+                description,
+                outcomes,
+                reportCards,
+                docState,
+              })
+            }
+          >
+            Generate Report
+          </CustomButton>
+        </div>
+      </div>
     </div>
   );
 };
@@ -4218,42 +7202,14 @@ const DocumentsCard: React.FC<DocumentsCardProps> = ({ docState, setany }) => {
 const Modal: React.FC<ModalProps> = ({ open, onClose, children }) =>
   open ? (
     <div
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'rgba(0,0,0,0.18)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 1000,
+      className="rp-modal-overlay"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div
-        style={{
-          background: '#fff',
-          borderRadius: 10,
-          minWidth: 350,
-          padding: 24,
-          position: 'relative',
-        }}
-      >
-        <button
-          onClick={onClose}
-          style={{
-            position: 'absolute',
-            right: 14,
-            top: 11,
-            border: 'none',
-            background: 'none',
-            fontSize: 18,
-            cursor: 'pointer',
-          }}
-          aria-label="Close"
-        >
-          ×
+      <div className="rp-modal-container">
+        <button onClick={onClose} className="rp-modal-close" aria-label="Close">
+          <X size={18} />
         </button>
         {children}
       </div>
@@ -4309,12 +7265,22 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows, showAler
     <section className="event-updates-resource-shell">
       <div className="resource-person-list">
         {rows.map((row, index) => (
-          <article className="event-approval-card form-card" key={row.id}>
-            <div className="event-approval-title-row">
-              <h2>
+          <article
+            className="event-approval-card form-card"
+            key={row.id}
+            style={{ borderRadius: '16px', padding: '20px 24px' }}
+          >
+            <div
+              className="event-approval-title-row"
+              style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: '14px' }}
+            >
+              <h2 style={{ fontSize: '17px', color: '#0069ab', fontWeight: 700, margin: 0 }}>
                 {EVENT_COPY.resourcePersonLabel} {index + 1}
               </h2>
-              <div className="event-approval-icon-actions">
+              <div
+                className="event-approval-icon-actions"
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
                 <button
                   type="button"
                   className="resource-person-add-btn"
@@ -4325,16 +7291,25 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows, showAler
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    width: '32px',
-                    height: '32px',
-                    background: '#0f6fc6',
-                    color: '#fff',
-                    borderRadius: '50%',
+                    width: '36px',
+                    height: '36px',
+                    minWidth: '36px',
+                    minHeight: '36px',
+                    background: '#0069ab',
+                    color: '#ffffff',
+                    borderRadius: '10px',
                     border: 'none',
+                    padding: 0,
                     cursor: 'pointer',
+                    transition: 'all 0.15s ease',
                   }}
                 >
-                  <Plus size={18} strokeWidth={3} />
+                  <Plus
+                    size={20}
+                    strokeWidth={2.5}
+                    color="#ffffff"
+                    style={{ color: '#ffffff', stroke: '#ffffff' }}
+                  />
                 </button>
                 {rows.length > 1 && (
                   <button
@@ -4344,11 +7319,16 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows, showAler
                     title="Remove resource person"
                     aria-label="Remove resource person"
                     style={{
-                      background: 'none',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '36px',
+                      height: '36px',
+                      background: '#fff1f1',
                       border: 'none',
                       cursor: 'pointer',
-                      color: '#64748b',
-                      padding: '4px',
+                      color: '#ef4444',
+                      borderRadius: '10px',
                     }}
                   >
                     <Trash2 size={18} />
@@ -4357,237 +7337,178 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows, showAler
               </div>
             </div>
 
-            <div className="event-approval-grid two" style={{ marginTop: '24px' }}>
-              <div
-                className="event-approval-inline-box"
-                style={{
-                  background: '#fff',
-                  border: 'none',
-                  padding: 0,
-                  minHeight: 'auto',
-                  display: 'flex',
-                  gap: '12px',
-                }}
-              >
-                <span
-                  style={{
-                    color: '#475467',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    textAlign: 'left',
-                    minWidth: '95px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Name
-                </span>
-                <input
-                  type="text"
-                  value={row.name || ''}
-                  onChange={(e) => handleChange(row.id, 'name', e.target.value)}
-                  style={{
-                    flex: 1,
-                    border: '1px solid #d4dbe4',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                  }}
-                />
-              </div>
-              <div
-                className="event-approval-inline-box"
-                style={{
-                  background: '#fff',
-                  border: 'none',
-                  padding: 0,
-                  minHeight: 'auto',
-                  display: 'flex',
-                  gap: '12px',
-                }}
-              >
-                <span
-                  style={{
-                    color: '#475467',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    textAlign: 'left',
-                    minWidth: '95px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Designation
-                </span>
-                <input
-                  type="text"
-                  value={row.designation || ''}
-                  onChange={(e) => handleChange(row.id, 'designation', e.target.value)}
-                  style={{
-                    flex: 1,
-                    border: '1px solid #d4dbe4',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="event-approval-grid two" style={{ marginTop: '16px' }}>
-              <div
-                className="event-approval-inline-box"
-                style={{
-                  background: '#fff',
-                  border: 'none',
-                  padding: 0,
-                  minHeight: 'auto',
-                  display: 'flex',
-                  gap: '12px',
-                }}
-              >
-                <span
-                  style={{
-                    color: '#475467',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    textAlign: 'left',
-                    minWidth: '95px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Organization
-                </span>
-                <input
-                  type="text"
-                  value={row.organization || ''}
-                  onChange={(e) => handleChange(row.id, 'organization', e.target.value)}
-                  style={{
-                    flex: 1,
-                    border: '1px solid #d4dbe4',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                  }}
-                />
-              </div>
-              <div
-                className="event-approval-inline-box"
-                style={{
-                  background: '#fff',
-                  border: 'none',
-                  padding: 0,
-                  minHeight: 'auto',
-                  display: 'flex',
-                  gap: '12px',
-                }}
-              >
-                <span
-                  style={{
-                    color: '#475467',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    textAlign: 'left',
-                    minWidth: '95px',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Email
-                </span>
-                <input
-                  type="email"
-                  value={row.email || ''}
-                  onChange={(e) => handleChange(row.id, 'email', e.target.value)}
-                  style={{
-                    flex: 1,
-                    border: '1px solid #d4dbe4',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                  }}
-                />
-              </div>
-            </div>
-
-            <div style={{ height: '1px', background: '#e1e7ef', margin: '20px 0' }} />
-
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns:
-                  'minmax(220px, 1.2fr) minmax(180px, 1fr) minmax(150px, 0.8fr) minmax(130px, 0.7fr)',
-                gap: '16px',
-                alignItems: 'center',
-              }}
-            >
-              <div
-                className="event-approval-inline-box"
-                style={{
-                  background: '#fff',
-                  border: 'none',
-                  padding: 0,
-                  minHeight: 'auto',
-                  display: 'flex',
-                  gap: '12px',
-                  alignItems: 'center',
-                }}
-              >
-                <span
-                  style={{
-                    color: '#475467',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    textAlign: 'left',
-                    minWidth: '60px',
-                  }}
-                >
-                  Purpose
-                </span>
-                <select
-                  value={row.purpose || ''}
-                  onChange={(e) => handleChange(row.id, 'purpose', e.target.value)}
-                  style={{
-                    flex: 1,
-                    border: '1px solid #d4dbe4',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    height: '42px',
-                  }}
-                >
-                  <option value="">-- Select Purpose --</option>
-                  <option value="Guest Lecture">Guest Lecture</option>
-                  <option value="Keynote Speaker">Keynote Speaker</option>
-                  <option value="Session Chair">Session Chair</option>
-                  <option value="Valedictory Address">Valedictory Address</option>
-                  <option value="Inaugural Address">Inaugural Address</option>
-                  <option value="Panelist">Panelist</option>
-                  <option value="Other">Other</option>
-                </select>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              {/* Row 1: Name, Designation */}
+              <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '14px' }}>
+                  <label
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      color: '#334155',
+                      minWidth: '100px',
+                      margin: 0,
+                    }}
+                  >
+                    Name
+                  </label>
+                  <input
+                    type="text"
+                    value={row.name || ''}
+                    onChange={(e) => handleChange(row.id, 'name', e.target.value)}
+                    style={{
+                      flex: 1,
+                      border: '1px solid #cfdbe8',
+                      borderRadius: '10px',
+                      height: '40px',
+                      padding: '0 14px',
+                      fontSize: '14px',
+                      color: '#102a43',
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '14px' }}>
+                  <label
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      color: '#334155',
+                      minWidth: '100px',
+                      margin: 0,
+                    }}
+                  >
+                    Designation
+                  </label>
+                  <input
+                    type="text"
+                    value={row.designation || ''}
+                    onChange={(e) => handleChange(row.id, 'designation', e.target.value)}
+                    style={{
+                      flex: 1,
+                      border: '1px solid #cfdbe8',
+                      borderRadius: '10px',
+                      height: '40px',
+                      padding: '0 14px',
+                      fontSize: '14px',
+                      color: '#102a43',
+                    }}
+                  />
+                </div>
               </div>
 
-              <div
-                className="event-approval-inline-box"
-                style={{
-                  background: '#fff',
-                  border: 'none',
-                  padding: 0,
-                  minHeight: 'auto',
-                  display: 'flex',
-                  gap: '12px',
-                  alignItems: 'center',
-                }}
-              >
-                <span
-                  style={{
-                    color: '#475467',
-                    fontWeight: 700,
-                    fontSize: '14px',
-                    textAlign: 'left',
-                    minWidth: '40px',
-                  }}
-                >
-                  Mode
-                </span>
-                <div className="event-approval-segmented" style={{ flex: 1 }}>
-                  <div>
+              {/* Row 2: Organization, Email */}
+              <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '14px' }}>
+                  <label
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      color: '#334155',
+                      minWidth: '100px',
+                      margin: 0,
+                    }}
+                  >
+                    Organization
+                  </label>
+                  <input
+                    type="text"
+                    value={row.organization || ''}
+                    onChange={(e) => handleChange(row.id, 'organization', e.target.value)}
+                    style={{
+                      flex: 1,
+                      border: '1px solid #cfdbe8',
+                      borderRadius: '10px',
+                      height: '40px',
+                      padding: '0 14px',
+                      fontSize: '14px',
+                      color: '#102a43',
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', flex: 1, gap: '14px' }}>
+                  <label
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      color: '#334155',
+                      minWidth: '100px',
+                      margin: 0,
+                    }}
+                  >
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={row.email || ''}
+                    onChange={(e) => handleChange(row.id, 'email', e.target.value)}
+                    style={{
+                      flex: 1,
+                      border: '1px solid #cfdbe8',
+                      borderRadius: '10px',
+                      height: '40px',
+                      padding: '0 14px',
+                      fontSize: '14px',
+                      color: '#102a43',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: Purpose, Mode, Date, Time */}
+              <div style={{ display: 'flex', gap: '20px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', flex: 2, gap: '14px' }}>
+                  <label
+                    style={{
+                      fontSize: '14px',
+                      fontWeight: 700,
+                      color: '#334155',
+                      minWidth: '100px',
+                      margin: 0,
+                    }}
+                  >
+                    Purpose
+                  </label>
+                  <CustomEventSelect
+                    value={row.purpose || ''}
+                    onChange={(e) => handleChange(row.id, 'purpose', e.target.value)}
+                    placeholder="Select Purpose"
+                    options={[
+                      'Guest Lecture',
+                      'Keynote Speaker',
+                      'Session Chair',
+                      'Valedictory Address',
+                      'Inaugural Address',
+                      'Panelist',
+                      'Other',
+                    ]}
+                  />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: 700, color: '#334155', margin: 0 }}>
+                    Mode
+                  </label>
+                  <div
+                    className="event-approval-toggle-pair-buttons"
+                    style={{ display: 'flex', gap: '8px' }}
+                  >
                     <button
                       type="button"
                       className={row.mode === 'Online' ? 'active' : ''}
                       onClick={() => handleChange(row.id, 'mode', 'Online')}
+                      style={{
+                        minHeight: '38px',
+                        border: row.mode === 'Online' ? '1px solid #0069ab' : '1px solid #d4dbe4',
+                        borderRadius: '8px',
+                        background: row.mode === 'Online' ? '#0069ab' : '#f5f7fb',
+                        color: row.mode === 'Online' ? '#ffffff' : '#0069ab',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        padding: '6px 18px',
+                        cursor: 'pointer',
+                        boxShadow:
+                          row.mode === 'Online' ? '0 4px 10px rgba(0, 105, 171, 0.2)' : 'none',
+                        transition: 'all 0.18s ease',
+                      }}
                     >
                       Online
                     </button>
@@ -4595,336 +7516,299 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows, showAler
                       type="button"
                       className={row.mode !== 'Online' ? 'active' : ''}
                       onClick={() => handleChange(row.id, 'mode', 'Offline')}
+                      style={{
+                        minHeight: '38px',
+                        border: row.mode !== 'Online' ? '1px solid #0069ab' : '1px solid #d4dbe4',
+                        borderRadius: '8px',
+                        background: row.mode !== 'Online' ? '#0069ab' : '#f5f7fb',
+                        color: row.mode !== 'Online' ? '#ffffff' : '#0069ab',
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        padding: '6px 18px',
+                        cursor: 'pointer',
+                        boxShadow:
+                          row.mode !== 'Online' ? '0 4px 10px rgba(0, 105, 171, 0.2)' : 'none',
+                        transition: 'all 0.18s ease',
+                      }}
                     >
                       Offline
                     </button>
                   </div>
                 </div>
-              </div>
-
-              <div
-                className="event-approval-inline-box"
-                style={{
-                  background: '#fff',
-                  border: 'none',
-                  padding: 0,
-                  minHeight: 'auto',
-                  display: 'flex',
-                  gap: '12px',
-                  alignItems: 'center',
-                }}
-              >
-                <span
-                  style={{ color: '#475467', fontWeight: 700, fontSize: '14px', textAlign: 'left' }}
-                >
-                  Date
-                </span>
-                <input
-                  type="date"
-                  value={row.date || ''}
-                  onChange={(e) => handleChange(row.id, 'date', e.target.value)}
-                  style={{
-                    flex: 1,
-                    border: '1px solid #d4dbe4',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    height: '42px',
-                  }}
-                />
-              </div>
-
-              <div
-                className="event-approval-inline-box"
-                style={{
-                  background: '#fff',
-                  border: 'none',
-                  padding: 0,
-                  minHeight: 'auto',
-                  display: 'flex',
-                  gap: '12px',
-                  alignItems: 'center',
-                }}
-              >
-                <span
-                  style={{ color: '#475467', fontWeight: 700, fontSize: '14px', textAlign: 'left' }}
-                >
-                  Time
-                </span>
-                <input
-                  type="time"
-                  value={row.time || ''}
-                  onChange={(e) => handleChange(row.id, 'time', e.target.value)}
-                  style={{
-                    flex: 1,
-                    border: '1px solid #d4dbe4',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    height: '42px',
-                  }}
-                />
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                background: '#f8fafc',
-                padding: '12px 16px',
-                borderRadius: '12px',
-                marginTop: '20px',
-                minHeight: '56px',
-              }}
-            >
-              <span
-                style={{ fontWeight: 700, color: '#475467', minWidth: '60px', fontSize: '14px' }}
-              >
-                Title
-              </span>
-              <label
-                className="event-approval-switch"
-                style={{ margin: 0, display: 'flex', alignItems: 'center' }}
-              >
-                <input
-                  type="checkbox"
-                  checked={!!row.hasTitle}
-                  onChange={(e) => handleChange(row.id, 'hasTitle', e.target.checked)}
-                />
-                <span />
-              </label>
-              <input
-                type="text"
-                value={row.title || ''}
-                onChange={(e) => handleChange(row.id, 'title', e.target.value)}
-                disabled={!row.hasTitle}
-                placeholder={row.hasTitle ? '' : ''}
-                style={{
-                  flex: 1,
-                  visibility: row.hasTitle ? 'visible' : 'hidden',
-                  background: '#fff',
-                  border: '1px solid #d4dbe4',
-                  borderRadius: '8px',
-                  padding: '8px 12px',
-                }}
-              />
-            </div>
-
-            <div
-              className="event-approval-band registration"
-              style={{
-                marginTop: '24px',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-                gap: '16px',
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-              }}
-            >
-              <div
-                className="event-approval-registration-box"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'auto 1fr',
-                  alignItems: 'center',
-                  gap: '12px',
-                  background: '#f0f6ff',
-                  border: '1px solid #d4e3f3',
-                  borderRadius: '12px',
-                  padding: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: 700, color: '#334155', margin: 0 }}>
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={row.date || ''}
+                    onChange={(e) => handleChange(row.id, 'date', e.target.value)}
                     style={{
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '50%',
-                      border: '1px solid #8cb4db',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#0069ab',
-                      background: '#fff',
+                      border: '1px solid #cfdbe8',
+                      borderRadius: '10px',
+                      height: '40px',
+                      padding: '0 12px',
+                      fontSize: '14px',
+                      width: '140px',
+                      color: '#102a43',
                     }}
-                  >
-                    <Mail size={18} />
-                  </div>
-                  <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>
-                    Invitation
-                  </span>
+                  />
                 </div>
-                <div
-                  className="event-approval-toggle-pair-buttons"
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: 700, color: '#334155', margin: 0 }}>
+                    Time
+                  </label>
+                  <input
+                    type="time"
+                    value={row.time || ''}
+                    onChange={(e) => handleChange(row.id, 'time', e.target.value)}
+                    style={{
+                      border: '1px solid #cfdbe8',
+                      borderRadius: '10px',
+                      height: '40px',
+                      padding: '0 12px',
+                      fontSize: '14px',
+                      width: '120px',
+                      color: '#102a43',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Row 4: Title */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <label
                   style={{
+                    fontSize: '14px',
+                    fontWeight: 700,
+                    color: '#334155',
+                    minWidth: '100px',
+                    margin: 0,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'flex-end',
                     gap: '8px',
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      showAlert(
-                        `Previewing Invitation for ${row.name || EVENT_COPY.resourcePersonLabel}`,
-                        'info',
-                        'Preview',
-                      )
-                    }
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      background: '#e1f0ff',
-                      border: 'none',
-                      color: '#0f6fc6',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      padding: '6px 14px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    <Eye size={14} /> Preview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.location.href = `mailto:${row.email || ''}?subject=${encodeURIComponent(EVENT_MAIL_TEMPLATES.invitationSubject(row.name || ''))}&body=${encodeURIComponent(EVENT_MAIL_TEMPLATES.invitationBody(row.name || ''))}`;
-                      handleChange(row.id, 'invitationStatus', 'Sent');
-                    }}
-                    style={{
-                      display: 'inline-flex',
-                      background: '#0f6fc6',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      padding: '6px 14px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {EVENT_COPY.sendMail}
-                  </button>
-                  <span
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '12px',
-                      color: '#64748b',
-                      minWidth: '70px',
-                      marginLeft: '4px',
-                    }}
-                  >
-                    <Info size={14} /> {row.invitationStatus || EVENT_COPY.notSent}
-                  </span>
-                </div>
+                  Title
+                  <label className="event-switch" style={{ margin: 0, display: 'inline-block' }}>
+                    <input
+                      type="checkbox"
+                      checked={!!row.hasTitle}
+                      onChange={(e) => handleChange(row.id, 'hasTitle', e.target.checked)}
+                    />
+                    <span className="event-slider" />
+                  </label>
+                </label>
+                <input
+                  type="text"
+                  value={row.title || ''}
+                  disabled={!row.hasTitle}
+                  onChange={(e) => handleChange(row.id, 'title', e.target.value)}
+                  style={{
+                    flex: 1,
+                    border: '1px solid #cfdbe8',
+                    borderRadius: '10px',
+                    height: '40px',
+                    padding: '0 14px',
+                    fontSize: '14px',
+                    color: '#102a43',
+                    opacity: row.hasTitle ? 1 : 0.6,
+                  }}
+                />
               </div>
 
-              <div
-                className="event-approval-registration-box"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'auto 1fr',
-                  alignItems: 'center',
-                  gap: '12px',
-                  background: '#f0f6ff',
-                  border: '1px solid #d4e3f3',
-                  borderRadius: '12px',
-                  padding: '16px',
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <div
-                    style={{
-                      width: '38px',
-                      height: '38px',
-                      borderRadius: '50%',
-                      border: '1px solid #8cb4db',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#0069ab',
-                      background: '#fff',
-                    }}
-                  >
-                    <Mail size={18} />
-                  </div>
-                  <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>
-                    Thanks
-                  </span>
-                </div>
+              {/* Row 5: Action Cards */}
+              <div style={{ display: 'flex', gap: '16px', marginTop: '6px' }}>
+                {/* Invitation Card */}
                 <div
-                  className="event-approval-toggle-pair-buttons"
                   style={{
+                    flex: 1,
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'flex-end',
-                    gap: '8px',
+                    justifyContent: 'space-between',
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '12px 18px',
+                    gap: '14px',
                   }}
                 >
-                  <button
-                    type="button"
-                    onClick={() =>
-                      showAlert(
-                        `Previewing Thank You letter for ${row.name || EVENT_COPY.resourcePersonLabel}`,
-                        'info',
-                        'Preview',
-                      )
-                    }
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Mail size={22} color="#0f6fc6" />
+                    <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>
+                      Invitation
+                    </span>
+                  </div>
+                  <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px',
-                      background: '#e1f0ff',
-                      border: 'none',
-                      color: '#0f6fc6',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      padding: '6px 14px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
+                      gap: '8px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '4px 12px 4px 6px',
+                      background: '#f8fafc',
                     }}
                   >
-                    <Eye size={14} /> Preview
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      window.location.href = `mailto:${row.email || ''}?subject=${encodeURIComponent(EVENT_MAIL_TEMPLATES.thankYouSubject())}&body=${encodeURIComponent(EVENT_MAIL_TEMPLATES.thankYouBody(row.name || ''))}`;
-                      handleChange(row.id, 'thanksStatus', 'Sent');
-                    }}
-                    style={{
-                      display: 'inline-flex',
-                      background: '#0f6fc6',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '13px',
-                      fontWeight: 600,
-                      padding: '6px 14px',
-                      borderRadius: '6px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {EVENT_COPY.sendMail}
-                  </button>
-                  <span
+                    <button
+                      type="button"
+                      onClick={() =>
+                        showAlert(
+                          `Previewing Invitation for ${row.name || EVENT_COPY.resourcePersonLabel}`,
+                          'info',
+                          'Preview',
+                        )
+                      }
+                      style={{
+                        background: '#e0f2fe',
+                        border: 'none',
+                        color: '#0284c7',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        padding: '7px 16px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.location.href = `mailto:${row.email || ''}?subject=${encodeURIComponent(EVENT_MAIL_TEMPLATES.invitationSubject(row.name || ''))}&body=${encodeURIComponent(EVENT_MAIL_TEMPLATES.invitationBody(row.name || ''))}`;
+                        handleChange(row.id, 'invitationStatus', 'Sent');
+                      }}
+                      style={{
+                        background: '#0284c7',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        padding: '7px 16px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(2, 132, 199, 0.25)',
+                      }}
+                    >
+                      {EVENT_COPY.sendMail}
+                    </button>
+                    <div
+                      style={{
+                        width: '1px',
+                        height: '18px',
+                        background: '#cbd5e1',
+                        margin: '0 4px',
+                      }}
+                    />
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        color: '#64748b',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      <Info size={16} /> {row.invitationStatus || EVENT_COPY.notSent}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Thanks Card */}
+                <div
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: '#ffffff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px',
+                    padding: '12px 18px',
+                    gap: '14px',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Mail size={22} color="#0f6fc6" />
+                    <span style={{ fontWeight: 700, color: '#1e293b', fontSize: '15px' }}>
+                      Thanks
+                    </span>
+                  </div>
+                  <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '4px',
-                      fontSize: '12px',
-                      color: '#64748b',
-                      minWidth: '70px',
-                      marginLeft: '4px',
+                      gap: '8px',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '12px',
+                      padding: '4px 12px 4px 6px',
+                      background: '#f8fafc',
                     }}
                   >
-                    <Info size={14} /> {row.thanksStatus || EVENT_COPY.notSent}
-                  </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        showAlert(
+                          `Previewing Thank You letter for ${row.name || EVENT_COPY.resourcePersonLabel}`,
+                          'info',
+                          'Preview',
+                        )
+                      }
+                      style={{
+                        background: '#e0f2fe',
+                        border: 'none',
+                        color: '#0284c7',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        padding: '7px 16px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.location.href = `mailto:${row.email || ''}?subject=${encodeURIComponent(EVENT_MAIL_TEMPLATES.thankYouSubject())}&body=${encodeURIComponent(EVENT_MAIL_TEMPLATES.thankYouBody(row.name || ''))}`;
+                        handleChange(row.id, 'thanksStatus', 'Sent');
+                      }}
+                      style={{
+                        background: '#0284c7',
+                        border: 'none',
+                        color: '#fff',
+                        fontSize: '14px',
+                        fontWeight: 600,
+                        padding: '7px 16px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 6px rgba(2, 132, 199, 0.25)',
+                      }}
+                    >
+                      {EVENT_COPY.sendMail}
+                    </button>
+                    <div
+                      style={{
+                        width: '1px',
+                        height: '18px',
+                        background: '#cbd5e1',
+                        margin: '0 4px',
+                      }}
+                    />
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        color: '#64748b',
+                        fontSize: '14px',
+                        fontWeight: 500,
+                      }}
+                    >
+                      <Info size={16} /> {row.thanksStatus || EVENT_COPY.notSent}
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -4946,9 +7830,11 @@ interface SocialLinks {
 
 interface EventUpdatesProps {
   goToTab: (tab: string) => void;
+  eventId?: string;
+  summary?: any;
 }
 
-const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
+const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab, eventId, summary }) => {
   const [rows, setRows] = useState<ResourcePersonRow[]>([
     {
       id: Date.now(),
@@ -4977,6 +7863,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
           mode: 'Letter/ Email',
           date: '',
           file: null,
+          mailSent: false,
         };
         return acc;
       },
@@ -4984,7 +7871,121 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
     ),
   );
 
-  const eventId = 1;
+  const [mailStatus, setMailStatus] = useState<Record<string, boolean>>({});
+  const [fullEventData, setFullEventData] = useState<any>(null);
+
+  // Preview Modal State
+  const [previewModal, setPreviewModal] = useState<{
+    show: boolean;
+    section: string;
+    content: string;
+  }>({
+    show: false,
+    section: '',
+    content: '',
+  });
+
+  useEffect(() => {
+    if (!eventId || eventId === 'new') return;
+    // Load existing event data to initialize mailStatus and get full event data
+    authenticityUtility
+      .get(`/events/${eventId}`)
+      .then((res: any) => {
+        setFullEventData(res);
+        const pub = res.publicity || {};
+        const newMailStatus: Record<string, boolean> = {
+          'Website Scrolling': !!pub.mail_sent_status?.['Website Scrolling'],
+          'Newspaper Engagement': !!pub.mail_sent_status?.['Newspaper Engagement'],
+          'Press Report': !!pub.mail_sent_status?.['Press Report'],
+        };
+
+        const docs = res.documents?.letters || {};
+        for (const section of sections) {
+          if (docs[section]?.mail_sent) {
+            newMailStatus[section] = true;
+            setFormData((prev) => ({
+              ...prev,
+              [section]: { ...prev[section], mailSent: true },
+            }));
+          }
+        }
+        setMailStatus(newMailStatus);
+      })
+      .catch(console.error);
+  }, [eventId]);
+
+  const generateMailTemplate = (sectionName: string) => {
+    const data = fullEventData || summary || formData || {};
+
+    const eventName = data.title || data.name || '';
+
+    // Attempt to format date nicely
+    let formattedDate = data.date || data.dateFrom || '';
+    const formattedTime =
+      data.time ||
+      data.session ||
+      data.inaugural_time ||
+      data.inauguralTime ||
+      data.valedictory_time ||
+      data.valedictoryTime ||
+      '';
+    if (data.start_date) {
+      formattedDate = `${new Date(data.start_date).toLocaleDateString()}`;
+      if (data.end_date && data.end_date !== data.start_date) {
+        formattedDate += ` to ${new Date(data.end_date).toLocaleDateString()}`;
+      }
+    } else if (data.dateFrom) {
+      formattedDate = data.dateFrom;
+      if (data.dateTo && data.dateTo !== data.dateFrom) {
+        formattedDate += ` to ${data.dateTo}`;
+      }
+    }
+
+    const venue =
+      data.venue ||
+      data.inaugural_venue ||
+      data.inauguralVenue ||
+      data.valedictory_venue ||
+      data.valedictoryVenue ||
+      '';
+    const orgName = data.organization_name || 'K.S.Rangasamy College of Technology';
+
+    const firstCoordinator = data.coordinators?.[0] || {};
+    const organizer = data.coordinator || data.organizer || firstCoordinator.name || '';
+    const designation = data.designation || firstCoordinator.department || '';
+    const contact = data.contact_number || data.mobile || firstCoordinator.mobile || '';
+    const email = data.email || firstCoordinator.email || '';
+
+    return `Dear Sir/Madam,
+
+Greetings from ${orgName}.
+
+We are pleased to inform you that ${eventName} is scheduled to be conducted on ${formattedDate} at ${venue}.
+
+We kindly request your support and necessary arrangements for the successful conduct of the event, including publicity, communication, security, photography, and video recording requirements.
+
+Event Details:
+Event Name: ${eventName}
+Date: ${formattedDate}
+Time: ${formattedTime}
+Venue: ${venue}
+
+We request your kind cooperation and support for the successful execution of the event.
+
+Thank you for your valuable support.
+
+Regards,
+${organizer}
+${designation}
+${orgName}
+${contact}
+${email}`;
+  };
+
+  const handlePreviewMail = (sectionName: string) => {
+    const content = generateMailTemplate(sectionName);
+    setPreviewModal({ show: true, section: sectionName, content });
+  };
 
   const [participants, setParticipants] = useState<ParticipantRow[]>([]);
   const [docState, setany] = useState<Record<string, DocumentRowState>>(
@@ -5034,9 +8035,16 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
     instagram: '',
     linkedin: '',
   });
+  const handleSendMail = async (section: string): Promise<void> => {
+    const content = generateMailTemplate(section);
+    window.location.href = `mailto:?subject=${encodeURIComponent(section)}&body=${encodeURIComponent(content)}`;
 
-  const handleSendMail = (section: string): void => {
-    window.location.href = `mailto:?subject=${encodeURIComponent(section)}`;
+    try {
+      await authenticityUtility.put(`/updates/events/${eventId}/mail-status`, { section });
+      setMailStatus((prev) => ({ ...prev, [section]: true }));
+    } catch (err) {
+      console.error('Failed to update mail status:', err);
+    }
   };
 
   const openLink = (link: string): void => {
@@ -5044,7 +8052,6 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
       window.open(link, '_blank', 'noopener,noreferrer');
     }
   };
-
   const uploadFile = async (file: File): Promise<number | null> => {
     if (!file) return null;
     const data = new FormData();
@@ -5061,7 +8068,6 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
       return null;
     }
   };
-
   const handleSubmit = async (): Promise<void> => {
     if (isSubmittingUpdates) return;
     setIsSubmittingUpdates(true);
@@ -5071,7 +8077,6 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
         newspaperEnabled && newspaperFile ? uploadFile(newspaperFile) : Promise.resolve(null),
         pressEnabled && pressFile ? uploadFile(pressFile) : Promise.resolve(null),
       ];
-
       const [websiteRes, newspaperRes, pressRes] = await Promise.allSettled(uploadPromises);
 
       const getUploadId = (res: PromiseSettledResult<number | null>) =>
@@ -5092,13 +8097,11 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
         instagram_link: links.instagram,
         linkedin_link: links.linkedin,
       };
-
       const wrapPromise = (promise: Promise<any>, sectionName: string) =>
         promise.catch((err) => {
           console.error(`Error saving ${sectionName}:`, err);
           return Promise.reject(sectionName);
         });
-
       const updatePromises = [
         wrapPromise(
           authenticityUtility.put(`/updates/events/${eventId}/publicity`, publicityData),
@@ -5180,7 +8183,6 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
       setIsSubmittingUpdates(false);
     }
   };
-
   return (
     <div className="event-updates-page">
       <div className="event-updates-top-grid">
@@ -5197,7 +8199,11 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
               <span className="event-publicity-label">{item.label}</span>
               <div className="event-publicity-actions">
                 <div className="event-publicity-buttons">
-                  <button type="button" className="event-publicity-preview-btn" disabled>
+                  <button
+                    type="button"
+                    className="event-publicity-preview-btn"
+                    onClick={() => handlePreviewMail(item.label)}
+                  >
                     Preview
                   </button>
                   <button
@@ -5207,8 +8213,11 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
                   >
                     Send Mail
                   </button>
-                  <span className="event-publicity-status">
-                    <Info size={16} /> Not Sent
+                  <span
+                    className="event-publicity-status"
+                    style={{ color: mailStatus[item.label] ? '#059669' : '#64748b' }}
+                  >
+                    <Info size={16} /> {mailStatus[item.label] ? 'Sent' : 'Not Sent'}
                   </span>
                 </div>
               </div>
@@ -5222,7 +8231,12 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
           ))}
         </div>
 
-        <LettersPage formData={formData} setFormData={setFormData} />
+        <LettersPage
+          formData={formData}
+          setFormData={setFormData}
+          handlePreviewMail={handlePreviewMail}
+          handleSendMail={handleSendMail}
+        />
       </div>
 
       <div className="event-card-section event-form-section event-social-links-card">
@@ -5270,7 +8284,15 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
 
       <ParticipantsCard participants={participants} setParticipants={setParticipants} />
 
-      <DocumentsCard docState={docState} setany={setany} />
+      <DocumentsCard
+        docState={docState}
+        setany={setany}
+        eventId={eventId}
+        summary={summary}
+        fullEventData={fullEventData}
+        rows={rows}
+        participants={participants}
+      />
 
       <div className="event-section-navigation">
         <button type="button" className="event-prev-btn" onClick={() => goToTab('finance')}>
@@ -5285,6 +8307,103 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
           {isSubmittingUpdates ? 'Saving...' : 'Save & Next →'}
         </button>
       </div>
+
+      {previewModal.show && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+          }}
+        >
+          <div
+            style={{
+              background: '#fff',
+              padding: '24px',
+              borderRadius: '8px',
+              maxWidth: '600px',
+              width: '90%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <h3
+              style={{
+                marginTop: 0,
+                marginBottom: '16px',
+                fontSize: '18px',
+                borderBottom: '1px solid #e2e8f0',
+                paddingBottom: '12px',
+              }}
+            >
+              Mail Preview: {previewModal.section}
+            </h3>
+            <pre
+              style={{
+                whiteSpace: 'pre-wrap',
+                fontFamily: 'inherit',
+                fontSize: '14px',
+                lineHeight: '1.6',
+                backgroundColor: '#f8fafc',
+                padding: '16px',
+                borderRadius: '6px',
+                border: '1px solid #e2e8f0',
+                color: '#334155',
+              }}
+            >
+              {previewModal.content}
+            </pre>
+            <div
+              style={{
+                marginTop: '20px',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                gap: '12px',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setPreviewModal({ ...previewModal, show: false })}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #cbd5e1',
+                  background: '#fff',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleSendMail(previewModal.section);
+                  setPreviewModal({ ...previewModal, show: false });
+                }}
+                style={{
+                  padding: '8px 16px',
+                  border: 'none',
+                  background: '#0f6fc6',
+                  color: '#fff',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: 500,
+                }}
+              >
+                Send Mail
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AlertModal
         show={alertConfig.show}
@@ -5323,11 +8442,57 @@ interface ResourcePersonState {
   suggestion: string;
 }
 
-interface FeedbackProps {
-  eventId?: string;
+interface ParticipantFeedbackResponse {
+  feedbackId: number;
+  registrationId: number;
+  submittedAt: string;
+  registrationRefNo: string;
+  participantName: string;
+  participantEmail: string;
+  answers: Record<number, { rating_value?: number | null; answer_text?: string | null }>;
 }
 
-const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
+interface QuestionSummary {
+  questionId: number;
+  questionText: string;
+  questionType: string;
+  sectionName?: string;
+  totalAnswers: number;
+  averageRating?: number;
+  optionCounts?: Record<string, number>;
+}
+
+interface EventFeedbackData {
+  questions: any[];
+  responses: ParticipantFeedbackResponse[];
+  summary: {
+    totalSubmissions: number;
+    questionSummaries: QuestionSummary[];
+  };
+}
+interface FeedbackProps {
+  eventId?: string;
+  summary?: any;
+}
+const Feedback: React.FC<FeedbackProps> = ({ eventId, summary: propSummary }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'analytics' | 'configure'>('analytics');
+  const [responses, setResponses] = useState<ParticipantFeedbackResponse[]>([]);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [summary, setSummary] = useState<any>(null);
+  const [eventDetails, setEventDetails] = useState<any>(null);
+
+  useEffect(() => {
+    if (eventId) {
+      authenticityUtility
+        .get(`/events/${eventId}/summary`)
+        .then((res: any) => {
+          const data = res.data?.data || res.data || res;
+          if (data) setEventDetails(data);
+        })
+        .catch(() => {});
+    }
+  }, [eventId]);
+
   // --- Section 1: Event Feedback State ---
   const [eventToggles, setEventToggles] = useState({
     food: false,
@@ -5386,6 +8551,44 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+
+  const fetchFeedbackData = useCallback(() => {
+    if (!eventId) return;
+    setLoading(true);
+    authenticityUtility
+      .get(`/events/${eventId}/feedback`)
+      .then((res) => {
+        const d = res.data?.data;
+        if (d) {
+          if (Array.isArray(d.responses)) setResponses(d.responses);
+          if (Array.isArray(d.questions)) setQuestions(d.questions);
+          if (d.summary) setSummary(d.summary);
+          if (d.eventFeedback) {
+            if (d.eventFeedback.toggles)
+              setEventToggles((prev) => ({ ...prev, ...d.eventFeedback.toggles }));
+            if (d.eventFeedback.ratings)
+              setEventRatings((prev) => ({ ...prev, ...d.eventFeedback.ratings }));
+            if (d.eventFeedback.awareness) setAwarenessChannel(d.eventFeedback.awareness);
+            if (d.eventFeedback.suggestion) setEventSuggestion(d.eventFeedback.suggestion);
+          }
+          if (Array.isArray(d.resourcePersonsFeedback) && d.resourcePersonsFeedback.length > 0) {
+            setResourcePersons(d.resourcePersonsFeedback);
+          }
+          if (d.accommodationFeedback) {
+            if (d.accommodationFeedback.ratings)
+              setAccommodationRatings((prev) => ({ ...prev, ...d.accommodationFeedback.ratings }));
+            if (d.accommodationFeedback.suggestion)
+              setAccommodationSuggestion(d.accommodationFeedback.suggestion);
+          }
+        }
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [eventId]);
+
+  useEffect(() => {
+    fetchFeedbackData();
+  }, [fetchFeedbackData]);
 
   // --- Helpers for Event state ---
   const toggleEventParam = (param: keyof typeof eventToggles) => {
@@ -5510,8 +8713,16 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
     try {
       await authenticityUtility.post(`/events/${eventId}/feedback`, payload);
       setSuccess(true);
+      fetchFeedbackData();
+      setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to submit feedback.');
+      setError(
+        err?.response?.data?.error ||
+          err?.response?.data?.details ||
+          err?.response?.data?.message ||
+          err?.message ||
+          'Failed to submit feedback.',
+      );
     } finally {
       setLoading(false);
     }
@@ -5535,12 +8746,32 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
     );
   };
 
+  const resolvedEventTitle =
+    propSummary?.title ||
+    propSummary?.name ||
+    propSummary?.event_name ||
+    summary?.title ||
+    summary?.name ||
+    summary?.event_name ||
+    summary?.eventName ||
+    eventDetails?.title ||
+    eventDetails?.name ||
+    eventDetails?.event_name ||
+    '';
+
   return (
     <form className="feedback-container" onSubmit={handleSubmit}>
       {/* ==================== CARD 1: EVENT FEEDBACK ==================== */}
       <div className="feedback-card">
         <div className="feedback-card-header">
-          <h2 className="feedback-card-title">{EVENT_COPY.eventFeedbackTitle}</h2>
+          <h2 className="feedback-card-title">
+            {EVENT_COPY.eventFeedbackTitle}{' '}
+            {resolvedEventTitle && (
+              <span style={{ color: '#0069ab', fontWeight: 600, marginLeft: '6px' }}>
+                {resolvedEventTitle}
+              </span>
+            )}
+          </h2>
         </div>
 
         {/* Toggles Sub-Header */}
@@ -5774,18 +9005,13 @@ const Feedback: React.FC<FeedbackProps> = ({ eventId }) => {
           <div className="feedback-resource-topbar">
             <div className="feedback-resource-topbar-left">
               <span className="feedback-resource-label">{EVENT_COPY.resourcePersonLabel}</span>
-              <select
+              <CustomEventSelect
                 className="feedback-resource-select"
                 value={rp.name}
                 onChange={(e) => updateResourcePerson(rp.id, 'name', e.target.value)}
-              >
-                <option value="">Name, Organization</option>
-                {EVENT_RESOURCE_PERSON_OPTIONS.map((person) => (
-                  <option key={person} value={person}>
-                    {person}
-                  </option>
-                ))}
-              </select>
+                placeholder="Name, Organization"
+                options={EVENT_RESOURCE_PERSON_OPTIONS}
+              />
             </div>
 
             <div className="feedback-resource-topbar-meta">
@@ -6178,6 +9404,21 @@ const EventCertificate: React.FC<EventCertificateProps> = ({ eventId, summary })
   const [customParticipantName, setCustomParticipantName] = useState<string>('');
   const [customCertNo, setCustomCertNo] = useState<string>('');
   const [issuedDate, setIssuedDate] = useState<string>('');
+  const [isPublishing, setIsPublishing] = useState<boolean>(false);
+
+  const handlePublish = async () => {
+    if (!eventId || eventId === 'new') return;
+    setIsPublishing(true);
+    try {
+      await authenticityUtility.post(`/events/${eventId}/certificates/publish`);
+      alert('Certificates published successfully!');
+    } catch (err) {
+      console.error('Failed to publish certificates:', err);
+      alert('Failed to publish certificates.');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   useEffect(() => {
     const today = new Date();
@@ -6427,6 +9668,18 @@ const EventCertificate: React.FC<EventCertificateProps> = ({ eventId, summary })
           </div>
         </div>
       </div>
+
+      {eventId && eventId !== 'new' && (
+        <div style={{ marginTop: '20px', textAlign: 'center' }}>
+          <button
+            className="event-btn event-submit"
+            onClick={handlePublish}
+            disabled={isPublishing}
+          >
+            {isPublishing ? 'Publishing...' : 'Submit Certificate'}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -6510,6 +9763,111 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
   budgetRows,
   setBudgetRows,
 }) => {
+  const [searchFinanceId, setSearchFinanceId] = React.useState('');
+  const [isFetchingFinance, setIsFetchingFinance] = React.useState(false);
+  const [hasFetchedData, setHasFetchedData] = React.useState(false);
+
+  const handleFetchFinanceData = async () => {
+    const rawSearch = searchFinanceId.trim();
+    if (!rawSearch) {
+      alert('Please enter a Finance Application ID');
+      return;
+    }
+    try {
+      setIsFetchingFinance(true);
+
+      // Extract numeric ID if formatted code like #F-2026-0081 or F-2026-0081 is entered
+      const structuredMatch = rawSearch.match(/^#?F[-_]\d{4}[-_](\d+)/i);
+      let fetchId = rawSearch;
+      if (structuredMatch && structuredMatch[1]) {
+        fetchId = parseInt(structuredMatch[1], 10).toString();
+      } else {
+        const digitsOnly = rawSearch.replace(/\D/g, '');
+        if (digitsOnly) {
+          fetchId = parseInt(digitsOnly, 10).toString();
+        }
+      }
+
+      const response = (await authenticityUtility.get(
+        `/finance-requests/${encodeURIComponent(fetchId)}`,
+      )) as any;
+
+      if (response && response.data) {
+        const record = response.data;
+
+        // Map Income rows
+        const incomeRowsFromApi = Array.isArray(record.income_rows)
+          ? record.income_rows
+          : Array.isArray(record.income)
+            ? record.income
+            : [];
+        if (incomeRowsFromApi.length > 0) {
+          const mappedIncome = incomeRowsFromApi.map((row: any) => {
+            const rawHead = (row.income_source || row.income_type || row.incomeHead || '').trim();
+            const isStandardHead = FINANCE_INCOME_HEADS.includes(rawHead) && rawHead !== 'Others';
+
+            return {
+              id: uuidv4(),
+              incomeHead: isStandardHead ? rawHead : rawHead ? 'Others' : '',
+              incomeHeadOther: isStandardHead ? '' : rawHead,
+              agency: row.credit_account || row.agency || row.contribution || '',
+              income: (row.amount ?? row.partial_amount ?? row.contribution ?? 0).toString(),
+            };
+          });
+          setIncomeRows(mappedIncome);
+        }
+
+        // Map Expenditure / Budget Breakup rows
+        const budgetRowsFromApi = Array.isArray(record.budget)
+          ? record.budget
+          : Array.isArray(record.budget_breakup)
+            ? record.budget_breakup
+            : [];
+        if (budgetRowsFromApi.length > 0) {
+          const mappedExpenditure = budgetRowsFromApi.map((row: any) => {
+            const rawHead = (
+              row.budget_head ||
+              row.category ||
+              row.head ||
+              row.budgetHead ||
+              ''
+            ).trim();
+            const isStandardHead = FINANCE_BUDGET_HEADS.includes(rawHead) && rawHead !== 'Others';
+
+            return {
+              id: uuidv4(),
+              budgetHead: isStandardHead ? rawHead : rawHead ? 'Others' : '',
+              budgetHeadOther: isStandardHead ? '' : rawHead,
+              amountProposed: (row.amount ?? row.amountProposed ?? 0).toString(),
+              actualExpenditure: (
+                row.actual_expenditure ??
+                row.approved_amount ??
+                row.amount ??
+                0
+              ).toString(),
+              file: null,
+            };
+          });
+          setExpenditureRows(mappedExpenditure);
+        }
+
+        setHasFetchedData(true);
+        alert('Finance details fetched successfully!');
+      } else {
+        setHasFetchedData(false);
+        alert('No data found for this Finance ID.');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setHasFetchedData(false);
+      alert(
+        err?.response?.data?.message || 'Failed to fetch Finance details. Please check the ID.',
+      );
+    } finally {
+      setIsFetchingFinance(false);
+    }
+  };
+
   // Add/Delete Income
   const addIncomeRow = (): void => {
     setIncomeRows([...incomeRows, { id: uuidv4(), incomeHead: '', agency: '', income: '' }]);
@@ -6567,443 +9925,468 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
 
   return (
     <div className="event-finance-wrapper event-budget-style-content">
-      {/* Income Section */}
-      <section className="event-finance-card event-budget-style-card">
-        <div className="event-card-header">
-          <h3>Income</h3>
-        </div>
-        <div className="event-budget-table-wrap">
-          <table className="event-finance-table event-budget-style-table">
-            <thead>
-              <tr>
-                <th>S.No.</th>
-                <th>Income Head</th>
-                <th>Agency</th>
-                <th>Income</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {incomeRows.map((row, index) => {
-                const isLastRow = index === incomeRows.length - 1;
-
-                return (
-                  <tr key={row.id}>
-                    <td>{index + 1}</td>
-                    <td>
-                      {row.incomeHead !== 'Others' ? (
-                        <select
-                          value={row.incomeHead}
-                          onChange={(e) =>
-                            setIncomeRows(
-                              incomeRows.map((r) =>
-                                r.id === row.id
-                                  ? {
-                                      ...r,
-                                      incomeHead: e.target.value,
-                                      incomeHeadOther: '', // clear the other input
-                                    }
-                                  : r,
-                              ),
-                            )
-                          }
-                        >
-                          <option value="">-- Select --</option>
-                          {FINANCE_INCOME_HEADS.map((head) => (
-                            <option key={head} value={head}>
-                              {head}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          value={row.incomeHeadOther || ''}
-                          placeholder="Enter other"
-                          onChange={(e) =>
-                            setIncomeRows(
-                              incomeRows.map((r) =>
-                                r.id === row.id
-                                  ? {
-                                      ...r,
-                                      incomeHeadOther: e.target.value,
-                                      incomeHead: e.target.value === '' ? '' : 'Others', // switch back if cleared
-                                    }
-                                  : r,
-                              ),
-                            )
-                          }
-                          autoFocus
-                        />
-                      )}
-                    </td>
-
-                    <td>
-                      <input
-                        type="text"
-                        value={row.agency}
-                        onChange={(e) =>
-                          setIncomeRows(
-                            incomeRows.map((r) =>
-                              r.id === row.id ? { ...r, agency: e.target.value } : r,
-                            ),
-                          )
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={row.income}
-                        onChange={(e) =>
-                          setIncomeRows(
-                            incomeRows.map((r) =>
-                              r.id === row.id ? { ...r, income: e.target.value } : r,
-                            ),
-                          )
-                        }
-                      />
-                    </td>
-                    <td className="event-actions-cell">
-                      <div className="event-action-icons">
-                        {index === 0 && incomeRows.length === 1 ? (
-                          // First row → Only Add
-                          <button
-                            type="button"
-                            className="event-add"
-                            onClick={addIncomeRow}
-                            title="Add"
-                          >
-                            <Plus size={16} />
-                          </button>
-                        ) : isLastRow ? (
-                          // Last row → Delete + Add
-                          <>
-                            <button
-                              type="button"
-                              className="event-icon-btn"
-                              onClick={() => deleteIncomeRow(row.id)}
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              className="event-add"
-                              onClick={addIncomeRow}
-                              title="Add"
-                            >
-                              <Plus size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          // Middle rows → Only Delete
-                          <button
-                            type="button"
-                            className="event-icon-btn text-red-500"
-                            onClick={() => deleteIncomeRow(row.id)}
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-
-              {/* Total row */}
-              <tr className="event-total-row">
-                <td colSpan={3} style={{ textAlign: 'right', fontWeight: '600' }}>
-                  Total Income:
-                </td>
-                <td colSpan={2} style={{ fontWeight: '600' }}>
-                  {totalIncome}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+      <section
+        className="event-finance-card event-budget-style-card"
+        style={{ marginBottom: '20px' }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-start',
+            padding: '20px',
+            gap: '15px',
+            alignItems: 'center',
+          }}
+        >
+          <label style={{ fontWeight: 600, margin: 0, fontSize: '14px', color: '#475569' }}>
+            Enter Finance Application ID:
+          </label>
+          <input
+            type="text"
+            placeholder="Enter ID"
+            value={searchFinanceId}
+            onChange={(e) => setSearchFinanceId(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #cbd5e1',
+              borderRadius: '6px',
+              width: '220px',
+              fontSize: '14px',
+              outline: 'none',
+            }}
+          />
+          <button
+            type="button"
+            className="event-save-next-btn"
+            onClick={handleFetchFinanceData}
+            disabled={isFetchingFinance}
+            style={{ padding: '8px 20px', minHeight: 'auto', opacity: isFetchingFinance ? 0.7 : 1 }}
+          >
+            {isFetchingFinance ? 'Fetching...' : 'Fetch'}
+          </button>
         </div>
       </section>
 
-      {/* Expenditure Section */}
-      <section className="event-finance-card event-budget-style-card">
-        <div className="event-card-header">
-          <h3>Expenditure</h3>
-        </div>
-        <div className="event-budget-table-wrap">
-          <table className="event-finance-table event-budget-style-table">
-            <thead>
-              <tr>
-                <th>S.No.</th>
-                <th>Budget Head</th>
-                <th>Amount Proposed</th>
-                <th>Actual Expenditure</th>
-                <th>Upload Document</th> {/* New column header */}
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {expenditureRows.map((row, index) => {
-                const isLastRow = index === expenditureRows.length - 1;
+      {hasFetchedData && (
+        <>
+          {/* Income Section */}
+          <section className="event-finance-card event-budget-style-card">
+            <div className="event-card-header">
+              <h3>Income</h3>
+            </div>
+            <div className="event-budget-table-wrap">
+              <table className="event-finance-table event-budget-style-table">
+                <thead>
+                  <tr>
+                    <th>S.No.</th>
+                    <th>Income Head</th>
+                    <th>Agency</th>
+                    <th>Income</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {incomeRows.map((row, index) => {
+                    const isLastRow = index === incomeRows.length - 1;
 
-                return (
-                  <tr key={row.id}>
-                    <td>{index + 1}</td>
-                    <td>
-                      {row.budgetHead !== 'Others' ? (
-                        <select
-                          value={row.budgetHead}
-                          onChange={(e) =>
-                            setExpenditureRows(
-                              expenditureRows.map((r) =>
-                                r.id === row.id
-                                  ? {
-                                      ...r,
-                                      budgetHead: e.target.value,
-                                      budgetHeadOther: '',
-                                    }
-                                  : r,
-                              ),
-                            )
-                          }
-                        >
-                          <option value="">-- Select --</option>
-                          {FINANCE_BUDGET_HEADS.map((head) => (
-                            <option key={head} value={head}>
-                              {head}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <input
-                          type="text"
-                          value={row.budgetHeadOther || ''}
-                          placeholder="Enter other"
-                          onChange={(e) =>
-                            setExpenditureRows(
-                              expenditureRows.map((r) =>
-                                r.id === row.id
-                                  ? {
-                                      ...r,
-                                      budgetHeadOther: e.target.value,
-                                      budgetHead: e.target.value.trim() ? 'Others' : '',
-                                    }
-                                  : r,
-                              ),
-                            )
-                          }
-                          autoFocus
-                        />
-                      )}
-                    </td>
-                    <td>
-                      <input
-                        type="text"
-                        value={row.amountProposed}
-                        onChange={(e) =>
-                          setExpenditureRows(
-                            expenditureRows.map((r) =>
-                              r.id === row.id ? { ...r, amountProposed: e.target.value } : r,
-                            ),
-                          )
-                        }
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={row.actualExpenditure}
-                        onChange={(e) =>
-                          setExpenditureRows(
-                            expenditureRows.map((r) =>
-                              r.id === row.id ? { ...r, actualExpenditure: e.target.value } : r,
-                            ),
-                          )
-                        }
-                      />
-                    </td>
+                    return (
+                      <tr key={row.id}>
+                        <td>{index + 1}</td>
+                        <td>
+                          {row.incomeHead !== 'Others' ? (
+                            <CustomEventSelect
+                              value={row.incomeHead}
+                              onChange={(e) =>
+                                setIncomeRows(
+                                  incomeRows.map((r) =>
+                                    r.id === row.id
+                                      ? {
+                                          ...r,
+                                          incomeHead: e.target.value,
+                                          incomeHeadOther: '',
+                                        }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              placeholder="-- Select --"
+                              options={FINANCE_INCOME_HEADS}
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              value={row.incomeHeadOther || ''}
+                              placeholder="Enter other"
+                              onChange={(e) =>
+                                setIncomeRows(
+                                  incomeRows.map((r) =>
+                                    r.id === row.id
+                                      ? {
+                                          ...r,
+                                          incomeHeadOther: e.target.value,
+                                          incomeHead: e.target.value === '' ? '' : 'Others', // switch back if cleared
+                                        }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              autoFocus
+                            />
+                          )}
+                        </td>
 
-                    {/* Upload Document Column */}
-                    <td style={{ verticalAlign: 'middle', padding: '8px' }}>
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '15px',
-                          justifyContent: 'center',
-                          height: '100%',
-                        }}
-                      >
-                        <label
-                          className="event-upload-icon"
-                          title="Upload document"
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <CloudUpload size={18} />
+                        <td>
                           <input
-                            type="file"
-                            style={{ display: 'none' }}
-                            onChange={(e) => {
-                              const file = e.target.files?.[0] || null;
-                              setExpenditureRows((prevRows) =>
-                                prevRows.map((r) => (r.id === row.id ? { ...r, file } : r)),
-                              );
-                            }}
-                            accept=".pdf,.doc,.docx,.jpg,.png"
+                            type="text"
+                            value={row.agency}
+                            onChange={(e) =>
+                              setIncomeRows(
+                                incomeRows.map((r) =>
+                                  r.id === row.id ? { ...r, agency: e.target.value } : r,
+                                ),
+                              )
+                            }
                           />
-                        </label>
-                        <span
-                          className={`event-eye-icon ${!row.file ? 'disabled' : ''}`}
-                          onClick={() => {
-                            if (row.file) window.open(URL.createObjectURL(row.file), '_blank');
-                          }}
-                          title={row.file ? 'View uploaded document' : 'No document uploaded'}
-                          style={{
-                            cursor: row.file ? 'pointer' : 'default',
-                            color: row.file ? '#3182ce' : '#ccc',
-                            display: 'flex',
-                            alignItems: 'center',
-                            height: '100%',
-                          }}
-                        >
-                          <Eye size={18} />
-                        </span>
-                      </div>
-                    </td>
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            value={row.income}
+                            onChange={(e) =>
+                              setIncomeRows(
+                                incomeRows.map((r) =>
+                                  r.id === row.id ? { ...r, income: e.target.value } : r,
+                                ),
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="event-actions-cell">
+                          <div className="event-action-icons">
+                            {index === 0 && incomeRows.length === 1 ? (
+                              // First row → Only Add
+                              <button
+                                type="button"
+                                className="event-add"
+                                onClick={addIncomeRow}
+                                title="Add"
+                              >
+                                <Plus size={16} />
+                              </button>
+                            ) : isLastRow ? (
+                              // Last row → Delete + Add
+                              <>
+                                <button
+                                  type="button"
+                                  className="event-icon-btn"
+                                  onClick={() => deleteIncomeRow(row.id)}
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="event-add"
+                                  onClick={addIncomeRow}
+                                  title="Add"
+                                >
+                                  <Plus size={16} />
+                                </button>
+                              </>
+                            ) : (
+                              // Middle rows → Only Delete
+                              <button
+                                type="button"
+                                className="event-icon-btn text-red-500"
+                                onClick={() => deleteIncomeRow(row.id)}
+                                title="Delete"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
-                    <td className="event-actions-cell">
-                      <div className="event-action-icons">
-                        {index === 0 && expenditureRows.length === 1 ? (
-                          <button
-                            type="button"
-                            className="event-add"
-                            onClick={addExpenditureRow}
-                            title="Add"
-                          >
-                            <Plus size={16} />
-                          </button>
-                        ) : isLastRow ? (
-                          <>
-                            <button
-                              type="button"
-                              className="event-icon-btn "
-                              onClick={() => deleteExpenditureRow(row.id)}
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                            <button
-                              type="button"
-                              className="event-add"
-                              onClick={addExpenditureRow}
-                              title="Add"
-                            >
-                              <Plus size={16} />
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            type="button"
-                            className="event-icon-btn "
-                            onClick={() => deleteExpenditureRow(row.id)}
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
-                      </div>
+                  {/* Total row */}
+                  <tr className="event-total-row">
+                    <td colSpan={3} style={{ textAlign: 'right', fontWeight: '600' }}>
+                      Total Income:
+                    </td>
+                    <td colSpan={2} style={{ fontWeight: '600' }}>
+                      {totalIncome}
                     </td>
                   </tr>
-                );
-              })}
+                </tbody>
+              </table>
+            </div>
+          </section>
 
-              {/* Total row */}
-              <tr className="event-total-row">
-                <td colSpan={4} style={{ textAlign: 'right', fontWeight: '600' }}>
-                  Total Expenditure:
-                </td>
-                <td colSpan={2} style={{ fontWeight: '600' }}>
-                  {totalExpenditure}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+          {/* Expenditure Section */}
+          <section className="event-finance-card event-budget-style-card">
+            <div className="event-card-header">
+              <h3>Expenditure</h3>
+            </div>
+            <div className="event-budget-table-wrap">
+              <table className="event-finance-table event-budget-style-table">
+                <thead>
+                  <tr>
+                    <th>S.No.</th>
+                    <th>Budget Head</th>
+                    <th>Amount Proposed</th>
+                    <th>Actual Expenditure</th>
+                    <th>Upload Document</th> {/* New column header */}
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {expenditureRows.map((row, index) => {
+                    const isLastRow = index === expenditureRows.length - 1;
 
-        <div className="event-docs-grid">
-          {Object.keys(financeDocs)
-            .filter((doc) => doc !== 'Bill Copies') // exclude Bill Copies
-            .map((doc) => {
-              const { active, file } = financeDocs[doc];
-              return (
-                <div className="event-doc-row" key={doc}>
-                  <span className="event-doc-label">{doc}</span>
-                  <label className="event-switch">
-                    <input
-                      type="checkbox"
-                      checked={active}
-                      onChange={() =>
-                        setFinanceDocs((prev) => ({
-                          ...prev,
-                          [doc]: { ...prev[doc], active: !active },
-                        }))
-                      }
-                    />
-                    <span className="event-slider"></span>
-                  </label>
-                  <label className={`event-upload-icon ${!active ? 'disabled' : ''}`}>
-                    <CloudUpload size={18} />
-                    <input
-                      type="file"
-                      style={{ display: 'none' }}
-                      disabled={!active}
-                      onChange={(e) =>
-                        setFinanceDocs((prev) => ({
-                          ...prev,
-                          [doc]: {
-                            ...prev[doc],
-                            file: e.target.files?.[0] || null,
-                          },
-                        }))
-                      }
-                    />
-                  </label>
-                  <span
-                    className={`event-eye-icon ${!file ? 'disabled' : ''}`}
-                    onClick={() => file && handleViewFile(file)}
-                  >
-                    <Eye size={18} />
-                  </span>
-                </div>
-              );
-            })}
-        </div>
-      </section>
+                    return (
+                      <tr key={row.id}>
+                        <td>{index + 1}</td>
+                        <td>
+                          {row.budgetHead !== 'Others' ? (
+                            <select
+                              value={row.budgetHead}
+                              onChange={(e) =>
+                                setExpenditureRows(
+                                  expenditureRows.map((r) =>
+                                    r.id === row.id
+                                      ? {
+                                          ...r,
+                                          budgetHead: e.target.value,
+                                          budgetHeadOther: '',
+                                        }
+                                      : r,
+                                  ),
+                                )
+                              }
+                            >
+                              <option value="">-- Select --</option>
+                              {FINANCE_BUDGET_HEADS.map((head) => (
+                                <option key={head} value={head}>
+                                  {head}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              type="text"
+                              value={row.budgetHeadOther || ''}
+                              placeholder="Enter other"
+                              onChange={(e) =>
+                                setExpenditureRows(
+                                  expenditureRows.map((r) =>
+                                    r.id === row.id
+                                      ? {
+                                          ...r,
+                                          budgetHeadOther: e.target.value,
+                                          budgetHead: e.target.value.trim() ? 'Others' : '',
+                                        }
+                                      : r,
+                                  ),
+                                )
+                              }
+                              autoFocus
+                            />
+                          )}
+                        </td>
+                        <td>
+                          <input
+                            type="text"
+                            value={row.amountProposed}
+                            onChange={(e) =>
+                              setExpenditureRows(
+                                expenditureRows.map((r) =>
+                                  r.id === row.id ? { ...r, amountProposed: e.target.value } : r,
+                                ),
+                              )
+                            }
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            value={row.actualExpenditure}
+                            onChange={(e) =>
+                              setExpenditureRows(
+                                expenditureRows.map((r) =>
+                                  r.id === row.id ? { ...r, actualExpenditure: e.target.value } : r,
+                                ),
+                              )
+                            }
+                          />
+                        </td>
+
+                        {/* Upload Document Column */}
+                        <td style={{ verticalAlign: 'middle', padding: '8px' }}>
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '15px',
+                              justifyContent: 'center',
+                              height: '100%',
+                            }}
+                          >
+                            <label
+                              className="event-upload-icon"
+                              title="Upload document"
+                              style={{ cursor: 'pointer' }}
+                            >
+                              <CloudUpload size={18} />
+                              <input
+                                type="file"
+                                style={{ display: 'none' }}
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0] || null;
+                                  setExpenditureRows((prevRows) =>
+                                    prevRows.map((r) => (r.id === row.id ? { ...r, file } : r)),
+                                  );
+                                }}
+                                accept=".pdf,.doc,.docx,.jpg,.png"
+                              />
+                            </label>
+                            <span
+                              className={`event-eye-icon ${!row.file ? 'disabled' : ''}`}
+                              onClick={() => {
+                                if (row.file) window.open(URL.createObjectURL(row.file), '_blank');
+                              }}
+                              title={row.file ? 'View uploaded document' : 'No document uploaded'}
+                              style={{
+                                cursor: row.file ? 'pointer' : 'default',
+                                color: row.file ? '#3182ce' : '#ccc',
+                                display: 'flex',
+                                alignItems: 'center',
+                                height: '100%',
+                              }}
+                            >
+                              <Eye size={18} />
+                            </span>
+                          </div>
+                        </td>
+
+                        <td className="event-actions-cell">
+                          <div className="event-action-icons">
+                            {index === 0 && expenditureRows.length === 1 ? (
+                              <button
+                                type="button"
+                                className="event-add"
+                                onClick={addExpenditureRow}
+                                title="Add"
+                              >
+                                <Plus size={16} />
+                              </button>
+                            ) : isLastRow ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="event-icon-btn "
+                                  onClick={() => deleteExpenditureRow(row.id)}
+                                  title="Delete"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  className="event-add"
+                                  onClick={addExpenditureRow}
+                                  title="Add"
+                                >
+                                  <Plus size={16} />
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                className="event-icon-btn "
+                                onClick={() => deleteExpenditureRow(row.id)}
+                                title="Delete"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {/* Total row */}
+                  <tr className="event-total-row">
+                    <td colSpan={4} style={{ textAlign: 'right', fontWeight: '600' }}>
+                      Total Expenditure:
+                    </td>
+                    <td colSpan={2} style={{ fontWeight: '600' }}>
+                      {totalExpenditure}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="event-docs-grid">
+              {Object.keys(financeDocs)
+                .filter((doc) => doc !== 'Bill Copies') // exclude Bill Copies
+                .map((doc) => {
+                  const { active, file } = financeDocs[doc];
+                  return (
+                    <div className="event-doc-row" key={doc}>
+                      <span className="event-doc-label">{doc}</span>
+                      <label className="event-switch">
+                        <input
+                          type="checkbox"
+                          checked={active}
+                          onChange={() =>
+                            setFinanceDocs((prev) => ({
+                              ...prev,
+                              [doc]: { ...prev[doc], active: !active },
+                            }))
+                          }
+                        />
+                        <span className="event-slider"></span>
+                      </label>
+                      <label className={`event-upload-icon ${!active ? 'disabled' : ''}`}>
+                        <CloudUpload size={18} />
+                        <input
+                          type="file"
+                          style={{ display: 'none' }}
+                          disabled={!active}
+                          onChange={(e) =>
+                            setFinanceDocs((prev) => ({
+                              ...prev,
+                              [doc]: {
+                                ...prev[doc],
+                                file: e.target.files?.[0] || null,
+                              },
+                            }))
+                          }
+                        />
+                      </label>
+                      <span
+                        className={`event-eye-icon ${!file ? 'disabled' : ''}`}
+                        onClick={() => file && handleViewFile(file)}
+                      >
+                        <Eye size={18} />
+                      </span>
+                    </div>
+                  );
+                })}
+            </div>
+          </section>
+        </>
+      )}
     </div>
   );
 };
 
 // ---------------- Sponsoring Agency Section ----------------
 const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToTab, eventId }) => {
-  const [enabled, setEnabled] = useState<boolean>(true);
   const [isSubmittingFinance, setIsSubmittingFinance] = useState<boolean>(false);
-
-  const initialanys: any[] = FINANCE_INITIAL_DOCS.map((name) => ({
-    name,
-    enabled: false,
-    file: null,
-  }));
-
-  const [agencies, setAgencies] = useState<Agency[]>([
-    {
-      id: uuidv4(),
-      agency: '',
-      sanctionDetails: { orderNo: '', amount: '', date: '' },
-      docStates: initialanys,
-    },
-  ]);
 
   // Finance section states
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([
@@ -7019,75 +10402,6 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
     'Finance Approval Documents': { active: true, file: null },
     'Bill Copies': { active: false, file: null },
   });
-
-  const addAgency = (): void => {
-    setAgencies([
-      ...agencies,
-      {
-        id: uuidv4(),
-        agency: '',
-        sanctionDetails: { orderNo: '', amount: '', date: '' },
-        docStates: initialanys,
-      },
-    ]);
-  };
-
-  const deleteAgency = (id: string): void => {
-    if (agencies.length === 1) return;
-    setAgencies(agencies.filter((a) => a.id !== id));
-  };
-
-  const handleAgencyChange = (id: string, value: string): void => {
-    setAgencies(agencies.map((a) => (a.id === id ? { ...a, agency: value } : a)));
-  };
-
-  const handleSanctionChange = (id: string, field: keyof SanctionDetails, value: string): void => {
-    setAgencies(
-      agencies.map((a) =>
-        a.id === id
-          ? {
-              ...a,
-              sanctionDetails: { ...a.sanctionDetails, [field]: value },
-            }
-          : a,
-      ),
-    );
-  };
-
-  const handleToggleDoc = (agencyId: string, index: number): void => {
-    setAgencies(
-      agencies.map((a) =>
-        a.id === agencyId
-          ? {
-              ...a,
-              docStates: a.docStates.map((doc, i) =>
-                i === index ? { ...doc, enabled: !doc.enabled, file: null } : doc,
-              ),
-            }
-          : a,
-      ),
-    );
-  };
-
-  const handleFileChange = (agencyId: string, index: number, file: File | null): void => {
-    setAgencies(
-      agencies.map((a) =>
-        a.id === agencyId
-          ? {
-              ...a,
-              docStates: a.docStates.map((doc, i) => (i === index ? { ...doc, file } : doc)),
-            }
-          : a,
-      ),
-    );
-  };
-
-  const viewFile = (file: File | null): void => {
-    if (file) {
-      const fileURL = URL.createObjectURL(file);
-      window.open(fileURL, '_blank');
-    }
-  };
 
   const handleSubmitToBackend = async (): Promise<void> => {
     // console.log("🔴 Finance Submit button clicked!");
@@ -7110,16 +10424,7 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
           amount: parseFloat(row.actualExpenditure) || 0,
           proposed_amount: parseFloat(row.amountProposed) || 0,
         })),
-      sponsoring_agencies: enabled
-        ? agencies
-            .filter((agency) => agency.agency)
-            .map((agency) => ({
-              agency_name: agency.agency,
-              order_no: agency.sanctionDetails.orderNo,
-              amount: parseFloat(agency.sanctionDetails.amount) || null,
-              date: agency.sanctionDetails.date,
-            }))
-        : [],
+      sponsoring_agencies: [],
       supporting_docs: Object.keys(financeDocs)
         .filter((doc) => financeDocs[doc].active && financeDocs[doc].file)
         .map((doc) => ({
@@ -7155,195 +10460,6 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
 
   return (
     <div className="event-sponsor-section finance-approval-body event-budget-style-page">
-      {(enabled ? agencies : [agencies[0]]).map((agency, index) => {
-        const isLastRow = index === agencies.length - 1;
-        return (
-          <section key={agency.id} className="event-agency-card event-budget-style-card">
-            {/* Card Header with Sponsoring Agency title + toggle */}
-            {/* Render title/toggle only for the very first card */}
-            {index === 0 && (
-              <div className="event-card-header">
-                <h3 className="event-section-title">Sponsoring Agency</h3>
-                <label className="event-toggle-switch">
-                  <input
-                    type="checkbox"
-                    checked={enabled}
-                    onChange={() => {
-                      setEnabled(!enabled);
-                      if (enabled) {
-                        setAgencies([
-                          {
-                            id: uuidv4(),
-                            agency: '',
-                            sanctionDetails: {
-                              orderNo: '',
-                              amount: '',
-                              date: '',
-                            },
-                            docStates: initialanys,
-                          },
-                        ]);
-                      }
-                    }}
-                  />
-                  <span className="event-slider"></span>
-                </label>
-              </div>
-            )}
-
-            {/* Render Table + Sanction Details only if enabled */}
-            {enabled && (
-              <>
-                {/* Name of Funding Agency Table */}
-                <div className="event-budget-table-wrap">
-                  <table className="event-sponsor-table event-budget-style-table">
-                    <thead>
-                      <tr>
-                        <th>S.No.</th>
-                        <th>Name of the Funding Agency</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td>{index + 1}</td>
-                        <td>
-                          <input
-                            type="text"
-                            className="event-input-field"
-                            placeholder="Enter Agency Name"
-                            value={agency.agency}
-                            onChange={(e) => handleAgencyChange(agency.id, e.target.value)}
-                            disabled={!enabled}
-                          />
-                        </td>
-                        <td className="event-row-actions text-center align-middle">
-                          <div className="event-flex items-center justify-center gap-2">
-                            {index === 0 && agencies.length === 1 ? (
-                              <button
-                                type="button"
-                                className="event-add"
-                                onClick={addAgency}
-                                title="Add"
-                                disabled={!enabled}
-                              >
-                                <Plus size={16} />
-                              </button>
-                            ) : isLastRow ? (
-                              <div className="flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  className="event-icon-btn"
-                                  onClick={() => deleteAgency(agency.id)}
-                                  title="Delete"
-                                  disabled={!enabled}
-                                >
-                                  <Trash2 size={16} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="event-add"
-                                  onClick={addAgency}
-                                  title="Add"
-                                  disabled={!enabled}
-                                >
-                                  <Plus size={16} />
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                className="event-icon-btn"
-                                onClick={() => deleteAgency(agency.id)}
-                                title="Delete"
-                                disabled={!enabled}
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Sanction Order Details */}
-                <div className="event-sanction-card enabled">
-                  <div className="event-sanction-header">
-                    <h4 style={{ fontSize: '20px' }}>Sanction Order Details</h4>
-                  </div>
-
-                  <div className="event-form-row event-inline-fields">
-                    <input
-                      type="text"
-                      className="event-input-field"
-                      placeholder="Order No."
-                      value={agency.sanctionDetails.orderNo}
-                      onChange={(e) => handleSanctionChange(agency.id, 'orderNo', e.target.value)}
-                    />
-                    <input
-                      type="number"
-                      className="event-input-field"
-                      placeholder="Amount"
-                      value={agency.sanctionDetails.amount}
-                      onChange={(e) => handleSanctionChange(agency.id, 'amount', e.target.value)}
-                    />
-                    <input
-                      type="date"
-                      className="event-input-field"
-                      value={agency.sanctionDetails.date}
-                      onChange={(e) => handleSanctionChange(agency.id, 'date', e.target.value)}
-                    />
-                  </div>
-
-                  {/* Supporting Docs */}
-                  <div className="event-docs-grid">
-                    {agency.docStates.map((doc, i) => (
-                      <div className="event-doc-row event-compact-doc-row" key={i}>
-                        <span className="event-doc-label">{doc.name}</span>
-                        <label className="event-switch">
-                          <input
-                            type="checkbox"
-                            checked={doc.enabled}
-                            onChange={() => handleToggleDoc(agency.id, i)}
-                          />
-                          <span className="event-slider"></span>
-                        </label>
-                        <label
-                          className={`event-upload-icon ${!doc.enabled ? 'disabled' : ''}`}
-                          onClick={() =>
-                            doc.enabled &&
-                            document.getElementById(`file-upload-${agency.id}-${i}`)?.click()
-                          }
-                        >
-                          <CloudUpload size={18} />
-                          <input
-                            type="file"
-                            onChange={(e) =>
-                              handleFileChange(agency.id, i, e.target.files?.[0] || null)
-                            }
-                            style={{ display: 'none' }}
-                            disabled={!doc.enabled}
-                            id={`file-upload-${agency.id}-${i}`}
-                          />
-                        </label>
-                        <span
-                          className={`event-eye-icon ${!doc.file ? 'disabled' : ''}`}
-                          onClick={() => doc.file && viewFile(doc.file)}
-                        >
-                          <Eye size={18} />
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
-          </section>
-        );
-      })}
-
       {/* Finance Section - always visible */}
       <div>
         <FinanceSection
@@ -7610,10 +10726,249 @@ const FeesIcon: React.FC = () => (
   </svg>
 );
 
+const ParticipantDetailsModal: React.FC<{
+  participant: any;
+  show: boolean;
+  onHide: () => void;
+  resolveAssetUrl: (url?: string) => string;
+}> = ({ participant, show, onHide, resolveAssetUrl }) => {
+  const [selectedReceipt, setSelectedReceipt] = React.useState<string | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = React.useState(false);
+
+  if (!participant) return null;
+
+  const profDetails = participant.profession_details
+    ? typeof participant.profession_details === 'string'
+      ? JSON.parse(participant.profession_details)
+      : participant.profession_details
+    : {};
+  const teamMembers = participant.team_members
+    ? typeof participant.team_members === 'string'
+      ? JSON.parse(participant.team_members)
+      : participant.team_members
+    : [];
+  const payments = participant.payments
+    ? typeof participant.payments === 'string'
+      ? JSON.parse(participant.payments)
+      : participant.payments
+    : [];
+
+  return (
+    <CustomModal
+      show={show}
+      onHide={onHide}
+      title="Participant Registration Details"
+      className="participant-details-modal"
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          maxHeight: '70vh',
+          overflowY: 'auto',
+          padding: '0 8px',
+        }}
+      >
+        {/* Personal Details */}
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1e293b' }}>
+            Personal & Contact
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Name</strong>
+              <div style={{ fontWeight: 500 }}>
+                {participant.first_name || ''} {participant.last_name || ''}
+              </div>
+            </div>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Email</strong>
+              <div style={{ fontWeight: 500 }}>
+                {participant.contact_email || participant.email || 'N/A'}
+              </div>
+            </div>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Mobile</strong>
+              <div style={{ fontWeight: 500 }}>{participant.mobile_number || 'N/A'}</div>
+            </div>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>WhatsApp</strong>
+              <div style={{ fontWeight: 500 }}>{participant.whatsapp_number || 'N/A'}</div>
+            </div>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Gender</strong>
+              <div style={{ fontWeight: 500 }}>{participant.gender || 'N/A'}</div>
+            </div>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>DOB</strong>
+              <div style={{ fontWeight: 500 }}>{participant.date_of_birth || 'N/A'}</div>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Address</strong>
+              <div style={{ fontWeight: 500 }}>
+                {[
+                  participant.address,
+                  participant.city,
+                  participant.state,
+                  participant.country,
+                  participant.pin,
+                ]
+                  .filter(Boolean)
+                  .join(', ') || 'N/A'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Professional Details */}
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1e293b' }}>Professional</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Type</strong>
+              <div style={{ fontWeight: 500 }}>
+                {participant.profession_type || participant.category || 'N/A'}
+              </div>
+            </div>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Institution/Org</strong>
+              <div style={{ fontWeight: 500 }}>
+                {participant.prof_institution ||
+                  participant.institution ||
+                  profDetails.organization ||
+                  'N/A'}
+              </div>
+            </div>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Department</strong>
+              <div style={{ fontWeight: 500 }}>{participant.department || 'N/A'}</div>
+            </div>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Designation</strong>
+              <div style={{ fontWeight: 500 }}>{participant.designation || 'N/A'}</div>
+            </div>
+            <div>
+              <strong style={{ color: '#64748b', fontSize: '12px' }}>Register No</strong>
+              <div style={{ fontWeight: 500 }}>{participant.register_number || 'N/A'}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Team Details */}
+        {participant.hasTeam && teamMembers.length > 0 && (
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1e293b' }}>
+              Team Members ({teamMembers.length})
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {teamMembers
+                .sort((a: any, b: any) => a.member_order - b.member_order)
+                .map((member: any, i: number) => (
+                  <div
+                    key={i}
+                    style={{ padding: '8px', background: '#f8fafc', borderRadius: '4px' }}
+                  >
+                    <div style={{ fontWeight: 'bold' }}>
+                      {member.name} {member.member_order === 1 ? '(Lead)' : ''}
+                    </div>
+                    <div style={{ fontSize: '14px', color: '#64748b' }}>
+                      {member.email} | {member.organization || member.role || ''}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* Document Details */}
+        <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+          <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1e293b' }}>Documents</h3>
+          <div style={{ display: 'flex', gap: '16px' }}>
+            {participant.profile_id_card && (
+              <a
+                href={resolveAssetUrl(participant.profile_id_card)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#0284c7', textDecoration: 'underline' }}
+              >
+                ID Card
+              </a>
+            )}
+            {participant.documentUrl && participant.documentUrl !== participant.profile_id_card && (
+              <a
+                href={resolveAssetUrl(participant.documentUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#0284c7', textDecoration: 'underline' }}
+              >
+                Registration Document
+              </a>
+            )}
+            {!participant.profile_id_card && !participant.documentUrl && (
+              <span style={{ color: '#94a3b8' }}>No documents uploaded</span>
+            )}
+          </div>
+        </div>
+
+        {/* Payment Details */}
+        {payments.length > 0 && (
+          <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '16px' }}>
+            <h3 style={{ margin: '0 0 12px 0', fontSize: '16px', color: '#1e293b' }}>
+              Payment Details
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {payments.map((pay: any, i: number) => (
+                <div
+                  key={i}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    padding: '8px',
+                    background: '#f8fafc',
+                    borderRadius: '4px',
+                  }}
+                >
+                  <div>
+                    <div style={{ fontWeight: 'bold' }}>
+                      â‚¹{pay.amount} - {pay.status}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#64748b' }}>
+                      Txn Ref: {pay.transaction_reference || 'N/A'} | Date:{' '}
+                      {pay.date ? new Date(pay.date).toLocaleDateString() : 'N/A'}
+                    </div>
+                  </div>
+                  {pay.proof_file_path && (
+                    <a
+                      href={resolveAssetUrl(pay.proof_file_path)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        alignSelf: 'center',
+                        color: '#0284c7',
+                        textDecoration: 'underline',
+                        fontSize: '14px',
+                      }}
+                    >
+                      View Receipt
+                    </a>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </CustomModal>
+  );
+};
+
 const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summary }) => {
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedParticipantModal, setSelectedParticipantModal] = useState<any | null>(null);
+  const [unsavedStatus, setUnsavedStatus] = useState<Record<number, string>>({});
 
   useEffect(() => {
     if (!eventId) return;
@@ -7628,6 +10983,7 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
           params: { _: Date.now() },
         })
         .then((res: any) => {
+          console.log(`[ParticipantDetails] fetched for eventId:`, eventId, `res:`, res);
           if (isActive) {
             setParticipants(Array.isArray(res?.participants) ? res.participants : []);
             setError(null);
@@ -7661,21 +11017,81 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
     };
   }, [eventId]);
 
+  const resolveAssetUrl = (url?: string | null) => {
+    if (!url) return '';
+    if (
+      url.startsWith('http://') ||
+      url.startsWith('https://') ||
+      url.startsWith('blob:') ||
+      url.startsWith('data:')
+    ) {
+      return url;
+    }
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    const baseUrl = apiUrl.replace(/\/api\/?$/, '');
+    return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+  };
+
+  const [alertNotice, setAlertNotice] = useState<string | null>(null);
+
   const handleViewDocument = (participant: any) => {
-    const documentUrl =
-      participant?.document_url ||
-      participant?.documentUrl ||
-      participant?.document?.url ||
-      participant?.upload?.url ||
-      participant?.uploadUrl ||
-      '';
+    let documentUrl =
+      participant?.documentUrl || participant?.document_url || participant?.profile_id_card || '';
+
+    if (!documentUrl && participant?.registration_documents) {
+      try {
+        const docs =
+          typeof participant.registration_documents === 'string'
+            ? JSON.parse(participant.registration_documents)
+            : participant.registration_documents;
+        documentUrl =
+          docs?.documentPath ||
+          docs?.filePath ||
+          docs?.url ||
+          docs?.[0]?.documentPath ||
+          docs?.[0]?.filePath ||
+          docs?.[0]?.url ||
+          '';
+      } catch (_e) {
+        // ignore parse error
+      }
+    }
 
     if (!documentUrl) {
-      setError('No document is available for this participant.');
+      setAlertNotice('No document uploaded');
       return;
     }
 
-    window.open(documentUrl, '_blank', 'noopener,noreferrer');
+    window.open(resolveAssetUrl(documentUrl), '_blank', 'noopener,noreferrer');
+  };
+
+  const handleViewReceipt = (participant: any) => {
+    let receiptUrl =
+      participant?.receiptUrl || participant?.receipt_url || participant?.proof_file_path || '';
+
+    if (!receiptUrl && participant?.payments) {
+      try {
+        const pays =
+          typeof participant.payments === 'string'
+            ? JSON.parse(participant.payments)
+            : participant.payments;
+        if (Array.isArray(pays) && pays.length > 0) {
+          const validPay =
+            pays.find((p: any) => p?.proof_file_path && String(p.proof_file_path).trim() !== '') ||
+            pays[pays.length - 1];
+          receiptUrl = validPay?.proof_file_path || '';
+        }
+      } catch (_e) {
+        // ignore parse error
+      }
+    }
+
+    if (!receiptUrl) {
+      setAlertNotice('No document uploaded');
+      return;
+    }
+
+    window.open(resolveAssetUrl(receiptUrl), '_blank', 'noopener,noreferrer');
   };
 
   const toggleHostel = (id: number) => {
@@ -7699,15 +11115,25 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
       .catch(console.error);
   };
 
+  const toggleAttendance = (id: number, val: string) => {
+    authenticityUtility
+      .put(`/events/${eventId}/participants/${id}`, { attendance: val })
+      .then(() => {
+        setParticipants((prev) => prev.map((p) => (p.id === id ? { ...p, attendance: val } : p)));
+      })
+      .catch(console.error);
+  };
+
   const toggleAction1 = (id: number) => {
     const p = participants.find((p) => p.id === id);
     if (!p) return;
-    const newAction1 = !p.action1;
+    const isPresent = p.attendance === 'Present';
+    const newAttendance = isPresent ? 'Absent' : 'Present';
     authenticityUtility
-      .put(`/events/${eventId}/participants/${id}`, { action1: newAction1 })
+      .put(`/events/${eventId}/participants/${id}`, { attendance: newAttendance })
       .then(() => {
         setParticipants((prev) =>
-          prev.map((p) => (p.id === id ? { ...p, action1: newAction1 } : p)),
+          prev.map((p) => (p.id === id ? { ...p, attendance: newAttendance } : p)),
         );
       })
       .catch(console.error);
@@ -7742,23 +11168,24 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
   };
 
   const stats = useMemo(() => {
-    const feeValue =
-      participants.find((p) => p.fees != null)?.fees ??
-      participants.find((p) => p.fee != null)?.fee ??
-      0;
+    const totalFeesSum = participants.reduce(
+      (sum, p) => sum + (Number(p.fees ?? p.fee ?? 0) || 0),
+      0,
+    );
     return {
       registered: participants.length,
       shortlisted: participants.filter((p) => p.status === 'Shortlisted' || p.status === 'Selected')
         .length,
       selected: participants.filter((p) => p.status === 'Selected').length,
-      rejected: participants.filter((p) => p.status === 'Rejected').length,
+      rejected: participants.filter((p) => p.status === 'Not Selected' || p.status === 'Rejected')
+        .length,
       hostel: participants.filter((p) => p.hostel === 'YES').length,
-      fees: feeValue,
+      fees: totalFeesSum.toFixed(2),
     };
   }, [participants]);
 
   return (
-    <div className="participant-details-wrapper">
+    <div className="participant-details-wrapper" style={{ width: '100%' }}>
       <div className="event-finance-card">
         {/* Stats Cards Section */}
         <div className="stats-cards-grid">
@@ -7830,14 +11257,12 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
               <th className="col-sno">S.No.</th>
               <th className="col-participant">Participant</th>
               <th className="col-category">Category</th>
-              {summary?.teamEnabled && (
-                <th className="col-group">
-                  <Users size={18} />
-                </th>
-              )}
-              {summary?.documentEnabled && <th className="col-doc">Doc.</th>}
-              {summary?.accommodationEnabled && <th className="col-hostel">Hostel</th>}
-              {summary?.registrationFeeEnabled && <th className="col-fees">Fees</th>}
+              <th className="col-group">
+                <Users size={18} />
+              </th>
+              <th className="col-doc">Doc.</th>
+              <th className="col-hostel">Hostel</th>
+              <th className="col-fees">Fees</th>
               <th className="col-status">Status</th>
               <th className="col-action-1">
                 <UserCheckCustom />
@@ -7845,11 +11270,9 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
               <th className="col-action-2">
                 <UserStarsCustom />
               </th>
-              {summary?.certificateEnabled && (
-                <th className="col-action-3">
-                  <CertificateCustom />
-                </th>
-              )}
+              <th className="col-action-3">
+                <CertificateCustom />
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -7877,7 +11300,11 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
                   <td className="col-sno">{index + 1}</td>
                   <td className="col-participant">
                     <div className="participant-info-cell">
-                      <div className="info-icon-wrapper">
+                      <div
+                        className="info-icon-wrapper"
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => setSelectedParticipantModal(p)}
+                      >
                         <Info size={16} className="info-icon" />
                       </div>
                       <div className="participant-text">
@@ -7900,8 +11327,12 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
                     )}
                   </td>
                   <td className="col-hostel">
-                    <span className={`hostel-text ${p.hostel === 'YES' ? 'yes' : 'no'}`}>
-                      {p.hostel}
+                    <span
+                      className={`hostel-text ${p.hostel === 'YES' ? 'yes' : 'no'}`}
+                      onClick={() => toggleHostel(p.id)}
+                      style={{ cursor: 'pointer', fontWeight: 700, fontSize: '13px' }}
+                    >
+                      {p.hostel === 'YES' ? 'YES' : 'NO'}
                     </span>
                   </td>
                   <td className="col-fees">
@@ -7915,97 +11346,105 @@ const ParticipantDetails: React.FC<ParticipantDetailsProps> = ({ eventId, summar
                     </div>
                   </td>
                   <td className="col-status">
-                    <div className="status-cell-wrapper">
-                      <div className="status-dropdown">
-                        <select
-                          value={p.status}
-                          onChange={(e) => handleStatusChange(p.id, e.target.value)}
-                        >
-                          <option value="Registered">Pending</option>
-                          <option value="Shortlisted">Shortlisted</option>
-                          <option value="Selected">Selected</option>
-                          <option value="Rejected">Rejected</option>
-                        </select>
-                        <ChevronDown size={12} className="dropdown-icon" />
-                      </div>
-                      <CheckCircle2
-                        size={22}
-                        className={`success-icon ${p.action1 ? 'filled' : 'outline'}`}
-                        onClick={() => toggleAction1(p.id)}
+                    <div
+                      className="status-cell-inner"
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                    >
+                      <CustomStatusDropdown
+                        value={p.status}
+                        onChange={(v) => handleStatusChange(p.id, v)}
+                      />
+                      <svg
+                        width="22"
+                        height="22"
+                        viewBox="0 0 24 24"
+                        fill="none"
                         style={{ cursor: 'pointer', flexShrink: 0 }}
+                        onClick={() => handleStatusChange(p.id, p.status)}
+                      >
+                        <circle cx="12" cy="12" r="10" fill="#00c853" />
+                        <path
+                          d="M8.5 12.5l2.5 2.5 5-5"
+                          stroke="#ffffff"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </div>
+                  </td>
+                  <td className="col-action-1">
+                    <div
+                      style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={p.attendance === 'Present'}
+                        onChange={() => toggleAction1(p.id)}
+                        style={{
+                          cursor: 'pointer',
+                          width: '16px',
+                          height: '16px',
+                          accentColor: '#00c853',
+                          margin: 0,
+                          borderRadius: '3px',
+                        }}
                       />
                     </div>
                   </td>
-                  {summary?.teamEnabled && (
-                    <td className="col-group" style={{ fontSize: '13px' }}>
-                      {p.group_id ? p.group_id : '-'}
-                    </td>
-                  )}
-                  {summary?.documentEnabled && (
-                    <td className="col-doc">
-                      {p.document_upload ? (
-                        <button
-                          className="icon-btn"
-                          title="View Document"
-                          onClick={() => handleViewDocument(p)}
-                        >
-                          <Paperclip size={18} />
-                        </button>
-                      ) : (
-                        <span style={{ color: '#ccc' }}>-</span>
-                      )}
-                    </td>
-                  )}
-                  {summary?.accommodationEnabled && (
-                    <td className="col-hostel">
-                      {p.accommodation_required === 1 ? (
-                        <CheckCircle2 size={18} className="status-icon green" />
-                      ) : (
-                        <span style={{ color: '#ccc' }}>-</span>
-                      )}
-                    </td>
-                  )}
-                  {summary?.registrationFeeEnabled && (
-                    <td className="col-fees">
-                      {p.fee_status === 'Paid' ? (
-                        <CheckCircle2 size={18} className="status-icon green" />
-                      ) : p.fee_status === 'Pending' ? (
-                        <Hourglass size={18} className="status-icon yellow" />
-                      ) : (
-                        <span style={{ color: '#ccc' }}>-</span>
-                      )}
-                    </td>
-                  )}
-                  <td className="col-action-1">
+                  <td className="col-action-2">
                     <div
-                      className={`custom-checkbox-wrapper ${p.action2 ? 'checked' : ''}`}
-                      onClick={() => toggleAction2(p.id)}
+                      style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}
                     >
-                      {p.action2 && <Check size={14} className="checkbox-check" />}
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        style={{ flexShrink: 0 }}
+                      >
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke={p.hasFeedback ? '#00c853' : '#cbd5e1'}
+                          strokeWidth="2.5"
+                          fill="#ffffff"
+                        />
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="6"
+                          fill={p.hasFeedback ? '#00c853' : '#cbd5e1'}
+                        />
+                      </svg>
                     </div>
                   </td>
-                  <td className="col-action-2">
-                    <button className="icon-btn">
-                      <CheckCircle2 size={18} />
-                    </button>
+                  <td className="col-action-3">
+                    <div
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => handleViewDocument(p)}
+                    >
+                      <FileText size={18} style={{ color: '#9ca3af', flexShrink: 0 }} />
+                    </div>
                   </td>
-                  {summary?.certificateEnabled && (
-                    <td className="col-action-3">
-                      <button
-                        className="icon-btn certificate-btn"
-                        title="Certificate"
-                        onClick={() => handleViewDocument(p)}
-                      >
-                        <Award size={18} />
-                      </button>
-                    </td>
-                  )}
                 </tr>
               ))
             )}
           </tbody>
         </table>
       </div>
+      <ParticipantDetailsModal
+        participant={selectedParticipantModal}
+        show={!!selectedParticipantModal}
+        onHide={() => setSelectedParticipantModal(null)}
+        resolveAssetUrl={resolveAssetUrl}
+      />
     </div>
   );
 };
@@ -8020,6 +11459,8 @@ interface PreEventProps {
   goToTab: (tab: string) => void;
   eventId?: string;
   isSubEvent?: boolean;
+  parentId?: string;
+  readOnly?: boolean;
 }
 
 interface MainEventOption {
@@ -8029,9 +11470,26 @@ interface MainEventOption {
   parent_id?: number | null;
 }
 
-const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => {
-  const [selectedSubEventId, setSelectedSubEventId] = useState('');
+const PreEvent: React.FC<PreEventProps> = ({
+  goToTab,
+  eventId,
+  isSubEvent,
+  parentId,
+  readOnly = false,
+}) => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [selectedSubEventId, setSelectedSubEventId] = useState(
+    isSubEvent && eventId && eventId !== 'new' ? eventId : '',
+  );
   const [mainEvents, setMainEvents] = useState<{ id: string; title: string }[]>([]);
+
+  useEffect(() => {
+    if (parentId && !selectedSubEventId) {
+      setSelectedSubEventId(parentId);
+    }
+  }, [parentId, selectedSubEventId]);
+
   const [alertConfig, setAlertConfig] = useState<{
     show: boolean;
     message: string;
@@ -8121,6 +11579,8 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
       bank_account: null,
       topics: [],
       expected_participants: data.expectedParticipants,
+      host_collaborator: data.hostCollaborator,
+      hostCollaborator: data.hostCollaborator,
       themes: Array.isArray(data.themes) ? data.themes : data.themes ? [data.themes] : [],
       sdgs: Array.isArray(data.sdgs) ? data.sdgs : data.sdgs ? [data.sdgs] : [],
       inaugural_enabled: data.ceremonyEnabled && data.inauguralEnabled,
@@ -8144,6 +11604,8 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
       // --- ADDED MISSING DATA ---
       registrationSettings: {
         enabled: data.registrationSettingsEnabled,
+        expectedParticipants: data.expectedParticipants,
+        expected_participants: data.expectedParticipants,
         eligibleParticipants: Array.isArray(data.eligibleParticipants)
           ? data.eligibleParticipants.join(', ')
           : data.eligibleParticipants,
@@ -8182,10 +11644,14 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
     };
 
     try {
+      let newEventId = eventId;
       if (eventId && eventId !== 'new') {
         await authenticityUtility.put(`/events/${eventId}`, eventSubmitData);
       } else {
-        await authenticityUtility.post('/events', eventSubmitData);
+        const res: any = await authenticityUtility.post('/events', eventSubmitData);
+        if (res && res.id) {
+          newEventId = String(res.id);
+        }
       }
       setAlertConfig({
         show: true,
@@ -8195,7 +11661,13 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
             : 'Event created successfully!',
         type: 'success',
       });
-      goToTab('finance');
+      if (eventId === 'new' && newEventId !== 'new') {
+        const currentParams = new URLSearchParams(location.search);
+        currentParams.set('tab', 'pre-event');
+        navigate(`/event/${newEventId}?${currentParams.toString()}`, { replace: true });
+      } else {
+        goToTab('pre-event');
+      }
     } catch (error: any) {
       const backendError =
         error.response?.data?.error ||
@@ -8256,6 +11728,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
           {selectedSubEventId && (
             <div style={{ marginTop: '24px' }}>
               <EventApprovalCards
+                eventId={eventId}
                 title={selectedEvent?.title || ''}
                 submitLabel={EVENT_COPY.submitNext}
                 showHeaderActions={false}
@@ -8280,12 +11753,14 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
   return (
     <>
       <EventApprovalCards
+        eventId={eventId}
         title=""
         submitLabel={EVENT_COPY.submitNext}
         showHeaderActions={false}
         showExtendedSections={!isSubEvent}
         showMultiEventToggle={!isSubEvent}
         isSubEvent={isSubEvent}
+        readOnly={readOnly}
         onSubmit={handleSubmit}
       />
       <AlertModal
@@ -8300,3 +11775,261 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab, eventId, isSubEvent }) => 
 
 export { PreEvent };
 export { Dashboard as EventDashboard };
+
+interface GuesthouseBooking {
+  id: number;
+  proposal_ref?: string | null;
+  applicant_name?: string | null;
+  primary_head?: string | null;
+  guest_details?: string | null;
+  check_in_date?: string | null;
+  check_out_date?: string | null;
+  has_room_allocation?: boolean | number;
+  overall_status?: string | null;
+}
+
+const toDateKey = (value?: string | null) => String(value || '').slice(0, 10);
+
+const toLocalDateKey = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
+
+const formatDate = (dateKey: string) => {
+  const date = new Date(`${dateKey}T00:00:00`);
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    weekday: 'long',
+  })
+    .format(date)
+    .replace(',', '');
+};
+
+const formatStayDate = (value?: string | null) => {
+  const dateKey = toDateKey(value);
+  if (!dateKey) return '';
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  }).format(new Date(`${dateKey}T00:00:00`));
+};
+
+const formatStayRange = (checkIn?: string | null, checkOut?: string | null) => {
+  const start = formatStayDate(checkIn);
+  const end = formatStayDate(checkOut);
+  if (!start) return 'Dates not specified';
+  return end && end !== start ? `${start} – ${end}` : start;
+};
+
+const bookingIncludesDate = (booking: GuesthouseBooking, dateKey: string) => {
+  const checkIn = toDateKey(booking.check_in_date);
+  const checkOut = toDateKey(booking.check_out_date) || checkIn;
+  return Boolean(checkIn && dateKey >= checkIn && dateKey <= checkOut);
+};
+
+export const EventCalendarPage: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const calendarRef = useRef<FullCalendar | null>(null);
+  const todayKey = toLocalDateKey(new Date());
+  const today = new Date();
+  const [bookings, setBookings] = useState<GuesthouseBooking[]>([]);
+  const [selectedDate, setSelectedDate] = useState(todayKey);
+  const [displayDate, setDisplayDate] = useState(today);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  const isGuesthouseAdmin = getGuesthouseWorkflowStage(user) === 'guesthouse_admin';
+  const selectedBookings = useMemo(
+    () => bookings.filter((booking) => bookingIncludesDate(booking, selectedDate)),
+    [bookings, selectedDate],
+  );
+
+  const bookingCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    bookings.forEach((booking) => {
+      const start = toDateKey(booking.check_in_date);
+      const end = toDateKey(booking.check_out_date) || start;
+      if (!start) return;
+      const cursor = new Date(`${start}T00:00:00`);
+      const last = new Date(`${end}T00:00:00`);
+      while (cursor <= last) {
+        const key = toLocalDateKey(cursor);
+        counts.set(key, (counts.get(key) || 0) + 1);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+    });
+    return counts;
+  }, [bookings]);
+
+  useEffect(() => {
+    const loadBookings = async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const response = (await authenticityUtility.get('/guesthouse')) as {
+          items?: GuesthouseBooking[];
+        };
+        setBookings(Array.isArray(response?.items) ? response.items : []);
+      } catch (loadError) {
+        console.error('Unable to load guesthouse calendar bookings', loadError);
+        setError('Unable to load guesthouse requests. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    void loadBookings();
+  }, []);
+
+  const syncDisplayDate = () => {
+    const date = calendarRef.current?.getApi().getDate();
+    if (date) setDisplayDate(date);
+  };
+
+  const goToToday = () => {
+    calendarRef.current?.getApi().today();
+    setSelectedDate(todayKey);
+    syncDisplayDate();
+  };
+
+  const goToPreviousMonth = () => {
+    calendarRef.current?.getApi().prev();
+    syncDisplayDate();
+  };
+
+  const goToNextMonth = () => {
+    calendarRef.current?.getApi().next();
+    syncDisplayDate();
+  };
+
+  const openBooking = (booking: GuesthouseBooking) => {
+    navigate(`/guesthouse/${booking.id}${isGuesthouseAdmin ? '?allotment=true' : ''}`);
+  };
+
+  return (
+    <main className="guesthouse-calendar-page">
+      <section className="guesthouse-calendar-details-panel">
+        <div className="guesthouse-calendar-panel-heading">
+          <div>
+            <h1>{formatDate(selectedDate)}</h1>
+            <p>
+              {selectedBookings.length} room booking request
+              {selectedBookings.length === 1 ? '' : 's'} for this day
+            </p>
+          </div>
+          <button
+            type="button"
+            className="guesthouse-calendar-add-button"
+            onClick={() => navigate('/guesthouse/new')}
+          >
+            Add +
+          </button>
+        </div>
+
+        {loading ? (
+          <p className="guesthouse-calendar-state">Loading room booking requests…</p>
+        ) : error ? (
+          <p className="guesthouse-calendar-state guesthouse-calendar-state--error">{error}</p>
+        ) : selectedBookings.length === 0 ? (
+          <p className="guesthouse-calendar-state">No rooms booked for this day.</p>
+        ) : (
+          <div className="guesthouse-calendar-request-list">
+            {selectedBookings.map((booking) => {
+              const allocated = Boolean(booking.has_room_allocation);
+              return (
+                <button
+                  type="button"
+                  className="guesthouse-calendar-request"
+                  key={booking.id}
+                  onClick={() => openBooking(booking)}
+                >
+                  <div className="guesthouse-calendar-request-top">
+                    <span>
+                      <FaLayerGroup /> {booking.proposal_ref || `#GH-${booking.id}`}
+                    </span>
+                    <span
+                      className="guesthouse-calendar-stay-dates"
+                      title={formatStayRange(booking.check_in_date, booking.check_out_date)}
+                    >
+                      <FaRegClock />{' '}
+                      {formatStayRange(booking.check_in_date, booking.check_out_date)}
+                    </span>
+                    <span
+                      className={
+                        allocated ? 'allocation-status allocated' : 'allocation-status pending'
+                      }
+                    >
+                      {allocated ? 'Room allocated' : 'Room not allocated'}
+                    </span>
+                  </div>
+                  <div className="guesthouse-calendar-request-bottom">
+                    <span>
+                      <FaBuilding />{' '}
+                      {booking.applicant_name || booking.primary_head || 'Guesthouse request'}
+                    </span>
+                    <span>
+                      <FaMapMarkerAlt /> {booking.guest_details || 'Open request details'}
+                    </span>
+                  </div>
+                  {isGuesthouseAdmin && (
+                    <span className="guesthouse-calendar-allocation-action">
+                      Open room allocation →
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="guesthouse-calendar-panel">
+        <h2>Calendar</h2>
+        <div className="guesthouse-calendar-toolbar">
+          <button type="button" onClick={goToToday}>
+            Today
+          </button>
+          <div className="guesthouse-calendar-month-navigation">
+            <button type="button" onClick={goToPreviousMonth} aria-label="Previous month">
+              ‹
+            </button>
+            <strong>
+              {displayDate.toLocaleString('en-US', { month: 'long', year: 'numeric' })}
+            </strong>
+            <button type="button" onClick={goToNextMonth} aria-label="Next month">
+              ›
+            </button>
+          </div>
+        </div>
+        <div className="guesthouse-calendar-grid">
+          <FullCalendar
+            ref={calendarRef}
+            plugins={[dayGridPlugin, interactionPlugin]}
+            initialView="dayGridMonth"
+            headerToolbar={false}
+            fixedWeekCount={false}
+            dateClick={(info) => setSelectedDate(info.dateStr)}
+            datesSet={syncDisplayDate}
+            dayCellClassNames={(arg) =>
+              toLocalDateKey(arg.date) === selectedDate ? 'guesthouse-calendar-selected-date' : ''
+            }
+            dayCellContent={(arg) => {
+              const dateKey = toLocalDateKey(arg.date);
+              const count = bookingCounts.get(dateKey) || 0;
+              return (
+                <div className="guesthouse-calendar-day-content">
+                  <span>{arg.dayNumberText}</span>
+                  {count > 0 && <b>{count}</b>}
+                </div>
+              );
+            }}
+          />
+        </div>
+      </section>
+    </main>
+  );
+};

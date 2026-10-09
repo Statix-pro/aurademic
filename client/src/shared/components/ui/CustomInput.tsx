@@ -19,6 +19,7 @@ interface CustomInputProps {
   onClick?: (e: any) => void;
   onFocus?: (e: any) => void;
   onBlur?: (e: any) => void;
+  onKeyDown?: (e: any) => void;
 }
 
 const CustomInput: React.FC<CustomInputProps> = ({

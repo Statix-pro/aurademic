@@ -1,0 +1,6 @@
+/* client/src/features/admin/events/event-approval/AdminEventApproval.css */
+
+.admin-event-approval-wrapper {
+  width: 100%;
+  min-height: calc(100vh - 64px);
+}

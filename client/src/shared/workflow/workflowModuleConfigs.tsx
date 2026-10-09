@@ -389,11 +389,73 @@ export const WORKFLOW_MODULE_CONFIGS: Record<string, WorkflowApprovalModuleConfi
     ],
     queueDefaultLimit: 20,
   },
+  event: {
+    moduleKey: 'event',
+    title: 'Event Proposals',
+    apiBasePath: '/events',
+    stageLabels: {
+      hod_pending: 'HOD',
+      iqac_pending: 'IQAC',
+      principal_pending: 'Principal',
+      level1: 'HOD',
+    },
+    getTimelineEndpoint: (id) => `/events/${id}/history`,
+    getApprovalEndpoint: (id) => `/events/${id}/approve`,
+    getViewRoute: (id) => `/event/${id}`,
+    getEditRoute: (id) => `/event/${id}`,
+    enableSuperAdminDelete: true,
+    enableLevel1RoleTabs: false,
+    enableSuperAdminAllProposals: false,
+    enableSecondaryFilter: true,
+    enableCsvExport: false,
+    mapQueueResponse: (response: any) => {
+      const payload =
+        response && typeof response === 'object' && !Array.isArray(response)
+          ? response
+          : { data: response };
+      const rawItems = Array.isArray(payload?.items)
+        ? payload.items
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : Array.isArray(payload)
+            ? payload
+            : [];
+      const statusCounts =
+        payload?.pagination?.statusCounts || payload?.statusCounts || payload?.counts;
+      const total = Number(
+        payload?.pagination?.total ??
+          payload?.totalCount ??
+          payload?.total ??
+          statusCounts?.total ??
+          rawItems.length,
+      );
+      const page = Number(payload?.pagination?.page ?? payload?.page ?? 1);
+      const limit = Number(payload?.pagination?.limit ?? payload?.limit ?? 20);
+
+      return {
+        items: rawItems,
+        total,
+        page,
+        limit,
+        statusCounts,
+      };
+    },
+    columns: [
+      { key: 'id', label: 'ID', render: (r) => r.proposal_ref || `#EVT-${r.id}` },
+      { key: 'title', label: 'Event Title' },
+      { key: 'category', label: 'Category' },
+      { key: 'proposedBy', label: 'Proposed By' },
+      { key: 'department', label: 'Department' },
+      { key: 'venue', label: 'Venue' },
+    ],
+    queueDefaultLimit: 20,
+  },
 };
 
-export const getWorkflowModuleConfig = (moduleKey: string) =>
-  WORKFLOW_MODULE_CONFIGS[
-    String(moduleKey || '')
-      .trim()
-      .toLowerCase()
-  ] || null;
+export const getWorkflowModuleConfig = (moduleKey: string) => {
+  const normalized = String(moduleKey || '')
+    .trim()
+    .toLowerCase();
+  const key = normalized === 'events' ? 'event' : normalized;
+  return WORKFLOW_MODULE_CONFIGS[key] || WORKFLOW_MODULE_CONFIGS[normalized] || null;
+};

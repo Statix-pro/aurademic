@@ -63,7 +63,16 @@ export interface ProfessionDetails {
 
 // ─── Events ────────────────────────────────────────────────────────────────
 export type RegistrationStatus = 'pending' | 'submitted' | 'registered';
-export type ReviewStatus = 'pending' | 'shortlisted' | 'selected' | 'rejected';
+export type ReviewStatus =
+  | 'Pending'
+  | 'Shortlisted'
+  | 'Selected'
+  | 'Rejected'
+  | 'Not Selected'
+  | 'pending'
+  | 'shortlisted'
+  | 'selected'
+  | 'rejected';
 export type PaymentBillType = 'event registration bill' | 'accommodation bill';
 
 export interface PaymentProof {
@@ -91,6 +100,11 @@ export interface SubEventItem {
   fees: number;
   feesUnit: 'Team' | 'Participant';
   category?: string;
+  documentEnabled?: boolean;
+  documentName?: string;
+  documentType?: string;
+  documentSize?: string;
+  documentTextFieldEnabled?: boolean;
 }
 
 export interface EventItem {
@@ -110,6 +124,12 @@ export interface EventItem {
   feeRange?: { min: number; max: number };
   feesUnit: 'Team' | 'Participant';
   status: 'Open' | 'Closed' | 'Upcoming';
+  startDate?: string | null;
+  endDate?: string | null;
+  end_date?: string | null;
+  lastDate?: string | null;
+  last_date?: string | null;
+  registrationClosesAt?: string | null;
   registrationStatus?: RegistrationStatus;
   subEvents?: SubEventItem[];
   parentEventName?: string;
@@ -117,6 +137,12 @@ export interface EventItem {
   hasAccommodation?: boolean;
   hasRegistrationFee?: boolean;
   documentEnabled?: boolean;
+  documentName?: string;
+  documentType?: string;
+  documentSize?: string;
+  documentTextFieldEnabled?: boolean;
+  shortlistingRequired?: boolean;
+  selectionIntimation?: string | null;
   feedbackEnabled?: boolean;
   certificateEnabled?: boolean;
   coordinators?: {
@@ -149,8 +175,14 @@ export interface EventRegistration {
   document?: RegistrationDocument | null;
   /** review status shown on the event card */
   reviewStatus: ReviewStatus;
+  shortlistingRequired?: boolean;
+  selectionIntimation?: string | null;
+  updatedAt?: string;
   backendId?: number;
   hasFeedback?: boolean;
+  attendance?: string;
+  adminFeedback?: { text: string };
+  certificateRefNo?: string | null;
 }
 
 // ─── Accommodation ─────────────────────────────────────────────────────────

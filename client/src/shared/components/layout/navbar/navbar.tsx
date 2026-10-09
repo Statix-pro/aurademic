@@ -10,6 +10,7 @@ import {
   canAccessExpenditureWorkflow,
   canAccessFinanceWorkflow,
   canAccessGuesthouseWorkflow,
+  canAccessEventWorkflow,
   canManageAccessControl,
   hasPermission,
   isSuperAdmin,
@@ -247,6 +248,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showFinanceWorkflow = canAccessFinanceWorkflow(user);
   const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
   const showGuesthouseApproval = canAccessGuesthouseWorkflow(user);
+  const showEventApproval = canAccessEventWorkflow(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
   const showAdminMenu =
@@ -254,7 +256,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
     showBudgetApproval ||
     showFinanceWorkflow ||
     showExpenditureWorkflow ||
-    showGuesthouseApproval;
+    showGuesthouseApproval ||
+    showEventApproval;
   const showSuperAdminMenu = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
@@ -635,6 +638,21 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     onClick={handleLinkClick}
                   >
                     Guesthouse Approval
+                  </Link>
+                )}
+                {showEventApproval && (
+                  <Link
+                    to="/workflow/event"
+                    className={`sb-sublink ${
+                      isActive('/workflow/event') ||
+                      isActive('/workflow/events') ||
+                      isActive('/admin/event-approval')
+                        ? 'active'
+                        : ''
+                    }`}
+                    onClick={handleLinkClick}
+                  >
+                    Event Approval
                   </Link>
                 )}
               </div>

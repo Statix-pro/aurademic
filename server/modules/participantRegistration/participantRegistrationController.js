@@ -1,3 +1,5 @@
+import fs from 'fs';
+
 import participantRegistrationModel, {
   NotImplementedError,
 } from './participantRegistrationModel.js';
@@ -166,6 +168,16 @@ const participantRegistrationController = {
 
       return ok(res, { registrationId });
     } catch (error) {
+      try {
+        fs.writeFileSync(
+          'C:\\Users\\sweth\\OneDrive\\Desktop\\finalpro\\aurademic\\error_log.txt',
+          (error.message || 'No message') + '\\n' + (error.stack || 'No stack'),
+        );
+      } catch (_e) {
+        // ignore log error
+      }
+      console.log('CRITICAL ERROR IN CREATEREGISTRATION:', error);
+      console.log('STACK:', error.stack);
       console.error('createRegistration failed:', error);
       return failFromError(res, error, 'Could not create registration');
     }
@@ -184,14 +196,27 @@ const participantRegistrationController = {
             return typeof r.teamMembers === 'string'
               ? JSON.parse(r.teamMembers)
               : r.teamMembers || [];
-          } catch (e) {
+          } catch (_e) {
             return [];
+          }
+        })(),
+        adminFeedback: (() => {
+          try {
+            return typeof r.adminFeedback === 'string'
+              ? JSON.parse(r.adminFeedback)
+              : r.adminFeedback || null;
+          } catch (_e) {
+            return null;
           }
         })(),
       }));
 
       return ok(res, { registrations });
     } catch (error) {
+      fs.writeFileSync(
+        'C:\\Users\\sweth\\OneDrive\\Desktop\\finalpro\\aurademic\\error_log_list.txt',
+        JSON.stringify(error, Object.getOwnPropertyNames(error), 2) + '\\n' + error.stack,
+      );
       console.error('listRegistrations failed:', error);
       return failFromError(res, error, 'Could not load registrations');
     }
@@ -256,7 +281,6 @@ const participantRegistrationController = {
       }
 
       const invalid = members.find((member) => !member?.email?.trim() || !member?.name?.trim());
-
       if (invalid) {
         return fail(res, 400, 'Every team member needs a name and an email');
       }
@@ -422,7 +446,7 @@ const participantRegistrationController = {
           );
           if (context && context.team_enabled) {
             const [memberCountRow] = await db.query(
-              'SELECT COUNT(*) AS count FROM event_registration_team_members WHERE registration_id = ? AND is_deleted = 0',
+              'SELECT JSON_LENGTH(team_members) AS count FROM event_registrations WHERE id = ? AND is_deleted = 0',
               [registration.id],
             );
             const memberCount = memberCountRow[0]?.count ?? 0;
@@ -456,10 +480,14 @@ const participantRegistrationController = {
         transactionReference,
       });
 
-      // Update registration_status to 'Submitted' if it was 'Pending' and this is registration payment
-      if (billType === 'Registration' && registration.registration_status === 'Pending') {
+      // Update registration_status to 'Registered' if this is a registration payment
+      if (
+        billType === 'Registration' &&
+        (registration.registration_status === 'Pending' ||
+          registration.registration_status === 'Submitted')
+      ) {
         await db.query(
-          "UPDATE event_registrations SET registration_status = 'Submitted' WHERE id = ?",
+          "UPDATE event_registrations SET registration_status = 'Registered' WHERE id = ?",
           [registration.id],
         );
       }
@@ -521,7 +549,7 @@ const participantRegistrationController = {
       }
 
       const [typeCheck] = await db.query(
-        'SELECT id FROM m_document_type WHERE id = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1',
+        'SELECT document_name FROM m_document_type WHERE id = ? AND is_active = 1 AND is_deleted = 0 LIMIT 1',
         [documentTypeId],
       );
       if (!typeCheck[0]) {
@@ -529,17 +557,15 @@ const participantRegistrationController = {
         return fail(res, 400, 'The specified document type does not exist or is inactive');
       }
 
+      const documentTypeName = typeCheck[0].document_name;
+
       // Unlink any existing registration document to prevent orphans
       const [oldDoc] = await db.query(
-        'SELECT file_path FROM event_registration_documents WHERE registration_id = ? AND is_deleted = 0 LIMIT 1',
+        "SELECT JSON_UNQUOTE(JSON_EXTRACT(documents, '$.documentPath')) as file_path FROM event_registrations WHERE id = ? LIMIT 1",
         [registration.id],
       );
       if (oldDoc[0] && oldDoc[0].file_path) {
         deleteUploadedFile(oldDoc[0].file_path);
-        await db.query(
-          'UPDATE event_registration_documents SET is_deleted = 1 WHERE registration_id = ?',
-          [registration.id],
-        );
       }
 
       const filePath = toPublicUploadPath(
@@ -549,6 +575,7 @@ const participantRegistrationController = {
 
       await participantRegistrationModel.insertRegistrationDocument(registration.id, {
         documentTypeId,
+        documentTypeName,
         filePath,
       });
 
@@ -640,12 +667,10 @@ const participantRegistrationController = {
     try {
       const body = req.body ?? {};
 
-      // Server-side validation — these are the same fields isPersonalComplete checks.
+      // Server-side validation — only the minimal fields are hard-required.
+      // dateOfBirth, lastName, gender are optional saves (completion is tracked separately).
       const required = [
         ['firstName', body.firstName],
-        ['lastName', body.lastName],
-        ['gender', body.gender],
-        ['dateOfBirth', body.dateOfBirth],
         ['mobileNumber', body.mobileNumber],
         ['email', body.email],
       ];
@@ -727,10 +752,73 @@ const participantRegistrationController = {
 
   // ---- Feedback ------------------------------------------------------------
 
+  async getFeedbackQuestions(req, res) {
+    try {
+      const registration = await loadOwnedRegistration(req, res);
+      if (!registration) return undefined;
+
+      let attendance = null;
+      try {
+        const fb =
+          typeof registration.feedback_answers === 'string'
+            ? JSON.parse(registration.feedback_answers)
+            : registration.feedback_answers;
+        attendance = fb?.attendance;
+      } catch (_) {
+        // ignore parse error
+      }
+
+      if (attendance !== 'Present') {
+        return fail(res, 403, 'You must attend the event to access feedback questions');
+      }
+
+      const questions = await participantRegistrationModel.getFeedbackQuestions(registration.id);
+      const existingAnswers = await participantRegistrationModel.getExistingAnswers(
+        registration.id,
+      );
+
+      const [[evt]] = await db.query(
+        'SELECT e.feedback_settings FROM events e JOIN event_registrations r ON r.event_id = e.id WHERE r.id = ?',
+        [registration.id],
+      );
+      let feedbackSettings = null;
+      if (evt?.feedback_settings) {
+        try {
+          feedbackSettings =
+            typeof evt.feedback_settings === 'string'
+              ? JSON.parse(evt.feedback_settings)
+              : evt.feedback_settings;
+        } catch (_) {
+          // ignore parse error
+        }
+      }
+
+      return ok(res, { questions, existingAnswers, feedbackSettings });
+    } catch (error) {
+      console.error('getFeedbackQuestions failed:', error);
+      return failFromError(res, error, 'Could not load feedback questions');
+    }
+  },
+
   async submitFeedback(req, res) {
     try {
       const registration = await loadOwnedRegistration(req, res);
       if (!registration) return undefined;
+
+      let attendance = null;
+      try {
+        const fb =
+          typeof registration.feedback_answers === 'string'
+            ? JSON.parse(registration.feedback_answers)
+            : registration.feedback_answers;
+        attendance = fb?.attendance;
+      } catch (_) {
+        // ignore parse error
+      }
+
+      if (attendance !== 'Present') {
+        return fail(res, 403, 'You must attend the event to submit feedback');
+      }
 
       // TODO(intern): validate answers against event_feedback_questions for this
       // event. uq_event_feedback_registration makes a resubmission a conflict:
@@ -741,6 +829,52 @@ const participantRegistrationController = {
     } catch (error) {
       console.error('submitFeedback failed:', error);
       return failFromError(res, error, 'Could not submit feedback');
+    }
+  },
+
+  // GET /api/participant/lookup?email=xxx  (public – no auth needed)
+  async lookupByEmail(req, res) {
+    const email = String(req.query.email || '')
+      .trim()
+      .toLowerCase();
+    if (!email || !email.includes('@')) {
+      return fail(res, 400, 'Valid email is required');
+    }
+    try {
+      const [rows] = await db.query(
+        `SELECT
+           ep.id             AS participant_id,
+           ep.email,
+           epp.first_name,
+           epp.last_name,
+           epp.mobile_number AS phone,
+           epp.institution,
+           epp.department,
+           epp.designation,
+           epp.profession_type
+         FROM event_participants ep
+         LEFT JOIN event_participant_profiles epp ON epp.participant_id = ep.id
+         WHERE ep.email = ? AND ep.is_deleted = 0
+         LIMIT 1`,
+        [email],
+      );
+      if (!rows.length) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+      const row = rows[0];
+      return ok(res, {
+        participant_id: row.participant_id,
+        email: row.email,
+        name: [row.first_name, row.last_name].filter(Boolean).join(' ') || '',
+        phone: row.phone || '',
+        institution: row.institution || '',
+        department: row.department || '',
+        designation: row.designation || '',
+        profession_type: row.profession_type || '',
+      });
+    } catch (error) {
+      console.error('lookupByEmail failed:', error);
+      return failFromError(res, error, 'Could not look up participant');
     }
   },
 };

@@ -236,6 +236,10 @@ function formatDateRange(from: string, to: string) {
   return `${month.format(start)} ${start.getDate()} - ${month.format(end)} ${end.getDate()}, ${year.format(end)}`;
 }
 
+export function isEventOpen(event: EventItem): boolean {
+  return String(event?.status || '').toLowerCase() === 'open';
+}
+
 export default function EventCard({
   event,
   onViewDetails,

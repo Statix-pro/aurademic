@@ -2,6 +2,7 @@ import { Award, ArrowLeft, Download, Eye, Sparkles } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import EventCertificate from './EventCertificate';
 import { useAuth } from '../../contexts/AuthContext';
 import { useEvents, flattenEvents } from '../../contexts/EventsContext';
 import { useProfile } from '../../contexts/ProfileContext';
@@ -21,12 +22,15 @@ export default function CertificatesPage() {
     return fromProfile || user?.name || '';
   }, [personal.firstName, personal.lastName, user?.name]);
 
-  // Get events with certificate enabled and confirmed registration
+  // Get events with certificate enabled, confirmed registration, AND a generated/published certificate
   const certifiedEvents = useMemo(() => {
     return flattenEvents(events).filter(
       (e) =>
         e.certificateEnabled &&
         registrations[e.id] &&
+        registrations[e.id].certificateRefNo && // Ensures certificate is published
+        registrations[e.id].attendance === 'Present' &&
+        registrations[e.id].hasFeedback &&
         (registrations[e.id].paymentStatus === 'paid' ||
           (!e.hasRegistrationFee && registrations[e.id].formStatus === 'ready')),
     );
@@ -73,8 +77,8 @@ export default function CertificatesPage() {
             <Award className="certificates-page-9" />
             <h3 className="certificates-page-10">No Certificates Earned Yet</h3>
             <p className="certificates-page-11">
-              Certificates become available once your event registration payment is completed and
-              approved.
+              Certificates become available once you have attended the event, submitted your
+              feedback, and completed any required payments.
             </p>
           </div>
         ) : (
@@ -121,16 +125,14 @@ export default function CertificatesPage() {
 
                 {viewingCert === event.id && (
                   <div className="certificates-page-27">
-                    <div className="certificates-page-28">
-                      <Award className="certificates-page-29" />
-                      <h4 className="certificates-page-30">CERTIFICATE OF PARTICIPATION</h4>
-                      <p className="certificates-page-31">PROUDLY PRESENTED TO</p>
-                      <p className="certificates-page-32">{participantName}</p>
-                      <p className="certificates-page-33">
-                        for active participation and completion of the technical/non-technical
-                        challenges at {event.eventName}.
-                      </p>
-                    </div>
+                    <EventCertificate
+                      eventId={event.id}
+                      certificateNo={
+                        registrations[event.id]?.certificateRefNo ||
+                        `CERT-${event.id}-${participantName.replace(/\s+/g, '').substring(0, 5)}-TEMP`
+                      }
+                      participantName={participantName}
+                    />
                   </div>
                 )}
               </div>

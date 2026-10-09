@@ -23,9 +23,7 @@ import budgetRoutes from './modules/budget/budgetRoutes.js';
 // Events routes
 import budgetCatalogRoutes from './modules/budgetCatalog/budgetCatalogRoutes.js';
 import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
-import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import eventsRoutes from './modules/events/eventsRoutes.js';
-import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
 import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
 import expenditureReportRoutes from './modules/expenditureReport/expenditureReportRoutes.js';
@@ -175,8 +173,6 @@ app.use('/api/form-options', formOptionsRoutes);
 
 // Event Module
 app.use('/api', eventsRoutes);
-app.use('/api', documentsRoutes);
-app.use('/api', updatesRoutes);
 
 app.use('/api', journalRoutes);
 app.use('/api', projectRoutes);

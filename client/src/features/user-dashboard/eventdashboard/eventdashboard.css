@@ -1,0 +1,7 @@
+/* client/src/features/user-dashboard/eventdashboard/eventdashboard.css */
+@import '../../events/events.css';
+
+.user-event-dashboard-container {
+  width: 100%;
+  min-height: 100vh;
+}

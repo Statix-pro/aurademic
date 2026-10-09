@@ -1,4 +1,5 @@
 import express from 'express';
+
 import userDashboardController from './userDashboardController.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 

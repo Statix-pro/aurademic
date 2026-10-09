@@ -15,11 +15,11 @@ export default defineConfig({
       // Same-origin /api in development mirrors production, where IIS rewrites
       // /api on the event subdomain to the shared Node backend.
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:5001',
         changeOrigin: true,
       },
       '/uploads': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:5001',
         changeOrigin: true,
       },
     },

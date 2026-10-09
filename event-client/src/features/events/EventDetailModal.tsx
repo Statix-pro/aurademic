@@ -1,7 +1,7 @@
 import { X, Calendar, MapPin, Users, IndianRupee } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
-import { CATEGORY_COLORS } from './EventCard';
+import { CATEGORY_COLORS, isEventOpen } from './EventCard';
 
 import type { EventItem } from '../../types';
 import type { ReactNode } from 'react';
@@ -15,7 +15,7 @@ interface Props {
 }
 
 export default function EventDetailModal({ event, onClose, onRegister }: Props) {
-  const isOpen = event.status === 'Open';
+  const isOpen = isEventOpen(event);
   const colors = CATEGORY_COLORS[event.category] ?? { pill: 'bg-slate-100 text-slate-600' };
   const dialogRef = useRef<HTMLDialogElement>(null);
 
@@ -88,14 +88,14 @@ export default function EventDetailModal({ event, onClose, onRegister }: Props) 
               />
             )}
           </div>
-          <div className="event-detail-modal-14">
-            <span
-              className={`text-xs font-semibold flex items-center gap-1.5 ${isOpen ? 'text-green-600' : 'text-red-500'}`}
-            >
-              <span className={`w-2 h-2 rounded-full ${isOpen ? 'bg-green-500' : 'bg-red-500'}`} />
-              {event.status}
-            </span>
-          </div>
+          {isOpen && (
+            <div className="event-detail-modal-14">
+              <span className="text-xs font-semibold flex items-center gap-1.5 text-emerald-600">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                Open
+              </span>
+            </div>
+          )}
 
           {event.coordinators && event.coordinators.length > 0 && (
             <div className="mt-8 border-t border-slate-200 pt-5">

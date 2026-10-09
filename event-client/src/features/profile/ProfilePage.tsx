@@ -363,6 +363,7 @@ export default function ProfilePage() {
     savePersonal,
     saveProfession,
     isSaving,
+    saveError,
   } = useProfile();
   const { user } = useAuth();
 
@@ -450,18 +451,18 @@ export default function ProfilePage() {
     if (ok) {
       showToast('success', 'Personal details saved successfully.');
     } else {
-      showToast('error', 'Could not save personal details. Please try again.');
+      showToast('error', saveError || 'Could not save personal details. Please try again.');
     }
-  }, [savePersonal, showToast]);
+  }, [savePersonal, saveError, showToast]);
 
   const handleSaveProfession = useCallback(async () => {
     const ok = await saveProfession();
     if (ok) {
       showToast('success', 'Professional details saved successfully.');
     } else {
-      showToast('error', 'Could not save professional details. Please try again.');
+      showToast('error', saveError || 'Could not save professional details. Please try again.');
     }
-  }, [saveProfession, showToast]);
+  }, [saveProfession, saveError, showToast]);
 
   const photoRef = useRef<HTMLInputElement>(null);
   const idRef = useRef<HTMLInputElement>(null);

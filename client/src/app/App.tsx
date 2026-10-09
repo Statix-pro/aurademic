@@ -8,13 +8,14 @@ import Dashboard from '../features/admin/admindashboard';
 import AdminBudget from '../features/admin/budget/budget-approval/adminbudget';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
+import AdminEventApproval from '../features/admin/events/event-approval/AdminEventApproval';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
 import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-approval/AdminGuesthouseApproval';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
-import { EventDashboard, EventPage } from '../features/events/events';
+import { EventPage, EventCalendarPage } from '../features/events/events';
 import ExpenditureReport from '../features/expenditure/expenditure-report/expenditurereport';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';
@@ -24,6 +25,7 @@ import ProfilePage from '../features/profile/ProfilePage';
 import Projectform from '../features/projects/projectform';
 import Storybook from '../features/storybook/Storybook';
 import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetdashboard';
+import EventDashboard from '../features/user-dashboard/eventdashboard/eventdashboard';
 import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
@@ -69,6 +71,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <EventDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/event/new"
+                    element={
+                      <ProtectedRoute>
+                        <EventPage />
                       </ProtectedRoute>
                     }
                   />
@@ -163,35 +173,11 @@ function App() {
 
                   {/* FINANCE */}
                   <Route
-                    path="/finance/new"
+                    path="/budgetcard"
                     element={
                       <ProtectedRoute>
-                        <FinanceApproval />
+                        <BudgetDashboard />
                       </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/finance/:id"
-                    element={
-                      <ProtectedRoute>
-                        <FinanceApproval />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/finance/:id/edit"
-                    element={
-                      <ProtectedRoute>
-                        <FinanceApproval />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workflow/:moduleKey"
-                    element={
-                      <ModuleWorkflowRoute>
-                        <WorkflowModulePage />
-                      </ModuleWorkflowRoute>
                     }
                   />
                   <Route
@@ -202,43 +188,11 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
-
-                  {/* GUEST HOUSE */}
                   <Route
-                    path="/guesthouse-booking"
-                    element={<Navigate to="/guesthouse/new" replace />}
-                  />
-                  <Route
-                    path="/guesthouse/new"
+                    path="/finance/new"
                     element={
                       <ProtectedRoute>
-                        <GuestHouseBooking />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/guesthouse/:id"
-                    element={
-                      <ProtectedRoute>
-                        <GuestHouseBooking />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/guesthouse-dashboard"
-                    element={
-                      <ProtectedRoute>
-                        <GuestHouseDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-
-                  {/* BUDGET */}
-                  <Route
-                    path="/budgetcard"
-                    element={
-                      <ProtectedRoute>
-                        <BudgetDashboard />
+                        <FinanceApproval />
                       </ProtectedRoute>
                     }
                   />
@@ -416,9 +370,97 @@ function App() {
                       </ProtectedRoute>
                     }
                   />
+                  <Route
+                    path="/event/new"
+                    element={
+                      <ProtectedRoute>
+                        <EventPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/event/:eventId"
+                    element={
+                      <ProtectedRoute>
+                        <EventPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/guesthouse-calendar"
+                    element={
+                      <ProtectedRoute>
+                        <EventCalendarPage />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/event-calendar"
+                    element={
+                      <ProtectedRoute>
+                        <EventCalendarPage />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route path="/storybook" element={<Storybook />} />
                   <Route path="/" element={<Navigate to="/dashboard" />} />
 
+                  <Route
+                    path="/guesthouse-dashboard"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorderdashboard"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrderDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder/new"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder/:id"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workorder/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <WorkOrder />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/resourcepersondirectorydashboard"
+                    element={
+                      <ProtectedRoute>
+                        <ResourcePersonDirectoryDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/organizationdirectorydashboard"
+                    element={
+                      <ProtectedRoute>
+                        <OrganizationDirectoryDashboard />
+                      </ProtectedRoute>
+                    }
+                  />
                   <Route
                     path="/vehicle-booking"
                     element={
@@ -492,6 +534,22 @@ function App() {
                       <GuesthouseWorkflowRoute>
                         <AdminGuesthouseApproval />
                       </GuesthouseWorkflowRoute>
+                    }
+                  />
+                  <Route
+                    path="/admin/event-approval"
+                    element={
+                      <ProtectedRoute>
+                        <AdminEventApproval />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/workflow/:moduleKey"
+                    element={
+                      <ModuleWorkflowRoute>
+                        <WorkflowModulePage />
+                      </ModuleWorkflowRoute>
                     }
                   />
                   <Route

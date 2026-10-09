@@ -1,4 +1,5 @@
 import db from '../../config/connection.js';
+import eventsModel from '../events/eventsModel.js';
 
 /**
  * Marks a route that is mounted but not yet built.
@@ -81,15 +82,22 @@ const participantRegistrationModel = {
    * just by changing the id in the URL.
    */
   async findOwnedRegistration(registrationId, participantId) {
+    const [emailRows] = await db.query(
+      `SELECT email FROM event_participants WHERE id = ? LIMIT 1`,
+      [participantId],
+    );
+    const participantEmail = emailRows[0]?.email || '';
+
     const [rows] = await db.query(
       `SELECT r.*, e.event_title
          FROM event_registrations r
          JOIN events e ON e.id = r.event_id
-        WHERE r.id = ? AND r.participant_id = ? AND r.is_deleted = 0
+        WHERE r.id = ? 
+          AND (r.participant_id = ? OR (r.team_members IS NOT NULL AND LOWER(CAST(r.team_members AS CHAR)) LIKE CONCAT('%', LOWER(?), '%'))) 
+          AND r.is_deleted = 0
         LIMIT 1`,
-      [registrationId, participantId],
+      [registrationId, participantId, participantEmail],
     );
-
     return rows[0] ?? null;
   },
 
@@ -419,6 +427,12 @@ const participantRegistrationModel = {
    * registration status. Returned in descending creation order.
    */
   async listRegistrations(participantId) {
+    const [emailRows] = await db.query(
+      `SELECT email FROM event_participants WHERE id = ? LIMIT 1`,
+      [participantId],
+    );
+    const participantEmail = emailRows[0]?.email || '';
+
     const [rows] = await db.query(
       `SELECT r.id,
               r.event_id        AS eventId,
@@ -428,6 +442,7 @@ const participantRegistrationModel = {
               r.registration_ref_no  AS refNo,
               r.is_cancelled,
               r.created_at,
+              r.updated_at      AS updatedAt,
               EXISTS(SELECT 1 FROM event_payments p
                       WHERE p.registration_id = r.id AND p.payment_status = 'Verified' AND p.is_deleted = 0) AS hasVerifiedPayment,
               EXISTS(SELECT 1 FROM event_payments p
@@ -444,13 +459,19 @@ const participantRegistrationModel = {
               JSON_UNQUOTE(JSON_EXTRACT(r.documents, '$.documentPath')) AS documentPath,
               JSON_UNQUOTE(JSON_EXTRACT(r.documents, '$.documentTypeName')) AS documentTypeName,
               JSON_UNQUOTE(JSON_EXTRACT(r.documents, '$.documentUploadedAt')) AS documentUploadedAt,
-              (r.feedback_answers IS NOT NULL AND r.feedback_answers != 'null') AS hasFeedback,
-              r.team_members AS teamMembers
+              EXISTS(SELECT 1 FROM event_feedbacks ef WHERE ef.registration_id = r.id AND ef.is_deleted = 0) AS hasFeedback,
+              (SELECT certificate_ref_no FROM event_certificates ec WHERE ec.registration_id = r.id AND ec.is_published = 1 LIMIT 1) AS certificateRefNo,
+              JSON_UNQUOTE(JSON_EXTRACT(r.feedback_answers, '$.attendance')) AS attendance,
+              JSON_EXTRACT(r.feedback_answers, '$.adminFeedback') AS adminFeedback,
+              r.team_members AS teamMembers,
+              COALESCE(ers.shortlisting_required, 0) AS shortlistingRequired,
+              ers.selection_intimation AS selectionIntimation
          FROM event_registrations r
          JOIN events e ON e.id = r.event_id
-        WHERE r.participant_id = ? AND r.is_deleted = 0
+         LEFT JOIN event_registration_settings ers ON ers.event_id = r.event_id
+        WHERE (r.participant_id = ? OR (r.team_members IS NOT NULL AND LOWER(CAST(r.team_members AS CHAR)) LIKE CONCAT('%', LOWER(?), '%'))) AND r.is_deleted = 0
         ORDER BY r.created_at DESC`,
-      [participantId],
+      [participantId, participantEmail],
     );
 
     return rows;
@@ -484,44 +505,17 @@ const participantRegistrationModel = {
    * the caller must catch ER_DUP_ENTRY and translate it to 400.
    */
   async replaceTeamMembers(registrationId, members) {
-    const connection = await db.getConnection();
+    const formattedMembers = members.map((m, index) => ({
+      ...m,
+      member_order: index + 1,
+    }));
 
-    try {
-      await connection.beginTransaction();
-
-      // Soft-delete existing rows first.
-      await connection.query(
-        `UPDATE event_registration_team_members
-            SET is_deleted = 1, deleted_at = CURRENT_TIMESTAMP
-          WHERE registration_id = ? AND is_deleted = 0`,
-        [registrationId],
-      );
-
-      // Re-insert fresh set.
-      for (let i = 0; i < members.length; i++) {
-        const m = members[i];
-        await connection.query(
-          `INSERT INTO event_registration_team_members
-             (registration_id, member_order, email, name, organization, role)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            registrationId,
-            i + 1,
-            m.email.trim(),
-            m.name.trim(),
-            m.organization?.trim() ?? null,
-            m.role?.trim() ?? null,
-          ],
-        );
-      }
-
-      await connection.commit();
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
-    }
+    await db.query(
+      `UPDATE event_registrations
+          SET team_members = ?
+        WHERE id = ? AND is_deleted = 0`,
+      [JSON.stringify(formattedMembers), registrationId],
+    );
   },
 
   /** Upserts event_registration_accommodation + its room rows in a transaction. */
@@ -621,14 +615,112 @@ const participantRegistrationModel = {
     }
   },
 
-  /** Inserts a registration document reference into the database. */
   async insertRegistrationDocument(registrationId, document) {
+    const docObj = {
+      documentPath: document.filePath,
+      documentTypeName: document.documentTypeName,
+      documentTypeId: document.documentTypeId,
+      documentUploadedAt: new Date().toISOString(),
+    };
     await db.query(
-      `INSERT INTO event_registration_documents
-         (registration_id, document_type_id, file_path, verification_status, is_active, is_deleted)
-       VALUES (?, ?, ?, 'Pending', 1, 0)`,
-      [registrationId, document.documentTypeId, document.filePath],
+      `UPDATE event_registrations
+          SET documents = ?
+        WHERE id = ? AND is_deleted = 0`,
+      [JSON.stringify(docObj), registrationId],
     );
+  },
+
+  /**
+   * Fetches the dynamic feedback questions and options for the event associated with a registration.
+   */
+  async getFeedbackQuestions(registrationId) {
+    const [regRows] = await db.query('SELECT event_id FROM event_registrations WHERE id = ?', [
+      registrationId,
+    ]);
+    if (!regRows[0]) {
+      throw new Error('Registration not found');
+    }
+    const eventId = regRows[0].event_id;
+
+    // Fetch questions
+    let [questions] = await db.query(
+      `SELECT id, question_text, question_type, section_name, display_order, is_required
+         FROM event_feedback_questions
+        WHERE event_id = ? AND is_deleted = 0 AND is_active = 1
+        ORDER BY display_order ASC, id ASC`,
+      [eventId],
+    );
+
+    if (questions.length === 0) {
+      const [[evt]] = await db.query('SELECT feedback_settings FROM events WHERE id = ?', [
+        eventId,
+      ]);
+      let settings = null;
+      if (evt?.feedback_settings) {
+        try {
+          settings =
+            typeof evt.feedback_settings === 'string'
+              ? JSON.parse(evt.feedback_settings)
+              : evt.feedback_settings;
+        } catch (_) {
+          // ignore parse error
+        }
+      }
+
+      if (settings && (settings.eventFeedback || settings.eventToggles)) {
+        await eventsModel.submitFeedback(eventId, null, settings);
+        [questions] = await db.query(
+          `SELECT id, question_text, question_type, section_name, display_order, is_required
+             FROM event_feedback_questions
+            WHERE event_id = ? AND is_deleted = 0 AND is_active = 1
+            ORDER BY display_order ASC, id ASC`,
+          [eventId],
+        );
+      }
+    }
+
+    const questionIds = questions.map((q) => q.id);
+
+    // Fetch options for these questions
+    let options = [];
+    if (questionIds.length > 0) {
+      const placeholders = questionIds.map(() => '?').join(',');
+      const [optRows] = await db.query(
+        `SELECT id, question_id, option_text, display_order
+           FROM event_feedback_question_options
+          WHERE question_id IN (${placeholders}) AND is_deleted = 0 AND is_active = 1
+          ORDER BY display_order ASC, id ASC`,
+        questionIds,
+      );
+      options = optRows;
+    }
+
+    // Attach options to their respective questions
+    return questions.map((q) => {
+      const qOptions = options.filter((o) => o.question_id === q.id);
+      return { ...q, options: qOptions };
+    });
+  },
+
+  /**
+   * Fetches existing submitted feedback answers for a registration if present.
+   */
+  async getExistingAnswers(registrationId) {
+    const [rows] = await db.query(
+      `SELECT efa.question_id, efa.rating_value, efa.answer_text
+         FROM event_feedback_answers efa
+         JOIN event_feedbacks ef ON ef.id = efa.feedback_id
+        WHERE ef.registration_id = ? AND ef.is_deleted = 0 AND efa.is_deleted = 0`,
+      [registrationId],
+    );
+    const answersMap = {};
+    rows.forEach((r) => {
+      answersMap[r.question_id] = {
+        ratingValue: r.rating_value,
+        answerText: r.answer_text,
+      };
+    });
+    return answersMap;
   },
 
   /** Inserts event_feedbacks + event_feedback_answers in a transaction. */
@@ -673,54 +765,60 @@ const participantRegistrationModel = {
         feedbackId = insertRes.insertId;
       }
 
-      // Check for dynamic questions. If none, auto-create default ones.
+      // Fetch all questions for this event to know their types
       const [questions] = await connection.query(
-        'SELECT id, question_text, question_type FROM event_feedback_questions WHERE event_id = ? AND is_deleted = 0',
+        'SELECT id, question_type FROM event_feedback_questions WHERE event_id = ? AND is_deleted = 0',
         [eventId],
       );
+      const questionMap = new Map(questions.map((q) => [q.id, q]));
 
-      let ratingQuestionId;
-      let commentQuestionId;
-      if (questions.length === 0) {
-        const [q1] = await connection.query(
-          'INSERT INTO event_feedback_questions (event_id, question_text, question_type, display_order, is_required) VALUES (?, "Overall Rating", "rating", 1, 1)',
-          [eventId],
-        );
-        const [q2] = await connection.query(
-          'INSERT INTO event_feedback_questions (event_id, question_text, question_type, display_order, is_required) VALUES (?, "Review Comment", "text", 2, 0)',
-          [eventId],
-        );
-        ratingQuestionId = q1.insertId;
-        commentQuestionId = q2.insertId;
-      } else {
-        const q1 = questions.find(
-          (q) => q.question_type === 'rating' || q.question_text.toLowerCase().includes('rating'),
-        );
-        const q2 = questions.find(
-          (q) =>
-            q.question_type === 'text' ||
-            q.question_text.toLowerCase().includes('comment') ||
-            q.question_text.toLowerCase().includes('review'),
-        );
-        ratingQuestionId = q1 ? q1.id : questions[0].id;
-        commentQuestionId = q2 ? q2.id : questions[1] ? questions[1].id : questions[0].id;
+      // Depending on the caller, feedback might be the answers array directly, or an object containing .answers
+      const answersArray = Array.isArray(feedback)
+        ? feedback
+        : Array.isArray(feedback?.answers)
+          ? feedback.answers
+          : [];
+
+      for (const answer of answersArray) {
+        const questionId = answer.questionId;
+        const qDef = questionMap.get(questionId);
+        if (!qDef) continue; // Skip answers for unknown or deleted questions
+
+        let ratingValue = null;
+        let answerText = null;
+
+        if (qDef.question_type === 'rating') {
+          ratingValue = Number(answer.value) || 0;
+        } else {
+          answerText = Array.isArray(answer.value)
+            ? answer.value.join(', ')
+            : String(answer.value || '').trim();
+        }
+
+        // Only insert if there's an actual answer
+        if (
+          (ratingValue !== null && ratingValue > 0) ||
+          (answerText !== null && answerText !== '')
+        ) {
+          await connection.query(
+            `INSERT INTO event_feedback_answers (feedback_id, question_id, rating_value, answer_text, is_active, is_deleted)
+             VALUES (?, ?, ?, ?, 1, 0)`,
+            [feedbackId, questionId, ratingValue, answerText],
+          );
+        }
       }
 
-      // Insert rating
-      const rating = Number(feedback.rating ?? 5);
-      await connection.query(
-        `INSERT INTO event_feedback_answers (feedback_id, question_id, rating_value, is_active, is_deleted)
-         VALUES (?, ?, ?, 1, 0)`,
-        [feedbackId, ratingQuestionId, rating],
+      // Automatically generate certificate if it doesn't exist
+      const [certCheck] = await connection.query(
+        'SELECT id FROM event_certificates WHERE event_id = ? AND registration_id = ? LIMIT 1',
+        [eventId, registrationId],
       );
 
-      // Insert comment
-      const comment = String(feedback.comment ?? '').trim();
-      if (comment) {
+      if (!certCheck[0]) {
+        const certRefNo = `CERT-${eventId}-${registrationId}-${Date.now().toString().slice(-6)}`;
         await connection.query(
-          `INSERT INTO event_feedback_answers (feedback_id, question_id, answer_text, is_active, is_deleted)
-           VALUES (?, ?, ?, 1, 0)`,
-          [feedbackId, commentQuestionId, comment],
+          'INSERT INTO event_certificates (event_id, registration_id, certificate_ref_no) VALUES (?, ?, ?)',
+          [eventId, registrationId, certRefNo],
         );
       }
 

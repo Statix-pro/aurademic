@@ -14,6 +14,8 @@ interface CustomModalProps {
   backdrop?: boolean | 'static';
   keyboard?: boolean;
   hideCloseButton?: boolean;
+  fullscreen?: boolean | string;
+  hideHeader?: boolean;
 }
 
 const CustomModal: React.FC<CustomModalProps> = ({
@@ -26,6 +28,8 @@ const CustomModal: React.FC<CustomModalProps> = ({
   centered = true,
   className = '',
   hideCloseButton = false,
+  fullscreen,
+  hideHeader = false,
   ...props
 }) => {
   return (
@@ -34,12 +38,16 @@ const CustomModal: React.FC<CustomModalProps> = ({
       onHide={onHide}
       size={size}
       centered={centered}
+      fullscreen={fullscreen || undefined}
       className={`custom-modal ${className}`}
+      dialogClassName={fullscreen ? 'modal-fullscreen' : undefined}
       {...props}
     >
-      <Modal.Header closeButton={!hideCloseButton}>
-        <Modal.Title>{title}</Modal.Title>
-      </Modal.Header>
+      {!hideHeader && (
+        <Modal.Header closeButton={!hideCloseButton}>
+          <Modal.Title>{title}</Modal.Title>
+        </Modal.Header>
+      )}
       <Modal.Body>{children}</Modal.Body>
       {footer && <Modal.Footer>{footer}</Modal.Footer>}
     </Modal>

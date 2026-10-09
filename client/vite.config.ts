@@ -11,7 +11,7 @@ export default defineConfig({
     // failures when localhost resolves differently (IPv4/IPv6).
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://localhost:5001',
         changeOrigin: true,
       },
     },

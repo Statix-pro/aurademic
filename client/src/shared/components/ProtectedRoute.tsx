@@ -112,7 +112,7 @@ export const ModuleWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
   }
 
   if (!user || !moduleKey || !canAccessModuleWorkflow(user, moduleKey)) {
-    return <Navigate to="/home" />;
+    return <Navigate to="/dashboard" />;
   }
 
   return <>{children}</>;

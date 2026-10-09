@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import publicEventsController from '../modules/events/public/publicEventsController.js';
-import publicEventsModel from '../modules/events/public/publicEventsModel.js';
+import eventsController from '../modules/events/eventsController.js';
+import eventsModel from '../modules/events/eventsModel.js';
 
-vi.mock('../modules/events/public/publicEventsModel.js', () => ({
+vi.mock('../modules/events/eventsModel.js', () => ({
   default: {
     listPublicEvents: vi.fn(),
     findPublicEventById: vi.fn(),
@@ -35,9 +35,9 @@ describe('public events nesting', () => {
   const listed = () => res.json.mock.calls.at(-1)[0];
 
   it('nests a child under its parent', async () => {
-    publicEventsModel.listPublicEvents.mockResolvedValue([row(1), row(2, 1)]);
+    eventsModel.listPublicEvents.mockResolvedValue([row(1), row(2, 1)]);
 
-    await publicEventsController.listEvents({}, res);
+    await eventsController.listPublicEvents({}, res);
 
     const { events } = listed().data;
     expect(events).toHaveLength(1);
@@ -50,9 +50,9 @@ describe('public events nesting', () => {
   // JSON.stringify would throw, turning one bad row into a 500 for the whole
   // public catalogue.
   it('does not 500 on an event that is its own parent', async () => {
-    publicEventsModel.listPublicEvents.mockResolvedValue([row(1, 1)]);
+    eventsModel.listPublicEvents.mockResolvedValue([row(1, 1)]);
 
-    await publicEventsController.listEvents({}, res);
+    await eventsController.listPublicEvents({}, res);
 
     expect(res.status).not.toHaveBeenCalledWith(500);
     expect(() => JSON.stringify(listed())).not.toThrow();
@@ -60,9 +60,9 @@ describe('public events nesting', () => {
   });
 
   it('does not 500 on a two-row parent cycle', async () => {
-    publicEventsModel.listPublicEvents.mockResolvedValue([row(1, 2), row(2, 1)]);
+    eventsModel.listPublicEvents.mockResolvedValue([row(1, 2), row(2, 1)]);
 
-    await publicEventsController.listEvents({}, res);
+    await eventsController.listPublicEvents({}, res);
 
     expect(res.status).not.toHaveBeenCalledWith(500);
     expect(() => JSON.stringify(listed())).not.toThrow();
@@ -70,9 +70,9 @@ describe('public events nesting', () => {
   });
 
   it('keeps an orphan whose parent is not public as a root', async () => {
-    publicEventsModel.listPublicEvents.mockResolvedValue([row(3, 99)]);
+    eventsModel.listPublicEvents.mockResolvedValue([row(3, 99)]);
 
-    await publicEventsController.listEvents({}, res);
+    await eventsController.listPublicEvents({}, res);
 
     expect(listed().data.events.map((e) => e.id)).toEqual(['3']);
   });

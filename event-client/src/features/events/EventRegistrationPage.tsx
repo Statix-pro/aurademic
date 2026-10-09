@@ -19,6 +19,7 @@ import {
   CategoryIcon,
   getCategorySolidBgClass,
   getLightLabelClass,
+  isEventOpen,
 } from './EventCard';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -88,21 +89,43 @@ function getRegisterState(
   isOpen: boolean,
 ) {
   const isFreeEvent = !event.hasRegistrationFee || Number(event.fees || 0) === 0;
+  const rawSelectionIntimation = registration?.selectionIntimation || event.selectionIntimation;
+  const isSelectionIntimationEnabled =
+    rawSelectionIntimation === 'YES' ||
+    rawSelectionIntimation === 'Yes' ||
+    rawSelectionIntimation === '1' ||
+    rawSelectionIntimation === 'true' ||
+    Boolean(event.shortlistingRequired || registration?.shortlistingRequired);
 
-  // A staff review decision, when one exists, outranks the ordinary
-  // register/pay progression for any event. Before staff rule on a registration
-  // its reviewStatus is 'pending' and the normal flow below applies.
-  if (registration?.reviewStatus === 'rejected') {
+  const isSelected =
+    registration?.reviewStatus === 'Selected' || registration?.reviewStatus === 'selected';
+  const isShortlisted =
+    registration?.reviewStatus === 'Shortlisted' || registration?.reviewStatus === 'shortlisted';
+  const isNotSelected =
+    registration?.reviewStatus === 'Not Selected' ||
+    registration?.reviewStatus === 'rejected' ||
+    registration?.reviewStatus === 'Rejected';
+
+  if (isNotSelected) {
     return {
-      label: 'Register Now',
-      className: 'opacity-60 cursor-not-allowed',
+      label: 'Not Selected',
+      className: 'bg-red-50 text-red-700 border border-red-200 cursor-not-allowed',
       disabled: true,
       kind: 'register' as const,
     };
   }
 
-  if (registration?.reviewStatus === 'selected') {
-    if (registration.paymentStatus === 'paid' || isFreeEvent) {
+  if (registration?.paymentStatus === 'paid' || registration?.paymentStatus === 'processing') {
+    return {
+      label: 'Registered',
+      className: 'bg-emerald-600 text-white cursor-default',
+      disabled: true,
+      kind: 'register' as const,
+    };
+  }
+
+  if (isSelected) {
+    if (isFreeEvent) {
       return {
         label: 'Selected',
         className: 'bg-emerald-600 text-white cursor-default',
@@ -119,6 +142,15 @@ function getRegisterState(
     };
   }
 
+  if (isShortlisted) {
+    return {
+      label: 'Shortlisted',
+      className: 'bg-blue-50 text-blue-800 border border-blue-300 cursor-not-allowed',
+      disabled: true,
+      kind: 'register' as const,
+    };
+  }
+
   if (!registration) {
     return {
       label: 'Register Now',
@@ -130,13 +162,11 @@ function getRegisterState(
     };
   }
 
-  // Paid is terminal. This used to fall through to an enabled "Register Now",
-  // which routed back into the form and on to /payment for an event the
-  // participant had already paid for.
-  if (registration.paymentStatus === 'paid') {
+  // If event requires Selection Intimation / Shortlisting, payment is locked until Admin marks participant as Selected
+  if (isSelectionIntimationEnabled) {
     return {
-      label: 'Registered',
-      className: 'bg-emerald-600 text-white cursor-default',
+      label: 'Pending',
+      className: 'bg-amber-50 text-amber-800 border border-amber-300 cursor-not-allowed',
       disabled: true,
       kind: 'register' as const,
     };
@@ -182,7 +212,7 @@ function EventRow({
 }) {
   const navigate = useNavigate();
   const colors = getStyles(event.category);
-  const isOpen = event.status === 'Open';
+  const isOpen = isEventOpen(event);
   const label1 = CATEGORY_LABELS[event.category] ?? event.category;
   const label2 = DETAIL_LABELS[event.category] ?? event.category;
   const participationText =
@@ -191,7 +221,7 @@ function EventRow({
   const registerClass = isOpen
     ? `${colors.button} text-white`
     : 'bg-slate-300 text-slate-500 cursor-not-allowed';
-  const statusClass = isOpen ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-600';
+  const statusClass = 'bg-emerald-50 text-emerald-700';
   const regState = getRegisterState(event, registration, isOpen);
   // Only shown once a decision actually exists — never inferred from the title.
   const shortlistStateLabel = getReviewStateLabel(registration);
@@ -310,14 +340,14 @@ function EventRow({
 
       <div className={`py-6 ${compactParticipation ? 'px-3' : 'px-5'}`}>
         <div className="event-registration-page-11">
-          <span
-            className={`inline-flex h-[22px] w-16 items-center justify-center gap-1.5 rounded-full px-2 text-[10px] font-bold uppercase tracking-wider ${statusClass}`}
-          >
+          {isOpen && (
             <span
-              className={`h-1.5 w-1.5 rounded-full ${isOpen ? 'bg-emerald-500' : 'bg-rose-500'}`}
-            />
-            {isOpen ? 'Open' : 'Closed'}
-          </span>
+              className={`inline-flex h-[22px] w-16 items-center justify-center gap-1.5 rounded-full px-2 text-[10px] font-bold uppercase tracking-wider ${statusClass}`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+              Open
+            </span>
+          )}
           {regState.label && (
             <div className={`group ${compactParticipation ? 'w-24' : 'w-28'}`}>
               <button

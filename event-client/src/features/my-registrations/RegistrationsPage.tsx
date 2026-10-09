@@ -126,14 +126,61 @@ function RegisteredEventRow({
           <span className="registrations-page-14">
             {(() => {
               if (!registration) return 'Not Registered';
-              if (registration.paymentStatus === 'paid') {
-                if (registration.reviewStatus === 'selected') return 'Paid & Approved';
-                if (registration.reviewStatus === 'rejected') return 'Rejected';
-                return 'Paid (Pending Review)';
+              const rawSelectionIntimation =
+                registration.selectionIntimation || event.selectionIntimation;
+              const isSelectionIntimationEnabled =
+                rawSelectionIntimation === 'YES' ||
+                rawSelectionIntimation === 'Yes' ||
+                rawSelectionIntimation === '1' ||
+                rawSelectionIntimation === 'true' ||
+                Boolean(registration.shortlistingRequired || event.shortlistingRequired);
+
+              const isSelected =
+                registration.reviewStatus === 'Selected' ||
+                registration.reviewStatus === 'selected';
+
+              const isShortlisted =
+                registration.reviewStatus === 'Shortlisted' ||
+                registration.reviewStatus === 'shortlisted';
+
+              const isNotSelected =
+                registration.reviewStatus === 'Not Selected' ||
+                registration.reviewStatus === 'rejected' ||
+                registration.reviewStatus === 'Rejected';
+
+              if (isNotSelected) return 'Not Selected';
+
+              if (
+                registration.paymentStatus === 'paid' ||
+                registration.paymentStatus === 'processing'
+              ) {
+                return 'Registered';
               }
-              if (registration.paymentStatus === 'processing') return 'Verification Pending';
-              if (registration.reviewStatus === 'selected') return 'Approved (Payment Required)';
-              if (registration.reviewStatus === 'rejected') return 'Rejected';
+
+              if (isSelectionIntimationEnabled) {
+                if (isSelected) {
+                  if (registration.paymentStatus === 'unpaid' && event.hasRegistrationFee)
+                    return 'Pay Now';
+                  return 'Selected';
+                }
+                if (isShortlisted) {
+                  return 'Shortlisted';
+                }
+                return 'Pending';
+              }
+
+              if (isSelected) {
+                if (registration.paymentStatus === 'unpaid' && event.hasRegistrationFee)
+                  return 'Pay Now';
+                return 'Selected';
+              }
+
+              if (isShortlisted) {
+                return 'Shortlisted';
+              }
+
+              if (registration.paymentStatus === 'unpaid' && event.hasRegistrationFee)
+                return 'Pay Now';
               return 'Pending';
             })()}
           </span>
@@ -365,6 +412,25 @@ function EventDetailsModal({
             ) : (
               <div className="registrations-page-77">No registration document uploaded.</div>
             )}
+          </ModalSection>
+
+          {/* Attendance & Feedback Section */}
+          <ModalSection title="Attendance & Feedback">
+            <div className="registrations-page-76">
+              <ReadField
+                label="Attendance Status"
+                value={registration?.attendance || 'Not Marked'}
+                className={registration?.attendance === 'Present' ? 'text-green-600 font-bold' : ''}
+              />
+              {registration?.adminFeedback?.text && (
+                <div className="flex flex-col gap-2 mt-4">
+                  <label className="registrations-page-50">Admin Feedback</label>
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-slate-700 whitespace-pre-wrap">
+                    {registration.adminFeedback.text}
+                  </div>
+                </div>
+              )}
+            </div>
           </ModalSection>
         </div>
       </div>

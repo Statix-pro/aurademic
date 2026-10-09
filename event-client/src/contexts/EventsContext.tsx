@@ -34,6 +34,8 @@ interface PublicApiEvent {
   registrationClosesAt: string | null;
   registrationOpen: boolean;
   status: 'Open' | 'Closed' | 'Upcoming';
+  shortlistingRequired?: boolean;
+  selectionIntimation?: string | null;
   feedbackEnabled?: boolean;
   certificateEnabled?: boolean;
   coordinators?: {
@@ -43,6 +45,10 @@ interface PublicApiEvent {
     department: string;
     email: string;
   }[];
+  documentName?: string;
+  documentType?: string;
+  documentSize?: string;
+  documentTextFieldEnabled?: boolean;
   subEvents?: PublicApiEvent[];
 }
 
@@ -105,6 +111,12 @@ function mapPublicEvent(item: PublicApiEvent): EventItem {
     fromDate: formatEventDate(item.startDate),
     toDate: formatEventDate(item.endDate ?? item.startDate),
     deadline: item.registrationClosesAt ? formatEventDate(item.registrationClosesAt) : undefined,
+    startDate: item.startDate,
+    endDate: item.endDate,
+    end_date: item.endDate,
+    lastDate: item.registrationClosesAt,
+    last_date: item.registrationClosesAt,
+    registrationClosesAt: item.registrationClosesAt,
     venue: item.venue ?? 'Venue to be announced',
     participation: item.participation === 'Team' ? 'Team' : 'Individual',
     teamSize: formatTeamSize(item),
@@ -122,12 +134,22 @@ function mapPublicEvent(item: PublicApiEvent): EventItem {
       feesUnit: sub.participation === 'Team' ? 'Team' : 'Participant',
       category: resolveCategory(sub),
       documentEnabled: Boolean(sub.documentEnabled),
+      documentName: sub.documentName,
+      documentType: sub.documentType,
+      documentSize: sub.documentSize,
+      documentTextFieldEnabled: Boolean(sub.documentTextFieldEnabled),
     })),
     hasAccommodation: Boolean(item.hasAccommodation),
     hasRegistrationFee: Boolean(item.hasRegistrationFee),
     documentEnabled: Boolean(item.documentEnabled),
+    shortlistingRequired: Boolean(item.shortlistingRequired),
+    selectionIntimation: item.selectionIntimation || null,
     feedbackEnabled: Boolean(item.feedbackEnabled),
     certificateEnabled: Boolean(item.certificateEnabled),
+    documentName: item.documentName,
+    documentType: item.documentType,
+    documentSize: item.documentSize,
+    documentTextFieldEnabled: Boolean(item.documentTextFieldEnabled),
     coordinators: item.coordinators,
   };
 }
@@ -190,10 +212,25 @@ export function isPayableEvent(
 ) {
   if (!event.hasRegistrationFee || Number(event.fees || 0) === 0) return false;
   if (registration.paymentStatus === 'paid') return false;
-  // A rejected registration is never payable. A selected one is payable straight
-  // away — being shortlisted is what the participant was waiting on.
-  if (registration.reviewStatus === 'rejected') return false;
-  if (registration.reviewStatus === 'selected') return true;
+  if (
+    registration.reviewStatus === 'rejected' ||
+    registration.reviewStatus === 'Not Selected' ||
+    registration.reviewStatus === 'Rejected'
+  ) {
+    return false;
+  }
+
+  const isShortlistingRequired = Boolean(
+    event.shortlistingRequired || registration.shortlistingRequired,
+  );
+
+  if (isShortlistingRequired) {
+    return registration.reviewStatus === 'selected' || registration.reviewStatus === 'Selected';
+  }
+
+  if (registration.reviewStatus === 'selected' || registration.reviewStatus === 'Selected') {
+    return true;
+  }
   return registration.formStatus === 'ready' || event.id === paymentEventId;
 }
 
@@ -211,8 +248,11 @@ function normalizeRegistration(
     paymentProof: registration.paymentProof ?? null,
     document: registration.document ?? null,
     reviewStatus: registration.reviewStatus ?? 'pending',
+    shortlistingRequired: registration.shortlistingRequired,
+    selectionIntimation: registration.selectionIntimation,
     backendId: registration.backendId,
     hasFeedback: registration.hasFeedback,
+    adminFeedback: registration.adminFeedback,
   };
 }
 
@@ -224,7 +264,7 @@ interface EventsContextType {
   updateTeamMembers: (eventId: string, members: TeamMember[]) => Promise<void>;
   markFormReady: (eventId: string, documentType?: string, file?: File | null) => Promise<void>;
   markPaymentDone: (eventId: string, paymentProof?: PaymentProof | null) => void;
-  submitFeedback: (eventId: string, rating: number, comment: string) => Promise<void>;
+  submitFeedback: (eventId: string, answers: { questionId: number; value: any }[]) => Promise<void>;
   updateReviewStatus: (eventId: string, reviewStatus: EventRegistration['reviewStatus']) => void;
   clearRegistration: (eventId: string) => void;
   getRegistration: (eventId: string) => EventRegistration | undefined;
@@ -286,9 +326,21 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         setEvents(formattedEvents);
 
         const loadedRegs: Record<string, EventRegistration> = {};
+        const flatEvents = flattenEvents(formattedEvents);
+
         for (const r of regsData.registrations ?? []) {
-          loadedRegs[r.eventId] = {
-            eventId: String(r.eventId),
+          // Find matching event from flat list to restore composite ID if necessary
+          const matchedEvent = flatEvents.find((e) => {
+            const actualId = String(e.id).includes('-')
+              ? String(e.id).split('-').pop()
+              : String(e.id);
+            return actualId === String(r.eventId);
+          });
+
+          const compositeKey = matchedEvent ? String(matchedEvent.id) : String(r.eventId);
+
+          loadedRegs[compositeKey] = {
+            eventId: compositeKey,
             teamMembers: r.teamMembers?.map((m: any) => ({
               id: String(m.id),
               registeredMailId: m.email,
@@ -297,12 +349,18 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
               role: m.role || '',
             })),
             formStatus: 'ready',
-            paymentStatus: r.hasVerifiedPayment
-              ? 'paid'
-              : r.hasSubmittedPayment
-                ? 'processing'
-                : 'unpaid',
+            paymentStatus:
+              r.hasVerifiedPayment ||
+              r.registrationStatus === 'Registered' ||
+              r.registration_status === 'Registered'
+                ? 'paid'
+                : r.hasSubmittedPayment
+                  ? 'processing'
+                  : 'unpaid',
             reviewStatus: r.reviewStatus || 'pending',
+            shortlistingRequired: Boolean(r.shortlistingRequired),
+            selectionIntimation: r.selectionIntimation || null,
+            updatedAt: r.updatedAt || r.updated_at || r.created_at,
             backendId: r.id,
             paymentProof: r.paymentProofPath
               ? {
@@ -322,6 +380,8 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
                 }
               : null,
             hasFeedback: Boolean(r.hasFeedback),
+            certificateRefNo: r.certificateRefNo || null,
+            attendance: r.attendance,
           };
         }
         setRegistrations(loadedRegs);
@@ -358,17 +418,37 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   }, []);
   const startRegistration = useCallback(
     async (eventId: string) => {
+      let actualEventId = String(eventId);
+      if (actualEventId.includes('-')) {
+        actualEventId = actualEventId.split('-').pop() || actualEventId;
+      }
       let backendId: number | undefined;
       try {
         const result = await apiFetch<{ registrationId: number }>('/participant/registrations', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ eventId }),
+          body: JSON.stringify({ eventId: actualEventId }),
         });
         backendId = result.registrationId;
-      } catch (err) {
-        console.error('Failed to create registration', err);
-        throw err;
+      } catch (err: any) {
+        // 409 = already registered — fetch the existing registration and reuse it
+        if (err?.status === 409) {
+          try {
+            const existing = await apiFetch<{ registrations: any[] }>('/participant/registrations');
+            const match = existing.registrations?.find(
+              (r: any) => String(r.eventId) === String(actualEventId),
+            );
+            if (match?.id) {
+              backendId = match.id;
+            }
+            // else proceed without backendId — team/doc endpoints will fetch it themselves
+          } catch {
+            // If we can't fetch existing, just proceed without a backendId
+          }
+        } else {
+          console.error('Failed to create registration', err);
+          throw err;
+        }
       }
 
       setRegistrations((prev) => {
@@ -410,10 +490,15 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         const reg = registrations[eventId];
         let backendRegId = reg?.backendId;
 
+        let actualEventId = String(eventId);
+        if (actualEventId.includes('-')) {
+          actualEventId = actualEventId.split('-').pop() || actualEventId;
+        }
+
         if (!backendRegId) {
           const result = await apiFetch<{ registrations: any[] }>('/participant/registrations');
           const backendReg = result.registrations.find(
-            (r) => String(r.eventId) === String(eventId),
+            (r) => String(r.eventId) === String(actualEventId),
           );
           if (backendReg) {
             backendRegId = backendReg.id;
@@ -494,7 +579,7 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
         ...prev,
         [eventId]: {
           ...prev[eventId],
-          paymentStatus: 'processing',
+          paymentStatus: 'paid', // Instantly mark as paid so 'Registered' shows on all pages
           paymentProof,
         },
       }));
@@ -503,14 +588,14 @@ export function EventsProvider({ children }: { children: React.ReactNode }) {
   );
 
   const submitFeedback = useCallback(
-    async (eventId: string, rating: number, comment: string) => {
+    async (eventId: string, answers: { questionId: number; value: any }[]) => {
       const reg = registrations[eventId];
       if (!reg || !reg.backendId) throw new Error('No registration found');
 
       await apiFetch(`/participant/registrations/${reg.backendId}/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating, comment }),
+        body: JSON.stringify({ answers }),
       });
 
       setRegistrations((prev) => ({

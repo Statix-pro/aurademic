@@ -464,14 +464,75 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 7px 14px;
+  padding: 5px 14px;
   border-radius: 999px;
-  background: #dbeaf5;
-  color: #3b6d91;
+  background: #eef6ff;
+  color: #0275d8;
+  border: 1px solid #cce5ff;
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
+}
+
+.fw-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 20px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.fw-status-pill--approved {
+  background: #eefbf3;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.fw-status-pill--draft {
+  background: #f8fafc;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.fw-status-pill--pending {
+  background: #fffbebf;
+  color: #d97706;
+  border: 1px solid #fde68a;
+}
+
+.fw-status-pill--returned {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.fw-status-pill--rejected {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.fw-status-pill--archived {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+}
+
+.fw-action-btn--blue {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: #0069ab;
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 .fw-topbar-right {

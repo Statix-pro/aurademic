@@ -86,11 +86,16 @@ export default function HomePage() {
   // Calculate certificate completion percentage dynamically
   const certProgress = useMemo(() => {
     if (certReadyCount === 0) return 0;
-    const paidCount = allEvents.filter(
+    const completedCount = allEvents.filter(
       (e) =>
-        e.certificateEnabled && registrations[e.id] && registrations[e.id].paymentStatus === 'paid',
+        e.certificateEnabled &&
+        registrations[e.id] &&
+        registrations[e.id].attendance === 'Present' &&
+        registrations[e.id].hasFeedback &&
+        (registrations[e.id].paymentStatus === 'paid' ||
+          (!e.hasRegistrationFee && registrations[e.id].formStatus === 'ready')),
     ).length;
-    return Math.min(100, Math.round((paidCount / certReadyCount) * 100));
+    return Math.min(100, Math.round((completedCount / certReadyCount) * 100));
   }, [allEvents, registrations, certReadyCount]);
 
   const boxes = [
@@ -114,40 +119,27 @@ export default function HomePage() {
       percentage: regProgress,
       path: '/registrations',
     },
-    hasAnyFeedbackEvent
-      ? {
-          title: 'Feedback',
-          description: 'Share your valuable feedback',
-          icon: Star,
-          color: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
-          progressColor: 'bg-emerald-600',
-          borderColor: 'hover:border-emerald-300',
-          percentage: feedbackProgress,
-          path: '/feedback',
-        }
-      : null,
-    hasAnyCertificateEvent
-      ? {
-          title: 'Certificates',
-          description: 'Download your event certificates',
-          icon: Award,
-          color: 'bg-amber-100 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
-          progressColor: 'bg-amber-500',
-          borderColor: 'hover:border-amber-300',
-          percentage: certProgress,
-          path: '/certificates',
-        }
-      : null,
-  ].filter(Boolean) as {
-    title: string;
-    description: string;
-    icon: any;
-    color: string;
-    progressColor: string;
-    borderColor: string;
-    percentage: number;
-    path: string;
-  }[];
+    {
+      title: 'Feedback',
+      description: 'Share your valuable feedback',
+      icon: Star,
+      color: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400',
+      progressColor: 'bg-emerald-600',
+      borderColor: 'hover:border-emerald-300',
+      percentage: feedbackProgress,
+      path: '/feedback',
+    },
+    {
+      title: 'Certificates',
+      description: 'Download your event certificates',
+      icon: Award,
+      color: 'bg-amber-100 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400',
+      progressColor: 'bg-amber-500',
+      borderColor: 'hover:border-amber-300',
+      percentage: certProgress,
+      path: '/certificates',
+    },
+  ];
 
   return (
     <div className="home-page-1">

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useEvents } from '../../contexts/EventsContext';
+import { useProfile } from '../../contexts/ProfileContext';
 import { CATEGORY_COLORS, CategoryIcon, getCategorySolidBgClass } from '../events/EventCard';
 
 import type { EventItem, TeamMember } from '../../types';
@@ -52,8 +53,32 @@ function TeamRow({
   onRemove: (id: string) => void;
   canRemove: boolean;
 }) {
+  const [lookupStatus, setLookupStatus] = useState<'idle' | 'loading' | 'found' | 'not_found'>(
+    'idle',
+  );
+
   const inputCls =
     'w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500';
+
+  const handleEmailBlur = async () => {
+    const email = member.registeredMailId.trim();
+    if (!email || !email.includes('@')) return;
+    setLookupStatus('loading');
+    try {
+      const res = await fetch(`/api/participant/lookup?email=${encodeURIComponent(email)}`);
+      if (res.ok) {
+        const json = await res.json();
+        const data = json.data;
+        if (data.name) onChange(member.id, 'name', data.name);
+        if (data.institution) onChange(member.id, 'organization', data.institution);
+        setLookupStatus('found');
+      } else {
+        setLookupStatus('not_found');
+      }
+    } catch {
+      setLookupStatus('not_found');
+    }
+  };
 
   return (
     <tr className="registration-page-5">
@@ -62,10 +87,25 @@ function TeamRow({
         <input
           type="email"
           value={member.registeredMailId}
-          onChange={(e) => onChange(member.id, 'registeredMailId', e.target.value)}
+          onChange={(e) => {
+            onChange(member.id, 'registeredMailId', e.target.value);
+            setLookupStatus('idle');
+          }}
+          onBlur={handleEmailBlur}
           placeholder="email@example.com"
           className={inputCls}
         />
+        {lookupStatus === 'loading' && (
+          <span style={{ fontSize: '10px', color: '#64748b' }}>Looking up…</span>
+        )}
+        {lookupStatus === 'not_found' && (
+          <span style={{ fontSize: '10px', color: '#ef4444', fontWeight: 600 }}>
+            User not found
+          </span>
+        )}
+        {lookupStatus === 'found' && (
+          <span style={{ fontSize: '10px', color: '#22c55e', fontWeight: 600 }}>✓ Found</span>
+        )}
       </td>
       <td className="registration-page-8">
         <input
@@ -73,6 +113,8 @@ function TeamRow({
           onChange={(e) => onChange(member.id, 'name', e.target.value)}
           placeholder="Full name"
           className={inputCls}
+          readOnly={lookupStatus === 'found'}
+          style={lookupStatus === 'found' ? { background: '#f0fdf4' } : undefined}
         />
       </td>
       <td className="registration-page-9">
@@ -81,6 +123,8 @@ function TeamRow({
           onChange={(e) => onChange(member.id, 'organization', e.target.value)}
           placeholder="College / Company"
           className={inputCls}
+          readOnly={lookupStatus === 'found'}
+          style={lookupStatus === 'found' ? { background: '#f0fdf4' } : undefined}
         />
       </td>
       <td className="registration-page-10">
@@ -145,6 +189,7 @@ export default function RegistrationPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { startRegistration, updateTeamMembers, markFormReady } = useEvents();
+  const { personal, profession, isLoadingProfile } = useProfile();
 
   const event = location.state?.event as EventItem | undefined;
   const parentEvent = location.state?.parentEvent as EventItem | undefined;
@@ -380,6 +425,36 @@ export default function RegistrationPage() {
                     </div>
                   </Section>
                 ) : null}
+
+                <Section title="Your Professional Details">
+                  {isLoadingProfile ? (
+                    <p style={{ fontSize: '13px', color: '#64748b', padding: '8px 0' }}>
+                      Loading profile…
+                    </p>
+                  ) : (
+                    <div className="registration-page-27">
+                      <ReadField
+                        label="Name"
+                        value={
+                          [personal.firstName, personal.lastName].filter(Boolean).join(' ') || '-'
+                        }
+                      />
+                      <ReadField label="Email" value={personal.email || '-'} />
+                      <ReadField label="Mobile" value={personal.mobileNumber || '-'} />
+                      <ReadField label="Profession Type" value={profession.professionType || '-'} />
+                      <ReadField label="Institution" value={profession.institution || '-'} />
+                      <ReadField label="Department" value={profession.department || '-'} />
+                      <ReadField label="Designation" value={profession.designation || '-'} />
+                      {profession.registerNumber && (
+                        <ReadField label="Register No." value={profession.registerNumber} />
+                      )}
+                      {profession.degree && <ReadField label="Degree" value={profession.degree} />}
+                      {profession.yearOfStudy && (
+                        <ReadField label="Year of Study" value={profession.yearOfStudy} />
+                      )}
+                    </div>
+                  )}
+                </Section>
               </>
             )}
 
@@ -432,39 +507,62 @@ export default function RegistrationPage() {
               <Section title="Document Upload">
                 <div className="registration-page-40">
                   <p className="registration-page-41">
-                    Please choose a document type and upload the file to complete registration.
+                    Please upload the required document to complete registration.
                   </p>
-                  <div className="registration-page-42">
-                    <select
-                      value={docType}
-                      onChange={(e) => setDocType(e.target.value)}
-                      className="registration-page-43"
-                      aria-label="Document type"
-                    >
-                      <option value="">Select Type</option>
-                      {DOCUMENT_TYPES.map((type) => (
-                        <option key={type}>{type}</option>
-                      ))}
-                    </select>
-                    <label className="registration-page-44">
-                      <Upload className="registration-page-45" />
-                      Choose File
-                      <input
-                        type="file"
-                        className="registration-page-46"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            setFileName(file.name);
-                            setSelectedFile(file);
-                          } else {
-                            setFileName('');
-                            setSelectedFile(null);
-                          }
-                        }}
-                      />
-                    </label>
-                    {fileName && <span className="registration-page-47">{fileName}</span>}
+                  <div className="flex flex-col gap-4 mt-4">
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-700 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                      <div>
+                        <span className="font-semibold text-gray-900">Document Name:</span>{' '}
+                        {event?.documentName || 'N/A'}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-900">Type:</span>{' '}
+                        {event?.documentType || 'N/A'}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-900">Size:</span>{' '}
+                        {event?.documentSize || 'N/A'}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-gray-900">Text Field:</span>{' '}
+                        {event?.documentTextFieldEnabled ? 'Yes' : 'No'}
+                      </div>
+                    </div>
+                    {event?.documentTextFieldEnabled && (
+                      <div className="flex flex-col gap-2">
+                        <label className="text-sm font-medium text-gray-700">
+                          Additional Details ({event?.documentName || 'Document'})
+                        </label>
+                        <input
+                          type="text"
+                          value={docType}
+                          onChange={(e) => setDocType(e.target.value)}
+                          placeholder="Enter details here..."
+                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                    <div className="registration-page-42">
+                      <label className="registration-page-44">
+                        <Upload className="registration-page-45" />
+                        Choose File
+                        <input
+                          type="file"
+                          className="registration-page-46"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              setFileName(file.name);
+                              setSelectedFile(file);
+                            } else {
+                              setFileName('');
+                              setSelectedFile(null);
+                            }
+                          }}
+                        />
+                      </label>
+                      {fileName && <span className="registration-page-47">{fileName}</span>}
+                    </div>
                   </div>
                 </div>
               </Section>

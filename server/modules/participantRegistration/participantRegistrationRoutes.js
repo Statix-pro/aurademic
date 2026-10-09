@@ -13,6 +13,9 @@ import {
 
 const router = express.Router();
 
+// Public: look up a registered participant by email (for team-member auto-fill)
+router.get('/lookup', (req, res) => participantRegistrationController.lookupByEmail(req, res));
+
 // Every route below belongs to the signed-in participant. Staff tokens are
 // rejected here, and each /:id handler re-checks ownership in the controller.
 router.use(participantAuthMiddleware);
@@ -66,6 +69,9 @@ router.get('/registrations/:id/payments', (req, res) =>
 );
 router.post('/registrations/:id/payments', uploadPaymentProof.single('file'), (req, res) =>
   participantRegistrationController.submitPaymentProof(req, res),
+);
+router.get('/registrations/:id/feedback-questions', (req, res) =>
+  participantRegistrationController.getFeedbackQuestions(req, res),
 );
 router.post('/registrations/:id/feedback', (req, res) =>
   participantRegistrationController.submitFeedback(req, res),
