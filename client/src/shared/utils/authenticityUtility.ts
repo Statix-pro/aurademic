@@ -1,6 +1,8 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 
+import { applyEventMockAdapter } from './eventMockStore.js';
+
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export interface DownloadedFile {
@@ -12,6 +14,7 @@ export interface DownloadedFile {
 interface AuthenticityUtility extends AxiosInstance {
   postFile: (endpoint: string, formData: FormData) => Promise<unknown>;
   getFile: (endpoint: string, params?: Record<string, unknown>) => Promise<DownloadedFile>;
+  putFile: (endpoint: string, formData: FormData) => Promise<unknown>;
   getBaseURL: () => string;
 }
 
@@ -43,6 +46,8 @@ const authenticityUtility = axios.create({
     Accept: 'application/json',
   },
 }) as AuthenticityUtility;
+
+applyEventMockAdapter(authenticityUtility);
 
 authenticityUtility.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -102,17 +107,17 @@ authenticityUtility.interceptors.response.use(
       });
     }
 
+    const serverMessage = (error.response?.data as { message?: string } | undefined)?.message;
+    if (serverMessage) {
+      return Promise.reject({ ...error, message: serverMessage });
+    }
     return Promise.reject(error);
   },
 );
 
 authenticityUtility.postFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
-    const response = await authenticityUtility.post(endpoint, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await authenticityUtility.post(endpoint, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
     return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
@@ -156,8 +161,28 @@ authenticityUtility.getFile = async (
   return { blob: response.data, filename };
 };
 
+authenticityUtility.putFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
+  try {
+    const response = await authenticityUtility.put(endpoint, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return response;
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: unknown }; message?: string };
+    console.error('Error in putFile request:', axiosError.response?.data || axiosError.message);
+    throw error;
+  }
+};
+
 authenticityUtility.getBaseURL = (): string => {
   return baseURL.replace(/\/api\/?$/, '');
+};
+
+export const isFallbackEligible = (error: any): boolean => {
+  return !!(
+    error &&
+    typeof error === 'object' &&
+    !error.response &&
+    (error.request || error.isAxiosError === true || error.code === 'ERR_NETWORK')
+  );
 };
 
 export default authenticityUtility;
