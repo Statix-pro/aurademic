@@ -1,16 +1,18 @@
 import './config/env.js';
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 import cors from 'cors';
 import express from 'express';
-import helmet from 'helmet';
 // import rateLimit from 'express-rate-limit';
 
 // routes
-import db from './config/connection.js';
+import swaggerUi from 'swagger-ui-express';
+
+import specs from './config/swagger.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
+import { PARTICIPANT_UPLOAD_DIRS } from './middleware/participantUploadMiddleware.js';
 import accessControlRoutes from './modules/accessControl/accessControlRoutes.js';
 import accountOptionsRoutes from './modules/accountOptions/accountOptionsRoutes.js';
 import adminBudgetRoutes from './modules/adminbudget/adminBudgetRoutes.js';
@@ -22,9 +24,7 @@ import budgetRoutes from './modules/budget/budgetRoutes.js';
 import budgetCatalogRoutes from './modules/budgetCatalog/budgetCatalogRoutes.js';
 import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
 import documentsRoutes from './modules/events/documents/documentsRoutes.js';
-import eventRoutes from './modules/events/events/eventRoutes.js';
-import financeRoutes from './modules/events/finance/financeRoutes.js';
-import preEventRoutes from './modules/events/preevents/preEventRoutes.js';
+import eventsRoutes from './modules/events/eventsRoutes.js';
 import updatesRoutes from './modules/events/updates/updatesRoutes.js';
 import expenditureRoutes from './modules/expenditure/expenditureRoutes.js';
 import expenditureUserDashboardRoutes from './modules/expenditure/expenditureUserDashboardRoutes.js';
@@ -35,25 +35,40 @@ import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
-import { startDispatcher, stopDispatcher } from './modules/notification/notificationDispatcher.js';
-import notificationRoutes from './modules/notification/notificationRoutes.js';
+import organizationDirectoryRoutes from './modules/organizationDirectory/organizationDirectoryRoutes.js';
+import resourcepersonDirectoryRoutes from './modules/resourcepersonDirectory/resourcepersonDirectoryRoutes.js';
+import participantAuthRoutes from './modules/participantAuth/participantAuthRoutes.js';
+import participantRegistrationRoutes from './modules/participantRegistration/participantRegistrationRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
+
+// Event Module routes
+
+// FinanceCard routes
+// import financeCardRoutes from './modules/financeCard/financeCardRoutes.js';
+// import guesthouseRoutes from './modules/guesthouse/guesthouseRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// Behind IIS / a reverse proxy the client address and scheme only arrive in
-// X-Forwarded-*, so req.ip and the HTTPS check below need this to be true.
-app.set('trust proxy', true);
-
 /* ================= CORS ================= */
 
+// FRONTEND_URL accepts a comma-separated list so the staff portal and the event
+// subdomain can both be allowed. In practice the event site is same-origin (IIS
+// rewrites /api on its subdomain), so this only matters if that changes.
+const allowedOrigins = (
+  process.env.NODE_ENV === 'production'
+    ? process.env.FRONTEND_URL || ''
+    : 'http://localhost:3000,http://localhost:3001'
+)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const corsOptions = {
-  origin:
-    process.env.NODE_ENV === 'production' ? process.env.FRONTEND_URL : ['http://localhost:3000'],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   credentials: true,
   allowedHeaders: ['Content-Type', 'Authorization'],
@@ -62,19 +77,7 @@ const corsOptions = {
 
 /* ================= MIDDLEWARE ================= */
 
-app.use(helmet());
 app.use(cors(corsOptions));
-
-// Registered before the body parsers so a plain-HTTP upload is bounced on its
-// headers rather than read to 50mb first and only then told to retry over TLS.
-if (process.env.NODE_ENV === 'production') {
-  app.use((req, res, next) => {
-    if (req.headers['x-forwarded-proto'] !== 'https') {
-      return res.redirect(`https://${req.headers.host}${req.url}`);
-    }
-    next();
-  });
-}
 
 // const globalLimiter = rateLimit({
 //   windowMs: 15 * 60 * 1000,
@@ -87,39 +90,37 @@ if (process.env.NODE_ENV === 'production') {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} from ${req.ip}`);
-  next();
-});
-
 /* ================= SWAGGER ================= */
 
-/**
- * Loaded on demand rather than at the top of the file. Swagger never mounts in
- * production, so importing it there only means `swagger-ui-express` and
- * `swagger-jsdoc` have to be installed on the production box to satisfy an
- * import whose result is thrown away.
- *
- * Deliberately `.then()` and not `await`. A top-level await anywhere in this
- * file — even inside a branch that production never enters — makes the whole
- * module async, and iisnode loads this file through `require()`, which refuses
- * an ESM graph containing one: ERR_REQUIRE_ASYNC_MODULE, before a single route
- * is reachable. Mounting /api-docs a tick later costs nothing.
- */
 if (process.env.NODE_ENV !== 'production') {
-  Promise.all([import('swagger-ui-express'), import('./config/swagger.js')])
-    .then(([{ default: swaggerUi }, { default: specs }]) => {
-      app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
-      console.log('Swagger UI available at /api-docs');
-    })
-    .catch((error) => console.error('Swagger UI failed to load.', error));
+  app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+  console.log('Swagger UI available at /api-docs');
 }
 
 /* ================= STATIC FILES ================= */
 
 console.log('Attempting to serve static files from:', path.join(__dirname, '..', 'uploads'));
 
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+app.use(
+  '/uploads',
+  express.static(path.join(process.cwd(), 'uploads'), {
+    setHeaders: (res, filePath) => {
+      // Never let a browser second-guess the declared type.
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+
+      // Participant uploads come from the public internet. Forcing a download on
+      // navigation means that even if a disallowed type ever reaches disk, it
+      // cannot execute as a document on this origin — which is shared with the
+      // staff portal. Subresource loads (<img src>) ignore this header, so the
+      // staff UI still renders participant photos and proofs inline.
+      const dir = path.basename(path.dirname(filePath));
+
+      if (PARTICIPANT_UPLOAD_DIRS.has(dir)) {
+        res.setHeader('Content-Disposition', 'attachment');
+      }
+    },
+  }),
+);
 
 /* ================= ENSURE UPLOAD DIRS ================= */
 
@@ -135,6 +136,9 @@ const createUploadDirectories = () => {
     'uploads/bankStatement',
     'uploads/journal-article',
     'uploads/finance-principal-documents',
+    // Event Module upload directories
+    'uploads/event-documents',
+    'uploads/event-updates',
   ];
 
   directories.forEach((dir) => {
@@ -156,19 +160,29 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+/* --- Public endpoints (no authentication) ---
+   These must be mounted before `app.use('/api', journalRoutes)` below: that
+   router applies authMiddleware to everything under /api, so anything mounted
+   after it would demand a staff token. */
+
 app.use('/api/auth', authRoutes);
+// Public event participants sign in here (any Google account, not just @ksrct.ac.in).
+app.use('/api/participant-auth', participantAuthRoutes);
+// Participant-owned writes (registrations, profile, payments). Authenticated by
+// participantAuthMiddleware inside the router, not by authMiddleware.
+app.use('/api/participant', participantRegistrationRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', userDashboardRoutes);
 app.use('/api/form-options', formOptionsRoutes);
 
+// Event Module
+app.use('/api', eventsRoutes);
+app.use('/api', documentsRoutes);
+app.use('/api', updatesRoutes);
+
 app.use('/api', journalRoutes);
 app.use('/api', projectRoutes);
 app.use('/api', editRequestRoutes);
-
-// Events
-app.use('/api/events', eventRoutes);
-app.use('/api/pre-events', preEventRoutes);
-app.use('/api/finance', financeRoutes);
 
 // Existing finance page
 app.use('/api/finance-requests', financePageRoutes);
@@ -181,14 +195,17 @@ app.use('/api/expenditure-requests', expenditureRoutes);
 app.use('/api/expenditure-dashboard', expenditureUserDashboardRoutes);
 app.use('/api/expenditure-report', expenditureReportRoutes);
 
+// FinanceCard API
+// app.use('/api/finance-dashboard', financeCardRoutes);
+// app.use('/api/guesthouse', guesthouseRoutes);
+
 // Updates & documents
-app.use('/api/updates', updatesRoutes);
-app.use('/api/documents', documentsRoutes);
 app.use('/api/access-control', accessControlRoutes);
 app.use('/api/master-data', masterDataRoutes);
+app.use('/api', organizationDirectoryRoutes);
+app.use('/api', resourcepersonDirectoryRoutes);
 app.use('/api/budget-catalog', budgetCatalogRoutes);
 app.use('/api/account-options', accountOptionsRoutes);
-app.use('/api/notifications', notificationRoutes);
 
 /* ================= 404 HANDLER ================= */
 
@@ -207,102 +224,14 @@ app.use(errorHandler);
 
 /* ================= SERVER ================= */
 
-/**
- * The notification outbox worker. Started with the HTTP listener rather than at
- * import time: the test suite imports `app` directly, and a background timer
- * polling a mocked connection pool there would be both noisy and useless.
- * Set NOTIFICATIONS_DISPATCH_ENABLED=false to run the API with delivery paused —
- * emits keep accumulating harmlessly in the outbox.
- */
-const startNotificationDispatcher = () => {
-  if (String(process.env.NOTIFICATIONS_DISPATCH_ENABLED || 'true').toLowerCase() === 'false') {
-    console.log('Notification dispatcher disabled by NOTIFICATIONS_DISPATCH_ENABLED=false');
-    return;
-  }
-  startDispatcher();
-};
-
-/**
- * The RBAC tables `mergeAuthorizationSnapshot` depends on, checked once at boot.
- *
- * Authority is read from the database on every request and no longer falls back
- * to the token's own claims, so if these tables are missing the whole estate
- * degrades at once: `getUserAuthorizationSnapshot` catches the missing-table
- * error, returns a `degraded` snapshot with `isSuperAdmin` false, and every
- * admin screen closes to everybody. That is the right answer for an authority
- * check, but it is a terrible thing to discover from a user's 403. Checked
- * here, it is one line in the boot log instead.
- *
- * Deliberately a warning and not a refusal to start: the API serves plenty that
- * never reaches a permission check, and a half-migrated database should still
- * come up so the migration can be finished against it. Started with the
- * listener, not at import time, for the same reason as the dispatcher above.
- */
-const RBAC_TABLES = ['roles', 'permissions', 'role_permissions', 'user_roles', 'user_entity_roles'];
-
-const verifyRbacSchema = async () => {
-  try {
-    const [rows] = await db.query(
-      `SELECT table_name AS name
-         FROM information_schema.tables
-        WHERE table_schema = DATABASE()
-          AND table_name IN (?)`,
-      [RBAC_TABLES],
-    );
-
-    const present = new Set(rows.map((row) => String(row.name).toLowerCase()));
-    const missing = RBAC_TABLES.filter((table) => !present.has(table));
-
-    if (missing.length > 0) {
-      console.error(
-        `RBAC tables missing: ${missing.join(', ')}. ` +
-          'Roles and permissions cannot be resolved, so every admin and super-admin ' +
-          'screen will be denied until the access-control migrations are applied.',
-      );
-    }
-  } catch (error) {
-    console.error('Could not verify the RBAC schema at startup:', error.message);
-  }
-};
-
-/**
- * iisnode recycles the worker with SIGTERM. Stopping the dispatcher on the way
- * out releases whatever outbox batch it holds a lease on, so the next worker can
- * pick the batch up at once instead of waiting out the stale-claim threshold.
- */
-const installShutdownHandlers = (server) => {
-  const shutdown = (signal) => {
-    console.log(`Received ${signal}, shutting down`);
-    stopDispatcher();
-    server.close(() => process.exit(0));
-  };
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
-};
-
-export const startServer = (port = process.env.PORT || 5000) => {
-  const server = app.listen(port, () => {
-    startNotificationDispatcher();
-    verifyRbacSchema();
+export const startServer = (port = process.env.PORT || 5000) =>
+  app.listen(port, () => {
     console.log(`Server running on port ${port}`);
+    console.log('- /api/finance-cards (FinanceCard API)');
+    console.log('- /api-docs (Swagger API docs)');
   });
-  installShutdownHandlers(server);
-  return server;
-};
 
-/**
- * Start unless a test runner is importing this file for `app`.
- *
- * This deliberately does not test `process.argv[1]` against this module's own
- * URL. Under iisnode the entry point is iisnode's interceptor, which pulls this
- * file in with `require()` — argv[1] is the interceptor, never `server.js`, so
- * an entrypoint check is false in the one environment that most needs the
- * listener. The process would boot, bind nothing, and every request through IIS
- * would fail with nothing in the log to explain it.
- */
-const isTestRun = Boolean(process.env.VITEST) || process.env.NODE_ENV === 'test';
-
-if (!isTestRun) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   startServer();
 }
 
