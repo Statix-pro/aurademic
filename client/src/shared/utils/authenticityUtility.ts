@@ -1,8 +1,6 @@
 import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig, AxiosError } from 'axios';
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 
-import { applyEventMockAdapter } from './eventMockStore.js';
-
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export interface DownloadedFile {
@@ -46,8 +44,6 @@ const authenticityUtility = axios.create({
     Accept: 'application/json',
   },
 }) as AuthenticityUtility;
-
-applyEventMockAdapter(authenticityUtility);
 
 authenticityUtility.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -117,7 +113,9 @@ authenticityUtility.interceptors.response.use(
 
 authenticityUtility.postFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
-    const response = await authenticityUtility.post(endpoint, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const response = await authenticityUtility.post(endpoint, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
@@ -163,7 +161,9 @@ authenticityUtility.getFile = async (
 
 authenticityUtility.putFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
-    const response = await authenticityUtility.put(endpoint, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+    const response = await authenticityUtility.put(endpoint, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
     return response;
   } catch (error: unknown) {
     const axiosError = error as { response?: { data?: unknown }; message?: string };
