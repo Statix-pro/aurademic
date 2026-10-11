@@ -1,0 +1,17 @@
+import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import controller from './resourcepersonDirectoryController.js';
+import { authMiddleware, superAdminMiddleware } from '../../middleware/authMiddleware.js';
+const router = express.Router();
+const uploadDir = path.join(process.cwd(), 'uploads', 'resource-persons');
+fs.mkdirSync(uploadDir, { recursive: true });
+const upload = multer({ storage: multer.diskStorage({ destination: uploadDir, filename: (_req, file, cb) => cb(null, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_')}`) }), limits: { fileSize: 5 * 1024 * 1024 } });
+router.use(authMiddleware);
+router.get('/resource-persons', controller.list);
+router.post('/resource-persons', upload.fields([{ name: 'photoFile', maxCount: 1 }, { name: 'resumeFile', maxCount: 1 }]), controller.submit);
+router.put('/resource-persons/:id', upload.fields([{ name: 'photoFile', maxCount: 1 }, { name: 'resumeFile', maxCount: 1 }]), controller.update);
+router.get('/admin/resource-person-submissions', superAdminMiddleware, controller.pending);
+router.patch('/admin/resource-person-submissions/:id/review', superAdminMiddleware, controller.review);
+export default router;

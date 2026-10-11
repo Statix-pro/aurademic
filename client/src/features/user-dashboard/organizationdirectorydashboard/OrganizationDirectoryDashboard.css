@@ -1,0 +1,111 @@
+@import '../budgetdashboard/budgetdashboard.css';
+
+.org-add-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 6px;
+  background: #0069ab;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.org-add-btn:hover {
+  background: #0056b3;
+  transform: translateY(-1px);
+}
+
+/* Alignments and Colors matching Consolidated Budget Dashboard */
+
+.org-table {
+  table-layout: fixed !important;
+  width: 100%;
+}
+
+.org-table th,
+.org-table td {
+  vertical-align: middle !important;
+}
+
+.org-table th:nth-child(1),
+.org-table td:nth-child(1) { width: 8%; text-align: center; }
+.org-table th:nth-child(2),
+.org-table td:nth-child(2) { width: 36%; text-align: left; }
+.org-table th:nth-child(3),
+.org-table td:nth-child(3) { width: 18%; text-align: left; }
+.org-table th:nth-child(4),
+.org-table td:nth-child(4) { width: 13%; text-align: center; }
+.org-table th:nth-child(5),
+.org-table td:nth-child(5) { width: 14%; text-align: center; }
+.org-table th:nth-child(6),
+.org-table td:nth-child(6) { width: 11%; text-align: center; }
+
+.org-table th {
+  padding: 12px 16px !important;
+  font-size: 0.95rem !important;
+  font-weight: 600 !important;
+}
+
+.org-table td {
+  padding: 14px 16px !important;
+  font-size: 0.9rem !important;
+  color: #2c3e50 !important;
+}
+
+.org-tag-pill {
+  display: inline-block;
+  background: #e0f0ff;
+  color: #0069ab;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.org-table td:nth-child(2) > div {
+  align-items: flex-start;
+}
+
+.org-status-pill {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.org-status-pill.approved { background: #dcfce7; color: #166534; }
+.org-status-pill.pending { background: #fef3c7; color: #92400e; }
+
+.org-action-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #0069ab;
+  background: #ffffff;
+  color: #0069ab;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.org-action-edit-btn:hover {
+  background: #e0f0ff;
+  transform: scale(1.05);
+}
+
+.org-empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #64748b;
+  font-style: italic;
+}
