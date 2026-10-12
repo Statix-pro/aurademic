@@ -90,6 +90,82 @@ describe('normalizeProjectPayload', () => {
     );
   });
 
+  // The column is NOT NULL with a default, so a client that sends no type
+  // (an older form, a script) saves a research project as before rather than
+  // failing; an unlisted type is refused instead of silently becoming one.
+  it('defaults the project type to a research project and refuses an unknown one', () => {
+    const typed = normalizeProjectPayload(validPayload({ project_type: 'travel_grant' }));
+    expect(typed.errors).toEqual([]);
+    expect(typed.aggregate.project.project_type).toBe('travel_grant');
+
+    expect(normalizeProjectPayload(validPayload()).aggregate.project.project_type).toBe(
+      'research_project',
+    );
+
+    const unknown = normalizeProjectPayload(validPayload({ project_type: 'consultancy' }));
+    expect(errorFields(unknown.errors)).toContain('project_type');
+  });
+
+  // An ENUM like the others: a value off the three radios is refused by name
+  // rather than reaching the column, and a project that never answered keeps
+  // NULL instead of a guess at where its money went.
+  it('stores where the grant-in-aid is credited', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({ grant_credited_to: 'institution_account' }),
+    );
+    expect(errors).toEqual([]);
+    expect(aggregate.project.grant_credited_to).toBe('institution_account');
+
+    expect(normalizeProjectPayload(validPayload()).aggregate.project.grant_credited_to).toBeNull();
+
+    const unknown = normalizeProjectPayload(validPayload({ grant_credited_to: 'cash' }));
+    expect(errorFields(unknown.errors)).toContain('grant_credited_to');
+  });
+
+  // An Event or Fellowship is classed by level instead of research type, and a
+  // Travel Grant by neither. A value the form hid after the type changed is
+  // not saved as if it still described the project.
+  it('keeps research type or level only for the types that ask for it', () => {
+    const both = { research_type: 'applied', level: 'national' };
+    const project = (projectType) =>
+      normalizeProjectPayload(validPayload({ ...both, project_type: projectType })).aggregate
+        .project;
+
+    expect(project('research_project')).toMatchObject({ research_type: 'applied', level: null });
+    expect(project('event')).toMatchObject({ research_type: null, level: 'national' });
+    expect(project('fellowship')).toMatchObject({ research_type: null, level: 'national' });
+    expect(project('travel_grant')).toMatchObject({ research_type: null, level: null });
+
+    const unknown = normalizeProjectPayload(
+      validPayload({ project_type: 'event', level: 'state' }),
+    );
+    expect(errorFields(unknown.errors)).toContain('level');
+  });
+
+  // Both columns are ENUMs: an unlisted value would be truncated to '' or fail
+  // the insert under strict mode, so it is refused by name before the write,
+  // and an unstated one stays NULL rather than defaulting to a guess.
+  it('stores research type and funding source as their enum values', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({ research_type: 'applied', funding_source: 'state_government' }),
+    );
+    expect(errors).toEqual([]);
+    expect(aggregate.project).toMatchObject({
+      research_type: 'applied',
+      funding_source: 'state_government',
+    });
+
+    const unstated = normalizeProjectPayload(validPayload());
+    expect(unstated.aggregate.project).toMatchObject({ research_type: null, funding_source: null });
+
+    const invalid = normalizeProjectPayload(
+      validPayload({ research_type: 'theoretical', funding_source: 'crowdfunding' }),
+    );
+    expect(errorFields(invalid.errors)).toEqual(
+      expect.arrayContaining(['research_type', 'funding_source']),
+    );
+  });
+
   it('rejects negative amounts', () => {
     const { errors } = normalizeProjectPayload(validPayload({ project_cost: '-5' }));
 
@@ -1247,7 +1323,12 @@ describe('facility rows', () => {
             stock_register_ref: '12 / 48',
             istem_listed: true,
             istem_id: 'ISTEM-0091',
-            supplier_details: 'Bruker India, Chennai',
+            supplier_name: 'Bruker India',
+            supplier_address: 'Guindy, Chennai',
+            contact_person: 'R Suresh',
+            contact_designation: 'Sales Engineer',
+            contact_mobile: '+91 98765-43210',
+            contact_email: 'suresh@bruker.example',
           },
         ],
       }),
@@ -1266,10 +1347,32 @@ describe('facility rows', () => {
         stock_register_ref: '12 / 48',
         istem_listed: 1,
         istem_id: 'ISTEM-0091',
-        supplier_details: 'Bruker India, Chennai',
+        supplier_name: 'Bruker India',
+        supplier_address: 'Guindy, Chennai',
+        contact_person: 'R Suresh',
+        contact_designation: 'Sales Engineer',
+        contact_mobile: '9876543210',
+        contact_email: 'suresh@bruker.example',
         display_order: 0,
       },
     ]);
+  });
+
+  // The supplier's contact is checked the way a manpower row's is, so a typo
+  // in a number someone will ring is caught on save rather than on the call.
+  it("rejects a supplier contact's malformed mobile and email", () => {
+    const { errors } = normalizeProjectPayload(
+      validPayload({
+        facilities: [{ facility_name: 'Kiln', contact_mobile: '98765', contact_email: 'sales@' }],
+      }),
+    );
+
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        { field: 'facilities[0].contact_mobile', message: 'Enter a 10-digit mobile number.' },
+        { field: 'facilities[0].contact_email', message: 'Enter a valid email address.' },
+      ]),
+    );
   });
 
   it('accepts the IT Product label spelling and rejects an unknown type', () => {

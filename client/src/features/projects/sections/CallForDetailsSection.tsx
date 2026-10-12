@@ -3,7 +3,12 @@ import React, { useMemo } from 'react';
 
 import { Field, ReadOnlyValue, SelectField } from '../components/FormFields';
 import SectionCard from '../components/SectionCard';
-import { safeExternalUrl } from '../constants';
+import {
+  FUNDING_SOURCE_OPTIONS,
+  PROJECT_TYPE_OPTIONS,
+  projectTypeRules,
+  safeExternalUrl,
+} from '../constants';
 import { withSelectedOption } from '../selectOptions';
 
 import type { ProjectFormState, ProjectOrganization, ProjectScheme } from '../types';
@@ -56,13 +61,23 @@ const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
     () =>
       withSelectedOption(
         schemes
-          .filter((scheme) => scheme.organization_id === form.fundingOrganizationId)
+          // Only this agency's schemes for this kind of grant: a scheme's
+          // category comes from its type's list, and the save refuses one of
+          // another type.
+          .filter(
+            (scheme) =>
+              scheme.organization_id === form.fundingOrganizationId &&
+              scheme.project_type === form.projectType,
+          )
           .map((scheme) => ({ value: String(scheme.id), label: scheme.name })),
         selectedSchemeValue,
         form.schemeName,
       ),
-    [schemes, form.fundingOrganizationId, selectedSchemeValue, form.schemeName],
+    [schemes, form.fundingOrganizationId, form.projectType, selectedSchemeValue, form.schemeName],
   );
+
+  const projectTypeLabel =
+    PROJECT_TYPE_OPTIONS.find((option) => option.value === form.projectType)?.label ?? 'project';
 
   const selectedScheme = schemes.find((scheme) => scheme.id === form.schemeId) ?? null;
   // Shown as typed, but only linked when it is a real http(s) address.
@@ -109,13 +124,25 @@ const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
         />
       </Field>
 
+      <Field label="Funding Source" htmlFor="pf-funding-source" error={errors.funding_source}>
+        <SelectField
+          id="pf-funding-source"
+          value={form.fundingSource}
+          onChange={(fundingSource) => patch({ fundingSource })}
+          options={FUNDING_SOURCE_OPTIONS}
+          placeholder="Select Source"
+          disabled={disabled}
+          invalid={Boolean(errors.funding_source)}
+        />
+      </Field>
+
       <Field
         label="Scheme"
         htmlFor="pf-scheme"
         error={errors.scheme_id}
         hint={
           form.fundingOrganizationId && schemeOptions.length === 0
-            ? 'No schemes listed for this agency yet — use Add Scheme to request one.'
+            ? `No ${projectTypeLabel} schemes listed for this agency yet — use Add Scheme to request one.`
             : undefined
         }
       >
@@ -134,9 +161,12 @@ const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
         />
       </Field>
 
-      <Field label="Domain">
-        <ReadOnlyValue value={selectedScheme?.domain} />
-      </Field>
+      {/* A travel grant scheme has no domain. */}
+      {projectTypeRules(form.projectType).schemeHasDomain && (
+        <Field label="Domain">
+          <ReadOnlyValue value={selectedScheme?.domain} />
+        </Field>
+      )}
 
       <div className="pf-grid pf-grid--two">
         <Field label="Category">

@@ -164,7 +164,7 @@ const TransactionSummarySection: React.FC<TransactionSummarySectionProps> = ({ f
 
             <HeadRows
               rows={summary.income}
-              emptyLabel="Tick the income heads on the Budget tab to see them here."
+              emptyLabel="Tick the income heads under Finance → Budget to see them here."
             />
             <tr className="pf-summary__total">
               <td colSpan={3} className="pf-table__total-label">

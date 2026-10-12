@@ -7,6 +7,7 @@
 
 import {
   DEFAULT_COUNTRY,
+  DEFAULT_PROJECT_TYPE,
   DISBURSEMENT_SLOTS,
   HOST_ORGANIZATION_NAME,
   MANPOWER_SLOTS,
@@ -165,7 +166,12 @@ export function createFacilityRow(): FacilityRow {
     stockRegisterRef: '',
     istemListed: false,
     istemId: '',
-    supplierDetails: '',
+    supplierName: '',
+    supplierAddress: '',
+    contactPerson: '',
+    contactDesignation: '',
+    contactMobile: '',
+    contactEmail: '',
   };
 }
 
@@ -271,15 +277,19 @@ export function createEmptyProjectForm(): ProjectFormState {
     drivenBy: 'faculty',
     investigators: [createInvestigatorRow({ isPrincipal: true })],
 
+    projectType: DEFAULT_PROJECT_TYPE,
     title: '',
     projectCost: '',
     durationYears: '',
     durationMonths: '',
     durationDays: '',
+    researchType: '',
+    level: '',
     nationalInitiatives: [],
     sdgs: [],
 
     fundingOrganizationId: null,
+    fundingSource: '',
     schemeId: null,
     fundingOrganizationName: '',
     schemeName: '',
@@ -311,6 +321,7 @@ export function createEmptyProjectForm(): ProjectFormState {
     sanctionDate: '',
     sanctionReferenceNo: '',
     sanctionMode: '',
+    grantCreditedTo: '',
 
     disbursements: [createDisbursementRow()],
 
@@ -557,7 +568,12 @@ export function projectToFormState(project: any): ProjectFormState {
         stockRegisterRef: text(row.stock_register_ref),
         istemListed: flag(row.istem_listed),
         istemId: text(row.istem_id),
-        supplierDetails: text(row.supplier_details),
+        supplierName: text(row.supplier_name),
+        supplierAddress: text(row.supplier_address),
+        contactPerson: text(row.contact_person),
+        contactDesignation: text(row.contact_designation),
+        contactMobile: text(row.contact_mobile),
+        contactEmail: text(row.contact_email),
       }))
     : [];
 
@@ -680,17 +696,21 @@ export function projectToFormState(project: any): ProjectFormState {
     // keeps the section usable if that ever stops being true.
     investigators: investigators.length > 0 ? investigators : empty.investigators,
 
+    projectType: text(project?.project_type) || DEFAULT_PROJECT_TYPE,
     title: text(project?.title),
     projectCost: amountInput(project?.project_cost),
     durationYears: countInput(project?.duration_years),
     durationMonths: countInput(project?.duration_months),
     durationDays: countInput(project?.duration_days),
+    researchType: text(project?.research_type),
+    level: text(project?.level),
     nationalInitiatives: Array.isArray(project?.national_initiatives)
       ? project.national_initiatives.map(text)
       : [],
     sdgs: Array.isArray(project?.sdgs) ? project.sdgs.map(text) : [],
 
     fundingOrganizationId: project?.funding_organization_id ?? null,
+    fundingSource: text(project?.funding_source),
     schemeId: project?.scheme_id ?? null,
     fundingOrganizationName: text(project?.funding_organization_name),
     schemeName: text(project?.scheme_name),
@@ -728,6 +748,7 @@ export function projectToFormState(project: any): ProjectFormState {
     sanctionDate: dateInput(project?.sanction_date),
     sanctionReferenceNo: text(project?.sanction_reference_no),
     sanctionMode: (text(project?.sanction_mode) || '') as ProjectFormState['sanctionMode'],
+    grantCreditedTo: text(project?.grant_credited_to),
 
     disbursements: disbursements.length > 0 ? disbursements : empty.disbursements,
 

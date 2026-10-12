@@ -2,6 +2,7 @@ import { AlertCircle, Loader2, Pencil } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
+import FinanceNav from './components/FinanceNav';
 import RequestOptionModal from './components/RequestOptionModal';
 import {
   DOCUMENT_ACCEPT,
@@ -9,6 +10,8 @@ import {
   MAX_DOCUMENT_BYTES,
   PROJECT_FORM_TABS,
   hasReachedProposalStage,
+  projectTypeFromParam,
+  projectTypeRules,
 } from './constants';
 import { toAmount } from './projectBudgetSummary';
 import {
@@ -46,14 +49,20 @@ import { financeOrganizations } from './selectOptions';
 import AlertModal from '../../shared/components/ui/AlertModal';
 import ViewModeBanner from '../../shared/components/ui/ViewModeBanner';
 
-import type { ProjectFormTab } from './constants';
+import type { FinanceSection, ProjectFormTab } from './constants';
 import type {
   DisbursementSlot,
   DocumentSlotState,
+  FacilityRow,
+  IprRow,
+  ManpowerRow,
+  OutcomeCandidateRow,
   ProjectAccess,
   ProjectDocumentType,
   ProjectFormState,
   ProjectLookups,
+  PublicationRow,
+  TechTransferRow,
 } from './types';
 import './projectForm.css';
 
@@ -65,16 +74,30 @@ const emptyLookups: ProjectLookups = {
   budgetHeads: [],
 };
 
+interface FormLocation {
+  tab: ProjectFormTab;
+  /** Which Finance sub-tab, for a field on the Finance tab. */
+  financeSection?: FinanceSection;
+}
+
 /**
- * The tab an error belongs to, so a failed save can open the tab holding the
- * first problem rather than leaving the user on one that looks fine. Field
- * paths come from the server (and are mirrored by `validate` below).
+ * Where an error belongs, so a failed save can open the tab (and Finance
+ * sub-tab) holding the first problem rather than leaving the user on one that
+ * looks fine. Field paths come from the server (and are mirrored by `validate`
+ * below).
  */
+function locationForField(field: string): FormLocation {
+  if (field.startsWith('budget.')) return { tab: 'finance', financeSection: 'budget' };
+  // Budget Sharing sits on Budget, beside the allotment it shares out.
+  if (field.startsWith('sharing_rows')) return { tab: 'finance', financeSection: 'budget' };
+  if (field.startsWith('transaction_accounts')) {
+    return { tab: 'finance', financeSection: 'transaction' };
+  }
+  return { tab: tabForField(field) };
+}
+
+/** The top-level tab for a field off the Finance tab. */
 function tabForField(field: string): ProjectFormTab {
-  if (field.startsWith('budget.')) return 'budget';
-  // Budget Sharing sits on the Budget tab, beside the allotment it shares out.
-  if (field.startsWith('sharing_rows')) return 'budget';
-  if (field.startsWith('transaction_accounts')) return 'transaction';
   if (field.startsWith('facilities')) return 'facility';
   if (field.startsWith('manpower')) return 'manpower';
   if (
@@ -89,6 +112,118 @@ function tabForField(field: string): ProjectFormTab {
   // sanction order slots stay on Details beside the sections they belong to.
   if (FINAL_DOCUMENT_TYPES.some((type) => field === `document__${type}`)) return 'documents';
   return 'details';
+}
+
+/*
+ * A mobile number as the office writes it — spaces, hyphens and a +91 prefix
+ * allowed — must come to ten digits, and an email needs a name, an @ and a
+ * dotted domain. The same tests as the server's `toMobile`, `MOBILE_PATTERN`
+ * and `EMAIL_PATTERN`; an empty value passes, since both are optional.
+ */
+const isValidMobile = (value: string) =>
+  !value.trim() || /^\d{10}$/.test(value.replace(/[\s-]/g, '').replace(/^\+91/, ''));
+
+const isValidEmail = (value: string) =>
+  !value.trim() || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
+/*
+ * Whether a row has been started: the fields the server's blank-row filter
+ * counts, so both sides agree on which rows are kept. A saved row (one with an
+ * id) or one carrying a file counts as started too. Shared by the validation
+ * below and by the rule that keeps a tab the project type does not need on
+ * screen while it still holds something.
+ */
+const isFacilityStarted = (row: FacilityRow) =>
+  Boolean(
+    row.facilityName.trim() ||
+    row.facilityType ||
+    row.installationDate ||
+    toAmount(row.cost) > 0 ||
+    row.make.trim() ||
+    row.model.trim() ||
+    row.serialNo.trim() ||
+    row.stockRegisterRef.trim() ||
+    row.istemListed ||
+    row.supplierName.trim() ||
+    row.supplierAddress.trim() ||
+    row.contactPerson.trim() ||
+    row.contactDesignation.trim() ||
+    row.contactMobile.trim() ||
+    row.contactEmail.trim(),
+  );
+
+const isManpowerStarted = (row: ManpowerRow) =>
+  Boolean(
+    row.id ||
+    row.role ||
+    row.name.trim() ||
+    row.qualification.trim() ||
+    toAmount(row.salary) > 0 ||
+    row.joiningDate ||
+    row.mobile.trim() ||
+    row.email.trim() ||
+    row.remarks.trim() ||
+    row.relievingDate ||
+    row.documents.profile.file,
+  );
+
+const isPublicationStarted = (row: PublicationRow) =>
+  Boolean(
+    row.publicationType ||
+    row.doi.trim() ||
+    row.journalId ||
+    row.title.trim() ||
+    row.venue.trim() ||
+    row.publicationYear.trim(),
+  );
+
+const isIprStarted = (row: IprRow) =>
+  Boolean(
+    row.iprType ||
+    row.iprNumber.trim() ||
+    row.status ||
+    row.title.trim() ||
+    row.filingDate ||
+    row.grantDate,
+  );
+
+const isTechTransferStarted = (row: TechTransferRow) =>
+  Boolean(
+    row.id || row.category || row.description.trim() || row.trl || row.documents.document.file,
+  );
+
+const isOutcomeCandidateStarted = (row: OutcomeCandidateRow) =>
+  Boolean(
+    row.id ||
+    row.candidateName.trim() ||
+    row.degree ||
+    row.university.trim() ||
+    row.documents.document.file,
+  );
+
+/**
+ * Whether a tab a project type does not need still holds something. Such a tab
+ * stays on screen: hiding it would leave rows that are still saved, and still
+ * validated, where nobody can see or clear them — a project whose type was
+ * changed after they were entered.
+ */
+type TabRows = Pick<
+  ProjectFormState,
+  'facilities' | 'manpower' | 'publications' | 'iprs' | 'techTransfers' | 'outcomeCandidates'
+>;
+
+function tabHoldsData(tab: ProjectFormTab, form: TabRows): boolean {
+  if (tab === 'facility') return form.facilities.some(isFacilityStarted);
+  if (tab === 'manpower') return form.manpower.some(isManpowerStarted);
+  if (tab === 'outcomes') {
+    return (
+      form.publications.some(isPublicationStarted) ||
+      form.iprs.some(isIprStarted) ||
+      form.techTransfers.some(isTechTransferStarted) ||
+      form.outcomeCandidates.some(isOutcomeCandidateStarted)
+    );
+  }
+  return false;
 }
 
 /**
@@ -171,54 +306,28 @@ function validate(form: ProjectFormState): Record<string, string> {
   });
 
   form.facilities.forEach((row, index) => {
-    // The fields the server's blank-row filter counts, so both sides agree on
-    // which rows have been started. A cost of 0 is blank there too.
-    const started =
-      row.facilityName.trim() ||
-      row.facilityType ||
-      row.installationDate ||
-      toAmount(row.cost) > 0 ||
-      row.make.trim() ||
-      row.model.trim() ||
-      row.serialNo.trim() ||
-      row.stockRegisterRef.trim() ||
-      row.istemListed ||
-      row.supplierDetails.trim();
-    if (!started) return;
+    if (!isFacilityStarted(row)) return;
 
     const field = `facilities[${index}]`;
     if (!row.facilityName.trim()) errors[`${field}.facility_name`] = 'Facility name is required.';
     if (row.istemListed && !row.istemId.trim())
       errors[`${field}.istem_id`] = 'Enter the I-STEM ID.';
+    if (!isValidMobile(row.contactMobile)) {
+      errors[`${field}.contact_mobile`] = 'Enter a 10-digit mobile number.';
+    }
+    if (!isValidEmail(row.contactEmail)) {
+      errors[`${field}.contact_email`] = 'Enter a valid email address.';
+    }
   });
 
   form.manpower.forEach((row, index) => {
-    // The fields the server's blank-row filter counts. A saved row (one with
-    // an id) or one carrying a profile counts as started there too.
-    const started =
-      row.id ||
-      row.role ||
-      row.name.trim() ||
-      row.qualification.trim() ||
-      toAmount(row.salary) > 0 ||
-      row.joiningDate ||
-      row.mobile.trim() ||
-      row.email.trim() ||
-      row.remarks.trim() ||
-      row.relievingDate ||
-      row.documents.profile.file;
-    if (!started) return;
+    if (!isManpowerStarted(row)) return;
 
     const field = `manpower[${index}]`;
     if (!row.role) errors[`${field}.role`] = 'Select a role.';
     if (!row.name.trim()) errors[`${field}.name`] = 'Name is required.';
-    const mobileDigits = row.mobile.replace(/[\s-]/g, '').replace(/^\+91/, '');
-    if (row.mobile.trim() && !/^\d{10}$/.test(mobileDigits)) {
-      errors[`${field}.mobile`] = 'Enter a 10-digit mobile number.';
-    }
-    if (row.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email.trim())) {
-      errors[`${field}.email`] = 'Enter a valid email address.';
-    }
+    if (!isValidMobile(row.mobile)) errors[`${field}.mobile`] = 'Enter a 10-digit mobile number.';
+    if (!isValidEmail(row.email)) errors[`${field}.email`] = 'Enter a valid email address.';
     if (row.joiningDate && row.relievingDate && row.relievingDate < row.joiningDate) {
       errors[`${field}.relieving_date`] = 'Date of relieving cannot be before the date of joining.';
     }
@@ -227,14 +336,7 @@ function validate(form: ProjectFormState): Record<string, string> {
   // The Outcomes tab: the same started-row tests and required fields as the
   // server's normalizers.
   form.publications.forEach((row, index) => {
-    const started =
-      row.publicationType ||
-      row.doi.trim() ||
-      row.journalId ||
-      row.title.trim() ||
-      row.venue.trim() ||
-      row.publicationYear.trim();
-    if (!started) return;
+    if (!isPublicationStarted(row)) return;
 
     const field = `publications[${index}]`;
     if (!row.publicationType) errors[`${field}.publication_type`] = 'Select a type.';
@@ -244,14 +346,7 @@ function validate(form: ProjectFormState): Record<string, string> {
   });
 
   form.iprs.forEach((row, index) => {
-    const started =
-      row.iprType ||
-      row.iprNumber.trim() ||
-      row.status ||
-      row.title.trim() ||
-      row.filingDate ||
-      row.grantDate;
-    if (!started) return;
+    if (!isIprStarted(row)) return;
 
     const field = `iprs[${index}]`;
     if (!row.iprType) errors[`${field}.ipr_type`] = 'Select a type.';
@@ -264,21 +359,13 @@ function validate(form: ProjectFormState): Record<string, string> {
   });
 
   form.techTransfers.forEach((row, index) => {
-    const started =
-      row.id || row.category || row.description.trim() || row.trl || row.documents.document.file;
-    if (started && !row.category) {
+    if (isTechTransferStarted(row) && !row.category) {
       errors[`tech_transfers[${index}].category`] = 'Select a category.';
     }
   });
 
   form.outcomeCandidates.forEach((row, index) => {
-    const started =
-      row.id ||
-      row.candidateName.trim() ||
-      row.degree ||
-      row.university.trim() ||
-      row.documents.document.file;
-    if (!started) return;
+    if (!isOutcomeCandidateStarted(row)) return;
 
     const field = `outcome_candidates[${index}]`;
     if (!row.candidateName.trim())
@@ -383,7 +470,12 @@ const ProjectForm: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const [form, setForm] = useState<ProjectFormState>(createEmptyProjectForm);
+  // A new project starts as the type picked in the Projects page's dialog,
+  // which arrives as `?type=`; a saved one is overwritten by its record on load.
+  const [form, setForm] = useState<ProjectFormState>(() => ({
+    ...createEmptyProjectForm(),
+    projectType: projectTypeFromParam(searchParams.get('type')),
+  }));
   const [lookups, setLookups] = useState<ProjectLookups>(emptyLookups);
   const [access, setAccess] = useState<ProjectAccess | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -402,6 +494,47 @@ const ProjectForm: React.FC = () => {
   const [saveMessage, setSaveMessage] = useState('');
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [activeTab, setActiveTab] = useState<ProjectFormTab>('details');
+  const [financeSection, setFinanceSection] = useState<FinanceSection>('budget');
+
+  const showLocation = ({ tab, financeSection: section }: FormLocation) => {
+    setActiveTab(tab);
+    if (section) setFinanceSection(section);
+  };
+
+  // The tabs this project shows: all of them, less the ones its type does not
+  // need — unless one of those still holds something (see `tabHoldsData`), or
+  // is the tab being looked at. Clearing the last row on such a tab would
+  // otherwise pull it out from under the user mid-edit; it goes once they
+  // move to another tab. The type is fixed when the project is added, so it
+  // never hides the open tab either.
+  // Only the type and the rows that can keep a tab on screen are read, so an
+  // edit to any other field does not re-scan every row.
+  const {
+    projectType,
+    facilities,
+    manpower,
+    publications,
+    iprs,
+    techTransfers,
+    outcomeCandidates,
+  } = form;
+  const visibleTabs = useMemo(() => {
+    const { tabsNotRequired } = projectTypeRules(projectType);
+    const rows = { facilities, manpower, publications, iprs, techTransfers, outcomeCandidates };
+    return PROJECT_FORM_TABS.filter(
+      (tab) =>
+        tab.id === activeTab || !tabsNotRequired.includes(tab.id) || tabHoldsData(tab.id, rows),
+    );
+  }, [
+    activeTab,
+    projectType,
+    facilities,
+    manpower,
+    publications,
+    iprs,
+    techTransfers,
+    outcomeCandidates,
+  ]);
 
   /**
    * Arrow, Home and End move between the tabs and select the one they land on;
@@ -409,7 +542,7 @@ const ProjectForm: React.FC = () => {
    * stop, so focus follows the selection rather than trailing behind it.
    */
   const moveTabFocus = (event: React.KeyboardEvent<HTMLButtonElement>, fromIndex: number) => {
-    const lastIndex = PROJECT_FORM_TABS.length - 1;
+    const lastIndex = visibleTabs.length - 1;
     const nextIndex = {
       ArrowRight: fromIndex === lastIndex ? 0 : fromIndex + 1,
       ArrowLeft: fromIndex === 0 ? lastIndex : fromIndex - 1,
@@ -420,7 +553,7 @@ const ProjectForm: React.FC = () => {
     if (nextIndex === undefined) return;
 
     event.preventDefault();
-    setActiveTab(PROJECT_FORM_TABS[nextIndex].id);
+    setActiveTab(visibleTabs[nextIndex].id);
     const nextTab = event.currentTarget.parentElement?.children[nextIndex];
     if (nextTab instanceof HTMLElement) nextTab.focus();
   };
@@ -682,7 +815,7 @@ const ProjectForm: React.FC = () => {
     if (firstField) {
       // The tab carrying the first problem, so dismissing the dialog leaves the
       // marked fields on screen rather than on a tab nobody was looking at.
-      setActiveTab(tabForField(firstField));
+      showLocation(locationForField(firstField));
       const messages = Object.values(validationErrors);
       setSaveProblem({
         title:
@@ -723,7 +856,7 @@ const ProjectForm: React.FC = () => {
             return map;
           }, {}),
         );
-        setActiveTab(tabForField(error.fieldErrors[0].field));
+        showLocation(locationForField(error.fieldErrors[0].field));
       }
 
       setLoadError('');
@@ -806,7 +939,7 @@ const ProjectForm: React.FC = () => {
         {/* One form across every tab: switching tab only changes what is on
             screen, and the single Save below writes the whole project. */}
         <div className="pf-tabs" role="tablist" aria-label="Project form sections">
-          {PROJECT_FORM_TABS.map((tab, tabIndex) => (
+          {visibleTabs.map((tab, tabIndex) => (
             <button
               key={tab.id}
               type="button"
@@ -981,57 +1114,83 @@ const ProjectForm: React.FC = () => {
             </section>
           </div>
 
+          {/* Budget, Transaction and Summary as sub-tabs of one Finance tab.
+              Their panels stay mounted like the top-level ones, so each keeps
+              its scroll position and the summary its year filter. */}
           <div
             role="tabpanel"
-            id="pf-panel-budget"
-            aria-labelledby="pf-tab-budget"
-            hidden={activeTab !== 'budget'}
+            id="pf-panel-finance"
+            aria-labelledby="pf-tab-finance"
+            hidden={activeTab !== 'finance'}
             className="pf-panel"
           >
-            <IncomeHeadsSection
-              value={form.incomeHeads}
-              onChange={(incomeHeads) => patch({ incomeHeads })}
-              disabled={isReadOnly}
-            />
+            <FinanceNav form={form} active={financeSection} onSelect={setFinanceSection} />
 
-            <FinanceRowsSection
-              title="Budget Sharing"
-              errorPrefix="sharing_rows"
-              rows={form.financeSharing}
-              onChange={(rows) => patch({ financeSharing: rows })}
-              enabled={form.financeSharingEnabled}
-              onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
-              organizations={sharingParties}
-              budgetHeads={lookups.budgetHeads}
-              errors={errors}
-              disabled={isReadOnly}
-            />
+            <div
+              role="tabpanel"
+              id="pf-panel-budget"
+              aria-labelledby="pf-finance-tab-budget"
+              hidden={financeSection !== 'budget'}
+              className="pf-panel"
+            >
+              <IncomeHeadsSection
+                value={form.incomeHeads}
+                onChange={(incomeHeads) => patch({ incomeHeads })}
+                disabled={isReadOnly}
+              />
 
-            <BudgetAllotmentSection
-              form={form}
-              patch={patch}
-              budgetHeads={lookups.budgetHeads}
-              organizations={financeParties}
-              errors={errors}
-              disabled={isReadOnly}
-            />
-          </div>
+              <FinanceRowsSection
+                title="Budget Sharing"
+                errorPrefix="sharing_rows"
+                rows={form.financeSharing}
+                onChange={(rows) => patch({ financeSharing: rows })}
+                enabled={form.financeSharingEnabled}
+                onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
+                organizations={sharingParties}
+                budgetHeads={lookups.budgetHeads}
+                errors={errors}
+                disabled={isReadOnly}
+              />
 
-          <div
-            role="tabpanel"
-            id="pf-panel-transaction"
-            aria-labelledby="pf-tab-transaction"
-            hidden={activeTab !== 'transaction'}
-            className="pf-panel"
-          >
-            <TransactionAccountsSection
-              form={form}
-              patch={patch}
-              accounts={lookups.accounts}
-              organizations={financeParties}
-              errors={errors}
-              disabled={isReadOnly}
-            />
+              <BudgetAllotmentSection
+                form={form}
+                patch={patch}
+                budgetHeads={lookups.budgetHeads}
+                organizations={financeParties}
+                errors={errors}
+                disabled={isReadOnly}
+              />
+            </div>
+
+            <div
+              role="tabpanel"
+              id="pf-panel-transaction"
+              aria-labelledby="pf-finance-tab-transaction"
+              hidden={financeSection !== 'transaction'}
+              className="pf-panel"
+            >
+              <TransactionAccountsSection
+                form={form}
+                patch={patch}
+                accounts={lookups.accounts}
+                organizations={financeParties}
+                errors={errors}
+                disabled={isReadOnly}
+              />
+            </div>
+
+            {/* Nothing here is an input: Budget comes from the allotment matrix
+                and Actuals from the ledger, so it reads Budget and Transaction
+                rather than adding anything of its own to save. */}
+            <div
+              role="tabpanel"
+              id="pf-panel-summary"
+              aria-labelledby="pf-finance-tab-summary"
+              hidden={financeSection !== 'summary'}
+              className="pf-panel"
+            >
+              <TransactionSummarySection form={form} />
+            </div>
           </div>
 
           <div
@@ -1154,19 +1313,6 @@ const ProjectForm: React.FC = () => {
             )}
           </div>
 
-          {/* Nothing on this tab is an input: Budget comes from the allotment
-              matrix and Actuals from the ledger, so it reads the Budget and
-              Transaction tabs rather than adding anything of its own to save. */}
-          <div
-            role="tabpanel"
-            id="pf-panel-summary"
-            aria-labelledby="pf-tab-summary"
-            hidden={activeTab !== 'summary'}
-            className="pf-panel"
-          >
-            <TransactionSummarySection form={form} />
-          </div>
-
           {!isReadOnly && (
             <div className="pf-actions">
               <button
@@ -1186,6 +1332,7 @@ const ProjectForm: React.FC = () => {
         onHide={() => setShowRequestModal(false)}
         organizations={lookups.organizations}
         defaultOrganizationId={form.fundingOrganizationId}
+        projectType={form.projectType}
       />
     </div>
   );

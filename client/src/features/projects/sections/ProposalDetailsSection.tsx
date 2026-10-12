@@ -1,9 +1,15 @@
 import React, { useMemo } from 'react';
 
-import { AmountInput, Field } from '../components/FormFields';
+import { AmountInput, Field, SelectField } from '../components/FormFields';
 import SectionCard from '../components/SectionCard';
 import TagSelectField from '../components/TagSelectField';
-import { NATIONAL_INITIATIVES, SUSTAINABLE_DEVELOPMENT_GOALS } from '../constants';
+import {
+  LEVEL_OPTIONS,
+  NATIONAL_INITIATIVES,
+  RESEARCH_TYPE_OPTIONS,
+  SUSTAINABLE_DEVELOPMENT_GOALS,
+  projectTypeRules,
+} from '../constants';
 
 import type { ProjectFormState } from '../types';
 
@@ -24,6 +30,9 @@ const ProposalDetailsSection: React.FC<ProposalDetailsSectionProps> = ({
 }) => {
   const initiativeOptions = useMemo(() => toOptions(NATIONAL_INITIATIVES), []);
   const sdgOptions = useMemo(() => toOptions(SUSTAINABLE_DEVELOPMENT_GOALS), []);
+  // The type itself is not asked here: it is picked in the dialog the Projects
+  // page's Add opens, and decides which of these fields the form shows.
+  const rules = projectTypeRules(form.projectType);
 
   return (
     <SectionCard title="Proposal Details" className="pf-card--proposal">
@@ -39,6 +48,36 @@ const ProposalDetailsSection: React.FC<ProposalDetailsSectionProps> = ({
           maxLength={500}
         />
       </Field>
+
+      {/* An Event or Fellowship is classed by level in the research type's
+          place; a Travel Grant asks neither. */}
+      {rules.asksResearchType && (
+        <Field label="Research Type" htmlFor="pf-research-type" error={errors.research_type}>
+          <SelectField
+            id="pf-research-type"
+            value={form.researchType}
+            onChange={(researchType) => patch({ researchType })}
+            options={RESEARCH_TYPE_OPTIONS}
+            placeholder="Select Research Type"
+            disabled={disabled}
+            invalid={Boolean(errors.research_type)}
+          />
+        </Field>
+      )}
+
+      {rules.asksLevel && (
+        <Field label="Level" htmlFor="pf-level" error={errors.level}>
+          <SelectField
+            id="pf-level"
+            value={form.level}
+            onChange={(level) => patch({ level })}
+            options={LEVEL_OPTIONS}
+            placeholder="Select Level"
+            disabled={disabled}
+            invalid={Boolean(errors.level)}
+          />
+        </Field>
+      )}
 
       <div className="pf-grid pf-grid--budget">
         <Field label="Budget" htmlFor="pf-project-cost" error={errors.project_cost}>

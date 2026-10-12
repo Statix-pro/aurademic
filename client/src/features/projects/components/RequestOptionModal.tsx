@@ -1,6 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import {
+  PROJECT_TYPE_OPTIONS,
+  SCHEME_CATEGORY_OPTIONS_BY_TYPE,
+  SCHEME_DOMAIN_OPTIONS,
+  projectTypeRules,
+} from '../constants';
 import projectsApi from '../projectsApi';
 import { Field, SelectField } from './FormFields';
 
@@ -12,6 +18,12 @@ interface RequestOptionModalProps {
   organizations: ProjectOrganization[];
   /** Pre-selected parent agency when the form already has one chosen. */
   defaultOrganizationId: number | null;
+  /**
+   * The project's type. A requested scheme is filed under it — the project
+   * can only use a scheme of its own type — and its category list is that
+   * type's.
+   */
+  projectType: string;
 }
 
 type RequestType = 'scheme' | 'organization';
@@ -26,7 +38,12 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
   onHide,
   organizations,
   defaultOrganizationId,
+  projectType,
 }) => {
+  const projectTypeLabel =
+    PROJECT_TYPE_OPTIONS.find((option) => option.value === projectType)?.label ??
+    'Research Project';
+  const askDomain = projectTypeRules(projectType).schemeHasDomain;
   const [requestType, setRequestType] = useState<RequestType>('scheme');
   const [name, setName] = useState('');
   const [organizationId, setOrganizationId] = useState<string>(
@@ -98,7 +115,8 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
         name: name.trim(),
         organization_id: requestType === 'scheme' && organizationId ? Number(organizationId) : null,
         organization_name: requestType === 'scheme' ? organizationName.trim() : '',
-        domain: domain.trim(),
+        project_type: requestType === 'scheme' ? projectType : null,
+        domain: requestType === 'scheme' && askDomain ? domain.trim() : '',
         category: category.trim(),
         website: website.trim(),
       });
@@ -143,7 +161,12 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
                     name="requestType"
                     value={option.value}
                     checked={requestType === option.value}
-                    onChange={() => setRequestType(option.value)}
+                    onChange={() => {
+                      setRequestType(option.value);
+                      // The two kinds' categories are different lists, so a
+                      // pick made for one is never carried to the other.
+                      setCategory('');
+                    }}
                   />
                   <span>{option.label}</span>
                 </label>
@@ -154,6 +177,11 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
           <Field
             label={requestType === 'scheme' ? 'Scheme name' : 'Funding agency name'}
             htmlFor="pf-request-name"
+            hint={
+              requestType === 'scheme'
+                ? `Requested as a ${projectTypeLabel} scheme, the type of this project.`
+                : undefined
+            }
           >
             <input
               id="pf-request-name"
@@ -194,29 +222,43 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
                 </Field>
               )}
 
-              <Field label="Domain" htmlFor="pf-request-domain">
-                <input
-                  id="pf-request-domain"
-                  type="text"
-                  className="pf-input"
-                  value={domain}
-                  onChange={(event) => setDomain(event.target.value)}
-                  maxLength={255}
-                />
-              </Field>
+              {/* A travel grant scheme has no domain. */}
+              {askDomain && (
+                <Field label="Domain" htmlFor="pf-request-domain">
+                  <SelectField
+                    id="pf-request-domain"
+                    value={domain}
+                    onChange={setDomain}
+                    options={SCHEME_DOMAIN_OPTIONS}
+                    placeholder="Select Domain"
+                  />
+                </Field>
+              )}
             </>
           )}
 
           <div className="pf-modal__pair">
+            {/* A scheme's category is a closed list; an agency's is its type
+                (Government, Private, …) and stays free text. */}
             <Field label="Category" htmlFor="pf-request-category">
-              <input
-                id="pf-request-category"
-                type="text"
-                className="pf-input"
-                value={category}
-                onChange={(event) => setCategory(event.target.value)}
-                maxLength={150}
-              />
+              {requestType === 'scheme' ? (
+                <SelectField
+                  id="pf-request-category"
+                  value={category}
+                  onChange={setCategory}
+                  options={SCHEME_CATEGORY_OPTIONS_BY_TYPE[projectType] ?? []}
+                  placeholder="Select Category"
+                />
+              ) : (
+                <input
+                  id="pf-request-category"
+                  type="text"
+                  className="pf-input"
+                  value={category}
+                  onChange={(event) => setCategory(event.target.value)}
+                  maxLength={150}
+                />
+              )}
             </Field>
 
             <Field label="Website" htmlFor="pf-request-website">

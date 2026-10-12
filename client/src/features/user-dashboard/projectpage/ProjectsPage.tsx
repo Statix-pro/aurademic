@@ -2,7 +2,9 @@ import React, { useState, useEffect, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { PROJECT_TYPE_OPTIONS } from '../../projects/constants';
 import projectsApi from '../../projects/projectsApi';
 import '../../user-dashboard/userdashboard.css';
 import '../recordCard.css';
@@ -11,6 +13,7 @@ import './ProjectsPage.css';
 interface Project {
   id: number;
   title: string;
+  project_type?: string;
   team_members: string;
   agency_name?: string;
   scheme_name?: string;
@@ -43,6 +46,10 @@ const STATUS_LABELS: Record<string, string> = {
  */
 const displayStatus = (project: Project): string =>
   project.project_status || project.proposal_status || 'draft';
+
+const PROJECT_TYPE_LABELS: Record<string, string> = Object.fromEntries(
+  PROJECT_TYPE_OPTIONS.map((option) => [option.value, option.label]),
+);
 
 const budgetFormat = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
 
@@ -93,6 +100,7 @@ const ProjectsPage: React.FC = () => {
   const [alert, setAlert] = useState<{ type: AlertType; message: string } | null>(null);
   // Set while a delete is awaiting confirmation; the modal reads the title from it.
   const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
+  const [showTypeModal, setShowTypeModal] = useState(false);
 
   useEffect(() => {
     fetchProjects(currentPage, itemsPerPage);
@@ -202,8 +210,15 @@ const ProjectsPage: React.FC = () => {
     }
   };
 
+  // Adding starts with the kind of grant, as adding a publication does; every
+  // kind opens the same form, which records the pick and lets it be changed.
   const handleAdd = () => {
-    navigate('/project');
+    setShowTypeModal(true);
+  };
+
+  const handleTypeSelect = (projectType: string) => {
+    setShowTypeModal(false);
+    navigate(`/project?type=${projectType}`);
   };
 
   const handlePageChange = (newPage: number) => {
@@ -306,6 +321,11 @@ const ProjectsPage: React.FC = () => {
                             footer of their own the four buttons left a strip
                             of empty card as tall as a row of details. */}
                         <div className="pc-card__aside">
+                          {project.project_type && (
+                            <span className="pc-status pc-status--type">
+                              {PROJECT_TYPE_LABELS[project.project_type] ?? project.project_type}
+                            </span>
+                          )}
                           <span
                             className={`pc-status pc-status--${displayStatus(project).replace(/[^a-z0-9]/g, '-')}`}
                           >
@@ -412,6 +432,28 @@ const ProjectsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <CustomModal
+        show={showTypeModal}
+        onHide={() => setShowTypeModal(false)}
+        title="Select Project Type"
+        size="sm"
+        className="pc-type-modal"
+      >
+        <div className="pc-type-grid">
+          {PROJECT_TYPE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className="pc-type-btn"
+              onClick={() => handleTypeSelect(option.value)}
+            >
+              <i className={`fas ${option.icon}`} aria-hidden="true"></i>
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </CustomModal>
 
       <AlertModal
         show={Boolean(pendingDelete)}

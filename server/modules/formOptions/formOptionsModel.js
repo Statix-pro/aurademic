@@ -1,4 +1,9 @@
 import db from '../../config/connection.js';
+import {
+  toSchemeCategory,
+  toSchemeDomain,
+  toSchemeProjectType,
+} from '../shared/schemeVocabulary.js';
 import { toStoredWebsite } from '../shared/webUrl.js';
 
 const formOptionsModel = {
@@ -231,7 +236,8 @@ const formOptionsModel = {
   async getProjectSchemes() {
     try {
       const [rows] = await db.query(
-        `SELECT ps.id, ps.organization_id, ps.name, ps.domain, ps.category, ps.website,
+        `SELECT ps.id, ps.organization_id, ps.project_type, ps.name, ps.domain, ps.category,
+                ps.website,
                 ps.is_active, ps.sort_order, org.name AS organization_name
            FROM project_schemes ps
            JOIN project_organizations org ON ps.organization_id = org.id
@@ -245,14 +251,17 @@ const formOptionsModel = {
 
   async addProjectScheme(data) {
     try {
+      const projectType = toSchemeProjectType(data.project_type);
       const [result] = await db.query(
-        `INSERT INTO project_schemes (organization_id, name, domain, category, website, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO project_schemes
+           (organization_id, project_type, name, domain, category, website, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           data.organization_id,
+          projectType,
           data.name,
-          data.domain || null,
-          data.category || null,
+          toSchemeDomain(data.domain, projectType),
+          toSchemeCategory(data.category, projectType),
           toStoredWebsite(data.website),
           Number(data.sort_order) || 0,
         ],
@@ -267,32 +276,58 @@ const formOptionsModel = {
   },
 
   /**
-   * Moving a scheme to another funding agency would strand every project that
-   * already points at it: the project keeps its own funding_organization_id, so
-   * its next save fails the "scheme belongs to a different funding agency"
-   * check. The move is refused while such projects exist, in the same spirit as
+   * Moving a scheme to another funding agency or project type would strand
+   * every project that already points at it: the project keeps its own
+   * funding_organization_id and project_type, so its next save fails the
+   * "scheme belongs to a different funding agency" (or type) check. The move is
+   * refused while such projects exist, in the same spirit as
    * `deleteProjectScheme` deactivating instead of deleting.
    */
   async updateProjectScheme(id, data) {
     try {
       const website = toStoredWebsite(data.website);
       const organizationId = Number(data.organization_id);
+      const projectType = toSchemeProjectType(data.project_type);
 
       const [[current]] = await db.query(
-        'SELECT organization_id FROM project_schemes WHERE id = ? LIMIT 1',
+        `SELECT organization_id, project_type, domain, category
+           FROM project_schemes WHERE id = ? LIMIT 1`,
         [id],
       );
       if (!current) return false;
+      const typeChanged = current.project_type !== projectType;
 
-      if (Number(current.organization_id) !== organizationId) {
+      // LEGACY: a scheme saved before domain and category became closed lists
+      // may hold free text. Resubmitting that same value is let through, so
+      // editing the scheme's name or website is not blocked by a field the
+      // admin did not touch; changing it must pick a listed value. Remove once
+      // every `project_schemes` row holds a listed domain and category.
+      // Only while the type is unchanged: under a new type the value is checked
+      // against that type's list like any other.
+      // Trimmed on both sides: free text could have been saved with a stray
+      // space, which the form's select does not send back.
+      const legacyKeep = (value, stored, toListed) =>
+        !typeChanged && stored && String(value ?? '').trim() === String(stored).trim()
+          ? stored
+          : toListed(value, projectType);
+      const domain = legacyKeep(data.domain, current.domain, toSchemeDomain);
+      const category = legacyKeep(data.category, current.category, toSchemeCategory);
+
+      // A project's scheme must match both its agency and its type, so either
+      // move strands the projects already on the scheme.
+      const agencyChanged = Number(current.organization_id) !== organizationId;
+      if (agencyChanged || typeChanged) {
         const [[usage]] = await db.query(
           'SELECT COUNT(*) AS references_count FROM research_projects WHERE scheme_id = ?',
           [id],
         );
 
         if (Number(usage.references_count) > 0) {
+          const [what, where] = agencyChanged
+            ? ['funding agency', 'agency']
+            : ['project type', 'type'];
           const error = new Error(
-            'This scheme is used by existing projects, so its funding agency cannot be changed. Deactivate it and add the scheme under the new agency instead.',
+            `This scheme is used by existing projects, so its ${what} cannot be changed. Deactivate it and add the scheme under the new ${where} instead.`,
           );
           error.statusCode = 409;
           throw error;
@@ -301,14 +336,15 @@ const formOptionsModel = {
 
       const [result] = await db.query(
         `UPDATE project_schemes
-            SET organization_id = ?, name = ?, domain = ?, category = ?, website = ?,
-                is_active = ?, sort_order = ?
+            SET organization_id = ?, project_type = ?, name = ?, domain = ?, category = ?,
+                website = ?, is_active = ?, sort_order = ?
           WHERE id = ?`,
         [
           organizationId,
+          projectType,
           data.name,
-          data.domain || null,
-          data.category || null,
+          domain,
+          category,
           website,
           data.is_active === undefined ? 1 : Number(Boolean(data.is_active)),
           Number(data.sort_order) || 0,

@@ -5,10 +5,17 @@ import { Alert, Form } from 'react-bootstrap';
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomCheckbox from '../../../shared/components/ui/CustomCheckbox';
+import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
 import CustomInput from '../../../shared/components/ui/CustomInput';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import {
+  PROJECT_TYPE_OPTIONS,
+  SCHEME_CATEGORY_OPTIONS_BY_TYPE,
+  SCHEME_DOMAIN_OPTIONS,
+  projectTypeRules,
+} from '../../projects/constants';
 import { AdminIconButton, AdminScreenHeader, AdminTabs } from '../components/AdminScreen';
 
 /**
@@ -33,9 +40,27 @@ interface OrganizationRow {
   sort_order?: number;
 }
 
+/**
+ * A scheme's domain or category as `<option>`s: the closed list, plus the
+ * scheme's stored value when it is not on it.
+ *
+ * LEGACY: a scheme saved before the lists existed may hold free text. Offering
+ * it keeps the select from rendering blank, and the server lets that unchanged
+ * value through, so editing the scheme's other fields is not blocked. Remove
+ * once every scheme holds a listed domain and category.
+ */
+function schemeSelectOptions(options: { value: string; label: string }[], stored?: string | null) {
+  const legacyValue = stored && !options.some((option) => option.value === stored) ? stored : null;
+  return legacyValue
+    ? [{ value: legacyValue, label: `${legacyValue} (not on the list)` }, ...options]
+    : options;
+}
+
 interface SchemeRow {
   id: number;
   organization_id: number;
+  /** The kind of grant it funds; picks its category list. */
+  project_type?: string;
   organization_name?: string;
   name: string;
   domain?: string | null;
@@ -179,6 +204,13 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       .filter((head) => head.head_group === group)
       .reduce((highest, head) => Math.max(highest, head.sort_order ?? 0), 0) + 1;
 
+  // A save error belongs to the dialog; it is not left on the page behind it
+  // once the dialog is closed.
+  const closeModal = () => {
+    setShowModal(false);
+    setError('');
+  };
+
   const openCreate = () => {
     const defaultHeadGroup = headGroups[0] ?? 'Research Projects';
 
@@ -193,6 +225,7 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       schemes: {
         name: '',
         organization_id: organizationOptions[0]?.id,
+        project_type: 'research_project',
         is_active: 1,
         sort_order: 0,
       },
@@ -356,15 +389,23 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       render: (row: SchemeRow) => row.organization_name || <span className="admin-muted">—</span>,
     },
     {
+      key: 'project_type',
+      label: 'Type',
+      style: { width: '12%' },
+      render: (row: SchemeRow) =>
+        PROJECT_TYPE_OPTIONS.find((option) => option.value === row.project_type)?.label ??
+        row.project_type,
+    },
+    {
       key: 'domain',
       label: 'Domain',
-      style: { width: '18%' },
+      style: { width: '14%' },
       render: (row: SchemeRow) => row.domain || <span className="admin-muted">—</span>,
     },
     {
       key: 'category',
       label: 'Category',
-      style: { width: '16%' },
+      style: { width: '14%' },
       render: (row: SchemeRow) => row.category || <span className="admin-muted">—</span>,
     },
   ];
@@ -454,7 +495,10 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
         <div className="admin-screen__header-actions admin-screen__tab-actions">{addButton}</div>
       )}
 
-      {error && <Alert variant="danger">{error}</Alert>}
+      {/* One error state serves the page and the dialog; while the dialog is
+          open its own copy is the one being read, so the page's would only
+          repeat it behind the backdrop. */}
+      {error && !showModal && <Alert variant="danger">{error}</Alert>}
 
       <div className="admin-card">
         <CustomTable
@@ -468,7 +512,7 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
 
       <CustomModal
         show={showModal}
-        onHide={() => setShowModal(false)}
+        onHide={closeModal}
         className="admin-modal"
         title={`${isEditing ? 'Edit' : 'Add'} ${TAB_LABELS[activeTab]}`}
         footer={
@@ -476,7 +520,7 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
             <CustomButton
               variant="light"
               className="admin-btn-secondary"
-              onClick={() => setShowModal(false)}
+              onClick={closeModal}
               disabled={loading}
             >
               Cancel
@@ -601,24 +645,89 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
               </>
             )}
 
+            {/* A scheme's domain and category are closed lists, checked again on
+                the server; an organization's category is its type and stays
+                free text. The type decides the category list, so a change of
+                type clears the category — and the domain, for a type that has
+                none. */}
             {activeTab === 'schemes' && (
-              <CustomInput
-                label="Domain"
-                name="pfo-domain"
-                value={current.domain || ''}
-                onChange={(value) => setCurrent({ ...current, domain: value })}
+              <CustomDropdown
+                label="Project type"
+                name="pfo-project-type"
+                options={PROJECT_TYPE_OPTIONS}
+                value={
+                  PROJECT_TYPE_OPTIONS.find(
+                    (option) => option.value === (current.project_type || 'research_project'),
+                  ) ?? null
+                }
+                onChange={(selected) => {
+                  const projectType = String((selected as OptionType | null)?.value ?? '');
+                  if (!projectType || projectType === current.project_type) return;
+                  // LEGACY: the server lets a free-text domain through only
+                  // while the type is unchanged, so under a new type it would
+                  // refuse one; it is cleared here rather than on a failed save.
+                  const legacyDomain =
+                    Boolean(current.domain) &&
+                    !SCHEME_DOMAIN_OPTIONS.some((option) => option.value === current.domain);
+                  setCurrent({
+                    ...current,
+                    project_type: projectType,
+                    category: null,
+                    ...(projectTypeRules(projectType).schemeHasDomain && !legacyDomain
+                      ? {}
+                      : { domain: null }),
+                  });
+                }}
               />
             )}
 
+            {activeTab === 'schemes' &&
+              [
+                ...(projectTypeRules(current.project_type || 'research_project').schemeHasDomain
+                  ? [{ key: 'domain' as const, label: 'Domain', options: SCHEME_DOMAIN_OPTIONS }]
+                  : []),
+                {
+                  key: 'category' as const,
+                  label: 'Category',
+                  options:
+                    SCHEME_CATEGORY_OPTIONS_BY_TYPE[current.project_type || 'research_project'] ??
+                    [],
+                },
+              ].map((field) => {
+                const options = [
+                  { value: '', label: 'Not stated' },
+                  ...schemeSelectOptions(field.options, current[field.key]),
+                ];
+                return (
+                  <CustomDropdown
+                    key={field.key}
+                    label={field.label}
+                    name={`pfo-${field.key}`}
+                    options={options}
+                    value={
+                      options.find((option) => option.value === (current[field.key] || '')) ?? null
+                    }
+                    onChange={(selected) =>
+                      setCurrent({
+                        ...current,
+                        [field.key]: String((selected as OptionType | null)?.value ?? '') || null,
+                      })
+                    }
+                  />
+                );
+              })}
+
             {activeTab !== 'budget-heads' && (
               <>
-                <CustomInput
-                  label="Category"
-                  name="pfo-category"
-                  placeholder={activeTab === 'organizations' ? 'Government' : 'Research Project'}
-                  value={current.category || ''}
-                  onChange={(value) => setCurrent({ ...current, category: value })}
-                />
+                {activeTab === 'organizations' && (
+                  <CustomInput
+                    label="Category"
+                    name="pfo-category"
+                    placeholder="Government"
+                    value={current.category || ''}
+                    onChange={(value) => setCurrent({ ...current, category: value })}
+                  />
+                )}
 
                 <CustomInput
                   label="Website"

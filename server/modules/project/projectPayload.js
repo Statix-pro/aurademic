@@ -10,7 +10,26 @@
  * Kept free of database and filesystem access so it can be unit tested.
  */
 
+import { SCHEME_PROJECT_TYPES } from '../shared/schemeVocabulary.js';
+
 export const DRIVEN_BY_VALUES = ['faculty', 'student'];
+
+/**
+ * The `research_projects.project_type` enum, picked when a project is added.
+ * The same list a scheme's type is drawn from, so it is defined once.
+ */
+export const PROJECT_TYPES = SCHEME_PROJECT_TYPES;
+
+/** The `research_projects.level` enum, asked of an Event or Fellowship. */
+export const LEVELS = ['international', 'national'];
+
+/**
+ * Which of Research Type and Level a project type asks for. An Event or a
+ * Fellowship is classed by level instead of research type, and a Travel Grant
+ * by neither.
+ */
+const ASKS_RESEARCH_TYPE = ['research_project'];
+const ASKS_LEVEL = ['event', 'fellowship'];
 
 export const MEMBER_TYPES = ['faculty', 'student', 'external'];
 
@@ -23,6 +42,20 @@ export const PROPOSAL_STATUSES = [
   'result_announced',
 ];
 
+/** The `research_projects.research_type` enum, offered on Proposal Details. */
+export const RESEARCH_TYPES = ['basic', 'applied', 'experimental', 'statistical', 'not_applicable'];
+
+/** The `research_projects.funding_source` enum, offered on Call for Details. */
+export const FUNDING_SOURCES = [
+  'central_government',
+  'state_government',
+  'public_sector_industry',
+  'private_sector_industry',
+  'startup',
+  'higher_education',
+  'other',
+];
+
 export const SUBMISSION_MODES = ['online', 'offline', 'email', 'portal', 'post'];
 
 export const RESULT_MODES = ['email', 'website', 'letter', 'portal', 'phone'];
@@ -30,6 +63,9 @@ export const RESULT_MODES = ['email', 'website', 'letter', 'portal', 'phone'];
 export const FINAL_RESULTS = ['selected', 'not_selected'];
 
 export const SANCTION_MODES = ['installment', 'advance', 'reimbursement', 'advance_reimbursement'];
+
+/** The `research_projects.grant_credited_to` enum, offered on the Transaction tab. */
+export const GRANT_CREDIT_TARGETS = ['pfms', 'institution_account', 'individual_account'];
 
 export const PROJECT_STATUSES = ['ongoing', 'completed', 'closed'];
 
@@ -1096,7 +1132,15 @@ function normalizeFacilities(raw, errors) {
           // The ID belongs to the listing: switching the toggle off says the
           // facility is not on I-STEM, so an ID typed before that is not kept.
           istem_id: istemListed ? toNullableString(row?.istem_id ?? row?.istemId, 100) : null,
-          supplier_details: toNullableString(row?.supplier_details ?? row?.supplierDetails, 1000),
+          supplier_name: toNullableString(row?.supplier_name ?? row?.supplierName, 255),
+          supplier_address: toNullableString(row?.supplier_address ?? row?.supplierAddress, 500),
+          contact_person: toNullableString(row?.contact_person ?? row?.contactPerson, 150),
+          contact_designation: toNullableString(
+            row?.contact_designation ?? row?.contactDesignation,
+            150,
+          ),
+          contact_mobile: toMobile(row?.contact_mobile ?? row?.contactMobile),
+          contact_email: toNullableString(row?.contact_email ?? row?.contactEmail, 255),
           // The form keys its inline errors by the index it rendered the row at,
           // so validation below must report the submitted index and not the one
           // left after blank rows are dropped.
@@ -1114,6 +1158,15 @@ function normalizeFacilities(raw, errors) {
         }
         if (row.istem_listed && !row.istem_id) {
           errors.push({ field: `${field}.istem_id`, message: 'Enter the I-STEM ID.' });
+        }
+        if (row.contact_mobile && !MOBILE_PATTERN.test(row.contact_mobile)) {
+          errors.push({
+            field: `${field}.contact_mobile`,
+            message: 'Enter a 10-digit mobile number.',
+          });
+        }
+        if (row.contact_email && !EMAIL_PATTERN.test(row.contact_email)) {
+          errors.push({ field: `${field}.contact_email`, message: 'Enter a valid email address.' });
         }
         return { ...row, display_order: index };
       })
@@ -1526,10 +1579,19 @@ export function normalizeProjectPayload(
     errors.push({ field: 'title', message: 'Title is required.' });
   }
 
+  const projectType = toEnum(
+    body.project_type ?? body.projectType,
+    PROJECT_TYPES,
+    'project_type',
+    errors,
+    { fallback: 'research_project' },
+  );
+
   const project = {
     driven_by: toEnum(body.driven_by ?? body.drivenBy, DRIVEN_BY_VALUES, 'driven_by', errors, {
       fallback: 'faculty',
     }),
+    project_type: projectType,
     title,
     project_cost: toAmount(body.project_cost ?? body.projectCost, 'project_cost', errors),
     duration_years: toCount(
@@ -1545,8 +1607,21 @@ export function normalizeProjectPayload(
       12,
     ),
     duration_days: toCount(body.duration_days ?? body.durationDays, 'duration_days', errors, 31),
+    // Each is kept only for the types that ask it: a value the form no longer
+    // shows — left in state after the type was changed — is not saved as if
+    // it still described the project.
+    research_type: ASKS_RESEARCH_TYPE.includes(projectType)
+      ? toEnum(body.research_type ?? body.researchType, RESEARCH_TYPES, 'research_type', errors)
+      : null,
+    level: ASKS_LEVEL.includes(projectType) ? toEnum(body.level, LEVELS, 'level', errors) : null,
 
     funding_organization_id: toId(body.funding_organization_id ?? body.fundingOrganizationId),
+    funding_source: toEnum(
+      body.funding_source ?? body.fundingSource,
+      FUNDING_SOURCES,
+      'funding_source',
+      errors,
+    ),
     scheme_id: toId(body.scheme_id ?? body.schemeId),
 
     collaborators_enabled: collaboratorsEnabled,
@@ -1604,6 +1679,12 @@ export function normalizeProjectPayload(
       body.sanction_mode ?? body.sanctionMode,
       SANCTION_MODES,
       'sanction_mode',
+      errors,
+    ),
+    grant_credited_to: toEnum(
+      body.grant_credited_to ?? body.grantCreditedTo,
+      GRANT_CREDIT_TARGETS,
+      'grant_credited_to',
       errors,
     ),
 

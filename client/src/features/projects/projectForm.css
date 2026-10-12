@@ -1336,6 +1336,164 @@
 }
 
 /* --------------------------------------------------------------------------
+   Finance sub-tabs
+   -------------------------------------------------------------------------- */
+
+/* Budget, Transaction and Summary as three equal segments of one card, each
+   with the figure that says where it stands. A second row of pills under the
+   tabs above read as the same control twice; a card of a different shape says
+   "these are the parts of Finance" instead. */
+.pf-finance-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border-radius: var(--pf-radius);
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 6px 22px rgb(0 62 105 / 6%);
+}
+
+.pf-finance-nav__item {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  /* A little more below than above: the Summary's bar sits in that room. */
+  padding: 9px 16px 12px;
+  border: 0;
+  border-left: 1px solid #e6edf6;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.pf-finance-nav__item:first-child {
+  border-left: 0;
+}
+
+.pf-finance-nav__item:hover {
+  background: #f7faff;
+}
+
+.pf-finance-nav__item:focus-visible {
+  outline: 2px solid var(--primary-color, #0069ab);
+  outline-offset: -2px;
+}
+
+/* The selected segment: filled with the primary colour, as the selected tab
+   above it is. A pale tint read as the page background showing through the
+   card rather than as a selection. */
+.pf-finance-nav__item.is-active,
+.pf-finance-nav__item.is-active:hover {
+  background: var(--primary-color, #0069ab);
+}
+
+/* White on the fill would vanish into an outline drawn in the same blue, so
+   the selected segment's focus ring is drawn in white instead. */
+.pf-finance-nav__item.is-active:focus-visible {
+  outline-color: #fff;
+}
+
+.pf-finance-nav__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #e1f0ff;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__icon {
+  background: #fff;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-finance-nav__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.pf-finance-nav__label {
+  color: #1f2d3d;
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__label {
+  color: #fff;
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__caption {
+  color: rgb(255 255 255 / 85%);
+}
+
+/* One line, however long the figure: the segment keeps its height. */
+.pf-finance-nav__caption {
+  overflow: hidden;
+  color: #6b7a90;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How much of the budget is used, along the foot of the Summary segment.
+   Out of the text's flow, so Summary's label and caption sit level with the
+   other two segments' instead of riding up over the bar. It starts where the
+   text does: the item's padding plus the icon and the gap after it. */
+.pf-finance-nav__meter {
+  position: absolute;
+  right: 16px;
+  bottom: 5px;
+  left: calc(16px + 30px + 10px);
+  height: 3px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #e1f0ff;
+}
+
+.pf-finance-nav__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary-color, #0069ab);
+}
+
+/* On the blue fill the bar turns white, over a faint white track. */
+.pf-finance-nav__item.is-active .pf-finance-nav__meter {
+  background: rgb(255 255 255 / 30%);
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__meter > span {
+  background: #fff;
+}
+
+@media (width <= 720px) {
+  .pf-finance-nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-finance-nav__item {
+    border-top: 1px solid #e6edf6;
+    border-left: 0;
+  }
+
+  .pf-finance-nav__item:first-child {
+    border-top: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
    Income heads
    -------------------------------------------------------------------------- */
 
@@ -1728,12 +1886,45 @@
   min-width: 0;
 }
 
-/* Supplier Details is a line of its own under the strip, split from it by the
-   same rule the design draws between the two. */
+/* Supplier Details and Contact Details are two lines under the strip, each
+   split from the one above by the rule the design draws between them. They
+   share one grid so both lines' fields start at the same edge: the first
+   column is as wide as the longer label, and each line takes its columns
+   from the grid through `subgrid`. Name and Address each span two of the
+   four field tracks, so they split the line evenly; the contact's Mobile is
+   ten digits and gets the narrowest track. */
+.pf-facility__supplier {
+  display: grid;
+  grid-template-columns:
+    max-content minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.75fr)
+    minmax(0, 1.45fr);
+  column-gap: 12px;
+}
+
 .pf-facility__supplier-line {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #e2e8f2;
+}
+
+.pf-facility__supplier-line .pf-ledger__detail-label {
+  margin-right: 10px;
+}
+
+.pf-facility__supplier-line .pf-input {
+  min-width: 0;
+}
+
+.pf-facility__supplier-name {
+  grid-column: 2 / span 2;
+}
+
+.pf-facility__supplier-address {
+  grid-column: 4 / span 2;
 }
 
 /* Manpower tab. Same strip as the Facility tab; Email and Remarks are the two
@@ -1885,6 +2076,13 @@
   grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
   gap: 18px;
   align-items: start;
+}
+
+/* Date, Mode and Account are one column of labels, so the date box and both
+   radio rows start at the same edge. Each label sits in its own row's grid,
+   so they share the width of the longest ("Account") rather than a column. */
+.pf-sanction__label {
+  min-width: 4.25rem;
 }
 
 .pf-presentation__fields,
