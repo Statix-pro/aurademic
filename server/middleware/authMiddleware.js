@@ -3,6 +3,13 @@ import jwt from 'jsonwebtoken';
 import { PARTICIPANT_TOKEN_AUDIENCE } from '../config/participantAuth.js';
 import accessControlModel from '../modules/accessControl/accessControlModel.js';
 
+// Declared here rather than imported from accessControlModel.js, which most of
+// the test suite replaces with a `default`-only mock: a named import off that
+// module throws the moment this line runs under test. The same literal is in
+// accessControlModel.js and in shared/workflow/workflowValidators.js; all three
+// have to agree, and the tests below pin that they do.
+const SUPER_ADMIN_ROLE_CODE = 'super_admin';
+
 const extractToken = (req) => {
   const authHeader = req.headers.authorization;
 
@@ -126,19 +133,59 @@ const mergeAuthorizationSnapshot = async (user) => {
 
   const authorization = await accessControlModel.getUserAuthorizationSnapshot(user.id);
 
-  const roles =
-    authorization.roles.length > 0 ? authorization.roles : uniqueStringArray(user.roles);
-  const permissions =
-    authorization.permissions.length > 0
-      ? authorization.permissions
-      : uniqueStringArray(user.permissions);
+  // The token's roles and permissions are a copy of this same snapshot, taken
+  // when the token was signed and then frozen for its 24h lifetime. Falling
+  // back to them can therefore only ever restore authority the database has
+  // since taken away -- there is no grant the token can hold that the database
+  // legitimately should not. The one exception is a snapshot that could not be
+  // read at all: `degraded` marks the missing-RBAC-table branch, where the
+  // stale copy is better than locking the estate out.
+  //
+  // This matters even for a user that still exists. Every user row gets a
+  // `base_user` assignment, so a resolved snapshot always carries a role, but
+  // its permission list is empty whenever that user's roles grant nothing --
+  // and the old fallback then handed back whatever the token was signed with.
+  //
+  // `super_admin` is stripped from the degraded fallback on purpose. The rest
+  // of a token's roles only ever name what the database already granted, but
+  // this one is not merely a grant -- `isSuperAdminActor` in
+  // shared/workflow/workflowValidators.js reads `roles` directly and treats it
+  // as full authority, without consulting `isSuperAdmin` below. Passing it
+  // through would leave the degraded branch honouring exactly the forged claim
+  // the rest of this function refuses, on the one code path where the database
+  // cannot contradict it: super admin has no `users` column behind it, only a
+  // role assignment, so when the RBAC tables are unreadable it is unverifiable
+  // and the answer has to be no.
+  const roles = authorization.degraded
+    ? uniqueStringArray(user.roles).filter((role) => role !== SUPER_ADMIN_ROLE_CODE)
+    : authorization.roles;
+  const permissions = authorization.degraded
+    ? uniqueStringArray(user.permissions)
+    : authorization.permissions;
 
   return {
     ...user,
     roles,
     permissions,
-    isSuperAdmin: authorization.isSuperAdmin || user.isSuperAdmin,
-    isAdmin: authorization.isAdmin || user.isAdmin,
+    // Authority comes from the database, never from the token. A token may say
+    // who you are; it may not say what you may do.
+    //
+    // These were `authorization.X || user.X`. Because `user` is the DECODED
+    // TOKEN, that OR meant a self-signed token asserting isSuperAdmin was
+    // super-admin regardless of the database — and getUserAuthorizationSnapshot
+    // returns an empty snapshot for an id with no users row, so the id did not
+    // have to exist. permissionMiddleware short-circuits on isSuperAdmin, so
+    // that claim bypassed every permission check on every write route.
+    //
+    // NOTE ON THE BLAST RADIUS: getUserAuthorizationSnapshot has a catch branch
+    // for a missing RBAC table that returns isSuperAdmin false for everyone,
+    // and the old fallback silently rescued an administrator in that state.
+    // Failing closed is correct for an authority check, but it means a missing
+    // table is now a lockout rather than a degradation. `verifyRbacSchema` in
+    // server.js names the missing tables in the boot log, so that state is read
+    // off startup rather than guessed at from a user's 403.
+    isSuperAdmin: authorization.isSuperAdmin,
+    isAdmin: authorization.isAdmin,
   };
 };
 

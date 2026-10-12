@@ -34,6 +34,7 @@ import {
 
 const normalizeText = (v) => String(v || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+const BENEFICIARY_CATEGORY_OPTIONS = ['Student', 'Faculty', 'Staff'];
 const ACCOUNT_TYPE_OPTIONS = ['Savings', 'Current'];
 const EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 
@@ -42,6 +43,17 @@ const normalizeAccountType = (value) =>
   ACCOUNT_TYPE_OPTIONS.find(
     (option) => option.toLowerCase() === normalizeText(value).toLowerCase(),
   ) || null;
+const normalizeBeneficiaryCategory = (value) =>
+  BENEFICIARY_CATEGORY_OPTIONS.find(
+    (option) => option.toLowerCase() === normalizeText(value).toLowerCase(),
+  ) || '';
+/**
+ * Only an individual from inside the institution has a Student / Faculty /
+ * Staff category: an External payee is outside it and an organization is an
+ * entity rather than a person, so both are stored with no category at all.
+ */
+const beneficiaryCategoryApplies = (beneficiaryType, beneficiaryOrg) =>
+  beneficiaryType !== 'organization' && (beneficiaryOrg === 'KSRCT' || beneficiaryOrg === 'KSREI');
 const sanitizeAlphaNumericUpper = (value, maxLength) =>
   normalizeText(value)
     .toUpperCase()
@@ -918,14 +930,22 @@ async function getCumulativeAdvanceSummary(
       legacyMatchParams = [lineId, normalizedHead, normalizedSubHead];
     }
   } else if (!lineId) {
-    // NEW: prefer ID match; fall back to text for un-backfilled rows.
+    // NEW: the ID match catches rows whose head/sub was renamed in the catalog. The text match
+    // runs beside it — never instead of it — for two reasons:
+    //   LEGACY: rows pre-dating the catalog, which carry snapshot text and no IDs. Remove this
+    //     reason once every advance row is backfilled:
+    //       SELECT COUNT(*) FROM expenditure_advance_rows WHERE budget_head_id IS NULL;
+    //   Rows pointing at a DUPLICATE catalog entry of the same name. No backfill fixes those,
+    //     so this reason stands until duplicates are merged out of the catalog.
+    // Both arms must count, whatever the other one holds — callers that resolve IDs (settlement
+    // validation) and callers that don't (the advance-summary endpoint the form reads) have to
+    // arrive at the same total or the form's figure gets rejected.
     if (headIdVal && subIdVal) {
       rowMatchClause = `
         (
           (ar.budget_head_id = ? AND ar.budget_sub_head_id = ?)
           OR (
-            ar.budget_head_id IS NULL
-            AND LOWER(TRIM(ar.budget_head)) = ?
+            LOWER(TRIM(ar.budget_head)) = ?
             AND LOWER(TRIM(ar.sub_head)) = ?
           )
         )
@@ -1885,14 +1905,24 @@ export async function getAdvanceSummary({
   dashboardRowId = null,
   workflowRowRef = null,
 } = {}) {
+  // Resolve the catalog IDs the settlement validation resolves too, so the total the form
+  // reads here and the total the submission is checked against come from the same matching.
+  const resolvedIds =
+    toPositiveInt(budgetHeadId) || toPositiveInt(budgetSubHeadId)
+      ? {
+          budget_head_id: toPositiveInt(budgetHeadId),
+          budget_sub_head_id: toPositiveInt(budgetSubHeadId),
+        }
+      : await resolveCatalogIds(db, head, subHead);
+
   return getCumulativeAdvanceSummary(db, {
     userId,
     employeeId,
     budgetLineId,
     head,
     subHead,
-    budgetHeadId,
-    budgetSubHeadId,
+    budgetHeadId: resolvedIds?.budget_head_id ?? null,
+    budgetSubHeadId: resolvedIds?.budget_sub_head_id ?? null,
     financeRequestId,
     rowIndex,
     sourceRequestId,
@@ -1902,6 +1932,183 @@ export async function getAdvanceSummary({
 }
 
 // ─── Payee master ─────────────────────────────────────────────────────────────
+
+const PAYEE_SEARCHABLE_COLUMNS_SQL = `
+  LOWER(CONCAT_WS(' ',
+    COALESCE(ep.payee_name, ''),
+    COALESCE(ep.account_name, ''),
+    COALESCE(ep.account_no, ''),
+    COALESCE(ep.bank_name, ''),
+    COALESCE(ep.branch_name, ''),
+    COALESCE(ep.ifsc, ''),
+    COALESCE(ep.pan_number, ''),
+    COALESCE(ep.beneficiary_type, ''),
+    COALESCE(ep.beneficiary_org, ''),
+    COALESCE(ep.beneficiary_category, ''),
+    COALESCE(ep.organization_type, ''),
+    COALESCE(ep.msme, ''),
+    COALESCE(ep.gstin, ''),
+    COALESCE(ep.tds_details, ''),
+    COALESCE(ep.tds_section, '')
+  ))
+`;
+
+// Mirrors normalizePayeeRecord() so the SQL tiles and the rendered badges can
+// never disagree: blank status means pending unless the row was approved.
+const PAYEE_STATUS_SQL = `
+  LOWER(TRIM(COALESCE(
+    NULLIF(TRIM(ep.approval_status), ''),
+    CASE WHEN ep.approved_at IS NOT NULL THEN 'approved' ELSE 'pending' END
+  )))
+`;
+
+const PAYEE_BENEFICIARY_TYPE_SQL = `
+  LOWER(TRIM(COALESCE(NULLIF(TRIM(ep.beneficiary_type), ''), 'individual')))
+`;
+
+// Mirrors resolveCanonicalPayeeName(): a legacy row can carry the beneficiary
+// org ('KSRCT'/'KSREI'/'External') in payee_name, and the screen then renders
+// account_name instead. Now that paging is server-side, the sort has to follow
+// the name that is actually rendered, or an alphabetical list breaks across
+// page boundaries. CAST(... AS BINARY) keeps the match case-sensitive, as
+// isBeneficiaryOrgValue() is.
+const PAYEE_DISPLAY_NAME_SQL = `
+  COALESCE(
+    NULLIF(
+      CASE
+        WHEN CAST(TRIM(COALESCE(ep.payee_name, '')) AS BINARY)
+             IN (${BENEFICIARY_ORG_OPTIONS.map((option) => `'${option}'`).join(', ')})
+          THEN ''
+        ELSE TRIM(COALESCE(ep.payee_name, ''))
+      END,
+      ''
+    ),
+    NULLIF(TRIM(COALESCE(ep.account_name, '')), ''),
+    TRIM(COALESCE(ep.payee_name, '')),
+    ''
+  )
+`;
+
+const PAYEE_DIRECTORY_STATUSES = ['pending', 'approved', 'rejected'];
+const PAYEE_DIRECTORY_BENEFICIARY_TYPES = ['individual', 'organization'];
+const PAYEE_DIRECTORY_MAX_LIMIT = 100;
+
+// A payee search is a literal substring match, so `%`, `_` and `\` typed into
+// the box must not be read as LIKE syntax — without this, searching "50%"
+// matches every payee and a trailing backslash escapes the closing wildcard.
+const escapeLikeLiteral = (value) => value.replace(/[\\%_]/g, '\\$&');
+
+const buildPayeeDirectoryFilters = ({ search, beneficiaryType }) => {
+  const clauses = ['ep.is_active = 1'];
+  const params = [];
+
+  const normalizedBeneficiaryType = normalizeText(beneficiaryType).toLowerCase();
+  if (PAYEE_DIRECTORY_BENEFICIARY_TYPES.includes(normalizedBeneficiaryType)) {
+    clauses.push(`${PAYEE_BENEFICIARY_TYPE_SQL} = ?`);
+    params.push(normalizedBeneficiaryType);
+  }
+
+  normalizeText(search)
+    .split(/\s+/)
+    .map((term) => term.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 8)
+    .forEach((term) => {
+      clauses.push(`${PAYEE_SEARCHABLE_COLUMNS_SQL} LIKE ? ESCAPE '\\\\'`);
+      params.push(`%${escapeLikeLiteral(term)}%`);
+    });
+
+  return { where: clauses.join('\n    AND '), params };
+};
+
+/**
+ * Count of every active payee still awaiting approval, ignoring the directory's
+ * search and beneficiary filters — the figure the "Payees" nav badge shows.
+ */
+async function countPendingPayees() {
+  const [[row]] = await db.execute(
+    `SELECT COUNT(*) AS pending_count
+       FROM expenditure_payees ep
+      WHERE ep.is_active = 1
+        AND ${PAYEE_STATUS_SQL} = 'pending'`,
+    [],
+  );
+  return Number(row?.pending_count || 0);
+}
+
+/**
+ * Paged reader for the payee management directory.
+ *
+ * Unlike listPayees() (a typeahead helper that returns a bare array), this
+ * returns one page of rows plus server-side totals, so the screen never has to
+ * hold the whole payee master in memory to know how many records exist.
+ */
+export async function listPayeeDirectory({
+  search = '',
+  status = 'all',
+  beneficiaryType = 'all',
+  limit = 20,
+  offset = 0,
+} = {}) {
+  const limitNum = Math.min(Math.max(Number(limit) || 20, 1), PAYEE_DIRECTORY_MAX_LIMIT);
+  const offsetNum = Math.max(Number(offset) || 0, 0);
+  const normalizedStatus = normalizeText(status).toLowerCase();
+  const statusFilter = PAYEE_DIRECTORY_STATUSES.includes(normalizedStatus) ? normalizedStatus : '';
+  const { where, params } = buildPayeeDirectoryFilters({ search, beneficiaryType });
+
+  // Status counts deliberately ignore the status filter so every tile keeps its
+  // full value while one status is being browsed.
+  const [[countRow]] = await db.execute(
+    `SELECT
+       COUNT(*) AS all_count,
+       ${PAYEE_DIRECTORY_STATUSES.map(
+         (value) =>
+           `SUM(CASE WHEN ${PAYEE_STATUS_SQL} = '${value}' THEN 1 ELSE 0 END) AS ${value}_count`,
+       ).join(',\n       ')}
+     FROM expenditure_payees ep
+     WHERE ${where}`,
+    params,
+  );
+
+  const counts = {
+    all: Number(countRow?.all_count || 0),
+    pending: Number(countRow?.pending_count || 0),
+    approved: Number(countRow?.approved_count || 0),
+    rejected: Number(countRow?.rejected_count || 0),
+  };
+  const total = statusFilter ? counts[statusFilter] : counts.all;
+
+  // counts.pending narrows with the search box, which is right for the tile but
+  // wrong for the "Payees" nav badge — that has to keep saying how many payees
+  // await approval in total, not how many the current query happens to show.
+  const isFiltered = params.length > 0;
+  const pendingTotal = isFiltered ? await countPendingPayees() : counts.pending;
+
+  if (!total) {
+    return { rows: [], total: 0, counts, pendingTotal, limit: limitNum, offset: offsetNum };
+  }
+
+  const [rows] = await db.execute(
+    `SELECT ep.* FROM expenditure_payees ep
+      WHERE ${where}
+        ${statusFilter ? `AND ${PAYEE_STATUS_SQL} = ?` : ''}
+      ORDER BY
+        CASE WHEN ${PAYEE_STATUS_SQL} = 'pending' THEN 0 ELSE 1 END,
+        ${PAYEE_DISPLAY_NAME_SQL} ASC,
+        ep.id ASC
+      LIMIT ${limitNum} OFFSET ${offsetNum}`,
+    statusFilter ? [...params, statusFilter] : params,
+  );
+
+  return {
+    rows: rows.map(normalizePayeeRecord),
+    total,
+    counts,
+    pendingTotal,
+    limit: limitNum,
+    offset: offsetNum,
+  };
+}
 
 export async function listPayees({ search = '', limit = 20, offset = 0, status = 'all' } = {}) {
   const q = normalizeText(search);
@@ -1925,24 +2132,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
   const rowAccountCompareSql = `
     REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(epr.account_no, ''))), ' ', ''), '-', ''), '\t', '')
   `;
-  const payeeSearchableColumns = `
-    LOWER(CONCAT_WS(' ',
-      COALESCE(ep.payee_name, ''),
-      COALESCE(ep.account_name, ''),
-      COALESCE(ep.account_no, ''),
-      COALESCE(ep.bank_name, ''),
-      COALESCE(ep.branch_name, ''),
-      COALESCE(ep.ifsc, ''),
-      COALESCE(ep.pan_number, ''),
-      COALESCE(ep.beneficiary_type, ''),
-      COALESCE(ep.beneficiary_org, ''),
-      COALESCE(ep.organization_type, ''),
-      COALESCE(ep.msme, ''),
-      COALESCE(ep.gstin, ''),
-      COALESCE(ep.tds_details, ''),
-      COALESCE(ep.tds_section, '')
-    ))
-  `;
+  const payeeSearchableColumns = PAYEE_SEARCHABLE_COLUMNS_SQL;
   const payeeRowSearchableColumns = `
     LOWER(CONCAT_WS(' ',
       COALESCE(epr.payee_name, ''),
@@ -1981,6 +2171,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
            UPPER(TRIM(COALESCE(ifsc, ''))) AS ifsc,
            beneficiary_type,
            beneficiary_org,
+           beneficiary_category,
            organization_type,
            msme,
            gstin,
@@ -2014,6 +2205,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
            UPPER(TRIM(COALESCE(NULLIF(TRIM(epr.ifsc), ''), ep.ifsc, ''))) AS ifsc,
            COALESCE(NULLIF(TRIM(epr.beneficiary_type), ''), ep.beneficiary_type) AS beneficiary_type,
            COALESCE(NULLIF(TRIM(epr.beneficiary_org), ''), ep.beneficiary_org) AS beneficiary_org,
+           ep.beneficiary_category,
            COALESCE(NULLIF(TRIM(epr.organization_type), ''), ep.organization_type) AS organization_type,
            COALESCE(NULLIF(TRIM(epr.msme), ''), ep.msme) AS msme,
            COALESCE(NULLIF(TRIM(epr.gstin), ''), ep.gstin) AS gstin,
@@ -2083,6 +2275,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
        UPPER(TRIM(COALESCE(NULLIF(TRIM(epr.ifsc), ''), ep.ifsc, ''))) AS ifsc,
        COALESCE(NULLIF(TRIM(epr.beneficiary_type), ''), ep.beneficiary_type) AS beneficiary_type,
        COALESCE(NULLIF(TRIM(epr.beneficiary_org), ''), ep.beneficiary_org) AS beneficiary_org,
+       ep.beneficiary_category,
        COALESCE(NULLIF(TRIM(epr.organization_type), ''), ep.organization_type) AS organization_type,
        COALESCE(NULLIF(TRIM(epr.msme), ''), ep.msme) AS msme,
        COALESCE(NULLIF(TRIM(epr.gstin), ''), ep.gstin) AS gstin,
@@ -2152,6 +2345,10 @@ export async function updatePayeeById(id, payeeData = {}) {
     ? beneficiaryOrgRaw
     : null;
   const accountType = normalizeAccountType(payeeData.account_type);
+  const categoryApplies = beneficiaryCategoryApplies(beneficiaryType, beneficiaryOrg);
+  const beneficiaryCategory = categoryApplies
+    ? normalizeBeneficiaryCategory(payeeData.beneficiary_category)
+    : '';
   const gstin = sanitizeAlphaNumericUpper(payeeData.gstin, 15);
   const panNumber = sanitizeAlphaNumericUpper(
     payeeData.pan_number || extractPanFromGstin(gstin),
@@ -2163,6 +2360,12 @@ export async function updatePayeeById(id, payeeData = {}) {
   }
   if (!beneficiaryOrg) throw new Error('beneficiary_org is required');
   if (!accountType) throw new Error('account_type must be Savings or Current');
+  // Unlike upsertPayee, this path is only ever reached from a payee form, so
+  // an internal individual arriving without a category is an incomplete edit
+  // rather than an unrelated save that should leave the stored one alone.
+  if (categoryApplies && !beneficiaryCategory) {
+    throw new Error('beneficiary_category must be Student, Faculty or Staff');
+  }
 
   const [existingRows] = await db.execute(
     'SELECT id FROM expenditure_payees WHERE id = ? AND is_active = 1 LIMIT 1',
@@ -2185,6 +2388,7 @@ export async function updatePayeeById(id, payeeData = {}) {
             branch_name = ?,
             beneficiary_type = ?,
             beneficiary_org = ?,
+            beneficiary_category = ?,
             organization_type = ?,
             msme = ?,
             gstin = ?,
@@ -2204,6 +2408,7 @@ export async function updatePayeeById(id, payeeData = {}) {
       branchName,
       beneficiaryType,
       beneficiaryOrg,
+      beneficiaryCategory || null,
       normalizeText(payeeData.organization_type) || null,
       normalizeText(payeeData.msme) || null,
       beneficiaryType === 'organization' ? gstin || null : null,
@@ -2687,6 +2892,10 @@ export async function upsertPayee(payeeData, userId, conn = db) {
     ? beneficiaryOrgRaw
     : null;
   const accountType = normalizeAccountType(payeeData.account_type);
+  const categoryApplies = beneficiaryCategoryApplies(beneficiaryType, beneficiaryOrg);
+  const beneficiaryCategory = categoryApplies
+    ? normalizeBeneficiaryCategory(payeeData.beneficiary_category)
+    : '';
   const gstin = sanitizeAlphaNumericUpper(payeeData.gstin, 15);
   const panNumber = sanitizeAlphaNumericUpper(
     payeeData.pan_number || extractPanFromGstin(gstin),
@@ -2696,13 +2905,16 @@ export async function upsertPayee(payeeData, userId, conn = db) {
   if (!beneficiaryOrg) throw new Error('beneficiary_org is required');
   if (!accountType) throw new Error('account_type must be Savings or Current');
 
-  const [existing] = await conn.execute(
-    'SELECT id FROM expenditure_payees WHERE account_no = ? AND ifsc = ? LIMIT 1',
-    [accountNo, ifsc],
-  );
+  const findExisting = async () => {
+    const [rows] = await conn.execute(
+      'SELECT id FROM expenditure_payees WHERE account_no = ? AND ifsc = ? LIMIT 1',
+      [accountNo, ifsc],
+    );
+    return rows.length ? toPositiveInt(rows[0].id) : null;
+  };
 
-  if (existing.length) {
-    await conn.execute(
+  const updateExisting = (payeeId) =>
+    conn.execute(
       `UPDATE expenditure_payees
           SET payee_name   = COALESCE(?, payee_name),
               account_name = COALESCE(?, account_name),
@@ -2712,6 +2924,12 @@ export async function upsertPayee(payeeData, userId, conn = db) {
               branch_name  = COALESCE(?, branch_name),
               beneficiary_type = COALESCE(?, beneficiary_type),
               beneficiary_org  = COALESCE(?, beneficiary_org),
+              -- Cleared outright once the payee is External or an
+              -- organization, so a category picked under a previous
+              -- beneficiary cannot linger. While it still applies, a save
+              -- that carries no category (an expenditure request reusing
+              -- these bank details) leaves the stored one alone.
+              beneficiary_category = IF(?, COALESCE(?, beneficiary_category), NULL),
               organization_type = COALESCE(?, organization_type),
               msme         = COALESCE(?, msme),
               gstin        = COALESCE(?, gstin),
@@ -2734,45 +2952,64 @@ export async function upsertPayee(payeeData, userId, conn = db) {
         payeeData.branch_name || null,
         beneficiaryType,
         beneficiaryOrg,
+        categoryApplies ? 1 : 0,
+        beneficiaryCategory || null,
         payeeData.organization_type || null,
         payeeData.msme || null,
         beneficiaryType === 'organization' ? gstin || null : null,
         payeeData.tds_details || null,
         payeeData.tds_section || null,
-        existing[0].id,
+        payeeId,
       ],
     );
-    return toPositiveInt(existing[0].id);
+
+  const existingId = await findExisting();
+  if (existingId) {
+    await updateExisting(existingId);
+    return existingId;
   }
 
-  const [result] = await conn.execute(
-    `INSERT INTO expenditure_payees
-       (payee_name, account_name, account_no, account_type,
-        bank_name, branch_name, ifsc, beneficiary_type,
-        beneficiary_org, organization_type, msme,
-        pan_number, gstin, tds_details, tds_section,
-        approval_status, requested_at, approved_by, approved_at, rejection_reason, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
-    [
-      canonicalPayeeName,
-      canonicalPayeeName || null,
-      accountNo,
-      accountType,
-      normalizeText(payeeData.bank_name),
-      normalizeText(payeeData.branch_name || ''),
-      ifsc,
-      beneficiaryType,
-      beneficiaryOrg,
-      payeeData.organization_type || null,
-      payeeData.msme || null,
-      panNumber || null,
-      beneficiaryType === 'organization' ? gstin || null : null,
-      payeeData.tds_details || null,
-      payeeData.tds_section || null,
-      userId || null,
-    ],
-  );
-  return result.insertId;
+  try {
+    const [result] = await conn.execute(
+      `INSERT INTO expenditure_payees
+         (payee_name, account_name, account_no, account_type,
+          bank_name, branch_name, ifsc, beneficiary_type,
+          beneficiary_org, beneficiary_category, organization_type, msme,
+          pan_number, gstin, tds_details, tds_section,
+          approval_status, requested_at, approved_by, approved_at, rejection_reason, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
+      [
+        canonicalPayeeName,
+        canonicalPayeeName || null,
+        accountNo,
+        accountType,
+        normalizeText(payeeData.bank_name),
+        normalizeText(payeeData.branch_name || ''),
+        ifsc,
+        beneficiaryType,
+        beneficiaryOrg,
+        beneficiaryCategory || null,
+        payeeData.organization_type || null,
+        payeeData.msme || null,
+        panNumber || null,
+        beneficiaryType === 'organization' ? gstin || null : null,
+        payeeData.tds_details || null,
+        payeeData.tds_section || null,
+        userId || null,
+      ],
+    );
+    return result.insertId;
+  } catch (err) {
+    if (err?.code !== 'ER_DUP_ENTRY') throw err;
+    // The lookup above and this insert are not atomic, so two saves for the
+    // same (account_no, ifsc) — a double-clicked Save, or two users entering
+    // the same bank details — can both miss and then both insert. The row is
+    // there now, so treat the loser as the update path instead of a 500.
+    const racedId = await findExisting();
+    if (!racedId) throw err;
+    await updateExisting(racedId);
+    return racedId;
+  }
 }
 
 // ─── Core SELECT for expenditure_requests ────────────────────────────────────
@@ -3568,8 +3805,20 @@ async function insertSettlementRows(
   } = {},
 ) {
   const validRows = Array.isArray(rows) ? rows : [];
+  // Same per-head/sub allocation the submitted totals were validated against, so the stored
+  // advance_amount of the rows adds up to the advance the settlement was checked against.
+  const advanceAllocations = await allocateSettlementAdvances(conn, validRows, {
+    userId,
+    financeRequestId,
+    rowIndex,
+    sourceRequestId,
+    dashboardRowId,
+    workflowRowRef,
+    excludeExpenditureId,
+  });
   let sortOrder = 0;
-  for (const row of validRows) {
+  for (let rowPosition = 0; rowPosition < validRows.length; rowPosition += 1) {
+    const row = validRows[rowPosition];
     const budgetHead = sanitizeRowValue(row.budgetHead || row.budget_head);
     const subHead = sanitizeRowValue(row.subHead || row.sub_head);
     const budgetAmount = moneyOrNull(row.budget);
@@ -3584,25 +3833,13 @@ async function insertSettlementRows(
         budgetHead,
         subHead,
       }));
-    const settlementAmount = toMoney(row.settlement || row.settlement_amount);
-    if (!budgetHead && !subHead && settlementAmount === 0) continue;
+    const settlementAmount = getSettlementRowSettlementAmount(row);
+    // Same rule `allocateSettlementAdvances` skipped by, so the allocation stays aligned.
+    if (isEmptySettlementRow(row)) continue;
 
     // NEW: catalog IDs alongside snapshot text.
     const setIds = await resolveCatalogIds(conn, budgetHead, subHead);
-    const advanceAmount = await getSettlementAdvanceAmount(conn, row, {
-      userId,
-      financeRequestId,
-      rowIndex,
-      sourceRequestId,
-      dashboardRowId,
-      workflowRowRef,
-      excludeExpenditureId,
-      budgetHead,
-      subHead,
-      budgetLineId,
-      budgetHeadId: setIds.budget_head_id,
-      budgetSubHeadId: setIds.budget_sub_head_id,
-    });
+    const advanceAmount = toMoney(advanceAllocations[rowPosition]);
 
     await conn.execute(
       `INSERT INTO expenditure_settlement_rows
@@ -3649,6 +3886,9 @@ async function getSettlementAdvanceAmount(
     budgetLineId = null,
     budgetHeadId = null,
     budgetSubHeadId = null,
+    // Narrow the lookup to the row's own budget line instead of the whole head/sub. Only the
+    // per-line split inside `allocateSettlementAdvances` wants this; validation never does.
+    matchByBudgetLine = false,
   } = {},
 ) {
   const uid = toPositiveInt(userId);
@@ -3670,23 +3910,18 @@ async function getSettlementAdvanceAmount(
         }
       : await resolveCatalogIds(conn, resolvedBudgetHead, resolvedSubHead);
 
-  // For a carry-forward settlement the original advance sits on the SOURCE-year
-  // budget line while the settlement uses the TARGET-year line — so an exact
-  // budget_line_id match never finds the advance (advanceTotal = 0). When this
-  // finance request has an active carry-forward, match the advance by head/sub
-  // instead; the row-identity scope (finance + dashboard row) already pins the
-  // correct card, and head/sub is stable across the year boundary.
-  let advanceMatchLineId = resolvedBudgetLineId;
-  if (advanceMatchLineId && toPositiveInt(financeRequestId)) {
-    const [cfRows] = await conn.execute(
-      `SELECT 1 FROM finance_carry_forward_allocations
-        WHERE finance_request_id = ?
-          AND LOWER(TRIM(COALESCE(status, 'active'))) = 'active'
-        LIMIT 1`,
-      [toPositiveInt(financeRequestId)],
-    );
-    if (cfRows.length) advanceMatchLineId = null;
-  }
+  // Match the advance by head/sub across every budget line, never by a single
+  // budget_line_id, because that is exactly what the settlement form did when it
+  // showed the user the advance to adjust: it groups all budget lines sharing a
+  // head/sub into one option and calls /expenditure/advance-summary once WITHOUT a
+  // budget_line_id. An advance booked across two lines of the same head/sub (or on
+  // the SOURCE-year line of a carry-forward, while the settlement uses the
+  // TARGET-year line) would otherwise be counted here only in part, and the
+  // settlement the form showed as fully adjusted gets rejected as a mismatch.
+  // The row-identity scope (finance request + dashboard row) already pins the card,
+  // so widening from line to head/sub cannot pull in another card's advance.
+  const advanceMatchLineId =
+    resolvedBudgetHead && resolvedSubHead && !matchByBudgetLine ? null : resolvedBudgetLineId;
 
   const summary = await getCumulativeAdvanceSummary(conn, {
     userId: uid,
@@ -3706,40 +3941,103 @@ async function getSettlementAdvanceAmount(
   return toMoney(summary.preAdvance);
 }
 
-async function getSettlementAdvanceTotal(
-  conn,
-  rows = [],
-  {
-    userId = null,
-    financeRequestId = null,
-    rowIndex = null,
-    sourceRequestId = null,
-    dashboardRowId = null,
-    workflowRowRef = null,
-    excludeExpenditureId = null,
-  } = {},
-) {
+const getSettlementRowSettlementAmount = (row = {}) =>
+  toMoney(row.settlement || row.settlement_amount);
+
+const getSettlementRowBudgetLineId = (row = {}) =>
+  toPositiveInt(row.budgetLineId || row.budget_line_id);
+
+const isEmptySettlementRow = (row = {}) =>
+  !sanitizeRowValue(row.budgetHead || row.budget_head) &&
+  !sanitizeRowValue(row.subHead || row.sub_head) &&
+  getSettlementRowSettlementAmount(row) === 0;
+
+const getSettlementAdvanceGroupKey = (row = {}) => {
+  const head = normalizeText(sanitizeRowValue(row.budgetHead || row.budget_head)).toLowerCase();
+  const subHead = normalizeText(sanitizeRowValue(row.subHead || row.sub_head)).toLowerCase();
+  if (head && subHead) return `head::${head}::${subHead}`;
+  return `line::${getSettlementRowBudgetLineId(row)}`;
+};
+
+/**
+ * The advance each settlement row discharges, aligned index-for-index with `rows`.
+ *
+ * The advance is looked up per head/sub GROUP, because that is the unit the settlement form
+ * works in: it collapses every budget line sharing a head/sub into one option and reads the
+ * advance for the group. Looking it up per row instead would report the group's whole advance
+ * on each row of the group and double it.
+ *
+ * Inside a group the total is then split back out per budget line, so `advance_amount` keeps
+ * saying WHICH advance each row discharged — `resolveAdvanceUsageAmount` reads it back to tell
+ * a settled advance from one still outstanding, and it reads it per row.
+ */
+async function allocateSettlementAdvances(conn, rows = [], options = {}) {
   const validRows = Array.isArray(rows) ? rows : [];
-  let total = 0;
+  const allocations = new Array(validRows.length).fill(0);
+  const groupPositions = new Map();
 
-  for (const row of validRows) {
-    const settlementAmount = toMoney(row.settlement || row.settlement_amount);
-    const budgetHead = sanitizeRowValue(row.budgetHead || row.budget_head);
-    const subHead = sanitizeRowValue(row.subHead || row.sub_head);
-    if (!budgetHead && !subHead && settlementAmount === 0) continue;
-
-    total += await getSettlementAdvanceAmount(conn, row, {
-      userId,
-      financeRequestId,
-      rowIndex,
-      sourceRequestId,
-      dashboardRowId,
-      workflowRowRef,
-      excludeExpenditureId,
-    });
+  for (let index = 0; index < validRows.length; index += 1) {
+    if (isEmptySettlementRow(validRows[index])) continue;
+    const groupKey = getSettlementAdvanceGroupKey(validRows[index]);
+    const positions = groupPositions.get(groupKey) || [];
+    positions.push(index);
+    groupPositions.set(groupKey, positions);
   }
 
-  return toMoney(total);
+  for (const positions of groupPositions.values()) {
+    // The group's whole advance, across every budget line under this head/sub — the same
+    // figure the form showed the user and validated the payee amounts against.
+    let unallocated = await getSettlementAdvanceAmount(conn, validRows[positions[0]], options);
+    const seenBudgetLineIds = new Set();
+
+    for (const position of positions) {
+      if (unallocated <= 0) break;
+      // A row recording no spend cannot hold any of the advance: `buildSettledAdvanceExpr`
+      // counts advance_amount only where settlement_amount > 0, so an advance parked here
+      // would be reported as still outstanding after the settlement that discharged it. Its
+      // line's advance stays unallocated and reaches a spend-bearing row as the remainder
+      // below. Skipped before `seenBudgetLineIds`, so a later row that does record spend on
+      // the same budget line still gets that line's share.
+      if (getSettlementRowSettlementAmount(validRows[position]) <= 0) continue;
+      const budgetLineId = getSettlementRowBudgetLineId(validRows[position]);
+      // Two rows on one budget line share that line's advance; it is allocated once.
+      if (!budgetLineId || seenBudgetLineIds.has(budgetLineId)) continue;
+      seenBudgetLineIds.add(budgetLineId);
+
+      const lineAdvance = await getSettlementAdvanceAmount(conn, validRows[position], {
+        ...options,
+        matchByBudgetLine: true,
+      });
+      // Capped by what is left, so a row that also matches line-less legacy advances by
+      // head/sub text cannot claim more of the group than the group holds.
+      const share = toMoney(Math.min(lineAdvance, unallocated));
+      if (share <= 0) continue;
+      allocations[position] = toMoney(allocations[position] + share);
+      unallocated = toMoney(unallocated - share);
+    }
+
+    // Advance sitting on budget lines this settlement has no spend row for is still discharged
+    // by it, so it has to land somewhere. It goes on a row that records spend, because the claim
+    // accounting (`buildSettledAdvanceExpr`) only counts advance_amount where
+    // settlement_amount > 0 — parking it on a zero-spend row would report the advance as still
+    // outstanding.
+    if (unallocated > 0) {
+      const carrier =
+        positions.find((position) => getSettlementRowSettlementAmount(validRows[position]) > 0) ??
+        positions[0];
+      allocations[carrier] = toMoney(allocations[carrier] + unallocated);
+    }
+  }
+
+  return allocations;
+}
+
+// Exported for tests: the per-row split is the part with the interesting edge cases.
+export const allocateSettlementAdvancesForTest = allocateSettlementAdvances;
+
+export async function getSettlementAdvanceTotal(conn, rows = [], options = {}) {
+  const allocations = await allocateSettlementAdvances(conn, rows, options);
+  return toMoney(allocations.reduce((sum, amount) => sum + toMoney(amount), 0));
 }
 
 const formatMoney = (value) =>

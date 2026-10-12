@@ -1,10 +1,23 @@
 import fs from 'fs';
 import path from 'path';
-import util from 'util';
 
 import journalModel from './journalModel.js';
+import { reviewerAudience, userAudience } from '../notification/audiences.js';
+import notificationService from '../notification/notificationService.js';
 
-const rename = util.promisify(fs.rename);
+/**
+ * Multer writes uploads into uploads/temp under a sanitized name, but `req.file.path`
+ * still traces back to client-supplied input as far as static analysis is concerned.
+ * Every filesystem call below goes through this, so a path that does not resolve inside
+ * the temp directory is refused rather than acted on.
+ */
+const TEMP_UPLOAD_DIR = path.join(process.cwd(), 'uploads', 'temp');
+
+const resolveTempUploadPath = (candidate) => {
+  const resolved = path.resolve(String(candidate || ''));
+  return resolved.startsWith(TEMP_UPLOAD_DIR + path.sep) ? resolved : null;
+};
+
 const isRequesterAdmin = (requestUser = {}) => Boolean(requestUser.isAdmin ?? requestUser.is_admin);
 
 const isRequesterSuperAdmin = (requestUser = {}) => {
@@ -23,6 +36,61 @@ const isRequesterSuperAdmin = (requestUser = {}) => {
 
 const hasAdminOverride = (requestUser = {}) =>
   isRequesterAdmin(requestUser) || isRequesterSuperAdmin(requestUser);
+
+/**
+ * Resolves the requester's access to one publication. Every mutation route shares this so
+ * an authenticated user cannot reach another owner's publication through a route that
+ * happens to check less than `updateJournal` does.
+ *
+ * Returns `{ workflowAccess }`, or `{ error }` describing the response to send.
+ */
+const resolveJournalAccess = async (req, journalId) => {
+  const workflowAccess = await journalModel.getJournalWorkflowAccess(
+    journalId,
+    req.user.id,
+    req.user.email,
+  );
+
+  if (!workflowAccess) {
+    return { error: { status: 404, body: { status: 'error', message: 'Journal not found' } } };
+  }
+
+  if (!hasAdminOverride(req.user) && !workflowAccess.can_manage) {
+    return {
+      error: {
+        status: 403,
+        body: { status: 'error', message: 'You are not authorized to edit this journal' },
+      },
+    };
+  }
+
+  return { workflowAccess };
+};
+
+/**
+ * An approved publication is frozen until an edit request is granted. Content routes
+ * (authors, indexes, the article file) enforce this alongside `updateJournal` — editing
+ * the parts was otherwise a way around the freeze on the whole.
+ */
+const journalEditIsFrozen = (req, workflowAccess) => {
+  if (hasAdminOverride(req.user)) {
+    return false;
+  }
+
+  const approvalStatus = workflowAccess.admin_approval_status || 'pending';
+  const editRequestStatus = workflowAccess.edit_request_status || 'none';
+  const canDirectEdit =
+    approvalStatus === 'pending' ||
+    approvalStatus === 'rejected' ||
+    (approvalStatus === 'approved' && editRequestStatus === 'approved');
+
+  return !canDirectEdit;
+};
+
+const FROZEN_EDIT_RESPONSE = {
+  status: 'error',
+  message: 'Direct edit is disabled for approved publications. Please request edit access.',
+};
 
 const journalController = {
   async createJournal(req, res) {
@@ -80,8 +148,12 @@ const journalController = {
       // For non-Journal types, make these fields optional instead of required
       // (they can still be provided but won't cause validation errors if missing)
 
-      // Create the journal entry
-      const journal = await journalModel.create(journalData);
+      // Create the journal entry, recording who filed it so they keep access to it
+      // even when the paper credits other people.
+      const journal = await journalModel.create({
+        ...journalData,
+        created_by: req.user?.id || null,
+      });
 
       // Handle file upload if present
       if (req.files && req.files.file) {
@@ -99,6 +171,18 @@ const journalController = {
         const filePath = `/uploads/${sanitizedFileName}`;
         await journalModel.update(journal.id, { file_path: filePath });
       }
+
+      // Fires after the record and its upload are settled, and outside any
+      // transaction — a publication is created without one, so there is nothing
+      // for the emit to join.
+      await notificationService.emit({
+        type: 'journal.submitted',
+        actorUserId: req.user?.id || null,
+        subject: { moduleKey: 'journal', recordId: journal.id, title: journal.title },
+        audience: [reviewerAudience()],
+        data: { applicantName: req.user?.name || null },
+        dedupeKey: `journal:${journal.id}:submitted`,
+      });
 
       res.status(201).json({
         status: 'success',
@@ -159,7 +243,7 @@ const journalController = {
         return res.status(404).json({ message: 'Journal not found' });
       }
 
-      if (!requesterHasAdminOverride && !workflowAccess.is_author) {
+      if (!requesterHasAdminOverride && !workflowAccess.can_manage) {
         return res.status(403).json({
           message: 'You are not authorized to edit this journal',
         });
@@ -227,23 +311,22 @@ const journalController = {
         'available_online_date',
         'file_path',
         'publication_details',
+        'scopus_id',
+        'scie_id',
+        'open_access',
+        'year',
+        'wos_id',
+        'pubmed_pmid',
       ];
 
-      const journalOptionsFields = [
-        'journal_name',
-        'publisher',
-        'website',
-        'print_issn',
-        'online_issn',
-      ];
+      // Only the journal name is read from the submission, and only to decide which
+      // registry entry this publication points at. Publisher/website/ISSN belong to the
+      // admin-curated registry (or to publication_details for books and conferences), so
+      // the publication form must not write them back.
+      const journalOptionsFields = ['journal_name', 'journal_options_id'];
 
-      // Handle potential ISBN fields for non-Journal types
-      if (journalData.print_isbn !== undefined) {
-        journalData.print_issn = journalData.print_isbn;
-      }
-      if (journalData.online_isbn !== undefined) {
-        journalData.online_issn = journalData.online_isbn;
-      }
+      // ISBNs for Conference/Book/Book Chapter are persisted inside publication_details,
+      // so they need no mapping onto the journal_options ISSN columns here.
 
       // Filter data for each table
       const journalUpdateData = Object.fromEntries(
@@ -280,11 +363,15 @@ const journalController = {
         journalUpdateData.external_details = JSON.stringify(journalUpdateData.external_details);
       }
 
-      if (
+      // Editing a rejected paper, or one unlocked by an approved edit request,
+      // sends it back to 'pending' — an implicit resubmission that the
+      // reviewers need to hear about, since nothing else announces it.
+      const isImplicitResubmission =
         !requesterHasAdminOverride &&
         (approvalStatus === 'rejected' ||
-          (approvalStatus === 'approved' && editRequestStatus === 'approved'))
-      ) {
+          (approvalStatus === 'approved' && editRequestStatus === 'approved'));
+
+      if (isImplicitResubmission) {
         Object.assign(journalUpdateData, {
           admin_approval_status: 'pending',
           admin_approval_comment: null,
@@ -317,6 +404,23 @@ const journalController = {
         await file.mv(uploadPath);
         const filePath = `/uploads/${sanitizedFileName}`;
         await journalModel.update(id, { file_path: filePath });
+      }
+
+      if (result.success && isImplicitResubmission) {
+        await notificationService.emit({
+          type: 'journal.resubmitted',
+          actorUserId: req.user?.id || null,
+          subject: {
+            moduleKey: 'journal',
+            recordId: Number(id),
+            title: journalUpdateData.title || null,
+          },
+          audience: [reviewerAudience()],
+          data: { actorName: req.user?.name || null },
+          // A paper can go round the review loop more than once, so each pass
+          // is its own notification.
+          dedupeKey: `journal:${id}:resubmitted:${Date.now()}`,
+        });
       }
 
       if (result.success) {
@@ -355,6 +459,67 @@ const journalController = {
     }
   },
 
+  async deleteAuthor(req, res) {
+    try {
+      const journalId = req.params.id;
+      const dbAuthorId = req.params.dbAuthorId;
+
+      const { workflowAccess, error } = await resolveJournalAccess(req, journalId);
+      if (error) {
+        return res.status(error.status).json(error.body);
+      }
+
+      if (journalEditIsFrozen(req, workflowAccess)) {
+        return res.status(403).json(FROZEN_EDIT_RESPONSE);
+      }
+
+      const result = await journalModel.deleteAuthorFromJournal(journalId, dbAuthorId);
+
+      if (result.affectedRows > 0) {
+        res.status(200).json({ status: 'success', message: 'Author removed successfully' });
+      } else {
+        res.status(404).json({ status: 'error', message: 'Author not found on this journal' });
+      }
+    } catch (error) {
+      console.error('Error in deleteAuthor:', error);
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  },
+
+  async replaceIndexes(req, res) {
+    try {
+      const journalId = req.params.id;
+      const { indexes } = req.body;
+
+      if (!Array.isArray(indexes)) {
+        return res.status(400).json({
+          status: 'error',
+          message: 'indexes must be an array of index names',
+        });
+      }
+
+      const { workflowAccess, error } = await resolveJournalAccess(req, journalId);
+      if (error) {
+        return res.status(error.status).json(error.body);
+      }
+
+      if (journalEditIsFrozen(req, workflowAccess)) {
+        return res.status(403).json(FROZEN_EDIT_RESPONSE);
+      }
+
+      const savedIndexes = await journalModel.replaceIndexes(journalId, indexes);
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Indexes updated successfully',
+        data: savedIndexes,
+      });
+    } catch (error) {
+      console.error('Error in replaceIndexes:', error);
+      res.status(500).json({ status: 'error', message: error.message });
+    }
+  },
+
   async deleteJournal(req, res) {
     try {
       const id = req.params.id;
@@ -370,7 +535,7 @@ const journalController = {
         return res.status(404).json({ message: 'Journal not found' });
       }
 
-      if (!requesterHasAdminOverride && !workflowAccess.is_author) {
+      if (!requesterHasAdminOverride && !workflowAccess.can_manage) {
         return res.status(403).json({
           message: 'You are not authorized to delete this journal',
         });
@@ -517,14 +682,42 @@ const journalController = {
         });
       }
 
-      const file = req.file;
-      const uploadDir = path.join(process.cwd(), 'uploads', 'journalform-articles');
+      const { workflowAccess, error } = await resolveJournalAccess(req, journalId);
+      if (error) {
+        await fs.promises.unlink(resolveTempUploadPath(req.file.path) || '').catch(() => {});
+        return res.status(error.status).json(error.body);
+      }
 
-      // Ensure the final upload directory exists
-      // Not tested
-      // if (!fs.existsSync(uploadDir)) {
-      //   fs.mkdirSync(uploadDir, { recursive: true });
-      // }
+      if (journalEditIsFrozen(req, workflowAccess)) {
+        await fs.promises.unlink(resolveTempUploadPath(req.file.path) || '').catch(() => {});
+        return res.status(403).json(FROZEN_EDIT_RESPONSE);
+      }
+
+      const file = req.file;
+      const tempPath = resolveTempUploadPath(file.path);
+      if (!tempPath) {
+        return res.status(400).json({
+          success: false,
+          message: 'Upload could not be processed.',
+        });
+      }
+
+      // The published article is PDF-only and capped at 5 MB. The shared upload
+      // middleware is deliberately looser (it serves every module), so the stricter
+      // rule this endpoint advertises is enforced here and the temp file discarded.
+      const isPdf = file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname || '');
+      const maxArticleBytes = 5 * 1024 * 1024;
+      if (!isPdf || file.size > maxArticleBytes) {
+        await fs.promises.unlink(tempPath).catch(() => {});
+        return res.status(400).json({
+          success: false,
+          message: !isPdf
+            ? 'Only PDF files are allowed for the published article.'
+            : 'The published article must be 5 MB or smaller.',
+        });
+      }
+
+      const uploadDir = path.join(process.cwd(), 'uploads', 'journalform-articles');
 
       await fs.promises.mkdir(uploadDir, { recursive: true });
 
@@ -534,11 +727,11 @@ const journalController = {
 
       try {
         // Move file from temp to final location
-        await fs.promises.rename(file.path, finalPath);
+        await fs.promises.rename(tempPath, finalPath);
       } catch (moveError) {
         // Fallback to copy if rename fails (might happen across devices)
-        await fs.promises.copyFile(file.path, finalPath);
-        await fs.promises.unlink(file.path);
+        await fs.promises.copyFile(tempPath, finalPath);
+        await fs.promises.unlink(tempPath);
       }
 
       // Save the file path in the database (use forward slashes for consistency)
@@ -615,6 +808,15 @@ const journalController = {
         category: category || 'National',
       });
 
+      await notificationService.emit({
+        type: 'journal.request_submitted',
+        actorUserId: userId,
+        subject: { moduleKey: 'journal', recordId: request?.id ?? null, name: journal_name.trim() },
+        audience: [reviewerAudience()],
+        data: { applicantName: req.user?.name || null },
+        dedupeKey: request?.id ? `journal_request:${request.id}:submitted` : null,
+      });
+
       res.status(201).json({
         status: 'success',
         message: 'Journal request submitted successfully. It will be reviewed by an administrator.',
@@ -688,18 +890,36 @@ const journalController = {
         });
       }
 
-      // Check if journal exists and user has access
-      const journalExists = await journalModel.doesJournalExist(journalId);
-      if (!journalExists) {
-        return res.status(404).json({
-          status: 'error',
-          message: 'Journal not found',
-        });
+      // Posting a progress update is only for people who manage this publication — the
+      // route previously checked that the journal existed and nothing else. The approval
+      // freeze deliberately does not apply here: status updates exist to report on a
+      // publication after it has been approved.
+      const { error } = await resolveJournalAccess(req, journalId);
+      if (error) {
+        return res.status(error.status).json(error.body);
       }
 
       const statusUpdateId = await journalModel.createStatusUpdate(journalId, userId, {
         status: status.trim(),
         user_comment: user_comment?.trim() || null,
+      });
+
+      const updateContext = await journalModel.getStatusUpdateContext(statusUpdateId);
+
+      await notificationService.emit({
+        type: 'journal.status_update_posted',
+        actorUserId: userId,
+        subject: {
+          moduleKey: 'journal',
+          recordId: Number(journalId),
+          title: updateContext?.title || null,
+        },
+        audience: [reviewerAudience()],
+        data: {
+          applicantName: req.user?.name || null,
+          comment: updateContext?.user_comment || status.trim(),
+        },
+        dedupeKey: `journal_status_update:${statusUpdateId}:posted`,
       });
 
       res.status(201).json({
@@ -761,6 +981,24 @@ const journalController = {
         statusUpdateId,
         admin_reply.trim(),
       );
+
+      if (result.affectedRows > 0) {
+        const updateContext = await journalModel.getStatusUpdateContext(statusUpdateId);
+
+        await notificationService.emit({
+          type: 'journal.status_update_replied',
+          actorUserId: req.user?.id || null,
+          subject: {
+            moduleKey: 'journal',
+            recordId: updateContext?.journal_id ?? null,
+            title: updateContext?.title || null,
+          },
+          audience: userAudience(updateContext?.user_id, 'applicant'),
+          data: { comment: admin_reply.trim() },
+          // A thread can be replied to more than once and each reply matters.
+          dedupeKey: `journal_status_update:${statusUpdateId}:replied:${Date.now()}`,
+        });
+      }
 
       if (result.affectedRows > 0) {
         res.status(200).json({ message: 'Admin reply updated successfully' });

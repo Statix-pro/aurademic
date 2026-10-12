@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { useParams } from 'react-router-dom';
 
 import { useAuth } from '../../contexts/AuthContext';
+import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
+import ViewModeBanner from '../../shared/components/ui/ViewModeBanner';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 import './journalform.css';
@@ -19,6 +22,7 @@ import {
   FileText,
   CheckCircle,
   ExternalLink,
+  Pencil,
 } from 'lucide-react';
 
 // Type definitions
@@ -67,23 +71,6 @@ interface Metrics {
   availableOnline: boolean;
 }
 
-interface RequiredFields {
-  title: boolean;
-  type: boolean;
-  journal_name: boolean;
-  quartile: boolean;
-  impactFactor: boolean;
-  citeScore: boolean;
-  dateOfSubmission: boolean;
-  volume: boolean;
-  issue: boolean;
-  pages: boolean;
-  articleNumber: boolean;
-  doi: boolean;
-  acceptedForPublication: boolean;
-  availableOnline: boolean;
-}
-
 interface Acknowledgements {
   Nil: boolean;
   'DST-FIST': boolean;
@@ -99,15 +86,6 @@ interface JournalRequest {
   online_issn: string;
   impact_factor: string;
   cite_score: string;
-  category: string;
-}
-
-interface ConferenceRequest {
-  conference_name: string;
-  publisher: string;
-  website: string;
-  print_isbn: string;
-  online_isbn: string;
   category: string;
 }
 
@@ -181,11 +159,64 @@ const dedupeTagsCaseInsensitive = (values: string[] = []): string[] => {
   return deduped;
 };
 
-const JournalForm: React.FC = () => {
-  const { journalId: urlJournalId } = useParams<{ journalId?: string }>();
-  const navigate = useNavigate();
+// Every internal (faculty/student) author belongs to the host institution; the
+// author search hardcodes the same string server-side.
+const DEFAULT_ORGANIZATION = 'K.S.Rangasamy College of Technology';
+
+interface JournalFormProps {
+  /** Show this publication instead of taking the id from the route. */
+  journalId?: string | number;
+  /** Force view or edit instead of reading `?mode=` from the URL. */
+  mode?: 'view' | 'edit';
+  /**
+   * Rendered inside another page (the admin dashboard) rather than on its own route, so
+   * the form must not rewrite the browser URL — that URL belongs to the host page.
+   */
+  embedded?: boolean;
+}
+
+const JournalForm: React.FC<JournalFormProps> = ({
+  journalId: journalIdProp,
+  mode: modeProp,
+  embedded = false,
+}) => {
+  const { journalId: routeJournalId } = useParams<{ journalId?: string }>();
+  const urlJournalId = journalIdProp != null ? String(journalIdProp) : routeJournalId;
+
+  /**
+   * The form flips between view and edit by rewriting `?mode=`. When it is embedded there
+   * is no such query string to own, so the mode comes from the prop and the URL is left
+   * alone.
+   */
+  const syncModeToUrl = useCallback(
+    (nextMode: 'view' | 'edit') => {
+      if (embedded) return;
+      const url = new URL(window.location.href);
+      url.searchParams.set('mode', nextMode);
+      window.history.replaceState({}, '', url.toString());
+    },
+    [embedded],
+  );
   const { user } = useAuth();
+  // Mirrors the server's admin override: admins edit an approved publication directly
+  // instead of going through the edit-request workflow.
+  const hasAdminOverride = Boolean(user?.is_admin || user?.is_super_admin);
   const MAX_AUTHORS = 10;
+
+  // Feedback goes through the app's own modal rather than window.alert, which cannot be
+  // styled, blocks the page, and shows the browser's origin instead of the product.
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+  }>({ show: false, message: '', type: 'info' });
+
+  const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
+
+  const showAlert = (message: React.ReactNode, type: AlertType = 'info', title?: string) => {
+    setAlertConfig({ show: true, message, type, title });
+  };
 
   // All Sustainable Development Goals
   const allSDGs = [
@@ -227,8 +258,16 @@ const JournalForm: React.FC = () => {
   const [journalId, setJournalId] = useState<string | undefined>(urlJournalId);
   const justAddedAuthorRef = useRef<boolean>(false); // Track if author was just added
   const isLoadingJournalDataRef = useRef<boolean>(false); // Track if journal data is being loaded programmatically
-  const suppressAuthorAutoSearchRef = useRef<boolean>(false); // Prevent suggestion popup from programmatic prefill
+  const activeAuthorSearchIndexRef = useRef<number | null>(null); // Row whose search input currently has focus
+  const authorSearchTokenRef = useRef<number[]>([]); // Latest request token per row, to drop stale responses
+  const authorSearchTimerRef = useRef<Array<ReturnType<typeof setTimeout> | null>>([]); // Per-row debounce timers
+  // author_journal link ids present when the publication was loaded, so a save can tell
+  // which authors the user removed and delete those links on the server.
+  const loadedAuthorLinkIdsRef = useRef<string[]>([]);
   const [isInternational, setIsInternational] = useState<boolean>(false);
+  // Which journal_options row the user picked. Sent with the submission so the server
+  // links to exactly that entry rather than re-resolving an ambiguous journal name.
+  const [journalOptionsId, setJournalOptionsId] = useState<number | null>(null);
   const [editMode, setEditMode] = useState<boolean>(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const mode = searchParams.get('mode');
@@ -271,13 +310,43 @@ const JournalForm: React.FC = () => {
   });
 
   // Compute designation from data: prefer student if student_id/register_no present, else faculty if author_id present
+  // What the author *is* has to be decided before falling back to "has an id, so
+  // faculty": v_authors reports a student's register number in the same erp_id/author_id
+  // slot as a faculty ERP id, so an id-first check classified every student as faculty.
+  // The row then reloaded into the faculty layout and the next save asked the server for
+  // a faculty member whose ERP id was a register number.
   const computeDesignation = (author: any): string => {
     const a = author || {};
-    if (a.student_id || a.register_no) return 'student';
-    if (a.author_id) return 'faculty';
-    if (a.designation === 'external') return 'external';
-    return (a.designation || 'faculty').toLowerCase();
+    const stated = String(a.designation || '').toLowerCase();
+
+    if (a.student_ref || a.student_id || a.register_no || stated === 'student') return 'student';
+    if (stated === 'external') return 'external';
+    // Faculty carry a job title in `designation` ("Professor"), not a role, so identity
+    // comes from the employee link instead.
+    if (a.employee_id || a.author_type === 'Internal' || a.author_id) return 'faculty';
+    return stated || 'faculty';
   };
+
+  // A student row shows Organization as an editable field but it is always the
+  // host institution, so seed it in state rather than only in the input's
+  // display value -- validation reads state, and a default it cannot see reads
+  // to the user as "All author fields must be filled" over a filled-looking box.
+  useEffect(() => {
+    setAuthors((prevAuthors) => {
+      let changed = false;
+      const next = prevAuthors.map((author, index) => {
+        const designation = (
+          authorDesignations[index] ||
+          author.designation ||
+          'faculty'
+        ).toLowerCase();
+        if (designation !== 'student' || author.organization) return author;
+        changed = true;
+        return { ...author, organization: DEFAULT_ORGANIZATION };
+      });
+      return changed ? next : prevAuthors;
+    });
+  }, [authors, authorDesignations]);
 
   // For check box
   const [acknowledgements, setAcknowledgements] = useState<Acknowledgements>({
@@ -292,7 +361,6 @@ const JournalForm: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [status, setStatus] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
-  const [uploadedFileName, setUploadedFileName] = useState<string>('');
   const [metrics, setMetrics] = useState<Metrics>({
     impactFactor: false,
     citeScore: false,
@@ -326,7 +394,6 @@ const JournalForm: React.FC = () => {
   const [journalSearchQuery, setJournalSearchQuery] = useState<string>('');
   const [journalSearchResults, setJournalSearchResults] = useState<any[]>([]);
   const [showJournalSuggestions, setShowJournalSuggestions] = useState<boolean>(false);
-  const [isExistingJournal, setIsExistingJournal] = useState<boolean>(false);
   const [showJournalRequestModal, setShowJournalRequestModal] = useState<boolean>(false);
   const [journalRequest, setJournalRequest] = useState<JournalRequest>({
     journal_name: '',
@@ -341,19 +408,7 @@ const JournalForm: React.FC = () => {
   const [journalRequestLoading, setJournalRequestLoading] = useState<boolean>(false);
   const [journalRequestError, setJournalRequestError] = useState<string>('');
 
-  // Add state for conference request
-  const [showConferenceRequestModal, setShowConferenceRequestModal] = useState<boolean>(false);
-  const [conferenceRequest, setConferenceRequest] = useState<ConferenceRequest>({
-    conference_name: '',
-    publisher: '',
-    website: '',
-    print_isbn: '',
-    online_isbn: '',
-    category: '',
-  });
-  const [conferenceRequestLoading, setConferenceRequestLoading] = useState<boolean>(false);
   const [isFormSubmitting, setIsFormSubmitting] = useState<boolean>(false);
-  const [conferenceRequestError, setConferenceRequestError] = useState<string>('');
 
   // Add state for Abstract and Keywords
   const [abstract, setAbstract] = useState<string>('');
@@ -363,7 +418,6 @@ const JournalForm: React.FC = () => {
   const [selectedCreditTo, setSelectedCreditTo] = useState<string[]>([]);
   const [selectedIndexes, setSelectedIndexes] = useState<string[]>([]);
   const [indexSearchQuery, setIndexSearchQuery] = useState<string>('');
-  const [showIndexSuggestions, setShowIndexSuggestions] = useState<boolean>(false);
   const [referenceNumber, setReferenceNumber] = useState<string>('');
   const [bookChapterTitle, setBookChapterTitle] = useState<string>('');
   const [selectedSDGs, setSelectedSDGs] = useState<string[]>([]);
@@ -375,7 +429,6 @@ const JournalForm: React.FC = () => {
     print_isbn: '',
     online_isbn: '',
   });
-  const [externalAuthorDetails, setExternalAuthorDetails] = useState<ExternalAuthorDetails[]>([]);
 
   // Function to determine category from type field
   const getCategoryFromType = (type: string): string | null => {
@@ -399,21 +452,20 @@ const JournalForm: React.FC = () => {
   };
 
   const [sdgSearchQuery, setSdgSearchQuery] = useState<string>('');
-  const [showSdgSuggestions, setShowSdgSuggestions] = useState<boolean>(false);
 
   // Collaboration multi-select state
   const [selectedCollaborations, setSelectedCollaborations] = useState<string[]>([]);
   const [collaborationSearchQuery, setCollaborationSearchQuery] = useState<string>('');
-  const [showCollaborationSuggestions, setShowCollaborationSuggestions] = useState<boolean>(false);
 
   // Acknowledgement multi-select state
   const [selectedAcknowledgements, setSelectedAcknowledgements] = useState<string[]>([]);
   const [acknowledgementSearchQuery, setAcknowledgementSearchQuery] = useState<string>('');
-  const [showAcknowledgementSuggestions, setShowAcknowledgementSuggestions] =
-    useState<boolean>(false);
 
   // Check if we're in view mode based on URL
-  const isViewMode = !!(journalId && window.location.search.includes('mode=view'));
+  // An embedded form has no query string of its own, so the caller states the mode.
+  const isViewMode = modeProp
+    ? modeProp === 'view'
+    : !!(journalId && window.location.search.includes('mode=view'));
 
   // Parse category from URL path
   const pathname = window.location.pathname;
@@ -427,14 +479,18 @@ const JournalForm: React.FC = () => {
     categoryParam = 'Journal';
   }
 
-  const isJournal = categoryParam === 'Journal';
-  const isConference = categoryParam === 'Conference';
-  const isBook = categoryParam === 'Book';
-  const isBookChapter = categoryParam === 'Book Chapter';
-
-  // Determine category: use type-based in view mode, URL-based otherwise
+  /**
+   * Which kind of publication this is.
+   *
+   * The URL path only carries the category while creating one (/journal/conference,
+   * /journal/book-chapter, ...). Editing always happens at /journal/:id, which falls into
+   * the 'Journal' branch above — so a saved conference paper or book chapter used to be
+   * re-rendered as a journal article: the Type select had no matching option and went
+   * blank, and because it is required the browser silently refused to submit the form.
+   * For an existing record the record's own type decides.
+   */
   const getEffectiveCategory = (): string | null => {
-    if (isViewMode && currentType) {
+    if (journalId && currentType) {
       return getCategoryFromType(currentType);
     }
     return categoryParam;
@@ -445,6 +501,14 @@ const JournalForm: React.FC = () => {
   const effectiveIsConference = effectiveCategory === 'Conference';
   const effectiveIsBook = effectiveCategory === 'Book';
   const effectiveIsBookChapter = effectiveCategory === 'Book Chapter';
+
+  // Validation and the save payload must follow the same category the form is showing,
+  // or editing a book chapter would submit it as a journal article and drop its
+  // publication details.
+  const isJournal = effectiveIsJournal;
+  const isConference = effectiveIsConference;
+  const isBook = effectiveIsBook;
+  const isBookChapter = effectiveIsBookChapter;
 
   // Auto-select Type on create (no journalId)
   useEffect(() => {
@@ -473,48 +537,11 @@ const JournalForm: React.FC = () => {
   });
   const [loadingStatusUpdate, setLoadingStatusUpdate] = useState<boolean>(false);
 
-  // Add new state for required fields
-  const [requiredFields, setRequiredFields] = useState<RequiredFields>({
-    title: true,
-    type: true,
-    journal_name: true,
-    quartile: true,
-    impactFactor: false,
-    citeScore: false,
-    dateOfSubmission: false,
-    volume: false,
-    issue: false,
-    pages: false,
-    articleNumber: false,
-    doi: false,
-    acceptedForPublication: false,
-    availableOnline: false,
-  });
-
   useEffect(() => {
     if (journalId) {
-      // Update URL mode parameter
-      const url = new URL(window.location.href);
-      url.searchParams.set('mode', editMode ? 'edit' : 'view');
-      window.history.replaceState({}, '', url.toString());
+      syncModeToUrl(editMode ? 'edit' : 'view');
     }
-  }, [editMode, journalId]);
-
-  useEffect(() => {
-    if (suppressAuthorAutoSearchRef.current) {
-      return;
-    }
-
-    const delayDebounceFn = searchQueries.map((query, index) => {
-      const authorJustSelected = authors[index]?.author_id === query;
-      if (query.length > 0 && !isViewMode && !authorJustSelected) {
-        return setTimeout(() => searchAuthor(query, index), 300);
-      }
-      return null;
-    });
-
-    return () => delayDebounceFn.forEach((timeout) => timeout && clearTimeout(timeout));
-  }, [searchQueries, authors, isViewMode]);
+  }, [editMode, journalId, syncModeToUrl]);
 
   useEffect(() => {
     // Skip search if journal data is being loaded programmatically (not user input)
@@ -537,21 +564,24 @@ const JournalForm: React.FC = () => {
           onlineISSN: '',
           website: '',
         });
+        // Clearing the journal clears its level too, so the next selection cannot inherit
+        // the previous journal's National/International value.
+        setIsInternational(false);
+        setJournalOptionsId(null);
       }
     }
   }, [journalSearchQuery]);
 
   useEffect(() => {
     if (journalId) {
-      setIsExistingJournal(true);
       fetchJournalDetails();
       checkEditRequestStatus();
     } else {
-      setIsExistingJournal(false);
       setEditRequestStatus(null);
       setAdminApprovalStatus('pending');
       setCanRequestEdit(false);
       setEditMode(true);
+      loadedAuthorLinkIdsRef.current = [];
     }
   }, [journalId]);
 
@@ -560,29 +590,32 @@ const JournalForm: React.FC = () => {
       return;
     }
 
-    const requiresEditRequest = adminApprovalStatus === 'approved';
+    const requiresEditRequest = adminApprovalStatus === 'approved' && !hasAdminOverride;
     const hasApprovedEditRequest = editRequestStatus === 'approved';
 
     if (requiresEditRequest && hasApprovedEditRequest && isViewMode) {
-      const url = new URL(window.location.href);
-      url.searchParams.set('mode', 'edit');
-      window.history.replaceState({}, '', url.toString());
+      syncModeToUrl('edit');
       setEditMode(true);
       return;
     }
 
     if (requiresEditRequest && !hasApprovedEditRequest) {
       if (!isViewMode) {
-        const url = new URL(window.location.href);
-        url.searchParams.set('mode', 'view');
-        window.history.replaceState({}, '', url.toString());
+        syncModeToUrl('view');
       }
       setEditMode(false);
       return;
     }
 
     setEditMode(!isViewMode);
-  }, [adminApprovalStatus, editRequestStatus, isViewMode, journalId]);
+  }, [
+    adminApprovalStatus,
+    editRequestStatus,
+    isViewMode,
+    journalId,
+    hasAdminOverride,
+    syncModeToUrl,
+  ]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
@@ -646,10 +679,15 @@ const JournalForm: React.FC = () => {
 
   const searchAuthor = async (query: string, index: number) => {
     // Allow empty query to show initial list on focus
+    const requestToken = (authorSearchTokenRef.current[index] || 0) + 1;
+    authorSearchTokenRef.current[index] = requestToken;
     try {
       const authors = (await authenticityUtility.get(
         `/authors/search?query=${encodeURIComponent(query)}&designation=${encodeURIComponent(authorDesignations[index])}&_=${Date.now()}`,
       )) as any;
+
+      // Drop responses that arrived after a newer search on this row started.
+      if (authorSearchTokenRef.current[index] !== requestToken) return;
 
       if (authors && Array.isArray(authors)) {
         setSearchResults((prevResults) => {
@@ -659,10 +697,13 @@ const JournalForm: React.FC = () => {
           return newResults;
         });
 
+        // Only the focused row may open its dropdown, and only one row at a time,
+        // otherwise slow responses stack overlapping popups on top of each other.
+        const isRowFocused = activeAuthorSearchIndexRef.current === index;
         setShowSuggestions((prev) => {
           const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
-          const newShow = [...prevArray];
-          newShow[index] = authors.length > 0;
+          const newShow = isRowFocused ? prevArray.map(() => false) : [...prevArray];
+          newShow[index] = isRowFocused && authors.length > 0;
           return newShow;
         });
       } else {
@@ -677,6 +718,11 @@ const JournalForm: React.FC = () => {
         data: error.response?.data,
         stack: error.stack,
       });
+
+      // A failure belonging to a query the user has already moved past says
+      // nothing about the current one, so it must not clear its results or
+      // raise an error over them.
+      if (authorSearchTokenRef.current[index] !== requestToken) return;
 
       setError(
         error.response?.data?.message ||
@@ -701,12 +747,13 @@ const JournalForm: React.FC = () => {
     }
   };
 
-  const checkEditRequestStatus = async () => {
-    if (!journalId) return;
+  const checkEditRequestStatus = async (targetJournalId?: string) => {
+    const idToCheck = targetJournalId || journalId;
+    if (!idToCheck) return;
 
     try {
       const response = (await authenticityUtility.get(
-        `/edit-requests/journals/${journalId}?_=${Date.now()}`,
+        `/edit-requests/journals/${idToCheck}?_=${Date.now()}`,
       )) as any;
 
       if (response.data) {
@@ -735,13 +782,40 @@ const JournalForm: React.FC = () => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (!journalRequest.journal_name.trim()) {
-      setJournalRequestError('Journal name is required');
+    // Checked here rather than by the browser so the message lands in the modal's own
+    // alert strip instead of a native bubble, and so every field the modal marks with an
+    // asterisk is actually enforced.
+    const missing = [
+      !journalRequest.journal_name.trim() && 'Journal name',
+      !journalRequest.category && 'Level',
+      !journalRequest.publisher.trim() && 'Publisher',
+      !journalRequest.website.trim() && 'Website',
+      !journalRequest.print_issn.trim() && 'Print ISSN',
+      !journalRequest.online_issn.trim() && 'Online ISSN',
+      !journalRequest.impact_factor.trim() && 'Impact Factor',
+      !journalRequest.cite_score.trim() && 'Cite Score',
+    ].filter(Boolean) as string[];
+
+    if (missing.length > 0) {
+      setJournalRequestError(
+        missing.length === 1
+          ? `${missing[0]} is required.`
+          : `These fields are required: ${missing.join(', ')}.`,
+      );
       return;
     }
 
-    if (!journalRequest.category) {
-      setJournalRequestError('Category is required');
+    // noValidate turns off the browser's own url check, so the shape of the website is
+    // verified here — an unparseable value would otherwise be stored on the registry
+    // entry an admin later approves.
+    const websiteValue = journalRequest.website.trim();
+    const normalizedWebsite = /^https?:\/\//i.test(websiteValue)
+      ? websiteValue
+      : `https://${websiteValue}`;
+    try {
+      new URL(normalizedWebsite);
+    } catch {
+      setJournalRequestError('Website must be a valid URL, for example https://example.com.');
       return;
     }
 
@@ -749,10 +823,17 @@ const JournalForm: React.FC = () => {
       setJournalRequestLoading(true);
       setJournalRequestError('');
 
-      const response = (await authenticityUtility.post('/journal-requests', journalRequest)) as any;
+      const response = (await authenticityUtility.post('/journal-requests', {
+        ...journalRequest,
+        website: normalizedWebsite,
+      })) as any;
 
       if (response.status === 'success') {
-        alert('Journal request submitted successfully! It will be reviewed by an administrator.');
+        showAlert(
+          'Journal request submitted successfully. It will be reviewed by an administrator.',
+          'success',
+          'Request Sent',
+        );
         setShowJournalRequestModal(false);
         setJournalRequest({
           journal_name: '',
@@ -775,65 +856,19 @@ const JournalForm: React.FC = () => {
     }
   };
 
-  const handleJournalRequestChange = (field: keyof JournalRequest, value: string) => {
+  // Opens "Add Journal" carrying over whatever the user already typed into the journal
+  // search box, and drops any error left over from a previous attempt.
+  const openJournalRequestModal = () => {
+    setJournalRequestError('');
     setJournalRequest((prev) => ({
       ...prev,
-      [field]: value,
+      journal_name: prev.journal_name || journalSearchQuery.trim(),
     }));
+    setShowJournalRequestModal(true);
   };
 
-  // Add conference request handlers
-  const handleConferenceRequestSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (!conferenceRequest.conference_name.trim()) {
-      setConferenceRequestError('Conference name is required');
-      return;
-    }
-
-    if (!conferenceRequest.category) {
-      setConferenceRequestError('Category is required');
-      return;
-    }
-
-    try {
-      setConferenceRequestLoading(true);
-      setConferenceRequestError('');
-
-      const response = (await authenticityUtility.post(
-        '/conference-requests',
-        conferenceRequest,
-      )) as any;
-
-      if (response.status === 'success') {
-        alert(
-          'Conference request submitted successfully! It will be reviewed by an administrator.',
-        );
-        setShowConferenceRequestModal(false);
-        setConferenceRequest({
-          conference_name: '',
-          publisher: '',
-          website: '',
-          print_isbn: '',
-          online_isbn: '',
-          category: '',
-        });
-      } else {
-        setConferenceRequestError(response.message || 'Failed to submit conference request');
-      }
-    } catch (error: any) {
-      console.error('Error submitting conference request:', error);
-      setConferenceRequestError(
-        error.response?.data?.message || 'Failed to submit conference request',
-      );
-    } finally {
-      setConferenceRequestLoading(false);
-    }
-  };
-
-  const handleConferenceRequestChange = (field: keyof ConferenceRequest, value: string) => {
-    setConferenceRequest((prev) => ({
+  const handleJournalRequestChange = (field: keyof JournalRequest, value: string) => {
+    setJournalRequest((prev) => ({
       ...prev,
       [field]: value,
     }));
@@ -845,9 +880,7 @@ const JournalForm: React.FC = () => {
     }
 
     setEditMode(true);
-    const url = new URL(window.location.href);
-    url.searchParams.set('mode', 'edit');
-    window.history.replaceState({}, '', url.toString());
+    syncModeToUrl('edit');
   };
 
   const handleEditRequest = async () => {
@@ -862,20 +895,29 @@ const JournalForm: React.FC = () => {
 
       if (response && response.success === true) {
         setEditRequestStatus('pending');
-        alert(response.message || 'Edit request sent to admin for approval');
+        showAlert(
+          response.message || 'Edit request sent to admin for approval.',
+          'success',
+          'Request Sent',
+        );
       } else {
         console.error('Edit request was not successful:', response.message);
-        alert(response.message || 'Failed to send edit request');
+        showAlert(response.message || 'Failed to send edit request.', 'error');
       }
     } catch (error: any) {
       console.error('Error sending edit request:', error);
-      alert(error.response?.data?.message || 'Failed to send edit request');
+      showAlert(error.response?.data?.message || 'Failed to send edit request.', 'error');
     }
   };
 
-  const fetchJournalDetails = async (): Promise<boolean> => {
+  // `targetJournalId` lets the save flow re-read a record whose id is not in state yet
+  // (a freshly created publication).
+  const fetchJournalDetails = async (targetJournalId?: string): Promise<boolean> => {
+    const idToFetch = targetJournalId || journalId;
+    if (!idToFetch) return false;
+
     try {
-      const response = await authenticityUtility.get(`/journals/${journalId}`);
+      const response = await authenticityUtility.get(`/journals/${idToFetch}`);
 
       const journalData = response.data?.data || response.data;
 
@@ -1079,6 +1121,7 @@ const JournalForm: React.FC = () => {
       }
 
       setIsInternational(journalData.category === 'International');
+      setJournalOptionsId(Number(journalData.journal_options_id) || null);
       setStatus(journalData.status || 'waiting');
       setDrivenBy(journalData.driven_by || 'faculty');
 
@@ -1105,6 +1148,12 @@ const JournalForm: React.FC = () => {
       setDoi(journalData.doi || '');
       setScopusId(journalData.scopus_id || '');
       setScieId(journalData.scie_id || '');
+      // These were never restored, so reopening a publication showed them blank and the
+      // next save wrote that blank back over the stored values.
+      setOpenAccess(journalData.open_access === 'Yes' ? 'Yes' : 'No');
+      setYear(journalData.year || '');
+      setWosId(journalData.wos_id || '');
+      setPubmedPmid(journalData.pubmed_pmid || '');
 
       // Set page/article choice based on existing data
       if (journalData.pages_from && journalData.pages_to) {
@@ -1139,8 +1188,10 @@ const JournalForm: React.FC = () => {
           if (typeof sdgsData === 'string') {
             try {
               sdgsData = JSON.parse(sdgsData);
-            } catch (e) {
-              // If JSON parsing fails, treat as regular string array
+            } catch {
+              // LEGACY: rows written before SDGs became a multi-select stored a single
+              // SDG as a plain string rather than a JSON array.
+              // Remove once every journals.sdgs value parses as JSON.
               sdgsData = [sdgsData];
             }
           }
@@ -1190,6 +1241,7 @@ const JournalForm: React.FC = () => {
 
       // Set authors
       let fetchedAuthors: Author[] = [];
+      loadedAuthorLinkIdsRef.current = [];
       if (Array.isArray(journalData.authors)) {
         fetchedAuthors = journalData.authors.map((author: any, index: number) => {
           const normalizedDesignation = computeDesignation(author);
@@ -1206,7 +1258,7 @@ const JournalForm: React.FC = () => {
             department: author.department,
             organization:
               normalizedDesignation === 'student' && !author.organization
-                ? 'K.S.Rangasamy College of Technology'
+                ? DEFAULT_ORGANIZATION
                 : author.organization,
             country: author.country,
             state: author.state || '',
@@ -1216,6 +1268,9 @@ const JournalForm: React.FC = () => {
           };
         });
         setAuthors(fetchedAuthors);
+        loadedAuthorLinkIdsRef.current = fetchedAuthors
+          .map((author: Author) => author.dbAuthorId)
+          .filter((dbAuthorId: string | undefined): dbAuthorId is string => Boolean(dbAuthorId));
 
         // Trim parallel arrays to match authors length
         setSearchResults((prev) => {
@@ -1228,7 +1283,6 @@ const JournalForm: React.FC = () => {
         });
 
         // Update search queries for authors
-        suppressAuthorAutoSearchRef.current = true;
         setSearchQueries((prevQueries) => {
           const prevArray = Array.isArray(prevQueries) ? prevQueries : Array(MAX_AUTHORS).fill('');
           const newQueries = [...prevArray];
@@ -1251,9 +1305,6 @@ const JournalForm: React.FC = () => {
           });
           return newDesignations.slice(0, fetchedAuthors.length);
         });
-        setTimeout(() => {
-          suppressAuthorAutoSearchRef.current = false;
-        }, 250);
       }
 
       // Append external.external_details JSON
@@ -1312,25 +1363,29 @@ const JournalForm: React.FC = () => {
         });
       }
 
-      // Track external authors separately for easier JSON construction on submit
-      setExternalAuthorDetails(
-        Array.isArray(journalData.external_details) ? journalData.external_details : [],
-      );
-
       const normalizedApprovalStatus = normalizeApprovalStatus(journalData.admin_approval_status);
       setAdminApprovalStatus(normalizedApprovalStatus);
 
-      // Check if the current user is the primary or first author
+      // Who may ask for edit access: the corresponding/first author, or whoever filed the
+      // submission. Matching on authorship alone left the submitter of a paper that
+      // credits other people with a permanently disabled "Edit Not Available" button,
+      // even though the server accepts their edit.
       const currentUserEmail = user?.email;
-      if (currentUserEmail && fetchedAuthors.length > 0) {
-        const isEligible = fetchedAuthors.some(
+      const isCreditedAuthor = Boolean(
+        currentUserEmail &&
+        fetchedAuthors.some(
           (author) =>
             (author.is_primary || author.is_first_author) && author.email === currentUserEmail,
-        );
-        setCanRequestEdit(isEligible && normalizedApprovalStatus === 'approved');
-      } else {
-        setCanRequestEdit(false);
-      }
+        ),
+      );
+      const isSubmitter = Boolean(
+        journalData.created_by != null &&
+        user?.id != null &&
+        String(journalData.created_by) === String(user.id),
+      );
+      setCanRequestEdit(
+        (isCreditedAuthor || isSubmitter) && normalizedApprovalStatus === 'approved',
+      );
 
       // Set uploaded file information
       if (journalData.file_path) {
@@ -1377,6 +1432,7 @@ const JournalForm: React.FC = () => {
     });
     setJournalSearchQuery(journal.name);
     setShowJournalSuggestions(false);
+    setJournalOptionsId(Number(journal.id) || null);
 
     // Set Impact Factor and Cite Score from journal options
     const impactFactorInput = document.getElementById('impactFactorInput') as HTMLInputElement;
@@ -1388,15 +1444,12 @@ const JournalForm: React.FC = () => {
       citeScoreInput.value = journal.citeScore != null ? String(journal.citeScore) : '';
     }
 
-    // Set category based on journal selection
-    if (journal.category) {
-      setIsInternational(journal.category === 'International');
-      // Also update the journal request category if modal is open
-      setJournalRequest((prev) => ({
-        ...prev,
-        category: journal.category,
-      }));
-    }
+    // National/International belongs to the journal, not to this publication: it comes
+    // from the registry entry the admin curated in Journal Management.
+    // FALLBACK: an entry that predates journal_options.category has no value, so it
+    // reads as National (the documented default).
+    // Remove after every journal_options row has a curated category.
+    setIsInternational(journal.category === 'International');
   };
 
   const handleDesignationChange = (index: number, designation: string) => {
@@ -1421,7 +1474,7 @@ const JournalForm: React.FC = () => {
         register_no: '',
         name: '',
         department: '',
-        organization: designation === 'student' ? 'K.S.Rangasamy College of Technology' : '',
+        organization: designation === 'student' ? DEFAULT_ORGANIZATION : '',
         country: '',
         state: '',
         designation: designation as 'faculty' | 'student' | 'external', // Set the new designation
@@ -1516,8 +1569,28 @@ const JournalForm: React.FC = () => {
     }
   };
 
+  // Every per-row array here — queries, results, suggestions, designations —
+  // is keyed by index, and delete/reorder splice all of them. A lookup still in
+  // flight would then land its results in whichever row moved into its index,
+  // so both boundaries invalidate every pending lookup rather than trying to
+  // remap it onto the new order.
+  const cancelPendingAuthorSearches = () => {
+    activeAuthorSearchIndexRef.current = null;
+    authorSearchTimerRef.current.forEach((timer, timerIndex) => {
+      if (timer) clearTimeout(timer);
+      authorSearchTimerRef.current[timerIndex] = null;
+    });
+    authorSearchTokenRef.current = authorSearchTokenRef.current.map((token) => (token || 0) + 1);
+    setShowSuggestions((prev) => {
+      const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
+      return prevArray.some(Boolean) ? prevArray.map(() => false) : prevArray;
+    });
+  };
+
   const deleteAuthor = (id: number) => {
     if (id === 1) return;
+
+    cancelPendingAuthorSearches();
 
     // Remove the author and keep parallel arrays in sync
     setAuthors((prevAuthors) => {
@@ -1593,6 +1666,8 @@ const JournalForm: React.FC = () => {
     const dragIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
 
     if (dragIndex === dropIndex) return;
+
+    cancelPendingAuthorSearches();
 
     // Reorder authors
     setAuthors((prevAuthors) => {
@@ -1674,8 +1749,17 @@ const JournalForm: React.FC = () => {
       return next;
     });
 
-    const debouncedSearch = debounce(() => searchAuthor(newValue, index), 300);
-    debouncedSearch();
+    if (authorSearchTimerRef.current[index]) {
+      clearTimeout(authorSearchTimerRef.current[index] as ReturnType<typeof setTimeout>);
+    }
+    // Retire the request already in flight here rather than when the timer
+    // fires: for the next 300ms its answer belongs to a query the user has
+    // already typed past, and showing that list would be showing stale names.
+    authorSearchTokenRef.current[index] = (authorSearchTokenRef.current[index] || 0) + 1;
+    authorSearchTimerRef.current[index] = setTimeout(() => {
+      authorSearchTimerRef.current[index] = null;
+      searchAuthor(newValue, index);
+    }, 300);
   };
 
   const handleAuthorSelect = (selectedAuthor: any, index: number) => {
@@ -1746,6 +1830,17 @@ const JournalForm: React.FC = () => {
             <input
               type="text"
               className="form-control"
+              placeholder="Register No."
+              name="register_no"
+              value={author.register_no || ''}
+              onChange={(e) =>
+                handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
+              }
+              disabled={!editMode && isViewMode}
+            />
+            <input
+              type="text"
+              className="form-control"
               placeholder="Department"
               name="department"
               value={author.department || ''}
@@ -1759,7 +1854,7 @@ const JournalForm: React.FC = () => {
               className="form-control"
               placeholder="Organization"
               name="organization"
-              value={author.organization || 'K.S.Rangasamy College of Technology'}
+              value={author.organization || ''}
               onChange={(e) =>
                 handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
               }
@@ -1822,6 +1917,13 @@ const JournalForm: React.FC = () => {
               value={author.name || searchQueries[index] || ''}
               onChange={(e) => handleSearchInputChange(e, index)}
               onFocus={() => {
+                activeAuthorSearchIndexRef.current = index;
+                // Close any dropdown left open on another row
+                setShowSuggestions((prev) => {
+                  const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
+                  if (!prevArray.some((isOpen, i) => isOpen && i !== index)) return prevArray;
+                  return prevArray.map((isOpen, i) => (i === index ? isOpen : false));
+                });
                 // Skip if author was just added to prevent auto-dropdown
                 if (justAddedAuthorRef.current) return;
                 const selectedAuthor = authors[index];
@@ -1890,7 +1992,9 @@ const JournalForm: React.FC = () => {
               </div>
             )}
           </div>
-          {/* These readOnly fields will display the data after a faculty member is selected */}
+          {/* These readOnly fields will display the data after a faculty member is selected.
+              Faculty details always come from the master record -- never typed here -- so a
+              blank one means the employee record needs fixing; validateAuthors says so. */}
           <input
             type="text"
             className="form-control"
@@ -1911,6 +2015,15 @@ const JournalForm: React.FC = () => {
   };
 
   const handleAuthorSearchBlur = (index: number) => {
+    if (activeAuthorSearchIndexRef.current === index) {
+      activeAuthorSearchIndexRef.current = null;
+    }
+    // Cancel a debounced search so it cannot reopen the dropdown after blur
+    if (authorSearchTimerRef.current[index]) {
+      clearTimeout(authorSearchTimerRef.current[index] as ReturnType<typeof setTimeout>);
+      authorSearchTimerRef.current[index] = null;
+    }
+    authorSearchTokenRef.current[index] = (authorSearchTokenRef.current[index] || 0) + 1;
     setTimeout(() => {
       setShowSuggestions((prev) => {
         const prevArray = Array.isArray(prev) ? prev : Array(MAX_AUTHORS).fill(false);
@@ -1944,11 +2057,6 @@ const JournalForm: React.FC = () => {
     }));
 
     // Update required fields based on toggle
-    setRequiredFields((prev) => ({
-      ...prev,
-      [metric]: value !== null ? value : !prev[metric],
-    }));
-
     if (metric === 'doi' && !value) {
       setDoi('');
     }
@@ -1979,11 +2087,6 @@ const JournalForm: React.FC = () => {
         dependentFields.forEach((field) => (updated[field] = false));
         return updated;
       });
-      setRequiredFields((prev) => {
-        const updated = { ...prev };
-        dependentFields.forEach((field) => (updated[field] = false));
-        return updated;
-      });
       // Reset page/article choice when dateOfSubmission is disabled
       setPageOrArticleChoice('pages');
       // Reset DOI when dateOfSubmission is disabled
@@ -2002,18 +2105,8 @@ const JournalForm: React.FC = () => {
         pages: true,
         articleNumber: false,
       }));
-      setRequiredFields((prev) => ({
-        ...prev,
-        pages: true,
-        articleNumber: false,
-      }));
     } else if (choice === 'article') {
       setMetrics((prev) => ({
-        ...prev,
-        pages: false,
-        articleNumber: true,
-      }));
-      setRequiredFields((prev) => ({
         ...prev,
         pages: false,
         articleNumber: true,
@@ -2025,37 +2118,32 @@ const JournalForm: React.FC = () => {
         pages: false,
         articleNumber: false,
       }));
-      setRequiredFields((prev) => ({
-        ...prev,
-        pages: false,
-        articleNumber: false,
-      }));
     }
   };
 
-  const handleAcknowledgementChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = event.target;
-    setAcknowledgements((prev) => ({
-      ...prev,
-      [name]: checked,
-    }));
-    if (name !== 'Others' && checked) {
-      setAcknowledgements((prev) => ({ ...prev, Nil: false }));
-    }
-    if (name === 'Nil' && checked) {
-      setAcknowledgements({
-        Nil: true,
-        'DST-FIST': false,
-        MODROBS: false,
-        Others: false,
-      });
-      setOtherAcknowledgement('');
-    }
-  };
+  // The published article is always a PDF, and the server caps it at 5 MB. Both are
+  // checked here so a wrong pick is reported immediately instead of at submit time.
+  const MAX_ARTICLE_FILE_BYTES = 5 * 1024 * 1024;
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event?.target?.files;
+    const input = event.target;
+    const files = input?.files;
     const file = files && files.length > 0 ? files[0] : null;
+
+    if (file) {
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (!isPdf) {
+        input.value = '';
+        showAlert('Only PDF files are allowed for the published article.', 'error');
+        return;
+      }
+      if (file.size > MAX_ARTICLE_FILE_BYTES) {
+        input.value = '';
+        showAlert('The published article must be 5 MB or smaller.', 'error');
+        return;
+      }
+    }
+
     setSelectedFile(file);
     if (file) {
       setUploadedFile({
@@ -2106,7 +2194,7 @@ const JournalForm: React.FC = () => {
     e.preventDefault();
 
     if (!newStatusUpdate.status.trim()) {
-      alert('Please select a status');
+      showAlert('Please select a status.', 'warning', 'Status Required');
       return;
     }
 
@@ -2120,11 +2208,15 @@ const JournalForm: React.FC = () => {
       if (response.status === 'success') {
         setNewStatusUpdate({ status: '', userComment: '' });
         await fetchStatusUpdates(); // Refresh the list
-        alert('Status update submitted successfully');
+        showAlert('Status update submitted successfully.', 'success');
       }
     } catch (error: any) {
       console.error('Error submitting status update:', error);
-      alert('Error submitting status update: ' + (error.response?.data?.message || error.message));
+      showAlert(
+        error.response?.data?.message || error.message || 'Could not submit the status update.',
+        'error',
+        'Status Update Failed',
+      );
     } finally {
       setLoadingStatusUpdate(false);
     }
@@ -2138,8 +2230,25 @@ const JournalForm: React.FC = () => {
 
     for (const author of authors) {
       const designation = (author.designation || '').toLowerCase();
+
+      // A faculty row is filled entirely from the master employee record and
+      // its Department/Organization are read-only, so a blank one is a gap in
+      // that record, not something the user left empty. Say so, or the generic
+      // message below sends them hunting for a field they cannot type into.
+      if (designation === 'faculty' && author.name) {
+        if (!author.department || !author.organization) {
+          const missingField = !author.department ? 'department' : 'organization';
+          return `No ${missingField} on the employee record for "${author.name}". Please ask an admin to update the master data, then re-select the author.`;
+        }
+      }
+
+      // External authors have no Department input in the form, so only
+      // name/organization are required for them (country is checked below).
       const baseMissing =
-        !author.name || !author.designation || !author.department || !author.organization;
+        !author.name ||
+        !author.designation ||
+        !author.organization ||
+        (designation !== 'external' && !author.department);
       if (baseMissing) return 'All author fields must be filled';
 
       if (designation === 'student') {
@@ -2272,14 +2381,6 @@ const JournalForm: React.FC = () => {
       return element.value || defaultValue;
     };
 
-    const getMetricValue = (metric: boolean, inputName: string): number | null => {
-      if (!metric) return null;
-      const value = getFormValue(inputName);
-      if (!value || value === '') return null;
-      const parsed = parseFloat(value);
-      return isNaN(parsed) ? null : parsed;
-    };
-
     // Required fields validation (conditional based on category)
     if (!getFormValue('title')) errors.push('Title is required');
     if (!getFormValue('type')) errors.push('Type is required');
@@ -2369,7 +2470,18 @@ const JournalForm: React.FC = () => {
 
     // If there are any validation errors, display them and stop submission
     if (errors.length > 0) {
-      alert('Please fix the following errors:\n\n' + errors.join('\n'));
+      showAlert(
+        <>
+          <div className="mb-2">Please fix the following before submitting:</div>
+          <ul className="mb-0 ps-3">
+            {errors.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        </>,
+        'warning',
+        errors.length === 1 ? '1 item needs attention' : `${errors.length} items need attention`,
+      );
       return;
     }
 
@@ -2432,6 +2544,9 @@ const JournalForm: React.FC = () => {
         : isConference
           ? publicationDetails.conference_title
           : '',
+      // Names are not unique in the registry, so the id decides which journal this
+      // publication is filed against (and therefore its National/International level).
+      journal_options_id: isJournal ? journalOptionsId : null,
       author_affiliation: getCollaborations(),
       driven_by: drivenBy,
       acknowledgement: acknowledgementData,
@@ -2443,7 +2558,12 @@ const JournalForm: React.FC = () => {
       volume: getFormValue('volumeInput'),
       issue: getFormValue('issueInput'),
       issue_type: getFormValue('issueType'),
-      pages_from: parseInt(getFormValue('pagesFromInput', '0') || '0') || null,
+      // Page range and article number are mutually exclusive; pages_from used to be sent
+      // in either mode, so switching to an article number left a stale start page behind.
+      pages_from:
+        pageOrArticleChoice === 'pages'
+          ? parseInt(getFormValue('pagesFromInput', '0') || '0') || null
+          : null,
       pages_to:
         pageOrArticleChoice === 'pages'
           ? parseInt(getFormValue('pagesToInput', '0') || '0') || null
@@ -2532,6 +2652,22 @@ const JournalForm: React.FC = () => {
       // ══════════════════════════════════════════════════════════════════════
       // STEP 2: Process authors (common to both flows)
       // ══════════════════════════════════════════════════════════════════════
+
+      // Authors the user removed from the form have to be unlinked on the server; only
+      // adds and updates used to be sent, so a removed author reappeared on reload.
+      if (isEditFlow) {
+        const remainingLinkIds = new Set(
+          authors.map((author) => author.dbAuthorId).filter(Boolean) as string[],
+        );
+        const removedLinkIds = loadedAuthorLinkIdsRef.current.filter(
+          (linkId) => !remainingLinkIds.has(linkId),
+        );
+
+        for (const linkId of removedLinkIds) {
+          await authenticityUtility.delete(`/journals/${currentJournalId}/authors/${linkId}`);
+        }
+      }
+
       for (const author of authors) {
         const isStudent = author.designation === 'student';
         const isExternal = author.designation === 'external';
@@ -2578,9 +2714,11 @@ const JournalForm: React.FC = () => {
       // ══════════════════════════════════════════════════════════════════════
       // STEP 3: Process indexes (common to both flows)
       // ══════════════════════════════════════════════════════════════════════
-      for (const indexName of selectedIndexes) {
-        await authenticityUtility.post(`/journals/${currentJournalId}/indexes`, { indexName });
-      }
+      // Replace the whole set rather than appending: re-posting each selected index on
+      // every save duplicated rows and never dropped a de-selected one.
+      await authenticityUtility.put(`/journals/${currentJournalId}/indexes`, {
+        indexes: selectedIndexes,
+      });
 
       // ══════════════════════════════════════════════════════════════════════
       // STEP 4: Upload file if selected (common to both flows)
@@ -2596,7 +2734,6 @@ const JournalForm: React.FC = () => {
           const filePath = uploadResponse?.data?.filePath || uploadResponse?.filePath;
           if (filePath) {
             setUploadedFile({ path: filePath, name: selectedFile.name });
-            setUploadedFileName(selectedFile.name);
             setSelectedFile(null);
           } else {
             console.warn('Invalid file upload response:', uploadResponse);
@@ -2631,21 +2768,23 @@ const JournalForm: React.FC = () => {
       const successMessage = isEditFlow
         ? 'Journal updated successfully!'
         : 'Journal created successfully!';
-      alert(successMessage);
+      showAlert(successMessage, 'success');
+
+      // Back to view mode
+      syncModeToUrl('view');
 
       setEditMode(false);
-      setEditRequestStatus(null);
-      setAdminApprovalStatus('pending');
-      setCanRequestEdit(false);
 
-      // Update URL to view mode
-      const url = new URL(window.location.href);
-      url.searchParams.set('mode', 'view');
-      window.history.replaceState({}, '', url.toString());
+      // Re-read the saved record instead of assuming what the workflow now looks like.
+      // Hard-coding 'pending' here contradicted the server whenever an admin edited an
+      // approved publication, and it hid the journal level, indexes and authors the
+      // server had just recalculated.
+      await fetchJournalDetails(currentJournalId);
+      await checkEditRequestStatus(currentJournalId);
     } catch (error: any) {
       console.error('Error submitting journal:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
-      alert(`Error submitting journal: ${errorMessage}`);
+      showAlert(errorMessage, 'error', 'Could Not Save');
     } finally {
       setIsFormSubmitting(false);
     }
@@ -2672,31 +2811,38 @@ const JournalForm: React.FC = () => {
       <div className="journal-form-body">
         <div className="container journal-form-container">
           {/* View Mode & Edit Request Alerts */}
-          {isViewMode &&
-            (adminApprovalStatus === 'approved' ? (
-              <div className="alert alert-info d-flex justify-content-between align-items-center">
-                <span>
-                  View Mode - This publication is admin approved. Request edit to modify it.
-                </span>
-                <button
-                  className="btn btn-warning"
-                  onClick={handleEditRequest}
-                  disabled={!canRequestEdit || editRequestStatus === 'pending'}
-                >
-                  {editRequestStatus === 'pending'
-                    ? 'Request Pending'
-                    : canRequestEdit
-                      ? 'Request Edit'
-                      : 'Edit Not Available'}
-                </button>
-              </div>
+          {/* The embedded form is a read-only record inside a page that supplies its own
+              workflow controls, so it does not offer its own way into edit mode. */}
+          {!embedded &&
+            isViewMode &&
+            (adminApprovalStatus === 'approved' && !hasAdminOverride ? (
+              <ViewModeBanner
+                locked
+                message="This publication is admin approved. Request an edit to modify it."
+                action={{
+                  label:
+                    editRequestStatus === 'pending'
+                      ? 'Request Pending'
+                      : canRequestEdit
+                        ? 'Request Edit'
+                        : 'Edit Not Available',
+                  onClick: handleEditRequest,
+                  disabled: !canRequestEdit || editRequestStatus === 'pending',
+                }}
+              />
             ) : (
-              <div className="alert alert-info d-flex justify-content-between align-items-center">
-                <span>View Mode - This submission is unapproved. You can edit it directly.</span>
-                <button className="btn btn-primary" onClick={openEditableMode}>
-                  Edit Now
-                </button>
-              </div>
+              <ViewModeBanner
+                message={
+                  adminApprovalStatus === 'approved'
+                    ? 'This publication is admin approved. You have admin rights to edit it directly.'
+                    : 'This submission is not yet approved. You can edit it directly.'
+                }
+                action={{
+                  label: 'Edit now',
+                  icon: <Pencil size={15} />,
+                  onClick: openEditableMode,
+                }}
+              />
             ))}
           {editRequestStatus === 'rejected' && showRejectedAlert && (
             <div className="alert alert-danger alert-dismissible fade show" role="alert">
@@ -2708,8 +2854,10 @@ const JournalForm: React.FC = () => {
               ></button>
             </div>
           )}
-          {/* New Toggle for Form/Status Tracking */}
-          <div className="category-toggle-container">
+          {/* New Toggle for Form/Status Tracking.
+              An embedded form is a read-only record inside a page that supplies its own
+              controls (admin review), so it offers no way to post status updates. */}
+          <div className={`category-toggle-container${embedded ? ' d-none' : ''}`}>
             <button
               type="button"
               className={activeTab === 'form' ? 'active' : ''}
@@ -2727,9 +2875,14 @@ const JournalForm: React.FC = () => {
             </button>
           </div>
 
-          {/* Conditional Content Based on Active Tab */}
+          {/* Conditional Content Based on Active Tab.
+              The form carries noValidate: it does its own checking and reports every
+              problem at once in one modal. With the browser's constraint validation on,
+              native bubbles competed with that — and worse, a required control that had
+              gone blank (a Type select whose option list no longer held the saved value,
+              say) silently cancelled the submit with no message at all. */}
           {activeTab === 'form' ? (
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} noValidate>
               {/* Author Card */}
               {/* --- Merged and Refined Author Card (Final Version) --- */}
               <div className="form-card">
@@ -3108,11 +3261,13 @@ const JournalForm: React.FC = () => {
                   <div className="form-card h-100" style={{ padding: '24px' }}>
                     <div className="d-flex justify-content-between align-items-center mb-3 section-title-divider">
                       <h6 className="form-section-title mb-0">Journal Details</h6>
-                      {effectiveIsJournal && (
+                      {/* Requesting a new journal is an authoring action, so it is absent
+                          from a read-only embedded record. */}
+                      {effectiveIsJournal && !embedded && (
                         <button
                           type="button"
                           className="btn btn-sm btn-add-journal"
-                          onClick={() => setShowJournalRequestModal(true)}
+                          onClick={openJournalRequestModal}
                           disabled={!editMode && isViewMode}
                         >
                           Add Journal
@@ -3429,298 +3584,192 @@ const JournalForm: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Journal Request Modal */}
-                    {showJournalRequestModal && (
-                      <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1}>
-                        <div className="modal-dialog">
-                          <div className="modal-content">
-                            <div className="modal-header">
-                              <h5 className="modal-title">Request Custom Journal</h5>
-                              <button
-                                type="button"
-                                className="btn-close"
-                                onClick={() => setShowJournalRequestModal(false)}
-                              ></button>
-                            </div>
-                            <div className="modal-body">
-                              {journalRequestError && (
-                                <div className="alert alert-danger">{journalRequestError}</div>
-                              )}
-                              <form onSubmit={handleJournalRequestSubmit}>
-                                <div className="mb-3">
-                                  <label className="form-label">Journal Name *</label>
-                                  <input
-                                    type="text"
-                                    className="form-control"
-                                    value={journalRequest.journal_name}
-                                    onChange={(e) =>
-                                      handleJournalRequestChange('journal_name', e.target.value)
-                                    }
-                                    required
-                                  />
-                                </div>
-                                <div className="mb-3">
-                                  <label className="form-label">Level *</label>
-                                  <div className="position-relative">
-                                    <select
-                                      className="form-control"
-                                      value={journalRequest.category}
-                                      onChange={(e) =>
-                                        handleJournalRequestChange('category', e.target.value)
-                                      }
-                                      required
-                                    >
-                                      <option value="">Select Level</option>
-                                      <option value="National">National</option>
-                                      <option value="International">International</option>
-                                    </select>
-                                    <ChevronDown
-                                      size={12}
-                                      style={{
-                                        position: 'absolute',
-                                        right: '10px',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        pointerEvents: 'none',
-                                        color: '#6c757d',
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="mb-3">
-                                  <label className="form-label">Publisher *</label>
-                                  <input
-                                    type="text"
-                                    className="form-control"
-                                    value={journalRequest.publisher}
-                                    onChange={(e) =>
-                                      handleJournalRequestChange('publisher', e.target.value)
-                                    }
-                                    required
-                                  />
-                                </div>
-                                <div className="mb-3">
-                                  <label className="form-label">Website *</label>
-                                  <input
-                                    type="url"
-                                    className="form-control"
-                                    value={journalRequest.website}
-                                    onChange={(e) =>
-                                      handleJournalRequestChange('website', e.target.value)
-                                    }
-                                    required
-                                  />
-                                </div>
-                                <div className="row mb-3">
-                                  <div className="col-6">
-                                    <label className="form-label">Print ISSN *</label>
-                                    <input
-                                      type="text"
-                                      className="form-control"
-                                      value={journalRequest.print_issn}
-                                      onChange={(e) =>
-                                        handleJournalRequestChange('print_issn', e.target.value)
-                                      }
-                                      required
-                                    />
-                                  </div>
-                                  <div className="col-6">
-                                    <label className="form-label">Online ISSN *</label>
-                                    <input
-                                      type="text"
-                                      className="form-control"
-                                      value={journalRequest.online_issn}
-                                      onChange={(e) =>
-                                        handleJournalRequestChange('online_issn', e.target.value)
-                                      }
-                                      required
-                                    />
-                                  </div>
-                                </div>
-                                <div className="row mb-3">
-                                  <div className="col-6">
-                                    <label className="form-label">Impact Factor *</label>
-                                    <input
-                                      type="number"
-                                      step="0.001"
-                                      className="form-control"
-                                      value={journalRequest.impact_factor}
-                                      onChange={(e) =>
-                                        handleJournalRequestChange('impact_factor', e.target.value)
-                                      }
-                                      placeholder="e.g., 5.123"
-                                      required
-                                    />
-                                  </div>
-                                  <div className="col-6">
-                                    <label className="form-label">Cite Score *</label>
-                                    <input
-                                      type="number"
-                                      step="0.001"
-                                      className="form-control"
-                                      value={journalRequest.cite_score}
-                                      onChange={(e) =>
-                                        handleJournalRequestChange('cite_score', e.target.value)
-                                      }
-                                      placeholder="e.g., 8.5"
-                                      required
-                                    />
-                                  </div>
-                                </div>
-                                <div className="d-flex justify-content-end">
+                    {/* Journal Request Modal.
+                        Rendered into document.body: its own <form> would otherwise sit
+                        inside the publication <form>, which is invalid HTML, and a
+                        fixed-position dialog buried in the layout is at the mercy of any
+                        ancestor that creates a containing block. */}
+                    {showJournalRequestModal &&
+                      createPortal(
+                        <>
+                          <div className="modal-backdrop fade show"></div>
+                          <div
+                            className="modal fade show"
+                            style={{ display: 'block' }}
+                            tabIndex={-1}
+                            onClick={(e) => {
+                              // Click on the scroll area outside the dialog dismisses it;
+                              // the currentTarget check keeps clicks inside the dialog alive.
+                              if (e.target === e.currentTarget) setShowJournalRequestModal(false);
+                            }}
+                          >
+                            <div className="modal-dialog">
+                              <div className="modal-content">
+                                <div className="modal-header">
+                                  <h5 className="modal-title">Request Custom Journal</h5>
                                   <button
                                     type="button"
-                                    className="btn btn-secondary me-2"
+                                    className="btn-close"
                                     onClick={() => setShowJournalRequestModal(false)}
-                                    disabled={journalRequestLoading}
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={journalRequestLoading}
-                                  >
-                                    {journalRequestLoading ? 'Submitting...' : 'Submit Request'}
-                                  </button>
+                                  ></button>
                                 </div>
-                              </form>
+                                <div className="modal-body">
+                                  {journalRequestError && (
+                                    <div className="alert alert-danger">{journalRequestError}</div>
+                                  )}
+                                  <form onSubmit={handleJournalRequestSubmit} noValidate>
+                                    <div className="mb-3">
+                                      <label className="form-label">Journal Name *</label>
+                                      <input
+                                        type="text"
+                                        className="form-control"
+                                        value={journalRequest.journal_name}
+                                        onChange={(e) =>
+                                          handleJournalRequestChange('journal_name', e.target.value)
+                                        }
+                                        required
+                                      />
+                                    </div>
+                                    <div className="mb-3">
+                                      <label className="form-label">Level *</label>
+                                      <div className="position-relative">
+                                        <select
+                                          className="form-control"
+                                          value={journalRequest.category}
+                                          onChange={(e) =>
+                                            handleJournalRequestChange('category', e.target.value)
+                                          }
+                                          required
+                                        >
+                                          <option value="">Select Level</option>
+                                          <option value="National">National</option>
+                                          <option value="International">International</option>
+                                        </select>
+                                        <ChevronDown
+                                          size={12}
+                                          style={{
+                                            position: 'absolute',
+                                            right: '10px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            pointerEvents: 'none',
+                                            color: '#6c757d',
+                                          }}
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="mb-3">
+                                      <label className="form-label">Publisher *</label>
+                                      <input
+                                        type="text"
+                                        className="form-control"
+                                        value={journalRequest.publisher}
+                                        onChange={(e) =>
+                                          handleJournalRequestChange('publisher', e.target.value)
+                                        }
+                                        required
+                                      />
+                                    </div>
+                                    <div className="mb-3">
+                                      <label className="form-label">Website *</label>
+                                      <input
+                                        type="url"
+                                        className="form-control"
+                                        value={journalRequest.website}
+                                        onChange={(e) =>
+                                          handleJournalRequestChange('website', e.target.value)
+                                        }
+                                        required
+                                      />
+                                    </div>
+                                    <div className="row mb-3">
+                                      <div className="col-6">
+                                        <label className="form-label">Print ISSN *</label>
+                                        <input
+                                          type="text"
+                                          className="form-control"
+                                          value={journalRequest.print_issn}
+                                          onChange={(e) =>
+                                            handleJournalRequestChange('print_issn', e.target.value)
+                                          }
+                                          required
+                                        />
+                                      </div>
+                                      <div className="col-6">
+                                        <label className="form-label">Online ISSN *</label>
+                                        <input
+                                          type="text"
+                                          className="form-control"
+                                          value={journalRequest.online_issn}
+                                          onChange={(e) =>
+                                            handleJournalRequestChange(
+                                              'online_issn',
+                                              e.target.value,
+                                            )
+                                          }
+                                          required
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="row mb-3">
+                                      <div className="col-6">
+                                        <label className="form-label">Impact Factor *</label>
+                                        <input
+                                          type="number"
+                                          step="0.001"
+                                          className="form-control"
+                                          value={journalRequest.impact_factor}
+                                          onChange={(e) =>
+                                            handleJournalRequestChange(
+                                              'impact_factor',
+                                              e.target.value,
+                                            )
+                                          }
+                                          placeholder="e.g., 5.123"
+                                          required
+                                        />
+                                      </div>
+                                      <div className="col-6">
+                                        <label className="form-label">Cite Score *</label>
+                                        <input
+                                          type="number"
+                                          step="0.001"
+                                          className="form-control"
+                                          value={journalRequest.cite_score}
+                                          onChange={(e) =>
+                                            handleJournalRequestChange('cite_score', e.target.value)
+                                          }
+                                          placeholder="e.g., 8.5"
+                                          required
+                                        />
+                                      </div>
+                                    </div>
+                                    <div className="d-flex justify-content-end journal-request-actions">
+                                      <button
+                                        type="button"
+                                        className="btn btn-secondary me-2"
+                                        onClick={() => setShowJournalRequestModal(false)}
+                                        disabled={journalRequestLoading}
+                                      >
+                                        Cancel
+                                      </button>
+                                      <button
+                                        type="submit"
+                                        className="btn btn-primary"
+                                        disabled={journalRequestLoading}
+                                      >
+                                        {journalRequestLoading ? 'Submitting...' : 'Submit Request'}
+                                      </button>
+                                    </div>
+                                  </form>
+                                </div>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </div>
-                    )}
+                        </>,
+                        document.body,
+                      )}
 
-                    {/* Conference Request Modal */}
-                    {showConferenceRequestModal && (
-                      <div className="modal fade show" style={{ display: 'block' }} tabIndex={-1}>
-                        <div className="modal-dialog">
-                          <div className="modal-content">
-                            <div className="modal-header">
-                              <h5 className="modal-title">Request Custom Conference</h5>
-                              <button
-                                type="button"
-                                className="btn-close"
-                                onClick={() => setShowConferenceRequestModal(false)}
-                              ></button>
-                            </div>
-                            <div className="modal-body">
-                              {conferenceRequestError && (
-                                <div className="alert alert-danger">{conferenceRequestError}</div>
-                              )}
-                              <form onSubmit={handleConferenceRequestSubmit}>
-                                <div className="mb-3">
-                                  <label className="form-label">Conference Name *</label>
-                                  <input
-                                    type="text"
-                                    className="form-control"
-                                    value={conferenceRequest.conference_name}
-                                    onChange={(e) =>
-                                      handleConferenceRequestChange(
-                                        'conference_name',
-                                        e.target.value,
-                                      )
-                                    }
-                                    required
-                                  />
-                                </div>
-                                <div className="mb-3">
-                                  <label className="form-label">Level *</label>
-                                  <div className="position-relative">
-                                    <select
-                                      className="form-control"
-                                      value={conferenceRequest.category}
-                                      onChange={(e) =>
-                                        handleConferenceRequestChange('category', e.target.value)
-                                      }
-                                      required
-                                    >
-                                      <option value="">Select Level</option>
-                                      <option value="National">National</option>
-                                      <option value="International">International</option>
-                                    </select>
-                                    <ChevronDown
-                                      size={12}
-                                      style={{
-                                        position: 'absolute',
-                                        right: '10px',
-                                        top: '50%',
-                                        transform: 'translateY(-50%)',
-                                        pointerEvents: 'none',
-                                        color: '#6c757d',
-                                      }}
-                                    />
-                                  </div>
-                                </div>
-                                <div className="mb-3">
-                                  <label className="form-label">Publisher</label>
-                                  <input
-                                    type="text"
-                                    className="form-control"
-                                    value={conferenceRequest.publisher}
-                                    onChange={(e) =>
-                                      handleConferenceRequestChange('publisher', e.target.value)
-                                    }
-                                  />
-                                </div>
-                                <div className="mb-3">
-                                  <label className="form-label">Website</label>
-                                  <input
-                                    type="url"
-                                    className="form-control"
-                                    value={conferenceRequest.website}
-                                    onChange={(e) =>
-                                      handleConferenceRequestChange('website', e.target.value)
-                                    }
-                                  />
-                                </div>
-                                <div className="row mb-3">
-                                  <div className="col-6">
-                                    <label className="form-label">Print ISBN</label>
-                                    <input
-                                      type="text"
-                                      className="form-control"
-                                      value={conferenceRequest.print_isbn}
-                                      onChange={(e) =>
-                                        handleConferenceRequestChange('print_isbn', e.target.value)
-                                      }
-                                    />
-                                  </div>
-                                  <div className="col-6">
-                                    <label className="form-label">Online ISBN</label>
-                                    <input
-                                      type="text"
-                                      className="form-control"
-                                      value={conferenceRequest.online_isbn}
-                                      onChange={(e) =>
-                                        handleConferenceRequestChange('online_isbn', e.target.value)
-                                      }
-                                    />
-                                  </div>
-                                </div>
-                                <div className="d-flex justify-content-end">
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary me-2"
-                                    onClick={() => setShowConferenceRequestModal(false)}
-                                    disabled={conferenceRequestLoading}
-                                  >
-                                    Cancel
-                                  </button>
-                                  <button
-                                    type="submit"
-                                    className="btn btn-primary"
-                                    disabled={conferenceRequestLoading}
-                                  >
-                                    {conferenceRequestLoading ? 'Submitting...' : 'Submit Request'}
-                                  </button>
-                                </div>
-                              </form>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
                     {/* Metrics & Status Section */}
                     {effectiveIsJournal && (
                       <div className="mb-3 mt-4">
@@ -3740,11 +3789,6 @@ const JournalForm: React.FC = () => {
                               className="form-control"
                               disabled={true}
                               readOnly
-                              style={{
-                                backgroundColor: '#e9ecef',
-                                cursor: 'not-allowed',
-                                color: '#495057',
-                              }}
                             />
                           </div>
                           <div className="col-6">
@@ -3762,11 +3806,6 @@ const JournalForm: React.FC = () => {
                               className="form-control"
                               disabled={true}
                               readOnly
-                              style={{
-                                backgroundColor: '#e9ecef',
-                                cursor: 'not-allowed',
-                                color: '#495057',
-                              }}
                             />
                           </div>
                         </div>
@@ -3831,11 +3870,8 @@ const JournalForm: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Modal backdrop */}
-                    {showConferenceRequestModal && <div className="modal-backdrop fade show"></div>}
-
-                    {/* Modal backdrop */}
-                    {showJournalRequestModal && <div className="modal-backdrop fade show"></div>}
+                    {/* Backdrops now render inside each modal's portal, so the dialog and
+                        its backdrop always share one stacking context. */}
                   </div>
                 </div>
               </div>
@@ -4164,7 +4200,7 @@ const JournalForm: React.FC = () => {
                               <div className="pub-upload-title-modern">Published Article</div>
                               <div className="pub-upload-subtitle-modern">PDF (Maximum 5 MB)</div>
                               {(selectedFile || uploadedFile) && !(isViewMode && !editMode) && (
-                                <div className="mt-1" style={{ fontSize: '12px' }}>
+                                <div className="pub-upload-file-row">
                                   <a
                                     href={
                                       selectedFile
@@ -4173,13 +4209,15 @@ const JournalForm: React.FC = () => {
                                     }
                                     target="_blank"
                                     rel="noopener noreferrer"
+                                    className="pub-upload-file-name"
+                                    title={selectedFile ? selectedFile.name : uploadedFile!.name}
                                   >
                                     {selectedFile ? selectedFile.name : uploadedFile!.name}
                                   </a>
                                   {editMode && (
                                     <button
                                       type="button"
-                                      className="btn btn-link text-danger p-0 ms-2"
+                                      className="pub-upload-file-delete"
                                       onClick={handleFileDelete}
                                       title="Delete file"
                                     >
@@ -4213,6 +4251,7 @@ const JournalForm: React.FC = () => {
                               <input
                                 id="file-upload"
                                 type="file"
+                                accept="application/pdf,.pdf"
                                 onChange={handleFileSelect}
                                 disabled={!editMode}
                                 style={{ display: 'none' }}
@@ -4339,8 +4378,8 @@ const JournalForm: React.FC = () => {
                   </div>
                 </>
               )}
-              {/* Submit Button */}
-              <div className="text-center mt-4 mb-5">
+              {/* Submit Button — hidden when embedded, where saving is not on offer */}
+              <div className={`text-center mt-4 mb-5${embedded ? ' d-none' : ''}`}>
                 <button
                   type="submit"
                   className="btn-submit-approval"
@@ -4471,6 +4510,14 @@ const JournalForm: React.FC = () => {
             </div>
           )}
         </div>
+
+        <AlertModal
+          show={alertConfig.show}
+          onHide={closeAlert}
+          message={alertConfig.message}
+          type={alertConfig.type}
+          title={alertConfig.title}
+        />
       </div>
     );
   } catch (error: any) {

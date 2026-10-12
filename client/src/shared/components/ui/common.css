@@ -200,6 +200,9 @@
 
 .compact-alert-modal .modal-header .btn-close {
   margin-top: -2px;
+  /* Bootstrap's own rule pushes the close button right, but the compact header sets
+     align-items and loses it, leaving the X butted against the title text. */
+  margin-left: auto;
 }
 
 .compact-alert-modal .modal-body {

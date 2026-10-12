@@ -227,16 +227,12 @@ input[type='checkbox'],
   box-shadow: 0 0 0 0.25rem rgba(0, 105, 171, 0.25) !important;
 }
 
-/* Modal specific styles for journal request modal - Compact */
-.modal.fade.show {
-  display: block !important;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-.modal-backdrop.fade.show {
-  display: block !important;
-  background-color: rgba(0, 0, 0, 0.5);
-}
+/* No `.modal`/`.modal-backdrop` background here on purpose. Both used to be
+   painted 50% black keyed on `.show`, which is a state, not a style: the colour
+   appeared and vanished in one frame while Bootstrap's backdrop was still
+   fading its opacity over 150ms, so opening and closing a dialog stepped
+   through two different shades instead of fading through one. The backdrop
+   alone does the darkening now, the way Bootstrap fades it. */
 
 /* Modal dialog and content styling - Compact */
 .modal-dialog {
@@ -327,7 +323,10 @@ input[type='checkbox'],
   width: 18px;
   height: 18px;
   padding: 0;
-  margin: 0;
+  /* margin-left:auto keeps the X pinned to the right edge of the header;
+     a bare `margin: 0` would kill Bootstrap's own auto margin. */
+  margin: 0 0 0 auto;
+  flex-shrink: 0;
 }
 
 .modal-header .btn-close:hover {

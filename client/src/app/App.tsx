@@ -13,6 +13,7 @@ import JournalManagement from '../features/admin/formManagement/JournalFormOptio
 import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
 import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-approval/AdminGuesthouseApproval';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
+import PublicationReview from '../features/admin/PublicationReview';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
 import { EventPage, EventCalendarPage } from '../features/events/events';
@@ -22,7 +23,7 @@ import FinanceApproval from '../features/finance/financeapproval';
 import GuestHouseBooking from '../features/guesthouse/GuestHouseBooking';
 import Journalform from '../features/journals/journalform';
 import ProfilePage from '../features/profile/ProfilePage';
-import Projectform from '../features/projects/projectform';
+import ProjectForm from '../features/projects/ProjectForm';
 import Storybook from '../features/storybook/Storybook';
 import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetdashboard';
 import EventDashboard from '../features/user-dashboard/eventdashboard/eventdashboard';
@@ -49,7 +50,11 @@ import {
   SuperAdminRoute,
   ExpenditureApprovalRoute,
 } from '../shared/components/ProtectedRoute';
+import NotFound from '../shared/components/ui/NotFound';
+import { ToastProvider } from '../shared/components/ui/toast/ToastProvider';
 import UnderConstruction from '../shared/components/ui/UnderConstruction';
+import NotificationProvider from '../shared/notifications/NotificationProvider';
+import NotificationsPage from '../shared/notifications/NotificationsPage';
 import WorkflowModulePage from '../shared/pages/workflow/WorkflowModulePage';
 
 function App() {
@@ -59,525 +64,605 @@ function App() {
         <BrowserRouter>
           <AuthProvider>
             <AbilityProvider>
-              <Routes>
-                {/* Login */}
-                <Route path="/login" element={<Login />} />
+              {/* ToastProvider is outside NotificationProvider because the
+                  latter raises toasts when a notification arrives, and both sit
+                  inside AuthProvider so polling starts and stops with the
+                  session. */}
+              <ToastProvider>
+                <NotificationProvider>
+                  <Routes>
+                    {/* Login */}
+                    <Route path="/login" element={<Login />} />
 
-                {/* Main Layout */}
-                <Route element={<MainLayout />}>
-                  {/* USER ROUTES */}
-                  <Route
-                    path="/events"
-                    element={
-                      <ProtectedRoute>
-                        <EventDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/event/new"
-                    element={
-                      <ProtectedRoute>
-                        <EventPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/event/:eventId"
-                    element={
-                      <ProtectedRoute>
-                        <EventPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/project"
-                    element={
-                      <ProtectedRoute>
-                        <Projectform />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/project/:id"
-                    element={
-                      <ProtectedRoute>
-                        <Projectform />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/dashboard"
-                    element={
-                      <ProtectedRoute>
-                        <UserDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/journal"
-                    element={
-                      <ProtectedRoute>
-                        <Journalform />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/journal/conference"
-                    element={
-                      <ProtectedRoute>
-                        <Journalform />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/journal/book"
-                    element={
-                      <ProtectedRoute>
-                        <Journalform />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/journal/book-chapter"
-                    element={
-                      <ProtectedRoute>
-                        <Journalform />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/journal/:journalId"
-                    element={
-                      <ProtectedRoute>
-                        <Journalform />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/publications"
-                    element={
-                      <ProtectedRoute>
-                        <PublicationsPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/projects"
-                    element={
-                      <ProtectedRoute>
-                        <ProjectsPage />
-                      </ProtectedRoute>
-                    }
-                  />
+                    {/* Main Layout */}
+                    <Route element={<MainLayout />}>
+                      {/* USER ROUTES */}
+                      <Route
+                        path="/events"
+                        element={
+                          <ProtectedRoute>
+                            <EventDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/event/new"
+                        element={
+                          <ProtectedRoute>
+                            <EventPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/event/:eventId"
+                        element={
+                          <ProtectedRoute>
+                            <EventPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/project"
+                        element={
+                          <ProtectedRoute>
+                            <ProjectForm />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/project/:id"
+                        element={
+                          <ProtectedRoute>
+                            <ProjectForm />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/dashboard"
+                        element={
+                          <ProtectedRoute>
+                            <UserDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/notifications"
+                        element={
+                          <ProtectedRoute>
+                            <NotificationsPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/journal"
+                        element={
+                          <ProtectedRoute>
+                            <Journalform />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/journal/conference"
+                        element={
+                          <ProtectedRoute>
+                            <Journalform />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/journal/book"
+                        element={
+                          <ProtectedRoute>
+                            <Journalform />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/journal/book-chapter"
+                        element={
+                          <ProtectedRoute>
+                            <Journalform />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/journal/:journalId"
+                        element={
+                          <ProtectedRoute>
+                            <Journalform />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/publications"
+                        element={
+                          <ProtectedRoute>
+                            <PublicationsPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/projects"
+                        element={
+                          <ProtectedRoute>
+                            <ProjectsPage />
+                          </ProtectedRoute>
+                        }
+                      />
 
-                  {/* FINANCE */}
-                  <Route
-                    path="/budgetcard"
-                    element={
-                      <ProtectedRoute>
-                        <BudgetDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/financecard"
-                    element={
-                      <ProtectedRoute>
-                        <FinanceCard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/finance/new"
-                    element={
-                      <ProtectedRoute>
-                        <FinanceApproval />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/budget/new"
-                    element={
-                      <ProtectedRoute>
-                        <Budget />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/budget/:id"
-                    element={
-                      <ProtectedRoute>
-                        <Budget />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/budget/:id/edit"
-                    element={
-                      <ProtectedRoute>
-                        <Budget />
-                      </ProtectedRoute>
-                    }
-                  />
+                      {/* FINANCE */}
+                      <Route
+                        path="/finance/new"
+                        element={
+                          <ProtectedRoute>
+                            <FinanceApproval />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/finance/:id"
+                        element={
+                          <ProtectedRoute>
+                            <FinanceApproval />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/finance/:id/edit"
+                        element={
+                          <ProtectedRoute>
+                            <FinanceApproval />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workflow/:moduleKey"
+                        element={
+                          <ModuleWorkflowRoute>
+                            <WorkflowModulePage />
+                          </ModuleWorkflowRoute>
+                        }
+                      />
+                      <Route
+                        path="/financecard"
+                        element={
+                          <ProtectedRoute>
+                            <FinanceCard />
+                          </ProtectedRoute>
+                        }
+                      />
 
-                  {/* EXPENDITURE */}
-                  {/* <Route path="/expenditure" element={<ProtectedRoute><UnderConstruction pageName="Expenditure" /></ProtectedRoute>} /> */}
-                  <Route
-                    path="/expenditurecard"
-                    element={
-                      <ProtectedRoute>
-                        <ExpenditureDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/expenditure/new"
-                    element={
-                      <ProtectedRoute>
-                        <ExpenditureApproval />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/expenditure/:id"
-                    element={
-                      <ProtectedRoute>
-                        <ExpenditureApproval />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/expenditure/:id/edit"
-                    element={
-                      <ProtectedRoute>
-                        <ExpenditureApproval />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/expenditure/approval"
-                    element={
-                      <ExpenditureApprovalRoute>
-                        <ExpenditureApproval />
-                      </ExpenditureApprovalRoute>
-                    }
-                  />
+                      {/* GUEST HOUSE */}
+                      <Route
+                        path="/guesthouse-booking"
+                        element={
+                          <ProtectedRoute>
+                            <GuestHouseBooking />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/guestHouse-dashboard"
+                        element={
+                          <ProtectedRoute>
+                            <GuestHouseDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
 
-                  {/* ADMIN */}
-                  <Route
-                    path="/admin-dashboard"
-                    element={
-                      <AdminRoute>
-                        <Dashboard />
-                      </AdminRoute>
-                    }
-                  />
-                  <Route
-                    path="/publication-dashboard"
-                    element={
-                      <AdminRoute>
-                        <Dashboard />
-                      </AdminRoute>
-                    }
-                  />
-                  <Route
-                    path="/project-dashboard"
-                    element={
-                      <AdminRoute>
-                        <Dashboard />
-                      </AdminRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/journals"
-                    element={
-                      <AdminRoute>
-                        <JournalManagement />
-                      </AdminRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/form-management/project-options"
-                    element={
-                      <AdminRoute>
-                        <ProjectFormOptions />
-                      </AdminRoute>
-                    }
-                  />
-                  <Route
-                    path="/access-control"
-                    element={
-                      <SuperAdminRoute>
-                        <AccessControlPage />
-                      </SuperAdminRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/master-data"
-                    element={
-                      <SuperAdminRoute>
-                        <MasterDataPage />
-                      </SuperAdminRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/budget-catalog"
-                    element={
-                      <SuperAdminRoute>
-                        <BudgetCatalogPage />
-                      </SuperAdminRoute>
-                    }
-                  />
+                      {/* BUDGET */}
+                      <Route
+                        path="/budgetcard"
+                        element={
+                          <ProtectedRoute>
+                            <BudgetDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/budget/new"
+                        element={
+                          <ProtectedRoute>
+                            <Budget />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/budget/:id"
+                        element={
+                          <ProtectedRoute>
+                            <Budget />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/budget/:id/edit"
+                        element={
+                          <ProtectedRoute>
+                            <Budget />
+                          </ProtectedRoute>
+                        }
+                      />
 
-                  {/* ADMIN BUDGET */}
-                  <Route
-                    path="/admin/budgetdashboard"
-                    element={
-                      <BudgetApprovalRoute>
-                        <AdminBudgetDashboard />
-                      </BudgetApprovalRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/budget"
-                    element={
-                      <BudgetApprovalRoute>
-                        <AdminBudget />
-                      </BudgetApprovalRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/budget/:tab"
-                    element={
-                      <BudgetApprovalRoute>
-                        <AdminBudget />
-                      </BudgetApprovalRoute>
-                    }
-                  />
-                  <Route path="/adminbudget" element={<Navigate to="/admin/budget" replace />} />
-                  <Route
-                    path="/adminbudget/*"
-                    element={<Navigate to="/admin/budget/approval" replace />}
-                  />
+                      {/* EXPENDITURE */}
+                      {/* <Route path="/expenditure" element={<ProtectedRoute><UnderConstruction pageName="Expenditure" /></ProtectedRoute>} /> */}
+                      <Route
+                        path="/expenditurecard"
+                        element={
+                          <ProtectedRoute>
+                            <ExpenditureDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/expenditure/new"
+                        element={
+                          <ProtectedRoute>
+                            <ExpenditureApproval />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/expenditure/:id"
+                        element={
+                          <ProtectedRoute>
+                            <ExpenditureApproval />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/expenditure/:id/edit"
+                        element={
+                          <ProtectedRoute>
+                            <ExpenditureApproval />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/expenditure/approval"
+                        element={
+                          <ExpenditureApprovalRoute>
+                            <ExpenditureApproval />
+                          </ExpenditureApprovalRoute>
+                        }
+                      />
 
-                  {/* UTILITY */}
-                  <Route
-                    path="/eventdashboard"
-                    element={
-                      <ProtectedRoute>
-                        <EventDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/event/new"
-                    element={
-                      <ProtectedRoute>
-                        <EventPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/event/:eventId"
-                    element={
-                      <ProtectedRoute>
-                        <EventPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/guesthouse-calendar"
-                    element={
-                      <ProtectedRoute>
-                        <EventCalendarPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/event-calendar"
-                    element={
-                      <ProtectedRoute>
-                        <EventCalendarPage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route path="/storybook" element={<Storybook />} />
-                  <Route path="/" element={<Navigate to="/dashboard" />} />
+                      {/* ADMIN */}
+                      <Route
+                        path="/admin-dashboard"
+                        element={
+                          <AdminRoute>
+                            <Dashboard />
+                          </AdminRoute>
+                        }
+                      />
+                      <Route
+                        path="/publication-dashboard"
+                        element={
+                          <AdminRoute>
+                            <Dashboard />
+                          </AdminRoute>
+                        }
+                      />
+                      <Route
+                        path="/project-dashboard"
+                        element={
+                          <AdminRoute>
+                            <Dashboard />
+                          </AdminRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/journals"
+                        element={
+                          <AdminRoute>
+                            <JournalManagement />
+                          </AdminRoute>
+                        }
+                      />
+                      {/* One publication under review, on its own page, so it can be linked
+                      to, refreshed and left with the browser's Back button. */}
+                      <Route
+                        path="/admin/publications/:journalId"
+                        element={
+                          <AdminRoute>
+                            <PublicationReview />
+                          </AdminRoute>
+                        }
+                      />
+                      <Route
+                        path="/access-control"
+                        element={
+                          <SuperAdminRoute>
+                            <AccessControlPage />
+                          </SuperAdminRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/master-data"
+                        element={
+                          <SuperAdminRoute>
+                            <MasterDataPage />
+                          </SuperAdminRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/budget-catalog"
+                        element={
+                          <SuperAdminRoute>
+                            <BudgetCatalogPage />
+                          </SuperAdminRoute>
+                        }
+                      />
 
-                  <Route
-                    path="/guesthouse-dashboard"
-                    element={
-                      <ProtectedRoute>
-                        <GuestHouseDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workorderdashboard"
-                    element={
-                      <ProtectedRoute>
-                        <WorkOrderDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workorder/new"
-                    element={
-                      <ProtectedRoute>
-                        <WorkOrder />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workorder/:id"
-                    element={
-                      <ProtectedRoute>
-                        <WorkOrder />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workorder/:id/edit"
-                    element={
-                      <ProtectedRoute>
-                        <WorkOrder />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/resourcepersondirectorydashboard"
-                    element={
-                      <ProtectedRoute>
-                        <ResourcePersonDirectoryDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/organizationdirectorydashboard"
-                    element={
-                      <ProtectedRoute>
-                        <OrganizationDirectoryDashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/vehicle-booking"
-                    element={
-                      <ProtectedRoute>
-                        <UnderConstruction pageName="Vehicle Booking" />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/hall-booking"
-                    element={
-                      <ProtectedRoute>
-                        <UnderConstruction pageName="Hall Booking" />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/profile"
-                    element={
-                      <ProtectedRoute>
-                        <ProfilePage />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/kpi"
-                    element={
-                      <ProtectedRoute>
-                        <UnderConstruction pageName="KPI Dashboard" />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/task"
-                    element={
-                      <ProtectedRoute>
-                        <UnderConstruction pageName="Task Management" />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/reports"
-                    element={
-                      <ProtectedRoute>
-                        <UnderConstruction pageName="Reports" />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/reports/finance"
-                    element={
-                      <ProtectedRoute>
-                        <UnderConstruction pageName="Finance Reports" />
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Any authenticated user may open the report: the API scopes what it
+                      {/* ADMIN BUDGET */}
+                      <Route
+                        path="/admin/budgetdashboard"
+                        element={
+                          <BudgetApprovalRoute>
+                            <AdminBudgetDashboard />
+                          </BudgetApprovalRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/budget"
+                        element={
+                          <BudgetApprovalRoute>
+                            <AdminBudget />
+                          </BudgetApprovalRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/budget/:tab"
+                        element={
+                          <BudgetApprovalRoute>
+                            <AdminBudget />
+                          </BudgetApprovalRoute>
+                        }
+                      />
+                      <Route
+                        path="/adminbudget"
+                        element={<Navigate to="/admin/budget" replace />}
+                      />
+                      <Route
+                        path="/adminbudget/*"
+                        element={<Navigate to="/admin/budget/approval" replace />}
+                      />
+
+                      {/* UTILITY */}
+                      <Route
+                        path="/eventdashboard"
+                        element={
+                          <ProtectedRoute>
+                            <EventDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/event/new"
+                        element={
+                          <ProtectedRoute>
+                            <EventPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/event/:eventId"
+                        element={
+                          <ProtectedRoute>
+                            <EventPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/guesthouse-calendar"
+                        element={
+                          <ProtectedRoute>
+                            <EventCalendarPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/event-calendar"
+                        element={
+                          <ProtectedRoute>
+                            <EventCalendarPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route path="/storybook" element={<Storybook />} />
+                      <Route path="/" element={<Navigate to="/dashboard" />} />
+
+                      <Route
+                        path="/guesthouse-dashboard"
+                        element={
+                          <ProtectedRoute>
+                            <GuestHouseDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workorderdashboard"
+                        element={
+                          <ProtectedRoute>
+                            <WorkOrderDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workorder/new"
+                        element={
+                          <ProtectedRoute>
+                            <WorkOrder />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workorder/:id"
+                        element={
+                          <ProtectedRoute>
+                            <WorkOrder />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workorder/:id/edit"
+                        element={
+                          <ProtectedRoute>
+                            <WorkOrder />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/resourcepersondirectorydashboard"
+                        element={
+                          <ProtectedRoute>
+                            <ResourcePersonDirectoryDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/organizationdirectorydashboard"
+                        element={
+                          <ProtectedRoute>
+                            <OrganizationDirectoryDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      {/* UNDER CONSTRUCTION */}
+                      <Route
+                        path="/vehicle-booking"
+                        element={
+                          <ProtectedRoute>
+                            <UnderConstruction pageName="Vehicle Booking" />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/hall-booking"
+                        element={
+                          <ProtectedRoute>
+                            <UnderConstruction pageName="Hall Booking" />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/profile"
+                        element={
+                          <ProtectedRoute>
+                            <ProfilePage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/kpi"
+                        element={
+                          <ProtectedRoute>
+                            <UnderConstruction pageName="KPI Dashboard" />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/task"
+                        element={
+                          <ProtectedRoute>
+                            <UnderConstruction pageName="Task Management" />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/reports"
+                        element={
+                          <ProtectedRoute>
+                            <UnderConstruction pageName="Reports" />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/reports/finance"
+                        element={
+                          <ProtectedRoute>
+                            <UnderConstruction pageName="Finance Reports" />
+                          </ProtectedRoute>
+                        }
+                      />
+                      {/* Any authenticated user may open the report: the API scopes what it
                       returns by role, down to "your own requests" for a plain user, so a
                       route-level approver check would only bounce them to /home. */}
-                  <Route
-                    path="/reports/expenditure"
-                    element={
-                      <ProtectedRoute>
-                        <ExpenditureReport />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/guesthouse"
-                    element={
-                      <GuesthouseWorkflowRoute>
-                        <AdminGuesthouseApproval />
-                      </GuesthouseWorkflowRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin/event-approval"
-                    element={
-                      <ProtectedRoute>
-                        <AdminEventApproval />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/workflow/:moduleKey"
-                    element={
-                      <ModuleWorkflowRoute>
-                        <WorkflowModulePage />
-                      </ModuleWorkflowRoute>
-                    }
-                  />
-                  <Route
-                    path="/guesthouse/:id/edit"
-                    element={
-                      <ProtectedRoute>
-                        <GuestHouseBooking />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/fellowship"
-                    element={
-                      <ProtectedRoute>
-                        <UnderConstruction pageName="Fellowship" />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/patent"
-                    element={
-                      <ProtectedRoute>
-                        <UnderConstruction pageName="Patent" />
-                      </ProtectedRoute>
-                    }
-                  />
-                </Route>
-              </Routes>
+                      <Route
+                        path="/reports/expenditure"
+                        element={
+                          <ProtectedRoute>
+                            <ExpenditureReport />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/guesthouse"
+                        element={
+                          <GuesthouseWorkflowRoute>
+                            <AdminGuesthouseApproval />
+                          </GuesthouseWorkflowRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/event-approval"
+                        element={
+                          <ProtectedRoute>
+                            <AdminEventApproval />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workflow/:moduleKey"
+                        element={
+                          <ModuleWorkflowRoute>
+                            <WorkflowModulePage />
+                          </ModuleWorkflowRoute>
+                        }
+                      />
+                      <Route
+                        path="/guesthouse/:id/edit"
+                        element={
+                          <ProtectedRoute>
+                            <GuestHouseBooking />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/fellowship"
+                        element={
+                          <ProtectedRoute>
+                            <UnderConstruction pageName="Fellowship" />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/patent"
+                        element={
+                          <ProtectedRoute>
+                            <UnderConstruction pageName="Patent" />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      {/* Last, and inside the layout: anything no route above
+                      claimed used to render an empty document. Behind
+                      `ProtectedRoute` so a signed-out visitor still goes to
+                      the login screen rather than meeting a 404 first. */}
+                      <Route
+                        path="*"
+                        element={
+                          <ProtectedRoute>
+                            <NotFound />
+                          </ProtectedRoute>
+                        }
+                      />
+                    </Route>
+                  </Routes>
+                </NotificationProvider>
+              </ToastProvider>
             </AbilityProvider>
           </AuthProvider>
         </BrowserRouter>

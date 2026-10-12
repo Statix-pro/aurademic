@@ -1950,6 +1950,18 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
+      // A top-up cycle routes on the appended rows alone, so resubmitting the loaded
+      // breakup unchanged leaves nothing to approve. Catch it here with the remedy
+      // spelled out: topping up a head that is already in the request means adding a
+      // row and picking that same head again, not editing the locked row above.
+      if (isTopupWorkflow && budgetRows.length <= initialBudgetRowCount) {
+        showAlert(
+          'Add at least one top-up budget row before submitting. To top up a head that is already in this request, add a new row and select the same Budget Head and Sub Head.',
+          'warning',
+        );
+        return;
+      }
+
       for (let index = 0; index < budgetRows.length; index += 1) {
         const row = budgetRows[index];
         const requestedAmount = Number(row.amount || 0);

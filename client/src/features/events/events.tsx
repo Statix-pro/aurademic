@@ -6915,7 +6915,7 @@ const DocumentsCard: React.FC<DocumentsCardProps> = ({
                 {card.type === 'resource' ? (
                   <div className="rp-form-group" style={{ flex: 2 }}>
                     <CustomDropdown
-                      label="Resource "
+                      label="Resource Person"
                       name={`resource-${card.id}`}
                       options={resourceOptions.map((opt) => ({ value: opt, label: opt }))}
                       value={card.resource ? { value: card.resource, label: card.resource } : null}

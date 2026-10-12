@@ -22,70 +22,62 @@ router.post('/journals', canEditFormOptions, formOptionsController.addOption);
 router.put('/journals/:id', canEditFormOptions, formOptionsController.updateOption);
 router.delete('/journals/:id', canEditFormOptions, formOptionsController.deleteOption);
 
-// Project Agency Options routes
+// Project organization routes (funding agencies, collaborating institutes)
 router.get(
-  '/project-options/agencies',
+  '/project-options/organizations',
   canReadFormOptions,
-  formOptionsController.getProjectAgencyOptions,
+  formOptionsController.getProjectOrganizations,
 );
 router.post(
-  '/project-options/agencies',
+  '/project-options/organizations',
   canEditFormOptions,
-  formOptionsController.addProjectAgencyOption,
+  formOptionsController.addProjectOrganization,
 );
 router.put(
-  '/project-options/agencies/:id',
+  '/project-options/organizations/:id',
   canEditFormOptions,
-  formOptionsController.updateProjectAgencyOption,
+  formOptionsController.updateProjectOrganization,
 );
 router.delete(
-  '/project-options/agencies/:id',
+  '/project-options/organizations/:id',
   canEditFormOptions,
-  formOptionsController.deleteProjectAgencyOption,
+  formOptionsController.deleteProjectOrganization,
 );
 
-// Project Scheme Options routes
-router.get(
-  '/project-options/schemes',
-  canReadFormOptions,
-  formOptionsController.getProjectSchemeOptions,
-);
-router.post(
-  '/project-options/schemes',
-  canEditFormOptions,
-  formOptionsController.addProjectSchemeOption,
-);
+// Project scheme routes
+router.get('/project-options/schemes', canReadFormOptions, formOptionsController.getProjectSchemes);
+router.post('/project-options/schemes', canEditFormOptions, formOptionsController.addProjectScheme);
 router.put(
   '/project-options/schemes/:id',
   canEditFormOptions,
-  formOptionsController.updateProjectSchemeOption,
+  formOptionsController.updateProjectScheme,
 );
 router.delete(
   '/project-options/schemes/:id',
   canEditFormOptions,
-  formOptionsController.deleteProjectSchemeOption,
+  formOptionsController.deleteProjectScheme,
 );
 
-// Project Agency Type Options routes
+// Project budget head routes (the vocabulary the project form offers)
 router.get(
-  '/project-options/agency-types',
+  '/project-options/budget-heads',
   canReadFormOptions,
-  formOptionsController.getProjectAgencyTypeOptions,
+  formOptionsController.getProjectBudgetHeads,
 );
 router.post(
-  '/project-options/agency-types',
+  '/project-options/budget-heads',
   canEditFormOptions,
-  formOptionsController.addProjectAgencyTypeOption,
+  formOptionsController.addProjectBudgetHead,
 );
 router.put(
-  '/project-options/agency-types/:id',
+  '/project-options/budget-heads/:id',
   canEditFormOptions,
-  formOptionsController.updateProjectAgencyTypeOption,
+  formOptionsController.updateProjectBudgetHead,
 );
 router.delete(
-  '/project-options/agency-types/:id',
+  '/project-options/budget-heads/:id',
   canEditFormOptions,
-  formOptionsController.deleteProjectAgencyTypeOption,
+  formOptionsController.deleteProjectBudgetHead,
 );
 
 export default router;

@@ -10,11 +10,13 @@ import {
   ArrowDown,
 } from 'lucide-react';
 import React, { useState, useEffect, useCallback, FormEvent } from 'react';
-import { Table, Button, Form, Modal, Nav, Spinner, Badge } from 'react-bootstrap';
+import { Table, Button, Form, Modal, Spinner } from 'react-bootstrap';
 import AsyncSelect from 'react-select/async';
 
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomButton from '../../../shared/components/ui/CustomButton';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { AdminIconButton, AdminScreenHeader, AdminTabs } from '../components/AdminScreen';
 
 import './MasterDataPage.css';
 
@@ -94,6 +96,35 @@ interface EmployeeLookupOption {
   mobile: string | null;
 }
 
+interface EmployeeLookupRow {
+  id: number;
+  erp_id: string;
+  full_name: string;
+  email: string;
+  mobile: string | null;
+}
+
+interface EmployeePage {
+  rows: Employee[];
+  total: number;
+  totalPages: number;
+}
+
+/** The `{ success, data?, message? }` envelope every endpoint returns. */
+interface ApiEnvelope<T = undefined> {
+  success?: boolean;
+  message?: string;
+  data: T;
+}
+
+/**
+ * `authenticityUtility` is axios, so a 4xx/5xx rejects instead of resolving with the
+ * body. The server's envelope message rides along on the error — surface it, and fall
+ * back to a generic line when the request never reached the API.
+ */
+const apiMessage = (error: unknown, fallback: string): string =>
+  (error as { response?: { data?: { message?: string } } })?.response?.data?.message || fallback;
+
 type TabKey = 'departments' | 'entities' | 'employees';
 
 type SortDirection = 'asc' | 'desc';
@@ -107,7 +138,6 @@ interface SortConfig {
 // ============================================
 
 export default function MasterDataPage() {
-  const baseUrl = authenticityUtility.getBaseURL();
   const [activeTab, setActiveTab] = useState<TabKey>('departments');
 
   const [deptSort, setDeptSort] = useState<SortConfig | null>(null);
@@ -170,17 +200,11 @@ export default function MasterDataPage() {
   const loadEmployeeOptions = async (inputValue: string): Promise<EmployeeLookupOption[]> => {
     if (!inputValue || inputValue.length < 2) return [];
     try {
-      const response = await fetch(
-        `${baseUrl}/api/master-data/employees/lookup?search=${encodeURIComponent(inputValue)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        },
-      );
-      const data = await response.json();
-      if (data.status === 'success') {
-        return data.data.map((emp: any) => ({
+      const data = (await authenticityUtility.get('/master-data/employees/lookup', {
+        params: { search: inputValue },
+      })) as ApiEnvelope<EmployeeLookupRow[]>;
+      if (data.success) {
+        return data.data.map((emp) => ({
           value: emp.id,
           label: `${emp.full_name?.trim()} (${emp.erp_id})`,
           email: emp.email,
@@ -251,27 +275,27 @@ export default function MasterDataPage() {
   const fetchDepartments = useCallback(async () => {
     setDeptLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (deptSearch) params.set('search', deptSearch);
-      if (deptTypeFilter) params.set('type', deptTypeFilter);
-
-      const response = await fetch(`${baseUrl}/api/master-data/departments?${params}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+      const data = (await authenticityUtility.get('/master-data/departments', {
+        params: {
+          ...(deptSearch ? { search: deptSearch } : {}),
+          ...(deptTypeFilter ? { type: deptTypeFilter } : {}),
         },
-      });
-      const data = await response.json();
-      if (data.status === 'success') setDepartments(data.data);
-    } catch {
-      showAlert('Failed to load departments', 'error');
+      })) as ApiEnvelope<Department[]>;
+      if (data.success) setDepartments(data.data);
+    } catch (error) {
+      showAlert(apiMessage(error, 'Failed to load departments'), 'error');
     } finally {
       setDeptLoading(false);
     }
-  }, [baseUrl, deptSearch, deptTypeFilter]);
+  }, [deptSearch, deptTypeFilter]);
 
+  // Not `if (activeTab === 'departments')`: the tab strip shows how many rows
+  // each list holds, and a count for a list that has not been fetched is either
+  // absent or a lie. Three small requests on open buys a strip that is complete
+  // before anything is clicked.
   useEffect(() => {
-    if (activeTab === 'departments') fetchDepartments();
-  }, [activeTab, fetchDepartments]);
+    fetchDepartments();
+  }, [fetchDepartments]);
 
   const openDeptModal = (dept?: Department) => {
     if (dept) {
@@ -323,21 +347,10 @@ export default function MasterDataPage() {
         // sort_order: parseInt(deptForm.sort_order) || 0,
       };
 
-      const url = editingDept
-        ? `${baseUrl}/api/master-data/departments/${editingDept.id}`
-        : `${baseUrl}/api/master-data/departments`;
-
-      const response = await fetch(url, {
-        method: editingDept ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-      if (data.status === 'success') {
+      const data = (await (editingDept
+        ? authenticityUtility.put(`/master-data/departments/${editingDept.id}`, body)
+        : authenticityUtility.post('/master-data/departments', body))) as ApiEnvelope;
+      if (data.success) {
         showAlert(
           editingDept ? 'Department updated successfully' : 'Department created successfully',
           'success',
@@ -347,8 +360,8 @@ export default function MasterDataPage() {
       } else {
         showAlert(data.message || 'Operation failed', 'error');
       }
-    } catch {
-      showAlert('Failed to save department', 'error');
+    } catch (error) {
+      showAlert(apiMessage(error, 'Failed to save department'), 'error');
     }
   };
 
@@ -363,21 +376,17 @@ export default function MasterDataPage() {
       'Deactivate',
       async () => {
         try {
-          const response = await fetch(`${baseUrl}/api/master-data/departments/${dept.id}`, {
-            method: 'DELETE',
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-          const data = await response.json();
-          if (data.status === 'success') {
+          const data = (await authenticityUtility.delete(
+            `/master-data/departments/${dept.id}`,
+          )) as ApiEnvelope;
+          if (data.success) {
             showAlert('Department deactivated', 'success');
             fetchDepartments();
           } else {
             showAlert(data.message || 'Failed to deactivate', 'error');
           }
-        } catch {
-          showAlert('Failed to deactivate department', 'error');
+        } catch (error) {
+          showAlert(apiMessage(error, 'Failed to deactivate department'), 'error');
         }
       },
     );
@@ -385,21 +394,17 @@ export default function MasterDataPage() {
 
   const handleRestoreDept = async (dept: Department) => {
     try {
-      const response = await fetch(`${baseUrl}/api/master-data/departments/${dept.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ is_active: 1 }),
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
+      const data = (await authenticityUtility.put(`/master-data/departments/${dept.id}`, {
+        is_active: 1,
+      })) as ApiEnvelope;
+      if (data.success) {
         showAlert('Department reactivated', 'success');
         fetchDepartments();
+      } else {
+        showAlert(data.message || 'Failed to reactivate department', 'error');
       }
-    } catch {
-      showAlert('Failed to reactivate department', 'error');
+    } catch (error) {
+      showAlert(apiMessage(error, 'Failed to reactivate department'), 'error');
     }
   };
 
@@ -426,45 +431,36 @@ export default function MasterDataPage() {
 
   const fetchEntityTypes = useCallback(async () => {
     try {
-      const response = await fetch(`${baseUrl}/api/master-data/entity-types`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      const data = await response.json();
-      if (data.status === 'success') setEntityTypes(data.data);
+      const data = (await authenticityUtility.get('/master-data/entity-types')) as ApiEnvelope<
+        EntityType[]
+      >;
+      if (data.success) setEntityTypes(data.data);
     } catch {
       /* silent */
     }
-  }, [baseUrl]);
+  }, []);
 
   const fetchEntities = useCallback(async () => {
     setEntityLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (entitySearch) params.set('search', entitySearch);
-      if (entityTypeFilter) params.set('entity_type_id', entityTypeFilter);
-
-      const response = await fetch(`${baseUrl}/api/master-data/entities?${params}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+      const data = (await authenticityUtility.get('/master-data/entities', {
+        params: {
+          ...(entitySearch ? { search: entitySearch } : {}),
+          ...(entityTypeFilter ? { entity_type_id: entityTypeFilter } : {}),
         },
-      });
-      const data = await response.json();
-      if (data.status === 'success') setEntities(data.data);
-    } catch {
-      showAlert('Failed to load entities', 'error');
+      })) as ApiEnvelope<Entity[]>;
+      if (data.success) setEntities(data.data);
+    } catch (error) {
+      showAlert(apiMessage(error, 'Failed to load entities'), 'error');
     } finally {
       setEntityLoading(false);
     }
-  }, [baseUrl, entitySearch, entityTypeFilter]);
+  }, [entitySearch, entityTypeFilter]);
 
   useEffect(() => {
-    if (activeTab === 'entities') {
-      fetchEntityTypes();
-      fetchEntities();
-    }
-  }, [activeTab, fetchEntities, fetchEntityTypes]);
+    fetchEntityTypes();
+    fetchEntities();
+  }, [fetchEntities, fetchEntityTypes]);
 
   const openEntityModal = (entity?: Entity) => {
     if (entity) {
@@ -501,21 +497,10 @@ export default function MasterDataPage() {
         // sort_order: parseInt(entityForm.sort_order) || 0,
       };
 
-      const url = editingEntity
-        ? `${baseUrl}/api/master-data/entities/${editingEntity.id}`
-        : `${baseUrl}/api/master-data/entities`;
-
-      const response = await fetch(url, {
-        method: editingEntity ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-      if (data.status === 'success') {
+      const data = (await (editingEntity
+        ? authenticityUtility.put(`/master-data/entities/${editingEntity.id}`, body)
+        : authenticityUtility.post('/master-data/entities', body))) as ApiEnvelope;
+      if (data.success) {
         showAlert(
           editingEntity ? 'Entity updated successfully' : 'Entity created successfully',
           'success',
@@ -525,8 +510,8 @@ export default function MasterDataPage() {
       } else {
         showAlert(data.message || 'Operation failed', 'error');
       }
-    } catch {
-      showAlert('Failed to save entity', 'error');
+    } catch (error) {
+      showAlert(apiMessage(error, 'Failed to save entity'), 'error');
     }
   };
 
@@ -541,21 +526,17 @@ export default function MasterDataPage() {
       'Deactivate',
       async () => {
         try {
-          const response = await fetch(`${baseUrl}/api/master-data/entities/${entity.id}`, {
-            method: 'DELETE',
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-          const data = await response.json();
-          if (data.status === 'success') {
+          const data = (await authenticityUtility.delete(
+            `/master-data/entities/${entity.id}`,
+          )) as ApiEnvelope;
+          if (data.success) {
             showAlert('Entity deactivated', 'success');
             fetchEntities();
           } else {
             showAlert(data.message || 'Failed to deactivate', 'error');
           }
-        } catch {
-          showAlert('Failed to deactivate entity', 'error');
+        } catch (error) {
+          showAlert(apiMessage(error, 'Failed to deactivate entity'), 'error');
         }
       },
     );
@@ -563,21 +544,17 @@ export default function MasterDataPage() {
 
   const handleRestoreEntity = async (entity: Entity) => {
     try {
-      const response = await fetch(`${baseUrl}/api/master-data/entities/${entity.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ is_active: 1 }),
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
+      const data = (await authenticityUtility.put(`/master-data/entities/${entity.id}`, {
+        is_active: 1,
+      })) as ApiEnvelope;
+      if (data.success) {
         showAlert('Entity reactivated', 'success');
         fetchEntities();
+      } else {
+        showAlert(data.message || 'Failed to reactivate entity', 'error');
       }
-    } catch {
-      showAlert('Failed to reactivate entity', 'error');
+    } catch (error) {
+      showAlert(apiMessage(error, 'Failed to reactivate entity'), 'error');
     }
   };
 
@@ -622,35 +599,31 @@ export default function MasterDataPage() {
   const fetchEmployees = useCallback(async () => {
     setEmpLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (empSearch) params.set('search', empSearch);
-      if (empDeptFilter) params.set('department_id', empDeptFilter);
-      if (empStatusFilter) params.set('status', empStatusFilter);
-      if (empTypeFilter) params.set('employee_type', empTypeFilter);
-      params.set('page', String(empPage));
-      params.set('limit', '50');
-
-      const response = await fetch(`${baseUrl}/api/master-data/employees?${params}`, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
+      const data = (await authenticityUtility.get('/master-data/employees', {
+        params: {
+          ...(empSearch ? { search: empSearch } : {}),
+          ...(empDeptFilter ? { department_id: empDeptFilter } : {}),
+          ...(empStatusFilter ? { status: empStatusFilter } : {}),
+          ...(empTypeFilter ? { employee_type: empTypeFilter } : {}),
+          page: empPage,
+          limit: 50,
         },
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
+      })) as ApiEnvelope<EmployeePage>;
+      if (data.success) {
         setEmployees(data.data.rows);
         setEmpTotal(data.data.total);
         setEmpTotalPages(data.data.totalPages);
       }
-    } catch {
-      showAlert('Failed to load employees', 'error');
+    } catch (error) {
+      showAlert(apiMessage(error, 'Failed to load employees'), 'error');
     } finally {
       setEmpLoading(false);
     }
-  }, [baseUrl, empSearch, empDeptFilter, empStatusFilter, empTypeFilter, empPage]);
+  }, [empSearch, empDeptFilter, empStatusFilter, empTypeFilter, empPage]);
 
   useEffect(() => {
-    if (activeTab === 'employees') fetchEmployees();
-  }, [activeTab, fetchEmployees]);
+    fetchEmployees();
+  }, [fetchEmployees]);
 
   // Also fetch departments and entities for employee dropdowns
   const [allDepartments, setAllDepartments] = useState<Department[]>([]);
@@ -659,33 +632,27 @@ export default function MasterDataPage() {
   useEffect(() => {
     const fetchAllDepts = async () => {
       try {
-        const response = await fetch(`${baseUrl}/api/master-data/departments?is_active=1`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        const data = await response.json();
-        if (data.status === 'success') setAllDepartments(data.data);
+        const data = (await authenticityUtility.get('/master-data/departments', {
+          params: { is_active: 1 },
+        })) as ApiEnvelope<Department[]>;
+        if (data.success) setAllDepartments(data.data);
       } catch {
         /* silent */
       }
     };
     const fetchAllEntitiesList = async () => {
       try {
-        const response = await fetch(`${baseUrl}/api/master-data/entities?is_active=1`, {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-        const data = await response.json();
-        if (data.status === 'success') setAllEntitiesList(data.data);
+        const data = (await authenticityUtility.get('/master-data/entities', {
+          params: { is_active: 1 },
+        })) as ApiEnvelope<Entity[]>;
+        if (data.success) setAllEntitiesList(data.data);
       } catch {
         /* silent */
       }
     };
     fetchAllDepts();
     fetchAllEntitiesList();
-  }, [baseUrl]);
+  }, []);
 
   const formatDate = (dateStr: string | null): string => {
     if (!dateStr) return '';
@@ -763,21 +730,10 @@ export default function MasterDataPage() {
         dor: empForm.dor || null,
       };
 
-      const url = editingEmp
-        ? `${baseUrl}/api/master-data/employees/${editingEmp.id}`
-        : `${baseUrl}/api/master-data/employees`;
-
-      const response = await fetch(url, {
-        method: editingEmp ? 'PUT' : 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-      if (data.status === 'success') {
+      const data = (await (editingEmp
+        ? authenticityUtility.put(`/master-data/employees/${editingEmp.id}`, body)
+        : authenticityUtility.post('/master-data/employees', body))) as ApiEnvelope;
+      if (data.success) {
         showAlert(
           editingEmp ? 'Employee updated successfully' : 'Employee created successfully',
           'success',
@@ -787,8 +743,8 @@ export default function MasterDataPage() {
       } else {
         showAlert(data.message || 'Operation failed', 'error');
       }
-    } catch {
-      showAlert('Failed to save employee', 'error');
+    } catch (error) {
+      showAlert(apiMessage(error, 'Failed to save employee'), 'error');
     }
   };
 
@@ -807,21 +763,17 @@ export default function MasterDataPage() {
       'Deactivate',
       async () => {
         try {
-          const response = await fetch(`${baseUrl}/api/master-data/employees/${emp.id}`, {
-            method: 'DELETE',
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem('token')}`,
-            },
-          });
-          const data = await response.json();
-          if (data.status === 'success') {
+          const data = (await authenticityUtility.delete(
+            `/master-data/employees/${emp.id}`,
+          )) as ApiEnvelope;
+          if (data.success) {
             showAlert('Employee deactivated', 'success');
             fetchEmployees();
           } else {
             showAlert(data.message || 'Failed to deactivate', 'error');
           }
-        } catch {
-          showAlert('Failed to deactivate employee', 'error');
+        } catch (error) {
+          showAlert(apiMessage(error, 'Failed to deactivate employee'), 'error');
         }
       },
     );
@@ -829,21 +781,17 @@ export default function MasterDataPage() {
 
   const handleRestoreEmp = async (emp: Employee) => {
     try {
-      const response = await fetch(`${baseUrl}/api/master-data/employees/${emp.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({ status: 'Active' }),
-      });
-      const data = await response.json();
-      if (data.status === 'success') {
+      const data = (await authenticityUtility.put(`/master-data/employees/${emp.id}`, {
+        status: 'Active',
+      })) as ApiEnvelope;
+      if (data.success) {
         showAlert('Employee reactivated', 'success');
         fetchEmployees();
+      } else {
+        showAlert(data.message || 'Failed to reactivate employee', 'error');
       }
-    } catch {
-      showAlert('Failed to reactivate employee', 'error');
+    } catch (error) {
+      showAlert(apiMessage(error, 'Failed to reactivate employee'), 'error');
     }
   };
 
@@ -852,22 +800,20 @@ export default function MasterDataPage() {
   // ============================================
 
   const renderStatusBadge = (active: number | boolean) => (
-    <Badge className={active ? 'badge-active' : 'badge-inactive'}>
+    <span className={`admin-badge ${active ? 'admin-badge--yes' : 'admin-badge--muted'}`}>
       {active ? 'Active' : 'Inactive'}
-    </Badge>
+    </span>
   );
 
-  const renderEmpStatusBadge = (status: string) => {
-    const colorMap: Record<string, string> = {
-      Active: 'badge-active',
-      Retired: 'badge-inactive',
-      Resigned: 'badge-inactive',
-      Terminated: 'badge-inactive',
-      Relieved: 'badge-inactive',
-      'On Leave': 'bg-warning',
-    };
-    return <Badge className={colorMap[status] || 'badge-inactive'}>{status}</Badge>;
-  };
+  // Only a serving employee is a positive state; every other status — retired,
+  // resigned, on leave — is simply not serving, and reads the same quiet way.
+  const renderEmpStatusBadge = (status: string) => (
+    <span
+      className={`admin-badge ${status === 'Active' ? 'admin-badge--yes' : 'admin-badge--muted'}`}
+    >
+      {status}
+    </span>
+  );
 
   // ============================================
   // RENDER: DEPARTMENTS TAB
@@ -875,29 +821,28 @@ export default function MasterDataPage() {
 
   const renderDepartmentsTab = () => (
     <>
-      <div className="master-data-toolbar">
-        <div className="search-wrapper">
-          <Search size={16} className="search-icon" />
-          <Form.Control
-            placeholder="Search departments..."
-            value={deptSearch}
-            onChange={(e) => setDeptSearch(e.target.value)}
-          />
+      <div className="admin-toolbar">
+        <div className="admin-toolbar__filters">
+          <div className="search-wrapper">
+            <Search size={16} className="search-icon" />
+            <Form.Control
+              placeholder="Search departments..."
+              value={deptSearch}
+              onChange={(e) => setDeptSearch(e.target.value)}
+            />
+          </div>
+          <Form.Select
+            value={deptTypeFilter}
+            onChange={(e) => setDeptTypeFilter(e.target.value)}
+            style={{ maxWidth: 180 }}
+          >
+            <option value="">All Types</option>
+            <option value="Academic">Academic</option>
+            <option value="Administrative">Administrative</option>
+            <option value="Support">Support</option>
+            <option value="Research">Research</option>
+          </Form.Select>
         </div>
-        <Form.Select
-          value={deptTypeFilter}
-          onChange={(e) => setDeptTypeFilter(e.target.value)}
-          style={{ maxWidth: 180 }}
-        >
-          <option value="">All Types</option>
-          <option value="Academic">Academic</option>
-          <option value="Administrative">Administrative</option>
-          <option value="Support">Support</option>
-          <option value="Research">Research</option>
-        </Form.Select>
-        <Button className="btn-add" onClick={() => openDeptModal()}>
-          <Plus size={16} /> Add Department
-        </Button>
       </div>
 
       {deptLoading ? (
@@ -905,7 +850,7 @@ export default function MasterDataPage() {
           <Spinner animation="border" variant="primary" />
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="admin-card table-responsive">
           <Table hover>
             <thead>
               <tr>
@@ -951,7 +896,9 @@ export default function MasterDataPage() {
             <tbody>
               {departments.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>No departments found</td>
+                  <td colSpan={7} className="admin-empty">
+                    No departments found
+                  </td>
                 </tr>
               ) : (
                 getSortedData(departments, deptSort).map((dept) => (
@@ -965,41 +912,30 @@ export default function MasterDataPage() {
                     <td>{dept.hod_name || '—'}</td>
                     <td>{renderStatusBadge(dept.is_active)}</td>
                     <td>
-                      <div className="d-flex gap-1">
-                        <Button
-                          className="btn-action btn-view"
-                          size="sm"
-                          title="View"
+                      <div className="admin-actions">
+                        <AdminIconButton
+                          icon={<Eye size={16} aria-hidden="true" />}
+                          label="View"
                           onClick={() => setViewingDept(dept)}
-                        >
-                          <Eye size={14} />
-                        </Button>
-                        <Button
-                          className="btn-action btn-edit"
-                          size="sm"
-                          title="Edit"
+                        />
+                        <AdminIconButton
+                          icon={<Pencil size={16} aria-hidden="true" />}
+                          label="Edit"
                           onClick={() => openDeptModal(dept)}
-                        >
-                          <Pencil size={14} />
-                        </Button>
+                        />
                         {dept.is_active ? (
-                          <Button
-                            className="btn-action btn-delete"
-                            size="sm"
-                            title="Deactivate"
+                          <AdminIconButton
+                            icon={<Trash2 size={16} aria-hidden="true" />}
+                            label="Deactivate"
+                            variant="danger"
                             onClick={() => handleDeleteDept(dept)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                          />
                         ) : (
-                          <Button
-                            className="btn-action btn-restore"
-                            size="sm"
-                            title="Reactivate"
+                          <AdminIconButton
+                            icon={<RotateCcw size={16} aria-hidden="true" />}
+                            label="Reactivate"
                             onClick={() => handleRestoreDept(dept)}
-                          >
-                            <RotateCcw size={14} />
-                          </Button>
+                          />
                         )}
                       </div>
                     </td>
@@ -1015,7 +951,7 @@ export default function MasterDataPage() {
       <Modal
         show={!!viewingDept}
         onHide={() => setViewingDept(null)}
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1071,7 +1007,7 @@ export default function MasterDataPage() {
       <Modal
         show={showDeptModal}
         onHide={() => setShowDeptModal(false)}
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1198,11 +1134,11 @@ export default function MasterDataPage() {
               )}
             </div>
           </Modal.Body>
-          <Modal.Footer className="bg-light p-3">
+          <Modal.Footer>
             <Button
-              variant="outline-secondary"
+              variant="light"
+              className="admin-btn-secondary"
               onClick={() => setShowDeptModal(false)}
-              className="px-4"
             >
               Cancel
             </Button>
@@ -1221,30 +1157,29 @@ export default function MasterDataPage() {
 
   const renderEntitiesTab = () => (
     <>
-      <div className="master-data-toolbar">
-        <div className="search-wrapper">
-          <Search size={16} className="search-icon" />
-          <Form.Control
-            placeholder="Search entities..."
-            value={entitySearch}
-            onChange={(e) => setEntitySearch(e.target.value)}
-          />
+      <div className="admin-toolbar">
+        <div className="admin-toolbar__filters">
+          <div className="search-wrapper">
+            <Search size={16} className="search-icon" />
+            <Form.Control
+              placeholder="Search entities..."
+              value={entitySearch}
+              onChange={(e) => setEntitySearch(e.target.value)}
+            />
+          </div>
+          <Form.Select
+            value={entityTypeFilter}
+            onChange={(e) => setEntityTypeFilter(e.target.value)}
+            style={{ maxWidth: 200 }}
+          >
+            <option value="">All Types</option>
+            {entityTypes.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </Form.Select>
         </div>
-        <Form.Select
-          value={entityTypeFilter}
-          onChange={(e) => setEntityTypeFilter(e.target.value)}
-          style={{ maxWidth: 200 }}
-        >
-          <option value="">All Types</option>
-          {entityTypes.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </Form.Select>
-        <Button className="btn-add" onClick={() => openEntityModal()}>
-          <Plus size={16} /> Add Entity
-        </Button>
       </div>
 
       {entityLoading ? (
@@ -1252,7 +1187,7 @@ export default function MasterDataPage() {
           <Spinner animation="border" variant="primary" />
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
+        <div className="admin-card table-responsive">
           <Table hover>
             <thead>
               <tr>
@@ -1292,54 +1227,45 @@ export default function MasterDataPage() {
             <tbody>
               {entities.length === 0 ? (
                 <tr>
-                  <td colSpan={6}>No entities found</td>
+                  <td colSpan={6} className="admin-empty">
+                    No entities found
+                  </td>
                 </tr>
               ) : (
                 getSortedData(entities, entitySort).map((entity) => (
                   <tr key={entity.id} style={{ opacity: entity.is_active ? 1 : 0.6 }}>
                     <td>
-                      <Badge bg="secondary">{entity.type_name}</Badge>
+                      <span className="admin-badge admin-badge--info">{entity.type_name}</span>
                     </td>
                     <td>{entity.code || '—'}</td>
                     <td>{entity.name}</td>
                     <td>{entity.contacts?.[0]?.email || '—'}</td>
                     <td>{renderStatusBadge(entity.is_active)}</td>
                     <td>
-                      <div className="d-flex gap-1">
-                        <Button
-                          className="btn-action btn-view"
-                          size="sm"
-                          title="View"
+                      <div className="admin-actions">
+                        <AdminIconButton
+                          icon={<Eye size={16} aria-hidden="true" />}
+                          label="View"
                           onClick={() => setViewingEntity(entity)}
-                        >
-                          <Eye size={14} />
-                        </Button>
-                        <Button
-                          className="btn-action btn-edit"
-                          size="sm"
-                          title="Edit"
+                        />
+                        <AdminIconButton
+                          icon={<Pencil size={16} aria-hidden="true" />}
+                          label="Edit"
                           onClick={() => openEntityModal(entity)}
-                        >
-                          <Pencil size={14} />
-                        </Button>
+                        />
                         {entity.is_active ? (
-                          <Button
-                            className="btn-action btn-delete"
-                            size="sm"
-                            title="Deactivate"
+                          <AdminIconButton
+                            icon={<Trash2 size={16} aria-hidden="true" />}
+                            label="Deactivate"
+                            variant="danger"
                             onClick={() => handleDeleteEntity(entity)}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                          />
                         ) : (
-                          <Button
-                            className="btn-action btn-restore"
-                            size="sm"
-                            title="Reactivate"
+                          <AdminIconButton
+                            icon={<RotateCcw size={16} aria-hidden="true" />}
+                            label="Reactivate"
                             onClick={() => handleRestoreEntity(entity)}
-                          >
-                            <RotateCcw size={14} />
-                          </Button>
+                          />
                         )}
                       </div>
                     </td>
@@ -1355,7 +1281,7 @@ export default function MasterDataPage() {
       <Modal
         show={!!viewingEntity}
         onHide={() => setViewingEntity(null)}
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1367,7 +1293,7 @@ export default function MasterDataPage() {
               <div className="detail-row">
                 <span className="detail-label">Entity Type</span>
                 <span className="detail-value">
-                  <Badge bg="secondary">{viewingEntity.type_name}</Badge>
+                  <span className="admin-badge admin-badge--info">{viewingEntity.type_name}</span>
                 </span>
               </div>
               <div className="detail-row">
@@ -1409,7 +1335,7 @@ export default function MasterDataPage() {
       <Modal
         show={showEntityModal}
         onHide={() => setShowEntityModal(false)}
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1517,11 +1443,11 @@ export default function MasterDataPage() {
               </div>
             </div>
           </Modal.Body>
-          <Modal.Footer className="bg-light p-3">
+          <Modal.Footer>
             <Button
-              variant="outline-secondary"
+              variant="light"
+              className="admin-btn-secondary"
               onClick={() => setShowEntityModal(false)}
-              className="px-4"
             >
               Cancel
             </Button>
@@ -1540,66 +1466,65 @@ export default function MasterDataPage() {
 
   const renderEmployeesTab = () => (
     <>
-      <div className="master-data-toolbar">
-        <div className="search-wrapper">
-          <Search size={16} className="search-icon" />
-          <Form.Control
-            placeholder="Search by name, ERP ID, email..."
-            value={empSearch}
+      <div className="admin-toolbar">
+        <div className="admin-toolbar__filters">
+          <div className="search-wrapper">
+            <Search size={16} className="search-icon" />
+            <Form.Control
+              placeholder="Search by name, ERP ID, email..."
+              value={empSearch}
+              onChange={(e) => {
+                setEmpSearch(e.target.value);
+                setEmpPage(1);
+              }}
+            />
+          </div>
+          <Form.Select
+            value={empDeptFilter}
             onChange={(e) => {
-              setEmpSearch(e.target.value);
+              setEmpDeptFilter(e.target.value);
               setEmpPage(1);
             }}
-          />
+            style={{ maxWidth: 200 }}
+          >
+            <option value="">All Departments</option>
+            {allDepartments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </Form.Select>
+          <Form.Select
+            value={empTypeFilter}
+            onChange={(e) => {
+              setEmpTypeFilter(e.target.value);
+              setEmpPage(1);
+            }}
+            style={{ maxWidth: 160 }}
+          >
+            <option value="">All Types</option>
+            <option value="Teaching">Teaching</option>
+            <option value="Non-Teaching">Non-Teaching</option>
+            <option value="Contract">Contract</option>
+            <option value="Visiting">Visiting</option>
+            <option value="Guest Faculty">Guest Faculty</option>
+          </Form.Select>
+          <Form.Select
+            value={empStatusFilter}
+            onChange={(e) => {
+              setEmpStatusFilter(e.target.value);
+              setEmpPage(1);
+            }}
+            style={{ maxWidth: 140 }}
+          >
+            <option value="">All Status</option>
+            <option value="Active">Active</option>
+            <option value="Retired">Retired</option>
+            <option value="Resigned">Resigned</option>
+            <option value="Relieved">Relieved</option>
+            <option value="On Leave">On Leave</option>
+          </Form.Select>
         </div>
-        <Form.Select
-          value={empDeptFilter}
-          onChange={(e) => {
-            setEmpDeptFilter(e.target.value);
-            setEmpPage(1);
-          }}
-          style={{ maxWidth: 200 }}
-        >
-          <option value="">All Departments</option>
-          {allDepartments.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </Form.Select>
-        <Form.Select
-          value={empTypeFilter}
-          onChange={(e) => {
-            setEmpTypeFilter(e.target.value);
-            setEmpPage(1);
-          }}
-          style={{ maxWidth: 160 }}
-        >
-          <option value="">All Types</option>
-          <option value="Teaching">Teaching</option>
-          <option value="Non-Teaching">Non-Teaching</option>
-          <option value="Contract">Contract</option>
-          <option value="Visiting">Visiting</option>
-          <option value="Guest Faculty">Guest Faculty</option>
-        </Form.Select>
-        <Form.Select
-          value={empStatusFilter}
-          onChange={(e) => {
-            setEmpStatusFilter(e.target.value);
-            setEmpPage(1);
-          }}
-          style={{ maxWidth: 140 }}
-        >
-          <option value="">All Status</option>
-          <option value="Active">Active</option>
-          <option value="Retired">Retired</option>
-          <option value="Resigned">Resigned</option>
-          <option value="Relieved">Relieved</option>
-          <option value="On Leave">On Leave</option>
-        </Form.Select>
-        <Button className="btn-add" onClick={() => openEmpModal()}>
-          <Plus size={16} /> Add Employee
-        </Button>
       </div>
 
       {empLoading ? (
@@ -1608,7 +1533,7 @@ export default function MasterDataPage() {
         </div>
       ) : (
         <>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="admin-card table-responsive">
             <Table hover>
               <thead>
                 <tr>
@@ -1660,7 +1585,9 @@ export default function MasterDataPage() {
               <tbody>
                 {employees.length === 0 ? (
                   <tr>
-                    <td colSpan={8}>No employees found</td>
+                    <td colSpan={8} className="admin-empty">
+                      No employees found
+                    </td>
                   </tr>
                 ) : (
                   getSortedData(employees, empSort).map((emp) => (
@@ -1680,45 +1607,34 @@ export default function MasterDataPage() {
                       <td>{emp.designation || '—'}</td>
                       <td>{emp.department_name || emp.entity_name || '—'}</td>
                       <td>
-                        <Badge bg="info">{emp.employee_type}</Badge>
+                        <span className="admin-badge admin-badge--info">{emp.employee_type}</span>
                       </td>
                       <td>{renderEmpStatusBadge(emp.status)}</td>
                       <td>
-                        <div className="d-flex gap-1">
-                          <Button
-                            className="btn-action btn-view"
-                            size="sm"
-                            title="View"
+                        <div className="admin-actions">
+                          <AdminIconButton
+                            icon={<Eye size={16} aria-hidden="true" />}
+                            label="View"
                             onClick={() => setViewingEmp(emp)}
-                          >
-                            <Eye size={14} />
-                          </Button>
-                          <Button
-                            className="btn-action btn-edit"
-                            size="sm"
-                            title="Edit"
+                          />
+                          <AdminIconButton
+                            icon={<Pencil size={16} aria-hidden="true" />}
+                            label="Edit"
                             onClick={() => openEmpModal(emp)}
-                          >
-                            <Pencil size={14} />
-                          </Button>
+                          />
                           {emp.status === 'Active' ? (
-                            <Button
-                              className="btn-action btn-delete"
-                              size="sm"
-                              title="Deactivate"
+                            <AdminIconButton
+                              icon={<Trash2 size={16} aria-hidden="true" />}
+                              label="Deactivate"
+                              variant="danger"
                               onClick={() => handleDeleteEmp(emp)}
-                            >
-                              <Trash2 size={14} />
-                            </Button>
+                            />
                           ) : (
-                            <Button
-                              className="btn-action btn-restore"
-                              size="sm"
-                              title="Reactivate"
+                            <AdminIconButton
+                              icon={<RotateCcw size={16} aria-hidden="true" />}
+                              label="Reactivate"
                               onClick={() => handleRestoreEmp(emp)}
-                            >
-                              <RotateCcw size={14} />
-                            </Button>
+                            />
                           )}
                         </div>
                       </td>
@@ -1761,7 +1677,7 @@ export default function MasterDataPage() {
         show={!!viewingEmp}
         onHide={() => setViewingEmp(null)}
         size="lg"
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
       >
         <Modal.Header closeButton>
@@ -1811,7 +1727,7 @@ export default function MasterDataPage() {
               <div className="detail-row">
                 <span className="detail-label">Employee Type</span>
                 <span className="detail-value">
-                  <Badge bg="info">{viewingEmp.employee_type}</Badge>
+                  <span className="admin-badge admin-badge--info">{viewingEmp.employee_type}</span>
                 </span>
               </div>
               <div className="detail-row">
@@ -1877,8 +1793,9 @@ export default function MasterDataPage() {
         show={showEmpModal}
         onHide={() => setShowEmpModal(false)}
         size="lg"
-        className="master-data-modal"
+        className="master-data-modal admin-modal"
         centered
+        scrollable
       >
         <Modal.Header closeButton>
           <Modal.Title>{editingEmp ? 'Edit Employee' : 'Add Employee'}</Modal.Title>
@@ -1980,7 +1897,7 @@ export default function MasterDataPage() {
               <h6 className="mb-0">Professional Details</h6>
             </div>
             <div className="row g-3">
-              <div className="col-md-4">
+              <div className="col-md-3">
                 <Form.Group>
                   <Form.Label>Designation</Form.Label>
                   <Form.Control
@@ -2099,7 +2016,7 @@ export default function MasterDataPage() {
             </div>
 
             <div className="form-section-header mt-4 mb-3">
-              <h6 className="mb-0 text-primary">Research Identifiers (Optional)</h6>
+              <h6 className="mb-0">Research Identifiers (Optional)</h6>
             </div>
             <div className="row g-3">
               <div className="col-md-3">
@@ -2143,9 +2060,9 @@ export default function MasterDataPage() {
           </Modal.Body>
           <Modal.Footer>
             <Button
-              variant="outline-secondary"
+              variant="light"
+              className="admin-btn-secondary"
               onClick={() => setShowEmpModal(false)}
-              className="px-4"
             >
               Cancel
             </Button>
@@ -2162,43 +2079,54 @@ export default function MasterDataPage() {
   // MAIN RENDER
   // ============================================
 
+  // The one action each tab adds, in the header beside the title — the same
+  // place Project Options and the Budget Catalog put theirs.
+  const addAction: Record<TabKey, { label: string; onClick: () => void }> = {
+    departments: { label: 'Add Department', onClick: () => openDeptModal() },
+    entities: { label: 'Add Entity', onClick: () => openEntityModal() },
+    employees: { label: 'Add Employee', onClick: () => openEmpModal() },
+  };
+
   return (
-    <div className="master-data-page-wrapper">
-      <div className="master-data-management">
-        <div className="d-flex justify-content-between align-items-center mb-3">
-          <h2>Master Data Management</h2>
-        </div>
+    <div className="admin-screen master-data-management">
+      <AdminScreenHeader
+        title="Master Data"
+        description="The institution's own records — the departments, centres and cells work is filed under, and the employees who staff them."
+        actions={
+          <CustomButton onClick={addAction[activeTab].onClick}>
+            <Plus size={16} aria-hidden="true" />
+            {addAction[activeTab].label}
+          </CustomButton>
+        }
+      />
 
-        <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k as TabKey)}>
-          <Nav.Item>
-            <Nav.Link eventKey="departments">Departments</Nav.Link>
-          </Nav.Item>
-          <Nav.Item>
-            <Nav.Link eventKey="entities">Entities (Centres / Cells / Clubs)</Nav.Link>
-          </Nav.Item>
-          <Nav.Item>
-            <Nav.Link eventKey="employees">Employees</Nav.Link>
-          </Nav.Item>
-        </Nav>
+      <AdminTabs<TabKey>
+        tabs={[
+          { key: 'departments', label: 'Departments', count: departments.length },
+          { key: 'entities', label: 'Entities', count: entities.length },
+          { key: 'employees', label: 'Employees', count: empTotal },
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
-        {activeTab === 'departments' && renderDepartmentsTab()}
-        {activeTab === 'entities' && renderEntitiesTab()}
-        {activeTab === 'employees' && renderEmployeesTab()}
+      {activeTab === 'departments' && renderDepartmentsTab()}
+      {activeTab === 'entities' && renderEntitiesTab()}
+      {activeTab === 'employees' && renderEmployeesTab()}
 
-        <AlertModal
-          show={alertState.show}
-          type={alertState.type}
-          title={alertState.title}
-          message={alertState.message}
-          showCancel={alertState.showCancel}
-          confirmText={alertState.confirmText}
-          onConfirm={() => {
-            alertState.onConfirm?.();
-            closeAlert();
-          }}
-          onHide={closeAlert}
-        />
-      </div>
+      <AlertModal
+        show={alertState.show}
+        type={alertState.type}
+        title={alertState.title}
+        message={alertState.message}
+        showCancel={alertState.showCancel}
+        confirmText={alertState.confirmText}
+        onConfirm={() => {
+          alertState.onConfirm?.();
+          closeAlert();
+        }}
+        onHide={closeAlert}
+      />
     </div>
   );
 }

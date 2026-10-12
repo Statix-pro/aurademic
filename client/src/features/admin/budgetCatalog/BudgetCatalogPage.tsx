@@ -1,9 +1,10 @@
 import { Pencil, Plus, RotateCcw, Trash2 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Form, Modal, Nav, Spinner, Table, Badge } from 'react-bootstrap';
+import { Button, Form, Modal, Spinner, Table } from 'react-bootstrap';
 import Select from 'react-select';
 
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomButton from '../../../shared/components/ui/CustomButton';
 import {
   BudgetCatalog,
   BudgetHead,
@@ -18,7 +19,7 @@ import {
   updateAccountOption,
 } from '../../../shared/utils/accountOptionsApi';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import './BudgetCatalogPage.css';
+import { AdminIconButton, AdminScreenHeader, AdminTabs } from '../components/AdminScreen';
 
 type TabKey = 'heads' | 'sub-heads' | 'tags' | 'accounts';
 type Scope = 'head-specific' | 'hoac-shared';
@@ -650,349 +651,339 @@ function BudgetCatalogPage() {
       .map((value) => ({ value, label: value }));
   }, [subHeads]);
 
+  // The one action each tab adds, in the header beside the title — the same
+  // place Project Options and Master Data put theirs.
+  const addAction: Record<TabKey, { label: string; onClick: () => void }> = {
+    heads: { label: 'New Head', onClick: openCreateHead },
+    'sub-heads': { label: 'New Sub-head', onClick: openCreateSub },
+    tags: { label: 'New Tag', onClick: openCreateTag },
+    accounts: { label: 'New Account', onClick: openCreateAccount },
+  };
+
   return (
-    <div className="p-4">
-      <div className="d-flex justify-content-between align-items-center mb-3">
-        <h3 className="m-0">Budget Catalog</h3>
-        <Button variant="outline-secondary" size="sm" onClick={refreshAll}>
-          <RotateCcw size={14} /> Refresh
-        </Button>
-      </div>
+    <div className="admin-screen">
+      <AdminScreenHeader
+        title="Budget Catalog"
+        description="The institution's own spending vocabulary — the heads and sub-heads budgets are raised against, the tags that group them, and the accounts money moves through."
+        actions={
+          <>
+            <CustomButton
+              variant="light"
+              className="admin-btn-secondary"
+              onClick={refreshAll}
+              disabled={loading}
+            >
+              <RotateCcw size={16} aria-hidden="true" />
+              Refresh
+            </CustomButton>
+            <CustomButton onClick={addAction[activeTab].onClick}>
+              <Plus size={16} aria-hidden="true" />
+              {addAction[activeTab].label}
+            </CustomButton>
+          </>
+        }
+      />
 
-      <Nav
-        variant="tabs"
-        activeKey={activeTab}
-        onSelect={(k) => k && setActiveTab(k as TabKey)}
-        className="mb-3 budget-catalog-tabs"
-      >
-        <Nav.Item>
-          <Nav.Link eventKey="heads">Heads ({heads.length})</Nav.Link>
-        </Nav.Item>
-        <Nav.Item>
-          <Nav.Link eventKey="sub-heads">Sub-heads ({subHeads.length})</Nav.Link>
-        </Nav.Item>
-        <Nav.Item>
-          <Nav.Link eventKey="tags">Tags ({tags.length})</Nav.Link>
-        </Nav.Item>
-        {accountsTableExists && (
-          <Nav.Item>
-            <Nav.Link eventKey="accounts">Accounts ({accounts.length})</Nav.Link>
-          </Nav.Item>
-        )}
-      </Nav>
+      <AdminTabs<TabKey>
+        tabs={[
+          { key: 'heads', label: 'Heads', count: heads.length },
+          { key: 'sub-heads', label: 'Sub-heads', count: subHeads.length },
+          { key: 'tags', label: 'Tags', count: tags.length },
+          ...(accountsTableExists
+            ? [{ key: 'accounts' as TabKey, label: 'Accounts', count: accounts.length }]
+            : []),
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+      />
 
-      {loading ? (
+      {/* Only the first load swaps the page for a spinner. Every save ends in
+          `refreshAll()`, and keying this on `loading` alone tore the whole table
+          out and rebuilt it each time — the rows vanished, the page collapsed to
+          a centred spinner and sprang back, right as the dialog was closing.
+          Once `catalog` holds rows we keep showing them and let the new ones
+          land in place. */}
+      {loading && !catalog ? (
         <div className="text-center py-5">
           <Spinner animation="border" />
         </div>
       ) : activeTab === 'heads' ? (
         <>
-          <div className="d-flex gap-2 mb-3">
-            <Form.Control
-              placeholder="Search heads or groups..."
-              value={headFilter}
-              onChange={(e) => setHeadFilter(e.target.value)}
-              style={{ maxWidth: 320 }}
-            />
-            <Button onClick={openCreateHead}>
-              <Plus size={16} /> New head
-            </Button>
+          <div className="admin-toolbar">
+            <div className="admin-toolbar__filters">
+              <Form.Control
+                placeholder="Search heads or groups..."
+                value={headFilter}
+                onChange={(e) => setHeadFilter(e.target.value)}
+              />
+            </div>
           </div>
-          <Table hover bordered size="sm">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Group</th>
-                <th>Active</th>
-                <th style={{ width: 130 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groupedHeads.map((group) => (
-                <React.Fragment key={group.group}>
-                  <tr className="budget-catalog-group-row">
-                    <td colSpan={4}>{group.group}</td>
-                  </tr>
-                  {group.items.map((h) => (
-                    <tr key={h.id}>
-                      <td>{h.name}</td>
-                      <td>{h.group_label}</td>
-                      <td>
-                        <Form.Check
-                          type="switch"
-                          checked={!!h.is_active}
-                          onChange={() => toggleHeadActive(h)}
-                        />
-                      </td>
-                      <td>
-                        <div className="d-flex align-items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="light"
-                            className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center"
-                            onClick={() => openEditHead(h)}
-                            title="Edit"
-                          >
-                            <Pencil size={16} color="#0d6efd" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="light"
-                            className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
-                            onClick={() => deleteHead(h)}
-                            title="Delete"
-                          >
-                            <Trash2 size={16} color="#dc3545" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-              {groupedHeads.length === 0 && (
+          <div className="admin-card table-responsive">
+            <Table hover>
+              <thead>
                 <tr>
-                  <td colSpan={4} className="text-center text-muted py-4">
-                    No heads found.
-                  </td>
+                  <th>Name</th>
+                  <th>Group</th>
+                  <th>Active</th>
+                  <th style={{ width: 130 }}>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {groupedHeads.map((group) => (
+                  <React.Fragment key={group.group}>
+                    <tr className="admin-group-row">
+                      <td colSpan={4}>{group.group}</td>
+                    </tr>
+                    {group.items.map((h) => (
+                      <tr key={h.id}>
+                        <td>{h.name}</td>
+                        <td>{h.group_label}</td>
+                        <td>
+                          <Form.Check
+                            type="switch"
+                            checked={!!h.is_active}
+                            onChange={() => toggleHeadActive(h)}
+                          />
+                        </td>
+                        <td>
+                          <div className="admin-actions">
+                            <AdminIconButton
+                              icon={<Pencil size={16} aria-hidden="true" />}
+                              label="Edit"
+                              onClick={() => openEditHead(h)}
+                            />
+                            <AdminIconButton
+                              icon={<Trash2 size={16} aria-hidden="true" />}
+                              label="Delete"
+                              variant="danger"
+                              onClick={() => deleteHead(h)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+                {groupedHeads.length === 0 && (
+                  <tr>
+                    <td colSpan={4} className="admin-empty">
+                      No heads found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
         </>
       ) : activeTab === 'sub-heads' ? (
         <>
-          <div className="d-flex gap-2 mb-3 flex-wrap">
-            <Form.Control
-              placeholder="Search sub-heads..."
-              value={subFilter}
-              onChange={(e) => setSubFilter(e.target.value)}
-              style={{ maxWidth: 320 }}
-            />
-            <Form.Select
-              value={scopeFilter}
-              onChange={(e) => setScopeFilter(e.target.value as Scope | 'all')}
-              style={{ maxWidth: 200 }}
-            >
-              <option value="all">All scopes</option>
-              <option value="head-specific">Head-specific</option>
-              <option value="hoac-shared">HOAC shared</option>
-            </Form.Select>
-            <Button onClick={openCreateSub}>
-              <Plus size={16} /> New sub-head
-            </Button>
+          <div className="admin-toolbar">
+            <div className="admin-toolbar__filters">
+              <Form.Control
+                placeholder="Search sub-heads..."
+                value={subFilter}
+                onChange={(e) => setSubFilter(e.target.value)}
+              />
+              <Form.Select
+                value={scopeFilter}
+                onChange={(e) => setScopeFilter(e.target.value as Scope | 'all')}
+              >
+                <option value="all">All scopes</option>
+                <option value="head-specific">Head-specific</option>
+                <option value="hoac-shared">HOAC shared</option>
+              </Form.Select>
+            </div>
           </div>
-          <Table hover bordered size="sm">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Scope</th>
-                <th>Parent head</th>
-                <th>Active</th>
-                <th style={{ width: 130 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groupedSubs.map((group) => (
-                <React.Fragment key={group.group}>
-                  <tr className="budget-catalog-group-row">
-                    <td colSpan={5}>{group.group}</td>
-                  </tr>
-                  {group.items.map((s) => (
-                    <tr key={s.id}>
-                      <td>{s.name}</td>
-                      <td>
-                        <Badge
-                          pill
-                          bg={
-                            s.scope === 'head-specific'
-                              ? 'primary'
-                              : s.scope === 'hoac-shared'
-                                ? 'secondary'
-                                : 'success'
-                          }
-                        >
-                          {s.scope === 'head-specific'
-                            ? 'Head-specific'
-                            : s.scope === 'hoac-shared'
-                              ? 'HOAC shared'
-                              : 'Event-specific'}
-                        </Badge>
-                      </td>
-                      <td>
-                        {s.scope === 'head-specific' ? s.head_name || '—' : s.event_type || '—'}
-                      </td>
-                      <td>
-                        <Form.Check
-                          type="switch"
-                          checked={!!s.is_active}
-                          onChange={() => toggleSubActive(s)}
-                        />
-                      </td>
-                      <td>
-                        <div className="d-flex align-items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="light"
-                            className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center"
-                            onClick={() => openEditSub(s)}
-                            title="Edit"
-                          >
-                            <Pencil size={16} color="#0d6efd" />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="light"
-                            className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
-                            onClick={() => deleteSub(s)}
-                            title="Delete"
-                          >
-                            <Trash2 size={16} color="#dc3545" />
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </React.Fragment>
-              ))}
-              {groupedSubs.length === 0 && (
+          <div className="admin-card table-responsive">
+            <Table hover>
+              <thead>
                 <tr>
-                  <td colSpan={5} className="text-center text-muted py-4">
-                    No sub-heads found.
-                  </td>
+                  <th>Name</th>
+                  <th>Scope</th>
+                  <th>Parent head</th>
+                  <th>Active</th>
+                  <th style={{ width: 130 }}>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {groupedSubs.map((group) => (
+                  <React.Fragment key={group.group}>
+                    <tr className="admin-group-row">
+                      <td colSpan={5}>{group.group}</td>
+                    </tr>
+                    {group.items.map((s) => (
+                      <tr key={s.id}>
+                        <td>{s.name}</td>
+                        <td>
+                          {/* A label for which kind of sub-head this is, not a
+                              state: all three read the same quiet way. */}
+                          <span className="admin-badge admin-badge--info">
+                            {s.scope === 'head-specific'
+                              ? 'Head-specific'
+                              : s.scope === 'hoac-shared'
+                                ? 'HOAC shared'
+                                : 'Event-specific'}
+                          </span>
+                        </td>
+                        <td>
+                          {s.scope === 'head-specific' ? s.head_name || '—' : s.event_type || '—'}
+                        </td>
+                        <td>
+                          <Form.Check
+                            type="switch"
+                            checked={!!s.is_active}
+                            onChange={() => toggleSubActive(s)}
+                          />
+                        </td>
+                        <td>
+                          <div className="admin-actions">
+                            <AdminIconButton
+                              icon={<Pencil size={16} aria-hidden="true" />}
+                              label="Edit"
+                              onClick={() => openEditSub(s)}
+                            />
+                            <AdminIconButton
+                              icon={<Trash2 size={16} aria-hidden="true" />}
+                              label="Delete"
+                              variant="danger"
+                              onClick={() => deleteSub(s)}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+                {groupedSubs.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="admin-empty">
+                      No sub-heads found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
         </>
       ) : activeTab === 'tags' ? (
         <>
-          <div className="d-flex gap-2 mb-3">
-            <Form.Control
-              placeholder="Search tags..."
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              style={{ maxWidth: 320 }}
-            />
-            <Button onClick={openCreateTag}>
-              <Plus size={16} /> New tag
-            </Button>
+          <div className="admin-toolbar">
+            <div className="admin-toolbar__filters">
+              <Form.Control
+                placeholder="Search tags..."
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+              />
+            </div>
           </div>
-          <Table hover bordered size="sm">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Active</th>
-                <th style={{ width: 130 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTags.map((tag) => (
-                <tr key={tag.id}>
-                  <td>{tag.tag_name}</td>
-                  <td>
-                    <Form.Check
-                      type="switch"
-                      checked={!!tag.is_active}
-                      onChange={() => toggleTagActive(tag)}
-                    />
-                  </td>
-                  <td>
-                    <div className="d-flex align-items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="light"
-                        className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center"
-                        onClick={() => openEditTag(tag)}
-                        title="Edit"
-                      >
-                        <Pencil size={16} color="#0d6efd" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="light"
-                        className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
-                        onClick={() => deleteTag(tag)}
-                        title="Delete"
-                      >
-                        <Trash2 size={16} color="#dc3545" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredTags.length === 0 && (
+          <div className="admin-card table-responsive">
+            <Table hover>
+              <thead>
                 <tr>
-                  <td colSpan={3} className="text-center text-muted py-4">
-                    No tags found.
-                  </td>
+                  <th>Name</th>
+                  <th>Active</th>
+                  <th style={{ width: 130 }}>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {filteredTags.map((tag) => (
+                  <tr key={tag.id}>
+                    <td>{tag.tag_name}</td>
+                    <td>
+                      <Form.Check
+                        type="switch"
+                        checked={!!tag.is_active}
+                        onChange={() => toggleTagActive(tag)}
+                      />
+                    </td>
+                    <td>
+                      <div className="admin-actions">
+                        <AdminIconButton
+                          icon={<Pencil size={16} aria-hidden="true" />}
+                          label="Edit"
+                          onClick={() => openEditTag(tag)}
+                        />
+                        <AdminIconButton
+                          icon={<Trash2 size={16} aria-hidden="true" />}
+                          label="Delete"
+                          variant="danger"
+                          onClick={() => deleteTag(tag)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredTags.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="admin-empty">
+                      No tags found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
         </>
       ) : (
         <>
-          <div className="d-flex gap-2 mb-3">
-            <Form.Control
-              placeholder="Search accounts..."
-              value={accountFilter}
-              onChange={(e) => setAccountFilter(e.target.value)}
-              style={{ maxWidth: 360 }}
-            />
-            <Button onClick={openCreateAccount}>
-              <Plus size={16} /> New account
-            </Button>
+          <div className="admin-toolbar">
+            <div className="admin-toolbar__filters">
+              <Form.Control
+                placeholder="Search accounts..."
+                value={accountFilter}
+                onChange={(e) => setAccountFilter(e.target.value)}
+              />
+            </div>
           </div>
-          <Table hover bordered size="sm">
-            <thead>
-              <tr>
-                <th>Account</th>
-                <th style={{ width: 130 }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAccounts.map((account) => (
-                <tr key={account.id}>
-                  <td>{account.name}</td>
-                  <td>
-                    <div className="d-flex align-items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="light"
-                        className="budget-catalog-icon-btn d-inline-flex align-items-center justify-content-center"
-                        onClick={() => openEditAccount(account)}
-                        title="Edit"
-                      >
-                        <Pencil size={16} />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="light"
-                        className="budget-catalog-icon-btn budget-catalog-delete-btn d-inline-flex align-items-center justify-content-center"
-                        onClick={() => deleteAccount(account)}
-                        title="Delete"
-                      >
-                        <Trash2 size={16} color="#dc3545" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {filteredAccounts.length === 0 && (
+          <div className="admin-card table-responsive">
+            <Table hover>
+              <thead>
                 <tr>
-                  <td colSpan={2} className="text-center text-muted py-4">
-                    No accounts found.
-                  </td>
+                  <th>Account</th>
+                  <th style={{ width: 130 }}>Actions</th>
                 </tr>
-              )}
-            </tbody>
-          </Table>
+              </thead>
+              <tbody>
+                {filteredAccounts.map((account) => (
+                  <tr key={account.id}>
+                    <td>{account.name}</td>
+                    <td>
+                      <div className="admin-actions">
+                        <AdminIconButton
+                          icon={<Pencil size={16} aria-hidden="true" />}
+                          label="Edit"
+                          onClick={() => openEditAccount(account)}
+                        />
+                        <AdminIconButton
+                          icon={<Trash2 size={16} aria-hidden="true" />}
+                          label="Delete"
+                          variant="danger"
+                          onClick={() => deleteAccount(account)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredAccounts.length === 0 && (
+                  <tr>
+                    <td colSpan={2} className="admin-empty">
+                      No accounts found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </Table>
+          </div>
         </>
       )}
 
       {/* HEAD MODAL */}
-      <Modal show={headModal.open} onHide={() => setHeadModal({ open: false, data: EMPTY_HEAD })}>
+      <Modal
+        className="admin-modal"
+        centered
+        show={headModal.open}
+        onHide={() => setHeadModal({ open: false, data: EMPTY_HEAD })}
+      >
         <Modal.Header closeButton>
           <Modal.Title>{headModal.data.id ? 'Edit head' : 'New head'}</Modal.Title>
         </Modal.Header>
@@ -1025,7 +1016,8 @@ function BudgetCatalogPage() {
         </Modal.Body>
         <Modal.Footer>
           <Button
-            variant="secondary"
+            className="admin-btn-secondary"
+            variant="light"
             onClick={() => setHeadModal({ open: false, data: EMPTY_HEAD })}
           >
             Cancel
@@ -1035,7 +1027,12 @@ function BudgetCatalogPage() {
       </Modal>
 
       {/* SUB-HEAD MODAL */}
-      <Modal show={subModal.open} onHide={() => setSubModal({ open: false, data: EMPTY_SUB })}>
+      <Modal
+        className="admin-modal"
+        centered
+        show={subModal.open}
+        onHide={() => setSubModal({ open: false, data: EMPTY_SUB })}
+      >
         <Modal.Header closeButton>
           <Modal.Title>{subModal.data.id ? 'Edit sub-head' : 'New sub-head'}</Modal.Title>
         </Modal.Header>
@@ -1177,7 +1174,11 @@ function BudgetCatalogPage() {
           )}
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setSubModal({ open: false, data: EMPTY_SUB })}>
+          <Button
+            className="admin-btn-secondary"
+            variant="light"
+            onClick={() => setSubModal({ open: false, data: EMPTY_SUB })}
+          >
             Cancel
           </Button>
           <Button onClick={submitSub}>Save</Button>
@@ -1185,7 +1186,12 @@ function BudgetCatalogPage() {
       </Modal>
 
       {/* TAG MODAL */}
-      <Modal show={tagModal.open} onHide={() => setTagModal({ open: false, data: EMPTY_TAG })}>
+      <Modal
+        className="admin-modal"
+        centered
+        show={tagModal.open}
+        onHide={() => setTagModal({ open: false, data: EMPTY_TAG })}
+      >
         <Modal.Header closeButton>
           <Modal.Title>{tagModal.data.id ? 'Edit tag' : 'New tag'}</Modal.Title>
         </Modal.Header>
@@ -1202,7 +1208,11 @@ function BudgetCatalogPage() {
           </Form.Group>
         </Modal.Body>
         <Modal.Footer>
-          <Button variant="secondary" onClick={() => setTagModal({ open: false, data: EMPTY_TAG })}>
+          <Button
+            className="admin-btn-secondary"
+            variant="light"
+            onClick={() => setTagModal({ open: false, data: EMPTY_TAG })}
+          >
             Cancel
           </Button>
           <Button onClick={submitTag}>Save</Button>
@@ -1211,6 +1221,8 @@ function BudgetCatalogPage() {
 
       {/* ACCOUNT MODAL */}
       <Modal
+        className="admin-modal"
+        centered
         show={accountModal.open}
         onHide={() => setAccountModal({ open: false, data: EMPTY_ACCOUNT })}
       >
@@ -1244,7 +1256,8 @@ function BudgetCatalogPage() {
         </Modal.Body>
         <Modal.Footer>
           <Button
-            variant="secondary"
+            className="admin-btn-secondary"
+            variant="light"
             onClick={() => setAccountModal({ open: false, data: EMPTY_ACCOUNT })}
           >
             Cancel

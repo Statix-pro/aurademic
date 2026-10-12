@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 
 import * as expenditureModel from './expenditureModel.js';
 import './expenditureWorkflowAdapter.js';
+import notificationService from '../notification/notificationService.js';
 import { isFinanceRequestOwner } from '../shared/financeOwnership.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import workflowService from '../shared/workflow/workflowService.js';
@@ -70,8 +71,36 @@ const normalizeBulkTransactionBank = (value) => {
 
 const isExcelOnlyBulkTransactionType = (type) => EXCEL_ONLY_BULK_TRANSACTION_TYPES.has(type);
 
+// Only the bank-routed transfers are filed on a bank's own layout. UPI payouts use a
+// single sheet whatever the debit bank, so they carry no bank code. Mirrors
+// BANK_TEMPLATE_BULK_TRANSACTION_TYPES in expenditureapproval.tsx.
+const BANK_TEMPLATE_BULK_TRANSACTION_TYPES = new Set(['NEFT', 'RTGS']);
+const bulkTransactionTypeNeedsBank = (type) => BANK_TEMPLATE_BULK_TRANSACTION_TYPES.has(type);
+
 const normalizeText = (value) => String(value || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+const BENEFICIARY_CATEGORY_OPTIONS = ['Student', 'Faculty', 'Staff'];
+const INTERNAL_BENEFICIARY_ORGS = ['KSRCT', 'KSREI'];
+/**
+ * Mirrors the model's `resolveCanonicalBeneficiaryOrg`: a payload that names no
+ * beneficiary can still carry one in `payee_name`, which is where the older
+ * clients put it. Reading it the same way here keeps the check below from
+ * waving through the very rows the model then files as internal.
+ */
+const resolveBeneficiaryOrg = (beneficiaryOrg, payeeName) => {
+  const submitted = normalizeText(beneficiaryOrg);
+  if (submitted) return submitted;
+
+  const fromPayeeName = normalizeText(payeeName);
+  return BENEFICIARY_ORG_OPTIONS.includes(fromPayeeName) ? fromPayeeName : '';
+};
+// A KSRCT / KSREI individual is someone inside the institution, and which
+// population they belong to is part of identifying them — so the category is
+// as mandatory as the beneficiary itself. External payees and organizations
+// carry none; the model stores NULL for them either way.
+const beneficiaryCategoryRequired = (beneficiaryType, beneficiaryOrg, payeeName) =>
+  normalizeText(beneficiaryType).toLowerCase() !== 'organization' &&
+  INTERNAL_BENEFICIARY_ORGS.includes(resolveBeneficiaryOrg(beneficiaryOrg, payeeName));
 
 const toMoney = (value) => {
   const parsed = Number(String(value ?? '').replace(/,/g, ''));
@@ -202,6 +231,29 @@ const resolveCanonicalPayeeName = (payeeName, accountName) => {
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+/**
+ * Payee notifications are per submission round, not per save. `upsertPayee`
+ * resets `requested_at` on every save and it is the only round marker the row
+ * carries, so it is the dedupe scope: a Save clicked twice — or two saves of
+ * the same bank details racing, which `upsertPayee` now resolves instead of
+ * failing — collapses to one notification, while a genuine resubmission later
+ * is news again and gets through.
+ *
+ * With no `requested_at` to hand, dedupe is left off rather than keyed on
+ * `Date.now()`: a key that can never match is not deduplication, it just fills
+ * the unique index with single-use values and reads like an idempotency
+ * guarantee that is not there. Same choice, and the same reason, as
+ * `budgetNotifications`.
+ */
+const payeeRoundKey = (payeeId, suffix, requestedAt) => {
+  const id = toPositiveInt(payeeId);
+  const round = requestedAt ? new Date(requestedAt).getTime() : Number.NaN;
+  // Seconds, not milliseconds: MySQL stores the timestamp to the second, but a
+  // driver configured for date strings can still hand back a value that parses
+  // with millisecond noise.
+  return id && Number.isFinite(round) ? `payee:${id}:${suffix}:${Math.floor(round / 1000)}` : null;
 };
 
 const parseWorkflowState = (value) => {
@@ -549,9 +601,7 @@ const normalizeIncomingPayload = (payload = {}) => {
 
   normalized.bulk_transaction_type =
     normalizeBulkTransactionType(normalized.bulk_transaction_type) || DEFAULT_BULK_TRANSACTION_TYPE;
-  normalized.bulk_transaction_bank = isExcelOnlyBulkTransactionType(
-    normalized.bulk_transaction_type,
-  )
+  normalized.bulk_transaction_bank = bulkTransactionTypeNeedsBank(normalized.bulk_transaction_type)
     ? normalizeBulkTransactionBank(normalized.bulk_transaction_bank) ||
       DEFAULT_BULK_TRANSACTION_BANK
     : null;
@@ -891,6 +941,41 @@ const expenditureController = {
     }
   },
 
+  async listPayeeDirectory(req, res) {
+    try {
+      const {
+        search = '',
+        status = 'all',
+        beneficiary_type: beneficiaryType = 'all',
+        limit = 20,
+        offset = 0,
+      } = req.query;
+
+      const result = await expenditureModel.listPayeeDirectory({
+        search,
+        status,
+        beneficiaryType,
+        limit,
+        offset,
+      });
+
+      return res.json({
+        status: 'success',
+        success: true,
+        data: result.rows,
+        meta: {
+          total: result.total,
+          counts: result.counts,
+          pending_total: result.pendingTotal,
+          limit: result.limit,
+          offset: result.offset,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error listing payee directory');
+    }
+  },
+
   async getPayee(req, res) {
     try {
       const id = toPositiveInt(req.params.id);
@@ -921,8 +1006,18 @@ const expenditureController = {
         data: payee,
       });
     } catch (err) {
+      // `updatePayeeById` reports a bad payload by throwing, in two shapes: a
+      // missing field ("... is required") and a field outside its vocabulary
+      // ("account_type must be Savings or Current", "beneficiary_category must
+      // be Student, Faculty or Staff"). Both are the caller's mistake, so both
+      // answer 400 — without the second pattern a category the form left blank
+      // came back as a 500 the user could not act on.
       const message = normalizeText(err.message);
-      if (message.includes('required') || message.includes('Invalid')) {
+      if (
+        message.includes('required') ||
+        message.includes('Invalid') ||
+        message.includes('must be')
+      ) {
         return sendError(res, 400, message);
       }
       return handleError(res, err, 'Error updating payee');
@@ -943,6 +1038,27 @@ const expenditureController = {
       });
 
       if (!updated) return sendError(res, 404, 'Payee not found');
+
+      // Read after the update so the notification carries the payee's name;
+      // `created_by` is who submitted the details and so who has to fix them.
+      const payee = await expenditureModel.getPayeeById(id);
+
+      await notificationService.emit({
+        type: decision === 'approved' ? 'payee.approved' : 'payee.rejected',
+        actorUserId: toPositiveInt(req.user?.id),
+        subject: {
+          moduleKey: 'expenditure',
+          recordId: id,
+          name: payee?.payee_name || payee?.account_name || null,
+        },
+        audience: payee?.created_by
+          ? [{ kind: 'user', userId: payee.created_by, recipientRole: 'applicant' }]
+          : [],
+        data: { feedback: rejectionReason || null },
+        // One decision per submission round; a double-clicked Approve is the
+        // same decision, not a second one.
+        dedupeKey: payeeRoundKey(id, decision, payee?.requested_at),
+      });
 
       return res.json({
         status: 'success',
@@ -978,7 +1094,17 @@ const expenditureController = {
   async createPayee(req, res) {
     try {
       const userId = toPositiveInt(req.user?.id);
-      const { payee_name, account_name, account_no, ifsc, bank_name, branch_name } = req.body || {};
+      const {
+        payee_name,
+        account_name,
+        account_no,
+        ifsc,
+        bank_name,
+        branch_name,
+        beneficiary_type,
+        beneficiary_org,
+        beneficiary_category,
+      } = req.body || {};
       const canonicalPayeeName = resolveCanonicalPayeeName(payee_name, account_name);
 
       if (!canonicalPayeeName || !account_no || !ifsc || !bank_name || !branch_name) {
@@ -987,6 +1113,13 @@ const expenditureController = {
           400,
           'accountant name, account_no, ifsc, bank_name and branch_name are required',
         );
+      }
+
+      if (
+        beneficiaryCategoryRequired(beneficiary_type, beneficiary_org, payee_name) &&
+        !BENEFICIARY_CATEGORY_OPTIONS.includes(normalizeText(beneficiary_category))
+      ) {
+        return sendError(res, 400, 'category must be Student, Faculty or Staff');
       }
 
       const payeeId = await expenditureModel.upsertPayee(
@@ -998,6 +1131,31 @@ const expenditureController = {
         userId,
       );
       const payee = await expenditureModel.getPayeeById(payeeId);
+
+      // upsertPayee forces approval_status back to 'pending' on both the
+      // insert and the update path, so every save here needs vetting.
+      //
+      // Addressed to the DoF rather than to everyone the route lets through
+      // (admin/hod/coordinator/dof/principal/entity_approver): the payee
+      // directory is a DoF-curated list, and notifying six roles for every
+      // bank-detail edit would be noise nobody reads.
+      await notificationService.emit({
+        type: 'payee.submitted',
+        actorUserId: userId,
+        subject: { moduleKey: 'expenditure', recordId: payeeId, name: canonicalPayeeName },
+        audience: [
+          { kind: 'role', roleCodes: ['dof'], recipientRole: 'approver' },
+          {
+            kind: 'permission',
+            permissions: ['expenditure.workflow.dof'],
+            recipientRole: 'approver',
+          },
+        ],
+        data: { applicantName: req.user?.name || null },
+        // Details can be corrected and resubmitted, and each round needs a
+        // fresh look.
+        dedupeKey: payeeRoundKey(payeeId, 'submitted', payee?.requested_at),
+      });
 
       return res.status(201).json({
         status: 'success',
@@ -1388,6 +1546,20 @@ const expenditureController = {
       }
 
       await expenditureModel.deleteExpenditure(id, { isSuperAdmin });
+
+      // Only meaningful when a super admin deletes someone else's request: an
+      // applicant deleting their own is the actor and is excluded.
+      const ownerUserId = toPositiveInt(record.created_by);
+      await notificationService.emit({
+        type: 'expenditure.deleted',
+        actorUserId: userId,
+        subject: { moduleKey: 'expenditure', recordId: id, applicantUserId: ownerUserId },
+        audience: ownerUserId
+          ? [{ kind: 'user', userId: ownerUserId, recipientRole: 'applicant' }]
+          : [],
+        dedupeKey: `expenditure:${id}:deleted`,
+      });
+
       return res.json({ status: 'success', message: 'Expenditure request deleted' });
     } catch (err) {
       if (normalizeText(err.message).toLowerCase().includes('only pending'))

@@ -4,6 +4,7 @@ import path from 'path';
 import financeModel from './financeModel.js';
 import financeWorkflowAdapter from './financeWorkflowAdapter.js';
 import db from '../../config/connection.js';
+import notificationService from '../notification/notificationService.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
@@ -111,6 +112,26 @@ const resolveTopupCycleAmount = (workflowState, financeRecord, fallbackAmount = 
 };
 
 const isTopupWorkflowCycle = (workflowState) => Boolean(workflowState?.topupAt);
+
+// The edit form groups the persisted breakup by budget head + sub-head + top-up flag
+// before rendering, so one visible row can stand for several stored rows: a head-only
+// match is split across every budget line it draws from, and a request may legitimately
+// hold two rows on the same head. The top-up submission therefore posts one row per
+// GROUP, and counting the stored rows overshoots it — slicing by that count swallowed
+// the appended top-up row and rejected a valid submission with "At least one new topup
+// budget row is required". Count the groups the form would have rendered instead.
+const countGroupedBudgetRows = (rows = []) => {
+  const groupKeys = new Set(
+    rows.map((row) =>
+      [
+        normalizeText(row?.budget_head).toLowerCase(),
+        normalizeText(row?.sub_head).toLowerCase(),
+        parseBooleanLike(row?.is_topup) ? 'topup' : 'original',
+      ].join('|'),
+    ),
+  );
+  return groupKeys.size;
+};
 
 const isEligibleForPrincipalDocument = (finance) => {
   const totalBudget = Number(finance?.total_budget || finance?.proposed_amount || 0);
@@ -663,7 +684,7 @@ const financeController = {
             ? req.body.budget_rows
             : [];
           const appendedBudgetRows = submittedBudgetRows
-            .slice(existingBudgetRows.length)
+            .slice(countGroupedBudgetRows(existingBudgetRows))
             .map((row) => {
               const sanitizedRow = { ...(row || {}) };
               delete sanitizedRow.approved_amount;
@@ -676,7 +697,8 @@ const financeController = {
             await connection.rollback();
             return res.status(400).json({
               success: false,
-              message: 'At least one new topup budget row is required',
+              message:
+                'Add at least one top-up budget row before submitting. To top up a head that is already in this request, add a new row and select the same Budget Head and Sub Head.',
             });
           }
 
@@ -1073,6 +1095,29 @@ const financeController = {
       }
 
       await financeModel.deleteFinanceRequest(financeId, normalizeActor(req));
+
+      // Only meaningful when a super admin deletes someone else's request: an
+      // applicant deleting their own is the actor and is excluded.
+      await notificationService.emit({
+        type: 'finance.deleted',
+        actorUserId: userId,
+        subject: {
+          moduleKey: 'finance',
+          recordId: financeId,
+          applicantUserId: finance.applicant_user_id || finance.created_by || null,
+        },
+        audience:
+          finance.applicant_user_id || finance.created_by
+            ? [
+                {
+                  kind: 'user',
+                  userId: finance.applicant_user_id || finance.created_by,
+                  recipientRole: 'applicant',
+                },
+              ]
+            : [],
+        dedupeKey: `finance:${financeId}:deleted`,
+      });
 
       return res.status(200).json({
         success: true,

@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ChevronUp,
   CheckCircle2,
+  FileCheck2,
   RotateCcw,
   XCircle,
   Archive,
@@ -466,6 +467,12 @@ type BulkTransactionType = (typeof BULK_TRANSACTION_TYPES)[number];
 const EXCEL_ONLY_BULK_TRANSACTION_TYPES: BulkTransactionType[] = ['NEFT', 'RTGS', 'UPI'];
 const isExcelOnlyBulkTransactionType = (type: BulkTransactionType) =>
   EXCEL_ONLY_BULK_TRANSACTION_TYPES.includes(type);
+// Only the bank-routed transfers are filed on a bank's own layout. UPI payouts are
+// uploaded on a single sheet regardless of the debit bank, so they take no bank choice
+// and have no bank-specific template to download.
+const BANK_TEMPLATE_BULK_TRANSACTION_TYPES: BulkTransactionType[] = ['NEFT', 'RTGS'];
+const bulkTransactionTypeNeedsBank = (type: BulkTransactionType) =>
+  BANK_TEMPLATE_BULK_TRANSACTION_TYPES.includes(type);
 const isExcelFileName = (name: string) => /\.(xlsx|xls)$/i.test(name.trim());
 // Mirrors EXCEL_FILE_EXTENSIONS / DD_FILE_EXTENSIONS in expenditureController.js. Keep in
 // sync: a file that passes here but fails there costs the user the whole submission.
@@ -1051,6 +1058,10 @@ const ExpenditureApproval: React.FC = () => {
   const [bulkTransactionFile, setBulkTransactionFile] = useState<File | null>(null);
   const [existingBulkTransactionFile, setExistingBulkTransactionFile] =
     useState<BillFileRecord | null>(null);
+  // Bulk transaction replaces the per-payee rows table: the bank's payout sheet (or the
+  // DD scan) carries the payee breakdown, so the row-level checks on submit do not apply.
+  const hasBulkTransactionFile = Boolean(bulkTransactionFile || existingBulkTransactionFile);
+  const isBulkTransactionMode = showBulkTransaction || Boolean(bulkTransactionFile);
   const [uploadedPayeeBills, setUploadedPayeeBills] = useState<File[]>([]);
   const [uploadedPaymentProofs, setUploadedPaymentProofs] = useState<File[]>([]);
   const [existingPaymentProofs, setExistingPaymentProofs] = useState<BillFileRecord[]>([]);
@@ -1116,6 +1127,10 @@ const ExpenditureApproval: React.FC = () => {
   const lockBeneficiaryAndTagFields = true;
   const [isPayeeCardOpen, setIsPayeeCardOpen] = useState(true);
   const [showAddPayeeModal, setShowAddPayeeModal] = useState(false);
+  // AddPayeeModal's own double-submit guard is driven entirely by this
+  // prop; without it the Save button stays live and a second click posts
+  // the same bank details again.
+  const [isSavingPayee, setIsSavingPayee] = useState(false);
   const [newPayee, setNewPayee] = useState<PayeeRow>(createPayeeRow());
   const [approvedBudgetOptions, setApprovedBudgetOptions] = useState<ApprovedBudgetOption[]>([]);
   const [isApprovedBudgetLoading, setIsApprovedBudgetLoading] = useState(false);
@@ -3783,7 +3798,6 @@ const ExpenditureApproval: React.FC = () => {
   const handleApplicantSearch = async (query: string) => {
     setApplicantSearchQuery(query);
     // Allow empty query to fetch initial list
-    // if (query.length < 2) { ... } <- Removed restriction
     try {
       const response = (await authenticityUtility.get(
         `/expenditure/search-applicant?q=${encodeURIComponent(query)}`,
@@ -3992,10 +4006,203 @@ const ExpenditureApproval: React.FC = () => {
     color: '#374151',
   };
 
+  // Debit account, the bills upload and the uploaded-documents table. Shared by the payee
+  // rows view and the bulk transaction view: both attach the same supporting documents, so
+  // neither may be missing the list.
+  const renderPayeeDocumentsFooter = () => (
+    <>
+      <div className="payee-footer-grid">
+        <div className="payee-footer-input-wrap">
+          <div className="payee-footer-debit-inline">
+            <div className="payee-footer-debit-left">
+              <span className="payee-footer-input-label">Debit Account</span>
+              <button
+                type="button"
+                className={`payee-footer-switch ${showDebitAccountDropdown ? 'is-on' : 'is-off'}`}
+                onClick={() => setShowDebitAccountDropdown((prev) => !prev)}
+                aria-label={
+                  showDebitAccountDropdown
+                    ? 'Disable debit account dropdown'
+                    : 'Enable debit account dropdown'
+                }
+                aria-pressed={showDebitAccountDropdown}
+              >
+                <span className="payee-footer-switch-thumb" />
+              </button>
+            </div>
+            <div className="payee-footer-debit-dropdown">
+              {showDebitAccountDropdown && (
+                <CustomDropdown
+                  name="debitAccount"
+                  options={accountDropdownOptions}
+                  value={getSelectedOption(paymentDetails.debitAccount, accountDropdownOptions)}
+                  onChange={(option) =>
+                    setPaymentDetails({
+                      ...paymentDetails,
+                      debitAccount: String((option as OptionType)?.value || ''),
+                    })
+                  }
+                  placeholder="Select debit account"
+                  className="mb-0"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+        {!isReadOnlyView && existingPayeeBills.length === 0 && uploadedPayeeBills.length === 0 && (
+          <label className="payee-upload-label payee-footer-upload-label">
+            <span className="payee-upload-label-content">
+              <span className="payee-upload-label-text">Bills</span>
+              <Upload size={18} />
+            </span>
+            <input
+              type="file"
+              className="payee-upload-input"
+              accept=".pdf,application/pdf"
+              onChange={handlePayeeBillUpload}
+            />
+          </label>
+        )}
+      </div>
+
+      {(financeAnnexures.length > 0 ||
+        existingPayeeBills.length > 0 ||
+        uploadedPayeeBills.length > 0) && (
+        <div className="payee-uploaded-files" style={{ marginTop: '14px', pointerEvents: 'auto' }}>
+          <div className="payee-uploaded-files-header payee-uploaded-files-header--with-category">
+            <span>S.No</span>
+            <span>Category</span>
+            <span>Document Name</span>
+            <span>Action</span>
+          </div>
+          {financeAnnexures.map((annexure, i) => {
+            const fileUrl = resolveBillFileUrl(annexure);
+            const displayName = normalizeText(
+              annexure.original_name || annexure.file_path || `File ${i + 1}`,
+            );
+            const category = normalizeText(annexure.annexure_type) || 'Bills';
+
+            return (
+              <div
+                key={`finance-annexure-${annexure.id}`}
+                className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
+              >
+                <span className="payee-uploaded-file-index">{i + 1}</span>
+                <span className="payee-uploaded-file-category" title={category}>
+                  {category}
+                </span>
+                <span className="payee-uploaded-file-name" title={displayName}>
+                  {displayName}
+                </span>
+                <div className="payee-upload-actions">
+                  <button
+                    className="payee-upload-view-btn"
+                    disabled={!fileUrl}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (fileUrl) window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                  >
+                    <Eye size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {existingPayeeBills.map((file, i) => {
+            const fileUrl = resolveBillFileUrl(file);
+            const displayName = normalizeText(
+              file.original_name || file.stored_name || file.file_path || `File ${i + 1}`,
+            );
+
+            return (
+              <div
+                key={`existing-${file.id ?? i}`}
+                className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
+              >
+                <span className="payee-uploaded-file-index">{financeAnnexures.length + i + 1}</span>
+                <span className="payee-uploaded-file-category" title="Bills">
+                  Bills
+                </span>
+                <span className="payee-uploaded-file-name" title={displayName}>
+                  {displayName}
+                </span>
+                <div className="payee-upload-actions">
+                  <button
+                    className="payee-upload-view-btn"
+                    disabled={!fileUrl}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (fileUrl) window.open(fileUrl, '_blank', 'noopener,noreferrer');
+                    }}
+                  >
+                    <Eye size={16} />
+                  </button>
+                  {!isReadOnlyView && (
+                    <button
+                      className="payee-upload-view-btn payee-upload-delete-btn"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        removeExistingPayeeBill(i);
+                      }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+          {uploadedPayeeBills.map((file, i) => (
+            <div
+              key={`uploaded-${i}`}
+              className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
+            >
+              <span className="payee-uploaded-file-index">
+                {financeAnnexures.length + existingPayeeBills.length + i + 1}
+              </span>
+              <span className="payee-uploaded-file-category" title="Bills">
+                Bills
+              </span>
+              <span className="payee-uploaded-file-name" title={file.name}>
+                {file.name}
+              </span>
+              <div className="payee-upload-actions">
+                <button
+                  className="payee-upload-view-btn"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (file)
+                      window.open(URL.createObjectURL(file), '_blank', 'noopener,noreferrer');
+                  }}
+                >
+                  <Eye size={16} />
+                </button>
+                {!isReadOnlyView && (
+                  <button
+                    className="payee-upload-view-btn payee-upload-delete-btn"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      removePayeeBill(i);
+                    }}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+
   const renderPayeeDetails = () => {
     if (showBulkTransaction) {
       const isExcelOnlyType = isExcelOnlyBulkTransactionType(bulkTransactionType);
-      const hasBulkTransactionFile = Boolean(bulkTransactionFile || existingBulkTransactionFile);
+      const needsBankTemplate = bulkTransactionTypeNeedsBank(bulkTransactionType);
+      const bulkFileName =
+        bulkTransactionFile?.name || existingBulkTransactionFile?.original_name || '';
 
       return (
         <div className="payee-details-card">
@@ -4037,7 +4244,7 @@ const ExpenditureApproval: React.FC = () => {
               ))}
             </div>
 
-            {isExcelOnlyType && (
+            {needsBankTemplate && (
               <div
                 className="bulk-transaction-segmented bulk-transaction-segmented--bank"
                 role="radiogroup"
@@ -4072,12 +4279,18 @@ const ExpenditureApproval: React.FC = () => {
           </div>
 
           <div className="bulk-neft-panel">
-            <div className="bulk-neft-file-name">
-              <p>
-                {bulkTransactionFile?.name ||
-                  existingBulkTransactionFile?.original_name ||
-                  'No Bulk Transaction file uploaded yet.'}
-              </p>
+            <div className={`bulk-neft-file-name ${hasBulkTransactionFile ? 'has-file' : ''}`}>
+              {hasBulkTransactionFile ? (
+                <>
+                  <FileCheck2 size={18} className="bulk-neft-file-icon" />
+                  <p title={bulkFileName}>{bulkFileName}</p>
+                  <span className="bulk-neft-file-badge">
+                    {bulkTransactionFile ? 'Ready to submit' : 'Uploaded'}
+                  </span>
+                </>
+              ) : (
+                <p>No Bulk Transaction file uploaded yet.</p>
+              )}
             </div>
             <div className="bulk-neft-actions">
               <input
@@ -4137,7 +4350,7 @@ const ExpenditureApproval: React.FC = () => {
                   </button>
                 )}
               </div>
-              {isExcelOnlyType && (
+              {needsBankTemplate && (
                 <button
                   className="payee-toolbar-btn payee-toolbar-btn-secondary"
                   style={{ color: '#0069ab', gap: '6px' }}
@@ -4151,57 +4364,7 @@ const ExpenditureApproval: React.FC = () => {
               )}
             </div>
           </div>
-          <div className="payee-footer-grid">
-            <div className="payee-footer-input-wrap">
-              <div className="payee-footer-debit-inline">
-                <div className="payee-footer-debit-left">
-                  <span className="payee-footer-input-label">Debit Account</span>
-                  <button
-                    type="button"
-                    className={`payee-footer-switch ${showDebitAccountDropdown ? 'is-on' : 'is-off'}`}
-                    onClick={() => setShowDebitAccountDropdown((prev) => !prev)}
-                    aria-label={
-                      showDebitAccountDropdown
-                        ? 'Disable debit account dropdown'
-                        : 'Enable debit account dropdown'
-                    }
-                    aria-pressed={showDebitAccountDropdown}
-                  >
-                    <span className="payee-footer-switch-thumb" />
-                  </button>
-                </div>
-                <div className="payee-footer-debit-dropdown">
-                  {showDebitAccountDropdown && (
-                    <CustomDropdown
-                      name="debitAccount"
-                      options={accountDropdownOptions}
-                      value={getSelectedOption(paymentDetails.debitAccount, accountDropdownOptions)}
-                      onChange={(option) =>
-                        setPaymentDetails({
-                          ...paymentDetails,
-                          debitAccount: String((option as OptionType)?.value || ''),
-                        })
-                      }
-                      placeholder="Select debit account"
-                      className="mb-0"
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-            <label className="payee-upload-label payee-footer-upload-label">
-              <span className="payee-upload-label-content">
-                <span className="payee-upload-label-text">Bills</span>
-                <Upload size={18} />
-              </span>
-              <input
-                type="file"
-                className="payee-upload-input"
-                accept=".pdf,application/pdf"
-                onChange={handlePayeeBillUpload}
-              />
-            </label>
-          </div>
+          {renderPayeeDocumentsFooter()}
         </div>
       );
     }
@@ -4451,196 +4614,7 @@ const ExpenditureApproval: React.FC = () => {
           </table>
         </div>
 
-        <div className="payee-footer-grid">
-          <div className="payee-footer-input-wrap">
-            <div className="payee-footer-debit-inline">
-              <div className="payee-footer-debit-left">
-                <span className="payee-footer-input-label">Debit Account</span>
-                <button
-                  type="button"
-                  className={`payee-footer-switch ${showDebitAccountDropdown ? 'is-on' : 'is-off'}`}
-                  onClick={() => setShowDebitAccountDropdown((prev) => !prev)}
-                  aria-label={
-                    showDebitAccountDropdown
-                      ? 'Disable debit account dropdown'
-                      : 'Enable debit account dropdown'
-                  }
-                  aria-pressed={showDebitAccountDropdown}
-                >
-                  <span className="payee-footer-switch-thumb" />
-                </button>
-              </div>
-              <div className="payee-footer-debit-dropdown">
-                {showDebitAccountDropdown && (
-                  <CustomDropdown
-                    name="debitAccount"
-                    options={accountDropdownOptions}
-                    value={getSelectedOption(paymentDetails.debitAccount, accountDropdownOptions)}
-                    onChange={(option) =>
-                      setPaymentDetails({
-                        ...paymentDetails,
-                        debitAccount: String((option as OptionType)?.value || ''),
-                      })
-                    }
-                    placeholder="Select debit account"
-                    className="mb-0"
-                  />
-                )}
-              </div>
-            </div>
-          </div>
-          {!isReadOnlyView &&
-            existingPayeeBills.length === 0 &&
-            uploadedPayeeBills.length === 0 && (
-              <label className="payee-upload-label payee-footer-upload-label">
-                <span className="payee-upload-label-content">
-                  <span className="payee-upload-label-text">Bills</span>
-                  <Upload size={18} />
-                </span>
-                <input
-                  type="file"
-                  className="payee-upload-input"
-                  accept=".pdf,application/pdf"
-                  onChange={handlePayeeBillUpload}
-                />
-              </label>
-            )}
-        </div>
-
-        {(financeAnnexures.length > 0 ||
-          existingPayeeBills.length > 0 ||
-          uploadedPayeeBills.length > 0) && (
-          <div
-            className="payee-uploaded-files"
-            style={{ marginTop: '14px', pointerEvents: 'auto' }}
-          >
-            <div className="payee-uploaded-files-header payee-uploaded-files-header--with-category">
-              <span>S.No</span>
-              <span>Category</span>
-              <span>Document Name</span>
-              <span>Action</span>
-            </div>
-            {financeAnnexures.map((annexure, i) => {
-              const fileUrl = resolveBillFileUrl(annexure);
-              const displayName = normalizeText(
-                annexure.original_name || annexure.file_path || `File ${i + 1}`,
-              );
-              const category = normalizeText(annexure.annexure_type) || 'Bills';
-
-              return (
-                <div
-                  key={`finance-annexure-${annexure.id}`}
-                  className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
-                >
-                  <span className="payee-uploaded-file-index">{i + 1}</span>
-                  <span className="payee-uploaded-file-category" title={category}>
-                    {category}
-                  </span>
-                  <span className="payee-uploaded-file-name" title={displayName}>
-                    {displayName}
-                  </span>
-                  <div className="payee-upload-actions">
-                    <button
-                      className="payee-upload-view-btn"
-                      disabled={!fileUrl}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (fileUrl) window.open(fileUrl, '_blank', 'noopener,noreferrer');
-                      }}
-                    >
-                      <Eye size={16} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {existingPayeeBills.map((file, i) => {
-              const fileUrl = resolveBillFileUrl(file);
-              const displayName = normalizeText(
-                file.original_name || file.stored_name || file.file_path || `File ${i + 1}`,
-              );
-
-              return (
-                <div
-                  key={`existing-${file.id ?? i}`}
-                  className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
-                >
-                  <span className="payee-uploaded-file-index">
-                    {financeAnnexures.length + i + 1}
-                  </span>
-                  <span className="payee-uploaded-file-category" title="Bills">
-                    Bills
-                  </span>
-                  <span className="payee-uploaded-file-name" title={displayName}>
-                    {displayName}
-                  </span>
-                  <div className="payee-upload-actions">
-                    <button
-                      className="payee-upload-view-btn"
-                      disabled={!fileUrl}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        if (fileUrl) window.open(fileUrl, '_blank', 'noopener,noreferrer');
-                      }}
-                    >
-                      <Eye size={16} />
-                    </button>
-                    {!isReadOnlyView && (
-                      <button
-                        className="payee-upload-view-btn payee-upload-delete-btn"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          removeExistingPayeeBill(i);
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            {uploadedPayeeBills.map((file, i) => (
-              <div
-                key={`uploaded-${i}`}
-                className="payee-uploaded-file-row payee-uploaded-file-row--with-category"
-              >
-                <span className="payee-uploaded-file-index">
-                  {financeAnnexures.length + existingPayeeBills.length + i + 1}
-                </span>
-                <span className="payee-uploaded-file-category" title="Bills">
-                  Bills
-                </span>
-                <span className="payee-uploaded-file-name" title={file.name}>
-                  {file.name}
-                </span>
-                <div className="payee-upload-actions">
-                  <button
-                    className="payee-upload-view-btn"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (file)
-                        window.open(URL.createObjectURL(file), '_blank', 'noopener,noreferrer');
-                    }}
-                  >
-                    <Eye size={16} />
-                  </button>
-                  {!isReadOnlyView && (
-                    <button
-                      className="payee-upload-view-btn payee-upload-delete-btn"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        removePayeeBill(i);
-                      }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+        {renderPayeeDocumentsFooter()}
       </div>
     );
   };
@@ -4724,6 +4698,43 @@ const ExpenditureApproval: React.FC = () => {
       }))
       .filter((row) => row.amount > 0 && !row.budgetLineId)
       .map((row) => row.rowNumber);
+
+  // Unplanned spend has no Head of Accounts picker of its own: it is charged to the planned
+  // Head of Accounts chosen in the rows above (first row with an amount, else the first row
+  // with an approved line), and the server deducts it from that line's balance.
+  const plannedRowsWithBudgetLine = getRowsForActiveTab().filter((row) =>
+    Boolean(parsePositiveIntLike(row.budgetLineId)),
+  );
+  const plannedHeadOfAccountBudgetLineId = parsePositiveIntLike(
+    (
+      plannedRowsWithBudgetLine.find((row) => getWorkflowRowEnteredAmount(row, activeTab) > 0) ||
+      plannedRowsWithBudgetLine[0]
+    )?.budgetLineId,
+  );
+
+  useEffect(() => {
+    if (!showUnplannedBudget || isReadOnlyView) return;
+
+    const plannedOption = plannedHeadOfAccountBudgetLineId
+      ? getUnplannedHeadOfAccountOptions().find(
+          (option) =>
+            parsePositiveIntLike(option.budgetLineId) === plannedHeadOfAccountBudgetLineId,
+        ) || null
+      : null;
+    // Approved lines still loading: keep the current value until the planned line resolves.
+    if (plannedHeadOfAccountBudgetLineId && !plannedOption) return;
+    if (parsePositiveIntLike(plannedOption?.budgetLineId) === unplannedHeadOfAccountBudgetLineId) {
+      return;
+    }
+
+    handleUnplannedHeadOfAccountForFormChange(plannedOption);
+  }, [
+    showUnplannedBudget,
+    isReadOnlyView,
+    plannedHeadOfAccountBudgetLineId,
+    unplannedHeadOfAccountBudgetLineId,
+    approvedBudgetOptions,
+  ]);
 
   const handlePayeeAmountChange = (rowId: string, nextValue: string) => {
     if (!/^\d*\.?\d*$/.test(nextValue)) return;
@@ -4869,7 +4880,10 @@ const ExpenditureApproval: React.FC = () => {
           return;
         }
         if (!unplannedHeadOfAccount.trim() || !unplannedHeadOfAccountBudgetLineId) {
-          showAlert('Please select Head of Accounts for Unplanned Expenditure.', 'warning');
+          showAlert(
+            'Unplanned Expenditure is charged to the planned Head of Accounts. Please select an approved budget head and sub head in the planned rows first.',
+            'warning',
+          );
           return;
         }
 
@@ -5026,20 +5040,31 @@ const ExpenditureApproval: React.FC = () => {
         return;
       }
 
+      // Bulk transaction carries the payee breakdown inside the uploaded sheet, so the
+      // per-row checks below are replaced by a single "the file must be there" check.
+      if (isBulkTransactionMode && !hasBulkTransactionFile) {
+        showAlert(
+          `Please upload the ${bulkTransactionType} bulk transaction file before submitting.`,
+          'warning',
+        );
+        return;
+      }
+
       const effectivePayeeRows = payeeRows.filter((row) => hasAnyPayeeRowValue(row));
       const normalizedWorkflowAmount = Number(
         getActiveTabPayeeExpectedAmount(activeTab).toFixed(2),
       );
-      const requiresPayeeRows = !(activeTab === 'Settlement' && normalizedWorkflowAmount === 0);
+      const requiresPayeeRows =
+        !isBulkTransactionMode && !(activeTab === 'Settlement' && normalizedWorkflowAmount === 0);
 
       if (requiresPayeeRows && effectivePayeeRows.length === 0) {
         showAlert('Please add at least one payee transaction row before submitting.', 'warning');
         return;
       }
 
-      const missingModeRowIndex = effectivePayeeRows.findIndex(
-        (row) => !row.mode || !row.mode.trim(),
-      );
+      const missingModeRowIndex = isBulkTransactionMode
+        ? -1
+        : effectivePayeeRows.findIndex((row) => !row.mode || !row.mode.trim());
       if (missingModeRowIndex !== -1) {
         showAlert(
           `Please select a transaction mode for Payee row ${missingModeRowIndex + 1} before submitting.`,
@@ -5048,9 +5073,9 @@ const ExpenditureApproval: React.FC = () => {
         return;
       }
 
-      const incompletePayeeRowIndex = effectivePayeeRows.findIndex(
-        (row) => !isPayeeRowReadyForAdd(row),
-      );
+      const incompletePayeeRowIndex = isBulkTransactionMode
+        ? -1
+        : effectivePayeeRows.findIndex((row) => !isPayeeRowReadyForAdd(row));
       if (incompletePayeeRowIndex !== -1) {
         showAlert(
           `Please fill required payee details for Payee row ${incompletePayeeRowIndex + 1}.`,
@@ -5067,7 +5092,10 @@ const ExpenditureApproval: React.FC = () => {
           ? settlementAdjustmentLabel.toLowerCase()
           : `${activeTab.toLowerCase()} amount`;
 
-      if (normalizedTotalPayeeTransactionAmount !== normalizedWorkflowAmount) {
+      if (
+        !isBulkTransactionMode &&
+        normalizedTotalPayeeTransactionAmount !== normalizedWorkflowAmount
+      ) {
         if (activeTab === 'Settlement' && normalizedWorkflowAmount === 0) {
           showAlert(
             'Settlement expenditure and advance are equal, so there is no amount to be received or returned. Payee transaction amount must be ₹ 0.00.',
@@ -5221,13 +5249,13 @@ const ExpenditureApproval: React.FC = () => {
         expenditurerows: selectedExpenditureRows,
 
         payeerows: normalizedPayeeRows,
-        showbulktransaction: showBulkTransaction || Boolean(bulkTransactionFile),
+        showbulktransaction: isBulkTransactionMode,
         bulktransactiontemplateversion: BULK_TRANSACTION_TEMPLATE_VERSION,
         bulktransactiontype: bulkTransactionType,
         // Tells the server whether an already-stored file was kept or deleted, so a
         // removal (or a mode/bank switch) with no new upload still persists.
         bulktransactionfileretained: Boolean(existingBulkTransactionFile),
-        bulktransactionbank: isExcelOnlyBulkTransactionType(bulkTransactionType)
+        bulktransactionbank: bulkTransactionTypeNeedsBank(bulkTransactionType)
           ? bulkTransactionBank
           : null,
         paymentdetails: paymentDetails,
@@ -5700,7 +5728,10 @@ const ExpenditureApproval: React.FC = () => {
   };
 
   const handleAddPayee = async (payee: AddPayeeModalPayee) => {
+    if (isSavingPayee) return;
+
     try {
+      setIsSavingPayee(true);
       const canonicalPayeeName = resolveCanonicalPayeeName(payee.payeeName, payee.accountName);
 
       const response = (await authenticityUtility.post('/expenditure/payees', {
@@ -5715,6 +5746,7 @@ const ExpenditureApproval: React.FC = () => {
         beneficiary_type: payee.beneficiaryType || 'individual',
         beneficiary_org:
           resolveCanonicalBeneficiaryOrg(payee.beneficiaryOrg, payee.payeeName) || null,
+        beneficiary_category: payee.beneficiaryCategory || null,
         organization_type: payee.organizationType || null,
         msme: payee.msme || null,
         gstin: payee.gstin || null,
@@ -5792,6 +5824,8 @@ const ExpenditureApproval: React.FC = () => {
     } catch (error) {
       console.error('Failed to save payee:', error);
       showAlert('Unable to save payee right now', 'error');
+    } finally {
+      setIsSavingPayee(false);
     }
   };
 
@@ -8841,9 +8875,12 @@ const ExpenditureApproval: React.FC = () => {
 
         <AddPayeeModal
           show={showAddPayeeModal}
-          onClose={() => setShowAddPayeeModal(false)}
+          onClose={() => {
+            if (!isSavingPayee) setShowAddPayeeModal(false);
+          }}
           onAddPayee={handleAddPayee}
           showAlert={showAlert}
+          isSubmitting={isSavingPayee}
         />
       </div>
       )

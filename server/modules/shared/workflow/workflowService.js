@@ -1,5 +1,10 @@
 import { getWorkflowModule } from './workflowModuleRegistry.js';
-import { assertRecordScopeAccess, resolveQueueScopeFilters } from './workflowScopeResolver.js';
+import {
+  assertRecordScopeAccess,
+  resolveQueueScopeFilters,
+  resolveStagePolicy,
+  STAGE_ROLE_CODES,
+} from './workflowScopeResolver.js';
 import {
   WorkflowError,
   normalizeText,
@@ -7,11 +12,11 @@ import {
   validateFlowArray,
   validateDecision,
   validateWorkflowMeta,
-  validateStagePolicyMeta,
   isSuperAdminActor,
   normalizePermissionSet,
 } from './workflowValidators.js';
 import db from '../../../config/connection.js';
+import notificationService from '../../notification/notificationService.js';
 
 const DEFAULT_FLOW = Object.freeze(['level1', 'dof', 'principal']);
 const TERMINAL_STATUSES = new Set(['completed', 'rejected', 'archived']);
@@ -157,45 +162,6 @@ async function resolveFlowConfig(conn, { moduleKey, beneficiaryType, entityTypeC
   }
 
   return validateFlowArray(rows[0].flow, { field: 'approval_flow_config.flow' });
-}
-
-async function resolveStagePolicy(conn, { moduleKey, stageKey }) {
-  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
-  const normalizedStageKey = normalizeText(stageKey).toLowerCase();
-
-  const [rows] = await conn.query(
-    `SELECT module_key, stage_key, scope_type, meta
-     FROM workflow_stage_policies
-     WHERE is_active = 1
-       AND LOWER(TRIM(stage_key)) = ?
-       AND LOWER(TRIM(module_key)) IN (?, '*')
-     ORDER BY CASE WHEN LOWER(TRIM(module_key)) = ? THEN 0 ELSE 1 END
-     LIMIT 1`,
-    [normalizedStageKey, normalizedModuleKey, normalizedModuleKey],
-  );
-
-  if (!rows.length) {
-    return {
-      moduleKey: normalizedModuleKey,
-      stageKey: normalizedStageKey,
-      scopeType: 'global',
-      meta: null,
-    };
-  }
-
-  const row = rows[0];
-  const scopeType = normalizeText(row.scope_type).toLowerCase();
-  const normalizedMeta = validateStagePolicyMeta({
-    scopeType,
-    meta: row.meta,
-  });
-
-  return {
-    moduleKey: normalizeText(row.module_key).toLowerCase(),
-    stageKey: normalizeText(row.stage_key).toLowerCase(),
-    scopeType,
-    meta: normalizedMeta,
-  };
 }
 
 const buildInitialState = (flow, extras = {}) => {
@@ -469,6 +435,10 @@ const canAccessExpenditureStageByRole = (actor = {}, stageKey = '') => {
   return false;
 };
 
+// The stages whose access is decided purely by role, in every module. Any
+// other stage key falls through to the module-specific handling below.
+const ROLE_CHECKED_STAGES = new Set(['level1', 'dof', 'principal']);
+
 const canAccessStageByRole = ({ moduleKey, actor = {}, stageKey = '' }) => {
   const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
   const normalizedStage = normalizeText(stageKey).toLowerCase();
@@ -476,30 +446,158 @@ const canAccessStageByRole = ({ moduleKey, actor = {}, stageKey = '' }) => {
     return false;
   }
 
-  if (normalizedStage === 'level1') {
-    const roles = getNormalizedActorRoles(actor);
-    return roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role));
+  // Role lists come from STAGE_ROLE_CODES so that this check and the inverse
+  // lookup used to pick notification recipients can never disagree about who
+  // owns a stage.
+  const roles = getNormalizedActorRoles(actor);
+  const holdsStageRole = (stage) =>
+    (STAGE_ROLE_CODES[stage] || []).some((role) => roles.includes(role));
+
+  if (ROLE_CHECKED_STAGES.has(normalizedStage)) {
+    return holdsStageRole(normalizedStage);
   }
 
-  if (normalizedStage === 'dof') {
-    const roles = getNormalizedActorRoles(actor);
-    return roles.includes('dof');
-  }
-
-  if (normalizedStage === 'principal') {
-    const roles = getNormalizedActorRoles(actor);
-    return roles.includes('principal');
-  }
-
+  // `chairman` exists only in the finance flow. In any other module it is not
+  // a role-bearing stage, and holding the role must not grant access.
   if (normalizedStage === 'chairman') {
-    const roles = getNormalizedActorRoles(actor);
-    return normalizedModuleKey === 'finance' && roles.includes('chairman');
+    return normalizedModuleKey === 'finance' && holdsStageRole('chairman');
   }
 
   return normalizedModuleKey === 'expenditure'
     ? canAccessExpenditureStageByRole(actor, normalizedStage)
     : false;
 };
+
+/* ============================================================
+   NOTIFICATIONS
+
+   Every stage transition for every module on this engine passes through
+   `actOnWorkflow`, which makes this the one place worth hooking. Wiring it here
+   rather than in each controller means finance and expenditure are covered by
+   the same three calls, and any module registered later through
+   `registerWorkflowModule()` is notified without touching this file again.
+
+   The emit is a single INSERT into the notification outbox, inside the caller's
+   transaction, and `notificationService.emit` never throws. An approval must
+   never fail because notifications are broken.
+   ============================================================ */
+
+/**
+ * Everyone who may act on `stageKey` for this record — resolved at dispatch
+ * time from role and org-unit scope, because approval here is pull-based and
+ * there is no assignee to read.
+ */
+const stageAudience = (moduleKey, stageKey, context) => ({
+  kind: 'workflow_stage',
+  moduleKey,
+  stageKey,
+  departmentId: context?.departmentId ?? null,
+  entityId: context?.beneficiaryEntityId ?? null,
+  beneficiaryType: context?.beneficiaryType ?? null,
+  recipientRole: 'approver',
+});
+
+const applicantAudience = (context) =>
+  context?.applicantUserId
+    ? [{ kind: 'user', userId: context.applicantUserId, recipientRole: 'applicant' }]
+    : [];
+
+const notificationSubject = (moduleKey, recordId, context) => ({
+  moduleKey: normalizeText(moduleKey).toLowerCase(),
+  recordId: toPositiveInt(recordId),
+  amount: Number(context?.totalBudget || 0) || null,
+  applicantUserId: context?.applicantUserId ?? null,
+});
+
+/**
+ * Decides who hears about a transition, and how it is worded to each of them.
+ *
+ * The branching is the interesting part: an applicant and an approver want
+ * different sentences and different links off the same event, so both are
+ * addressed by one emit with distinct recipient roles and the catalog renders
+ * each separately.
+ */
+async function emitWorkflowNotification({
+  conn,
+  moduleKey,
+  recordId,
+  context,
+  previousStage,
+  nextState,
+  decision,
+  feedback,
+  actor,
+  actionId = null,
+}) {
+  const key = normalizeText(moduleKey).toLowerCase();
+  const status = normalizeText(nextState?.status).toLowerCase();
+  const nextStage = normalizeText(nextState?.currentStage).toLowerCase();
+
+  const subject = notificationSubject(key, recordId, context);
+  const common = {
+    actorUserId: actor?.userId ?? null,
+    subject,
+    data: { stage: previousStage, feedback: normalizeText(feedback) || null },
+  };
+
+  // Every branch below scopes its dedupe key to the `workflow_actions` row that
+  // caused the transition. A record passes through the same stage repeatedly —
+  // return then resubmit, or a top-up on an already-approved record — so a key
+  // built only from the record and stage suppresses every cycle after the
+  // first and leaves the waiting party unnotified. The action id is unique per
+  // transition and rolls back with it, which is the idempotency scope wanted
+  // here. With no action id there is nothing safe to scope by, so dedupe is
+  // left off rather than risking a silently dropped notification.
+  const cycle = toPositiveInt(actionId);
+  const dedupeFor = (suffix) => (cycle ? `${key}:${subject.recordId}:${suffix}:${cycle}` : null);
+
+  if (status === 'completed') {
+    return notificationService.emit({
+      ...common,
+      type: `${key}.approved`,
+      audience: applicantAudience(context),
+      dedupeKey: dedupeFor('approved'),
+      tx: conn,
+    });
+  }
+
+  if (status === 'rejected') {
+    return notificationService.emit({
+      ...common,
+      type: `${key}.rejected`,
+      audience: applicantAudience(context),
+      dedupeKey: dedupeFor(`rejected:${previousStage}`),
+      tx: conn,
+    });
+  }
+
+  if (status === 'returned') {
+    return notificationService.emit({
+      ...common,
+      type: `${key}.returned`,
+      audience: applicantAudience(context),
+      dedupeKey: dedupeFor(`returned:${previousStage}`),
+      tx: conn,
+    });
+  }
+
+  // 'archived' has no waiting party and no applicant action, so it is not
+  // announced. Anything else still in progress has moved to a new stage.
+  if (status !== 'in_progress' || !nextStage || nextStage === previousStage) {
+    return null;
+  }
+
+  return notificationService.emit({
+    ...common,
+    type: `${key}.stage_advanced`,
+    // One emit, two audiences: the applicant learns it moved on, the new
+    // stage's approvers learn it is theirs now.
+    audience: [...applicantAudience(context), stageAudience(key, nextStage, context)],
+    data: { ...common.data, stage: nextStage, decision },
+    dedupeKey: dedupeFor(`stage:${nextStage}`),
+    tx: conn,
+  });
+}
 
 export async function startWorkflow({ moduleKey, recordId, metadata = {}, tx = null }) {
   const moduleConfig = getWorkflowModule(moduleKey);
@@ -567,6 +665,20 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {}, tx = n
       await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, initialState, {
         tx: conn,
         metadata: normalizedMeta,
+      });
+
+      // Tell the first stage's approvers there is something waiting. The
+      // submitter is the actor here, so they are excluded automatically.
+      await notificationService.emit({
+        type: `${normalizeText(moduleKey).toLowerCase()}.submitted`,
+        actorUserId: context?.applicantUserId ?? null,
+        subject: notificationSubject(moduleKey, recordId, context),
+        audience: [
+          stageAudience(normalizeText(moduleKey).toLowerCase(), initialState.currentStage, context),
+        ],
+        data: { stage: initialState.currentStage },
+        dedupeKey: `${normalizeText(moduleKey).toLowerCase()}:${toPositiveInt(recordId)}:submitted:${initialState.currentStage}`,
+        tx: conn,
       });
 
       return {
@@ -656,7 +768,7 @@ export async function actOnWorkflow({
       decision: normalizedDecision,
     });
 
-    await conn.query(
+    const [actionResult] = await conn.query(
       `INSERT INTO workflow_actions (
           module_key,
           record_id,
@@ -686,6 +798,19 @@ export async function actOnWorkflow({
     await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, nextState, {
       tx: conn,
       metadata: normalizedMeta,
+    });
+
+    await emitWorkflowNotification({
+      conn,
+      moduleKey,
+      recordId,
+      context,
+      previousStage: currentStage,
+      nextState,
+      decision: normalizedDecision,
+      feedback,
+      actor: normalizedActor,
+      actionId: actionResult?.insertId ?? null,
     });
 
     return {
@@ -923,7 +1048,7 @@ export async function logWorkflowResubmission({
   const actorRole = normalizeText(actor?.role).toLowerCase() || null;
 
   const executor = tx || db;
-  await executor.query(
+  const [actionResult] = await executor.query(
     `INSERT INTO workflow_actions (
         module_key,
         record_id,
@@ -948,6 +1073,40 @@ export async function logWorkflowResubmission({
       JSON.stringify(validateWorkflowMeta(metadata)),
     ],
   );
+
+  const resubmitActionId = toPositiveInt(actionResult?.insertId);
+
+  // Tell the stage it went back to. Unlike the other two hooks this one has no
+  // record context in hand, so it is loaded here — resubmission is a rare,
+  // user-initiated action, so the extra read costs nothing that matters.
+  let context = null;
+  try {
+    const moduleConfig = getWorkflowModule(normalizedModuleKey);
+    context = await moduleConfig.adapter.getRecordContext(normalizedRecordId, { tx: executor });
+  } catch (error) {
+    // A resubmission that was logged is a success. Failing to work out who to
+    // tell must not undo it.
+    console.error(
+      `Could not load record context to notify about resubmission of ` +
+        `${normalizedModuleKey}#${normalizedRecordId}:`,
+      error,
+    );
+  }
+
+  await notificationService.emit({
+    type: `${normalizedModuleKey}.resubmitted`,
+    actorUserId,
+    subject: notificationSubject(normalizedModuleKey, normalizedRecordId, context),
+    audience: [stageAudience(normalizedModuleKey, normalizedStage, context)],
+    data: { stage: normalizedStage },
+    // Resubmission can legitimately happen more than once for the same record
+    // and stage, so the key is scoped to the action row just written and each
+    // round stays distinct.
+    dedupeKey: resubmitActionId
+      ? `${normalizedModuleKey}:${normalizedRecordId}:resubmitted:${normalizedStage}:${resubmitActionId}`
+      : null,
+    tx: executor,
+  });
 }
 
 export async function getWorkflowMetadata({ moduleKey, actor }) {

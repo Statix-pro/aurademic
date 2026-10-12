@@ -52,6 +52,21 @@
   margin-left: auto;
 }
 
+/* Payees view only: the search box takes the same right-hand slot as Export CSV
+   (workflow-only, so they never compete) and stays on the title row.
+   A wrapping flex container breaks lines on each item's flex-basis BEFORE any
+   shrinking, so the basis — not min-width — is what has to fit. The widest
+   stage-tab row is the super-admin one (five tabs), which leaves ~184px next to
+   the title and the Requests/Payees toggle; 170px clears that with room to
+   spare and still shows the full placeholder. */
+.fw-header-main .fw-payee-header-search {
+  margin-left: auto;
+  flex: 0 0 170px;
+  width: 170px;
+  max-width: 170px;
+  min-width: 170px;
+}
+
 .fw-title {
   margin: 0;
   font-weight: 600;
@@ -136,6 +151,57 @@
   border-color: #005492;
   color: #ffffff;
   box-shadow: 0 10px 22px rgba(0, 105, 171, 0.22);
+}
+
+/* Requests / Payees switch — a secondary control sitting beside the title, so it
+   stays a notch smaller than the role tabs it shares the row with. */
+.fw-view-tabs {
+  display: flex;
+  gap: 2px;
+  background: #f1f5f9;
+  padding: 4px;
+  border-radius: 10px;
+}
+
+.fw-view-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  border-radius: 7px;
+  padding: 7px 14px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.fw-view-tab:hover:not(.active) {
+  color: #334155;
+}
+
+.fw-view-tab.active {
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.fw-view-tab-badge {
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  min-width: 18px;
+  text-align: center;
 }
 
 /* Role Tabs */
@@ -1251,20 +1317,6 @@
   width: 100%;
 }
 
-.fw-payee-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.fw-payee-count {
-  font-size: 0.95rem;
-  color: #475569;
-  font-weight: 600;
-}
-
 .fw-payee-filter-buttons {
   display: none;
 }
@@ -1277,15 +1329,15 @@
 .fw-payee-action-buttons {
   display: grid;
   grid-template-columns: repeat(5, auto);
-  gap: 10px;
+  gap: 6px;
   align-content: center;
   justify-content: end;
 }
 
 .fw-payee-action-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   border: 1px solid transparent;
   font-weight: 600;
   cursor: pointer;
@@ -1386,9 +1438,13 @@
   }
 
   .fw-payee-search,
-  .fw-payee-header-search {
+  .fw-payee-header-search,
+  .fw-header-main .fw-payee-header-search {
     width: 100%;
+    flex: 1 1 100%;
     max-width: none;
+    min-width: 0;
+    margin-left: 0;
   }
 
   .fw-payee-type-filter {

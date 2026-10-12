@@ -199,6 +199,15 @@ router.get('/budget/approved', expenditureController.getApprovedBudgets);
 router.get('/advance-summary', expenditureController.getAdvanceSummary);
 
 router.get('/payees', expenditureController.listPayees);
+// Declared before '/payees/:id' so the literal segment is not read as an id.
+// Guarded like the payee mutations below: unlike the '/payees' typeahead, the
+// directory hands back every payee's account number, IFSC, PAN and GSTIN —
+// including rejected rows — and is only ever read by the DoF/admin panel.
+router.get(
+  '/payees/directory',
+  canAccessExpenditureWorkflowForAdmins,
+  expenditureController.listPayeeDirectory,
+);
 router.post('/payees', expenditureController.createPayee);
 router.get('/payees/:id', expenditureController.getPayee);
 router.patch(

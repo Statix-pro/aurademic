@@ -1,8 +1,11 @@
 import React, { useState, useEffect, ChangeEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import projectsApi from '../../projects/projectsApi';
 import '../../user-dashboard/userdashboard.css';
+import '../recordCard.css';
 import './ProjectsPage.css';
 
 interface Project {
@@ -10,14 +13,57 @@ interface Project {
   title: string;
   team_members: string;
   agency_name?: string;
-  category: string;
-  sanction_order_amount?: string | number;
+  scheme_name?: string;
+  scheme_category?: string;
+  project_cost?: string | number;
   duration_years?: number;
   duration_months?: number;
   duration_days?: number;
-  submission_status: string;
-  date_of_submission: string;
+  proposal_status: string;
+  project_status?: string | null;
+  submitted_on: string;
 }
+
+/** Human labels for the stored proposal/project status values. */
+const STATUS_LABELS: Record<string, string> = {
+  draft: 'Draft',
+  submitted: 'Submitted',
+  accepted_for_evaluation: 'Accepted for Evaluation',
+  shortlisted: 'Shortlisted',
+  shortlisted_for_presentation: 'Shortlisted for Presentation',
+  result_announced: 'Result Announced',
+  ongoing: 'Ongoing',
+  completed: 'Completed',
+  closed: 'Closed',
+};
+
+/**
+ * A sanctioned project reports where it is in delivery; anything earlier
+ * reports where its proposal is.
+ */
+const displayStatus = (project: Project): string =>
+  project.project_status || project.proposal_status || 'draft';
+
+const budgetFormat = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
+
+/** The sanctioned amount as a reader expects it: `₹ 5,00,000`, not `500000.00`. */
+const formatBudget = (cost: Project['project_cost']): string => {
+  if (cost === null || cost === undefined || cost === '') return '—';
+  const amount = Number(cost);
+  return Number.isFinite(amount) ? `₹ ${budgetFormat.format(amount)}` : String(cost);
+};
+
+const plural = (count: number, unit: string) => `${count} ${unit}${count === 1 ? '' : 's'}`;
+
+/** `2 years 6 months`, leaving out the parts that are zero. */
+const formatDuration = (project: Project): string => {
+  const parts = [
+    project.duration_years ? plural(project.duration_years, 'year') : '',
+    project.duration_months ? plural(project.duration_months, 'month') : '',
+    project.duration_days ? plural(project.duration_days, 'day') : '',
+  ].filter(Boolean);
+  return parts.length ? parts.join(' ') : '—';
+};
 
 interface ProjectsResponse {
   data: Project[];
@@ -44,6 +90,9 @@ const ProjectsPage: React.FC = () => {
     pending: 0,
     total: 0,
   });
+  const [alert, setAlert] = useState<{ type: AlertType; message: string } | null>(null);
+  // Set while a delete is awaiting confirmation; the modal reads the title from it.
+  const [pendingDelete, setPendingDelete] = useState<Project | null>(null);
 
   useEffect(() => {
     fetchProjects(currentPage, itemsPerPage);
@@ -86,25 +135,12 @@ const ProjectsPage: React.FC = () => {
 
       if (response && Array.isArray(response.data)) {
         const kpis: KpiData = {
-          ongoing: response.data.filter(
-            (item) =>
-              item.submission_status === 'approved' ||
-              item.submission_status === 'ongoing' ||
-              item.submission_status === 'active',
+          ongoing: response.data.filter((item) => item.project_status === 'ongoing').length,
+          completed: response.data.filter((item) =>
+            ['completed', 'closed'].includes(item.project_status ?? ''),
           ).length,
-          completed: response.data.filter(
-            (item) =>
-              item.submission_status === 'completed' ||
-              item.submission_status === 'finished' ||
-              item.submission_status === 'closed',
-          ).length,
-          pending: response.data.filter(
-            (item) =>
-              item.submission_status === 'waiting' ||
-              item.submission_status === 'pending' ||
-              item.submission_status === 'draft' ||
-              item.submission_status === 'under_review',
-          ).length,
+          // Everything still with the funding agency: no delivery status yet.
+          pending: response.data.filter((item) => !item.project_status).length,
           total: response.data.length,
         };
         setKpiData(kpis);
@@ -126,6 +162,44 @@ const ProjectsPage: React.FC = () => {
 
   const handleView = (projectId: number) => {
     navigate(`/project/${projectId}?mode=view`);
+  };
+
+  const handleEdit = (projectId: number) => {
+    navigate(`/project/${projectId}`);
+  };
+
+  /** Copies a deep link to the project so it can be pasted into a mail or chat. */
+  const handleShare = async (projectId: number) => {
+    const link = `${window.location.origin}/project/${projectId}?mode=view`;
+
+    try {
+      await navigator.clipboard.writeText(link);
+      setAlert({ type: 'success', message: 'Project link copied to the clipboard.' });
+    } catch {
+      // Clipboard access is denied outside a secure context, so show the link
+      // instead of failing silently.
+      setAlert({ type: 'info', message: `Copy this link: ${link}` });
+    }
+  };
+
+  /**
+   * Only the principal investigator, the person who filed the project and
+   * admins may delete one; the API decides, and its message is shown as-is.
+   */
+  const handleDelete = async (project: Project) => {
+    setPendingDelete(null);
+
+    try {
+      await projectsApi.deleteProject(project.id);
+      setAlert({ type: 'success', message: 'Project deleted.' });
+      await Promise.all([fetchProjects(currentPage, itemsPerPage), fetchKpiData()]);
+    } catch (err: unknown) {
+      const response = (err as { response?: { data?: { message?: string } } })?.response;
+      setAlert({
+        type: 'error',
+        message: response?.data?.message || 'The project could not be deleted.',
+      });
+    }
   };
 
   const handleAdd = () => {
@@ -218,68 +292,27 @@ const ProjectsPage: React.FC = () => {
               <div className="research-grid">
                 {projects && projects.length > 0 ? (
                   projects.map((project) => (
-                    <div key={project.id} className="research-card compact-row">
-                      <div className="d-flex w-100 align-items-start">
-                        {/* Left side: Content */}
-                        <div className="compact-content flex-grow-1 pe-3">
-                          <div className="compact-header">
-                            <h6 className="research-title">{project.title}</h6>
-                          </div>
-                          <div className="compact-details">
-                            <span className="detail-item">
-                              <span className="detail-label">Team:</span>
-                              <span className="detail-value">{project.team_members}</span>
-                            </span>
-                            <span className="detail-separator">•</span>
-                            <span className="detail-item">
-                              <span className="detail-label">Agency:</span>
-                              <span className="detail-value">
-                                {project.agency_name || 'Not specified'}
-                              </span>
-                            </span>
-                            <span className="detail-separator">•</span>
-                            <span className="detail-item">
-                              <span className="detail-label">Category:</span>
-                              <span className="detail-value">{project.category}</span>
-                            </span>
-                            <span className="detail-separator">•</span>
-                            <span className="detail-item">
-                              <span className="detail-label">Amount:</span>
-                              <span className="detail-value">
-                                {project.sanction_order_amount || 'Not set'}
-                              </span>
-                            </span>
-                            <span className="detail-separator">•</span>
-                            <span className="detail-item">
-                              <span className="detail-label">Duration:</span>
-                              <span className="detail-value">
-                                {project.duration_years ? `${project.duration_years}y` : ''}
-                                {project.duration_months ? ` ${project.duration_months}m` : ''}
-                                {project.duration_days ? ` ${project.duration_days}d` : ''}
-                                {!project.duration_years &&
-                                  !project.duration_months &&
-                                  !project.duration_days &&
-                                  'Not specified'}
-                              </span>
-                            </span>
-                          </div>
+                    <article key={project.id} className="research-card pc-card">
+                      <header className="pc-card__header">
+                        <div className="pc-card__heading">
+                          <span className="pc-card__id" aria-label={`Project ID ${project.id}`}>
+                            #{project.id}
+                          </span>
+                          <h6 className="pc-card__title" title={project.title}>
+                            {project.title}
+                          </h6>
                         </div>
-
-                        {/* Right side: ID, Actions, Status */}
-                        <div
-                          className="metadata-fixed-column text-end"
-                          style={{ minWidth: '220px', flexShrink: 0 }}
-                        >
-                          {/* ID Row at top */}
-                          <div className="d-flex justify-content-end align-items-center mb-2">
-                            <span className="research-id" aria-label={`Project ID ${project.id}`}>
-                              {project.id}
-                            </span>
-                          </div>
-
-                          {/* Action buttons */}
+                        {/* Status and actions share the title's line: on a
+                            footer of their own the four buttons left a strip
+                            of empty card as tall as a row of details. */}
+                        <div className="pc-card__aside">
+                          <span
+                            className={`pc-status pc-status--${displayStatus(project).replace(/[^a-z0-9]/g, '-')}`}
+                          >
+                            {STATUS_LABELS[displayStatus(project)] ?? displayStatus(project)}
+                          </span>
                           <div
-                            className="research-actions mb-3 d-flex justify-content-end align-items-center"
+                            className="pc-card__actions"
                             role="group"
                             aria-label="Project actions"
                           >
@@ -293,13 +326,15 @@ const ProjectsPage: React.FC = () => {
                             </button>
                             <button
                               className="action-btn share-btn"
-                              title="Share project"
+                              onClick={() => handleShare(project.id)}
+                              title="Copy a link to this project"
                               aria-label="Share project"
                             >
                               <i className="fas fa-link" aria-hidden="true"></i>
                             </button>
                             <button
                               className="action-btn edit-btn"
+                              onClick={() => handleEdit(project.id)}
                               title="Edit project"
                               aria-label="Edit project"
                             >
@@ -307,27 +342,43 @@ const ProjectsPage: React.FC = () => {
                             </button>
                             <button
                               className="action-btn delete-btn"
+                              onClick={() => setPendingDelete(project)}
                               title="Delete project"
                               aria-label="Delete project"
                             >
                               <i className="fas fa-trash" aria-hidden="true"></i>
                             </button>
                           </div>
-
-                          {/* Status and Date - Stacked */}
-                          <div className="d-flex flex-column align-items-end gap-1">
-                            <span
-                              className={`status-badge status-${project.submission_status?.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
-                            >
-                              {project.submission_status}
-                            </span>
-                            <span className="text-muted" style={{ fontSize: '0.75rem' }}>
-                              Submitted: {formatDate(project.date_of_submission)}
-                            </span>
-                          </div>
                         </div>
-                      </div>
-                    </div>
+                      </header>
+
+                      <dl className="pc-card__facts">
+                        <div className="pc-fact pc-fact--wide">
+                          <dt>Team</dt>
+                          <dd title={project.team_members}>{project.team_members || '—'}</dd>
+                        </div>
+                        <div className="pc-fact pc-fact--wide">
+                          <dt>Funding Agency</dt>
+                          <dd title={project.agency_name}>{project.agency_name || '—'}</dd>
+                        </div>
+                        <div className="pc-fact pc-fact--wide">
+                          <dt>Scheme</dt>
+                          <dd title={project.scheme_name}>{project.scheme_name || '—'}</dd>
+                        </div>
+                        <div className="pc-fact">
+                          <dt>Budget</dt>
+                          <dd className="pc-fact__amount">{formatBudget(project.project_cost)}</dd>
+                        </div>
+                        <div className="pc-fact">
+                          <dt>Duration</dt>
+                          <dd>{formatDuration(project)}</dd>
+                        </div>
+                        <div className="pc-fact">
+                          <dt>Submitted</dt>
+                          <dd>{project.submitted_on ? formatDate(project.submitted_on) : '—'}</dd>
+                        </div>
+                      </dl>
+                    </article>
                   ))
                 ) : (
                   <div className="no-data">No projects found.</div>
@@ -361,6 +412,24 @@ const ProjectsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      <AlertModal
+        show={Boolean(pendingDelete)}
+        onHide={() => setPendingDelete(null)}
+        type="warning"
+        title="Delete project"
+        message={`Delete "${pendingDelete?.title ?? ''}"? Its investigators, finance rows and uploaded documents are removed with it.`}
+        showCancel
+        confirmText="Delete"
+        onConfirm={() => pendingDelete && handleDelete(pendingDelete)}
+      />
+
+      <AlertModal
+        show={Boolean(alert)}
+        onHide={() => setAlert(null)}
+        type={alert?.type ?? 'info'}
+        message={alert?.message ?? ''}
+      />
     </div>
   );
 };

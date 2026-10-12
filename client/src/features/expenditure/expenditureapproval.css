@@ -1332,8 +1332,10 @@
   display: none;
 }
 
+/* Empty state: dashed and muted, so it reads as a placeholder. */
 .bulk-neft-file-name {
   flex: 1;
+  min-width: 0;
   margin-bottom: 0;
   padding: 12px 16px;
   border: 1px dashed #d1d5db;
@@ -1345,6 +1347,44 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
+}
+
+.bulk-neft-file-name p {
+  margin-bottom: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Uploaded state: solid tinted chip, left-aligned with an icon and a status badge, so
+   it is unmistakably different from the placeholder above. */
+.bulk-neft-file-name.has-file {
+  border: 1px solid #a7d3ee;
+  background: #eef7fd;
+  color: #0b4f75;
+  font-weight: 600;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.bulk-neft-file-icon {
+  flex-shrink: 0;
+  color: #0069ab;
+}
+
+.bulk-neft-file-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #0069ab;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .bulk-neft-actions {

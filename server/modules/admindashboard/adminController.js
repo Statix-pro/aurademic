@@ -1,5 +1,8 @@
 // adminController.js
 import adminModel from './adminModel.js';
+import journalModel from '../journal/journalModel.js';
+import { userAudience } from '../notification/audiences.js';
+import notificationService from '../notification/notificationService.js';
 
 const adminController = {
   async getDashboard(req, res) {
@@ -126,6 +129,21 @@ const adminController = {
         });
       }
 
+      await notificationService.emit({
+        type: status === 'approved' ? 'journal.approved' : 'journal.rejected',
+        actorUserId: req.user.id,
+        subject: {
+          moduleKey: 'journal',
+          recordId: journalId,
+          title: updatedJournal.title,
+        },
+        audience: userAudience(updatedJournal.created_by, 'applicant'),
+        data: { feedback: updatedJournal.admin_approval_comment || null },
+        // A reviewer can flip a decision, and the author needs to hear the new
+        // one, so the timestamp keeps each decision distinct.
+        dedupeKey: `journal:${journalId}:review:${status}:${Date.now()}`,
+      });
+
       return res.status(200).json({
         message: `Journal submission ${status} successfully`,
         data: updatedJournal,
@@ -166,6 +184,20 @@ const adminController = {
         });
       }
 
+      const requester = await adminModel.getJournalRequestOwner(requestId);
+      await notificationService.emit({
+        type: 'journal.request_approved',
+        actorUserId: req.user?.id || null,
+        subject: {
+          moduleKey: 'journal',
+          recordId: requestId,
+          name: requester?.journal_name || null,
+        },
+        audience: userAudience(requester?.user_id, 'applicant'),
+        data: { feedback: admin_comment || null },
+        dedupeKey: `journal_request:${requestId}:approved`,
+      });
+
       res.status(200).json({
         message: 'Journal request approved successfully',
         data: result,
@@ -191,6 +223,20 @@ const adminController = {
           message: 'Journal request not found',
         });
       }
+
+      const requester = await adminModel.getJournalRequestOwner(requestId);
+      await notificationService.emit({
+        type: 'journal.request_rejected',
+        actorUserId: req.user?.id || null,
+        subject: {
+          moduleKey: 'journal',
+          recordId: requestId,
+          name: requester?.journal_name || null,
+        },
+        audience: userAudience(requester?.user_id, 'applicant'),
+        data: { feedback: admin_comment || null },
+        dedupeKey: `journal_request:${requestId}:rejected`,
+      });
 
       res.status(200).json({
         message: 'Journal request rejected successfully',
@@ -224,13 +270,23 @@ const adminController = {
       const requestId = parseInt(req.params.id);
       const { admin_comment } = req.body;
 
-      const result = await adminModel.approveProjectRequest(requestId, admin_comment);
+      const result = await adminModel.approveProjectRequest(requestId, admin_comment, req.user?.id);
 
       if (!result) {
         return res.status(404).json({
           message: 'Project request not found',
         });
       }
+
+      const requester = await adminModel.getProjectRequestOwner(requestId);
+      await notificationService.emit({
+        type: 'project.request_approved',
+        actorUserId: req.user?.id || null,
+        subject: { moduleKey: 'project', recordId: requestId, name: requester?.name || null },
+        audience: userAudience(requester?.user_id, 'applicant'),
+        data: { feedback: admin_comment || null, requestType: requester?.request_type || null },
+        dedupeKey: `project_request:${requestId}:approved`,
+      });
 
       res.status(200).json({
         message: 'Project request approved successfully',
@@ -257,6 +313,16 @@ const adminController = {
           message: 'Project request not found',
         });
       }
+
+      const requester = await adminModel.getProjectRequestOwner(requestId);
+      await notificationService.emit({
+        type: 'project.request_rejected',
+        actorUserId: req.user?.id || null,
+        subject: { moduleKey: 'project', recordId: requestId, name: requester?.name || null },
+        audience: userAudience(requester?.user_id, 'applicant'),
+        data: { feedback: admin_comment || null, requestType: requester?.request_type || null },
+        dedupeKey: `project_request:${requestId}:rejected`,
+      });
 
       res.status(200).json({
         message: 'Project request rejected successfully',
@@ -326,6 +392,24 @@ const adminController = {
       );
 
       if (result.affectedRows > 0) {
+        // Same notification as the journal-side reply route, sharing
+        // journalModel's context helper so the two cannot describe the same
+        // event differently.
+        const updateContext = await journalModel.getStatusUpdateContext(statusUpdateId);
+
+        await notificationService.emit({
+          type: 'journal.status_update_replied',
+          actorUserId: req.user?.id || null,
+          subject: {
+            moduleKey: 'journal',
+            recordId: updateContext?.journal_id ?? null,
+            title: updateContext?.title || null,
+          },
+          audience: userAudience(updateContext?.user_id, 'applicant'),
+          data: { comment: admin_reply.trim() },
+          dedupeKey: `journal_status_update:${statusUpdateId}:replied:${Date.now()}`,
+        });
+
         res.status(200).json({
           message: 'Admin reply updated successfully',
           data: { id: statusUpdateId, admin_reply: admin_reply.trim() },
