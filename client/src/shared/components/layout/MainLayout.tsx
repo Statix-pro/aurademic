@@ -26,7 +26,7 @@ const MainLayout = () => {
 
   if (isPreviewMode) {
     return (
-      <main style={{ width: '100%', height: '100vh', overflowY: 'auto', background: '#fff' }}>
+      <main className="guesthouse-print-preview-layout" style={{ width: '100%', height: '100vh', overflowY: 'auto', background: '#fff' }}>
         <Outlet />
       </main>
     );

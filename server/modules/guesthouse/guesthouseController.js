@@ -13,6 +13,30 @@ const toPositiveInt = (value) => {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 };
 
+const isValidDateKey = (value) => {
+  const date = normalizeText(value);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(`${date}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date;
+};
+
+const normalizeTimeKey = (value) => {
+  const time = normalizeText(value);
+  const match = time.match(/^([01]\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/);
+  return match ? `${match[1]}:${match[2]}:${match[3] || '00'}` : null;
+};
+
+const isValidStay = ({ checkInDate, checkOutDate, checkInTime, checkOutTime } = {}) => {
+  if (
+    !isValidDateKey(checkInDate) ||
+    !isValidDateKey(checkOutDate) ||
+    !normalizeTimeKey(checkInTime) ||
+    !normalizeTimeKey(checkOutTime)
+  ) return false;
+
+  return `${checkOutDate}T${normalizeTimeKey(checkOutTime)}` > `${checkInDate}T${normalizeTimeKey(checkInTime)}`;
+};
+
 const isSuperAdminRequest = (req) => Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin);
 
 const normalizeActor = (req) => {
@@ -29,12 +53,7 @@ const normalizeActor = (req) => {
   };
 };
 
-const hasAnyGuesthouseWorkflowPermission = (req) => {
-  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  return permissions.some((permission) =>
-    normalizeText(permission).startsWith('guesthouse.workflow.'),
-  );
-};
+const GUESTHOUSE_WORKFLOW_STAGES = ['hod', 'guesthouse_incharge', 'principal', 'guesthouse_admin'];
 
 const hasGuesthouseStagePermission = (req, stage) => {
   const normalizedStage = normalizeText(stage).toLowerCase();
@@ -68,6 +87,9 @@ const hasGuesthouseStagePermission = (req, stage) => {
 
   return normalizedRoles.includes(normalizedStage);
 };
+
+const hasAnyGuesthouseStagePermission = (req) =>
+  GUESTHOUSE_WORKFLOW_STAGES.some((stage) => hasGuesthouseStagePermission(req, stage));
 
 const canAccessGuesthouseRecord = async (req, booking) => {
   if (!booking) return false;
@@ -194,12 +216,9 @@ const guesthouseController = {
         ...guest,
         travel: guest?.travel || payload.travelDetails || {},
       }));
-      const invalidGuest = guests.some((guest) => {
-        const travel = guest.travel;
-        const start = new Date(`${travel.checkInDate || ''}T00:00:00`);
-        const end = new Date(`${travel.checkOutDate || ''}T00:00:00`);
-        return !normalizeText(guest?.name) || !travel.checkInTime || !travel.checkOutTime || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start;
-      });
+      const invalidGuest = guests.some((guest) =>
+        !normalizeText(guest?.name) || !isValidStay(guest.travel),
+      );
       if (invalidGuest) {
         return res.status(400).json({ success: false, message: 'Every guest needs a valid check-in and check-out stay' });
       }
@@ -224,7 +243,7 @@ const guesthouseController = {
     } catch (error) {
       if (bookingId) {
         try {
-          await guesthouseModel.deleteGuesthouseBooking(bookingId);
+          await guesthouseModel.deleteGuesthouseBooking(bookingId, { allowSuperAdmin: true });
         } catch (cleanupError) {
           console.error('Unable to remove incomplete guesthouse booking', cleanupError);
         }
@@ -236,10 +255,42 @@ const guesthouseController = {
   async listGuesthouseBookings(req, res) {
     try {
       const mineOnly = normalizeText(req.query.mine).toLowerCase() === 'true';
-      const isOwnerOnly =
-        mineOnly || (!hasAnyGuesthouseWorkflowPermission(req) && !isSuperAdminRequest(req));
+      const isOwnerOnly = mineOnly || !hasAnyGuesthouseStagePermission(req);
+      const canListAll = Boolean(
+        isSuperAdminRequest(req) ||
+        req.user?.is_admin ||
+        req.user?.isAdmin ||
+        req.user?.permissions?.includes('guesthouse.workflow.guesthouse_admin'),
+      );
+      let accessibleBookingIds;
+
+      if (!mineOnly && !isOwnerOnly && !canListAll) {
+        const actor = normalizeActor(req);
+        const search = req.query.q || req.query.search;
+        accessibleBookingIds = [];
+
+        for (const stage of GUESTHOUSE_WORKFLOW_STAGES) {
+          if (!hasGuesthouseStagePermission(req, stage)) continue;
+          let page = 1;
+          let total = 0;
+          do {
+            const result = await listQueue({
+              moduleKey: 'guesthouse',
+              stage,
+              actor,
+              filters: { workflowStatus: 'all', q: search, page, limit: 100 },
+            });
+            accessibleBookingIds.push(...result.items.map((item) => item.id));
+            total = result.total;
+            page += 1;
+          } while ((page - 1) * 100 < total);
+        }
+        accessibleBookingIds = [...new Set(accessibleBookingIds.map(toPositiveInt).filter(Boolean))];
+      }
+
       const result = await guesthouseModel.listGuesthouseBookings({
         createdByUserId: isOwnerOnly ? req.user?.id : undefined,
+        bookingIds: accessibleBookingIds,
         search: req.query.q || req.query.search,
         page: req.query.page,
         limit: req.query.limit,
@@ -299,15 +350,19 @@ const guesthouseController = {
         return res.status(400).json({ success: false, message: 'At least one guest is required' });
       }
       const guests = payload.guests.map((guest) => ({ ...guest, travel: guest?.travel || payload.travelDetails || {} }));
-      const invalidGuest = guests.some((guest) => {
-        const travel = guest.travel;
-        const start = new Date(`${travel.checkInDate || ''}T00:00:00`);
-        const end = new Date(`${travel.checkOutDate || ''}T00:00:00`);
-        return !normalizeText(guest?.name) || !travel.checkInTime || !travel.checkOutTime || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end < start;
-      });
+      const invalidGuest = guests.some((guest) =>
+        !normalizeText(guest?.name) || !isValidStay(guest.travel),
+      );
       if (invalidGuest) return res.status(400).json({ success: false, message: 'Every guest needs a valid check-in and check-out stay' });
 
-      await guesthouseModel.updateGuesthouseBooking(bookingId, { ...payload, guests });
+      await guesthouseModel.updateGuesthouseBooking(bookingId, { ...payload, guests }, {
+        expectedWorkflowStage: isSuperAdminRequest(req) ? null : stage || 'hod',
+        allowedWorkflowStatuses: isSuperAdminRequest(req)
+          ? null
+          : isApprover
+            ? ['in_progress', 'pending', 'submitted', 'returned']
+            : ['in_progress', 'pending', 'submitted', ''],
+      });
       const booking = await guesthouseModel.getGuesthouseBookingById(bookingId);
       return res.json({ success: true, message: 'Guest house booking updated', data: booking });
     } catch (error) {
@@ -353,7 +408,10 @@ const guesthouseController = {
       if (!isSuperAdminRequest(req) && ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(status))) {
         return res.status(409).json({ success: false, message: 'This booking can no longer be deleted after approval has started' });
       }
-      await guesthouseModel.deleteGuesthouseBooking(bookingId);
+      await guesthouseModel.deleteGuesthouseBooking(bookingId, {
+        expectedOwnerId: req.user?.id,
+        allowSuperAdmin: isSuperAdminRequest(req),
+      });
       return res.json({ success: true, message: 'Guest house booking deleted' });
     } catch (error) {
       return handleError(res, error, 'Error in deleteGuesthouseBooking');
@@ -640,7 +698,12 @@ const guesthouseController = {
     try {
       const bookingId = toPositiveInt(req.params.id);
       const schedule = req.body || {};
-      if (!bookingId || !/^\d{4}-\d{2}-\d{2}$/.test(normalizeText(schedule.checkInDate || schedule.check_in_date)) || !/^\d{4}-\d{2}-\d{2}$/.test(normalizeText(schedule.checkOutDate || schedule.check_out_date)) || !/^\d{2}:\d{2}$/.test(normalizeText(schedule.checkInTime || schedule.check_in_time)) || !/^\d{2}:\d{2}$/.test(normalizeText(schedule.checkOutTime || schedule.check_out_time))) {
+      if (!bookingId || !isValidStay({
+        checkInDate: schedule.checkInDate || schedule.check_in_date,
+        checkOutDate: schedule.checkOutDate || schedule.check_out_date,
+        checkInTime: schedule.checkInTime || schedule.check_in_time,
+        checkOutTime: schedule.checkOutTime || schedule.check_out_time,
+      })) {
         return res.status(400).json({ success: false, message: 'A valid check-in and check-out date and time are required' });
       }
       const booking = await guesthouseModel.getGuesthouseBookingById(bookingId);
@@ -659,7 +722,14 @@ const guesthouseController = {
       if (!isSuperAdminRequest(req) && !ownerCanEdit && !approverCanEdit) {
         return res.status(409).json({ success: false, message: 'Travel schedule can only be changed while the booking is editable in its current workflow stage' });
       }
-      await guesthouseModel.updateGuesthouseTravelSchedule(bookingId, schedule);
+      await guesthouseModel.updateGuesthouseTravelSchedule(bookingId, schedule, {
+        expectedWorkflowStage: isSuperAdminRequest(req) ? null : stage,
+        allowedWorkflowStatuses: isSuperAdminRequest(req)
+          ? null
+          : approverCanEdit
+            ? ['in_progress', 'pending', 'submitted', 'returned']
+            : ['in_progress', 'pending', 'submitted'],
+      });
       return res.json({ success: true, message: 'Travel schedule updated' });
     } catch (error) {
       return handleError(res, error, 'Error in updateTravelSchedule');
@@ -677,10 +747,23 @@ const guesthouseController = {
 
   async getRoomOptions(req, res) {
     try {
+      const checkInDate = normalizeText(req.query.checkInDate);
+      const checkOutDate = normalizeText(req.query.checkOutDate);
+      const checkInTime = normalizeText(req.query.checkInTime);
+      const checkOutTime = normalizeText(req.query.checkOutTime);
+      if (
+        (checkInDate || checkOutDate) &&
+        (!isValidDateKey(checkInDate) || !isValidDateKey(checkOutDate) ||
+          ((checkInTime || checkOutTime) && !isValidStay({ checkInDate, checkOutDate, checkInTime, checkOutTime })))
+      ) {
+        return res.status(400).json({ success: false, message: 'A valid check-in and check-out date and time are required' });
+      }
       const rooms = await guesthouseModel.listGuesthouseRooms({
         status: 'Active',
-        checkInDate: req.query.checkInDate,
-        checkOutDate: req.query.checkOutDate,
+        checkInDate,
+        checkInTime,
+        checkOutDate,
+        checkOutTime,
         excludeBookingId: req.query.bookingId,
       });
       return res.json({ success: true, data: rooms });

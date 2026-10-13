@@ -58,20 +58,80 @@ const buildDateRange = (checkInDate, checkOutDate) => {
   return dates;
 };
 
-const assertRoomAvailable = async (tx, { bookingId, roomId, block, roomNumber, excludeBookingId = bookingId }) => {
+const getGuesthouseBookingForUpdate = async (tx, bookingId) => {
+  const [rows] = await tx.query(
+    `SELECT id, created_by, check_in_date, check_in_time, check_out_date, check_out_time,
+            workflow_state, workflow_status, workflow_stage, overall_status
+       FROM guesthouse_bookings WHERE id = ? FOR UPDATE`,
+    [toPositiveInt(bookingId)],
+  );
+  if (!rows.length) return null;
+  return { ...rows[0], workflow_state: safeParseJSON(rows[0].workflow_state, null) };
+};
+
+const getWorkflowStageAndStatus = (booking) => ({
+  stage: normalizeText(booking?.workflow_state?.currentStage || booking?.workflow_stage).toLowerCase(),
+  status: normalizeText(booking?.workflow_state?.status || booking?.workflow_status || booking?.overall_status).toLowerCase(),
+});
+
+const assertWorkflowState = (booking, { expectedWorkflowStage, allowedWorkflowStatuses, conflictMessage } = {}) => {
+  const current = getWorkflowStageAndStatus(booking);
+  if (
+    expectedWorkflowStage != null && current.stage !== normalizeText(expectedWorkflowStage).toLowerCase()
+  ) {
+    const error = new Error(conflictMessage || 'Guest House request changed workflow stage; reload and try again');
+    error.statusCode = 409;
+    throw error;
+  }
+  if (Array.isArray(allowedWorkflowStatuses) && !allowedWorkflowStatuses.includes(current.status)) {
+    const error = new Error(conflictMessage || 'Guest House request is no longer editable in its current workflow stage');
+    error.statusCode = 409;
+    throw error;
+  }
+  return current;
+};
+
+const assertRoomAllocationActionable = async (tx, bookingId) => {
+  const booking = await getGuesthouseBookingForUpdate(tx, bookingId);
+  if (!booking) {
+    const error = new Error('Guest house booking not found');
+    error.statusCode = 404;
+    throw error;
+  }
+  const { stage, status } = getWorkflowStageAndStatus(booking);
+  if (stage !== 'guesthouse_admin' || !['in_progress', 'returned'].includes(status)) {
+    const error = new Error('Room allocation is not available at this workflow stage');
+    error.statusCode = 409;
+    throw error;
+  }
+  return booking;
+};
+
+const assertRoomAvailable = async (tx, {
+  bookingId,
+  roomId,
+  block,
+  roomNumber,
+  checkInDate,
+  checkInTime,
+  checkOutDate,
+  checkOutTime,
+  excludeBookingId = bookingId,
+  requireActive = true,
+}) => {
   const normalizedRoomId = toPositiveInt(roomId);
   const [roomRows] = await tx.query(
     normalizedRoomId
-      ? 'SELECT id FROM guesthouse_rooms WHERE id = ? AND status = \'Active\' FOR UPDATE'
-      : 'SELECT id FROM guesthouse_rooms WHERE block = ? AND room_number = ? AND status = \'Active\' FOR UPDATE',
+      ? `SELECT id FROM guesthouse_rooms WHERE id = ?${requireActive ? " AND status = 'Active'" : ''} FOR UPDATE`
+      : `SELECT id FROM guesthouse_rooms WHERE block = ? AND room_number = ?${requireActive ? " AND status = 'Active'" : ''} FOR UPDATE`,
     normalizedRoomId ? [normalizedRoomId] : [normalizeText(block), normalizeText(roomNumber)],
   );
-  if (!roomRows.length) {
+  if (!roomRows.length && requireActive) {
     const error = new Error('Selected room is unavailable');
     error.statusCode = 409;
     throw error;
   }
-  const lockedRoomId = Number(roomRows[0].id);
+  const lockedRoomId = roomRows.length ? Number(roomRows[0].id) : normalizedRoomId;
   const roomFilter = '(grar.room_id = ? OR (grar.room_id IS NULL AND grar.block = ? AND grar.room_number = ?))';
   const roomParams = [lockedRoomId, normalizeText(block), normalizeText(roomNumber)];
   const [conflicts] = await tx.query(
@@ -80,10 +140,19 @@ const assertRoomAvailable = async (tx, { bookingId, roomId, block, roomNumber, e
      INNER JOIN guesthouse_bookings gb ON gb.id = gra.booking_id
      WHERE ${roomFilter} AND gb.id <> ?
        AND gb.overall_status NOT IN ('rejected', 'archived')
-       AND gb.check_in_date < (SELECT check_out_date FROM guesthouse_bookings WHERE id = ?)
-       AND gb.check_out_date > (SELECT check_in_date FROM guesthouse_bookings WHERE id = ?)
-     LIMIT 1`,
-    [...roomParams, excludeBookingId, bookingId, bookingId],
+       AND CAST(CONCAT(gb.check_in_date, ' ', COALESCE(NULLIF(gb.check_in_time, ''), '00:00:00')) AS DATETIME)
+           < CAST(CONCAT(?, ' ', COALESCE(NULLIF(?, ''), '23:59:59')) AS DATETIME)
+       AND CAST(CONCAT(gb.check_out_date, ' ', COALESCE(NULLIF(gb.check_out_time, ''), '00:00:00')) AS DATETIME)
+           > CAST(CONCAT(?, ' ', COALESCE(NULLIF(?, ''), '00:00:00')) AS DATETIME)
+     LIMIT 1 FOR UPDATE`,
+    [
+      ...roomParams,
+      excludeBookingId,
+      checkOutDate,
+      checkOutTime,
+      checkInDate,
+      checkInTime,
+    ],
   );
   if (conflicts.length) {
     const error = new Error('Selected room is already allotted for an overlapping stay');
@@ -147,8 +216,12 @@ const guesthouseModel = {
         beneficiaryDepartmentName || normalizeText(applicant.department) || null;
       const guests = Array.isArray(payload.guests) ? payload.guests : [];
       const datedGuests = guests.filter((guest) => guest?.travel?.checkInDate && guest?.travel?.checkOutDate);
-      const firstStay = [...datedGuests].sort((a, b) => a.travel.checkInDate.localeCompare(b.travel.checkInDate))[0];
-      const lastStay = [...datedGuests].sort((a, b) => b.travel.checkOutDate.localeCompare(a.travel.checkOutDate))[0];
+      const firstStay = [...datedGuests].sort((a, b) =>
+        `${a.travel.checkInDate}T${a.travel.checkInTime || '00:00'}`.localeCompare(`${b.travel.checkInDate}T${b.travel.checkInTime || '00:00'}`),
+      )[0];
+      const lastStay = [...datedGuests].sort((a, b) =>
+        `${b.travel.checkOutDate}T${b.travel.checkOutTime || '00:00'}`.localeCompare(`${a.travel.checkOutDate}T${a.travel.checkOutTime || '00:00'}`),
+      )[0];
       const overallCheckIn = firstStay?.travel?.checkInDate || null;
       const overallCheckOut = lastStay?.travel?.checkOutDate || null;
 
@@ -287,18 +360,29 @@ const guesthouseModel = {
   },
 
   /** Replace the editable booking detail rows in one transaction. Workflow data is retained. */
-  async updateGuesthouseBooking(bookingId, payload = {}) {
+  async updateGuesthouseBooking(bookingId, payload = {}, workflowGuard = {}) {
     const normalizedId = toPositiveInt(bookingId);
     if (!normalizedId) return false;
 
     return withTransaction(async (tx) => {
+      const currentBooking = await getGuesthouseBookingForUpdate(tx, normalizedId);
+      if (!currentBooking) return false;
+      assertWorkflowState(currentBooking, {
+        ...workflowGuard,
+        conflictMessage: 'This booking can only be edited while it remains active in the current workflow stage',
+      });
+
       const applicant = payload.applicant || {};
       const beneficiary = payload.beneficiary || {};
       const beneficiaryType = normalizeText(beneficiary.beneficiaryType);
       const guests = Array.isArray(payload.guests) ? payload.guests : [];
       const datedGuests = guests.filter((guest) => guest?.travel?.checkInDate && guest?.travel?.checkOutDate);
-      const firstStay = [...datedGuests].sort((a, b) => a.travel.checkInDate.localeCompare(b.travel.checkInDate))[0];
-      const lastStay = [...datedGuests].sort((a, b) => b.travel.checkOutDate.localeCompare(a.travel.checkOutDate))[0];
+      const firstStay = [...datedGuests].sort((a, b) =>
+        `${a.travel.checkInDate}T${a.travel.checkInTime || '00:00'}`.localeCompare(`${b.travel.checkInDate}T${b.travel.checkInTime || '00:00'}`),
+      )[0];
+      const lastStay = [...datedGuests].sort((a, b) =>
+        `${b.travel.checkOutDate}T${b.travel.checkOutTime || '00:00'}`.localeCompare(`${a.travel.checkOutDate}T${a.travel.checkOutTime || '00:00'}`),
+      )[0];
 
       // A guest with an allocation must not be replaced: its allocation references that guest id.
       const [allocated] = await tx.query(
@@ -469,13 +553,21 @@ const guesthouseModel = {
     return booking;
   },
 
-  async listGuesthouseBookings({ createdByUserId, search, page = 1, limit = 20 } = {}) {
+  async listGuesthouseBookings({ createdByUserId, bookingIds, search, page = 1, limit = 20 } = {}) {
     const whereParts = [];
     const whereParams = [];
 
     if (createdByUserId) {
       whereParts.push('gb.created_by = ?');
       whereParams.push(toPositiveInt(createdByUserId));
+    }
+    if (Array.isArray(bookingIds)) {
+      const normalizedIds = [...new Set(bookingIds.map(toPositiveInt).filter(Boolean))];
+      const safePage = Math.max(Number.parseInt(page, 10) || 1, 1);
+      const safeLimit = Math.min(Math.max(Number.parseInt(limit, 10) || 20, 1), 100);
+      if (!normalizedIds.length) return { items: [], total: 0, page: safePage, limit: safeLimit };
+      whereParts.push('gb.id IN (?)');
+      whereParams.push(normalizedIds);
     }
     if (search) {
       whereParts.push(
@@ -505,7 +597,13 @@ const guesthouseModel = {
                 INNER JOIN guesthouse_room_allotment_rows grar ON grar.allotment_id = gra.id
                 WHERE gra.booking_id = gb.id
                   AND NULLIF(TRIM(grar.room_number), '') IS NOT NULL
-              ) AS has_room_allocation
+              ) AS has_room_allocation,
+              (SELECT COUNT(*)
+               FROM guesthouse_room_allotments gra
+               INNER JOIN guesthouse_room_allotment_rows grar ON grar.allotment_id = gra.id
+               WHERE gra.booking_id = gb.id
+                 AND NULLIF(TRIM(grar.room_number), '') IS NOT NULL
+              ) AS allocated_room_count
        FROM guesthouse_bookings gb
        ${whereClause}
        ORDER BY gb.created_at DESC
@@ -536,13 +634,32 @@ const guesthouseModel = {
     return rows[0] || null;
   },
 
-  async deleteGuesthouseBooking(bookingId) {
+  async deleteGuesthouseBooking(bookingId, { expectedOwnerId, allowSuperAdmin = false } = {}) {
     const normalizedId = toPositiveInt(bookingId);
     if (!normalizedId) return false;
-    const [result] = await db.query(`DELETE FROM guesthouse_bookings WHERE id = ?`, [
-      normalizedId,
-    ]);
-    return result.affectedRows > 0;
+    return withTransaction(async (tx) => {
+      const booking = await getGuesthouseBookingForUpdate(tx, normalizedId);
+      if (!booking) return false;
+
+      if (!allowSuperAdmin) {
+        const ownerId = toPositiveInt(booking.created_by);
+        const actorId = toPositiveInt(expectedOwnerId);
+        if (!ownerId || !actorId || ownerId !== actorId) {
+          const error = new Error('Insufficient permissions');
+          error.statusCode = 403;
+          throw error;
+        }
+        const { stage, status } = getWorkflowStageAndStatus(booking);
+        if ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(status)) {
+          const error = new Error('This booking can no longer be deleted after approval has started');
+          error.statusCode = 409;
+          throw error;
+        }
+      }
+
+      const [result] = await tx.query('DELETE FROM guesthouse_bookings WHERE id = ?', [normalizedId]);
+      return result.affectedRows > 0;
+    });
   },
 
   // ============================================
@@ -893,6 +1010,7 @@ const guesthouseModel = {
 
   async upsertRoomAllotment(bookingId, guestId, payload = {}) {
     return withTransaction(async (tx) => {
+      await assertRoomAllocationActionable(tx, bookingId);
       const [guestRows] = await tx.query(
         'SELECT id FROM guesthouse_guests WHERE id = ? AND booking_id = ? FOR UPDATE',
         [toPositiveInt(guestId), toPositiveInt(bookingId)],
@@ -943,11 +1061,16 @@ const guesthouseModel = {
     return withTransaction(async (tx) => {
       const [allotments] = await tx.query('SELECT booking_id FROM guesthouse_room_allotments WHERE id = ?', [toPositiveInt(allotmentId)]);
       if (!allotments.length) throw new Error('Room allotment not found');
+      const booking = await assertRoomAllocationActionable(tx, allotments[0].booking_id);
       const roomId = await assertRoomAvailable(tx, {
         bookingId: allotments[0].booking_id,
         roomId: payload.roomId,
         block: payload.block,
         roomNumber: payload.roomNumber,
+        checkInDate: booking.check_in_date,
+        checkInTime: booking.check_in_time,
+        checkOutDate: booking.check_out_date,
+        checkOutTime: booking.check_out_time,
       });
       const [sameBookingRoom] = await tx.query(
         `SELECT 1
@@ -996,10 +1119,19 @@ const guesthouseModel = {
   },
 
   async deleteRoomAllotmentRow(rowId) {
-    const [result] = await db.query(`DELETE FROM guesthouse_room_allotment_rows WHERE id = ?`, [
-      toPositiveInt(rowId),
-    ]);
-    return result.affectedRows > 0;
+    return withTransaction(async (tx) => {
+      const [rows] = await tx.query(
+        `SELECT gra.booking_id
+           FROM guesthouse_room_allotment_rows grar
+           INNER JOIN guesthouse_room_allotments gra ON gra.id = grar.allotment_id
+          WHERE grar.id = ?`,
+        [toPositiveInt(rowId)],
+      );
+      if (!rows.length) return false;
+      await assertRoomAllocationActionable(tx, rows[0].booking_id);
+      const [result] = await tx.query('DELETE FROM guesthouse_room_allotment_rows WHERE id = ?', [toPositiveInt(rowId)]);
+      return result.affectedRows > 0;
+    });
   },
 
   async unarchiveGuesthouseBooking(bookingId, actor = {}) {
@@ -1160,6 +1292,7 @@ const guesthouseModel = {
     if (!normalizedBookingId) throw new Error('A valid booking is required');
 
     return withTransaction(async (tx) => {
+      const booking = await assertRoomAllocationActionable(tx, normalizedBookingId);
       const roomAssignments = new Set();
       for (const allocation of Array.isArray(allotments) ? allotments : []) {
         for (const room of Array.isArray(allocation?.rows) ? allocation.rows : []) {
@@ -1225,6 +1358,10 @@ const guesthouseModel = {
             roomId: room?.roomId,
             block: room?.block,
             roomNumber: room?.roomNumber,
+            checkInDate: booking.check_in_date,
+            checkInTime: booking.check_in_time,
+            checkOutDate: booking.check_out_date,
+            checkOutTime: booking.check_out_time,
           });
           const [result] = await tx.query(
             `INSERT INTO guesthouse_room_allotment_rows
@@ -1278,13 +1415,19 @@ const guesthouseModel = {
                 WHERE (grar.room_id = gr.id OR (grar.room_id IS NULL AND grar.block = gr.block AND grar.room_number = gr.room_number))
                   AND gb.overall_status NOT IN ('rejected', 'archived')
                   AND (? IS NULL OR gb.id <> ?)
-                  AND (? IS NULL OR ? IS NULL OR (gb.check_in_date < ? AND gb.check_out_date > ?))
+                  AND (? IS NULL OR ? IS NULL OR (
+                    CAST(CONCAT(gb.check_in_date, ' ', COALESCE(NULLIF(gb.check_in_time, ''), '00:00:00')) AS DATETIME)
+                      < CAST(CONCAT(?, ' ', COALESCE(NULLIF(?, ''), '00:00:00')) AS DATETIME)
+                    AND CAST(CONCAT(gb.check_out_date, ' ', COALESCE(NULLIF(gb.check_out_time, ''), '00:00:00')) AS DATETIME)
+                      > CAST(CONCAT(?, ' ', COALESCE(NULLIF(?, ''), '00:00:00')) AS DATETIME)
+                  ))
               ) THEN 1 ELSE 0 END AS is_unavailable
          FROM guesthouse_rooms gr ${whereClause.replace(/\bstatus\b/g, 'gr.status')} ORDER BY gr.block ASC, gr.room_number ASC`,
       [
         toPositiveInt(filters.excludeBookingId), toPositiveInt(filters.excludeBookingId),
         normalizeText(filters.checkInDate) || null, normalizeText(filters.checkOutDate) || null,
-        normalizeText(filters.checkOutDate) || null, normalizeText(filters.checkInDate) || null,
+        normalizeText(filters.checkOutDate) || null, normalizeText(filters.checkOutTime) || null,
+        normalizeText(filters.checkInDate) || null, normalizeText(filters.checkInTime) || null,
         ...whereParams,
       ],
     );
@@ -1445,19 +1588,53 @@ const guesthouseModel = {
     return result.affectedRows > 0 || result.changedRows === 0;
   },
 
-  async updateGuesthouseTravelSchedule(bookingId, schedule = {}) {
+  async updateGuesthouseTravelSchedule(bookingId, schedule = {}, workflowGuard = {}) {
     const normalizedId = toPositiveInt(bookingId);
     const checkInDate = normalizeText(schedule.checkInDate || schedule.check_in_date);
     const checkOutDate = normalizeText(schedule.checkOutDate || schedule.check_out_date);
     const checkInTime = normalizeText(schedule.checkInTime || schedule.check_in_time);
     const checkOutTime = normalizeText(schedule.checkOutTime || schedule.check_out_time);
-    const [result] = await db.query(
-      `UPDATE guesthouse_bookings
-          SET check_in_date = ?, check_in_time = ?, check_out_date = ?, check_out_time = ?, updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?`,
-      [checkInDate, checkInTime, checkOutDate, checkOutTime, normalizedId],
-    );
-    return result.affectedRows > 0 || result.changedRows === 0;
+    if (!normalizedId) return false;
+
+    return withTransaction(async (tx) => {
+      const booking = await getGuesthouseBookingForUpdate(tx, normalizedId);
+      if (!booking) return false;
+      assertWorkflowState(booking, {
+        ...workflowGuard,
+        conflictMessage: 'Travel schedule can only be changed while the booking remains active in the current workflow stage',
+      });
+
+      const [allocatedRooms] = await tx.query(
+        `SELECT grar.room_id, grar.block, grar.room_number
+           FROM guesthouse_room_allotment_rows grar
+           INNER JOIN guesthouse_room_allotments gra ON gra.id = grar.allotment_id
+          WHERE gra.booking_id = ?
+          ORDER BY grar.room_id, grar.block, grar.room_number
+          FOR UPDATE`,
+        [normalizedId],
+      );
+      for (const room of allocatedRooms) {
+        await assertRoomAvailable(tx, {
+          bookingId: normalizedId,
+          roomId: room.room_id,
+          block: room.block,
+          roomNumber: room.room_number,
+          checkInDate,
+          checkInTime,
+          checkOutDate,
+          checkOutTime,
+          requireActive: false,
+        });
+      }
+
+      const [result] = await tx.query(
+        `UPDATE guesthouse_bookings
+            SET check_in_date = ?, check_in_time = ?, check_out_date = ?, check_out_time = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?`,
+        [checkInDate, checkInTime, checkOutDate, checkOutTime, normalizedId],
+      );
+      return result.affectedRows > 0 || result.changedRows === 0;
+    });
   },
 
 };

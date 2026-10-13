@@ -951,7 +951,7 @@ const downloadCsv = (filename: string, content: string) => {
   URL.revokeObjectURL(url);
 };
 
-interface GuesthousePrintPreviewProps {
+export interface GuesthousePrintPreviewProps {
   bookingId: number;
   applicant: ApplicantDetails;
   beneficiary: BeneficiaryDetails;
@@ -960,94 +960,110 @@ interface GuesthousePrintPreviewProps {
   foodRows: FoodRequirementRow[];
 }
 
-const previewValue = (value: unknown) => String(value ?? '').trim() || '-';
+const escapePrintHtml = (value: unknown) => {
+  const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  return String(value ?? '').replace(/[&<>"']/g, (character) => entities[character]);
+};
 
-/** A compact document view for the workflow iframe, deliberately separate from the editable form. */
-const GuesthousePrintPreview: React.FC<GuesthousePrintPreviewProps> = ({
-  bookingId,
-  applicant,
-  beneficiary,
-  travel,
-  guests,
-  foodRows,
+const previewValue = (value: unknown) => escapePrintHtml(String(value ?? '').trim());
+
+/** The iframe preview and print output share this standalone, app-independent document. */
+export const GuesthousePrintPreview: React.FC<GuesthousePrintPreviewProps> = ({
+  bookingId, applicant, beneficiary, travel, guests, foodRows,
 }) => {
   const reference = `#GH-${new Date(applicant.date || Date.now()).getFullYear()}-${String(bookingId).padStart(4, '0')}`;
-  const totalRooms = guests.reduce(
-    (sum, guest) =>
-      sum + Number(guest.roomSingle || 0) + Number(guest.roomDouble || 0) + Number(guest.roomDeluxe || 0),
-    0,
-  );
-  const totalPeople = guests.reduce(
-    (sum, guest) =>
-      sum + 1 + Number(guest.accompaniedMale || 0) + Number(guest.accompaniedFemale || 0) + Number(guest.accompaniedChildren || 0),
-    0,
-  );
-  const cell: React.CSSProperties = { border: '1px solid #111', padding: '5px 6px', verticalAlign: 'middle' };
-  // Keep this document deliberately compact: it is rendered inside a preview at any
-  // browser zoom, but must also fit cleanly on one A4 page when saved as a PDF.
+  const totalRooms = guests.reduce((sum, guest) => sum + Number(guest.roomSingle || 0) + Number(guest.roomDouble || 0) + Number(guest.roomDeluxe || 0), 0);
+  const totalPeople = guests.reduce((sum, guest) => sum + 1 + Number(guest.accompaniedMale || 0) + Number(guest.accompaniedFemale || 0) + Number(guest.accompaniedChildren || 0), 0);
   const primaryGuest = guests[0];
-  const guestAddress = [primaryGuest?.organization, primaryGuest?.city, primaryGuest?.state]
-    .filter(Boolean)
-    .join(', ');
-  const formField: React.CSSProperties = { display: 'grid', gridTemplateColumns: '36% minmax(0, 1fr) 12% 22%', alignItems: 'end', columnGap: 8, marginBottom: 10 };
-  const formLabel: React.CSSProperties = { whiteSpace: 'nowrap', fontWeight: 700, fontSize: 11 };
-  const formLine: React.CSSProperties = { borderBottom: '1px solid #111', minHeight: 18, padding: '1px 4px', minWidth: 0, overflowWrap: 'anywhere', lineHeight: 1.35 };
+  const guestAddress = [primaryGuest?.organization, primaryGuest?.city, primaryGuest?.state].filter(Boolean).join(', ');
   const mealTotal = (veg: string, nonVeg: string) => `${veg || 0} / ${nonVeg || 0}`;
-  const stayDays = (() => {
-    const checkIn = new Date(travel.checkInDate);
-    const checkOut = new Date(travel.checkOutDate);
-    if (Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())) return '-';
-    return Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / 86_400_000));
-  })();
+  const additionalMembers = Math.max(0, totalPeople - guests.length);
+  const vegetarianMembers = guests.reduce((sum, guest) => sum + Number(guest.foodVeg || 0), 0);
+  const nonVegetarianMembers = guests.reduce((sum, guest) => sum + Number(guest.foodNonVeg || 0), 0);
+  const foodDisplayRows = Math.max(foodRows.length, 5);
+  const foodRowHeight = 26.5 / foodDisplayRows;
+  const foodFontSize = Math.min(8.4, Math.max(4.5, foodRowHeight * 72 / 25.4 - 3));
+  // All template coordinates are authored against the A4 reference image.
+  // Keep them in native A4 millimetres; a Letter-to-A4 transform here used to
+  // compress the vertical layout twice and leave a large blank area at the foot.
+  const referenceX = (millimeters: number) => `${millimeters}mm`;
+  const referenceY = (millimeters: number) => `${millimeters}mm`;
+  const checkIn = new Date(travel.checkInDate);
+  const checkOut = new Date(travel.checkOutDate);
+  const stayDays = Number.isNaN(checkIn.getTime()) || Number.isNaN(checkOut.getTime())
+    ? ''
+    : String(Math.max(1, Math.ceil((checkOut.getTime() - checkIn.getTime()) / 86_400_000)));
+  const tableRows = Array.from({ length: foodDisplayRows }, (_, index) => {
+    const row = foodRows[index];
+    const meal = (veg?: string, nonVeg?: string) => row ? escapePrintHtml(mealTotal(veg || '', nonVeg || '')) : '';
+    return `<tr><td>${row ? previewValue(formatDateForDisplay(row.date)) : ''}</td><td>${row ? previewValue(row.morningRefreshment || '-') : ''}</td><td>${meal(row?.breakfastVeg, row?.breakfastNonVeg)}</td><td>${meal(row?.lunchVeg, row?.lunchNonVeg)}</td><td>${row ? previewValue(row.eveningRefreshment || '-') : ''}</td><td>${meal(row?.dinnerVeg, row?.dinnerNonVeg)}</td></tr>`;
+  }).join('');
+  const documentMarkup = `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Guest House Booking</title>
+<style>
+@page{size:A4 portrait;margin:0}
+html,body{width:210mm;height:297mm;margin:0;padding:0;overflow:hidden;background:#fff}
+*,*::before,*::after{box-sizing:border-box}
+body{font-family:"Arial Narrow","Bahnschrift",Arial,sans-serif;color:#111;font-stretch:condensed;font-variation-settings:"wdth" 75}
+.guesthouse-print-form{position:relative;width:210mm;height:297mm;margin:0;background:#fff;font-size:8.4pt;line-height:1.12}
+.ghp-header,.ghp-proposal,.ghp-row,.ghp-food-table,.ghp-signatures,.ghp-divider,.ghp-detail-divider,.ghp-incharge-title,.ghp-recommendation,.ghp-room-numbers,.ghp-final-signatures{position:absolute}
+.ghp-header{top:${referenceY(10.8)};left:0;width:100%;text-align:center}
+.ghp-institution-title{display:block;font-size:12.3pt;font-weight:400;line-height:${referenceY(5)}}
+.ghp-booking-title{display:block;margin-top:${referenceY(2.8)};font-size:15.8pt;font-weight:400;line-height:${referenceY(6)}}
+.ghp-contact-title{display:block;margin-top:${referenceY(3.4)};font-size:10.8pt;line-height:${referenceY(4.5)}}
+.ghp-proposal{top:${referenceY(39.2)};left:${referenceX(24.5)};right:${referenceX(20)};display:flex;align-items:end;justify-content:space-between;height:${referenceY(5)};white-space:nowrap}
+.ghp-date-line{display:inline-block;width:${referenceX(43)};margin-left:${referenceX(1.5)};border-bottom:${referenceX(.25)} solid #111}
+.ghp-row{left:${referenceX(24.2)};width:${referenceX(166)};display:grid;align-items:end;column-gap:${referenceX(2)};min-width:0}
+.ghp-row--institution{top:${referenceY(53.1)};height:${referenceY(5)};grid-template-columns:${referenceX(28)} ${referenceX(63)} ${referenceX(18)} minmax(0,1fr)}
+.ghp-row--faculty{top:${referenceY(65.4)};height:${referenceY(5)};grid-template-columns:${referenceX(28)} minmax(0,1fr) ${referenceX(19)} ${referenceX(40)}}
+.ghp-row--guest{top:${referenceY(74.6)};height:${referenceY(5)};grid-template-columns:${referenceX(28)} minmax(0,1fr)}
+.ghp-row--address{top:${referenceY(83.7)};height:${referenceY(5)};grid-template-columns:${referenceX(27)} minmax(0,1fr)}
+.ghp-row--purpose{top:${referenceY(93.8)};height:${referenceY(10)};grid-template-columns:${referenceX(32)} minmax(0,1fr);align-items:start}
+.ghp-detail-divider{top:${referenceY(107.8)};left:${referenceX(22.3)};width:${referenceX(169.5)};border-top:${referenceX(1)} dotted #111}
+.ghp-row--guests{top:${referenceY(113.5)};height:${referenceY(5)};grid-template-columns:${referenceX(32)} ${referenceX(46)} ${referenceX(27)} minmax(0,1fr)}
+.ghp-row--checkin{top:${referenceY(124)};height:${referenceY(5)};grid-template-columns:${referenceX(33)} ${referenceX(9)} ${referenceX(43)} ${referenceX(14)} minmax(0,1fr)}
+.ghp-row--checkout{top:${referenceY(134.3)};height:${referenceY(5)};grid-template-columns:${referenceX(33)} ${referenceX(9)} ${referenceX(43)} ${referenceX(14)} minmax(0,1fr)}
+.ghp-row--days{top:${referenceY(144.6)};height:${referenceY(5)};grid-template-columns:${referenceX(23)} ${referenceX(26)} ${referenceX(36)} ${referenceX(22)} ${referenceX(22)} ${referenceX(27)}}
+.ghp-row--days .ghp-label:nth-child(3){grid-column:4}.ghp-row--days .ghp-label:nth-child(4){grid-column:5}.ghp-row--days .ghp-value:nth-child(5){grid-column:6}
+.ghp-row--rooms{top:${referenceY(154.9)};height:${referenceY(5)};grid-template-columns:${referenceX(27)} ${referenceX(24)} ${referenceX(58)} ${referenceX(31)} ${referenceX(18)}}
+.ghp-row--rooms .ghp-label:nth-child(3){grid-column:4}.ghp-row--rooms .ghp-value:nth-child(4){grid-column:5}
+.ghp-label{min-width:0;font-weight:700;font-size:7.6pt;white-space:nowrap;align-self:center;padding-right:${referenceX(1)}}
+.ghp-value{display:flex;min-width:0;min-height:${referenceY(5)};align-items:center;padding:${referenceY(.25)} ${referenceX(1.2)} ${referenceY(.8)};border-bottom:${referenceX(.25)} solid #111;overflow:hidden;white-space:nowrap;text-overflow:clip;font-size:10pt;line-height:1.1}
+.ghp-row--institution .ghp-value:last-child{font-size:8pt}
+.ghp-row--purpose .ghp-value{white-space:normal;overflow-wrap:anywhere;align-items:flex-start;margin-top:${referenceY(1.2)};min-height:${referenceY(4.5)}}
+.ghp-row--guests .ghp-value{min-height:${referenceY(5)};padding-left:${referenceX(1.5)}}
+.ghp-food-table{top:${referenceY(165.1)};left:${referenceX(24.2)};width:${referenceX(168.6)};height:${referenceY(43.8)};border-collapse:collapse;table-layout:fixed;text-align:center}
+.ghp-food-table th,.ghp-food-table td{border:${referenceX(.25)} solid #111;padding:${referenceY(.5)} ${referenceX(.7)};vertical-align:middle;overflow-wrap:anywhere}
+.ghp-food-table thead tr:first-child{height:${referenceY(12)};font-size:11.8pt}.ghp-food-table thead tr:nth-child(2){height:${referenceY(5.3)};font-size:8.9pt}
+.ghp-food-table tbody tr{height:${referenceY(foodRowHeight)};font-size:${foodFontSize}pt}
+.ghp-food-table col:nth-child(1){width:16.5%}.ghp-food-table col:nth-child(2){width:15.7%}.ghp-food-table col:nth-child(3){width:17.3%}.ghp-food-table col:nth-child(4){width:16.7%}.ghp-food-table col:nth-child(5){width:16.9%}.ghp-food-table col:nth-child(6){width:16.9%}
+.ghp-signatures{top:${referenceY(217.5)};left:${referenceX(28.4)};right:${referenceX(32)};display:flex;justify-content:space-between;font-size:8.9pt}
+.ghp-divider{top:${referenceY(245.7)};left:${referenceX(27.2)};width:${referenceX(159.5)};border-top:${referenceX(.25)} solid #111}
+.ghp-incharge-title{top:${referenceY(253.3)};left:${referenceX(24.2)};width:${referenceX(168.6)};text-align:center;font-size:7.8pt;font-weight:700}
+.ghp-recommendation{top:${referenceY(257.3)};left:${referenceX(24.2)};width:${referenceX(168.6)};text-align:center;font-size:11.3pt;font-style:italic}
+.ghp-room-numbers{top:${referenceY(263.1)};left:${referenceX(24.2)};width:${referenceX(168.6)};display:flex;justify-content:center;gap:${referenceX(7)};font-size:8.4pt;white-space:nowrap}
+.ghp-room-line{display:inline-block;width:${referenceX(30)};border-bottom:${referenceX(.2)} solid #111}
+.ghp-final-signatures{top:${referenceY(278.6)};left:${referenceX(65.5)};right:${referenceX(26)};display:flex;justify-content:space-between;font-size:8.4pt}
+@media print{html,body{width:210mm;height:297mm;overflow:hidden}.guesthouse-print-form{break-after:avoid;page-break-after:avoid}}
+</style></head><body><main class="guesthouse-print-form">
+<header class="ghp-header"><span class="ghp-institution-title">KSR EDUCATIONAL INSTITUTIONS, TIRUCHENGODE - 637 215</span><span class="ghp-booking-title">GUEST HOUSE BOOKING</span><span class="ghp-contact-title">GUEST HOUSE - <u>CONTACT NO 97902 65556</u></span></header>
+<div class="ghp-proposal"><span>Proposal ID: ${previewValue(reference)}</span><span>Date: <span class="ghp-date-line">${previewValue(formatDateForDisplay(applicant.date))}</span></span></div>
+<div class="ghp-row ghp-row--institution"><span class="ghp-label">Name of the Institution:</span><span class="ghp-value">K.S. Rangasamy College of Technology</span><span class="ghp-label">Department:</span><span class="ghp-value">${previewValue(applicant.department)}</span></div>
+<div class="ghp-row ghp-row--faculty"><span class="ghp-label">Booking Faculty Name:</span><span class="ghp-value">${previewValue(applicant.name)}</span><span class="ghp-label">Mobile No.:</span><span class="ghp-value">${previewValue(applicant.mobile)}</span></div>
+<div class="ghp-row ghp-row--guest"><span class="ghp-label">Name of the Guest:</span><span class="ghp-value">${previewValue(primaryGuest?.name)}</span></div>
+<div class="ghp-row ghp-row--address"><span class="ghp-label">Guest Address:</span><span class="ghp-value">${previewValue(guestAddress)}</span></div>
+<div class="ghp-row ghp-row--purpose"><span class="ghp-label">Purpose of Visit Details:</span><span class="ghp-value">${previewValue(primaryGuest?.remarks || beneficiary.beneficiaryType)}</span></div><div class="ghp-detail-divider"></div>
+<div class="ghp-row ghp-row--guests"><span class="ghp-label">Total Numbers of Guest:</span><span class="ghp-value">${totalPeople}</span><span class="ghp-label">Additional Member:</span><span class="ghp-value">${additionalMembers}</span></div>
+<div class="ghp-row ghp-row--checkin"><span class="ghp-label">Accommodation from:</span><span class="ghp-label">Date:</span><span class="ghp-value">${previewValue(formatDateForDisplay(travel.checkInDate))}</span><span class="ghp-label">Time:</span><span class="ghp-value">${previewValue(travel.checkInTime)}</span></div>
+<div class="ghp-row ghp-row--checkout"><span class="ghp-label">Leaving Accommodation on:</span><span class="ghp-label">Date:</span><span class="ghp-value">${previewValue(formatDateForDisplay(travel.checkOutDate))}</span><span class="ghp-label">Time:</span><span class="ghp-value">${previewValue(travel.checkOutTime)}</span></div>
+<div class="ghp-row ghp-row--days"><span class="ghp-label">Total No. of Days:</span><span class="ghp-value">${stayDays}</span><span class="ghp-label">Boarding Type:</span><span class="ghp-label">Vegetarian No&#8217;s:</span><span class="ghp-value">${vegetarianMembers}</span></div>
+<div class="ghp-row ghp-row--rooms"><span class="ghp-label">Total Rooms Needed:</span><span class="ghp-value">${totalRooms}</span><span aria-hidden="true"></span><span class="ghp-label">Non-Vegetarian No&#8217;s:</span><span class="ghp-value">${nonVegetarianMembers}</span></div>
+<table class="ghp-food-table"><colgroup>${Array.from({ length: 6 }, () => '<col>').join('')}</colgroup><thead><tr><th></th><th colspan="5">*Food Requirement Total Members*</th></tr><tr><th>Date</th><th>Morning Tea</th><th>Breakfast</th><th>Lunch</th><th>Evening Tea</th><th>Dinner</th></tr></thead><tbody>${tableRows}</tbody></table>
+<div class="ghp-signatures"><span>Sig. of Dept. HoD</span><span>Institution&#8217;s Principal Sig.</span></div><div class="ghp-divider"></div><strong class="ghp-incharge-title">TO BE FILLED BY GUEST HOUSE INCHARGE</strong><div class="ghp-recommendation">Recommended / Not Recommended</div>
+<div class="ghp-room-numbers"><span>KSR Guest House - Room No. <span class="ghp-room-line"></span></span><span>RR Guest House - Room No. <span class="ghp-room-line"></span></span></div><div class="ghp-final-signatures"><span>Date:</span><span>Sig. of Guest House IC</span></div>
+</main></body></html>`;
 
-  return (
-    <main className="guesthouse-print-form" style={{ width: '210mm', minHeight: '297mm', margin: '0 auto', padding: '13mm 14mm', background: '#fff', boxSizing: 'border-box', color: '#111', fontFamily: 'Arial, sans-serif', fontSize: 11 }}>
-      <style>{`
-        @page { size: A4 portrait; margin: 10mm; }
-        html, body { margin: 0; padding: 0; background: #f3f4f6; }
-        * { box-sizing: border-box; }
-        .guesthouse-print-form table, .guesthouse-print-form section { break-inside: avoid; page-break-inside: avoid; }
-        @media print {
-          html, body { width: auto !important; height: auto !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
-          .guesthouse-print-form {
-            width: 100% !important;
-            min-height: 277mm !important;
-            margin: 0 !important;
-            padding: 3mm 2mm !important;
-            overflow: visible !important;
-            box-shadow: none !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-          }
-        }
-      `}</style>
-      <header style={{ textAlign: 'center', marginBottom: 16 }}>
-        <strong style={{ display: 'block', fontSize: 17, letterSpacing: 0.7 }}>KSR EDUCATIONAL INSTITUTIONS</strong>
-        <strong style={{ display: 'block', fontSize: 17, letterSpacing: 0.7, marginTop: 3 }}>GUEST HOUSE BOOKING</strong>
-        <strong style={{ display: 'inline-block', marginTop: 4, borderBottom: '1px solid #111', fontSize: 11 }}>Guest House Contact No. 97902 65556</strong>
-      </header>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 18 }}><span>Proposal ID: {reference}</span><span>Date:&nbsp; <span style={{ display: 'inline-block', minWidth: 105, textAlign: 'left', borderBottom: '1px solid #111' }}>{previewValue(formatDateForDisplay(applicant.date))}</span></span></div>
-      <section>
-        <div style={formField}><span style={formLabel}>Name of the Institution:</span><span style={formLine}>{previewValue(applicant.department)}</span><span style={formLabel}>Department:</span><span style={formLine}>{previewValue(applicant.department)}</span></div>
-        <div style={formField}><span style={formLabel}>Booking Faculty Name:</span><span style={formLine}>{previewValue(applicant.name)}</span><span style={formLabel}>Mobile No.</span><span style={formLine}>{previewValue(applicant.mobile)}</span></div>
-        <div style={formField}><span style={formLabel}>Name of the Guest:</span><span style={{ ...formLine, gridColumn: '2 / -1' }}>{previewValue(primaryGuest?.name)}</span></div>
-        <div style={formField}><span style={formLabel}>Address:</span><span style={formLine}>{previewValue(guestAddress)}</span><span style={formLabel}>Mobile No.</span><span style={formLine}>{previewValue(applicant.mobile)}</span></div>
-        <div style={{ ...formField, alignItems: 'start' }}><span style={formLabel}>Purpose of Visit Details:</span><span style={{ ...formLine, gridColumn: '2 / -1', minHeight: 30 }}>{previewValue(primaryGuest?.remarks || beneficiary.beneficiaryType)}</span></div>
-      </section>
-      <hr style={{ border: 0, borderTop: '2px solid #222', margin: '14px 0 15px' }} />
-      <section>
-        <div style={{ ...formField, gridTemplateColumns: '36% 30%', maxWidth: '65%' }}><span style={formLabel}>Total Number of Guests:</span><span style={formLine}>{totalPeople}</span></div>
-        <div style={formField}><span style={formLabel}>Accommodation From Date:</span><span style={formLine}>{previewValue(formatDateForDisplay(travel.checkInDate))}</span><span style={formLabel}>/ Time:</span><span style={formLine}>{previewValue(travel.checkInTime)}</span></div>
-        <div style={formField}><span style={formLabel}>Leaving Accommodation on Date:</span><span style={formLine}>{previewValue(formatDateForDisplay(travel.checkOutDate))}</span><span style={formLabel}>/ Time:</span><span style={formLine}>{previewValue(travel.checkOutTime)}</span></div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: 28 }}><div style={{ ...formField, gridTemplateColumns: '48% minmax(0, 1fr)' }}><span style={formLabel}>Total No. of Days:</span><span style={formLine}>{stayDays}</span></div><div style={{ ...formField, gridTemplateColumns: '58% minmax(0, 1fr)' }}><span style={formLabel}>Total Rooms Required:</span><span style={formLine}>{totalRooms}</span></div></div>
-        <div style={{ textAlign: 'right', marginBottom: 12 }}><strong>Boarding Type: </strong>VEGETARIAN Nos. {guests.reduce((sum, guest) => sum + Number(guest.foodVeg || 0), 0)} &nbsp;&nbsp; NON VEGETARIAN Nos. {guests.reduce((sum, guest) => sum + Number(guest.foodNonVeg || 0), 0)}</div>
-      </section>
-      <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', textAlign: 'center' }}><thead><tr><th style={cell} colSpan={6}>Food Requirement Total No. of Members: {totalPeople}</th></tr><tr>{['Date', 'Morning Tea', 'Breakfast', 'Lunch', 'Evening Tea', 'Dinner'].map((heading) => <th key={heading} style={cell}>{heading}</th>)}</tr></thead><tbody>{foodRows.map((row) => <tr key={row.id}><td style={cell}>{previewValue(formatDateForDisplay(row.date))}</td><td style={cell}>{row.morningRefreshment || '-'}</td><td style={cell}>{mealTotal(row.breakfastVeg, row.breakfastNonVeg)}</td><td style={cell}>{mealTotal(row.lunchVeg, row.lunchNonVeg)}</td><td style={cell}>{row.eveningRefreshment || '-'}</td><td style={cell}>{mealTotal(row.dinnerVeg, row.dinnerNonVeg)}</td></tr>)}</tbody></table>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 38 }}><span>Sig. of Dept. HoD</span><span>Institution's Principal's Sig</span></div>
-      <section style={{ borderTop: '1px solid #111', marginTop: 28, paddingTop: 12, textAlign: 'center' }}><strong style={{ textDecoration: 'underline' }}>TO BE FILLED BY GUEST HOUSE INCHARGE</strong><div style={{ fontStyle: 'italic', margin: '12px 0' }}>RECOMMENDED / NOT RECOMMENDED</div><div>KSR Guest House - Room No. .................... &nbsp;&nbsp;&nbsp; RR Guest House - Room No. ....................</div><div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 52 }}><span>Date: </span><span>Sig. of Guest House IC</span></div></section>
-    </main>
-  );
-
+  return <iframe className="guesthouse-print-document" title="Guest House Booking print document" srcDoc={documentMarkup} onLoad={() => window.parent.postMessage({ type: 'guesthouse-print-document-ready' }, window.location.origin)} style={{ display: 'block', width: '210mm', height: '297mm', maxWidth: 'none', border: 0, margin: '0 auto', background: '#fff' }} />;
 };
 
 const GuestHouseBooking: React.FC = () => {
@@ -1110,6 +1126,9 @@ const GuestHouseBooking: React.FC = () => {
   const [activeRoomDetail, setActiveRoomDetail] = useState<ActiveRoomDetail>(null);
   const [activeAllotmentDropdown, setActiveAllotmentDropdown] = useState<ActiveAllotmentDropdown>(null);
   const allotmentDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [activeCareTakerDropdown, setActiveCareTakerDropdown] = useState<string | null>(null);
+  const careTakerDropdownRef = useRef<HTMLDivElement | null>(null);
+  const [careTakerDropdownPosition, setCareTakerDropdownPosition] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const [allotmentDropdownPosition, setAllotmentDropdownPosition] = useState({ top: 0, left: 0, width: 0, openUp: false });
   const [managedRooms, setManagedRooms] = useState<ManagedRoomRow[]>(initialManagedRooms);
   const [careTakers, setCareTakers] = useState<CareTakerRow[]>(initialCareTakers);
@@ -1237,8 +1256,20 @@ const GuestHouseBooking: React.FC = () => {
     let isMounted = true;
 
     const toInputDate = (value: unknown) => {
-      const text = String(value || '').trim();
-      return text ? text.slice(0, 10) : '';
+      if (!value) return '';
+      if (value instanceof Date) {
+        return Number.isNaN(value.getTime()) ? '' : formatDateInput(value);
+      }
+      const text = String(value).trim();
+      if (!text) return '';
+      // Older API responses may serialize MySQL DATE as UTC timestamps. Format
+      // those in local time instead of slicing the UTC day, which is previous
+      // day in India for a midnight SQL DATE.
+      if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+        const parsed = new Date(text);
+        return Number.isNaN(parsed.getTime()) ? '' : formatDateInput(parsed);
+      }
+      return text.slice(0, 10);
     };
     const toText = (value: unknown) => (value === null || value === undefined ? '' : String(value));
 
@@ -1422,7 +1453,9 @@ const GuestHouseBooking: React.FC = () => {
       try {
         const params = new URLSearchParams();
         if (travelDetails.checkInDate) params.set('checkInDate', travelDetails.checkInDate);
+        if (travelDetails.checkInTime) params.set('checkInTime', travelDetails.checkInTime);
         if (travelDetails.checkOutDate) params.set('checkOutDate', travelDetails.checkOutDate);
+        if (travelDetails.checkOutTime) params.set('checkOutTime', travelDetails.checkOutTime);
         if (bookingId) params.set('bookingId', String(bookingId));
         const query = params.toString();
         const response = await authenticityUtility.get(`/guesthouse/room-options${query ? `?${query}` : ''}`);
@@ -1443,7 +1476,7 @@ const GuestHouseBooking: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [isRoomAllotmentVisible, travelDetails.checkInDate, travelDetails.checkOutDate, bookingId]);
+  }, [isRoomAllotmentVisible, travelDetails.checkInDate, travelDetails.checkInTime, travelDetails.checkOutDate, travelDetails.checkOutTime, bookingId]);
 
   useEffect(() => {
     if (!isRoomAllotmentVisible) return;
@@ -1502,21 +1535,40 @@ const GuestHouseBooking: React.FC = () => {
 
 
 
-    useEffect(() => {
+  useEffect(() => {
+    // Wait for the saved booking data before reconciling dates. Otherwise this
+    // effect can run with the new travel dates and the initial blank food row,
+    // replacing the meal counts loaded by loadBooking.
+    if (hasBookingId && bookingLoadState !== 'loaded') return;
+
     const stayDates = buildStayDates(travelDetails.checkInDate, travelDetails.checkOutDate);
 
     if (!stayDates.length) {
-      setFoodRows([createFoodRow()]);
+      setFoodRows((prevRows) => prevRows.length ? prevRows : [createFoodRow()]);
       return;
     }
 
-    setFoodRows((prevRows) =>
-      stayDates.map((date) => {
-        const existingRow = prevRows.find((row) => row.date === date);
-        return existingRow ? { ...existingRow, date } : createFoodRow(date);
-      }),
-    );
-  }, [travelDetails.checkInDate, travelDetails.checkOutDate]);
+    setFoodRows((prevRows) => {
+      const unmatchedRows = [...prevRows];
+      const alignedRows = stayDates.map((date) => {
+        // Exact dates win. If a saved row is outside the stay, pair it with
+        // the next unfilled stay date so its meal counts remain attached to
+        // the booking instead of appearing on a separate, stale date.
+        const exactIndex = unmatchedRows.findIndex((row) => row.date === date);
+        const rowIndex = exactIndex >= 0
+          ? exactIndex
+          : unmatchedRows.findIndex((row) => Boolean(row.date));
+        if (rowIndex < 0) return createFoodRow(date);
+
+        const [existingRow] = unmatchedRows.splice(rowIndex, 1);
+        return { ...existingRow, date };
+      });
+
+      // If there are more saved rows than stay dates, keep extras visible so
+      // they can be reviewed and corrected rather than silently discarded.
+      return [...alignedRows, ...unmatchedRows];
+    });
+  }, [bookingId, bookingLoadState, hasBookingId, travelDetails.checkInDate, travelDetails.checkOutDate]);
 
   const stayDates = useMemo(
     () => buildStayDates(travelDetails.checkInDate, travelDetails.checkOutDate),
@@ -1830,6 +1882,44 @@ const GuestHouseBooking: React.FC = () => {
       document.removeEventListener('keydown', closeOnKey);
     };
   }, [activeAllotmentDropdown]);
+
+  useEffect(() => {
+    if (!activeCareTakerDropdown) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (careTakerDropdownRef.current?.contains(event.target as Node)) return;
+      if ((event.target as Element | null)?.closest?.('[data-caretaker-dropdown-trigger="true"]')) return;
+      setActiveCareTakerDropdown(null);
+    };
+    const closeOnKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setActiveCareTakerDropdown(null);
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnKey);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnKey);
+    };
+  }, [activeCareTakerDropdown]);
+
+  const toggleCareTakerDropdown = (event: React.MouseEvent<HTMLButtonElement>, guestId: string) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuHeight = Math.min(300, (spocOptions.length + 1) * 42 + 12, window.innerHeight - 16);
+    const openUp = window.innerHeight - rect.bottom < menuHeight && rect.top > menuHeight;
+    setCareTakerDropdownPosition({
+      top: openUp ? Math.max(8, rect.top - menuHeight - 6) : rect.bottom + 6,
+      left: Math.min(rect.left, window.innerWidth - rect.width - 8),
+      width: rect.width,
+      openUp,
+    });
+    setActiveCareTakerDropdown((active) => active === guestId ? null : guestId);
+  };
+
+  const chooseCareTaker = (guestId: string, name: string) => {
+    const selected = spocOptions.find((spoc) => spoc.name === name);
+    updateAllotmentContact(guestId, 'spoc', name);
+    updateAllotmentContact(guestId, 'mobile', selected?.mobile || '');
+    setActiveCareTakerDropdown(null);
+  };
 
   const renderAllotmentDropdown = (
     guestId: string,
@@ -2580,17 +2670,9 @@ const GuestHouseBooking: React.FC = () => {
     isViewing: boolean,
     label: string,
     onSave: () => void,
+    showAdd = true,
   ) => (
     <div className="guesthousebooking-management-actions">
-      <button
-        className="guesthousebooking-management-icon-button guesthousebooking-management-icon-button--add"
-        type="button"
-        onClick={onAdd}
-        aria-label={isEditing ? `Save ${label} and add another` : `Add another ${label}`}
-        title={isEditing ? `Save ${label} and add another` : `Add another ${label}`}
-      >
-        <PlusCircle size={16} />
-      </button>
       <button
         className="guesthousebooking-management-icon-button"
         type="button"
@@ -2630,6 +2712,17 @@ const GuestHouseBooking: React.FC = () => {
       >
         <Check size={16} />
       </button>
+      {showAdd && (
+        <button
+          className="guesthousebooking-management-icon-button guesthousebooking-management-icon-button--add"
+          type="button"
+          onClick={onAdd}
+          aria-label={isEditing ? `Save ${label} and add another` : `Add another ${label}`}
+          title={isEditing ? `Save ${label} and add another` : `Add another ${label}`}
+        >
+          <PlusCircle size={16} />
+        </button>
+      )}
     </div>
   );
 
@@ -2641,17 +2734,9 @@ const GuestHouseBooking: React.FC = () => {
     isEditing: boolean,
     label: string,
     onSave: () => void,
+    showAdd = true,
   ) => (
     <div className="guesthousebooking-management-actions guesthousebooking-management-actions--compact">
-      <button
-        className="guesthousebooking-management-icon-button guesthousebooking-management-icon-button--add"
-        type="button"
-        onClick={onAdd}
-        aria-label={isEditing ? `Save ${label} and add another` : `Add another ${label}`}
-        title={isEditing ? `Save ${label} and add another` : `Add another ${label}`}
-      >
-        <PlusCircle size={16} />
-      </button>
       <button
         className="guesthousebooking-management-icon-button"
         type="button"
@@ -2682,6 +2767,17 @@ const GuestHouseBooking: React.FC = () => {
       >
         <Check size={16} />
       </button>
+      {showAdd && (
+        <button
+          className="guesthousebooking-management-icon-button guesthousebooking-management-icon-button--add"
+          type="button"
+          onClick={onAdd}
+          aria-label={isEditing ? `Save ${label} and add another` : `Add another ${label}`}
+          title={isEditing ? `Save ${label} and add another` : `Add another ${label}`}
+        >
+          <PlusCircle size={16} />
+        </button>
+      )}
     </div>
   );
   const renderGuesthouseAdminManagement = () => (
@@ -2820,6 +2916,7 @@ const GuestHouseBooking: React.FC = () => {
                         isViewing,
                         'room',
                         () => void saveManagedRoom(room),
+                        index === managedRooms.length - 1,
                       )}
                     </td>
                   </tr>
@@ -2913,6 +3010,7 @@ const GuestHouseBooking: React.FC = () => {
                         isEditing,
                         'care taker',
                         () => void saveCareTaker(careTaker),
+                        index === careTakers.length - 1,
                       )}
                     </td>
                   </tr>
@@ -3008,6 +3106,9 @@ const GuestHouseBooking: React.FC = () => {
   };
 
   if (isPrintPreview) {
+    if (hasBookingId && bookingLoadState !== 'loaded') {
+      return <div role={bookingLoadState === 'error' ? 'alert' : 'status'}>{bookingLoadState === 'error' ? 'This booking could not be loaded for printing.' : 'Preparing booking print preview…'}</div>;
+    }
     return (
       <GuesthousePrintPreview
         bookingId={bookingId}
@@ -3111,24 +3212,31 @@ const GuestHouseBooking: React.FC = () => {
           )}
           {(!canShowRoomAllocationTab || adminView === 'booking') && <>
           <section className="guesthousebooking-card">
-            <button
-              className="guesthousebooking-card-header"
-              type="button"
-              onClick={() => setIsApplicantCardOpen((prev) => !prev)}
-            >
+            <div className="guesthousebooking-card-header">
               <span>Applicant Details</span>
-              {isApplicantCardOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-            </button>
+              <button
+                className="guesthousebooking-card-toggle"
+                type="button"
+                aria-label={isApplicantCardOpen ? 'Hide full applicant details' : 'Show full applicant details'}
+                aria-expanded={isApplicantCardOpen}
+                onClick={() => setIsApplicantCardOpen((open) => !open)}
+              >
+                {isApplicantCardOpen ? <ChevronUp size={18} aria-hidden="true" /> : <ChevronDown size={18} aria-hidden="true" />}
+              </button>
+            </div>
 
             {!isApplicantCardOpen && (
-              <div className="guesthousebooking-card-summary">
+              <div
+                className="guesthousebooking-card-summary"
+                onClick={() => setIsApplicantCardOpen(true)}
+              >
                 <div className="guesthousebooking-summary-field">
                   <span className="guesthousebooking-summary-label">Applicant Name</span>
                   <input
                     className="guesthousebooking-input"
                     value={applicantUiDetails.name}
                     readOnly
-                    onClick={() => setIsApplicantCardOpen(true)}
+                    tabIndex={-1}
                   />
                 </div>
                 <div className="guesthousebooking-summary-field">
@@ -3137,7 +3245,7 @@ const GuestHouseBooking: React.FC = () => {
                     className="guesthousebooking-input"
                     value={applicantUiDetails.date}
                     readOnly
-                    onClick={() => setIsApplicantCardOpen(true)}
+                    tabIndex={-1}
                   />
                 </div>
               </div>
@@ -4080,22 +4188,17 @@ const GuestHouseBooking: React.FC = () => {
                       <span className="guesthousebooking-caretaker-title">Care Taker Details</span>
                       <div className="guesthousebooking-spoc-field guesthousebooking-caretaker-field">
                         <span>Care Taker Name</span>
-                        <select
-                          className="guesthousebooking-input guesthousebooking-spoc-control"
-                          value={allotment.spoc}
-                          onChange={(event) => {
-                            const selected = spocOptions.find((spoc) => spoc.name === event.target.value);
-                            updateAllotmentContact(guestId, 'spoc', event.target.value);
-                            updateAllotmentContact(guestId, 'mobile', selected?.mobile || '');
-                          }}
+                        <button
+                          type="button"
+                          className={`guesthousebooking-input guesthousebooking-spoc-control guesthousebooking-caretaker-dropdown-trigger${activeCareTakerDropdown === guestId ? ' is-open' : ''}`}
+                          onClick={(event) => toggleCareTakerDropdown(event, guestId)}
+                          aria-haspopup="listbox"
+                          aria-expanded={activeCareTakerDropdown === guestId}
+                          data-caretaker-dropdown-trigger="true"
                         >
-                          <option value="">Select Care Taker</option>
-                          {spocOptions.map((spoc) => (
-                            <option key={`${spoc.name}-${spoc.mobile}`} value={spoc.name}>
-                              {spoc.name}
-                            </option>
-                          ))}
-                        </select>
+                          <span>{allotment.spoc || 'Select Care Taker'}</span>
+                          <ChevronDown size={16} aria-hidden="true" />
+                        </button>
                       </div>
                       <div className="guesthousebooking-spoc-field guesthousebooking-caretaker-field">
                         <span>Mobile Number</span>
@@ -4200,6 +4303,38 @@ const GuestHouseBooking: React.FC = () => {
             onClick={() => chooseActiveAllotmentOption(option)}
           >
             {option}
+          </button>
+        ))}
+      </div>,
+      document.body,
+    )}
+    {activeCareTakerDropdown && createPortal(
+      <div
+        ref={careTakerDropdownRef}
+        className={`guesthousebooking-allotment-dropdown-menu guesthousebooking-caretaker-dropdown-menu${careTakerDropdownPosition.openUp ? ' opens-up' : ''}`}
+        style={{ top: careTakerDropdownPosition.top, left: careTakerDropdownPosition.left, width: careTakerDropdownPosition.width }}
+        role="listbox"
+        aria-label="Select Care Taker"
+      >
+        <button
+          type="button"
+          role="option"
+          aria-selected={!roomAllotments[activeCareTakerDropdown]?.spoc}
+          className="guesthousebooking-allotment-dropdown-option guesthousebooking-caretaker-dropdown-option is-placeholder"
+          onClick={() => chooseCareTaker(activeCareTakerDropdown, '')}
+        >
+          Select Care Taker
+        </button>
+        {spocOptions.map((spoc) => (
+          <button
+            key={`${spoc.name}-${spoc.mobile}`}
+            type="button"
+            role="option"
+            aria-selected={spoc.name === roomAllotments[activeCareTakerDropdown]?.spoc}
+            className={`guesthousebooking-allotment-dropdown-option guesthousebooking-caretaker-dropdown-option${spoc.name === roomAllotments[activeCareTakerDropdown]?.spoc ? ' is-selected' : ''}`}
+            onClick={() => chooseCareTaker(activeCareTakerDropdown, spoc.name)}
+          >
+            {spoc.name}
           </button>
         ))}
       </div>,

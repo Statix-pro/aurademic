@@ -169,6 +169,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   const navigate = useNavigate();
   const principalDocInputRef = useRef<HTMLInputElement | null>(null);
   const printPreviewFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const [isPrintPreviewReady, setIsPrintPreviewReady] = useState(false);
   const [principalDocTargetId, setPrincipalDocTargetId] = useState<number | null>(null);
   const [principalDocBusyId, setPrincipalDocBusyId] = useState<number | null>(null);
   const [approvalBusyId, setApprovalBusyId] = useState<number | null>(null);
@@ -1092,16 +1093,29 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     })),
   ];
   const handlePdfPreviewClick = (requestId: number) => {
+    setIsPrintPreviewReady(false);
     setPreviewRecordId(requestId);
   };
 
+  useEffect(() => {
+    const handlePrintDocumentReady = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.source !== printPreviewFrameRef.current?.contentWindow) return;
+      if (event.data?.type === 'guesthouse-print-document-ready') setIsPrintPreviewReady(true);
+    };
+    window.addEventListener('message', handlePrintDocumentReady);
+    return () => window.removeEventListener('message', handlePrintDocumentReady);
+  }, []);
+
   const handleDownloadPreviewPdf = () => {
+    if (!isPrintPreviewReady) return;
     const frameWindow = printPreviewFrameRef.current?.contentWindow;
     if (!frameWindow) return;
-    // The preview is a same-origin, A4-only document. Printing its own window
-    // prevents the dashboard/modal styles from being captured in the PDF.
-    frameWindow.focus();
-    frameWindow.print();
+    const printFrame = frameWindow.document.querySelector<HTMLIFrameElement>('.guesthouse-print-document');
+    const printWindow = printFrame?.contentWindow;
+    if (!printWindow) return;
+    printWindow.focus();
+    printWindow.print();
   };
 
   const approvalStageLabel =
@@ -1747,13 +1761,16 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       </CustomModal>
       <CustomModal
         show={previewRecordId !== null}
-        onHide={() => setPreviewRecordId(null)}
+        onHide={() => {
+          setIsPrintPreviewReady(false);
+          setPreviewRecordId(null);
+        }}
         title="Request Print Preview"
         size="xl"
         centered
         className="pdf-popup-preview-modal"
         footer={
-          <button type="button" className="btn btn-primary d-inline-flex align-items-center gap-2" onClick={handleDownloadPreviewPdf}>
+          <button type="button" className="btn btn-primary d-inline-flex align-items-center gap-2" onClick={handleDownloadPreviewPdf} disabled={!isPrintPreviewReady}>
             <Download size={16} />
             Print / Save PDF
           </button>
