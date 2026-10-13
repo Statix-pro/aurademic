@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 import {
   Briefcase,
   CheckCircle2,
@@ -5,7 +6,7 @@ import {
   XCircle,
   Eye,
   Info,
-  Edit2,
+  UserCheck,
   Archive,
   Trash2,
   FileText,
@@ -26,7 +27,6 @@ import ExportOptionsModal, {
   type ExportOptions,
   type ExportRunResult,
 } from '../../components/export/ExportOptionsModal';
-import { type PayeeDirectoryRecord, usePayeeDirectory } from '../../hooks/usePayeeDirectory';
 import authenticityUtility from '../../utils/authenticityUtility';
 import {
   buildCsvFilename,
@@ -468,7 +468,7 @@ const defaultQueueMapper = (response: any): WorkflowQueueResult => ({
   total: Number(response?.pagination?.total || 0),
   page: Number(response?.pagination?.page || 1),
   limit: Number(response?.pagination?.limit || 20),
-  statusCounts: response?.pagination?.statusCounts,
+  statusCounts: response?.pagination?.statusCounts || response?.statusCounts,
 });
 
 const defaultTimelineMapper = (response: any): WorkflowTimelineItem[] =>
@@ -606,6 +606,14 @@ const buildUpdatedLogSubtitles = (entry: WorkflowTimelineItem) => {
 };
 
 const formatProposalRef = (record: Record<string, any>) => {
+  // Work orders have their own generated identifier (for example 26LA0001).
+  // Keep the database id available for API actions, but display the work-order
+  // number consistently across every approval stage.
+  const workOrderNumber = String(record?.wo_number || record?.woNumber || '').trim();
+  if (workOrderNumber) {
+    return workOrderNumber.startsWith('#') ? workOrderNumber : `#${workOrderNumber}`;
+  }
+
   const fiscalYear = Number.parseInt(String(record?.fiscal_year || record?.fiscalYear || ''), 10);
   const createdAt = record?.created_at ? new Date(record.created_at) : null;
   const requestDate = record?.request_date ? new Date(record.request_date) : null;
@@ -628,7 +636,28 @@ interface WorkflowApprovalPageProps {
   config: WorkflowApprovalModuleConfig;
 }
 
-type PendingPayeeRecord = PayeeDirectoryRecord;
+interface PendingPayeeRecord {
+  id: number;
+  payee_name?: string;
+  account_name?: string | null;
+  pan_number?: string | null;
+  account_no?: string;
+  account_type?: string | null;
+  ifsc?: string;
+  bank_name?: string;
+  branch_name?: string;
+  beneficiary_type?: string | null;
+  beneficiary_org?: string | null;
+  organization_type?: string | null;
+  msme?: string | null;
+  gstin?: string | null;
+  tds_details?: string | null;
+  tds_section?: string | null;
+  approval_status?: string | null;
+  rejection_reason?: string | null;
+  approved_at?: string | null;
+  requested_at?: string | null;
+}
 
 interface WorkflowStageTab {
   key: string;
@@ -665,10 +694,14 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [limit, setLimit] = useState<number>(config.queueDefaultLimit || 20);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
+  const queueRequestRef = useRef(0);
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [workOrderCategoryFilter, setWorkOrderCategoryFilter] = useState<string>('');
+  const [workOrderAssignedFilter, setWorkOrderAssignedFilter] = useState<string>('');
+  const [payeeSearchTerm, setPayeeSearchTerm] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<
     'total' | 'pending' | 'approved' | 'returned' | 'rejected' | 'archived'
-  >('pending');
+  >(config.moduleKey === 'workorder' ? 'total' : 'pending');
   const [viewMode, setViewMode] = useState<'workflow' | 'payees'>('workflow');
   const [actingRecordId, setActingRecordId] = useState<number | string | null>(null);
   const [logPopupOpen, setLogPopupOpen] = useState(false);
@@ -695,6 +728,19 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   );
   const [principalApprovalFile, setPrincipalApprovalFile] = useState<File | null>(null);
   const [principalApprovalSubmitting, setPrincipalApprovalSubmitting] = useState(false);
+  const [assignModal, setAssignModal] = useState<{ open: boolean; recordId: string | number | null }>({ open: false, recordId: null });
+  const [assignEmployees, setAssignEmployees] = useState<any[]>([]);
+  const [assignEmployee, setAssignEmployee] = useState('');
+  const [assignStatus, setAssignStatus] = useState('Pending');
+  const [assignItemIds, setAssignItemIds] = useState<(string | number)[]>([]);
+  const [assignWorkDetails, setAssignWorkDetails] = useState({ type: '', subtype: '' });
+
+  useEffect(() => {
+    if (config.moduleKey !== 'workorder') return;
+    authenticityUtility.get('/workorders/assignees')
+      .then((response: any) => setAssignEmployees(Array.isArray(response?.data) ? response.data : []))
+      .catch(() => setAssignEmployees([]));
+  }, [config.moduleKey]);
 
   // Action popups
   const [actionPopupOpen, setActionPopupOpen] = useState(false);
@@ -727,6 +773,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [proposalTypeFilter, setProposalTypeFilter] = useState<
     'all' | 'advance' | 'expenditure' | 'settlement'
   >('all');
+  const [pendingPayees, setPendingPayees] = useState<PendingPayeeRecord[]>([]);
+  const [pendingPayeesLoading, setPendingPayeesLoading] = useState<boolean>(false);
   const [pendingPayeeActingId, setPendingPayeeActingId] = useState<number | null>(null);
   const [pendingPayeeEditingId, setPendingPayeeEditingId] = useState<number | null>(null);
   const [exportingCsv, setExportingCsv] = useState<boolean>(false);
@@ -1063,7 +1111,23 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   const stageTabs = useMemo<WorkflowStageTab[]>(() => {
     const normalizedRoles = getNormalizedUserRoles(user);
-    const tabs: WorkflowStageTab[] = permittedStages.flatMap<WorkflowStageTab>((stage) => {
+    const hiddenStageTabs = new Set(
+      (config.hiddenStageTabs || []).map((stage) => String(stage).trim().toLowerCase()),
+    );
+    // Work Order Admin has its own queue; do not show the Principal tab in
+    // that session. Principal users still receive and see their own tab.
+    if (
+      config.moduleKey === 'workorder' &&
+      (meta?.isSuperAdmin || normalizedRoles.some((role) =>
+        ['admin', 'workorderadmin', 'workorder_admin'].includes(String(role).replace(/[_-]/g, '').toLowerCase())
+        || ['admin', 'workorderadmin', 'workorder_admin'].includes(String(role).toLowerCase()),
+      ))
+    ) {
+      hiddenStageTabs.add('principal');
+    }
+    const tabs: WorkflowStageTab[] = permittedStages
+      .filter((stage) => !hiddenStageTabs.has(String(stage).trim().toLowerCase()))
+      .flatMap<WorkflowStageTab>((stage) => {
       const normalizedStage = String(stage || '')
         .trim()
         .toLowerCase();
@@ -1124,6 +1188,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, [
     config.moduleKey,
     config.stageLabels,
+    config.hiddenStageTabs,
     enableLevel1RoleTabs,
     enableSuperAdminAllProposals,
     meta?.isSuperAdmin,
@@ -1294,7 +1359,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   const getRecordStageDecision = useCallback((record: Record<string, any>) => {
     return String(
-      record.workflow_stage_decision ||
+        record.workflow_stage_decision ||
         record.workflow_stage_status ||
         record.stage_decision ||
         record.stage_status ||
@@ -1425,7 +1490,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const resolveStatusCategory = useCallback(
     (record: Record<string, any>) => {
       const workflowDecision = getRecordWorkflowDecision(record);
-      const stageDecision = getRecordStageDecision(record);
+      const stageDecision =
+        getRecordStageDecision(record) ||
+        (String(activeStage || '').toLowerCase() === 'workorder_admin'
+          ? String(record.workflow_latest_decision || '').toLowerCase()
+          : '');
       const token = String(record.workflow_status || record.status || '').toLowerCase();
       const currentStage = getRecordCurrentStage(record);
       const activeStageKey = String(activeStage || '').toLowerCase();
@@ -1442,18 +1511,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         return 'returned';
       if (isAllProposalsTab && token === 'in_progress' && currentStage) return 'pending';
 
-      if (currentStage && activeStageKey && currentStage === activeStageKey) {
-        return 'pending';
-      }
-
       if (workflowDecision === 'resubmitted') {
         return 'pending';
       }
 
       // Stage-owned decisions should drive KPIs for historical actions at this stage.
+      // Check these before the current-stage pending fallback. A returned or
+      // rejected item can remain at the same stage, but it must not continue
+      // showing approve/return/reject controls.
       if (stageDecision.includes('rejected')) return 'rejected';
       if (stageDecision.includes('returned') || stageDecision.includes('return')) return 'returned';
       if (stageDecision.includes('approved')) return 'approved';
+
+      if (currentStage && activeStageKey && currentStage === activeStageKey) {
+        return 'pending';
+      }
 
       if (!activeStageKey) {
         if (token.includes('rejected') || workflowDecision === 'rejected') return 'rejected';
@@ -1518,18 +1590,20 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const isVisibleInWorkflowList = useCallback(
     (record: Record<string, any>, stage: string) => {
       const category = resolveStatusCategory(record);
+      const stageDecision = String(getRecordStageDecision(record) || '').toLowerCase();
       if (
         category === 'approved' ||
         category === 'returned' ||
         category === 'rejected' ||
-        category === 'archived'
+        category === 'archived' ||
+        stageDecision.includes('archived')
       ) {
         return true;
       }
 
       return getRecordCurrentStage(record) === String(stage || '').toLowerCase();
     },
-    [getRecordCurrentStage, resolveStatusCategory],
+    [getRecordCurrentStage, getRecordStageDecision, resolveStatusCategory],
   );
 
   const loadMeta = useCallback(async () => {
@@ -1565,6 +1639,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
       setLoading(true);
       setError('');
+      const requestId = ++queueRequestRef.current;
       try {
         const endpoint = getQueueEndpoint(stage);
         const activeTab = stageTabs.find((tab) => tab.key === activeStageTabKey) || null;
@@ -1580,7 +1655,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             page: requestedPage,
             limit,
             workflowStatus: 'all',
-            ...(statusFilter !== 'total' ? { statusCategory: statusFilter } : {}),
+            // Always send the selected category. The backend treats an omitted
+            // category as the current-stage queue, while `total` means all
+            // records in the user's scope.
+            statusCategory: statusFilter,
             fiscalYear,
             ...(level1RoleFilter ? { level1Role: level1RoleFilter } : {}),
             ...(isAllProposalsTab ? { allProposals: true } : {}),
@@ -1593,10 +1671,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         });
 
         const mapped = mapQueueResponse(response);
+        if (requestId !== queueRequestRef.current) return;
 
         const fetchedItems = Array.isArray(mapped.items) ? mapped.items : [];
         let items = fetchedItems;
-        if (!isAllProposalsTab) {
+        if (!isAllProposalsTab && statusFilter !== 'total') {
           items = fetchedItems.filter((item) => isVisibleInWorkflowList(item, stage));
         }
         // Records hidden by isVisibleInWorkflowList are ones the server counted (in `total`
@@ -1610,7 +1689,14 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         const normalizedMappedPage = Math.max(Number(mapped.page || requestedPage || 1), 1);
         const normalizedMappedTotal = Math.max(Number(mapped.total || 0) - hiddenCount, 0);
 
-        if (mapped.statusCounts && hiddenCount > 0) {
+        if (statusFilter === 'total' && mapped.statusCounts) {
+          // Keep Total and each status tab on the same stage-scoped server
+          // counts. Deriving counts from the current page caused Pending to
+          // differ between Total and Pending tabs.
+          setQueueStatusCounts({
+            ...mapped.statusCounts,
+          });
+        } else if (mapped.statusCounts && hiddenCount > 0) {
           // isVisibleInWorkflowList only stage-checks records that resolve to the
           // 'pending' category (all other categories are always visible), so every
           // hidden record was counted as 'pending' server-side.
@@ -1627,6 +1713,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         setPage(normalizedMappedPage);
         setLimit(nextLimit);
       } catch (queueError: any) {
+        if (requestId !== queueRequestRef.current) return;
         setRows([]);
         setTotalRows(0);
         setQueueStatusCounts(undefined);
@@ -1634,7 +1721,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           queueError?.response?.data?.message || queueError?.message || 'Failed to load queue',
         );
       } finally {
-        setLoading(false);
+        if (requestId === queueRequestRef.current) setLoading(false);
       }
     },
     [
@@ -1701,7 +1788,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         setLogEntries(mapped);
       } catch (error) {
         console.error('Failed to fetch timeline:', error);
-        setLogEntries([]);
+        // Keep the original submission visible even when an older work-order
+        // record has no workflow action rows yet or the timeline endpoint is
+        // temporarily unavailable.
+        setLogEntries([
+          {
+            id: `submission-${id}`,
+            stage: 'Submission',
+            decision: 'submitted',
+            feedback: 'Proposal created',
+            userName: normalizeLogText(record?.applicant_name || record?.applicantName) || 'Unknown',
+            actorEmail: normalizeLogText(record?.email),
+            createdAt: record?.created_at || record?.createdAt || record?.submittedAt || null,
+            decidedAt: record?.created_at || record?.createdAt || record?.submittedAt || null,
+          } as unknown as WorkflowTimelineItem,
+        ]);
       } finally {
         setLogLoading(false);
       }
@@ -1789,25 +1890,29 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     );
   }, [activeStage, config.moduleKey, isSuperAdminView]);
 
-  const payeeDirectory = usePayeeDirectory({
-    apiBasePath: config.apiBasePath,
-    enabled: showExpenditurePayeePanel,
-  });
-  const refreshPayeeDirectory = payeeDirectory.refresh;
+  const loadPendingPayees = useCallback(async () => {
+    if (!showExpenditurePayeePanel) return;
+    setPendingPayeesLoading(true);
+    try {
+      const response = (await authenticityUtility.get(`${config.apiBasePath}/payees`, {
+        params: { status: 'all', limit: 200 },
+      })) as { success?: boolean; status?: string; data?: PendingPayeeRecord[] };
 
-  // Payees requested from other screens (the user dashboard) land while this
-  // page is already mounted, so re-read the directory whenever the tab opens.
-  useEffect(() => {
-    if (viewMode !== 'payees') return;
-    refreshPayeeDirectory();
-  }, [viewMode, refreshPayeeDirectory]);
+      if (response?.success === true || response?.status === 'success') {
+        setPendingPayees(Array.isArray(response.data) ? response.data : []);
+      } else {
+        setPendingPayees([]);
+      }
+    } catch {
+      setPendingPayees([]);
+    } finally {
+      setPendingPayeesLoading(false);
+    }
+  }, [config.apiBasePath, showExpenditurePayeePanel]);
 
-  // The Requests/Payees switch only exists on the DoF stage (and for super
-  // admins). Moving to another stage hides it, so drop back to the workflow
-  // view instead of leaving the page stuck on a panel with no way out.
   useEffect(() => {
-    if (!showExpenditurePayeePanel) setViewMode('workflow');
-  }, [showExpenditurePayeePanel]);
+    loadPendingPayees().catch(() => {});
+  }, [loadPendingPayees]);
 
   const onPayeeDecision = useCallback(
     async (payeeId: number, decision: 'approved' | 'rejected') => {
@@ -1831,7 +1936,19 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         )) as { success?: boolean; status?: string; message?: string };
 
         if (response?.success === true || response?.status === 'success') {
-          refreshPayeeDirectory();
+          setPendingPayees((prev) =>
+            prev.map((row) =>
+              Number(row.id) === Number(payeeId)
+                ? {
+                    ...row,
+                    approval_status: decision,
+                    rejection_reason: decision === 'rejected' ? rejectionReason : null,
+                    approved_at:
+                      decision === 'approved' ? new Date().toISOString() : row.approved_at,
+                  }
+                : row,
+            ),
+          );
           showAlert(response.message || `Payee ${decision} successfully.`, 'success');
           return true;
         }
@@ -1848,7 +1965,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         setPendingPayeeActingId(null);
       }
     },
-    [config.apiBasePath, refreshPayeeDirectory, showAlert],
+    [config.apiBasePath, showAlert],
   );
 
   const onPayeeEdit = useCallback(
@@ -1866,7 +1983,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         };
 
         if (response?.success === true || response?.status === 'success') {
-          refreshPayeeDirectory();
+          const updatedRow = response.data || payload;
+          setPendingPayees((prev) =>
+            prev.map((row) =>
+              Number(row.id) === Number(payeeId) ? { ...row, ...updatedRow } : row,
+            ),
+          );
           return true;
         }
 
@@ -1882,7 +2004,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         setPendingPayeeEditingId(null);
       }
     },
-    [config.apiBasePath, refreshPayeeDirectory, showAlert],
+    [config.apiBasePath, showAlert],
   );
 
   const onPayeeDelete = useCallback(
@@ -1902,7 +2024,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             };
 
             if (response?.success === true || response?.status === 'success') {
-              refreshPayeeDirectory();
+              setPendingPayees((prev) => prev.filter((row) => Number(row.id) !== Number(payeeId)));
               return;
             }
 
@@ -1920,7 +2042,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       );
       return false;
     },
-    [config.apiBasePath, refreshPayeeDirectory, showAlert],
+    [config.apiBasePath, showAlert],
   );
 
   const performApproval = useCallback(
@@ -2123,7 +2245,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       if (response?.status === 'success' || response?.success || response?.data?.success) {
         closeActionPopup();
         const nextStage = String(
-          response?.data?.currentState?.currentStage ||
+          response?.data?.workflowResult?.currentState?.currentStage ||
+            response?.data?.workflowResult?.currentState?.stage ||
+            response?.data?.currentState?.currentStage ||
             response?.data?.currentState?.stage ||
             response?.data?.workflow_state?.currentStage ||
             '',
@@ -2172,6 +2296,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       if (workflowDecision === 'resubmitted') return 'Resubmitted';
       if (category === 'approved') {
         if (stageDecision.includes('approved')) return 'Approved';
+        if (config.moduleKey === 'workorder' && statusFilter === 'total') return 'Approved';
         if (status === 'level1_approved') return 'Approved Level-1';
         if (status === 'hod_approved') return 'Approved HOD';
         if (status === 'ithead_approved') return 'Approved IT Head';
@@ -2202,9 +2327,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       return 'Pending';
     },
     [
+      activeStage,
       activeWorkflowTab?.showAllProposals,
       config.moduleKey,
       config.stageLabels,
+      statusFilter,
       getRecordCurrentStage,
       getRecordStageDecision,
       getRecordWorkflowDecision,
@@ -2428,6 +2555,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         approved: Number(queueStatusCounts.approved || 0),
         returned: Number(queueStatusCounts.returned || 0),
         rejected: Number(queueStatusCounts.rejected || 0),
+        // The Total tab includes records that have passed through this stage,
+        // including currently archived records. Use the server's stage-scoped
+        // count so the tile matches the rows shown in the list.
         archived: Number(queueStatusCounts.archived || 0),
       };
     }
@@ -2454,6 +2584,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     searchScopedRows,
     secondaryFilter,
     resolveStatusCategory,
+    statusFilter,
   ]);
 
   // `statusOverride` lets the CSV export narrow to a status other than the tab's — the
@@ -2801,6 +2932,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   }, []);
 
   const filteredColumns = useMemo(() => {
+    const workorderExcludeKeys =
+      config.moduleKey === 'workorder' ? ['category_name'] : [];
     return config.columns.filter(
       (column) =>
         column.key !== 'applicant_name' &&
@@ -2811,9 +2944,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         column.key !== 'status' &&
         column.key !== 'workflow_status' &&
         column.key !== 'stage' &&
-        column.key !== 'workflow_stage',
+        column.key !== 'workflow_stage' &&
+        !workorderExcludeKeys.includes(column.key),
     );
-  }, [config.columns]);
+  }, [config.columns, config.moduleKey]);
   const getProposalType = (record: any) => {
     const rawType = String(
       record?.proposal_type ||
@@ -2886,7 +3020,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
 
   const proposalFilteredRows = useMemo(
     () => applyProposalTypeScope(filteredRows),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [filteredRows, config.moduleKey, proposalTypeFilter],
   );
 
@@ -3153,6 +3286,46 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     }
   };
 
+  const openWorkOrderAssignment = async (recordId: string | number) => {
+    try {
+      const [people, order] = await Promise.all([
+        authenticityUtility.get('/workorders/assignees'),
+        authenticityUtility.get(`/workorders/${recordId}`),
+      ]);
+      setAssignEmployees(Array.isArray((people as any)?.data) ? (people as any).data : []);
+      const items = Array.isArray((order as any)?.data?.items) ? (order as any).data.items : [];
+      setAssignItemIds(items.map((item: any) => item.id).filter(Boolean));
+      setAssignEmployee(items[0]?.assigned_to || '');
+      setAssignStatus(items[0]?.status || 'Pending');
+      const firstItem = items[0] || {};
+      setAssignWorkDetails({
+        type: firstItem.type_name || firstItem.type || (order as any)?.data?.category_name || (order as any)?.data?.category || '',
+        subtype: firstItem.sub_type_name || firstItem.subType || firstItem.sub_type || '',
+      });
+      setAssignModal({ open: true, recordId });
+    } catch (err) { console.error('Failed to open assignment modal:', err); }
+  };
+
+  const saveWorkOrderAssignment = async () => {
+    const employee = assignEmployees.find((item) => item.name === assignEmployee);
+    await Promise.all(assignItemIds.map((itemId) => authenticityUtility.patch(`/workorders/items/${itemId}/dashboard`, {
+      status: assignStatus, assignedTo: assignEmployee, assignedToRole: employee?.designation || 'Staff',
+    })));
+    setAssignModal({ open: false, recordId: null });
+    loadQueue(activeStage, page);
+  };
+
+  const updateInlineWorkOrderAssignment = async (recordId: string | number, assignedTo?: string, status?: string) => {
+    const order = await authenticityUtility.get(`/workorders/${recordId}`) as any;
+    const items = Array.isArray(order?.data?.items) ? order.data.items : [];
+    const employee = assignEmployees.find((item: any) => item.name === assignedTo);
+    await Promise.all(items.map((item: any) => authenticityUtility.patch(`/workorders/items/${item.id}/dashboard`, {
+      ...(assignedTo !== undefined ? { assignedTo, assignedToRole: employee?.designation || 'Staff' } : {}),
+      ...(status !== undefined ? { status } : {}),
+    })));
+    await loadQueue(activeStage, page);
+  };
+
   return (
     <>
       <input
@@ -3164,7 +3337,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       />
       <div className="fw-page">
         <div className="fw-container">
-          <div className="fw-card">
+          <div className={`fw-card ${config.moduleKey === 'workorder' ? 'fw-card--workorder' : ''} ${config.moduleKey === 'workorder' && activeStage === 'workorder_admin' ? 'fw-card--workorder-admin' : ''}`}>
             <div className="fw-header">
               {/* Title, view toggle, stage tabs and Export CSV own the full first row so
                   the button sits top-right for every role. Left in the shared flex row it
@@ -3172,25 +3345,80 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                   on a single-tab queue such as HOD. */}
               <div className="fw-header-main">
                 <h5 className="fw-title" style={{ margin: 0 }}>
-                  {config.title}
+                  {config.moduleKey === 'workorder' ? 'Work Order Requests' : config.title}
                 </h5>
                 {showExpenditurePayeePanel && (
-                  <div className="fw-view-tabs">
+                  <div
+                    className="fw-view-tabs"
+                    style={{
+                      display: 'flex',
+                      background: '#f1f5f9',
+                      padding: '4px',
+                      borderRadius: '8px',
+                    }}
+                  >
                     <button
                       type="button"
                       onClick={() => setViewMode('workflow')}
-                      className={`fw-view-tab ${viewMode === 'workflow' ? 'active' : ''}`}
+                      style={{
+                        padding: '6px 12px',
+                        border: 'none',
+                        background: viewMode === 'workflow' ? '#fff' : 'transparent',
+                        borderRadius: '6px',
+                        fontWeight: 600,
+                        color: viewMode === 'workflow' ? '#0f172a' : '#64748b',
+                        boxShadow: viewMode === 'workflow' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                      }}
                     >
                       Requests
                     </button>
                     <button
                       type="button"
                       onClick={() => setViewMode('payees')}
-                      className={`fw-view-tab ${viewMode === 'payees' ? 'active' : ''}`}
+                      style={{
+                        padding: '6px 12px',
+                        border: 'none',
+                        background: viewMode === 'payees' ? '#fff' : 'transparent',
+                        borderRadius: '6px',
+                        fontWeight: 600,
+                        color: viewMode === 'payees' ? '#0f172a' : '#64748b',
+                        boxShadow: viewMode === 'payees' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                      }}
                     >
                       Payees
-                      {payeeDirectory.pendingTotal > 0 && (
-                        <span className="fw-view-tab-badge">{payeeDirectory.pendingTotal}</span>
+                      {pendingPayees.filter(
+                        (payee) =>
+                          String(payee.approval_status || 'pending')
+                            .trim()
+                            .toLowerCase() === 'pending',
+                      ).length > 0 && (
+                        <span
+                          style={{
+                            background: '#ef4444',
+                            color: '#fff',
+                            fontSize: '0.75rem',
+                            padding: '2px 6px',
+                            borderRadius: '10px',
+                            minWidth: '20px',
+                            textAlign: 'center',
+                          }}
+                        >
+                          {
+                            pendingPayees.filter(
+                              (payee) =>
+                                String(payee.approval_status || 'pending')
+                                  .trim()
+                                  .toLowerCase() === 'pending',
+                            ).length
+                          }
+                        </span>
                       )}
                     </button>
                   </div>
@@ -3237,21 +3465,19 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     <span>{exportingCsv ? 'Exporting…' : 'Export CSV'}</span>
                   </button>
                 )}
-                {/* Payee search shares the title row: Export CSV is workflow-only and
-                    this is payees-only, so both can claim the same right-hand slot. */}
-                {config.moduleKey === 'expenditure' && viewMode === 'payees' && (
-                  <div className="fw-payee-header-search">
-                    <Search size={16} className="fw-payee-header-search-icon" />
-                    <input
-                      type="text"
-                      className="fw-control fw-payee-header-search-input"
-                      placeholder="Search payee..."
-                      value={payeeDirectory.search}
-                      onChange={(e) => payeeDirectory.setSearch(e.target.value)}
-                    />
-                  </div>
-                )}
               </div>
+              {config.moduleKey === 'expenditure' && viewMode === 'payees' && (
+                <div className="fw-payee-header-search">
+                  <Search size={16} className="fw-payee-header-search-icon" />
+                  <input
+                    type="text"
+                    className="fw-control fw-payee-header-search-input"
+                    placeholder="Search payee..."
+                    value={payeeSearchTerm}
+                    onChange={(e) => setPayeeSearchTerm(e.target.value)}
+                  />
+                </div>
+              )}
               {viewMode === 'workflow' && (
                 <div className="fw-header-actions">
                   {/* Proposal-type shortcuts live in the actions row (like finance's
@@ -3332,7 +3558,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     </div>
                   )}
 
-                  <select
+                  {config.moduleKey === 'workorder' && activeStage === 'workorder_admin' ? (
+                    <select className="fw-control fw-workorder-filter-control" value={workOrderAssignedFilter} onChange={(e) => setWorkOrderAssignedFilter(e.target.value)} title="Filter by Assigned Employee">
+                      <option value="">Filter</option>
+                      {assignEmployees.map((employee: any) => <option key={employee.employee_id || employee.id || employee.name} value={employee.name}>{employee.name}</option>)}
+                    </select>
+                  ) : <select
                     className="fw-control"
                     value={fiscalYear}
                     onChange={(e) => setFiscalYear(Number(e.target.value))}
@@ -3343,7 +3574,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                         FY {year}-{String(year + 1).slice(2)}
                       </option>
                     ))}
-                  </select>
+                  </select>}
 
                   <select
                     className="fw-control"
@@ -3387,6 +3618,63 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                 </div>
               )}
             </div>
+
+            {config.moduleKey === 'workorder' && activeStage === 'workorder_admin' && viewMode === 'workflow' && (
+              <div className="fw-workorder-category-tabs">
+                {['Carpentry', 'Civil', 'Electrical', 'Gardening', 'HVAC', 'Interior', 'IT Infrastructure', 'Labour', 'Metal Works', 'Painting', 'Plumbing', 'UPS'].map((category) => (
+                  <button key={category} type="button" className={workOrderCategoryFilter === category ? 'active' : ''} onClick={() => setWorkOrderCategoryFilter((current) => current === category ? '' : category)}>{category}</button>
+                ))}
+              </div>
+            )}
+
+            {config.moduleKey === 'workorder' && activeStage === 'workorder_admin' && viewMode === 'workflow' && (
+              <div className="fw-workorder-table-wrap">
+                <table className="fw-workorder-table">
+                  <thead><tr><th>Work Order ID</th><th>Category</th><th>Type</th><th>Sub Type</th><th>Approval</th><th>Assigned To</th><th>Work Status</th><th>Target Date</th></tr></thead>
+                  <tbody>{proposalFilteredRows.filter((record: any) => (!workOrderCategoryFilter || String(record.category_name || record.category || '').trim().toLowerCase() === workOrderCategoryFilter.toLowerCase()) && (!workOrderAssignedFilter || String(record.assigned_to || '').trim() === workOrderAssignedFilter)).map((record: any) => {
+                    const recordId = getRecordId(record);
+                    const rawWorkflowState = record.workflow_state;
+                    let workflowState: any = rawWorkflowState;
+                    if (typeof rawWorkflowState === 'string') {
+                      try { workflowState = JSON.parse(rawWorkflowState); } catch { workflowState = {}; }
+                    }
+                    const workflowStatus = String(
+                      workflowState?.status || record.workflow_status || '',
+                    ).toLowerCase();
+                    const workflowStage = String(
+                      workflowState?.currentStage || record.workflow_stage || '',
+                    ).toLowerCase();
+                    const statusCategory = resolveStatusCategory(record);
+                    const isAssignmentLocked = ['returned', 'rejected'].includes(statusCategory);
+                    const isTerminalWorkflow =
+                      ['completed', 'approved', 'rejected', 'archived'].includes(workflowStatus) ||
+                      (!workflowStage && ['approved', 'rejected', 'archived'].includes(statusCategory));
+                    return <tr key={String(recordId)} className="fw-workorder-row-clickable" onClick={() => navigate(getRecordRoute(recordId, 'view'))}>
+                      <td><span className="fw-workorder-id">#{record.wo_number || record.work_order_number || recordId}</span>{String(record.priority || record.work_priority || '').toLowerCase() === 'high' && <span className="fw-workorder-high-priority-dot" title="High priority" aria-label="High priority" />}</td>
+                      <td>{record.category_name || record.category || '-'}</td>
+                      <td>{record.work_type || record.type_name || record.type || '-'}</td>
+                      <td>{record.work_subtype || record.sub_type_name || record.subtype_name || record.sub_type || '-'}</td>
+                      <td>
+                        {isTerminalWorkflow || statusCategory !== 'pending' ? (
+                          <span className={`fw-workorder-approved-text fw-workorder-status-text--${statusCategory}`}>
+                            {statusCategory === 'returned' ? 'Returned' : statusCategory === 'rejected' ? 'Rejected' : statusCategory === 'archived' ? 'Archived' : 'Approved'}
+                          </span>
+                        ) : (
+                          <div className="fw-workorder-approval-actions" onClick={(event) => event.stopPropagation()}>
+                            <button type="button" className="fw-workorder-approval-action" title="Approve" onClick={() => onApprove(recordId)}><CheckCircle2 size={16} /></button>
+                            <button type="button" className="fw-workorder-approval-action" title="Return" onClick={() => openActionPopup('return', recordId, getRecordProposalRef(record))}><RotateCcw size={15} /></button>
+                            <button type="button" className="fw-workorder-approval-action" title="Reject" onClick={() => openActionPopup('reject', recordId, getRecordProposalRef(record))}><XCircle size={16} /></button>
+                          </div>
+                        )}
+                      </td>
+                      <td>{isAssignmentLocked ? null : (record.assigned_to ? <span className="fw-workorder-assigned-name">{record.assigned_to}</span> : <select onClick={(event) => event.stopPropagation()} className="fw-workorder-select fw-workorder-assigned fw-workorder-assign-empty" value="" onChange={(event) => updateInlineWorkOrderAssignment(recordId, event.target.value, undefined)}><option value="">+ Assign</option>{assignEmployees.map((employee: any) => <option key={employee.employee_id || employee.id || employee.name} value={employee.name}>{employee.name}</option>)}</select>)}</td>
+                      <td>{isAssignmentLocked ? null : <select onClick={(event) => event.stopPropagation()} className={`fw-workorder-select fw-workorder-status fw-workorder-status--${String(record.assignment_status || record.work_status || record.status || 'Pending').toLowerCase().replace(/\s+/g, '-')}`} value={record.assignment_status || record.work_status || record.status || 'Pending'} onChange={(event) => updateInlineWorkOrderAssignment(recordId, undefined, event.target.value)}><option value="Pending">Pending</option><option value="Assigned">Assigned</option><option value="Procurement">Procurement</option><option value="On Hold">On Hold</option><option value="Completed">Completed</option></select>}</td>
+                      <td><span className="fw-workorder-date-text">{record.target_date ? String(record.target_date).slice(0, 10) : '-'}</span></td>
+                    </tr>;
+                  })}</tbody>
+                </table>
+              </div>
+            )}
 
             {viewMode === 'workflow' && (
               <div className="fw-stats">
@@ -3483,16 +3771,19 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
               </div>
             )}
 
-            {viewMode === 'payees' && showExpenditurePayeePanel ? (
+            {viewMode === 'payees' ? (
               <div className="fw-payee-panel" style={{ margin: '10px 0 24px', padding: '0 24px' }}>
                 <PendingPayeeApprovals
-                  directory={payeeDirectory}
+                  pendingPayees={pendingPayees}
+                  pendingPayeesLoading={pendingPayeesLoading}
                   onPayeeDecision={onPayeeDecision}
                   pendingPayeeActingId={pendingPayeeActingId}
                   onPayeeEdit={onPayeeEdit}
                   pendingPayeeEditingId={pendingPayeeEditingId}
                   apiBasePath={config.apiBasePath}
                   onPayeeDelete={onPayeeDelete}
+                  searchTerm={payeeSearchTerm}
+                  onSearchTermChange={setPayeeSearchTerm}
                   showTopSearch={false}
                 />
               </div>
@@ -3573,7 +3864,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                         return (
                           <div key={timelineKey} className="fw-item-wrap">
                             <div
-                              className={`fw-item fw-item--clickable ${isResubmitted ? 'fw-item--resubmitted' : ''} ${archivingIds.has(recordId) ? 'fw-item--archiving' : ''}`}
+                              className={`fw-item fw-item--clickable ${config.moduleKey === 'workorder' && activeStage === 'principal' ? 'fw-item--workorder-principal' : ''} ${isResubmitted ? 'fw-item--resubmitted' : ''} ${archivingIds.has(recordId) ? 'fw-item--archiving' : ''}`}
                               role="button"
                               tabIndex={0}
                               onClick={() =>
@@ -3602,6 +3893,30 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                       </h5>
                                       {tag && tag.trim() !== '' && (
                                         <span className="fw-tag-pill">{tag}</span>
+                                      )}
+                                      {String(config.moduleKey) === 'workorder' && (
+                                        <>
+                                          {(record.work_type || record.type_name) && (
+                                            <span className="fw-tag-pill fw-workorder-detail-pill">
+                                              {record.work_type || record.type_name}
+                                            </span>
+                                          )}
+                                          {(record.work_subtype || record.sub_type_name) && (
+                                            <span className="fw-tag-pill fw-workorder-detail-pill">
+                                              {record.work_subtype || record.sub_type_name}
+                                            </span>
+                                          )}
+                                          {record.assigned_to && (
+                                            <span className="fw-tag-pill fw-workorder-assignment-pill">
+                                              Assigned to: {record.assigned_to}
+                                            </span>
+                                          )}
+                                          {record.assignment_status && (
+                                            <span className="fw-tag-pill fw-workorder-status-pill">
+                                              {record.assignment_status}
+                                            </span>
+                                          )}
+                                        </>
                                       )}
                                       {(() => {
                                         const badge = getProposalBadge(record);
@@ -3666,6 +3981,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 </div>
 
                                 <div className="fw-topbar-right">
+                                  {config.moduleKey !== 'workorder' && (
                                   <div
                                     className="fw-amounts-container"
                                     style={{
@@ -3701,10 +4017,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                       </div>
                                     ))}
                                   </div>
+                                  )}
 
                                   <button
-                                    className="fw-icon-btn"
-                                    title="Logs"
+                                    className="fw-icon-btn fw-submission-log-btn"
+                                    title="Submission Logs"
+                                    aria-label="Submission Logs"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       fetchFullTimeline(record, recordId, proposalRef);
@@ -3726,31 +4044,20 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                     <Eye size={16} />
                                   </button>
 
-                                  <button
-                                    className="fw-icon-btn"
-                                    title="Edit"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (
-                                        !isApproved ||
-                                        (isSuperAdminView &&
-                                          (config.moduleKey === 'finance' ||
-                                            config.moduleKey === 'expenditure'))
-                                      ) {
-                                        navigate(getRecordRoute(recordId, 'edit'));
-                                      }
-                                    }}
-                                    disabled={
-                                      isApproved &&
-                                      !(
-                                        isSuperAdminView &&
-                                        (config.moduleKey === 'finance' ||
-                                          config.moduleKey === 'expenditure')
-                                      )
-                                    }
-                                  >
-                                    <Edit2 size={16} />
-                                  </button>
+                                  {config.moduleKey === 'workorder' && activeStage === 'workorder_admin' && (
+                                    <button
+                                      className="fw-icon-btn fw-workorder-assign-btn"
+                                      title="Assign work"
+                                      aria-label="Assign work"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openWorkOrderAssignment(recordId);
+                                      }}
+                                    >
+                                      <UserCheck size={16} />
+                                    </button>
+                                  )}
+
                                 </div>
                               </div>
 
@@ -4283,6 +4590,22 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             />
           </label>
         </CustomModal>
+        <CustomModal show={assignModal.open} onHide={() => setAssignModal({ open: false, recordId: null })} title="Assign Work" size="sm" footer={<><button className="wo-info-btn-close" onClick={() => setAssignModal({ open: false, recordId: null })}>Cancel</button><button className="wo-info-btn-save" onClick={saveWorkOrderAssignment}>Save</button></> }>
+          <div className="workorder-assignment-details">
+            <div><span>Type of Work</span><strong>{assignWorkDetails.type || 'Not specified'}</strong></div>
+            <div><span>Subtype</span><strong>{assignWorkDetails.subtype || 'Not specified'}</strong></div>
+          </div>
+          <label className="form-label">Active employee</label>
+          <select className="form-select mb-3" value={assignEmployee} onChange={(e) => setAssignEmployee(e.target.value)}>
+            <option value="">Not assigned</option>
+            {assignEmployees.map((employee) => <option key={employee.employee_id} value={employee.name}>{employee.name}</option>)}
+          </select>
+          <label className="form-label">Status</label>
+          <select className="form-select" value={assignStatus} onChange={(e) => setAssignStatus(e.target.value)}>
+            {['Pending', 'Assigned', 'Procurement', 'On Hold', 'Completed'].map((status) => <option key={status} value={status}>{status}</option>)}
+          </select>
+        </CustomModal>
+
         <AlertModal
           show={alertConfig.show}
           onHide={closeAlert}
@@ -4408,7 +4731,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         <CustomModal
           show={logPopupOpen}
           onHide={closeLogPopup}
-          title="Workflow Timeline"
+          title="Submission Logs"
           size="lg"
           centered
           className="fw-log-modal"
@@ -4424,18 +4747,18 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         >
           <div className="fw-log-body">
             <div className="fw-log-item">
-              <span className="fw-log-label">Reference:</span>
+              <span className="fw-log-label">Proposal:</span>
               <span className="fw-log-value">{logRef || '--'}</span>
             </div>
 
             {logLoading && (
               <div className="fw-state" style={{ padding: '24px 0' }}>
-                Loading timeline...
+                Loading updates...
               </div>
             )}
             {!logLoading && logEntries.length === 0 && (
               <div className="fw-state" style={{ padding: '24px 0' }}>
-                No timeline entries available.
+                No submission log entries available.
               </div>
             )}
 

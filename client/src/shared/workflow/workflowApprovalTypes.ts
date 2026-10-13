@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import type { ReactNode } from 'react';
 
 export type WorkflowDecision = 'approved' | 'rejected' | 'returned';
@@ -12,7 +13,7 @@ export interface WorkflowMeta {
 }
 
 export interface WorkflowTimelineItem {
-  id: number;
+  id: number | string;
   stage: string;
   decision: string;
   feedback?: string | null;
@@ -90,6 +91,7 @@ export interface WorkflowApprovalModuleConfig<
   apiBasePath: string;
   columns: WorkflowQueueColumn<TRecord>[];
   stageLabels?: Record<string, string>;
+  hiddenStageTabs?: string[];
   decisions?: WorkflowDecision[];
   requireFeedbackFor?: WorkflowDecision[];
   queueDefaultLimit?: number;
