@@ -26,7 +26,7 @@ export const review = async (req, res) => {
   try {
     const decision = req.body?.decision;
     if (!['approve', 'reject'].includes(decision)) return res.status(400).json({ success: false, message: 'decision must be approve or reject' });
-    return res.json({ success: true, data: await model.review(req.params.id, decision, req.user?.id, req.body?.comment) });
+    return res.json({ success: true, data: await model.review(req.params.id, decision, req.user, req.body?.comment) });
   } catch (error) { return sendError(res, error, 'Failed to review organization'); }
 };
 

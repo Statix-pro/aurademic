@@ -176,13 +176,4 @@ authenticityUtility.getBaseURL = (): string => {
   return baseURL.replace(/\/api\/?$/, '');
 };
 
-export const isFallbackEligible = (error: any): boolean => {
-  return !!(
-    error &&
-    typeof error === 'object' &&
-    !error.response &&
-    (error.request || error.isAxiosError === true || error.code === 'ERR_NETWORK')
-  );
-};
-
 export default authenticityUtility;

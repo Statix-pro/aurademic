@@ -2,7 +2,6 @@ import { Search, X, Edit3 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 import './OrganizationDirectoryDashboard.css';
-import { useAbility } from '../../../shared/casl/AbilityContext';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import OrganizationDirectory, {
   Organization,
@@ -52,7 +51,6 @@ const CATEGORY_OPTIONS = [
    ═══════════════════════════════════════════════════════════ */
 
 const OrganizationDirectoryDashboard: React.FC = () => {
-  const ability = useAbility();
   const [records, setRecords] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,15 +61,18 @@ const OrganizationDirectoryDashboard: React.FC = () => {
   const [searchName, setSearchName] = useState('');
   const [searchCategory, setSearchCategory] = useState('');
 
+  const scrollToFormTop = () => {
+    document.querySelector<HTMLElement>('.app-content')?.scrollTo({ top: 0, behavior: 'auto' });
+  };
+
   const fetchRecords = async () => {
     setIsLoading(true);
     setLoadError(null);
     try {
       const data = await apiGetAll();
       setRecords(data);
-    } catch {
-      setRecords([]);
-      setLoadError('Could not reach the server. Showing empty list — add a record or retry later.');
+    } catch (err: any) {
+      setLoadError(err?.message || 'Failed to load organizations.');
     } finally {
       setIsLoading(false);
     }
@@ -83,10 +84,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
   const filtered = useMemo(() => {
     const nameFilter = searchName.trim().toLowerCase();
-    const categoryFilter = searchCategory
-      .trim()
-      .toLowerCase()
-      .replace(/^legacy-/, '');
+    const categoryFilter = searchCategory.trim().toLowerCase();
 
     return records.filter(
       (record) =>
@@ -99,11 +97,13 @@ const OrganizationDirectoryDashboard: React.FC = () => {
   }, [records, searchName, searchCategory]);
 
   const handleAdd = () => {
+    scrollToFormTop();
     setEditingOrg(null);
     setShowForm(true);
   };
 
   const handleEdit = (org: Organization) => {
+    scrollToFormTop();
     setEditingOrg(org);
     setShowForm(true);
   };
@@ -227,18 +227,16 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                   >
                     <option value="">Search Category</option>
                     {CATEGORY_OPTIONS.map((cat) => (
-                      <option key={cat} value={`legacy-${cat.toLowerCase()}`}>
+                      <option key={cat} value={cat}>
                         {cat}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                {ability.can('create', 'MasterData') || ability.can('read', 'MasterData') ? (
-                  <button type="button" className="org-add-btn" onClick={handleAdd}>
-                    Add +
-                  </button>
-                ) : null}
+                <button type="button" className="org-add-btn" onClick={handleAdd}>
+                  Add +
+                </button>
               </div>
             </div>
 
@@ -314,16 +312,14 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                               </span>
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              {(ability.can('edit', 'MasterData') || ability.can('read', 'MasterData')) && (
-                                <button
-                                  type="button"
-                                  className="org-action-edit-btn"
-                                  onClick={() => handleEdit(org)}
-                                  title="Edit Organization"
-                                >
-                                  <Edit3 size={15} />
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                className="org-action-edit-btn"
+                                onClick={() => handleEdit(org)}
+                                title="Edit Organization"
+                              >
+                                <Edit3 size={15} />
+                              </button>
                             </td>
                           </tr>
                         );

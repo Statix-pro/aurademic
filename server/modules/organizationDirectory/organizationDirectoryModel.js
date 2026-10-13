@@ -1,4 +1,6 @@
 import db from '../../config/connection.js';
+import '../shared/workflow/directoryWorkflowAdapter.js';
+import workflowService from '../shared/workflow/workflowService.js';
 
 const ORG_FIELDS = [
   'name', 'abbreviation', 'establishment_year', 'sector', 'category', 'tag',
@@ -21,6 +23,9 @@ const normalizePayload = (input = {}) => {
 
 const serialize = (row) => ({
   ...row,
+  establishmentYear: row.establishment_year,
+  linkedIn: row.linked_in,
+  pinCode: row.pin_code,
   date: row.created_at ? new Date(row.created_at).toISOString().slice(0, 10) : null,
 });
 
@@ -40,26 +45,47 @@ export default {
     if (!payload.name) throw new Error('Organization name is required');
     const columns = [...ORG_FIELDS, 'is_active', 'created_by'];
     const values = [...ORG_FIELDS.map((field) => payload[field]), 0, userId || null];
-    const [result] = await db.execute(
-      `INSERT INTO organizations (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
-      values,
-    );
-    return { id: result.insertId, status: 'Pending', ...payload };
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [result] = await connection.execute(`INSERT INTO organizations (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`, values);
+      await workflowService.startWorkflow({ moduleKey: 'organization_directory', recordId: result.insertId, tx: connection });
+      await connection.commit();
+      return { id: result.insertId, status: 'Pending', ...payload };
+    } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
   },
 
   async update(id, input, userId) {
     const payload = normalizePayload(input);
     if (!payload.name) throw new Error('Organization name is required');
     const assignments = ORG_FIELDS.map((field) => `${field} = ?`).join(', ');
-    const [result] = await db.execute(
-      `UPDATE organizations SET ${assignments}, updated_by = ? WHERE id = ?`,
-      [...ORG_FIELDS.map((field) => payload[field]), userId || null, id],
-    );
-    if (!result.affectedRows) throw new Error('Approved organization not found');
-    const [rows] = await db.execute(
-      'SELECT *, DATE(created_at) AS date FROM organizations WHERE id = ?', [id],
-    );
-    return serialize(rows[0]);
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [existing] = await connection.execute(
+        'SELECT id FROM organizations WHERE id = ? AND created_by = ? FOR UPDATE',
+        [id, userId || 0],
+      );
+      if (!existing[0]) throw new Error('Organization not found');
+
+      // Editing reopens this owner's record for review. updated_by identifies
+      // a reviewer, so clear it until an admin makes the next decision.
+      await connection.execute(
+        `UPDATE organizations SET ${assignments}, is_active = 0, updated_by = NULL WHERE id = ?`,
+        [...ORG_FIELDS.map((field) => payload[field]), id],
+      );
+      await workflowService.startWorkflow({ moduleKey: 'organization_directory', recordId: id, tx: connection });
+      const [rows] = await connection.execute(
+        'SELECT *, DATE(created_at) AS date FROM organizations WHERE id = ?', [id],
+      );
+      await connection.commit();
+      return serialize(rows[0]);
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   },
 
   async listPending() {
@@ -73,33 +99,8 @@ export default {
       submitted_by_email: row.submitted_by_email }));
   },
 
-  async review(id, decision, reviewerId, comment) {
-    const connection = await db.getConnection();
-    try {
-      await connection.beginTransaction();
-      const [rows] = await connection.execute(
-        'SELECT * FROM organizations WHERE id = ? AND is_active = 0 FOR UPDATE', [id],
-      );
-      const submission = rows[0];
-      if (!submission) throw new Error('Pending organization not found');
-      if (decision === 'approve') {
-        await connection.execute(
-          'UPDATE organizations SET is_active = 1, status = \'Active\', updated_by = ? WHERE id = ?',
-          [reviewerId, id],
-        );
-      } else {
-        // Preserve rejected rows for the admin count/history. The existing table
-        // has no approval-state column, so updated_by marks the reviewer.
-        await connection.execute(
-          "UPDATE organizations SET is_active = 0, status = 'Inactive', updated_by = ? WHERE id = ?",
-          [reviewerId, id],
-        );
-      }
-      await connection.commit();
-      return { id: Number(id), status: decision === 'approve' ? 'Approved' : 'Rejected' };
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally { connection.release(); }
+  async review(id, decision, actor, comment) {
+    await workflowService.actOnWorkflow({ moduleKey: 'organization_directory', recordId: id, decision: decision === 'approve' ? 'approved' : 'rejected', feedback: comment || (decision === 'reject' ? 'Rejected by super administrator' : null), actor, metadata: { origin: 'api', moduleMeta: { route: 'PATCH /api/admin/organization-submissions/:id/review' } } });
+    return { id: Number(id), status: decision === 'approve' ? 'Approved' : 'Rejected' };
   },
 };

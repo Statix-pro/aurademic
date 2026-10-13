@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 
 import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
-import { useAbility } from '../../../shared/casl/AbilityContext';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import ResourcePersonDirectory, {
   ResourcePerson,
@@ -60,12 +59,8 @@ const apiUpdate = async (
 
 const getPrimary = (p: ResourcePerson) => {
   if (!p.professions?.length) return null;
-  // LEGACY: some older records use 'Current' instead of 'Working'; fall back to it
-  // here for backward compatibility. Remove once all persisted records are migrated
-  // to the 'Working'/'Relieved' status vocabulary.
   return (
     p.professions.find((x) => x.status === 'Working') ||
-    p.professions.find((x) => x.status === 'Current') ||
     p.professions[0]
   );
 };
@@ -75,7 +70,6 @@ const getPrimary = (p: ResourcePerson) => {
    ═══════════════════════════════════════════════════════════ */
 
 const ResourcePersonDirectoryDashboard: React.FC = () => {
-  const ability = useAbility();
   const [records, setRecords] = useState<ResourcePerson[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,15 +80,18 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
   const [searchName, setSearchName] = useState('');
   const [searchCategory, setSearchCategory] = useState('');
 
+  const scrollToFormTop = () => {
+    document.querySelector<HTMLElement>('.app-content')?.scrollTo({ top: 0, behavior: 'auto' });
+  };
+
   const fetchRecords = async () => {
     setIsLoading(true);
     setLoadError(null);
     try {
       const data = await apiGetAll();
       setRecords(data);
-    } catch {
-      setRecords([]);
-      setLoadError('Could not reach the server. Showing empty list — add a record or retry later.');
+    } catch (err: any) {
+      setLoadError(err?.message || 'Failed to load resource persons.');
     } finally {
       setIsLoading(false);
     }
@@ -116,6 +113,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
   }, [records, searchName, searchCategory]);
 
   const handleAdd = () => {
+    scrollToFormTop();
     setEditingPerson(null);
     setShowForm(true);
   };
@@ -127,6 +125,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
   };
 
   const handleEdit = (person: ResourcePerson) => {
+    scrollToFormTop();
     setEditingPerson(person);
     setShowForm(true);
   };
@@ -215,11 +214,9 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {ability.can('create', 'MasterData') || ability.can('read', 'MasterData') ? (
-                  <button type="button" className="rpd-add-btn" onClick={handleAdd}>
-                    <Plus size={15} /> Add
-                  </button>
-                ) : null}
+                <button type="button" className="rpd-add-btn" onClick={handleAdd}>
+                  <Plus size={15} /> Add
+                </button>
               </div>
             </div>
 
@@ -312,16 +309,14 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                             </td>
 
                             <td className="rpd-center">
-                              {(ability.can('edit', 'MasterData') || ability.can('read', 'MasterData')) && (
-                                <button
-                                  type="button"
-                                  className="rpd-icon-btn"
-                                  onClick={() => handleEdit(person)}
-                                  title="Edit Resource Person"
-                                >
-                                  <Edit3 size={15} />
-                                </button>
-                              )}
+                              <button
+                                type="button"
+                                className="rpd-icon-btn"
+                                onClick={() => handleEdit(person)}
+                                title="Edit Resource Person"
+                              >
+                                <Edit3 size={15} />
+                              </button>
                             </td>
                           </tr>
                         );

@@ -1,32 +1,279 @@
-import { Check, X, Search, BriefcaseBusiness, Clock3, CircleCheck, CircleX, Archive } from 'lucide-react';
+import {
+  BriefcaseBusiness,
+  Check,
+  CircleCheck,
+  CircleX,
+  Clock3,
+  Eye,
+  Search,
+  X,
+} from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { Badge } from 'react-bootstrap';
 
-type Organization = Record<string, any> & { id: number };
-type Tab = 'Pending' | 'Approved' | 'Rejected';
-const blue = '#0878bd';
+import CustomButton from '../../../shared/components/ui/CustomButton';
+import CustomCard from '../../../shared/components/ui/CustomCard';
+import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
+import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomTable from '../../../shared/components/ui/CustomTable';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import OrganizationDirectory, { Organization as OrganizationForm } from '../../organizationdirectory/OrganizationDirectory';
+
+type ApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
+type Tab = ApprovalStatus | 'All';
+type Organization = Record<string, any> & { id: number; approvalStatus?: ApprovalStatus };
+
+const BLUE = '#0878bd';
 
 export default function OrganizationApprovalPage() {
   const [rows, setRows] = useState<Organization[]>([]);
-  const [tab, setTab] = useState<Tab | 'All'>('Pending');
+  const [tab, setTab] = useState<Tab>('All');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All categories');
   const [error, setError] = useState('');
-  const load = async () => { try { const response = (await authenticityUtility.get('/admin/organization-submissions')) as any; setRows(response.data || []); setError(''); } catch (err: any) { setError(err?.message || 'Failed to load submissions.'); } };
-  useEffect(() => { void load(); }, []);
-  const review = async (id: number, decision: 'approve' | 'reject') => { try { await authenticityUtility.patch(`/admin/organization-submissions/${id}/review`, { decision }); setRows((current) => current.filter((row) => row.id !== id)); } catch (err: any) { setError(err?.message || 'Failed to review organization.'); } };
-  const counts = { pending: rows.filter((r) => !r.approvalStatus || r.approvalStatus === 'Pending').length, approved: rows.filter((r) => r.approvalStatus === 'Approved').length, rejected: rows.filter((r) => r.approvalStatus === 'Rejected').length, total: rows.length };
-  const filtered = useMemo(() => rows.filter((row) => { const state = row.approvalStatus || 'Pending'; const needle = search.toLowerCase(); return (tab === 'All' || state === tab) && (!needle || [row.name, row.city, row.submitted_by_name].some((v) => String(v || '').toLowerCase().includes(needle))) && (category === 'All categories' || row.category === category); }), [rows, tab, search, category]);
-  const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))];
-  const stat = (icon: React.ReactNode, value: number, label: string, filter?: Tab | 'All') => <div onClick={() => filter && setTab(filter)} style={{ cursor: filter ? 'pointer' : 'default', flex: 1, minWidth: 160, background: '#fff', border: '1px solid #dbe4ed', borderRadius: 14, padding: '14px 16px', boxShadow: '0 6px 18px rgba(15,42,70,.08)' }}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><span style={{ width: 46, height: 46, borderRadius: 12, background: blue, color: '#fff', display: 'grid', placeItems: 'center' }}>{icon}</span><div><div style={{ color: '#65758b', fontSize: 15 }}>{label}</div><div style={{ fontSize: 26, lineHeight: 1.1, fontWeight: 700, color: '#29436a' }}>{value}</div></div></div></div>;
-  return <div style={{ minHeight: '100%', padding: 26, background: '#f1f6fb' }}><div style={{ maxWidth: 1250, margin: '0 auto', background: '#fff', borderRadius: 18, padding: 26, boxShadow: '0 8px 24px rgba(15,42,70,.08)' }}><div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 18, marginBottom: 22, flexWrap: 'wrap' }}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><h2 style={{ color: '#082b50', margin: 0, fontSize: 24, fontWeight: 700 }}>Organization Directory</h2><span style={{ background: '#0878bd', color: '#fff', borderRadius: 12, padding: '8px 18px', fontSize: 14, fontWeight: 700 }}>ADMIN</span></div><div style={{ display: 'flex', gap: 12, alignItems: 'center' }}><div style={{ position: 'relative' }}><Search size={17} style={{ position: 'absolute', left: 13, top: 12, color: '#7890a6' }} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search organization" style={{ width: 230, height: 40, border: '1px solid #d3dfeb', borderRadius: 9, padding: '0 12px 0 36px' }} /></div><select value={category} onChange={(e) => setCategory(e.target.value)} style={{ width: 160, height: 40, border: '1px solid #d3dfeb', borderRadius: 9, padding: '0 10px' }}><option>All categories</option>{categories.map((item) => <option key={item}>{item}</option>)}</select></div></div>{error && <div className="alert alert-danger">{error}</div>}<div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 28 }}>{stat(<BriefcaseBusiness size={22} />, counts.total, 'Total', 'All')}{stat(<Clock3 size={22} />, counts.pending, 'Pending', 'Pending')}{stat(<CircleCheck size={22} />, counts.approved, 'Approved', 'Approved')}{stat(<CircleX size={22} />, counts.rejected, 'Reject', 'Rejected')}</div><div style={{ display: 'none' }}>{(['Pending', 'Approved', 'Rejected'] as Tab[]).map((item) => <button key={item} onClick={() => setTab(item)} style={{ border: 0, background: 'none', padding: '0 4px 14px', color: tab === item ? blue : '#526b84', borderBottom: tab === item ? `3px solid ${blue}` : '3px solid transparent', fontSize: 16, fontWeight: 600 }}>{item} <span style={{ background: '#e6f2fa', borderRadius: 12, padding: '2px 8px', marginLeft: 5 }}>{item === 'Pending' ? counts.pending : item === 'Approved' ? counts.approved : counts.rejected}</span></button>)}</div><div style={{ display: 'none' }}><div style={{ flex: 1, position: 'relative' }}><Search size={18} style={{ position: 'absolute', left: 15, top: 14, color: '#7890a6' }} /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by name, city or submitter" style={{ width: '100%', height: 48, border: '1px solid #d3dfeb', borderRadius: 10, padding: '0 16px 0 44px', fontSize: 16 }} /></div><select value={category} onChange={(e) => setCategory(e.target.value)} style={{ width: 180, border: '1px solid #d3dfeb', borderRadius: 10, padding: '0 14px', fontSize: 16, color: '#24425e' }}><option>All categories</option>{categories.map((item) => <option key={item}>{item}</option>)}</select></div><div style={{ overflowX: 'auto', border: '1px solid #dbe4ed', borderRadius: 12 }}><table className="table mb-0" style={{ minWidth: 850 }}><thead style={{ background: '#f3f7fb' }}><tr><th>Organization</th><th>Category</th><th>City</th><th>Submitted by</th><th>Status</th><th>Action</th></tr></thead><tbody>{filtered.map((row) => <tr key={row.id}><td><strong style={{ color: '#082b50' }}>{row.name}</strong></td><td><span style={{ background: '#e4f2fb', color: blue, borderRadius: 14, padding: '6px 12px' }}>{row.category}</span></td><td>{row.city || '—'}</td><td>{row.submitted_by_name || row.submitted_by_email || '—'}</td><td><span style={{ background: tab === 'Pending' ? '#fff0d6' : '#daf4e5', color: tab === 'Pending' ? '#a46600' : '#147448', borderRadius: 14, padding: '6px 12px', fontWeight: 600 }}>{tab}</span></td><td>{tab === 'Pending' ? <><button className="btn btn-success btn-sm me-2" onClick={() => void review(row.id, 'approve')}><Check size={15} /> Approve</button><button className="btn btn-danger btn-sm" style={{ marginLeft: 8 }} onClick={() => void review(row.id, 'reject')}><X size={15} /> Reject</button></> : <button className="btn btn-light btn-sm"><Archive size={15} /></button>}</td></tr>)}{filtered.length === 0 && <tr><td colSpan={6} className="text-center py-5">No organizations found.</td></tr>}</tbody></table></div></div></div>;
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
+  const [viewing, setViewing] = useState<Organization | null>(null);
+
+  const load = async () => {
+    try {
+      const response = (await authenticityUtility.get('/admin/organization-submissions')) as any;
+      setRows(response.data || []);
+      setError('');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load submissions.');
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const review = async (id: number, decision: 'approve' | 'reject') => {
+    setReviewingId(id);
+    setError('');
+    try {
+      await authenticityUtility.patch(`/admin/organization-submissions/${id}/review`, { decision });
+      const approvalStatus = decision === 'approve' ? 'Approved' : 'Rejected';
+      setRows((current) => current.map((row) =>
+        row.id === id ? { ...row, approvalStatus } : row,
+      ));
+    } catch (err: any) {
+      setError(err?.message || 'Failed to review organization.');
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
+  const counts = useMemo(() => ({
+    pending: rows.filter((row) => (row.approvalStatus || 'Pending') === 'Pending').length,
+    approved: rows.filter((row) => row.approvalStatus === 'Approved').length,
+    rejected: rows.filter((row) => row.approvalStatus === 'Rejected').length,
+    total: rows.length,
+  }), [rows]);
+
+  const categories = useMemo(
+    () => [...new Set(rows.map((row) => row.category).filter(Boolean))] as string[],
+    [rows],
+  );
+  const categoryOptions: OptionType[] = [
+    { value: 'All categories', label: 'All categories' },
+    ...categories.map((item) => ({ value: item, label: item })),
+  ];
+  const filtered = useMemo(() => rows.filter((row) => {
+    const state = row.approvalStatus || 'Pending';
+    const needle = search.toLowerCase();
+    return (tab === 'All' || state === tab) &&
+      (!needle || [row.name, row.city, row.submitted_by_name, row.submitted_by_email]
+        .some((value) => String(value || '').toLowerCase().includes(needle))) &&
+      (category === 'All categories' || row.category === category);
+  }), [rows, tab, search, category]);
+
+  const stat = (icon: React.ReactNode, value: number, label: string, filter: Tab) => (
+    <CustomCard
+      key={label}
+      className="h-100 mb-0"
+      role="button"
+      tabIndex={0}
+      onClick={() => setTab(filter)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') setTab(filter);
+      }}
+      aria-label={`Show ${label.toLowerCase()} organizations`}
+      style={{ cursor: 'pointer' }}
+    >
+      <div className="d-flex align-items-center gap-3 organization-stat-content">
+        <span
+          aria-hidden="true"
+          style={{ width: 40, height: 40, borderRadius: 10, background: BLUE, color: '#fff', display: 'grid', placeItems: 'center' }}
+        >
+          {icon}
+        </span>
+        <div>
+          <div className="text-muted">{label}</div>
+          <div className="fs-4 fw-bold" style={{ color: '#29436a', lineHeight: 1.1 }}>{value}</div>
+        </div>
+      </div>
+    </CustomCard>
+  );
+
+  const columns = [
+    { key: 'name', label: 'Organization', render: (row: Organization) => <strong>{row.name}</strong> },
+    { key: 'category', label: 'Category', render: (row: Organization) => <span className="organization-category">{row.category || '—'}</span> },
+    { key: 'city', label: 'City', render: (row: Organization) => row.city || '—' },
+    {
+      key: 'submitted_by',
+      label: 'Submitted by',
+      render: (row: Organization) => row.submitted_by_name || row.submitted_by_email || '—',
+    },
+    {
+      key: 'approvalStatus',
+      label: 'Status',
+      render: (row: Organization) => {
+        const status = row.approvalStatus || 'Pending';
+        const statusStyle = status === 'Approved'
+          ? { background: '#d9f8e5', color: '#087b43' }
+          : status === 'Rejected'
+            ? { background: '#fde1e5', color: '#c52d43' }
+            : { background: '#fff0d2', color: '#a96800' };
+        return <span style={{ ...statusStyle, display: 'inline-block', padding: '7px 12px', borderRadius: 18, fontWeight: 700, fontSize: 13 }}>{status}</span>;
+      },
+    },
+    {
+      key: 'view',
+      label: 'View',
+      render: (row: Organization) => (
+        <button
+          type="button"
+          onClick={() => setViewing(row)}
+          aria-label="View organization submission"
+          title="View organization submission"
+          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 36, height: 36, padding: 0, border: '1px solid #bfdbfe', borderRadius: 6, background: '#eff6ff', color: '#006db4', cursor: 'pointer' }}
+        >
+          <Eye size={17} />
+        </button>
+      ),
+    },
+  ];
+
+  return (
+    <div className="organization-approval-page p-4">
+      <style>{`
+        .organization-approval-page { min-height: 100%; background: #f1f6fb; color: #29436a; }
+        .organization-approval-card { max-width: 1250px; border: 0; border-radius: 18px; background: #fff; box-shadow: 0 8px 24px rgba(15,42,70,.08); }
+        .organization-approval-title { color: #082b50 !important; font-size: 24px; font-weight: 700; }
+        .organization-admin-badge { background: #0878bd !important; border-radius: 12px !important; color: #fff !important; display: inline-flex; align-items: center; justify-content: center; width: 82px; height: 38px; font-size: .9rem; font-weight: 700; padding: 0 !important; }
+        .organization-approval-header-controls { align-items: center !important; }
+        .organization-approval-header-controls > .position-relative { width: 285px; height: 40px; }
+        .organization-approval-header-controls > .position-relative > svg { left: 14px; z-index: 2; color: #006db4 !important; }
+        .organization-approval-header-controls .custom-input { height: 40px; margin: 0 !important; padding-left: 50px !important; }
+        .organization-approval-header-controls > div[style*='min-width'] { height: 40px; }
+        .organization-approval-card .row.g-3 > [class*='col-'] > .card { height: 108px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); }
+        .organization-approval-table.custom-table { min-width: 980px; margin-bottom: 0; table-layout: auto; color: #092f59; font-size: .9rem; }
+        .organization-approval-table.custom-table thead th { padding: 15px 10px; background: #eef5fd; border-bottom: 1px solid #cddceb; color: #006db4; font-size: 14px; font-weight: 700; text-align: left; }
+        .organization-approval-table.custom-table tbody td { padding: 16px 10px; border-color: #e1e8f0; color: #29436a; vertical-align: middle; }
+        .organization-approval-table.custom-table tbody td:first-child { color: #092f59; font-weight: 700; }
+        .organization-approval-table.custom-table th:nth-child(1), .organization-approval-table.custom-table td:nth-child(1) { width: 18%; }
+        .organization-approval-table.custom-table th:nth-child(2), .organization-approval-table.custom-table td:nth-child(2) { width: 14%; }
+        .organization-approval-table.custom-table th:nth-child(3), .organization-approval-table.custom-table td:nth-child(3) { width: 11%; }
+        .organization-approval-table.custom-table th:nth-child(4), .organization-approval-table.custom-table td:nth-child(4) { width: 16%; }
+        .organization-approval-table.custom-table th:nth-child(5), .organization-approval-table.custom-table td:nth-child(5) { width: 13%; }
+        .organization-approval-table.custom-table th:nth-last-child(2), .organization-approval-table.custom-table td:nth-last-child(2) { width: 8%; text-align: center; }
+        .organization-approval-table.custom-table th:last-child, .organization-approval-table.custom-table td:last-child { width: 20% !important; text-align: center; white-space: nowrap; }
+      `}</style>
+      <CustomCard className="organization-approval-card mx-auto" style={{ maxWidth: 1250 }}>
+        <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
+          <div className="d-flex align-items-center gap-3">
+            <h2 className="organization-approval-title h4 mb-0">Organization Directory Approval</h2>
+            <Badge
+              className="organization-admin-badge"
+              style={{ backgroundColor: '#0878bd', borderRadius: 12, color: '#fff' }}
+            >
+              ADMIN
+            </Badge>
+          </div>
+          <div className="organization-approval-header-controls d-flex align-items-center gap-3 flex-wrap">
+            <div className="position-relative">
+              <Search size={17} className="position-absolute top-50 translate-middle-y ms-3 text-secondary" aria-hidden="true" />
+              <CustomInput
+                name="organization-search"
+                value={search}
+                onChange={setSearch}
+                placeholder="Search organization"
+                className="mb-0"
+              />
+            </div>
+            <div style={{ minWidth: 190 }}>
+              <CustomDropdown
+                name="organization-category"
+                options={categoryOptions}
+                value={categoryOptions.find((option) => option.value === category)}
+                onChange={(option) => {
+                  if (option && !Array.isArray(option) && 'value' in option) {
+                    setCategory(String(option.value));
+                  }
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+        {error && <div className="alert alert-danger" role="alert">{error}</div>}
+
+        <div className="row g-3 mb-4">
+          <div className="col-12 col-sm-6 col-xl-3">{stat(<BriefcaseBusiness size={22} />, counts.total, 'Total', 'All')}</div>
+          <div className="col-12 col-sm-6 col-xl-3">{stat(<Clock3 size={22} />, counts.pending, 'Pending', 'Pending')}</div>
+          <div className="col-12 col-sm-6 col-xl-3">{stat(<CircleCheck size={22} />, counts.approved, 'Approved', 'Approved')}</div>
+          <div className="col-12 col-sm-6 col-xl-3">{stat(<CircleX size={22} />, counts.rejected, 'Rejected', 'Rejected')}</div>
+        </div>
+
+        <CustomTable
+          columns={columns}
+          data={filtered}
+          keyField="id"
+          className="organization-approval-table"
+          emptyMessage="No organizations found."
+          actions={(row: Organization) => row.approvalStatus === 'Pending' || !row.approvalStatus ? (
+            <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap' }}>
+              <button type="button" onClick={() => void review(row.id, 'approve')} disabled={reviewingId !== null} style={{ minWidth: 80, padding: '8px 7px', border: 0, borderRadius: 6, background: '#178b58', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>✓ Approve</button>
+              <button type="button" onClick={() => void review(row.id, 'reject')} disabled={reviewingId !== null} style={{ minWidth: 68, padding: '8px 7px', border: 0, borderRadius: 6, background: '#df3349', color: '#fff', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>× Reject</button>
+            </div>
+          ) : null}
+        />
+        {viewing && (
+          <div className="modal d-block" role="dialog" aria-modal="true" onClick={() => setViewing(null)}>
+            <div
+              className="modal-dialog modal-dialog-scrollable"
+              style={{ maxWidth: '1150px', width: 'calc(100% - 32px)', margin: '1.75rem auto' }}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Organization Details</h5>
+                  <button type="button" className="btn-close" onClick={() => setViewing(null)} aria-label="Close" />
+                </div>
+                <div className="modal-body p-0">
+                  <OrganizationDirectory
+                    editingOrg={viewing as OrganizationForm}
+                    readOnly
+                    onSave={() => undefined}
+                    onCancel={() => setViewing(null)}
+                  />
+                </div>
+                {(viewing.approvalStatus === 'Pending' || !viewing.approvalStatus) && (
+                  <div className="modal-footer">
+                    <CustomButton variant="success" disabled={reviewingId !== null} loading={reviewingId === viewing.id} onClick={() => { void review(viewing.id, 'approve'); setViewing(null); }}>
+                      <Check size={15} /> Approve
+                    </CustomButton>
+                    <CustomButton variant="danger" disabled={reviewingId !== null} onClick={() => { void review(viewing.id, 'reject'); setViewing(null); }}>
+                      <X size={15} /> Reject
+                    </CustomButton>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </CustomCard>
+    </div>
+  );
 }
-
-
-
-
-
-
-
-
-

@@ -148,6 +148,23 @@ const IconProfile = () => (
   </svg>
 );
 
+// Directory — address book
+const IconDirectory = () => (
+  <svg
+    className="sb-icon"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <circle cx="12" cy="9" r="2.5" />
+    <path d="M8 17c.8-2 2.1-3 4-3s3.2 1 4 3" />
+  </svg>
+);
+
 // KPI — bar chart trending up
 const IconKpi = () => (
   <svg
@@ -489,6 +506,45 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
           <span className="sb-text">Task</span>
         </Link>
 
+        {/* 5.1 Directory */}
+        <div className="sb-group">
+          <button
+            className={`sb-link ${
+              isGroupActive(['/organizationdirectorydashboard', '/resourcepersondirectorydashboard'])
+                ? 'active'
+                : ''
+            } ${activeMenu === 'Directory' ? 'open' : ''}`}
+            onClick={() => toggleDropdown('Directory')}
+            title="Directory"
+          >
+            <IconDirectory />
+            <span className="sb-text">Directory</span>
+            <ChevronDown />
+          </button>
+          {isExpanded && activeMenu === 'Directory' && (
+            <div className="sb-submenu">
+              <Link
+                to="/organizationdirectorydashboard"
+                className={`sb-sublink ${
+                  isActive('/organizationdirectorydashboard') ? 'active' : ''
+                }`}
+                onClick={handleLinkClick}
+              >
+                Organizations
+              </Link>
+              <Link
+                to="/resourcepersondirectorydashboard"
+                className={`sb-sublink ${
+                  isActive('/resourcepersondirectorydashboard') ? 'active' : ''
+                }`}
+                onClick={handleLinkClick}
+              >
+                Resource Persons
+              </Link>
+            </div>
+          )}
+        </div>
+
         {/* 6. Approvals */}
         {showAdminMenu && (
           <div className="sb-group">
@@ -499,6 +555,8 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                   '/project-dashboard',
                   '/admin-dashboard',
                   '/admin/budget',
+                  '/admin/organization-approval',
+                  '/admin/resource-person-approval',
                   '/workflow/finance',
                   '/workflow/expenditure',
                 ])
@@ -565,6 +623,24 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                   >
                     Expenditure Approval
                   </Link>
+                )}
+                {showSuperAdminMenu && (
+                  <>
+                    <Link
+                      to="/admin/organization-approval"
+                      className={`sb-sublink ${isActive('/admin/organization-approval') ? 'active' : ''}`}
+                      onClick={handleLinkClick}
+                    >
+                      Organization Approval
+                    </Link>
+                    <Link
+                      to="/admin/resource-person-approval"
+                      className={`sb-sublink ${isActive('/admin/resource-person-approval') ? 'active' : ''}`}
+                      onClick={handleLinkClick}
+                    >
+                      Resource Person Approval
+                    </Link>
+                  </>
                 )}
               </div>
             )}

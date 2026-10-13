@@ -11,7 +11,6 @@ import {
 import React, { useState, useEffect } from 'react';
 
 import './ResourcePersonDirectory.css';
-import { useAbility } from '../../shared/casl/AbilityContext';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 
 /* ─── Types ─────────────────────────────────────────────── */
@@ -56,6 +55,7 @@ interface ResourcePersonDirectoryProps {
   editingPerson: ResourcePerson | null;
   onSave: (personData: Omit<ResourcePerson, 'id' | 'date'>) => void;
   onCancel: () => void;
+  readOnly?: boolean;
 }
 
 const CATEGORY_OPTIONS = [
@@ -192,9 +192,9 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   editingPerson,
   onSave,
   onCancel,
+  readOnly = false,
 }) => {
-  const ability = useAbility();
-  const isReadOnly = !ability.can('read', 'MasterData');
+  const isReadOnly = readOnly;
 
   /* form fields */
   const [category, setCategory] = useState('Academic');

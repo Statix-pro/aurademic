@@ -2,7 +2,6 @@ import { Linkedin, Globe } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
 import './OrganizationDirectory.css';
-import { useAbility } from '../../shared/casl/AbilityContext';
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -30,6 +29,7 @@ interface OrganizationDirectoryProps {
   editingOrg: Organization | null;
   onSave: (orgData: Omit<Organization, 'id' | 'date'>) => void;
   onCancel: () => void;
+  readOnly?: boolean;
 }
 
 const CATEGORY_OPTIONS = [
@@ -49,9 +49,8 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
   editingOrg,
   onSave,
   onCancel,
+  readOnly = false,
 }) => {
-  const ability = useAbility();
-  const isAllowed = ability.can('read', 'MasterData');
   /* form fields */
   const [category, setCategory] = useState('Academic');
   const [name, setName] = useState('');
@@ -94,10 +93,6 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
 
   const handleSubmit = () => {
     setFormError(null);
-    if (!isAllowed) {
-      setFormError('You do not have permission to perform this action.');
-      return;
-    }
     if (!name.trim()) {
       setFormError('Please fill in the Organization Name field.');
       return;
@@ -122,7 +117,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
 
   return (
     <div className="orgd-form-wrapper">
-      <div className="orgd-card">
+      <div className="orgd-card" style={readOnly ? { pointerEvents: 'none' } : undefined}>
         {/* Category Section */}
         <h5 className="orgd-section-title">Category</h5>
         <div className="orgd-category-chips" role="group" aria-label="Category Selector">
@@ -329,19 +324,18 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
           {formError}
         </div>
       )}
-      <div className="orgd-actions-row">
+      {!readOnly && <div className="orgd-actions-row">
         <button
           type="button"
           className="orgd-btn-save"
           onClick={handleSubmit}
-          disabled={!isAllowed}
         >
           {editingOrg !== null ? 'Update Record' : 'Save Record'}
         </button>
         <button type="button" className="orgd-btn-cancel" onClick={onCancel}>
           Cancel
         </button>
-      </div>
+      </div>}
     </div>
   );
 };
