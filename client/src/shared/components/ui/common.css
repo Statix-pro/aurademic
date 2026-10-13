@@ -140,6 +140,19 @@
   overflow: hidden;
 }
 
+/* Fullscreen Overrides */
+.custom-modal .modal-dialog.modal-fullscreen {
+  width: 100vw !important;
+  max-width: none !important;
+  height: 100vh !important;
+  margin: 0 !important;
+}
+
+.custom-modal .modal-dialog.modal-fullscreen .modal-content {
+  height: 100% !important;
+  border-radius: 0 !important;
+}
+
 .custom-modal .modal-header {
   background-color: var(--bg-light);
   border-bottom: 1px solid var(--border-color);

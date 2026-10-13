@@ -6,6 +6,7 @@ import {
   canAccessAdminArea,
   canAccessBudgetApproval,
   canAccessFinanceWorkflow,
+  canAccessGuesthouseWorkflow,
   canAccessModuleWorkflow,
   canManageAccessControl,
   canAccessExpenditureWorkflow,
@@ -87,6 +88,20 @@ export const FinanceWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
 
   if (!user || !canAccessFinanceWorkflow(user)) {
     return <Navigate to="/dashboard" />;
+  }
+
+  return <>{children}</>;
+};
+
+export const GuesthouseWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user || !canAccessGuesthouseWorkflow(user)) {
+    return <Navigate to="/guesthouse-dashboard" />;
   }
 
   return <>{children}</>;

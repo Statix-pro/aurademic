@@ -9,8 +9,35 @@ const uniqueStringArray = (values = []) => [
   ),
 ];
 
-const normalizeRoleCodes = (user?: User | null) =>
-  uniqueStringArray(Array.isArray(user?.roles) ? user.roles : []);
+const normalizeRoleCodes = (user?: User | null) => {
+  if (!user) return [];
+  const rawRoles: string[] = [];
+  if ((user as any).role) rawRoles.push(String((user as any).role));
+  if (Array.isArray(user.roles)) {
+    user.roles.forEach((r) =>
+      rawRoles.push(
+        typeof r === 'object'
+          ? (r as any).role_code || (r as any).name || (r as any).role
+          : String(r),
+      ),
+    );
+  }
+  if (Array.isArray((user as any).user_roles)) {
+    (user as any).user_roles.forEach((r: any) =>
+      rawRoles.push(typeof r === 'object' ? r.role_code || r.name || r.role : String(r)),
+    );
+  }
+  if ((user as any).is_hod || (user as any).isHod || Number((user as any).is_hod) === 1) {
+    rawRoles.push('hod', 'head_of_department');
+  }
+  const designation = String(
+    user.designation || (user as any).designation_name || '',
+  ).toLowerCase();
+  if (designation.includes('hod') || designation.includes('head')) {
+    rawRoles.push('hod', 'head_of_department');
+  }
+  return uniqueStringArray(rawRoles as any);
+};
 
 const normalizePermissionKeys = (user?: User | null) =>
   uniqueStringArray(Array.isArray(user?.permissions) ? user.permissions : []);
@@ -155,24 +182,48 @@ export const canAccessModuleWorkflow = (user: User | null | undefined, moduleKey
     return false;
   }
 
-  if (isSuperAdmin(user)) {
+  if (isSuperAdmin(user) || canAccessAdminArea(user)) {
     return true;
   }
 
-  if (
-    String(moduleKey || '')
-      .trim()
-      .toLowerCase() === 'expenditure' &&
-    canAccessAdminArea(user)
-  ) {
+  const normalized = String(moduleKey || '')
+    .trim()
+    .toLowerCase();
+  const key = normalized === 'events' ? 'event' : normalized;
+
+  const hasPermission = getWorkflowPermissionsForModule(user, key).length > 0;
+  if (hasPermission) {
     return true;
   }
 
-  return getWorkflowPermissionsForModule(user, moduleKey).length > 0;
+  return isAdminOrWorkflowRole(user);
 };
 
 export const canAccessFinanceWorkflow = (user?: User | null) =>
   canAccessModuleWorkflow(user, 'finance');
+
+export type GuesthouseWorkflowStage = 'admin' | 'hod' | 'principal' | 'guesthouse_admin';
+
+export const getGuesthouseWorkflowStage = (user?: User | null): GuesthouseWorkflowStage | null => {
+  if (!user) return null;
+  if (
+    isSuperAdmin(user) ||
+    hasAnyPermission(user, ['guesthouse.workflow.admin', 'guesthouse.manage'])
+  ) {
+    return 'admin';
+  }
+  const stages: GuesthouseWorkflowStage[] = ['hod', 'principal', 'guesthouse_admin'];
+  const permissions = new Set(normalizePermissionKeys(user));
+  return stages.find((stage) => permissions.has(`guesthouse.workflow.${stage}`)) || null;
+};
+
+export const canAccessGuesthouseWorkflow = (user?: User | null) => {
+  if (!user) {
+    return false;
+  }
+
+  return getGuesthouseWorkflowStage(user) !== null;
+};
 
 const isAdminOrWorkflowRole = (user?: User | null) => {
   if (!user) {
@@ -197,22 +248,8 @@ const isAdminOrWorkflowRole = (user?: User | null) => {
   return normalizedRoles.some((role) => workflowRoles.includes(role.toLowerCase()));
 };
 
-export const canAccessExpenditureWorkflow = (user?: User | null) => {
-  if (!user) {
-    return false;
-  }
+export const canAccessExpenditureWorkflow = (user?: User | null) =>
+  canAccessModuleWorkflow(user, 'expenditure');
 
-  // Super admins and admin-area users should be able to open expenditure approvals.
-  if (isSuperAdmin(user) || canAccessAdminArea(user)) {
-    return true;
-  }
-
-  // Check for expenditure workflow permissions
-  const hasWorkflowPermission = canAccessModuleWorkflow(user, 'expenditure');
-  if (hasWorkflowPermission) {
-    return true;
-  }
-
-  // Fallback: check for admin/workflow roles
-  return isAdminOrWorkflowRole(user);
-};
+export const canAccessEventWorkflow = (user?: User | null) =>
+  canAccessModuleWorkflow(user, 'event');

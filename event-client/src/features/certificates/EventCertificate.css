@@ -1,0 +1,574 @@
+/* =========================================
+   Event Certificate Styling — User Website
+   Mirrors the admin-side certificate styles
+   ========================================= */
+
+.event-certificate-tab-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  padding: 10px 0 40px;
+}
+
+/* Toolbar Controls */
+.cert-toolbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px 24px;
+  width: 100%;
+  max-width: 1050px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  flex-wrap: wrap;
+}
+
+.cert-toolbar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 180px;
+}
+
+.cert-toolbar-group label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0;
+}
+
+.cert-toolbar-group select,
+.cert-toolbar-group input {
+  height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 14px;
+  color: #0f172a;
+  background: #f8fafc;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.cert-toolbar-group select:focus,
+.cert-toolbar-group input:focus {
+  border-color: #0284c7;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.cert-toolbar-group .cert-readonly-field {
+  height: 38px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 14px;
+  color: #334155;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+}
+
+.cert-print-btn {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 20px;
+  background: linear-gradient(135deg, #0069ab, #0284c7);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 105, 171, 0.25);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.cert-print-btn:hover {
+  background: linear-gradient(135deg, #00568c, #0369a1);
+  transform: translateY(-1px);
+}
+
+/* Certificate Canvas Container */
+.cert-print-area {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.ksrct-certificate-card {
+  width: 1000px;
+  min-height: 680px;
+  background: #fff8e7;
+  border: 8px solid #0069ab;
+  outline: 4px solid #f59e0b;
+  outline-offset: -14px;
+  position: relative;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+  padding: 24px 32px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* Corner folds */
+.cert-corner-tr-gold {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 60px 60px 0;
+  border-color: transparent #f59e0b transparent transparent;
+  z-index: 3;
+}
+
+.cert-corner-tr-navy {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 46px 46px 0;
+  border-color: transparent #0069ab transparent transparent;
+  z-index: 4;
+}
+
+.cert-corner-bl-navy {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 60px 60px 0 0;
+  border-color: transparent transparent transparent #0069ab;
+  z-index: 3;
+}
+
+.cert-corner-bl-gold {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 46px 46px 0 0;
+  border-color: transparent transparent transparent #f59e0b;
+  z-index: 4;
+}
+
+/* Inner frame */
+.cert-inner-frame {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+/* Top logos row */
+.cert-logos-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.cert-logo-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-width: 80px;
+}
+
+/* KSRCT4 badge */
+.cert-badge-ksrct4 {
+  font-size: 15px;
+  font-weight: 900;
+  color: #0069ab;
+  letter-spacing: -0.5px;
+  line-height: 1;
+}
+
+.cert-badge-ksrct4 .gold-num {
+  color: #f59e0b;
+}
+
+.cert-badge-sub {
+  font-size: 8px;
+  color: #64748b;
+  margin-top: 2px;
+  font-style: italic;
+}
+
+/* 32 Excellence badge */
+.cert-badge-32 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 2px solid #0069ab;
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+
+.num-32 {
+  font-size: 28px;
+  font-weight: 900;
+  color: #0069ab;
+  line-height: 1;
+}
+
+.text-32 {
+  font-size: 8px;
+  font-weight: 700;
+  color: #0069ab;
+  text-align: left;
+  line-height: 1.3;
+}
+
+/* AICTE badge */
+.cert-badge-aicte {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.aicte-ring {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #0069ab;
+  border-radius: 50%;
+  display: block;
+}
+
+.aicte-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: #0069ab;
+}
+
+/* College crest shield */
+.college-crest-shield {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.crest-top {
+  font-size: 7.5px;
+  font-weight: 700;
+  color: #0069ab;
+  text-align: center;
+  line-height: 1.2;
+  max-width: 110px;
+}
+
+.crest-center {
+  width: 50px;
+  height: 50px;
+}
+
+.crest-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.crest-banner {
+  font-size: 7px;
+  font-weight: 700;
+  color: #f59e0b;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+/* NAAC badge */
+.cert-badge-naac {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.naac-eye {
+  width: 28px;
+  height: 16px;
+  border: 2px solid #0069ab;
+  border-radius: 50%;
+  display: block;
+  position: relative;
+}
+
+.naac-grade {
+  font-size: 14px;
+  font-weight: 900;
+  color: #0069ab;
+  line-height: 1;
+}
+
+.naac-sub {
+  font-size: 8px;
+  font-weight: 700;
+  color: #0069ab;
+}
+
+/* NBA badge */
+.cert-badge-nba {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.nba-title {
+  font-size: 20px;
+  font-weight: 900;
+  color: #0069ab;
+  line-height: 1;
+}
+
+.nba-sub {
+  font-size: 6.5px;
+  font-weight: 700;
+  color: #0069ab;
+  max-width: 70px;
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* SDG boxes */
+.sdg-box {
+  border-radius: 4px;
+  padding: 4px;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+}
+
+.sdg-4 {
+  background: #c5192d;
+}
+
+.sdg-9 {
+  background: #fd6925;
+}
+
+.sdg-num {
+  font-size: 22px;
+  font-weight: 900;
+  color: #ffffff;
+  line-height: 1;
+}
+
+.sdg-txt {
+  font-size: 6px;
+  font-weight: 700;
+  color: #ffffff;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* College header */
+.cert-college-header {
+  text-align: center;
+  border-top: 2px solid #0069ab;
+  border-bottom: 1px solid #f59e0b;
+  padding: 6px 0 4px;
+}
+
+.cert-college-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: #0069ab;
+  letter-spacing: 1px;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.cert-college-sub {
+  font-size: 12px;
+  color: #475569;
+  margin-top: 2px;
+}
+
+.cert-college-address {
+  font-size: 11px;
+  color: #475569;
+}
+
+.cert-dept-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0069ab;
+  margin: 2px 0 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Certificate title block */
+.cert-title-block {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.cert-calligraphy-title {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: #0069ab;
+  margin: 0;
+  letter-spacing: 1px;
+}
+
+.cert-title-line {
+  width: 120px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #f59e0b, transparent);
+  margin: 6px auto;
+}
+
+.cert-presented-txt {
+  font-size: 13px;
+  font-style: italic;
+  color: #64748b;
+}
+
+/* Participant name block */
+.cert-participant-block {
+  text-align: center;
+  margin: 6px 0 4px;
+}
+
+.cert-participant-name {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1e293b;
+  letter-spacing: 0.5px;
+}
+
+.cert-participant-dashed-line {
+  width: 300px;
+  height: 1px;
+  border-bottom: 1px dashed #94a3b8;
+  margin: 4px auto 0;
+}
+
+/* Description block */
+.cert-description-block {
+  text-align: center;
+  margin: 4px 0;
+}
+
+.cert-desc-text {
+  font-size: 13px;
+  color: #475569;
+  margin: 0;
+}
+
+.cert-event-title-highlight {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: 16px;
+  font-weight: 700;
+  color: #0069ab;
+  margin: 4px 0 2px;
+}
+
+.cert-event-date-range {
+  font-size: 12px;
+  color: #64748b;
+}
+
+/* Footer row */
+.cert-footer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.cert-meta-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cert-meta-item {
+  font-size: 11px;
+  color: #475569;
+}
+
+.meta-lbl {
+  font-weight: 700;
+  color: #334155;
+}
+
+.cert-signatures-right {
+  display: flex;
+  gap: 32px;
+}
+
+.cert-sig-item {
+  font-size: 11px;
+  font-weight: 600;
+  color: #334155;
+  text-align: center;
+  padding-top: 24px;
+  border-top: 1px solid #334155;
+  min-width: 80px;
+}
+
+/* Website footer */
+.cert-url-footer {
+  text-align: center;
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+/* Print styling */
+@media print {
+  .cert-toolbar {
+    display: none !important;
+  }
+
+  .event-certificate-tab-wrapper {
+    padding: 0;
+  }
+
+  .cert-print-area {
+    width: 100%;
+  }
+
+  .ksrct-certificate-card {
+    box-shadow: none;
+    border: 8px solid #0069ab;
+    outline: 4px solid #f59e0b;
+    outline-offset: -14px;
+    page-break-inside: avoid;
+  }
+}

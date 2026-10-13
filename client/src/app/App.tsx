@@ -8,14 +8,15 @@ import Dashboard from '../features/admin/admindashboard';
 import AdminBudget from '../features/admin/budget/budget-approval/adminbudget';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
+import AdminEventApproval from '../features/admin/events/event-approval/AdminEventApproval';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
+import ProjectFormOptions from '../features/admin/formManagement/ProjectFormOptions';
+import AdminGuesthouseApproval from '../features/admin/guesthouse/guesthouse-approval/AdminGuesthouseApproval';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import PublicationReview from '../features/admin/PublicationReview';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
-import EventDashboard from '../features/events/components/EventDashboard';
-import EventEntry from '../features/events/components/EventEntry';
-import EventPage from '../features/events/components/EventPage';
+import { EventPage, EventCalendarPage } from '../features/events/events';
 import ExpenditureReport from '../features/expenditure/expenditure-report/expenditurereport';
 import ExpenditureApproval from '../features/expenditure/expenditureapproval';
 import FinanceApproval from '../features/finance/financeapproval';
@@ -25,12 +26,17 @@ import ProfilePage from '../features/profile/ProfilePage';
 import ProjectForm from '../features/projects/ProjectForm';
 import Storybook from '../features/storybook/Storybook';
 import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetdashboard';
+import EventDashboard from '../features/user-dashboard/eventdashboard/eventdashboard';
 import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
+import OrganizationDirectoryDashboard from '../features/user-dashboard/organizationdirectorydashboard/OrganizationDirectoryDashboard';
 import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
 import PublicationsPage from '../features/user-dashboard/publicationspage/PublicationsPage';
+import ResourcePersonDirectoryDashboard from '../features/user-dashboard/resourcepersondirectorydashboard/ResourcePersonDirectoryDashboard';
 import UserDashboard from '../features/user-dashboard/userdashboard';
+import WorkOrderDashboard from '../features/user-dashboard/workorderdashboard/WorkOrderDashboard';
+import WorkOrder from '../features/workorder/WorkOrder';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
 import { MsalProvider } from '../shared/components/MsalProvider';
@@ -39,6 +45,7 @@ import {
   AdminRoute,
   BudgetApprovalRoute,
   FinanceWorkflowRoute,
+  GuesthouseWorkflowRoute,
   ModuleWorkflowRoute,
   SuperAdminRoute,
   ExpenditureApprovalRoute,
@@ -75,6 +82,14 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <EventDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/event/new"
+                        element={
+                          <ProtectedRoute>
+                            <EventPage />
                           </ProtectedRoute>
                         }
                       />
@@ -424,15 +439,96 @@ function App() {
                         }
                       />
                       <Route
-                        path="/event-entry"
+                        path="/event/new"
                         element={
                           <ProtectedRoute>
-                            <EventEntry />
+                            <EventPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/event/:eventId"
+                        element={
+                          <ProtectedRoute>
+                            <EventPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/guesthouse-calendar"
+                        element={
+                          <ProtectedRoute>
+                            <EventCalendarPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/event-calendar"
+                        element={
+                          <ProtectedRoute>
+                            <EventCalendarPage />
                           </ProtectedRoute>
                         }
                       />
                       <Route path="/storybook" element={<Storybook />} />
                       <Route path="/" element={<Navigate to="/dashboard" />} />
+
+                      <Route
+                        path="/guesthouse-dashboard"
+                        element={
+                          <ProtectedRoute>
+                            <GuestHouseDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workorderdashboard"
+                        element={
+                          <ProtectedRoute>
+                            <WorkOrderDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workorder/new"
+                        element={
+                          <ProtectedRoute>
+                            <WorkOrder />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workorder/:id"
+                        element={
+                          <ProtectedRoute>
+                            <WorkOrder />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workorder/:id/edit"
+                        element={
+                          <ProtectedRoute>
+                            <WorkOrder />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/resourcepersondirectorydashboard"
+                        element={
+                          <ProtectedRoute>
+                            <ResourcePersonDirectoryDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/organizationdirectorydashboard"
+                        element={
+                          <ProtectedRoute>
+                            <OrganizationDirectoryDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
 
                       {/* UNDER CONSTRUCTION */}
                       <Route
@@ -503,6 +599,38 @@ function App() {
                         }
                       />
                       <Route
+                        path="/admin/guesthouse"
+                        element={
+                          <GuesthouseWorkflowRoute>
+                            <AdminGuesthouseApproval />
+                          </GuesthouseWorkflowRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/event-approval"
+                        element={
+                          <ProtectedRoute>
+                            <AdminEventApproval />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/workflow/:moduleKey"
+                        element={
+                          <ModuleWorkflowRoute>
+                            <WorkflowModulePage />
+                          </ModuleWorkflowRoute>
+                        }
+                      />
+                      <Route
+                        path="/guesthouse/:id/edit"
+                        element={
+                          <ProtectedRoute>
+                            <GuestHouseBooking />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
                         path="/fellowship"
                         element={
                           <ProtectedRoute>
@@ -520,9 +648,9 @@ function App() {
                       />
 
                       {/* Last, and inside the layout: anything no route above
-                          claimed used to render an empty document. Behind
-                          `ProtectedRoute` so a signed-out visitor still goes to
-                          the login screen rather than meeting a 404 first. */}
+                      claimed used to render an empty document. Behind
+                      `ProtectedRoute` so a signed-out visitor still goes to
+                      the login screen rather than meeting a 404 first. */}
                       <Route
                         path="*"
                         element={

@@ -14,6 +14,7 @@ import {
   RotateCcw,
   CreditCard,
   Search,
+  ClipboardList,
 } from 'lucide-react';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -104,6 +105,21 @@ const normalizeWorkflowFiscalYearOptions = (years: unknown[], fallbackYear: numb
   });
   return Array.from(normalized).sort((a, b) => b - a);
 };
+const stagesMatch = (stageA?: string | null, stageB?: string | null) => {
+  const norm = (s?: string | null) => {
+    const raw = String(s || '')
+      .trim()
+      .toLowerCase();
+    if (raw === 'level1' || raw === 'hod_pending' || raw === 'hod') return 'hod';
+    if (raw === 'iqac_pending' || raw === 'iqac') return 'iqac';
+    if (raw === 'principal_pending' || raw === 'principal') return 'principal';
+    return raw;
+  };
+  const a = norm(stageA);
+  const b = norm(stageB);
+  return Boolean(a && b && a === b);
+};
+
 const FINANCE_COORDINATOR_BENEFICIARY_OPTIONS = [
   'All Beneficiary',
   'Centre',
@@ -606,6 +622,7 @@ const buildUpdatedLogSubtitles = (entry: WorkflowTimelineItem) => {
 };
 
 const formatProposalRef = (record: Record<string, any>) => {
+  if (record.proposal_ref) return record.proposal_ref;
   const fiscalYear = Number.parseInt(String(record?.fiscal_year || record?.fiscalYear || ''), 10);
   const createdAt = record?.created_at ? new Date(record.created_at) : null;
   const requestDate = record?.request_date ? new Date(record.request_date) : null;
@@ -621,7 +638,26 @@ const formatProposalRef = (record: Record<string, any>) => {
       : fallbackDate.getFullYear() - (fallbackDate.getMonth() < 3 ? 1 : 0);
   const id = Number(record?.id);
   if (!Number.isFinite(id)) return '-';
-  return `#F-${year}-${String(id).padStart(4, '0')}`;
+  const isEvent = Boolean(
+    record.event_title ||
+    record.eventType ||
+    record.event_type_name ||
+    record.category_name ||
+    record.category ||
+    (record.title && !record.applicant_name),
+  );
+  const prefix = isEvent ? 'EV' : 'F';
+  return `#${prefix}-${year}-${String(id).padStart(4, '0')}`;
+};
+
+const formatEventDate = (dateStr: any) => {
+  if (!dateStr) return '-';
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return String(dateStr);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
 };
 
 interface WorkflowApprovalPageProps {
@@ -1011,6 +1047,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     const permissions = getNormalizedUserPermissions(user);
 
     if (meta?.isSuperAdmin || roles.includes('super_admin')) {
+      if (config.moduleKey === 'event') {
+        return ['iqac_pending'];
+      }
       if (config.moduleKey === 'finance') {
         return ['level1', 'dof', 'principal', 'chairman'];
       }
@@ -1442,7 +1481,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         return 'returned';
       if (isAllProposalsTab && token === 'in_progress' && currentStage) return 'pending';
 
-      if (currentStage && activeStageKey && currentStage === activeStageKey) {
+      const isStageMatch = stagesMatch(currentStage, activeStageKey);
+
+      if (currentStage && activeStageKey && isStageMatch) {
         return 'pending';
       }
 
@@ -1473,7 +1514,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
       // - workflowDecision === 'resubmitted': request went back to an earlier stage,
       //   so ALL later stages' stale decisions should be ignored
       if (token === 'in_progress' && currentStage) {
-        if (currentStage === activeStageKey || workflowDecision === 'resubmitted') {
+        if (isStageMatch || workflowDecision === 'resubmitted') {
           return 'pending';
         }
       }
@@ -1492,7 +1533,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         return 'approved';
 
       if (token.includes('approved') && currentStage) {
-        if (currentStage === activeStageKey) {
+        if (isStageMatch) {
           return 'pending';
         }
 
@@ -1527,7 +1568,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         return true;
       }
 
-      return getRecordCurrentStage(record) === String(stage || '').toLowerCase();
+      const currentStage = getRecordCurrentStage(record);
+      const targetStage = String(stage || '').toLowerCase();
+      if (stagesMatch(currentStage, targetStage)) return true;
+
+      return false;
     },
     [getRecordCurrentStage, resolveStatusCategory],
   );
@@ -3516,7 +3561,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                           Boolean(config.enableSuperAdminDelete) && isSuperAdminView;
                         const isPending =
                           statusCategory === 'pending' &&
-                          recordCurrentStage === activeStage.toLowerCase();
+                          stagesMatch(recordCurrentStage, activeStage);
                         const isActionablePending =
                           isPending ||
                           (isSuperAdminView &&
@@ -3592,7 +3637,34 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                             >
                               <div className="fw-topbar">
                                 <div className="fw-topbar-left">
-                                  {config.moduleKey === 'expenditure' ? (
+                                  {config.moduleKey === 'event' ? (
+                                    <>
+                                      <span className="fw-id">{proposalRef}</span>
+                                      <h5 className="fw-name">
+                                        {record.proposedBy ||
+                                          record.applicant_name ||
+                                          record.user_name ||
+                                          record.faculty_name ||
+                                          'Unknown'}
+                                      </h5>
+                                      {(record.category || record.category_name) && (
+                                        <span className="fw-tag-pill">
+                                          {record.category || record.category_name}
+                                        </span>
+                                      )}
+                                      {(record.eventType ||
+                                        record.event_type_name ||
+                                        record.level ||
+                                        record.level_name) && (
+                                        <span className="fw-tag-pill">
+                                          {record.eventType ||
+                                            record.event_type_name ||
+                                            record.level ||
+                                            record.level_name}
+                                        </span>
+                                      )}
+                                    </>
+                                  ) : config.moduleKey === 'expenditure' ? (
                                     <>
                                       <h5 className="fw-name">
                                         {record.applicant_name ||
@@ -3666,41 +3738,77 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 </div>
 
                                 <div className="fw-topbar-right">
-                                  <div
-                                    className="fw-amounts-container"
-                                    style={{
-                                      display: 'flex',
-                                      gap: '12px',
-                                      textAlign: 'right',
-                                      marginRight: '15px',
-                                    }}
-                                  >
-                                    {amountBoxes.map((box) => (
-                                      <div className="fw-amount-item" key={box.key}>
-                                        <p
-                                          className="fw-amount-label"
-                                          style={{
-                                            margin: 0,
-                                            fontSize: '0.78rem',
-                                            fontWeight: 600,
-                                            opacity: 0.75,
-                                          }}
-                                        >
-                                          {box.label}
-                                        </p>
-                                        <p
-                                          className="fw-amount"
-                                          style={{
-                                            margin: 0,
-                                            fontSize: '1.1rem',
-                                            ...(box.key === 'proposed' ? {} : { color: '#137a3a' }),
-                                          }}
-                                        >
-                                          {formatAmount(box.value)}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
+                                  {config.moduleKey === 'event' ? (
+                                    <div
+                                      className="fw-event-date-box"
+                                      style={{ textAlign: 'right', marginRight: '8px' }}
+                                    >
+                                      <span
+                                        style={{
+                                          fontSize: '0.75rem',
+                                          fontWeight: 600,
+                                          color: '#64748b',
+                                          display: 'block',
+                                          lineHeight: 1,
+                                        }}
+                                      >
+                                        Date
+                                      </span>
+                                      <span
+                                        style={{
+                                          fontSize: '0.95rem',
+                                          fontWeight: 700,
+                                          color: '#0069ab',
+                                          lineHeight: 1.3,
+                                        }}
+                                      >
+                                        {formatEventDate(
+                                          record.date ||
+                                            record.start_date ||
+                                            record.createdAt ||
+                                            record.created_at,
+                                        )}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div
+                                      className="fw-amounts-container"
+                                      style={{
+                                        display: 'flex',
+                                        gap: '12px',
+                                        textAlign: 'right',
+                                        marginRight: '15px',
+                                      }}
+                                    >
+                                      {amountBoxes.map((box) => (
+                                        <div className="fw-amount-item" key={box.key}>
+                                          <p
+                                            className="fw-amount-label"
+                                            style={{
+                                              margin: 0,
+                                              fontSize: '0.78rem',
+                                              fontWeight: 600,
+                                              opacity: 0.75,
+                                            }}
+                                          >
+                                            {box.label}
+                                          </p>
+                                          <p
+                                            className="fw-amount"
+                                            style={{
+                                              margin: 0,
+                                              fontSize: '1.1rem',
+                                              ...(box.key === 'proposed'
+                                                ? {}
+                                                : { color: '#137a3a' }),
+                                            }}
+                                          >
+                                            {formatAmount(box.value)}
+                                          </p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
 
                                   <button
                                     className="fw-icon-btn"
@@ -3755,180 +3863,245 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                               </div>
 
                               <div className="fw-row">
-                                <div className="fw-left">
-                                  {filteredColumns.map((column) => (
-                                    <div key={column.key} className="fw-detail-row">
-                                      <span className="fw-label">{column.label}</span>
-                                      <span className="fw-value">
-                                        {column.render
-                                          ? column.render(record)
-                                          : (record[column.key] ?? '-')}
-                                      </span>
+                                {config.moduleKey === 'event' ? (
+                                  <>
+                                    <div
+                                      className="fw-left"
+                                      style={{ display: 'flex', alignItems: 'center' }}
+                                    >
+                                      <h4
+                                        className="fw-event-title"
+                                        style={{
+                                          margin: '4px 0',
+                                          fontSize: '1.1rem',
+                                          fontWeight: 700,
+                                          color: '#0f172a',
+                                        }}
+                                      >
+                                        {record.title || record.event_title || record.name || '-'}
+                                      </h4>
                                     </div>
-                                  ))}
-                                </div>
 
-                                <div className="fw-right">
-                                  {config.moduleKey === 'finance' &&
-                                    showPrincipalDocumentAction &&
-                                    (principalDocumentUrl ? (
-                                      <button
-                                        type="button"
-                                        className="fw-action-btn fw-action-btn--download"
-                                        title={principalDocumentTitle}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handlePrincipalDocumentDownload(record);
-                                        }}
-                                        disabled={
-                                          principalDocumentActionBusy || !principalDocumentUrl
-                                        }
-                                      >
-                                        <Download size={18} />
-                                      </button>
-                                    ) : canManagePrincipalDocuments &&
-                                      isPrincipalDocumentEligible(record) ? (
-                                      <button
-                                        type="button"
-                                        className="fw-action-btn fw-action-btn--download"
-                                        title="Upload Principal Document"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handlePrincipalDocumentUploadClick(record, recordId);
-                                        }}
-                                        disabled={principalDocumentActionBusy}
-                                      >
-                                        <Upload size={18} />
-                                      </button>
-                                    ) : null)}
-
-                                  {config.moduleKey === 'finance' &&
-                                    principalDocumentUrl &&
-                                    canManagePrincipalDocuments && (
-                                      <>
-                                        <button
-                                          type="button"
-                                          className="fw-action-btn fw-action-btn--download"
-                                          title={`View ${principalDocumentTitle}`}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            window.open(
-                                              principalDocumentUrl,
-                                              '_blank',
-                                              'noopener,noreferrer',
-                                            );
-                                          }}
-                                          disabled={principalDocumentActionBusy}
-                                          style={{ background: '#eef6ff', color: '#184d92' }}
-                                        >
-                                          <Eye size={18} />
-                                        </button>
-                                        <button
-                                          type="button"
-                                          className="fw-action-btn fw-action-btn--download"
-                                          title={`Delete ${principalDocumentTitle}`}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            deletePrincipalDocument(record);
-                                          }}
-                                          disabled={principalDocumentActionBusy}
-                                          style={{ background: '#fef2f2', color: '#dc2626' }}
-                                        >
-                                          <Trash2 size={18} />
-                                        </button>
-                                      </>
-                                    )}
-
-                                  {showWorkflowAnnexureAction && primaryAnnexure && (
-                                    <button
-                                      type="button"
-                                      className="fw-action-btn fw-action-btn--download"
-                                      title={`View Annexure: ${annexureTitle}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleAnnexureView(primaryAnnexure);
-                                      }}
-                                      style={{ background: '#eaf6ff', color: '#075985' }}
-                                    >
-                                      <FileText size={18} />
-                                    </button>
-                                  )}
-
-                                  {Boolean(config.enablePdfPreview) && (
-                                    <button
-                                      type="button"
-                                      className="fw-action-btn fw-action-btn--download"
-                                      title="Open PDF Preview"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handlePdfPreviewClick(recordId, isActionablePending);
+                                    <div
+                                      className="fw-right"
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '10px',
                                       }}
                                     >
-                                      <FileText size={18} />
-                                    </button>
-                                  )}
+                                      <button
+                                        type="button"
+                                        className="fw-action-btn--blue"
+                                        title="View Details"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          navigate(getRecordRoute(recordId, 'view'), {
+                                            state: { isActionablePending },
+                                          });
+                                        }}
+                                      >
+                                        <ClipboardList size={18} />
+                                      </button>
 
-                                  <div className="fw-status-wrap">
-                                    <span className={getStatusClass(statusCategory)}>
-                                      {getDisplayStatus(record)}
-                                    </span>
-                                    {(() => {
-                                      const financeIndicators =
-                                        getFinanceProgressIndicators(record);
-                                      if (!financeIndicators) return null;
-                                      return (
-                                        <>
-                                          {financeIndicators.map((indicator) => (
-                                            <span
-                                              key={indicator.label}
-                                              className={indicator.className}
-                                            >
-                                              {indicator.label}
-                                            </span>
-                                          ))}
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                  <div className="fw-actions-row">
-                                    {isSuperAdminView
-                                      ? !isArchived && (
+                                      <span
+                                        className={`fw-status-pill fw-status-pill--${statusCategory}`}
+                                      >
+                                        {getDisplayStatus(record)}
+                                      </span>
+
+                                      {statusCategory === 'pending' && (
+                                        <div
+                                          className="fw-actions-row"
+                                          style={{ display: 'inline-flex', gap: '6px' }}
+                                        >
+                                          <button
+                                            className="fw-action-btn fw-action-btn--approved"
+                                            title="Approve"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              onApprove(recordId);
+                                            }}
+                                            disabled={
+                                              actingRecordId === recordId || !isActionablePending
+                                            }
+                                          >
+                                            <CheckCircle2 size={18} />
+                                          </button>
+
+                                          <button
+                                            className="fw-action-btn fw-action-btn--returned"
+                                            title="Return"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openActionPopup('return', recordId, proposalRef);
+                                            }}
+                                            disabled={
+                                              actingRecordId === recordId || !isActionablePending
+                                            }
+                                          >
+                                            <RotateCcw size={18} />
+                                          </button>
+
+                                          <button
+                                            className="fw-action-btn fw-action-btn--rejected"
+                                            title="Reject"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openActionPopup('reject', recordId, proposalRef);
+                                            }}
+                                            disabled={
+                                              actingRecordId === recordId || !isActionablePending
+                                            }
+                                          >
+                                            <XCircle size={18} />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="fw-left">
+                                      {filteredColumns.map((column) => (
+                                        <div key={column.key} className="fw-detail-row">
+                                          <span className="fw-label">{column.label}</span>
+                                          <span className="fw-value">
+                                            {column.render
+                                              ? column.render(record)
+                                              : (record[column.key] ?? '-')}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    <div className="fw-right">
+                                      {config.moduleKey === 'finance' &&
+                                        showPrincipalDocumentAction &&
+                                        (principalDocumentUrl ? (
+                                          <button
+                                            type="button"
+                                            className="fw-action-btn fw-action-btn--download"
+                                            title={principalDocumentTitle}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handlePrincipalDocumentDownload(record);
+                                            }}
+                                            disabled={
+                                              principalDocumentActionBusy || !principalDocumentUrl
+                                            }
+                                          >
+                                            <Download size={18} />
+                                          </button>
+                                        ) : canManagePrincipalDocuments &&
+                                          isPrincipalDocumentEligible(record) ? (
+                                          <button
+                                            type="button"
+                                            className="fw-action-btn fw-action-btn--download"
+                                            title="Upload Principal Document"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handlePrincipalDocumentUploadClick(record, recordId);
+                                            }}
+                                            disabled={principalDocumentActionBusy}
+                                          >
+                                            <Upload size={18} />
+                                          </button>
+                                        ) : null)}
+
+                                      {config.moduleKey === 'finance' &&
+                                        principalDocumentUrl &&
+                                        canManagePrincipalDocuments && (
                                           <>
-                                            {isSuperAdminDeleteMode ? (
+                                            <button
+                                              type="button"
+                                              className="fw-action-btn fw-action-btn--download"
+                                              title={`View ${principalDocumentTitle}`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                window.open(
+                                                  principalDocumentUrl,
+                                                  '_blank',
+                                                  'noopener,noreferrer',
+                                                );
+                                              }}
+                                              disabled={principalDocumentActionBusy}
+                                              style={{ background: '#eef6ff', color: '#184d92' }}
+                                            >
+                                              <Eye size={18} />
+                                            </button>
+                                            <button
+                                              type="button"
+                                              className="fw-action-btn fw-action-btn--download"
+                                              title={`Delete ${principalDocumentTitle}`}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                deletePrincipalDocument(record);
+                                              }}
+                                              disabled={principalDocumentActionBusy}
+                                              style={{ background: '#fef2f2', color: '#dc2626' }}
+                                            >
+                                              <Trash2 size={18} />
+                                            </button>
+                                          </>
+                                        )}
+
+                                      {showWorkflowAnnexureAction && primaryAnnexure && (
+                                        <button
+                                          type="button"
+                                          className="fw-action-btn fw-action-btn--download"
+                                          title={`View Annexure: ${annexureTitle}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleAnnexureView(primaryAnnexure);
+                                          }}
+                                          style={{ background: '#eaf6ff', color: '#075985' }}
+                                        >
+                                          <FileText size={18} />
+                                        </button>
+                                      )}
+
+                                      {Boolean(config.enablePdfPreview) && (
+                                        <button
+                                          type="button"
+                                          className="fw-action-btn fw-action-btn--download"
+                                          title="Open PDF Preview"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handlePdfPreviewClick(recordId, isActionablePending);
+                                          }}
+                                        >
+                                          <FileText size={18} />
+                                        </button>
+                                      )}
+
+                                      <div className="fw-status-wrap">
+                                        <span className={getStatusClass(statusCategory)}>
+                                          {getDisplayStatus(record)}
+                                        </span>
+                                        {(() => {
+                                          const financeIndicators =
+                                            getFinanceProgressIndicators(record);
+                                          if (!financeIndicators) return null;
+                                          return (
+                                            <>
+                                              {financeIndicators.map((indicator) => (
+                                                <span
+                                                  key={indicator.label}
+                                                  className={indicator.className}
+                                                >
+                                                  {indicator.label}
+                                                </span>
+                                              ))}
+                                            </>
+                                          );
+                                        })()}
+                                      </div>
+                                      <div className="fw-actions-row">
+                                        {isSuperAdminView
+                                          ? !isArchived && (
                                               <>
-                                                <button
-                                                  className="fw-action-btn fw-action-btn--returned"
-                                                  title="Return"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    openActionPopup(
-                                                      'return',
-                                                      recordId,
-                                                      proposalRef,
-                                                    );
-                                                  }}
-                                                  disabled={
-                                                    actingRecordId === recordId ||
-                                                    !isSuperAdminReturnAllowed
-                                                  }
-                                                >
-                                                  <RotateCcw size={18} />
-                                                </button>
-                                                <button
-                                                  className="fw-action-btn fw-action-btn--rejected"
-                                                  title="Delete"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteRecord(record);
-                                                  }}
-                                                  disabled={actingRecordId === recordId}
-                                                >
-                                                  <Trash2 size={18} />
-                                                </button>
-                                              </>
-                                            ) : (
-                                              statusCategory === 'pending' && (
-                                                <>
+                                                {statusCategory === 'pending' && (
                                                   <button
                                                     className="fw-action-btn fw-action-btn--approved"
                                                     title="Approve"
@@ -3943,14 +4116,37 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                                   >
                                                     <CheckCircle2 size={18} />
                                                   </button>
+                                                )}
 
+                                                <button
+                                                  className="fw-action-btn fw-action-btn--returned"
+                                                  title="Return"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openActionPopup(
+                                                      'return',
+                                                      recordId,
+                                                      proposalRef,
+                                                    );
+                                                  }}
+                                                  disabled={
+                                                    actingRecordId === recordId ||
+                                                    (statusCategory === 'pending'
+                                                      ? !isActionablePending
+                                                      : !isSuperAdminReturnAllowed)
+                                                  }
+                                                >
+                                                  <RotateCcw size={18} />
+                                                </button>
+
+                                                {statusCategory === 'pending' && (
                                                   <button
-                                                    className="fw-action-btn fw-action-btn--returned"
-                                                    title="Return"
+                                                    className="fw-action-btn fw-action-btn--rejected"
+                                                    title="Reject"
                                                     onClick={(e) => {
                                                       e.stopPropagation();
                                                       openActionPopup(
-                                                        'return',
+                                                        'reject',
                                                         recordId,
                                                         proposalRef,
                                                       );
@@ -3960,94 +4156,119 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                                       !isActionablePending
                                                     }
                                                   >
-                                                    <RotateCcw size={18} />
+                                                    <XCircle size={18} />
                                                   </button>
-                                                </>
-                                              )
+                                                )}
+
+                                                {isSuperAdminDeleteMode && (
+                                                  <button
+                                                    className="fw-action-btn fw-action-btn--rejected"
+                                                    title="Delete"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleDeleteRecord(record);
+                                                    }}
+                                                    disabled={actingRecordId === recordId}
+                                                  >
+                                                    <Trash2 size={18} />
+                                                  </button>
+                                                )}
+                                              </>
+                                            )
+                                          : statusCategory === 'pending' && (
+                                              <>
+                                                <button
+                                                  className="fw-action-btn fw-action-btn--approved"
+                                                  title="Approve"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    onApprove(recordId);
+                                                  }}
+                                                  disabled={
+                                                    actingRecordId === recordId ||
+                                                    !isActionablePending
+                                                  }
+                                                >
+                                                  <CheckCircle2 size={18} />
+                                                </button>
+
+                                                <button
+                                                  className="fw-action-btn fw-action-btn--returned"
+                                                  title="Return"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openActionPopup(
+                                                      'return',
+                                                      recordId,
+                                                      proposalRef,
+                                                    );
+                                                  }}
+                                                  disabled={
+                                                    actingRecordId === recordId ||
+                                                    !isActionablePending
+                                                  }
+                                                >
+                                                  <RotateCcw size={18} />
+                                                </button>
+
+                                                <button
+                                                  className="fw-action-btn fw-action-btn--rejected"
+                                                  title="Reject"
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openActionPopup(
+                                                      'reject',
+                                                      recordId,
+                                                      proposalRef,
+                                                    );
+                                                  }}
+                                                  disabled={
+                                                    actingRecordId === recordId ||
+                                                    !isActionablePending
+                                                  }
+                                                >
+                                                  <XCircle size={18} />
+                                                </button>
+                                              </>
                                             )}
-                                          </>
-                                        )
-                                      : statusCategory === 'pending' && (
-                                          <>
-                                            <button
-                                              className="fw-action-btn fw-action-btn--approved"
-                                              title="Approve"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                onApprove(recordId);
-                                              }}
-                                              disabled={
-                                                actingRecordId === recordId || !isActionablePending
-                                              }
-                                            >
-                                              <CheckCircle2 size={18} />
-                                            </button>
 
-                                            <button
-                                              className="fw-action-btn fw-action-btn--returned"
-                                              title="Return"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                openActionPopup('return', recordId, proposalRef);
-                                              }}
-                                              disabled={
-                                                actingRecordId === recordId || !isActionablePending
-                                              }
-                                            >
-                                              <RotateCcw size={18} />
-                                            </button>
-
-                                            <button
-                                              className="fw-action-btn fw-action-btn--rejected"
-                                              title="Reject"
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                openActionPopup('reject', recordId, proposalRef);
-                                              }}
-                                              disabled={
-                                                actingRecordId === recordId || !isActionablePending
-                                              }
-                                            >
-                                              <XCircle size={18} />
-                                            </button>
-                                          </>
+                                        {canCarryForwardCard && (
+                                          <button
+                                            className="fw-action-btn fw-action-btn--download"
+                                            title="Carry Forward Card"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              openCarryForwardPopup(record);
+                                            }}
+                                            disabled={actingRecordId === recordId}
+                                            style={{ background: '#f0fdf4', color: '#15803d' }}
+                                          >
+                                            <CreditCard size={18} />
+                                          </button>
                                         )}
 
-                                    {canCarryForwardCard && (
-                                      <button
-                                        className="fw-action-btn fw-action-btn--download"
-                                        title="Carry Forward Card"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openCarryForwardPopup(record);
-                                        }}
-                                        disabled={actingRecordId === recordId}
-                                        style={{ background: '#f0fdf4', color: '#15803d' }}
-                                      >
-                                        <CreditCard size={18} />
-                                      </button>
-                                    )}
-
-                                    {(isSuperAdminView || !isApproved) && (
-                                      <button
-                                        className="fw-action-btn fw-action-btn--archive"
-                                        title={isArchived ? 'Unarchive' : 'Archive'}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleArchiveToggle(record);
-                                        }}
-                                        disabled={
-                                          archivingIds.has(recordId) ||
-                                          (isSuperAdminView &&
-                                            !isActionablePending &&
-                                            resolveStatusCategory(record) !== 'archived')
-                                        }
-                                      >
-                                        <Archive size={18} />
-                                      </button>
-                                    )}
-                                  </div>
-                                </div>
+                                        {(isSuperAdminView || !isApproved) && (
+                                          <button
+                                            className="fw-action-btn fw-action-btn--archive"
+                                            title={isArchived ? 'Unarchive' : 'Archive'}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleArchiveToggle(record);
+                                            }}
+                                            disabled={
+                                              archivingIds.has(recordId) ||
+                                              (isSuperAdminView &&
+                                                !isActionablePending &&
+                                                resolveStatusCategory(record) !== 'archived')
+                                            }
+                                          >
+                                            <Archive size={18} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>

@@ -24,3 +24,11 @@ uploads/
 *.log
 
 .claude
+.env
+.env.*
+!.env.example
+!.env.template
+server/.env
+server/.env.*
+!server/.env.example
+!server/.env.template

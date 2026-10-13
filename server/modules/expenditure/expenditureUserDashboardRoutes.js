@@ -1,4 +1,5 @@
 import express from 'express';
+
 import expenditureController from './expenditureController.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 

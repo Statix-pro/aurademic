@@ -191,9 +191,15 @@ The `legacy/` folder contains the original individual schema files for reference
 - `01_auth.sql` - Users & authentication tables
 - `02_journals.sql` - Journal tables
 - `03_projects.sql` - Project tables
-- `04_events.sql` - Event tables
 
 These are kept for documentation purposes. **Use the dump for actual setup.**
+
+> `04_events.sql` was **removed** on 2026-08-13. It opened with
+> `DROP TABLE IF EXISTS events, pre_events, resource_persons, …` and then rebuilt
+> the old 4-column `events` table, so running it after the events module
+> migrations destroyed that module. Its design is superseded by
+> `migrations/20260812_events_module.sql`; the tables it created held no data and
+> were never released. Recover it from git history if you need the old design.
 
 ---
 

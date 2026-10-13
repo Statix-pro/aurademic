@@ -1191,7 +1191,18 @@ const financeController = {
 
   async getFinanceRequest(req, res) {
     try {
-      const financeId = toPositiveInt(req.params.id);
+      let rawId = req.params.id;
+      let financeId = toPositiveInt(rawId);
+      if (!financeId && typeof rawId === 'string') {
+        const match = rawId.match(/#?F[-_]\d{4}[-_](\d+)/i);
+        if (match) {
+          financeId = Number.parseInt(match[1], 10) || 0;
+        } else {
+          const digits = rawId.replace(/\D/g, '');
+          if (digits) financeId = Number.parseInt(digits, 10) || 0;
+        }
+      }
+
       if (!financeId) {
         return res.status(400).json({
           success: false,

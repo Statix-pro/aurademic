@@ -1,0 +1,11 @@
+connection lost\nError: connection lost
+    at C:/Users/sweth/OneDrive/Desktop/finalpro/aurademic/server/tests/participantAccommodationPricing.test.js:126:7
+    at file:///C:/Users/sweth/OneDrive/Desktop/finalpro/aurademic/server/node_modules/@vitest/runner/dist/chunk-artifact.js:302:11
+    at file:///C:/Users/sweth/OneDrive/Desktop/finalpro/aurademic/server/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:26
+    at file:///C:/Users/sweth/OneDrive/Desktop/finalpro/aurademic/server/node_modules/@vitest/runner/dist/chunk-artifact.js:2326:20
+    at new Promise (<anonymous>)
+    at runWithCancel (file:///C:/Users/sweth/OneDrive/Desktop/finalpro/aurademic/server/node_modules/@vitest/runner/dist/chunk-artifact.js:2323:10)
+    at file:///C:/Users/sweth/OneDrive/Desktop/finalpro/aurademic/server/node_modules/@vitest/runner/dist/chunk-artifact.js:2305:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/sweth/OneDrive/Desktop/finalpro/aurademic/server/node_modules/@vitest/runner/dist/chunk-artifact.js:2272:10)
+    at file:///C:/Users/sweth/OneDrive/Desktop/finalpro/aurademic/server/node_modules/@vitest/runner/dist/chunk-artifact.js:2955:64

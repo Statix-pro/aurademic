@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+
 const { parse } = require('csv-parse/sync');
 const dotenv = require('dotenv');
 const mysql = require('mysql2/promise');
