@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BriefcaseBusiness, CheckCircle, Clock3, Eye, XCircle } from 'lucide-react';
+import { BriefcaseBusiness, CheckCircle, Clock3, Eye, X, XCircle } from 'lucide-react';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import ResourcePersonDirectory from '../../resourcepersondirectory/ResourcePersonDirectory';
 
