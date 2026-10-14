@@ -23,6 +23,11 @@ export interface Organization {
   date: string;
   status: string; // 'Active' | 'Inactive'
   approvalStatus?: 'Pending' | 'Approved';
+  // LEGACY: accept organization rows from servers that have not yet deployed
+  // the camelCase response serializer. Remove after all API deployments do.
+  establishment_year?: string;
+  linked_in?: string;
+  pin_code?: string;
 }
 
 interface OrganizationDirectoryProps {
@@ -77,16 +82,16 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       setCategory(editingOrg.category || 'Academic');
       setName(editingOrg.name || '');
       setAbbreviation(editingOrg.abbreviation || '');
-      setEstablishmentYear(editingOrg.establishmentYear || '');
+      setEstablishmentYear(editingOrg.establishmentYear ?? editingOrg.establishment_year ?? '');
       setSector(editingOrg.sector || '');
       setTag(editingOrg.tag || '');
       setWebsite(editingOrg.website || '');
-      setLinkedIn(editingOrg.linkedIn || '');
+      setLinkedIn(editingOrg.linkedIn ?? editingOrg.linked_in ?? '');
       setAddress(editingOrg.address || '');
       setCity(editingOrg.city || '');
       setState(editingOrg.state || '');
       setCountry(editingOrg.country || '');
-      setPinCode(editingOrg.pinCode || '');
+      setPinCode(editingOrg.pinCode ?? editingOrg.pin_code ?? '');
       setStatus(editingOrg.status || 'Active');
     }
   }, [editingOrg]);

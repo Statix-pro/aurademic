@@ -8,6 +8,40 @@ import ResourcePersonDirectory, {
   ResourcePerson,
 } from '../../resourcepersondirectory/ResourcePersonDirectory';
 
+type ResourcePersonApiRow = Partial<ResourcePerson> & {
+  first_name?: string;
+  last_name?: string;
+  personal_email?: string;
+  official_email?: string;
+  linked_in?: string;
+  photo_name?: string;
+  photo_path?: string;
+  resume_name?: string;
+  resume_path?: string;
+  created_at?: string;
+};
+
+// LEGACY: normalize rows from servers that have not yet deployed the camelCase
+// resource-person serializer. Remove after all API deployments do.
+const normalizeResourcePerson = (row: ResourcePersonApiRow): ResourcePerson => {
+  const firstName = row.firstName ?? row.first_name ?? '';
+  const lastName = row.lastName ?? row.last_name ?? '';
+
+  return {
+    ...row,
+    firstName,
+    lastName,
+    name: row.name ?? [row.title, firstName, lastName].filter(Boolean).join(' '),
+    personalEmail: row.personalEmail ?? row.personal_email ?? '',
+    officialEmail: row.officialEmail ?? row.official_email ?? '',
+    linkedIn: row.linkedIn ?? row.linked_in ?? '',
+    photoName: row.photoName ?? row.photo_name ?? '',
+    resumeName: row.resumeName ?? row.resume_name ?? '',
+    professions: row.professions ?? [],
+    date: row.date ?? row.created_at ?? '',
+  } as ResourcePerson;
+};
+
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
  * POST   /resource-persons          → { success: true, data: ResourcePerson }   (body: Omit<ResourcePerson, 'id'|'date'>)
@@ -17,7 +51,7 @@ import ResourcePersonDirectory, {
 
 const apiGetAll = async (): Promise<ResourcePerson[]> => {
   const res = (await authenticityUtility.get('/resource-persons')) as any;
-  if (res?.success && Array.isArray(res.data)) return res.data;
+  if (res?.success && Array.isArray(res.data)) return res.data.map(normalizeResourcePerson);
   throw new Error(res?.message || 'Failed to load resource persons.');
 };
 
@@ -43,7 +77,7 @@ const apiCreate = async (
 ): Promise<ResourcePerson> => {
   const formData = buildPersonFormData(personData);
   const res = (await authenticityUtility.postFile('/resource-persons', formData)) as any;
-  if (res?.success && res.data) return res.data;
+  if (res?.success && res.data) return normalizeResourcePerson(res.data);
   throw new Error(res?.message || 'Failed to create resource person.');
 };
 
@@ -53,7 +87,7 @@ const apiUpdate = async (
 ): Promise<ResourcePerson> => {
   const formData = buildPersonFormData(personData);
   const res = (await authenticityUtility.putFile(`/resource-persons/${id}`, formData)) as any;
-  if (res?.success && res.data) return res.data;
+  if (res?.success && res.data) return normalizeResourcePerson(res.data);
   throw new Error(res?.message || 'Failed to update resource person.');
 };
 

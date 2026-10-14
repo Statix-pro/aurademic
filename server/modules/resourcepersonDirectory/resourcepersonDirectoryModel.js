@@ -100,5 +100,32 @@ export default {
     }
     return rows;
   },
-  async review(id, decision, actor, comment) { await workflowService.actOnWorkflow({ moduleKey: 'resource_person_directory', recordId: id, decision: decision === 'approve' ? 'approved' : 'rejected', feedback: comment || (decision === 'reject' ? 'Rejected by super administrator' : null), actor, metadata: { origin: 'api', moduleMeta: { route: 'PATCH /api/admin/resource-person-submissions/:id/review' } } }); return { id: Number(id), status: decision === 'approve' ? 'Approved' : 'Rejected' }; },
+  async review(id, decision, actor, comment) {
+    // LEGACY: submissions created before directory workflows were introduced
+    // have no snapshot. Start their original pending workflow once, then let
+    // the shared workflow service record the reviewer action normally.
+    const currentWorkflow = await workflowService.getWorkflow({
+      moduleKey: 'resource_person_directory',
+      recordId: id,
+    });
+    if (!currentWorkflow) {
+      await workflowService.startWorkflow({
+        moduleKey: 'resource_person_directory',
+        recordId: id,
+      });
+    }
+
+    await workflowService.actOnWorkflow({
+      moduleKey: 'resource_person_directory',
+      recordId: id,
+      decision: decision === 'approve' ? 'approved' : 'rejected',
+      feedback: comment || (decision === 'reject' ? 'Rejected by super administrator' : null),
+      actor,
+      metadata: {
+        origin: 'api',
+        moduleMeta: { route: 'PATCH /api/admin/resource-person-submissions/:id/review' },
+      },
+    });
+    return { id: Number(id), status: decision === 'approve' ? 'Approved' : 'Rejected' };
+  },
 };
