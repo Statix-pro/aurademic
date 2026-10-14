@@ -250,79 +250,6 @@ export const FUNDING_SOURCE_OPTIONS = [
   { value: 'other', label: 'Other' },
 ];
 
-/*
- * A funding scheme's domain and category, picked on Add Scheme and on Form
- * Management. Stored as the label, so value and label are one — the server
- * checks against the same lists in `modules/shared/schemeVocabulary.js`. A
- * scheme funds one project type, and its category comes from that type's list.
- */
-const asOptions = (labels: string[]) => labels.map((label) => ({ value: label, label }));
-
-export const SCHEME_DOMAIN_OPTIONS = asOptions([
-  'Innovation',
-  'Start-up & Entrepreneurship',
-  'Societal Development',
-  'Engineering and Technology',
-  'Science and Technology',
-  'Agriculture and Biotechnology',
-  'Health, Food and Nutrition',
-  'Medicine',
-  'Life Sciences',
-  'Nano Science',
-  'Materials',
-  'Manufacturing',
-  'Electronics',
-  'Textile',
-  'Civil & Infrastructure',
-  'Energy',
-  'Futuristic Technology',
-  'Science, Technology, Engineering and Mathematics (STEM)',
-  'Artificial Intelligence',
-  'Computing Science',
-  'Multidisciplinary',
-  'Environment and Climate',
-  'Social Science',
-  'Traditional Knowledge',
-  'Mathematics',
-]);
-
-export const SCHEME_CATEGORY_OPTIONS_BY_TYPE: Record<string, { value: string; label: string }[]> = {
-  research_project: asOptions([
-    'Research Project',
-    'Product Development',
-    'Community Outreach',
-    'Survey',
-    'Infrastructure',
-    'Incubation/Start-up',
-    'Collaborative Research',
-    'Industrial R&D',
-    'Facilities Access',
-    'Centre of Excellence',
-  ]),
-  event: asOptions([
-    'Seminar',
-    'Workshop',
-    'Conference',
-    'Faculty Development Programme',
-    'Entrepreneurship Development Programme',
-    'Campaign',
-    'Science Day',
-    'Earth Day',
-    'Competition',
-    'Dissemination of Innovative Technology',
-    'Bilateral Workshop',
-    'Bilateral Conference',
-  ]),
-  travel_grant: asOptions(['Conference Travel Grant', 'Research Travel Grant']),
-  fellowship: asOptions([
-    'Post Doctoral Fellowship',
-    'Doctoral Fellowship',
-    'Summer Research Fellowship',
-    'Women Scientist',
-    'Research Scholar Fellowship',
-  ]),
-};
-
 /** An Event or Fellowship's level, valued to match `research_projects.level`. */
 export const LEVEL_OPTIONS = [
   { value: 'international', label: 'International' },
@@ -402,26 +329,12 @@ export const PROJECT_STATUS_OPTIONS = [
   { value: 'closed', label: 'Closed' },
 ];
 
-/** Government of India programmes projects are commonly aligned with. */
-export const NATIONAL_INITIATIVES = [
-  'Atmanirbhar Bharat',
-  'Atal Innovation Mission',
-  'Digital India',
-  'Green Hydrogen Mission',
-  'Jal Jeevan Mission',
-  'Make in India',
-  'National Education Policy 2020',
-  'National Mission on Quantum Technologies',
-  'National Quantum Mission',
-  'National Solar Mission',
-  'Skill India',
-  'Smart Cities Mission',
-  'Startup India',
-  'Svamitva',
-  'Swachh Bharat Mission',
-  'Unnat Bharat Abhiyan',
-  'Vocal for Local',
-];
+/**
+ * Only a completed or closed project has a closing date; the field is hidden
+ * otherwise. The server applies the same rule (`projectPayload.js`).
+ */
+export const statusHasClosingDate = (status: string): boolean =>
+  status === 'completed' || status === 'closed';
 
 /** The 17 UN Sustainable Development Goals, worded as in the journal form. */
 export const SUSTAINABLE_DEVELOPMENT_GOALS = [
@@ -572,7 +485,7 @@ interface ProjectTypeRules {
   asksResearchType: boolean;
   /** Proposal Details asks the level, in the research type's place. */
   asksLevel: boolean;
-  /** A scheme of this type has a domain, shown in Call for Details. */
+  /** A project (and a scheme) of this type has a domain, picked in Call for Details. */
   schemeHasDomain: boolean;
   /** Tabs this type does not need — hidden while they hold nothing. */
   tabsNotRequired: ProjectFormTab[];

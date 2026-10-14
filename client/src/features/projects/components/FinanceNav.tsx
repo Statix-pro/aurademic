@@ -51,12 +51,9 @@ const FinanceNav: React.FC<FinanceNavProps> = ({ form, active, onSelect }) => {
     );
 
     // Actuals can run below zero — a credit against an expenditure head is a
-    // refund — so the meter is held to its own 0–100 range, and the caption
-    // uses the Summary's own word for the figure rather than "spent".
+    // refund — so the caption uses the Summary's own word for the figure
+    // rather than "spent".
     const { budget, actuals } = summary.expenditureTotal;
-    const utilisation = budget
-      ? Math.max(0, Math.min(100, Math.round((actuals / budget) * 100)))
-      : null;
 
     return {
       budget: budget === null ? 'Nothing allotted yet' : `${rupees(budget)} allotted`,
@@ -70,7 +67,6 @@ const FinanceNav: React.FC<FinanceNavProps> = ({ form, active, onSelect }) => {
         budget === null
           ? 'Budget against actuals'
           : `Actuals ${rupees(actuals)} of ${rupees(budget)}`,
-      utilisation,
     };
   }, [
     form.budgetRows,
@@ -123,18 +119,6 @@ const FinanceNav: React.FC<FinanceNavProps> = ({ form, active, onSelect }) => {
             <span className="pf-finance-nav__text">
               <span className="pf-finance-nav__label">{section.label}</span>
               <span className="pf-finance-nav__caption">{captions[section.id]}</span>
-              {section.id === 'summary' && captions.utilisation !== null && (
-                <span
-                  className="pf-finance-nav__meter"
-                  role="meter"
-                  aria-label="Budget utilised"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={captions.utilisation}
-                >
-                  <span style={{ width: `${captions.utilisation}%` }} />
-                </span>
-              )}
             </span>
           </button>
         );
