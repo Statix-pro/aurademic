@@ -1,42 +1,78 @@
 -- ==================================================================
--- Migration: Curate the project form's National Initiatives, Domains
---            and Categories in the admin
+-- Migration: A project's own domain, and the admin-curated project lists
 -- Author: Maheshwaran A K
 -- Date: 2026-10-14
 -- ==================================================================
 --
 -- Description:
--- Three lists the project form offers were fixed in code, so a new entry
--- needed a release:
+-- Two changes to the project form, made together on 2026-10-14.
 --
---   national_initiative  Proposal Details' National Initiatives.
---   domain               A project's domain (Call for Details) and a
---                        scheme's (Form Management).
---   category             A scheme's category, one list per project type
---                        (Form Management and Add Scheme).
+-- 1. A project's own research domain.
+--    Call for Details showed the domain read-only, taken from the selected
+--    scheme (`project_schemes.domain`). Projects under one scheme can work
+--    in different domains, so the domain is now picked per project:
 --
--- This table holds all three, curated on Form Management the way
--- `project_budget_head_options` holds budget heads. Like those heads, a
--- value is stored by name wherever it is used — `project_tags.tag_value`,
--- `research_projects.domain`, `project_schemes.domain` and `.category` —
--- and nothing here references a row by id. Renaming or retiring an entry
--- changes only what the form offers next; a project or scheme that already
--- holds the old name keeps it.
+--      research_projects.domain   Display text, like `project_schemes.domain`,
+--                                 so a VARCHAR rather than an ENUM. The server
+--                                 stores it in the curated list's spelling
+--                                 (see 2), or as entered when the list no
+--                                 longer has it. NULL when not stated, and
+--                                 always for a Travel Grant.
 --
---   list_key      Which list the entry belongs to.
---   project_type  The project type a category is offered for; '' for the
---                 two lists that are not split by type. NOT NULL with ''
---                 rather than NULL so the unique key holds for them too —
---                 MySQL treats NULLs as distinct in a unique index.
+--    `project_schemes.domain` and `project_requests.domain` stay in place.
+--    Form Management still edits a scheme's domain; Add Scheme no longer
+--    asks for one, so a request now stores NULL there.
 --
--- Entries are offered in alphabetical order, so the table keeps no sort
--- order of its own.
+-- 2. National Initiatives, Domains and Categories, curated in the admin.
+--    The three lists were fixed in code, so a new entry needed a release.
+--    `project_vocabulary_options` holds all three, edited on Form
+--    Management the way `project_budget_head_options` holds budget heads:
 --
--- Seeded with the lists exactly as they stood in code
--- (`modules/shared/schemeVocabulary.js` and the client's `constants.ts`).
--- No existing row is touched.
+--      national_initiative  Proposal Details' National Initiatives.
+--      domain               A project's domain (1) and a scheme's.
+--      category             A scheme's category, one list per project type.
+--
+--    Like budget heads, a value is stored by name wherever it is used —
+--    `project_tags.tag_value`, `research_projects.domain`,
+--    `project_schemes.domain` and `.category` — and nothing references a
+--    row here by id. Renaming or retiring an entry changes only what the
+--    form offers next; a record that already holds the old name keeps it.
+--
+--      list_key      Which list the entry belongs to.
+--      project_type  The project type a category is offered for; '' for the
+--                    two lists that are not split by type. NOT NULL with ''
+--                    rather than NULL so the unique key holds for them too —
+--                    MySQL treats NULLs as distinct in a unique index.
+--
+--    Entries are offered in alphabetical order, so the table keeps no sort
+--    order of its own. Seeded with the lists exactly as they stood in code.
+--
+-- Additive only, with no backfill: the project form was not in production
+-- use, so no project holds a domain to carry over. No existing row, balance
+-- or total is touched. Every step is guarded, so a second run is a no-op.
+--
+-- Replaces 20261014_project_domain.sql and
+-- 20261014_create_project_vocabulary_options.sql, which were never applied
+-- outside development; both steps are guarded, so a database that ran either
+-- of them is brought to the same state by this file.
 
--- ── 1. The table ────────────────────────────────────────────────────
+-- ── 1. research_projects.domain ─────────────────────────────────────
+
+SET @has_column = (
+  SELECT COUNT(*) FROM information_schema.columns
+   WHERE table_schema = DATABASE()
+     AND table_name = 'research_projects'
+     AND column_name = 'domain'
+);
+SET @sql = IF(@has_column = 0,
+  'ALTER TABLE `research_projects`
+     ADD COLUMN `domain` varchar(255) DEFAULT NULL
+       COMMENT \'Research domain, a curated domain list label; NULL when not stated\'
+     AFTER `funding_source`',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ── 2a. project_vocabulary_options ──────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS `project_vocabulary_options` (
   `id` int NOT NULL AUTO_INCREMENT,
@@ -51,7 +87,7 @@ CREATE TABLE IF NOT EXISTS `project_vocabulary_options` (
   KEY `idx_project_vocabulary_options_active` (`list_key`,`is_active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
--- ── 2. Seed it with the lists that were in code ─────────────────────
+-- ── 2b. Seed it with the lists that were in code ────────────────────
 -- Guarded on the table being empty rather than written as INSERT IGNORE:
 -- a second run must not resurrect an entry an administrator has since
 -- deleted.
@@ -139,3 +175,4 @@ PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 -- either way, since they are stored by name)
 -- ==================================================================
 -- DROP TABLE IF EXISTS `project_vocabulary_options`;
+-- ALTER TABLE `research_projects` DROP COLUMN `domain`;
