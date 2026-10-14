@@ -57,6 +57,11 @@ router.put(
 //Uploads
 router.post('/journals/:id/upload', upload.single('file'), journalController.uploadFile);
 
+// Reference data for the form. Login-only, like every other journal form route:
+// anyone who may enter a publication needs the list, and there is no permission
+// that all of them hold. Read-only, and only active department names.
+router.get('/journal-departments', journalController.listDepartments);
+
 // Journal Request routes
 router.post('/journal-requests', journalController.createJournalRequest);
 router.get('/journal-requests', journalController.getUserJournalRequests);

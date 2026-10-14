@@ -762,6 +762,18 @@ const journalModel = {
     }
   },
 
+  /**
+   * The active departments, for a student author's Department dropdown. A
+   * student is not in the employee master, so the form stores the department
+   * by name on the author row; only the names are needed here.
+   */
+  async listDepartments() {
+    const [rows] = await db.execute(
+      'SELECT id, name FROM master_departments WHERE is_active = 1 ORDER BY name',
+    );
+    return rows;
+  },
+
   async searchJournals(query) {
     try {
       const queryStr = query ? query.trim() : '';

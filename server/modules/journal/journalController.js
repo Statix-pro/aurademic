@@ -630,6 +630,17 @@ const journalController = {
     }
   },
 
+  /** GET /journal-departments — the Department dropdown on a student author row. */
+  async listDepartments(req, res) {
+    try {
+      const departments = await journalModel.listDepartments();
+      return res.json({ success: true, data: departments });
+    } catch (error) {
+      console.error('Error loading departments:', error);
+      return res.status(500).json({ success: false, message: 'Error loading departments' });
+    }
+  },
+
   async searchAuthor(req, res) {
     try {
       const { query, designation } = req.query;
