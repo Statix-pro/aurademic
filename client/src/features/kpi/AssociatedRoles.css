@@ -44,17 +44,28 @@
 }
 .associated-roles-top-row {
   display: grid;
-  grid-template-columns: 1.4fr 1.15fr 1.28fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   padding: 14px 2px;
   align-items: start;
 }
+.associated-roles-top-row .custom-input-group {
+  margin-bottom: 0;
+}
 .associated-roles-detail-top-row {
   display: grid;
-  grid-template-columns: 1.2fr 0.9fr 1.28fr;
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 18px;
   padding: 14px 2px;
   align-items: start;
+}
+.associated-roles-detail-top-row .associated-roles-levels {
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+}
+.associated-roles-detail-top-row .associated-roles-levels > .associated-roles-checkbox {
+  transform: translateY(8px);
 }
 .associated-roles-top-row > label,
 .associated-roles-credit-card label {
@@ -173,6 +184,7 @@
 .associated-roles-category {
   display: grid;
   gap: 7px;
+  justify-self: center;
 }
 .associated-roles-category-actions {
   display: flex;
@@ -197,16 +209,33 @@
   color: #fff;
   box-shadow: 0 2px 5px rgba(0, 105, 171, 0.22);
 }
+.associated-roles-category-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
 .associated-roles-levels {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: max-content max-content;
+  grid-template-rows: auto 38px;
   align-items: center;
-  gap: 12px 20px;
-  min-height: 55px;
+  column-gap: 20px;
+  row-gap: 7px;
 }
 .associated-roles-levels > .associated-roles-field-label {
-  width: 100%;
-  margin-bottom: -8px;
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+}
+.associated-roles-levels > .associated-roles-checkbox {
+  grid-row: 2;
+  margin-left: 0;
+  padding-left: 0;
+}
+.associated-roles-levels > .associated-roles-checkbox:first-of-type {
+  grid-column: 1;
+}
+.associated-roles-levels > .associated-roles-checkbox:last-of-type {
+  grid-column: 2;
 }
 .associated-roles-levels label {
   display: inline-flex;
@@ -223,7 +252,7 @@
   margin: 0;
   accent-color: var(--associated-roles-blue);
 }
-.associated-roles-levels .associated-roles-round-checkbox .form-check-input {
+.associated-roles-levels .associated-roles-checkbox .form-check-input {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -234,69 +263,81 @@
   border: 0;
   cursor: pointer;
 }
-.associated-roles-levels .associated-roles-round-checkbox .form-check-label {
+.associated-roles-levels .associated-roles-checkbox .form-check-label {
   position: relative;
   padding-left: 28px;
   cursor: pointer;
 }
-.associated-roles-levels .associated-roles-round-checkbox .form-check-label::before,
-.associated-roles-levels .associated-roles-round-checkbox .form-check-label::after {
+.associated-roles-levels .associated-roles-checkbox .form-check-label::before,
+.associated-roles-levels .associated-roles-checkbox .form-check-label::after {
   position: absolute;
   top: 50%;
   content: '';
-  border-radius: 50%;
 }
-.associated-roles-levels .associated-roles-round-checkbox .form-check-label::before {
+.associated-roles-levels .associated-roles-checkbox .form-check-label::before {
   left: 0;
   width: 20px;
   height: 20px;
+  border-radius: 4px;
   border: 2px solid #c3d3e8;
   background-color: #fff;
   transform: translateY(-50%);
 }
-.associated-roles-levels .associated-roles-round-checkbox .form-check-label::after {
-  left: 5px;
-  width: 10px;
-  height: 10px;
-  background-color: var(--associated-roles-blue);
-  transform: translateY(-50%) scale(0);
+.associated-roles-levels .associated-roles-checkbox .form-check-label::after {
+  left: 7px;
+  width: 6px;
+  height: 11px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  border-radius: 0;
+  transform: translateY(-60%) rotate(45deg) scale(0);
   transition: transform 0.2s ease-in-out;
 }
 .associated-roles-levels
-  .associated-roles-round-checkbox
+  .associated-roles-checkbox
   .form-check-input:checked
   + .form-check-label::before {
+  background-color: var(--associated-roles-blue);
   border-color: var(--associated-roles-blue);
 }
 .associated-roles-levels
-  .associated-roles-round-checkbox
+  .associated-roles-checkbox
   .form-check-input:checked
   + .form-check-label::after {
-  transform: translateY(-50%) scale(1);
+  transform: translateY(-60%) rotate(45deg) scale(1);
 }
 .associated-roles-levels
-  .associated-roles-round-checkbox
+  .associated-roles-checkbox
   .form-check-input:focus-visible
   + .form-check-label::before {
   outline: 2px solid rgba(0, 105, 171, 0.32);
   outline-offset: 2px;
 }
-.associated-roles-levels .associated-roles-round-checkbox .form-check-input:disabled {
+.associated-roles-levels .associated-roles-checkbox .form-check-input:disabled {
   cursor: not-allowed;
 }
-.associated-roles-levels
-  .associated-roles-round-checkbox
-  .form-check-input:disabled
-  + .form-check-label {
+.associated-roles-levels .associated-roles-checkbox .form-check-input:disabled + .form-check-label {
   cursor: not-allowed;
   opacity: 0.55;
 }
 .associated-roles-associated-levels {
   display: grid;
-  grid-template-columns: 142px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  gap: 12px;
+  gap: 8px;
   padding: 0 2px 18px;
+}
+.associated-roles-level-input {
+  width: 100%;
+  max-width: none;
+}
+.associated-roles-level-input > .form-control.custom-input {
+  height: 50px !important;
+  min-height: 50px !important;
+  padding: 4px 12px;
+  flex-wrap: nowrap !important;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 .associated-roles-associated-role-content {
   display: grid;
@@ -333,7 +374,7 @@
     600 0.95rem 'Roboto',
     sans-serif;
 }
-.associated-roles-multiselect-toggle {
+.associtheated-roles-multiselect-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -470,6 +511,39 @@
 }
 .associated-roles-credit-section {
   padding: 4px 0 10px;
+}
+.associated-roles-panel > .associated-roles-credit-section {
+  margin: 14px 0 16px;
+  padding: 14px 14px 16px;
+  border: 2px solid var(--associated-roles-blue);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fff 0%, #f5faff 100%);
+  box-shadow: inset 0 0 28px rgba(0, 105, 171, 0.06);
+}
+.associated-roles-panel > .associated-roles-credit-section h2 {
+  padding-bottom: 8px;
+}
+.associated-roles-panel > .associated-roles-credit-section .associated-roles-credit-card {
+  box-shadow: 0 3px 8px rgba(0, 105, 171, 0.24);
+}
+.associated-roles-primary-level {
+  margin: 14px 0 16px;
+  padding: 14px 14px 16px;
+  border: 2px solid var(--associated-roles-blue);
+  border-radius: 10px;
+  background: linear-gradient(135deg, #fff 0%, #f5faff 100%);
+  box-shadow: inset 0 0 28px rgba(0, 105, 171, 0.06);
+}
+.associated-roles-primary-level .associated-roles-credit-section {
+  margin: 0;
+  padding: 0 0 10px;
+  border-bottom: 0;
+}
+.associated-roles-primary-level .associated-roles-credit-section h2 {
+  padding-bottom: 8px;
+}
+.associated-roles-primary-level .associated-roles-credit-card {
+  box-shadow: 0 3px 8px rgba(0, 105, 171, 0.24);
 }
 .associated-roles-credit-section h2 {
   padding-bottom: 7px;

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useAssociatedLevels } from './useAssociatedLevels';
+import { useAuth } from '../../contexts/AuthContext';
 import CustomButton from '../../shared/components/ui/CustomButton';
 import CustomCheckbox from '../../shared/components/ui/CustomCheckbox';
 import CustomInput from '../../shared/components/ui/CustomInput';
@@ -150,6 +151,142 @@ const AssociatedLevelCreditPoints = ({
     </div>
   </section>
 );
+
+const PrimaryRoleResponsibilities = ({ level }: { level: string }) => {
+  const [responsibilities, setResponsibilities] = useState<{ id: string; text: string }[]>([]);
+  const [value, setValue] = useState('');
+  const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
+
+  const addResponsibility = () => {
+    const text = value.trim();
+    if (!text) return;
+    setResponsibilities((current) => [...current, { id: createResponsibilityId(), text }]);
+    setValue('');
+  };
+
+  const deleteResponsibility = (id: string) => {
+    setResponsibilities((current) => current.filter((item) => item.id !== id));
+  };
+
+  const saveEdit = () => {
+    if (!editing) return;
+    const text = editing.text.trim();
+    if (!text) return;
+    setResponsibilities((current) =>
+      current.map((item) => (item.id === editing.id ? { ...item, text } : item)),
+    );
+    setEditing(null);
+  };
+
+  return (
+    <div className="associated-roles-responsibilities">
+      <FieldLabel>{`${level} Responsibilities`}</FieldLabel>
+      <div className="associated-roles-responsibilities-card">
+        {responsibilities.length > 0 && (
+          <div className="associated-roles-responsibility-list">
+            {responsibilities.map((item) => (
+              <div key={item.id} className="associated-roles-responsibility-item">
+                <span className="associated-roles-responsibility-text">{item.text}</span>
+                <div className="associated-roles-responsibility-item-actions">
+                  <button
+                    type="button"
+                    className="associated-roles-responsibility-edit"
+                    onClick={() => setEditing(item)}
+                    aria-label={`Edit responsibility: ${item.text}`}
+                  >
+                    <Pencil size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="associated-roles-responsibility-delete"
+                    onClick={() => deleteResponsibility(item.id)}
+                    aria-label={`Delete responsibility: ${item.text}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="associated-roles-responsibility-input-row">
+          <CustomInput
+            name={`${level}-primary-responsibility`}
+            value={value}
+            onChange={setValue}
+            placeholder="Enter responsibility"
+            className="associated-roles-responsibility-input"
+          />
+          <CustomButton
+            variant="outline-primary"
+            className="associated-roles-responsibility-add"
+            onClick={addResponsibility}
+            aria-label={`Add ${level} responsibility`}
+          >
+            <Plus size={16} aria-hidden="true" />
+          </CustomButton>
+          <CustomButton
+            variant="outline-primary"
+            className="associated-roles-responsibility-edit"
+            onClick={() => {
+              const latest = responsibilities[responsibilities.length - 1];
+              if (latest) setEditing(latest);
+            }}
+            disabled={responsibilities.length === 0}
+            aria-label={`Edit the latest ${level} responsibility`}
+            title="Edit the latest responsibility"
+          >
+            <Pencil size={15} aria-hidden="true" />
+          </CustomButton>
+          <CustomButton
+            variant="outline-danger"
+            className="associated-roles-responsibility-delete"
+            onClick={() => {
+              const latest = responsibilities[responsibilities.length - 1];
+              if (latest) deleteResponsibility(latest.id);
+            }}
+            disabled={responsibilities.length === 0}
+            aria-label={`Delete the latest ${level} responsibility`}
+            title="Delete the latest responsibility"
+          >
+            <Trash2 size={15} aria-hidden="true" />
+          </CustomButton>
+        </div>
+      </div>
+      <CustomModal
+        show={editing !== null}
+        onHide={() => setEditing(null)}
+        title="Edit Responsibility"
+        size="sm"
+      >
+        <CustomInput
+          name={`${level}-edit-responsibility`}
+          value={editing?.text || ''}
+          onChange={(text) => setEditing((current) => (current ? { ...current, text } : current))}
+          placeholder="Enter responsibility"
+          autoFocus
+        />
+        <div className="d-flex justify-content-end gap-2">
+          <CustomButton
+            variant="secondary"
+            className="associated-roles-modal-cancel"
+            onClick={() => setEditing(null)}
+          >
+            Cancel
+          </CustomButton>
+          <CustomButton
+            variant="primary"
+            className="associated-roles-modal-save"
+            onClick={saveEdit}
+            disabled={!editing?.text.trim()}
+          >
+            Save
+          </CustomButton>
+        </div>
+      </CustomModal>
+    </div>
+  );
+};
 
 const AssociatedLevelsTable = ({ onAddDetails }: { onAddDetails: () => void }) => {
   const associatedLevelRows: Array<{
@@ -378,14 +515,14 @@ const AssociatedRoleDetailsPage = ({
               label="Institutional Level"
               checked={isInstitutionalChecked}
               onChange={handleInstitutionalLevelChange}
-              className="associated-roles-round-checkbox"
+              className="associated-roles-checkbox"
             />
             <CustomCheckbox
               name="detail-department-level"
               label="Department Level"
               checked={isDepartmentChecked}
               onChange={handleDepartmentLevelChange}
-              className="associated-roles-round-checkbox"
+              className="associated-roles-checkbox"
             />
           </div>
         </div>
@@ -394,6 +531,7 @@ const AssociatedRoleDetailsPage = ({
           <FieldLabel>Associated Levels</FieldLabel>
           <CustomTagInput
             name="associated-levels-details"
+            className="associated-roles-level-input"
             value={selectedAssociatedLevels}
             onChange={syncAssociatedLevels}
             suggestions={getAvailableLevelOptions()}
@@ -542,8 +680,20 @@ const AssociatedRoleDetailsPage = ({
 const AssociatedRoles = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [category, setCategory] = useState<'Academic' | 'Non-Academic'>('Academic');
-  const [role, setRole] = useState('');
+  const { user } = useAuth();
+  const routeState = location.state as {
+    primaryRoleId?: string;
+    primaryRole?: string;
+    primaryRoleName?: string;
+    email?: string;
+    category?: 'Academic' | 'Non-Academic';
+    resetForm?: boolean;
+  } | null;
+  const [category, setCategory] = useState<'Academic' | 'Non-Academic'>(
+    routeState?.category || 'Academic',
+  );
+  const [role, setRole] = useState(routeState?.primaryRole || '');
+  const isPrimaryRoleLocked = Boolean(routeState?.primaryRoleId);
   const [ratings, setRatings] = useState<{
     [level: string]: { priority: number; frequency: number; workload: number };
   }>({});
@@ -595,6 +745,22 @@ const AssociatedRoles = () => {
     });
   };
 
+  const handleSavePrimaryRole = () => {
+    if (!role.trim()) return;
+
+    navigate('/kpi/faculty-credit-points', {
+      state: {
+        savedRole: {
+          id: routeState?.primaryRoleId || `primary-role-${Date.now()}`,
+          name: routeState?.primaryRoleName || user?.name || '',
+          role: role.trim(),
+          email: routeState?.email || user?.email || '',
+          category,
+        },
+      },
+    });
+  };
+
   return (
     <section className="associated-roles-page" aria-labelledby="associated-roles-title">
       <div className="associated-roles-panel">
@@ -604,7 +770,13 @@ const AssociatedRoles = () => {
 
         <div className="associated-roles-top-row">
           <div className="associated-roles-role-field">
-            <CustomInput name="primary-role" label="Role" value={role} onChange={setRole} />
+            <CustomInput
+              name="primary-role"
+              label="Role"
+              value={role}
+              onChange={setRole}
+              readOnly={isPrimaryRoleLocked}
+            />
           </div>
           <div className="associated-roles-category" aria-label="Category">
             <FieldLabel>Category</FieldLabel>
@@ -616,6 +788,7 @@ const AssociatedRoles = () => {
                   className={category === option ? 'is-selected' : ''}
                   aria-pressed={category === option}
                   onClick={() => setCategory(option)}
+                  disabled={isPrimaryRoleLocked}
                 >
                   {option}
                 </button>
@@ -629,14 +802,14 @@ const AssociatedRoles = () => {
               label="Institutional Level"
               checked={isInstitutionalChecked}
               onChange={handleInstitutionalLevelChange}
-              className="associated-roles-round-checkbox"
+              className="associated-roles-checkbox"
             />
             <CustomCheckbox
               name="department-level"
               label="Department Level"
               checked={isDepartmentChecked}
               onChange={handleDepartmentLevelChange}
-              className="associated-roles-round-checkbox"
+              className="associated-roles-checkbox"
             />
           </div>
         </div>
@@ -645,6 +818,7 @@ const AssociatedRoles = () => {
           <FieldLabel>Associated Levels</FieldLabel>
           <CustomTagInput
             name="associated-levels"
+            className="associated-roles-level-input"
             value={selectedAssociatedLevels}
             onChange={syncAssociatedLevels}
             suggestions={getAvailableLevelOptions()}
@@ -658,43 +832,45 @@ const AssociatedRoles = () => {
         </div>
 
         {selectedAssociatedLevels.map((associatedLevel) => (
-          <AssociatedLevelCreditPoints
-            key={associatedLevel}
-            level={associatedLevel}
-            sectionId={associatedLevel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
-            ratings={ratings[associatedLevel] || { priority: 0, frequency: 0, workload: 0 }}
-            onRatingChange={(field, value) =>
-              setRatings((current) => ({
-                ...current,
-                [associatedLevel]: {
-                  priority: 0,
-                  frequency: 0,
-                  workload: 0,
-                  ...current[associatedLevel],
-                  [field]: value,
-                },
-              }))
-            }
-            creditPointValues={
-              creditPointValues[associatedLevel] || {
-                max: '',
-                score: '',
-                creditPoint: '',
+          <div className="associated-roles-primary-level" key={associatedLevel}>
+            <AssociatedLevelCreditPoints
+              level={associatedLevel}
+              sectionId={associatedLevel.toLowerCase().replace(/[^a-z0-9]+/g, '-')}
+              ratings={ratings[associatedLevel] || { priority: 0, frequency: 0, workload: 0 }}
+              onRatingChange={(field, value) =>
+                setRatings((current) => ({
+                  ...current,
+                  [associatedLevel]: {
+                    priority: 0,
+                    frequency: 0,
+                    workload: 0,
+                    ...current[associatedLevel],
+                    [field]: value,
+                  },
+                }))
               }
-            }
-            onCreditPointChange={(field, value) =>
-              setCreditPointValues((current) => ({
-                ...current,
-                [associatedLevel]: {
+              creditPointValues={
+                creditPointValues[associatedLevel] || {
                   max: '',
                   score: '',
                   creditPoint: '',
-                  ...current[associatedLevel],
-                  [field]: value,
-                },
-              }))
-            }
-          />
+                }
+              }
+              onCreditPointChange={(field, value) =>
+                setCreditPointValues((current) => ({
+                  ...current,
+                  [associatedLevel]: {
+                    max: '',
+                    score: '',
+                    creditPoint: '',
+                    ...current[associatedLevel],
+                    [field]: value,
+                  },
+                }))
+              }
+            />
+            <PrimaryRoleResponsibilities level={associatedLevel} />
+          </div>
         ))}
 
         <AssociatedLevelsTable onAddDetails={handleAddAssociatedLevel} />
@@ -703,8 +879,8 @@ const AssociatedRoles = () => {
           <CustomButton
             variant="primary"
             className="associated-roles-save-button"
-            disabled
-            title="Persistence is not available yet"
+            disabled={!role.trim()}
+            onClick={handleSavePrimaryRole}
           >
             Save
           </CustomButton>

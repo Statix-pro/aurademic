@@ -62,6 +62,7 @@
 
 .faculty-credit-points-table {
   width: 100%;
+  min-width: 0;
   border: 1px solid #e2e8f0;
   border-collapse: separate;
   border-spacing: 0;
@@ -72,24 +73,54 @@
 
 .faculty-credit-points-table th,
 .faculty-credit-points-table td {
-  padding: 12px 10px;
+  padding: 10px 8px;
   border: 0;
   border-right: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
   text-align: center;
   vertical-align: middle;
-  white-space: nowrap;
+  white-space: normal;
+}
+
+.faculty-credit-points-table th:nth-child(1),
+.faculty-credit-points-table td:nth-child(1) {
+  width: 9%;
+}
+
+.faculty-credit-points-table th:nth-child(2),
+.faculty-credit-points-table td:nth-child(2) {
+  width: 22%;
+}
+
+.faculty-credit-points-table th:nth-child(3),
+.faculty-credit-points-table td:nth-child(3) {
+  width: 20%;
+}
+
+.faculty-credit-points-table th:nth-child(4),
+.faculty-credit-points-table td:nth-child(4) {
+  width: 31%;
+}
+
+.faculty-credit-points-table td:nth-child(4) {
+  overflow-wrap: anywhere;
+}
+
+.faculty-credit-points-table th:last-child,
+.faculty-credit-points-table td:last-child {
+  width: 18%;
+  min-width: 176px;
 }
 
 .faculty-credit-points-table th {
-  background: #0069ab;
-  color: #fff;
+  background: #edf6ff;
+  color: #0069ab;
   font-size: 0.875rem;
   font-weight: 700;
 }
 
 .faculty-credit-points-table thead tr:last-child th {
-  border-top: 1px solid #e2e8f0;
+  border-top: 0;
 }
 
 .faculty-credit-points-table thead tr:first-child th:last-child,
@@ -136,7 +167,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 11px;
+  gap: 6px;
+  flex-wrap: nowrap;
+}
+
+.faculty-credit-points-text-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 0;
+  background: transparent;
+  color: #0878cc;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
 .faculty-credit-points-empty-row {
@@ -162,8 +206,8 @@
   padding: 8px 12px;
   border: 1px solid #0069ab;
   border-radius: 8px;
-  background: transparent;
-  color: #0069ab;
+  background: #0069ab;
+  color: #fff;
   font:
     700 0.875rem 'Roboto',
     sans-serif;
@@ -172,7 +216,14 @@
 
 .faculty-credit-points-add-inline:hover,
 .faculty-credit-points-add-inline:focus-visible {
+  background: #005492;
+  color: #fff;
+}
+
+.faculty-credit-points-text-action:hover,
+.faculty-credit-points-text-action:focus-visible {
   background: #eaf5ff;
+  color: #005492;
 }
 
 .faculty-credit-points-add,
@@ -195,11 +246,22 @@
 }
 
 .faculty-credit-points-icon-button {
+  width: 36px;
+  height: 36px;
   color: #0878cc;
+  border: 0;
+  border-radius: 8px;
+  background: #eaf4ff;
+}
+
+.faculty-credit-points-actions .faculty-credit-points-icon-button:nth-child(3) {
+  color: #475569;
+  background: #eef1f5;
 }
 
 .faculty-credit-points-delete {
   color: #ff3a3a;
+  background: #ffeaec;
 }
 
 .faculty-credit-points-add:hover,
@@ -209,7 +271,67 @@
 
 .faculty-credit-points-icon-button:hover,
 .faculty-credit-points-icon-button:focus-visible {
-  opacity: 0.75;
+  background: #dcecff;
+  opacity: 1;
+}
+
+.faculty-credit-points-delete:hover,
+.faculty-credit-points-delete:focus-visible {
+  background: #ffd9dd;
+}
+
+.faculty-credit-points-form {
+  display: grid;
+  gap: 16px;
+}
+
+.faculty-credit-points-category {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+
+.faculty-credit-points-category legend {
+  margin: 0;
+  color: #555;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.faculty-credit-points-category-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.faculty-credit-points-category-actions button {
+  flex: 1;
+  min-height: 38px;
+  padding: 6px 10px;
+  border: 1px solid #dce3eb;
+  border-radius: 8px;
+  background: #fff;
+  color: #7a8491;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.faculty-credit-points-category-actions button.is-selected {
+  border-color: #0069ab;
+  background: #0069ab;
+  color: #fff;
+}
+
+.faculty-credit-points-category-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.faculty-credit-points-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 @media (max-width: 640px) {

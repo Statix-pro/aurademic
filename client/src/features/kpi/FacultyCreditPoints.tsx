@@ -1,32 +1,131 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Eye, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
+import { useAuth } from '../../contexts/AuthContext';
 import CustomButton from '../../shared/components/ui/CustomButton';
+import CustomInput from '../../shared/components/ui/CustomInput';
+import CustomModal from '../../shared/components/ui/CustomModal';
 import CustomTable from '../../shared/components/ui/CustomTable';
 import './FacultyCreditPoints.css';
 
-interface CreditPointRow {
-  serialNumber: number;
+const STORAGE_KEY = 'aurademic.kpi.primary-roles';
+
+type RoleCategory = 'Academic' | 'Non-Academic';
+
+interface PrimaryRoleRow {
+  id: string;
+  name: string;
   role: string;
-  il1: string;
-  il2: string;
-  dl1: string;
-  dl2: string;
+  email: string;
+  category: RoleCategory;
 }
+
+interface RoleForm {
+  name: string;
+  role: string;
+  category: RoleCategory;
+}
+
+const createRoleId = () =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `primary-role-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+const readStoredRoles = (): PrimaryRoleRow[] => {
+  try {
+    const storedRoles = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    return Array.isArray(storedRoles) ? storedRoles : [];
+  } catch {
+    return [];
+  }
+};
 
 const FacultyCreditPoints = () => {
   const navigate = useNavigate();
-  const handleAddAssociatedRole = () =>
-    navigate('/kpi/associated-roles', { state: { resetForm: true } });
+  const location = useLocation();
+  const { user } = useAuth();
+  const [primaryRoles, setPrimaryRoles] = useState<PrimaryRoleRow[]>(readStoredRoles);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [form, setForm] = useState<RoleForm>({
+    name: '',
+    role: '',
+    category: 'Academic',
+  });
 
-  const creditPointRows: CreditPointRow[] = [];
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(primaryRoles));
+  }, [primaryRoles]);
+
+  useEffect(() => {
+    const savedRole = (location.state as { savedRole?: PrimaryRoleRow } | null)?.savedRole;
+    if (savedRole) {
+      setPrimaryRoles((current) => {
+        const exists = current.some((item) => item.id === savedRole.id);
+        return exists
+          ? current.map((item) => (item.id === savedRole.id ? savedRole : item))
+          : [...current, savedRole];
+      });
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
+
+  const openAddModal = () => {
+    setForm({ name: '', role: '', category: 'Academic' });
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+  };
+
+  const savePrimaryRole = () => {
+    const name = form.name.trim();
+    const role = form.role.trim();
+    if (!name || !role) return;
+
+    setPrimaryRoles((current) => [
+      ...current,
+      {
+        id: createRoleId(),
+        name,
+        role,
+        email: user?.email || '',
+        category: form.category,
+      },
+    ]);
+    closeModal();
+  };
+
+  const removePrimaryRole = (row: PrimaryRoleRow) => {
+    if (window.confirm(`Delete primary role "${row.role}"?`)) {
+      setPrimaryRoles((current) => current.filter((item) => item.id !== row.id));
+    }
+  };
+
+  const openDetails = (row: PrimaryRoleRow, mode: 'edit' | 'view' = 'edit') => {
+    navigate('/kpi/associated-roles', {
+      state: {
+        primaryRoleId: row.id,
+        primaryRole: row.role,
+        primaryRoleName: row.name,
+        email: row.email,
+        category: row.category,
+        readOnly: mode === 'view',
+      },
+    });
+  };
+
   const columns = [
-    { key: 'serialNumber', label: 'S.No.' },
-    { key: 'role', label: 'Prime Roles' },
-    { key: 'il1', label: 'I-L1' },
-    { key: 'il2', label: 'I-L2' },
-    { key: 'dl1', label: 'D-L1' },
-    { key: 'dl2', label: 'D-L2' },
+    {
+      key: 'serialNumber',
+      label: 'S.No',
+      render: (_row: PrimaryRoleRow, rowIndex: number) => rowIndex + 1,
+      style: { width: '8%' },
+    },
+    { key: 'role', label: 'Role' },
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Mail ID' },
   ];
 
   return (
@@ -38,47 +137,57 @@ const FacultyCreditPoints = () => {
             <CustomButton
               variant="primary"
               className="faculty-credit-points-add-inline"
-              onClick={handleAddAssociatedRole}
+              onClick={openAddModal}
             >
               <Plus size={14} strokeWidth={3} aria-hidden="true" />
-              Add Prime Role
+              Add Primary Role
             </CustomButton>
           </header>
 
           <div className="faculty-credit-points-table-wrap">
             <CustomTable
               columns={columns}
-              data={creditPointRows}
-              keyField="serialNumber"
+              data={primaryRoles}
+              keyField="id"
               className="faculty-credit-points-table"
-              emptyMessage="No prime roles configured."
-              actions={(row: CreditPointRow) => (
+              emptyMessage="No primary roles configured."
+              actions={(row: PrimaryRoleRow) => (
                 <div className="faculty-credit-points-actions">
                   <CustomButton
                     variant="outline-primary"
-                    className="faculty-credit-points-add"
-                    aria-label={`Add credit points for ${row.role}`}
-                    onClick={handleAddAssociatedRole}
+                    className="faculty-credit-points-icon-button"
+                    aria-label={`View ${row.role}`}
+                    title={`View ${row.role}`}
+                    onClick={() => openDetails(row, 'view')}
                   >
-                    <Plus size={14} strokeWidth={3} aria-hidden="true" />
+                    <Eye size={16} aria-hidden="true" />
+                  </CustomButton>
+                  <CustomButton
+                    variant="outline-primary"
+                    className="faculty-credit-points-icon-button"
+                    aria-label={`Add associated role to ${row.role}`}
+                    title={`Add associated role to ${row.role}`}
+                    onClick={() => openDetails(row)}
+                  >
+                    <Plus size={16} aria-hidden="true" />
                   </CustomButton>
                   <CustomButton
                     variant="outline-secondary"
                     className="faculty-credit-points-icon-button"
                     aria-label={`Edit ${row.role}`}
-                    disabled
-                    title="Editing is unavailable until KPI persistence is implemented"
+                    title={`Edit ${row.role}`}
+                    onClick={() => openDetails(row)}
                   >
-                    <Pencil size={17} strokeWidth={2} aria-hidden="true" />
+                    <Pencil size={16} aria-hidden="true" />
                   </CustomButton>
                   <CustomButton
                     variant="outline-danger"
                     className="faculty-credit-points-icon-button faculty-credit-points-delete"
                     aria-label={`Delete ${row.role}`}
-                    disabled
-                    title="Deleting is unavailable until KPI persistence is implemented"
+                    title={`Delete ${row.role}`}
+                    onClick={() => removePrimaryRole(row)}
                   >
-                    <Trash2 size={18} strokeWidth={2.5} aria-hidden="true" />
+                    <Trash2 size={17} aria-hidden="true" />
                   </CustomButton>
                 </div>
               )}
@@ -86,6 +195,52 @@ const FacultyCreditPoints = () => {
           </div>
         </div>
       </div>
+
+      <CustomModal show={isModalOpen} onHide={closeModal} title="Add Primary Role" size="sm">
+        <div className="faculty-credit-points-form">
+          <CustomInput
+            name="primary-role-name"
+            label="Name"
+            value={form.name}
+            onChange={(value) => setForm((current) => ({ ...current, name: value }))}
+            autoFocus
+          />
+          <CustomInput
+            name="primary-role"
+            label="Primary Role"
+            value={form.role}
+            onChange={(value) => setForm((current) => ({ ...current, role: value }))}
+          />
+          <fieldset className="faculty-credit-points-category">
+            <legend>Category</legend>
+            <div className="faculty-credit-points-category-actions">
+              {(['Academic', 'Non-Academic'] as const).map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  className={form.category === category ? 'is-selected' : ''}
+                  aria-pressed={form.category === category}
+                  onClick={() => setForm((current) => ({ ...current, category }))}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+          </fieldset>
+          <div className="faculty-credit-points-modal-actions">
+            <CustomButton variant="secondary" onClick={closeModal}>
+              Cancel
+            </CustomButton>
+            <CustomButton
+              variant="primary"
+              onClick={savePrimaryRole}
+              disabled={!form.name.trim() || !form.role.trim()}
+            >
+              Save
+            </CustomButton>
+          </div>
+        </div>
+      </CustomModal>
     </section>
   );
 };
