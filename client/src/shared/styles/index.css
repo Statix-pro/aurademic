@@ -113,3 +113,37 @@ code {
   border-color: #bee5eb;
   color: #0c5460;
 }
+
+/* Placeholder hints, portal-wide. A hint is light grey so it never reads as a
+   typed value; on a disabled field — one switched off by its toggle, or a form
+   in view mode — there is nothing to type, so the hint is not shown at all.
+   The disabled rule is !important because screens set their own placeholder
+   colours with class selectors that would otherwise outrank it, and a disabled
+   field's -webkit-text-fill-color would paint the hint dark in Chrome. */
+input::placeholder,
+textarea::placeholder {
+  color: var(--placeholder-color);
+  /* A read-only field's -webkit-text-fill-color (set so its value reads at
+     full strength) would otherwise paint its hint dark too. */
+  -webkit-text-fill-color: var(--placeholder-color);
+  opacity: 1;
+}
+
+input:disabled::placeholder,
+textarea:disabled::placeholder {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* The same for react-select dropdowns styled only by class (prefix
+   `react-select` or `select`), which draw their hint as an element rather than
+   a ::placeholder. */
+.react-select__placeholder,
+.select__placeholder {
+  color: var(--placeholder-color);
+}
+
+.react-select--is-disabled .react-select__placeholder,
+.select--is-disabled .select__placeholder {
+  visibility: hidden;
+}

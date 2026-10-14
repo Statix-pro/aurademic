@@ -13,6 +13,8 @@
   /* Text Colors */
   --text-main: #4f4f6e;
   --text-muted: #6c757d;
+  /* Placeholder hints: a light grey, so they never read as a typed value. */
+  --placeholder-color: #9aa5b4;
   --text-light: #ffffff;
 
   /* Border Colors */

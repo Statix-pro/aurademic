@@ -306,7 +306,7 @@
 }
 
 .expenditurereport-search::placeholder {
-  color: #64748b;
+  color: var(--placeholder-color);
 }
 
 .expenditurereport-search:focus {

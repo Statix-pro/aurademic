@@ -262,9 +262,10 @@ const dropdownBaseStyles = {
     margin: 0,
     padding: 0,
   }),
-  placeholder: (base: any) => ({
+  // Light grey, and hidden while disabled, like every placeholder (index.css).
+  placeholder: (base: any, state: any) => ({
     ...base,
-    color: '#6b7280',
+    color: state.isDisabled ? 'transparent' : 'var(--placeholder-color)',
     display: 'flex',
     alignItems: 'center',
     height: '100%',
