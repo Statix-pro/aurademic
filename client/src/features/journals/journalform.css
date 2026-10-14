@@ -142,6 +142,17 @@
   /* Very light blue tint */
 }
 
+/* Placeholder hints sit below the 14px labels in size and in a quiet grey, so
+   they read as guidance rather than as a value typed into the field. Bootstrap
+   draws them at the input's own 16px otherwise. */
+.journal-form-body .form-control::placeholder,
+.journal-form-body input::placeholder,
+.journal-form-body textarea::placeholder {
+  color: var(--placeholder-color);
+  font-size: 13px;
+  opacity: 1;
+}
+
 .form-control:focus {
   border-color: #0069ab;
   /* Primary blue */
@@ -1682,4 +1693,99 @@ input[type='checkbox'],
    #0069ab — bring the form's inline labels back onto the palette. */
 .journal-form-body .text-primary {
   color: #0069ab !important;
+}
+
+/* Article Details sits beside the taller Journal Details card and is stretched
+   to its height. Rather than leave that height as an empty band under the last
+   field, the fields above it share it evenly, so the last field ends level with
+   the other card's last row. A field block grows only into spare room: when
+   this card is the taller one, nothing changes. */
+.journal-card-spread {
+  display: flex;
+  flex-direction: column;
+}
+
+.journal-card-spread > .mb-3:not(:last-child) {
+  flex: 1 0 auto;
+}
+
+/* A dropdown with nothing picked reads like the placeholder hints beside it. */
+.journal-form-body select.journal-select-empty {
+  color: #9aa5b4;
+  font-size: 13px;
+}
+
+.journal-form-body select.journal-select-empty option {
+  color: #212529;
+  font-size: 14px;
+}
+
+/* Status updates: a floating bell (the budget page's guidelines trigger, in this
+   form's palette) that opens the updates in a panel over the form. */
+.journal-updates-trigger {
+  position: fixed;
+  top: 85px;
+  right: 40px;
+  padding: 10px;
+  z-index: 900;
+}
+
+.journal-updates-button {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  color: #0069ab;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.journal-updates-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+.journal-updates-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+/* `.journal-form-body` is on the panel too, so the form styles the updates use
+   on the page (cards, inputs, placeholders) still apply inside the portal. */
+.journal-updates-panel {
+  position: relative;
+  width: min(960px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 28px 24px 8px;
+  border-radius: 16px;
+  background: #f5f8fd;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+}
+
+.journal-updates-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  border: none;
+  background: transparent;
+  color: #6c757d;
+  cursor: pointer;
+}
+
+.journal-updates-close:hover {
+  color: #0069ab;
 }
