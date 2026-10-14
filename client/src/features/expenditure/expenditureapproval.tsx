@@ -674,10 +674,11 @@ const BUDGET_SELECT_STYLES = {
       textAlign: 'center !important',
     },
   }),
-  placeholder: (base: any) => ({
+  // Light grey, and hidden while disabled, like every placeholder (index.css).
+  placeholder: (base: any, state: any) => ({
     ...base,
     textAlign: 'center',
-    color: '#999',
+    color: state.isDisabled ? 'transparent' : 'var(--placeholder-color)',
     margin: 0,
     position: 'static',
     transform: 'none',

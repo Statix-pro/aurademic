@@ -81,9 +81,10 @@ const AdminBudgetDashboard: React.FC = () => {
         borderColor: state.isFocused ? '#0069ab' : 'rgba(15, 23, 42, 0.3)',
       },
     }),
-    placeholder: (base: any) => ({
+    // Light grey, and hidden while disabled, like every placeholder (index.css).
+    placeholder: (base: any, state: any) => ({
       ...base,
-      color: '#64748b',
+      color: state.isDisabled ? 'transparent' : 'var(--placeholder-color)',
     }),
     singleValue: (base: any) => ({
       ...base,

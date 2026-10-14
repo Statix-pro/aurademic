@@ -111,9 +111,11 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
       ...provided,
       color: 'var(--text-main)',
     }),
-    placeholder: (provided: any) => ({
+    // Light grey like every other hint, and hidden while the field is disabled
+    // (see the placeholder rules in shared/styles/index.css).
+    placeholder: (provided: any, state: any) => ({
       ...provided,
-      color: 'var(--text-muted)',
+      color: state.isDisabled ? 'transparent' : 'var(--placeholder-color)',
     }),
   };
 
