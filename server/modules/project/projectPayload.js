@@ -10,7 +10,7 @@
  * Kept free of database and filesystem access so it can be unit tested.
  */
 
-import { SCHEME_PROJECT_TYPES } from '../shared/schemeVocabulary.js';
+import { SCHEME_PROJECT_TYPES, schemeHasDomain } from '../shared/schemeVocabulary.js';
 
 export const DRIVEN_BY_VALUES = ['faculty', 'student'];
 
@@ -30,6 +30,12 @@ export const LEVELS = ['international', 'national'];
  */
 const ASKS_RESEARCH_TYPE = ['research_project'];
 const ASKS_LEVEL = ['event', 'fellowship'];
+
+/**
+ * The project statuses that have a closing date. An ongoing project has not
+ * closed, so the form hides the date until the status is one of these.
+ */
+const HAS_CLOSING_DATE = ['completed', 'closed'];
 
 export const MEMBER_TYPES = ['faculty', 'student', 'external'];
 
@@ -418,6 +424,20 @@ export function toEnum(value, allowed, field, errors, { fallback = null } = {}) 
 }
 
 /**
+ * A value from one of the admin-curated lists (`project_vocabulary_options`),
+ * stored in its curated case when the list has it, so `artificial
+ * intelligence` and `Artificial Intelligence` are one domain. A value the list
+ * does not have is kept as submitted, trimmed and bounded, the way a retired
+ * budget head is: the list is edited in the admin, and a project that holds
+ * a since-renamed entry must still save. Null when empty.
+ */
+export function toCuratedLabel(value, curated = []) {
+  const text = trimmed(value).slice(0, 255);
+  if (!text) return null;
+  return curated.find((entry) => entry.toLowerCase() === text.toLowerCase()) ?? text;
+}
+
+/**
  * The Indian financial year (April–March) an ISO date falls in, as `2026-27`.
  * Used to fill a ledger row's year when the form left the column blank, so the
  * Transaction Summary can still group the row.
@@ -565,7 +585,7 @@ function normalizeCollaborators(raw, enabled, errors) {
         if (!row.organization_id && !row.organization_name) {
           errors.push({
             field: `${field}.organization`,
-            message: 'Select a collaborating organization.',
+            message: 'Enter the collaborating organization.',
           });
         }
         if (row.contact_email && !EMAIL_PATTERN.test(row.contact_email)) {
@@ -1559,7 +1579,12 @@ function normalizeDocumentTransactions(raw, errors, keysWithDocuments = new Set(
  */
 export function normalizeProjectPayload(
   input = {},
-  { rowKeysWithDocuments = [], documentRowKeys = {}, budgetHeadNames = [] } = {},
+  {
+    rowKeysWithDocuments = [],
+    documentRowKeys = {},
+    budgetHeadNames = [],
+    vocabulary = { nationalInitiatives: [], domains: [] },
+  } = {},
 ) {
   const errors = [];
   const body = input && typeof input === 'object' ? input : {};
@@ -1585,6 +1610,13 @@ export function normalizeProjectPayload(
     'project_type',
     errors,
     { fallback: 'research_project' },
+  );
+
+  const projectStatus = toEnum(
+    body.project_status ?? body.projectStatus,
+    PROJECT_STATUSES,
+    'project_status',
+    errors,
   );
 
   const project = {
@@ -1622,6 +1654,9 @@ export function normalizeProjectPayload(
       'funding_source',
       errors,
     ),
+    // The project's own domain, not its scheme's: projects under one scheme
+    // can work in different domains. A travel grant has none.
+    domain: schemeHasDomain(projectType) ? toCuratedLabel(body.domain, vocabulary.domains) : null,
     scheme_id: toId(body.scheme_id ?? body.schemeId),
 
     collaborators_enabled: collaboratorsEnabled,
@@ -1693,17 +1728,12 @@ export function normalizeProjectPayload(
       'project_start_date',
       errors,
     ),
-    project_closing_date: toDate(
-      body.project_closing_date ?? body.projectClosingDate,
-      'project_closing_date',
-      errors,
-    ),
-    project_status: toEnum(
-      body.project_status ?? body.projectStatus,
-      PROJECT_STATUSES,
-      'project_status',
-      errors,
-    ),
+    // Like research type and level: a date left in state after the status
+    // went back to Ongoing is hidden on the form, so it is not saved either.
+    project_closing_date: HAS_CLOSING_DATE.includes(projectStatus)
+      ? toDate(body.project_closing_date ?? body.projectClosingDate, 'project_closing_date', errors)
+      : null,
+    project_status: projectStatus,
 
     // The six typed outcome counts are no longer written from the form: the
     // Outcomes tab's rows are the record now. Leaving the columns out of the
@@ -1735,9 +1765,17 @@ export function normalizeProjectPayload(
     project,
     investigators: normalizeInvestigators(body.investigators, errors),
     tags: {
-      national_initiative: toStringArray(body.national_initiatives ?? body.nationalInitiatives).map(
-        (value) => value.slice(0, 255),
-      ),
+      // `project_tags` is unique on the value under a case-insensitive
+      // collation, so two casings of one initiative are kept once — in the
+      // curated case when the list has it — rather than failing the save.
+      national_initiative: [
+        ...new Map(
+          toStringArray(body.national_initiatives ?? body.nationalInitiatives)
+            .map((value) => toCuratedLabel(value, vocabulary.nationalInitiatives))
+            .filter(Boolean)
+            .map((value) => [value.toLowerCase(), value]),
+        ).values(),
+      ],
       sdg: toStringArray(body.sdgs).map((value) => value.slice(0, 255)),
     },
     collaborators: normalizeCollaborators(body.collaborators, collaboratorsEnabled, errors),

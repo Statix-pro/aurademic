@@ -8,6 +8,20 @@ import formOptionsModel from './formOptionsModel.js';
 const respondWithError = (res, error) =>
   res.status(error.statusCode ?? 500).json({ status: 'error', message: error.message });
 
+/**
+ * The admin tab's path segment for each `project_vocabulary_options` list. The
+ * routes accept only these, so an unknown segment never reaches a handler.
+ */
+const VOCABULARY_LIST_BY_PATH = {
+  'national-initiatives': 'national_initiative',
+  domains: 'domain',
+  categories: 'category',
+};
+
+/** The same rule as `respondWithError`, in the `{ success, … }` envelope. */
+const respondWithEnvelopeError = (res, error) =>
+  res.status(error.statusCode ?? 500).json({ success: false, message: error.message });
+
 const formOptionsController = {
   async getAllOptions(req, res) {
     try {
@@ -258,6 +272,62 @@ const formOptionsController = {
       });
     } catch (error) {
       return respondWithError(res, error);
+    }
+  },
+  // Project vocabulary — National Initiatives, Domains, Categories
+
+  async getProjectVocabulary(req, res) {
+    try {
+      const listKey = VOCABULARY_LIST_BY_PATH[req.params.list];
+      const entries = await formOptionsModel.getProjectVocabulary(listKey);
+      return res.json({ success: true, data: entries });
+    } catch (error) {
+      return respondWithEnvelopeError(res, error);
+    }
+  },
+
+  async addProjectVocabularyEntry(req, res) {
+    try {
+      const listKey = VOCABULARY_LIST_BY_PATH[req.params.list];
+      const entry = await formOptionsModel.addProjectVocabularyEntry(listKey, req.body ?? {});
+      return res.status(201).json({ success: true, data: entry });
+    } catch (error) {
+      return respondWithEnvelopeError(res, error);
+    }
+  },
+
+  async updateProjectVocabularyEntry(req, res) {
+    try {
+      const listKey = VOCABULARY_LIST_BY_PATH[req.params.list];
+      const updated = await formOptionsModel.updateProjectVocabularyEntry(
+        listKey,
+        req.params.id,
+        req.body ?? {},
+      );
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Entry not found' });
+      }
+      return res.json({ success: true, message: 'Entry updated successfully' });
+    } catch (error) {
+      return respondWithEnvelopeError(res, error);
+    }
+  },
+
+  async deleteProjectVocabularyEntry(req, res) {
+    try {
+      const listKey = VOCABULARY_LIST_BY_PATH[req.params.list];
+      const result = await formOptionsModel.deleteProjectVocabularyEntry(listKey, req.params.id);
+      if (!result) {
+        return res.status(404).json({ success: false, message: 'Entry not found' });
+      }
+      return res.json({
+        success: true,
+        message: result?.deactivated
+          ? 'Entry is used by existing projects or schemes, so it was deactivated instead of deleted'
+          : 'Entry deleted successfully',
+      });
+    } catch (error) {
+      return respondWithEnvelopeError(res, error);
     }
   },
 };

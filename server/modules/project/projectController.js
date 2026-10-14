@@ -22,11 +22,8 @@ import {
 } from './projectPayload.js';
 import { reviewerAudience } from '../notification/audiences.js';
 import notificationService from '../notification/notificationService.js';
-import {
-  toSchemeCategory,
-  toSchemeDomain,
-  toSchemeProjectType,
-} from '../shared/schemeVocabulary.js';
+import { loadProjectVocabulary } from '../shared/projectVocabularyStore.js';
+import { toSchemeCategory, toSchemeProjectType } from '../shared/schemeVocabulary.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import { toStoredWebsite } from '../shared/webUrl.js';
 
@@ -339,6 +336,9 @@ const projectController = {
         // in, so a project's allotment row and its ledger lines group together
         // however the client cased them.
         budgetHeadNames: await projectModel.listBudgetHeadNames(),
+        // Every entry, retired ones too, for the same reason: a domain or
+        // initiative is stored in its curated case.
+        vocabulary: await loadProjectVocabulary({ activeOnly: false }),
       });
 
       const allErrors = [...errors, ...staged.errors];
@@ -481,6 +481,8 @@ const projectController = {
       // A scheme funds one kind of grant, and its category list is that kind's.
       const projectType =
         requestType === 'scheme' ? toSchemeProjectType(req.body?.project_type) : null;
+      const { categoriesByType } =
+        requestType === 'scheme' ? await loadProjectVocabulary() : { categoriesByType: {} };
 
       const request = await projectModel.createRequest(req.user.id, {
         request_type: requestType,
@@ -491,14 +493,16 @@ const projectController = {
             .trim()
             .slice(0, 255) || null,
         project_type: projectType,
-        // A scheme's domain and category come from closed lists, checked here
-        // so approval copies a listed value into `project_schemes`. An
-        // agency's category is its type (Government, Private, …) and stays
-        // free text.
-        domain: requestType === 'scheme' ? toSchemeDomain(req.body?.domain, projectType) : null,
+        // Add Scheme no longer asks a domain: it is picked per project, so a
+        // scheme approved from a request has none until an administrator sets
+        // one on Form Management.
+        domain: null,
+        // A scheme's category comes from a closed list, checked here so
+        // approval copies a listed value into `project_schemes`. An agency's
+        // category is its type (Government, Private, …) and stays free text.
         category:
           requestType === 'scheme'
-            ? toSchemeCategory(req.body?.category, projectType)
+            ? toSchemeCategory(req.body?.category, projectType, categoriesByType)
             : String(req.body?.category ?? '')
                 .trim()
                 .slice(0, 150) || null,
