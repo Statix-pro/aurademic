@@ -62,7 +62,6 @@ describe('vocabulary entry checks', () => {
       await formOptionsModel.updateProjectVocabularyEntry('category', 12, {
         name: 'Seminar',
         project_type: 'event',
-        sort_order: 3,
       }),
     ).toBe(true);
 

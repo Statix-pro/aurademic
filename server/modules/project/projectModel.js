@@ -1487,7 +1487,7 @@ const projectModel = {
           `SELECT list_key, project_type, name
            FROM project_vocabulary_options
           WHERE is_active = 1
-          ORDER BY list_key, project_type, sort_order, name`,
+          ORDER BY list_key, project_type, name`,
         ),
       ]);
 

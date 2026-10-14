@@ -91,7 +91,6 @@ interface VocabularyRow {
   project_type: string;
   name: string;
   is_active?: number;
-  sort_order?: number;
 }
 
 type VocabularyTab = 'national-initiatives' | 'domains' | 'categories';
@@ -129,7 +128,7 @@ const TAB_TITLES: Record<TabType, string> = {
 const projectTypeLabel = (projectType?: string | null) =>
   PROJECT_TYPE_OPTIONS.find((option) => option.value === projectType)?.label ?? projectType;
 
-/** Active entries as `<option>`s, in the order set on their tab. */
+/** Active entries as `<option>`s, alphabetical as the server lists them. */
 const activeOptions = (rows: VocabularyRow[]) =>
   rows.filter((row) => row.is_active !== 0).map((row) => ({ value: row.name, label: row.name }));
 
@@ -253,15 +252,6 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
     activeOptions(vocabulary.categories.filter((row) => row.project_type === projectType));
 
   /**
-   * Where a new entry sits on its list — after the ones already there. A
-   * category's position is within its project type's list.
-   */
-  const nextVocabularySortOrder = (tab: VocabularyTab, projectType = '') =>
-    vocabulary[tab]
-      .filter((row) => row.project_type === projectType)
-      .reduce((highest, row) => Math.max(highest, row.sort_order ?? 0), 0) + 1;
-
-  /**
    * Where a new head sits in the group it is being added to — after the ones
    * already there. Counted within the group, not across the whole table: the
    * order only decides the position inside one dropdown heading, and a total
@@ -281,12 +271,12 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
 
   const openCreate = () => {
     const defaultHeadGroup = headGroups[0] ?? 'Research Projects';
-    // Each list's new entry sorts after the ones already on it.
-    const vocabularyDefault = (tab: VocabularyTab, projectType = ''): EditableRow => ({
+    // The lists are alphabetical, so a new entry needs only its name — and a
+    // category its project type.
+    const vocabularyDefault = (projectType = ''): EditableRow => ({
       name: '',
       project_type: projectType,
       is_active: 1,
-      sort_order: nextVocabularySortOrder(tab, projectType),
     });
 
     const defaults: Record<TabType, EditableRow> = {
@@ -312,9 +302,9 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
         is_active: 1,
         sort_order: nextSortOrderIn(defaultHeadGroup),
       },
-      'national-initiatives': vocabularyDefault('national-initiatives'),
-      domains: vocabularyDefault('domains'),
-      categories: vocabularyDefault('categories', 'research_project'),
+      'national-initiatives': vocabularyDefault(),
+      domains: vocabularyDefault(),
+      categories: vocabularyDefault('research_project'),
     };
 
     setCurrent(defaults[activeTab]);
@@ -515,7 +505,7 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
   const vocabularyNameColumn = {
     key: 'name',
     label: 'Name',
-    style: { width: '60%' },
+    style: { width: '72%' },
     render: (row: VocabularyRow) => (
       <>
         <span className="admin-name">{row.name}</span>
@@ -523,23 +513,16 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       </>
     ),
   };
-  const vocabularyOrderColumn = {
-    key: 'sort_order',
-    label: 'Order',
-    style: { width: '12%' },
-    render: (row: VocabularyRow) => <span className="admin-muted">{row.sort_order ?? 0}</span>,
-  };
-  const vocabularyColumns = [vocabularyNameColumn, vocabularyOrderColumn];
+  const vocabularyColumns = [vocabularyNameColumn];
   // A category is offered only for its project type, so the type is shown.
   const categoryColumns = [
-    { ...vocabularyNameColumn, style: { width: '46%' } },
+    { ...vocabularyNameColumn, style: { width: '50%' } },
     {
       key: 'project_type',
       label: 'Project type',
-      style: { width: '26%' },
+      style: { width: '30%' },
       render: (row: VocabularyRow) => projectTypeLabel(row.project_type),
     },
-    vocabularyOrderColumn,
   ];
 
   const tables: Record<
@@ -784,34 +767,18 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
                     onChange={(selected) => {
                       const projectType = String((selected as OptionType | null)?.value ?? '');
                       if (!projectType || projectType === current.project_type) return;
-                      setCurrent({
-                        ...current,
-                        project_type: projectType,
-                        // The order is a position inside one type's list, so a
-                        // new category re-reads it there. Only while creating:
-                        // an existing one keeps the place it was given.
-                        ...(isEditing
-                          ? {}
-                          : { sort_order: nextVocabularySortOrder('categories', projectType) }),
-                      });
+                      setCurrent({ ...current, project_type: projectType });
                     }}
                   />
                 )}
-
-                <CustomInput
-                  label="Sort order"
-                  name="pfo-vocabulary-sort-order"
-                  type="number"
-                  value={current.sort_order ?? 0}
-                  onChange={(value) => setCurrent({ ...current, sort_order: Number(value) })}
-                />
 
                 <p className="admin-hint admin-field--full">
                   {activeTab === 'categories'
                     ? 'A category is offered only for schemes of its project type. '
                     : ''}
-                  Projects and schemes keep the name they were saved with, so renaming or
-                  deactivating an entry changes only what the project form offers from now on.
+                  The project form lists entries alphabetically. Projects and schemes keep the name
+                  they were saved with, so renaming or deactivating an entry changes only what the
+                  form offers from now on.
                 </p>
               </>
             )}
