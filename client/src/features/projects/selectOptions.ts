@@ -6,7 +6,23 @@ import type {
   BudgetHeadOption,
   ProjectFormState,
   ProjectOrganization,
+  VocabularyEntry,
 } from './types';
+
+/**
+ * One admin-curated list — National Initiatives, Domains, or one project
+ * type's Categories — as options, in the order the admin set. Valued by name,
+ * which is what a project or scheme stores.
+ */
+export function vocabularyOptions(
+  vocabulary: VocabularyEntry[],
+  listKey: VocabularyEntry['list_key'],
+  projectType = '',
+): SelectOption[] {
+  return vocabulary
+    .filter((entry) => entry.list_key === listKey && entry.project_type === projectType)
+    .map((entry) => ({ value: entry.name, label: entry.name }));
+}
 
 /**
  * The project's expenditure heads, filed under the group each belongs to.

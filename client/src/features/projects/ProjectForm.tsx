@@ -12,6 +12,7 @@ import {
   hasReachedProposalStage,
   projectTypeFromParam,
   projectTypeRules,
+  statusHasClosingDate,
 } from './constants';
 import { toAmount } from './projectBudgetSummary';
 import {
@@ -72,6 +73,7 @@ const emptyLookups: ProjectLookups = {
   departments: [],
   accounts: [],
   budgetHeads: [],
+  vocabulary: [],
 };
 
 interface FormLocation {
@@ -254,6 +256,7 @@ function validate(form: ProjectFormState): Record<string, string> {
   });
 
   if (
+    statusHasClosingDate(form.projectStatus) &&
     form.projectStartDate &&
     form.projectClosingDate &&
     form.projectClosingDate < form.projectStartDate
@@ -980,6 +983,7 @@ const ProjectForm: React.FC = () => {
               <ProposalDetailsSection
                 form={form}
                 patch={patch}
+                vocabulary={lookups.vocabulary}
                 errors={errors}
                 disabled={isReadOnly}
               />
@@ -988,19 +992,14 @@ const ProjectForm: React.FC = () => {
                 patch={patch}
                 organizations={lookups.organizations}
                 schemes={lookups.schemes}
+                vocabulary={lookups.vocabulary}
                 errors={errors}
                 disabled={isReadOnly}
                 onRequestOption={() => setShowRequestModal(true)}
               />
             </div>
 
-            <CollaboratorsSection
-              form={form}
-              patch={patch}
-              organizations={lookups.organizations}
-              errors={errors}
-              disabled={isReadOnly}
-            />
+            <CollaboratorsSection form={form} patch={patch} errors={errors} disabled={isReadOnly} />
 
             <FinanceRowsSection
               title="Financial Contribution"
@@ -1331,6 +1330,7 @@ const ProjectForm: React.FC = () => {
         show={showRequestModal}
         onHide={() => setShowRequestModal(false)}
         organizations={lookups.organizations}
+        vocabulary={lookups.vocabulary}
         defaultOrganizationId={form.fundingOrganizationId}
         projectType={form.projectType}
       />

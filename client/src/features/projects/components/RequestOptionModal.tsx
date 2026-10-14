@@ -1,21 +1,19 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import CustomModal from '../../../shared/components/ui/CustomModal';
-import {
-  PROJECT_TYPE_OPTIONS,
-  SCHEME_CATEGORY_OPTIONS_BY_TYPE,
-  SCHEME_DOMAIN_OPTIONS,
-  projectTypeRules,
-} from '../constants';
+import { PROJECT_TYPE_OPTIONS } from '../constants';
 import projectsApi from '../projectsApi';
+import { vocabularyOptions } from '../selectOptions';
 import { Field, SelectField } from './FormFields';
 
-import type { ProjectOrganization } from '../types';
+import type { ProjectOrganization, VocabularyEntry } from '../types';
 
 interface RequestOptionModalProps {
   show: boolean;
   onHide: () => void;
   organizations: ProjectOrganization[];
+  /** The admin-curated lists; the scheme's category is picked from them. */
+  vocabulary: VocabularyEntry[];
   /** Pre-selected parent agency when the form already has one chosen. */
   defaultOrganizationId: number | null;
   /**
@@ -37,20 +35,19 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
   show,
   onHide,
   organizations,
+  vocabulary,
   defaultOrganizationId,
   projectType,
 }) => {
   const projectTypeLabel =
     PROJECT_TYPE_OPTIONS.find((option) => option.value === projectType)?.label ??
     'Research Project';
-  const askDomain = projectTypeRules(projectType).schemeHasDomain;
   const [requestType, setRequestType] = useState<RequestType>('scheme');
   const [name, setName] = useState('');
   const [organizationId, setOrganizationId] = useState<string>(
     defaultOrganizationId ? String(defaultOrganizationId) : '',
   );
   const [organizationName, setOrganizationName] = useState('');
-  const [domain, setDomain] = useState('');
   const [category, setCategory] = useState('');
   const [website, setWebsite] = useState('');
   const [status, setStatus] = useState<'idle' | 'saving' | 'sent'>('idle');
@@ -72,7 +69,6 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
     setName('');
     setOrganizationId(defaultOrganizationId ? String(defaultOrganizationId) : '');
     setOrganizationName('');
-    setDomain('');
     setCategory('');
     setWebsite('');
     setStatus('idle');
@@ -116,7 +112,6 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
         organization_id: requestType === 'scheme' && organizationId ? Number(organizationId) : null,
         organization_name: requestType === 'scheme' ? organizationName.trim() : '',
         project_type: requestType === 'scheme' ? projectType : null,
-        domain: requestType === 'scheme' && askDomain ? domain.trim() : '',
         category: category.trim(),
         website: website.trim(),
       });
@@ -221,19 +216,6 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
                   />
                 </Field>
               )}
-
-              {/* A travel grant scheme has no domain. */}
-              {askDomain && (
-                <Field label="Domain" htmlFor="pf-request-domain">
-                  <SelectField
-                    id="pf-request-domain"
-                    value={domain}
-                    onChange={setDomain}
-                    options={SCHEME_DOMAIN_OPTIONS}
-                    placeholder="Select Domain"
-                  />
-                </Field>
-              )}
             </>
           )}
 
@@ -246,7 +228,7 @@ const RequestOptionModal: React.FC<RequestOptionModalProps> = ({
                   id="pf-request-category"
                   value={category}
                   onChange={setCategory}
-                  options={SCHEME_CATEGORY_OPTIONS_BY_TYPE[projectType] ?? []}
+                  options={vocabularyOptions(vocabulary, 'category', projectType)}
                   placeholder="Select Category"
                 />
               ) : (

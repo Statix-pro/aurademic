@@ -290,6 +290,7 @@ export function createEmptyProjectForm(): ProjectFormState {
 
     fundingOrganizationId: null,
     fundingSource: '',
+    domain: '',
     schemeId: null,
     fundingOrganizationName: '',
     schemeName: '',
@@ -711,6 +712,7 @@ export function projectToFormState(project: any): ProjectFormState {
 
     fundingOrganizationId: project?.funding_organization_id ?? null,
     fundingSource: text(project?.funding_source),
+    domain: text(project?.domain),
     schemeId: project?.scheme_id ?? null,
     fundingOrganizationName: text(project?.funding_organization_name),
     schemeName: text(project?.scheme_name),
