@@ -709,12 +709,12 @@ const formOptionsModel = {
   async getProjectVocabulary(listKey) {
     try {
       const [rows] = await db.query(
-        `SELECT id, list_key, project_type, name, is_active, sort_order
+        `SELECT id, list_key, project_type, name, is_active
            FROM project_vocabulary_options
           WHERE list_key = ?
-          -- Categories grouped by project type in the order the type picker
-          -- offers them, rather than alphabetically by type key.
-          ORDER BY FIELD(project_type, ?), sort_order, name`,
+          -- Alphabetical within a list. Categories are grouped by project type
+          -- first, in the order the type picker offers them.
+          ORDER BY FIELD(project_type, ?), name`,
         [listKey, SCHEME_PROJECT_TYPES],
       );
       return rows;
@@ -727,15 +727,13 @@ const formOptionsModel = {
     try {
       const entry = await formOptionsModel.assertVocabularyEntryIsFree(listKey, data);
       const [result] = await db.query(
-        `INSERT INTO project_vocabulary_options
-           (list_key, project_type, name, is_active, sort_order)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO project_vocabulary_options (list_key, project_type, name, is_active)
+         VALUES (?, ?, ?, ?)`,
         [
           listKey,
           entry.project_type,
           entry.name,
           data.is_active === undefined ? 1 : Number(Boolean(data.is_active)),
-          Number(data.sort_order) || 0,
         ],
       );
       return { id: result.insertId, list_key: listKey, ...data, ...entry };
@@ -751,13 +749,12 @@ const formOptionsModel = {
       const entry = await formOptionsModel.assertVocabularyEntryIsFree(listKey, data, id);
       const [result] = await db.query(
         `UPDATE project_vocabulary_options
-            SET project_type = ?, name = ?, is_active = ?, sort_order = ?
+            SET project_type = ?, name = ?, is_active = ?
           WHERE id = ? AND list_key = ?`,
         [
           entry.project_type,
           entry.name,
           data.is_active === undefined ? 1 : Number(Boolean(data.is_active)),
-          Number(data.sort_order) || 0,
           id,
           listKey,
         ],

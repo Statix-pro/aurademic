@@ -13,7 +13,7 @@ import db from '../../config/connection.js';
 export const VOCABULARY_LISTS = ['national_initiative', 'domain', 'category'];
 
 /**
- * The lists as names, in the order the form offers them.
+ * The lists as names, alphabetical — the order the form offers them.
  *
  * `activeOnly` is for choosing a new value — a retired entry is not offered.
  * Matching a value already stored reads every entry, so a retired one is
@@ -24,7 +24,7 @@ export async function loadProjectVocabulary({ activeOnly = true } = {}) {
     `SELECT list_key, project_type, name
        FROM project_vocabulary_options
       ${activeOnly ? 'WHERE is_active = 1' : ''}
-      ORDER BY list_key, project_type, sort_order, name`,
+      ORDER BY list_key, project_type, name`,
   );
 
   const vocabulary = { nationalInitiatives: [], domains: [], categoriesByType: {} };
