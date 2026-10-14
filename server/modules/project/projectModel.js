@@ -41,6 +41,7 @@ const PROJECT_COLUMNS = [
   'level',
   'funding_organization_id',
   'funding_source',
+  'domain',
   'scheme_id',
   'collaborators_enabled',
   'financial_contribution_enabled',
@@ -994,6 +995,7 @@ const projectModel = {
           rp.level,
           rp.funding_organization_id,
           rp.funding_source,
+          rp.domain,
           rp.scheme_id,
           rp.collaborators_enabled,
           rp.financial_contribution_enabled,
@@ -1033,7 +1035,6 @@ const projectModel = {
           org.short_name AS funding_organization_short_name,
           org.website AS funding_organization_website,
           sch.name AS scheme_name,
-          sch.domain AS scheme_domain,
           sch.category AS scheme_category,
           sch.website AS scheme_website
         FROM research_projects rp
@@ -1444,41 +1445,51 @@ const projectModel = {
    * latency to the form's first paint.
    */
   async getFormLookups() {
-    const [organizations, schemes, departments, accounts, budgetHeads] = await Promise.all([
-      db.query(
-        `SELECT id, name, short_name, category, city, state, country, website,
+    const [organizations, schemes, departments, accounts, budgetHeads, vocabulary] =
+      await Promise.all([
+        db.query(
+          `SELECT id, name, short_name, category, city, state, country, website,
                 is_funding_agency, is_internal
            FROM project_organizations
           WHERE is_active = 1
           ORDER BY is_internal DESC, sort_order, name`,
-      ),
-      db.query(
-        `SELECT id, organization_id, project_type, name, domain, category, website
+        ),
+        db.query(
+          `SELECT id, organization_id, project_type, name, domain, category, website
            FROM project_schemes
           WHERE is_active = 1
           ORDER BY sort_order, name`,
-      ),
-      db.query(
-        `SELECT id, name, code FROM master_departments WHERE is_active = 1 ORDER BY sort_order, name`,
-      ),
-      // The Transaction tab's account dropdown, from the same list the finance
-      // and expenditure screens use.
-      db.query(
-        `SELECT id, account_name AS name
+        ),
+        db.query(
+          `SELECT id, name, code FROM master_departments WHERE is_active = 1 ORDER BY sort_order, name`,
+        ),
+        // The Transaction tab's account dropdown, from the same list the finance
+        // and expenditure screens use.
+        db.query(
+          `SELECT id, account_name AS name
            FROM account_options
           WHERE is_active = 1 AND is_deleted = 0
           ORDER BY sort_order, account_name`,
-      ),
-      // The budget-head vocabulary the form offers, curated in the admin. A
-      // head retired there stays on the projects that already budget under it,
-      // which store the name rather than a reference to this row.
-      db.query(
-        `SELECT id, name, head_group
+        ),
+        // The budget-head vocabulary the form offers, curated in the admin. A
+        // head retired there stays on the projects that already budget under it,
+        // which store the name rather than a reference to this row.
+        db.query(
+          `SELECT id, name, head_group
            FROM project_budget_head_options
           WHERE is_active = 1
           ORDER BY head_group, sort_order, name`,
-      ),
-    ]);
+        ),
+        // National Initiatives, Domains and each type's Categories, curated in
+        // the admin. Only what is offered; a stored value that has since been
+        // retired is kept on the record and shown by the form as it is.
+        db.query(
+          `SELECT list_key, project_type, name
+           FROM project_vocabulary_options
+          WHERE is_active = 1
+          ORDER BY list_key, project_type, sort_order, name`,
+        ),
+      ]);
 
     return {
       organizations: organizations[0],
@@ -1486,6 +1497,7 @@ const projectModel = {
       departments: departments[0],
       accounts: accounts[0],
       budgetHeads: budgetHeads[0],
+      vocabulary: vocabulary[0],
     };
   },
 

@@ -86,4 +86,21 @@ router.delete(
   formOptionsController.deleteProjectBudgetHead,
 );
 
+// Project vocabulary routes — the National Initiatives, Domains and Categories
+// lists the project form offers. One handler set serves all three; the path
+// segment names the list, and only these three segments match.
+const VOCABULARY_PATH = '/project-options/:list(national-initiatives|domains|categories)';
+router.get(VOCABULARY_PATH, canReadFormOptions, formOptionsController.getProjectVocabulary);
+router.post(VOCABULARY_PATH, canEditFormOptions, formOptionsController.addProjectVocabularyEntry);
+router.put(
+  `${VOCABULARY_PATH}/:id`,
+  canEditFormOptions,
+  formOptionsController.updateProjectVocabularyEntry,
+);
+router.delete(
+  `${VOCABULARY_PATH}/:id`,
+  canEditFormOptions,
+  formOptionsController.deleteProjectVocabularyEntry,
+);
+
 export default router;
