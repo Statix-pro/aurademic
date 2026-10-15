@@ -207,6 +207,7 @@ interface RoomAllotmentData {
 interface RoomBlockOption {
   block: string;
   roomNumbers: string[];
+  rooms?: ManagedRoomRow[];
 }
 
 type ApiRecord = Record<string, unknown>;
@@ -231,6 +232,7 @@ interface ManagedRoomRow {
   floor: string;
   roomNumber: string;
   status: ManagedRoomStatus;
+  facilities: Record<string, boolean>;
 }
 
 interface CareTakerRow {
@@ -557,7 +559,6 @@ const createFoodRow = (date = ''): FoodRequirementRow => ({
   dinnerNonVeg: '',
 });
 
-// Room management is preview-only until persisted room-options APIs are available.
 const initialManagedRooms: ManagedRoomRow[] = [];
 
 const initialCareTakers: CareTakerRow[] = [];
@@ -569,6 +570,7 @@ const createManagedRoomRow = (): ManagedRoomRow => ({
   floor: '',
   roomNumber: '',
   status: 'Active',
+  facilities: {},
 });
 
 const createCareTakerRow = (): CareTakerRow => ({
@@ -765,17 +767,17 @@ const buildApplicantDetails = (
   };
 };
 
-const addRoomOption = (map: Map<string, Set<string>>, block: string, roomNumber = '') => {
+const addRoomOption = (map: Map<string, { numbers: Set<string>; rooms: ManagedRoomRow[] }>, block: string, roomNumber = '') => {
   if (!block) {
     return;
   }
 
   if (!map.has(block)) {
-    map.set(block, new Set<string>());
+    map.set(block, { numbers: new Set<string>(), rooms: [] });
   }
 
   if (roomNumber) {
-    map.get(block)?.add(roomNumber);
+    map.get(block)?.numbers.add(roomNumber);
   }
 };
 
@@ -814,7 +816,7 @@ const normalizeRoomBlockOptions = (payload: unknown): RoomBlockOption[] => {
     return [];
   }
 
-  const blockMap = new Map<string, Set<string>>();
+  const blockMap = new Map<string, { numbers: Set<string>; rooms: ManagedRoomRow[] }>();
 
   items.forEach((item) => {
     if (typeof item !== 'object' || item === null) {
@@ -829,8 +831,21 @@ const normalizeRoomBlockOptions = (payload: unknown): RoomBlockOption[] => {
       'room_no',
       'number',
     ]);
-    if (Boolean(option.is_unavailable || option.isUnavailable)) return;
+    const isUnavailable = Boolean(option.is_unavailable || option.isUnavailable);
+    if (isUnavailable) return;
     const nestedRooms = readRoomNumbers(option.roomNumbers || option.rooms || option.room_numbers);
+
+    const roomDetails: ManagedRoomRow = {
+      id: Number(option.id) || 0,
+      roomType: getTextValue(option, ['room_type', 'roomType']) as RoomType,
+      block,
+      floor: getTextValue(option, ['floor']),
+      roomNumber,
+      status: getTextValue(option, ['status']) as ManagedRoomStatus,
+      facilities: option.facilities && typeof option.facilities === 'object'
+        ? option.facilities as Record<string, boolean>
+        : {},
+    };
 
     if (nestedRooms.length) {
       nestedRooms.forEach((room) => addRoomOption(blockMap, block, room));
@@ -838,11 +853,17 @@ const normalizeRoomBlockOptions = (payload: unknown): RoomBlockOption[] => {
     }
 
     addRoomOption(blockMap, block, roomNumber);
+    if (roomNumber) {
+      const blockRooms = blockMap.get(block) || { numbers: new Set<string>(), rooms: [] };
+      blockRooms.rooms.push(roomDetails);
+      blockMap.set(block, blockRooms);
+    }
   });
 
   return Array.from(blockMap.entries()).map(([block, rooms]) => ({
     block,
-    roomNumbers: Array.from(rooms),
+    roomNumbers: Array.from(rooms.numbers),
+    rooms: rooms.rooms,
   }));
 };
 
@@ -1092,7 +1113,7 @@ const GuestHouseBooking: React.FC = () => {
   const canShowRoomAllocationTab = hasBookingId && (isGuesthouseAdmin || isRoomAllotmentLink);
   const isRoomAllotmentVisible = canShowRoomAllocationTab && adminView === 'allotment';
   const canEditRoomAllotment = hasBookingId && isGuesthouseAdmin && adminView === 'allotment';
-  const canOverrideApplicant = !isViewingBooking;
+  const canOverrideApplicant = !isViewingBooking && Boolean(canManageGuesthouse || (user as any)?.is_super_admin || (user as any)?.isSuperAdmin);
   const [applicantProfile, setApplicantProfile] = useState<ApiRecord | null>(null);
   const [applicantSearch, setApplicantSearch] = useState('');
   const [applicantSearchInitialized, setApplicantSearchInitialized] = useState(false);
@@ -1121,6 +1142,7 @@ const GuestHouseBooking: React.FC = () => {
     useState<BeneficiaryEmployeeOption[]>([]);
   const [beneficiarySearchOpen, setBeneficiarySearchOpen] = useState(false);
   const [roomBlockOptions, setRoomBlockOptions] = useState<RoomBlockOption[]>([]);
+  const [roomFacilityOptions, setRoomFacilityOptions] = useState<ManagedRoomRow[]>([]);
   const [spocOptions, setSpocOptions] = useState<Array<{ name: string; mobile: string }>>([]);
   const [roomAllotments, setRoomAllotments] = useState<RoomAllotmentsByGuest>({});
   const [activeRoomDetail, setActiveRoomDetail] = useState<ActiveRoomDetail>(null);
@@ -1169,7 +1191,7 @@ const GuestHouseBooking: React.FC = () => {
           authenticityUtility.get('/guesthouse/admin/rooms'),
           authenticityUtility.get('/guesthouse/admin/caretakers'),
         ]);
-        setManagedRooms((roomsResponse?.data || []).map((room: any) => ({ id: room.id, roomType: room.room_type, block: room.block, floor: room.floor || '', roomNumber: room.room_number, status: room.status })));
+        setManagedRooms((roomsResponse?.data || []).map((room: any) => ({ id: room.id, roomType: room.room_type, block: room.block, floor: room.floor || '', roomNumber: room.room_number, status: room.status, facilities: room.facilities && typeof room.facilities === 'object' ? room.facilities : {} })));
         setCareTakers((caretakersResponse?.data || []).map((caretaker: any) => ({ id: caretaker.id, name: caretaker.name, mobile: caretaker.mobile || '', status: caretaker.status })));
       } catch (error) {
         showAlert('Unable to load Guest House resources.', 'error');
@@ -1463,6 +1485,7 @@ const GuestHouseBooking: React.FC = () => {
 
         if (isMounted && options.length) {
           setRoomBlockOptions(options);
+          setRoomFacilityOptions(options.flatMap((option) => option.rooms || []));
         }
       } catch (error) {
         if (import.meta.env.DEV) {
@@ -1484,7 +1507,7 @@ const GuestHouseBooking: React.FC = () => {
 
     const loadSpocOptions = async () => {
       try {
-        const response = await authenticityUtility.get('/guesthouse/admin/caretakers');
+        const response = await authenticityUtility.get('/guesthouse/spocs');
         const payload = getPayloadData(response);
         const options = (Array.isArray(payload) ? payload : [])
           .map((caretaker: any) => ({
@@ -2092,19 +2115,21 @@ const GuestHouseBooking: React.FC = () => {
     );
   };
 
-  const updateManagedRoom = (
-    id: number,
-    field: keyof Omit<ManagedRoomRow, 'id'>,
-    value: string,
-  ) => {
+  const updateManagedRoom = (id: number, field: keyof Omit<ManagedRoomRow, 'id'>, value: string) => {
     setManagedRooms((prevRooms) =>
-      prevRooms.map((room) => (room.id === id ? { ...room, [field]: value } : room)),
+      prevRooms.map((room) => (room.id === id
+        ? field === 'facilities'
+          ? { ...room, facilities: { ...room.facilities, [value]: !room.facilities[value] } }
+          : { ...room, [field]: value }
+        : room)),
     );
   };
 
   const addManagedRoom = () => {
     const currentlyEditedRoom = managedRooms.find((room) => room.id === editingManagedRoomId);
     if (currentlyEditedRoom) {
+      // The Add Room button should keep working while an existing row is being
+      // edited. Save that row first, then open the next draft only on success.
       void saveManagedRoom(currentlyEditedRoom).then((saved) => {
         if (saved) addManagedRoomRow();
       });
@@ -2133,6 +2158,7 @@ const GuestHouseBooking: React.FC = () => {
         floor: room.floor.trim(),
         roomNumber: room.roomNumber.trim(),
         status: room.status,
+        facilities: room.facilities,
       };
       const isNewRoom = room.id >= 1_000_000_000;
       const response: any = isNewRoom
@@ -2151,6 +2177,10 @@ const GuestHouseBooking: React.FC = () => {
           currentRoom.id === room.id ? { ...currentRoom, id: savedId } : currentRoom,
         ),
       );
+      setRoomFacilityOptions((previous) => [
+        ...previous.filter((item) => !(item.block === room.block && item.roomNumber === room.roomNumber)),
+        { ...room, id: savedId },
+      ]);
       setEditingManagedRoomId(null);
       setViewingManagedRoomId(savedId);
       showAlert(isNewRoom ? 'Room added successfully.' : 'Room updated successfully.', 'success');
@@ -2302,6 +2332,7 @@ const GuestHouseBooking: React.FC = () => {
           floor: read(row, ['floor']),
           roomNumber: read(row, ['roomnumber', 'roomno']),
           status: `${status[0].toUpperCase()}${status.slice(1)}` as ManagedRoomStatus,
+          facilities: {},
         }];
       });
       if (imported.length === 0) {
@@ -2310,7 +2341,7 @@ const GuestHouseBooking: React.FC = () => {
       }
       await authenticityUtility.post('/guesthouse/admin/resources/bulk-import', { type: 'rooms', rows: imported });
       const saved: any = await authenticityUtility.get('/guesthouse/admin/rooms');
-      setManagedRooms((saved?.data || []).map((room: any) => ({ id: room.id, roomType: room.room_type, block: room.block, floor: room.floor || '', roomNumber: room.room_number, status: room.status })));
+      setManagedRooms((saved?.data || []).map((room: any) => ({ id: room.id, roomType: room.room_type, block: room.block, floor: room.floor || '', roomNumber: room.room_number, status: room.status, facilities: room.facilities || {} })));
       showAlert(`${imported.length} rooms saved. Re-uploading this CSV updates the same rooms without duplicates.`, 'success');
       return;
     }
@@ -2570,11 +2601,6 @@ const GuestHouseBooking: React.FC = () => {
     </div>
   );
 
-  const getRoomFloor = (roomNumber: string) => {
-    const floorDigit = roomNumber.match(/\d/)?.[0] || '';
-    return floorDigit ? `${floorDigit} Floor` : '';
-  };
-
   const renderRoomDetailControl = (label: string, value: string, asSelect = false) => (
     <label className="guesthousebooking-room-detail-meta-field">
       <span>{label}</span>
@@ -2588,7 +2614,7 @@ const GuestHouseBooking: React.FC = () => {
     </label>
   );
 
-  const renderRoomDetailItem = (item: RoomDetailOption) => {
+  const renderRoomDetailItem = (item: RoomDetailOption, facilities: Record<string, boolean>) => {
     const Icon = item.Icon;
 
     return (
@@ -2596,6 +2622,8 @@ const GuestHouseBooking: React.FC = () => {
         <input
           className="guesthousebooking-checkbox guesthousebooking-room-detail-checkbox"
           type="checkbox"
+          checked={Boolean(facilities[item.label])}
+          readOnly
         />
         <Icon className="guesthousebooking-room-detail-item-icon" size={22} aria-hidden="true" />
         <span>{item.label}</span>
@@ -2612,6 +2640,20 @@ const GuestHouseBooking: React.FC = () => {
 
   const renderRoomDetailsCard = (row: RoomAllotmentRow) => {
     const status = row.roomNumber ? 'Ready' : 'Pending';
+    const savedRoom = roomFacilityOptions.find((room) =>
+      room.block === row.block && room.roomNumber === row.roomNumber,
+    );
+    const facilities = savedRoom?.facilities || {};
+    const roomFloor = savedRoom?.floor || '';
+    const visibleAmenityGroups = ROOM_DETAIL_AMENITY_GROUPS
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => Boolean(facilities[item.label])),
+      }))
+      .filter((group) => group.items.length > 0);
+    const visibleEssentials = ROOM_DETAIL_ESSENTIALS.filter((item) => Boolean(facilities[item.label]));
+    const visibleServices = ROOM_DETAIL_SERVICES.filter((item) => Boolean(facilities[item.label]));
+    const hasFacilities = visibleAmenityGroups.length > 0 || visibleEssentials.length > 0 || visibleServices.length > 0;
 
     return (
       <div className="guesthousebooking-room-details-card" id={`room-details-${row.id}`}>
@@ -2623,39 +2665,51 @@ const GuestHouseBooking: React.FC = () => {
           <div className="guesthousebooking-room-details-meta-row">
             {renderRoomDetailControl('Number', row.roomNumber)}
             {renderRoomDetailControl('Type', row.roomType, true)}
-            {renderRoomDetailControl('Floor', getRoomFloor(row.roomNumber), true)}
+            {renderRoomDetailControl('Floor', roomFloor, true)}
             {renderRoomDetailControl('Block', row.block, true)}
             {renderRoomDetailControl('Status', status, true)}
             <CircleCheck className="guesthousebooking-room-detail-ready-icon" size={18} aria-hidden="true" />
           </div>
 
-          <section className="guesthousebooking-room-detail-section" aria-label="Amenities">
-            {renderRoomDetailSectionTitle('Amenities')}
-            <div className="guesthousebooking-room-detail-groups">
-              {ROOM_DETAIL_AMENITY_GROUPS.map((group) => (
-                <div className="guesthousebooking-room-detail-group" key={group.title}>
-                  <h3>{group.title}</h3>
-                  <div className="guesthousebooking-room-detail-group-items">
-                    {group.items.map(renderRoomDetailItem)}
+          {hasFacilities ? (
+            <>
+              {visibleAmenityGroups.length > 0 && (
+                <section className="guesthousebooking-room-detail-section" aria-label="Amenities">
+                  {renderRoomDetailSectionTitle('Amenities')}
+                  <div className="guesthousebooking-room-detail-groups">
+                    {visibleAmenityGroups.map((group) => (
+                      <div className="guesthousebooking-room-detail-group" key={group.title}>
+                        <h3>{group.title}</h3>
+                        <div className="guesthousebooking-room-detail-group-items">
+                          {group.items.map((item) => renderRoomDetailItem(item, facilities))}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                </div>
-              ))}
-            </div>
-          </section>
+                </section>
+              )}
 
-          <section className="guesthousebooking-room-detail-section" aria-label="Essentials">
-            {renderRoomDetailSectionTitle('Essentials')}
-            <div className="guesthousebooking-room-detail-flat-list">
-              {ROOM_DETAIL_ESSENTIALS.map(renderRoomDetailItem)}
-            </div>
-          </section>
+              {visibleEssentials.length > 0 && (
+                <section className="guesthousebooking-room-detail-section" aria-label="Essentials">
+                  {renderRoomDetailSectionTitle('Essentials')}
+                  <div className="guesthousebooking-room-detail-flat-list">
+                    {visibleEssentials.map((item) => renderRoomDetailItem(item, facilities))}
+                  </div>
+                </section>
+              )}
 
-          <section className="guesthousebooking-room-detail-section" aria-label="Services">
-            {renderRoomDetailSectionTitle('Services')}
-            <div className="guesthousebooking-room-detail-flat-list guesthousebooking-room-detail-services-list">
-              {ROOM_DETAIL_SERVICES.map(renderRoomDetailItem)}
-            </div>
-          </section>
+              {visibleServices.length > 0 && (
+                <section className="guesthousebooking-room-detail-section" aria-label="Services">
+                  {renderRoomDetailSectionTitle('Services')}
+                  <div className="guesthousebooking-room-detail-flat-list guesthousebooking-room-detail-services-list">
+                    {visibleServices.map((item) => renderRoomDetailItem(item, facilities))}
+                  </div>
+                </section>
+              )}
+            </>
+          ) : (
+            <p className="guesthousebooking-room-detail-empty">No facilities have been listed for this room.</p>
+          )}
         </div>
       </div>
     );
@@ -2833,7 +2887,8 @@ const GuestHouseBooking: React.FC = () => {
                 const isViewing = viewingManagedRoomId === room.id;
 
                 return (
-                  <tr className={isViewing ? 'is-viewing' : ''} key={room.id}>
+                  <React.Fragment key={room.id}>
+                  <tr className={isViewing ? 'is-viewing' : ''}>
                     <td>{index + 1}</td>
                     <td>
                       <select
@@ -2881,6 +2936,9 @@ const GuestHouseBooking: React.FC = () => {
                         className="guesthousebooking-management-control"
                         type="text"
                         value={room.roomNumber}
+                        placeholder="Required"
+                        autoFocus={isEditing && room.id >= 1_000_000_000}
+                        aria-required="true"
                         onChange={(event) =>
                           updateManagedRoom(room.id, 'roomNumber', event.target.value)
                         }
@@ -2905,11 +2963,14 @@ const GuestHouseBooking: React.FC = () => {
                     <td>
                       {renderGuesthouseManagementActions(
                         addManagedRoom,
-                        () => setEditingManagedRoomId(room.id),
-                        () =>
-                          setViewingManagedRoomId((currentId) =>
-                            currentId === room.id ? null : room.id,
-                          ),
+                        () => {
+                          setEditingManagedRoomId(room.id);
+                          setViewingManagedRoomId(room.id);
+                        },
+                        () => {
+                          setViewingManagedRoomId((currentId) => currentId === room.id ? null : room.id);
+                          if (editingManagedRoomId !== room.id) setEditingManagedRoomId(null);
+                        },
                         () => void removeManagedRoom(room.id),
                         false,
                         isEditing,
@@ -2920,6 +2981,42 @@ const GuestHouseBooking: React.FC = () => {
                       )}
                     </td>
                   </tr>
+                  {isViewing && (
+                    <tr>
+                      <td colSpan={7}>
+                        <div className="guesthousebooking-room-details-card">
+                          <div className="guesthousebooking-room-details-header"><span>Room Details</span></div>
+                          <div className="guesthousebooking-room-details-content">
+                            <div className="guesthousebooking-room-details-meta-row">
+                              {renderRoomDetailControl('Number', room.roomNumber)}
+                              {renderRoomDetailControl('Type', room.roomType, true)}
+                              {renderRoomDetailControl('Floor', room.floor, true)}
+                              {renderRoomDetailControl('Block', room.block, true)}
+                              {renderRoomDetailControl('Status', room.status, true)}
+                            </div>
+                            {[...ROOM_DETAIL_AMENITY_GROUPS.map((group) => ({ title: group.title, items: group.items })), { title: 'Essentials', items: ROOM_DETAIL_ESSENTIALS }, { title: 'Services', items: ROOM_DETAIL_SERVICES }].map((group) => (
+                              <section className="guesthousebooking-room-detail-section" aria-label={group.title} key={group.title}>
+                                {renderRoomDetailSectionTitle(group.title)}
+                                <div className={group.title === 'Comfort' || group.title === 'Connectivity' || group.title === 'Furniture' ? 'guesthousebooking-room-detail-groups' : 'guesthousebooking-room-detail-flat-list'}>
+                                  {group.items.map((item) => {
+                                    const Icon = item.Icon;
+                                    return (
+                                      <label className="guesthousebooking-room-detail-item" key={item.label}>
+                                        <input className="guesthousebooking-checkbox guesthousebooking-room-detail-checkbox" type="checkbox" checked={Boolean(room.facilities[item.label])} disabled={!isEditing} onChange={() => updateManagedRoom(room.id, 'facilities', item.label)} />
+                                        <Icon className="guesthousebooking-room-detail-item-icon" size={22} aria-hidden="true" />
+                                        <span>{item.label}</span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              </section>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
