@@ -13,9 +13,11 @@ export function safeResolvePath(baseDir, targetFile) {
 
   const resolvedBase = path.resolve(baseDir);
   const resolvedTarget = path.resolve(baseDir, targetFile);
+  const relativeTarget = path.relative(resolvedBase, resolvedTarget);
 
-  // Ensure the resolved target path is within the resolved base directory
-  if (resolvedTarget.startsWith(resolvedBase)) {
+  // A string-prefix check treats sibling paths such as /uploads-evil as
+  // children of /uploads. Reject absolute relatives and parent traversal.
+  if (!relativeTarget || (!relativeTarget.startsWith(`..${path.sep}`) && relativeTarget !== '..' && !path.isAbsolute(relativeTarget))) {
     return resolvedTarget;
   }
 

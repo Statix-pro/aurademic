@@ -1,6 +1,6 @@
 import guesthouseModel from './guesthouseModel.js';
 import './guesthouseWorkflowAdapter.js';
-import { actOnWorkflow, startWorkflow, listQueue, getQueueScopeFilters, getTimeline, getWorkflowMetadata } from '../shared/workflow/workflowService.js';
+import { actOnWorkflow, startWorkflow, unarchiveWorkflow, resubmitReturnedWorkflow, listQueue, getQueueScopeFilters, getTimeline, getWorkflowMetadata } from '../shared/workflow/workflowService.js';
 import fs from 'fs';
 import path from 'path';
 import { safeResolvePath } from '../../utils/pathSecurity.js';
@@ -59,33 +59,20 @@ const hasGuesthouseStagePermission = (req, stage) => {
   const normalizedStage = normalizeText(stage).toLowerCase();
   if (!normalizedStage) return false;
   if (isSuperAdminRequest(req)) return true;
-  if (req.user?.is_admin || req.user?.isAdmin) return true;
 
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   const normalizedPermissions = permissions.map((p) => normalizeText(p).toLowerCase());
-  if (
-    normalizedPermissions.includes('guesthouse.workflow.*') ||
-    normalizedPermissions.includes(`guesthouse.workflow.${normalizedStage}`)
-  ) {
+  if (normalizedPermissions.includes(`guesthouse.workflow.${normalizedStage}`)) {
     return true;
   }
 
-  // Access Control assigns the HOD as a role for a department.  A role-based
-  // HOD must be allowed through to the shared workflow service, which then
-  // restricts the queue to that HOD's assigned department(s).
   const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
-  const normalizedRoles = roles.map((role) => {
-    if (typeof role === 'string') return normalizeText(role).toLowerCase();
-    return normalizeText(
-      role?.role_code || role?.roleCode || role?.code || role?.role,
-    ).toLowerCase();
+  return roles.some((role) => {
+    const roleCode = typeof role === 'string'
+      ? normalizeText(role).toLowerCase()
+      : normalizeText(role?.role_code || role?.roleCode || role?.code || role?.role).toLowerCase();
+    return roleCode === normalizedStage;
   });
-
-  if (normalizedStage === 'guesthouse_admin') {
-    return normalizedRoles.includes('guesthouse_admin') || normalizedRoles.includes('admin');
-  }
-
-  return normalizedRoles.includes(normalizedStage);
 };
 
 const hasAnyGuesthouseStagePermission = (req) =>
@@ -94,9 +81,6 @@ const hasAnyGuesthouseStagePermission = (req) =>
 const canAccessGuesthouseRecord = async (req, booking) => {
   if (!booking) return false;
   if (isSuperAdminRequest(req)) return true;
-  const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
-  const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
-  if (normalizedPermissions.includes('guesthouse.read')) return true;
   const actorUserId = toPositiveInt(req.user?.id);
   if (actorUserId && actorUserId === toPositiveInt(booking.created_by)) return true;
 
@@ -133,7 +117,7 @@ const canAccessGuesthouseBookingAtStage = async (
 const isApplicantEditable = (booking) => {
   const status = normalizeText(booking?.workflow_state?.status || booking?.workflow_status || booking?.overall_status).toLowerCase();
   const stage = normalizeText(booking?.workflow_state?.currentStage || booking?.workflow_stage).toLowerCase();
-  return stage === 'hod' && ['in_progress', 'pending', 'submitted', ''].includes(status);
+  return stage === 'hod' && ['in_progress', 'pending', 'submitted', 'returned', ''].includes(status);
 };
 
 const isRoomAllotmentActionable = (booking) => {
@@ -163,12 +147,8 @@ const resolveSafeTempUploadPath = (unsafePath) => {
   const normalized = String(unsafePath || '').trim();
   if (!normalized) return null;
 
-  const resolved = path.resolve(normalized);
-  const safeBase = `${TEMP_UPLOAD_DIR}${path.sep}`;
-  if (!resolved.startsWith(safeBase)) {
-    return null;
-  }
-  return resolved;
+  const relativePath = path.relative(TEMP_UPLOAD_DIR, path.resolve(normalized));
+  return safeResolvePath(TEMP_UPLOAD_DIR, relativePath);
 };
 
 const isEligibleForPrincipalDocument = (booking) => {
@@ -222,32 +202,41 @@ const guesthouseController = {
       if (invalidGuest) {
         return res.status(400).json({ success: false, message: 'Every guest needs a valid check-in and check-out stay' });
       }
-      bookingId = await guesthouseModel.createGuesthouseBooking(
-        { ...payload, guests },
-        req.user?.id,
-      );
-
-      const { state } = await startWorkflow({
-        moduleKey: 'guesthouse',
-        recordId: bookingId,
-        metadata: {
-          origin: 'api',
-          requestId: null,
-          moduleMetaVersion: 1,
-          moduleMeta: { route: 'POST /api/guesthouse-bookings' },
-        },
-      });
-
+      const applicant = { ...(payload.applicant || {}) };
+      const mayOverrideApplicant = isSuperAdminRequest(req) ||
+        (Array.isArray(req.user?.permissions) && (
+          req.user.permissions.includes('guesthouse.applicant.override') ||
+          req.user.permissions.includes('guesthouse.manage')
+        ));
+      if (!mayOverrideApplicant) {
+        applicant.employeeId = toPositiveInt(req.user?.employee_id || req.user?.employeeId);
+        if (!applicant.employeeId) {
+          return res.status(403).json({ success: false, message: 'Your account is not linked to an employee profile' });
+        }
+      }
+      const conn = await guesthouseModel.beginTransaction();
+      let state;
+      try {
+        bookingId = await guesthouseModel.createGuesthouseBooking(
+          { ...payload, applicant, guests }, req.user?.id, { tx: conn },
+        );
+        ({ state } = await startWorkflow({
+          moduleKey: 'guesthouse', recordId: bookingId, tx: conn,
+          metadata: {
+            origin: 'api', requestId: null, moduleMetaVersion: 1,
+            moduleMeta: { route: 'POST /api/guesthouse-bookings' },
+          },
+        }));
+        await conn.commit();
+      } catch (error) {
+        await conn.rollback();
+        throw error;
+      } finally {
+        conn.release();
+      }
       const booking = await guesthouseModel.getGuesthouseBookingById(bookingId);
       return res.status(201).json({ success: true, data: { ...booking, workflow_state: state } });
     } catch (error) {
-      if (bookingId) {
-        try {
-          await guesthouseModel.deleteGuesthouseBooking(bookingId, { allowSuperAdmin: true });
-        } catch (cleanupError) {
-          console.error('Unable to remove incomplete guesthouse booking', cleanupError);
-        }
-      }
       return handleError(res, error, 'Error in createGuesthouseBooking');
     }
   },
@@ -258,8 +247,6 @@ const guesthouseController = {
       const isOwnerOnly = mineOnly || !hasAnyGuesthouseStagePermission(req);
       const canListAll = Boolean(
         isSuperAdminRequest(req) ||
-        req.user?.is_admin ||
-        req.user?.isAdmin ||
         req.user?.permissions?.includes('guesthouse.workflow.guesthouse_admin'),
       );
       let accessibleBookingIds;
@@ -267,10 +254,11 @@ const guesthouseController = {
       if (!mineOnly && !isOwnerOnly && !canListAll) {
         const actor = normalizeActor(req);
         const search = req.query.q || req.query.search;
-        accessibleBookingIds = [];
-
-        for (const stage of GUESTHOUSE_WORKFLOW_STAGES) {
-          if (!hasGuesthouseStagePermission(req, stage)) continue;
+        const visibleStages = GUESTHOUSE_WORKFLOW_STAGES.filter((stage) =>
+          hasGuesthouseStagePermission(req, stage),
+        );
+        const stageBookingIds = await Promise.all(visibleStages.map(async (stage) => {
+          const stageIds = [];
           let page = 1;
           let total = 0;
           do {
@@ -280,12 +268,13 @@ const guesthouseController = {
               actor,
               filters: { workflowStatus: 'all', q: search, page, limit: 100 },
             });
-            accessibleBookingIds.push(...result.items.map((item) => item.id));
+            stageIds.push(...result.items.map((item) => item.id));
             total = result.total;
             page += 1;
           } while ((page - 1) * 100 < total);
-        }
-        accessibleBookingIds = [...new Set(accessibleBookingIds.map(toPositiveInt).filter(Boolean))];
+          return stageIds;
+        }));
+        accessibleBookingIds = [...new Set(stageBookingIds.flat().map(toPositiveInt).filter(Boolean))];
       }
 
       const result = await guesthouseModel.listGuesthouseBookings({
@@ -355,14 +344,38 @@ const guesthouseController = {
       );
       if (invalidGuest) return res.status(400).json({ success: false, message: 'Every guest needs a valid check-in and check-out stay' });
 
-      await guesthouseModel.updateGuesthouseBooking(bookingId, { ...payload, guests }, {
-        expectedWorkflowStage: isSuperAdminRequest(req) ? null : stage || 'hod',
-        allowedWorkflowStatuses: isSuperAdminRequest(req)
-          ? null
-          : isApprover
-            ? ['in_progress', 'pending', 'submitted', 'returned']
-            : ['in_progress', 'pending', 'submitted', ''],
-      });
+      const shouldResubmit = isOwner && stage === 'hod' && status === 'returned';
+      const tx = shouldResubmit ? await guesthouseModel.beginTransaction() : null;
+      try {
+        await guesthouseModel.updateGuesthouseBooking(bookingId, { ...payload, guests }, {
+          expectedWorkflowStage: isSuperAdminRequest(req) ? null : stage || 'hod',
+          allowedWorkflowStatuses: isSuperAdminRequest(req)
+            ? null
+            : isApprover
+              ? ['in_progress', 'pending', 'submitted', 'returned']
+              : ['in_progress', 'pending', 'submitted', 'returned', ''],
+          tx,
+        });
+        if (shouldResubmit) {
+          await resubmitReturnedWorkflow({
+            moduleKey: 'guesthouse',
+            recordId: bookingId,
+            actor: normalizeActor(req),
+            tx,
+            metadata: {
+              origin: 'api',
+              moduleMetaVersion: 1,
+              moduleMeta: { route: 'PUT /api/guesthouse/:id' },
+            },
+          });
+        }
+        if (tx) await tx.commit();
+      } catch (error) {
+        if (tx) await tx.rollback();
+        throw error;
+      } finally {
+        if (tx) tx.release();
+      }
       const booking = await guesthouseModel.getGuesthouseBookingById(bookingId);
       return res.json({ success: true, message: 'Guest house booking updated', data: booking });
     } catch (error) {
@@ -405,7 +418,7 @@ const guesthouseController = {
       const state = booking?.workflow_state || {};
       const status = normalizeText(state.status || booking?.workflow_status || booking?.overall_status).toLowerCase();
       const stage = normalizeText(state.currentStage || booking?.workflow_stage).toLowerCase();
-      if (!isSuperAdminRequest(req) && ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(status))) {
+      if (!isSuperAdminRequest(req) && ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed'].includes(status))) {
         return res.status(409).json({ success: false, message: 'This booking can no longer be deleted after approval has started' });
       }
       await guesthouseModel.deleteGuesthouseBooking(bookingId, {
@@ -468,14 +481,14 @@ const guesthouseController = {
 
       const state = booking.workflow_state || {};
       if (normalizeText(state.status).toLowerCase() === 'archived') {
-        const restoredState = await guesthouseModel.unarchiveGuesthouseBooking(
-          bookingId,
-          normalizeActor(req),
-        );
+        const restored = await unarchiveWorkflow({
+          moduleKey: 'guesthouse', recordId: bookingId, actor: normalizeActor(req),
+          metadata: { origin: 'api', moduleMetaVersion: 1, moduleMeta: { route: 'PATCH /api/guesthouse/:id/archive-toggle' } },
+        });
         return res.json({
           success: true,
           message: 'Guest House request unarchived successfully',
-          data: { action: 'unarchived', workflow_state: restoredState },
+          data: { action: 'unarchived', workflow_state: restored.currentState },
         });
       }
 
@@ -493,7 +506,7 @@ const guesthouseController = {
         return res.status(403).json({ success: false, message: 'Insufficient permissions for this Guest House workflow stage' });
       }
 
-      const isElevatedActor = isSuperAdminRequest(req) || Boolean(req.user?.is_admin || req.user?.isAdmin);
+      const isElevatedActor = isSuperAdminRequest(req);
       let allowedDepartmentIds = null;
       if (stage === 'hod' && !isElevatedActor) {
         const scopeFilters = await getQueueScopeFilters({
@@ -508,11 +521,15 @@ const guesthouseController = {
         }
       }
 
-      const archivedState = await guesthouseModel.archiveGuesthouseBooking(
-        bookingId,
-        { ...actor, feedback: normalizeText(req.body?.feedback) || null },
-        allowedDepartmentIds,
-      );
+      if (allowedDepartmentIds !== null && !allowedDepartmentIds.includes(toPositiveInt(booking.department_id))) {
+        return res.status(403).json({ success: false, message: 'Record is outside your department workflow scope' });
+      }
+      const result = await actOnWorkflow({
+        moduleKey: 'guesthouse', recordId: bookingId, decision: 'archived',
+        feedback: normalizeText(req.body?.feedback), actor,
+        metadata: { origin: 'api', moduleMetaVersion: 1, moduleMeta: { route: 'PATCH /api/guesthouse/:id/archive-toggle' } },
+      });
+      const archivedState = result.currentState;
 
       return res.json({
         success: true,
@@ -728,7 +745,7 @@ const guesthouseController = {
           ? null
           : approverCanEdit
             ? ['in_progress', 'pending', 'submitted', 'returned']
-            : ['in_progress', 'pending', 'submitted'],
+            : ['in_progress', 'pending', 'submitted', 'returned'],
       });
       return res.json({ success: true, message: 'Travel schedule updated' });
     } catch (error) {
@@ -964,9 +981,8 @@ const guesthouseController = {
 
       const extension = '.pdf';
       const storedName = `guesthouse-principal-${bookingId}-${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
-      const finalPath = path.resolve(GUESTHOUSE_PRINCIPAL_DOC_DIR, storedName);
-      const safeBase = `${GUESTHOUSE_PRINCIPAL_DOC_DIR}${path.sep}`;
-      if (!finalPath.startsWith(safeBase)) {
+      const finalPath = safeResolvePath(GUESTHOUSE_PRINCIPAL_DOC_DIR, storedName);
+      if (!finalPath) {
         throw new Error('Invalid principal document path');
       }
 

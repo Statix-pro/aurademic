@@ -19,6 +19,8 @@ const GUESTHOUSE_MANAGE_PERMISSIONS = ['guesthouse.manage'];
 const canAccessGuesthouseWorkflow = permissionMiddleware(GUESTHOUSE_WORKFLOW_PERMISSIONS);
 
 const canManageGuesthouseMasterData = permissionMiddleware(GUESTHOUSE_MANAGE_PERMISSIONS);
+const canReadGuesthouse = permissionMiddleware(['guesthouse.read', 'guesthouse.edit', 'guesthouse.workflow.*']);
+const canEditGuesthouse = permissionMiddleware(['guesthouse.edit', 'guesthouse.workflow.*']);
 
 const canDeleteGuesthouseBooking = async (req, res, next) => {
   try {
@@ -64,11 +66,11 @@ router.use(authMiddleware);
 // the potentially stale role/permission claims embedded in the login token.
 router.use(authorizationSnapshotMiddleware);
 
-router.get('/room-options', guesthouseController.getRoomOptions);
-router.get('/spocs', guesthouseController.getSpocOptions);
+router.get('/room-options', canReadGuesthouse, guesthouseController.getRoomOptions);
+router.get('/spocs', canReadGuesthouse, guesthouseController.getSpocOptions);
 
-router.post('/', guesthouseController.createGuesthouseBooking);
-router.get('/', guesthouseController.listGuesthouseBookings);
+router.post('/', canEditGuesthouse, guesthouseController.createGuesthouseBooking);
+router.get('/', canReadGuesthouse, guesthouseController.listGuesthouseBookings);
 
 router.get('/workflow/meta', canAccessGuesthouseWorkflow, guesthouseController.getWorkflowMeta);
 router.get(
@@ -120,16 +122,17 @@ router.delete(
   guesthouseController.deleteGuesthouseCaretaker,
 );
 
-router.get('/:id', guesthouseController.getGuesthouseBooking);
-router.put('/:id', guesthouseController.updateGuesthouseBooking);
-router.delete('/:id', canDeleteGuesthouseBooking, guesthouseController.deleteGuesthouseBooking);
-router.get('/:id/status-updates', guesthouseController.getStatusUpdates);
+router.get('/:id', canReadGuesthouse, guesthouseController.getGuesthouseBooking);
+router.put('/:id', canEditGuesthouse, guesthouseController.updateGuesthouseBooking);
+router.delete('/:id', canEditGuesthouse, canDeleteGuesthouseBooking, guesthouseController.deleteGuesthouseBooking);
+router.get('/:id/status-updates', canReadGuesthouse, guesthouseController.getStatusUpdates);
 router.post(
   '/:id/principal-document',
+  permissionMiddleware(['guesthouse.workflow.principal', 'guesthouse.workflow.guesthouse_admin']),
   upload.single('file'),
   guesthouseController.uploadPrincipalDocument,
 );
-router.delete('/:id/principal-document', guesthouseController.deletePrincipalDocument);
+router.delete('/:id/principal-document', permissionMiddleware(['guesthouse.workflow.principal', 'guesthouse.workflow.guesthouse_admin']), guesthouseController.deletePrincipalDocument);
 router.patch(
   '/:id/approval',
   canAccessGuesthouseWorkflow,
@@ -140,7 +143,7 @@ router.patch(
   canAccessGuesthouseWorkflow,
   guesthouseController.toggleGuesthouseArchive,
 );
-router.patch('/:id/travel-schedule', guesthouseController.updateTravelSchedule);
+router.patch('/:id/travel-schedule', canEditGuesthouse, guesthouseController.updateTravelSchedule);
 router.put(
   '/:id/room-allotments',
   canAccessGuesthouseWorkflow,

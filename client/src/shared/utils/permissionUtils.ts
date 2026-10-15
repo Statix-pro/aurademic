@@ -165,17 +165,11 @@ export const getGuesthouseWorkflowStage = (user?: User | null): GuesthouseWorkfl
   const roleCodes = new Set(normalizeRoleCodes(user).map((role) => role.toLowerCase()));
   const explicitRoleStage = stages.find((stage) => roleCodes.has(stage));
   if (explicitRoleStage) return explicitRoleStage;
-  if (hasAnyPermission(user, ['guesthouse.workflow.admin'])) {
-    return 'admin';
-  }
   const permissions = new Set(normalizePermissionKeys(user));
   const explicitStage = stages.find((stage) =>
     permissions.has(`guesthouse.workflow.${stage}`),
   );
   if (explicitStage) return explicitStage;
-  if (hasAnyPermission(user, ['guesthouse.manage']) || canAccessAdminArea(user)) {
-    return 'guesthouse_admin';
-  }
   return null;
 };
 

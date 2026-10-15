@@ -286,12 +286,23 @@ ON DUPLICATE KEY UPDATE `scope_type` = VALUES(`scope_type`), `meta` = VALUES(`me
 -- 11. Role + permissions
 -- ============================================================
 INSERT INTO `roles` (`role_code`, `role_name`, `description`, `is_system`, `is_admin_role`)
-VALUES ('guesthouse_admin', 'Guest House Admin', 'Final-stage approver and master-data manager for Guest House bookings', 1, 1)
-ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`), `description` = VALUES(`description`);
+VALUES ('guesthouse_admin', 'Guest House Admin', 'Final-stage approver and master-data manager for Guest House bookings', 1, 0)
+ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`), `description` = VALUES(`description`), `is_admin_role` = 0;
 
 INSERT INTO `roles` (`role_code`, `role_name`, `description`, `is_system`, `is_admin_role`)
-VALUES ('guesthouse_incharge', 'Guesthouse Incharge', 'Reviews guesthouse requests after HOD approval', 0, 1)
-ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`), `description` = VALUES(`description`);
+VALUES ('guesthouse_incharge', 'Guesthouse Incharge', 'Reviews guesthouse requests after HOD approval', 0, 0)
+ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`), `description` = VALUES(`description`), `is_admin_role` = 0;
+
+-- Clear legacy portal-admin flags previously copied from these guesthouse-only
+-- roles, while retaining admin access granted by any other admin role.
+UPDATE `users` u
+JOIN `user_roles` assigned_role ON assigned_role.user_id = u.id
+JOIN `roles` guesthouse_role ON guesthouse_role.id = assigned_role.role_id
+  AND guesthouse_role.role_code IN ('guesthouse_incharge', 'guesthouse_admin')
+SET u.is_admin = EXISTS (
+  SELECT 1 FROM `user_roles` ur JOIN `roles` r ON r.id = ur.role_id
+  WHERE ur.user_id = u.id AND r.is_admin_role = 1
+);
 
 INSERT INTO `permissions` (`module_key`, `action_key`, `permission_key`, `description`, `is_system`)
 VALUES
@@ -309,11 +320,8 @@ ON DUPLICATE KEY UPDATE `description` = VALUES(`description`);
 -- (anyone who isn't a super admin, which bypasses permission checks in
 -- authMiddleware.js) could not read, submit, or approve a booking.
 --
--- - `user` (role_code 'user') is the base role granted to every authenticated
---   account; GuestHouseBooking's /guesthouse/new and /guesthouse-dashboard
---   routes are gated only by the generic ProtectedRoute (any logged-in user),
---   so guesthouse.read/edit must be broadly granted the same way
---   budget_proposal.manage is.
+-- - `user` is not granted broad edit/read permissions; booking ownership and
+--   assigned workflow queues govern record access.
 -- - `admin` gets guesthouse.manage, matching how it holds *_admin.manage for
 --   budget/access_control without holding workflow-stage permissions.
 -- - The approval path is HOD -> Guesthouse Incharge -> Principal -> Admin.
@@ -338,10 +346,13 @@ JOIN `permissions` p ON p.permission_key = 'guesthouse.manage'
 WHERE r.role_code = 'admin'
 ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
 
+DELETE rp FROM `role_permissions` rp
+JOIN `roles` r ON r.id = rp.role_id AND r.role_code = 'user'
+JOIN `permissions` p ON p.id = rp.permission_id AND p.permission_key IN ('guesthouse.read', 'guesthouse.edit');
+
 INSERT INTO `role_permissions` (`role_id`, `permission_id`)
-SELECT r.id, p.id
-FROM `roles` r
-JOIN `permissions` p ON p.permission_key IN ('guesthouse.read', 'guesthouse.edit')
+SELECT r.id, p.id FROM `roles` r
+JOIN `permissions` p ON p.permission_key = 'guesthouse.edit'
 WHERE r.role_code = 'user'
 ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
 

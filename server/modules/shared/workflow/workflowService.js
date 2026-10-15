@@ -476,6 +476,13 @@ const canAccessStageByRole = ({ moduleKey, actor = {}, stageKey = '' }) => {
     return false;
   }
 
+  if (normalizedModuleKey === 'guesthouse') {
+    // Guest House stage roles are named after their workflow stages. Keep
+    // this exact-role check in sync with the module's queue authorization;
+    // generic admin flags and the portal-wide `admin` role grant no stages.
+    return getNormalizedActorRoles(actor).includes(normalizedStage);
+  }
+
   if (normalizedStage === 'level1') {
     const roles = getNormalizedActorRoles(actor);
     return roles.some((role) => ['hod', 'coordinator', 'entity_approver'].includes(role));
@@ -700,6 +707,59 @@ export async function actOnWorkflow({
   });
 }
 
+export async function unarchiveWorkflow({ moduleKey, recordId, actor, metadata = {} }) {
+  const moduleConfig = getWorkflowModule(moduleKey);
+  const normalizedActor = normalizeActorPayload(actor);
+  if (!normalizedActor.userId) {
+    throw new WorkflowError('Actor user ID is required', 400, 'ACTOR_REQUIRED');
+  }
+
+  return withTransaction(async (conn) => {
+    const context = await moduleConfig.adapter.getRecordContext(recordId, { tx: conn, forUpdate: true });
+    if (!context) throw new WorkflowError('Record not found', 404, 'WORKFLOW_RECORD_NOT_FOUND');
+    const currentState = await getWorkflowStateFromRecord(conn, moduleConfig, recordId, { forUpdate: true });
+    if (normalizeText(currentState?.status).toLowerCase() !== 'archived') {
+      throw new WorkflowError('Workflow is not archived', 409, 'WORKFLOW_NOT_ARCHIVED');
+    }
+    const [archiveRows] = await conn.query(
+      `SELECT stage, actor_user_id, actor_email, snapshot_before
+         FROM workflow_actions
+        WHERE module_key = ? AND record_id = ? AND decision = 'archived'
+        ORDER BY decided_at DESC, id DESC LIMIT 1`,
+      [normalizeText(moduleKey).toLowerCase(), toPositiveInt(recordId)],
+    );
+    if (!archiveRows.length) throw new WorkflowError('Archive record not found', 409, 'ARCHIVE_RECORD_NOT_FOUND');
+    const archive = archiveRows[0];
+    const sameActor = toPositiveInt(archive.actor_user_id) === normalizedActor.userId ||
+      (normalizeText(archive.actor_email).toLowerCase() && normalizeText(archive.actor_email).toLowerCase() === normalizedActor.email);
+    if (!isSuperAdminActor(normalizedActor) && !sameActor) {
+      throw new WorkflowError('Only the user who archived this request can unarchive it (or a super admin)', 403, 'UNARCHIVE_FORBIDDEN');
+    }
+    const restoredState = parseJsonValue(archive.snapshot_before, null);
+    if (!restoredState?.flow || !restoredState?.currentStage) {
+      throw new WorkflowError('Original workflow state is missing', 409, 'ARCHIVE_SNAPSHOT_INVALID');
+    }
+    assertDecisionPermission({ moduleKey: normalizeText(moduleKey).toLowerCase(), currentStage: restoredState.currentStage, actor: normalizedActor });
+    const stagePolicy = await resolveStagePolicy(conn, { moduleKey, stageKey: restoredState.currentStage });
+    await assertRecordScopeAccess({ conn, actor: normalizedActor, stagePolicy, recordContext: context });
+
+    const normalizedMeta = await validateAdapterModuleMeta({
+      moduleConfig, normalizedMeta: validateWorkflowMeta(metadata), operation: 'act', recordId, context, decision: 'unarchived',
+    });
+    await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, restoredState, { tx: conn, metadata: normalizedMeta });
+    await conn.query(
+      `INSERT INTO workflow_actions (
+        module_key, record_id, stage, decision, feedback, actor_user_id,
+        actor_email, actor_role, snapshot_before, meta
+      ) VALUES (?, ?, ?, 'unarchived', ?, ?, ?, ?, ?, ?)`,
+      [normalizeText(moduleKey).toLowerCase(), toPositiveInt(recordId), restoredState.currentStage,
+        `Restored to ${restoredState.currentStage}`, normalizedActor.userId, normalizedActor.email,
+        normalizedActor.role, JSON.stringify(currentState), JSON.stringify(normalizedMeta)],
+    );
+    return { moduleKey: normalizeText(moduleKey).toLowerCase(), recordId: toPositiveInt(recordId), previousState: currentState, currentState: restoredState };
+  });
+}
+
 export async function listQueue({ moduleKey, stage, actor, filters = {} }) {
   const moduleConfig = getWorkflowModule(moduleKey);
   const normalizedStage = normalizeText(stage).toLowerCase();
@@ -862,6 +922,74 @@ export async function logWorkflowResubmission({
       JSON.stringify(validateWorkflowMeta(metadata)),
     ],
   );
+}
+
+export async function resubmitReturnedWorkflow({
+  moduleKey,
+  recordId,
+  actor,
+  metadata = {},
+  tx = null,
+}) {
+  const normalizedModuleKey = normalizeText(moduleKey).toLowerCase();
+  const moduleConfig = getWorkflowModule(normalizedModuleKey);
+  const normalizedActor = normalizeActorPayload(actor);
+  const normalizedRecordId = toPositiveInt(recordId);
+  if (!normalizedActor.userId || !normalizedRecordId) {
+    throw new WorkflowError('Actor and record ID are required', 400, 'INVALID_RESUBMIT_REQUEST');
+  }
+
+  return withTransaction(async (conn) => {
+    const context = await moduleConfig.adapter.getRecordContext(normalizedRecordId, {
+      tx: conn,
+      forUpdate: true,
+    });
+    if (!context) throw new WorkflowError('Record not found', 404, 'WORKFLOW_RECORD_NOT_FOUND');
+    if (context.applicantUserId !== normalizedActor.userId) {
+      throw new WorkflowError('Only the applicant can resubmit this request', 403, 'RESUBMIT_FORBIDDEN');
+    }
+
+    const previousState = await getWorkflowStateFromRecord(conn, moduleConfig, normalizedRecordId, {
+      forUpdate: true,
+    });
+    if (
+      normalizeText(previousState?.status).toLowerCase() !== 'returned' ||
+      normalizeText(previousState?.currentStage).toLowerCase() !== 'hod'
+    ) {
+      throw new WorkflowError('Only requests returned at the HOD stage can be resubmitted', 409, 'WORKFLOW_NOT_RESUBMITTABLE');
+    }
+
+    const nextState = {
+      ...previousState,
+      status: 'in_progress',
+      lastDecision: 'resubmitted',
+      lastFeedback: null,
+      updatedAt: new Date().toISOString(),
+      resolvedAt: null,
+      isEditableByApplicant: false,
+    };
+    const normalizedMeta = await validateAdapterModuleMeta({
+      moduleConfig,
+      normalizedMeta: validateWorkflowMeta(metadata),
+      operation: 'act',
+      recordId: normalizedRecordId,
+      context,
+      decision: 'resubmitted',
+    });
+
+    await conn.query(
+      `INSERT INTO workflow_actions (
+        module_key, record_id, stage, decision, feedback, actor_user_id,
+        actor_email, actor_role, snapshot_before, meta
+      ) VALUES (?, ?, 'hod', 'resubmitted', ?, ?, ?, ?, ?, ?)`,
+      [normalizedModuleKey, normalizedRecordId,
+        normalizeText(previousState.lastFeedback) || null,
+        normalizedActor.userId, normalizedActor.email, normalizedActor.role,
+        JSON.stringify(previousState), JSON.stringify(normalizedMeta)],
+    );
+    await moduleConfig.adapter.updateRecordWorkflowSnapshot(normalizedRecordId, nextState, { tx: conn, metadata: normalizedMeta });
+    return { moduleKey: normalizedModuleKey, recordId: normalizedRecordId, previousState, currentState: nextState };
+  }, { tx });
 }
 
 export async function getWorkflowMetadata({ moduleKey, actor }) {

@@ -21,7 +21,8 @@ const safeParseJSON = (value, fallback = null) => {
   }
 };
 
-const withTransaction = async (callback) => {
+const withTransaction = async (callback, { tx = null } = {}) => {
+  if (tx) return callback(tx);
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -60,7 +61,8 @@ const buildDateRange = (checkInDate, checkOutDate) => {
 
 const getGuesthouseBookingForUpdate = async (tx, bookingId) => {
   const [rows] = await tx.query(
-    `SELECT id, created_by, check_in_date, check_in_time, check_out_date, check_out_time,
+    `SELECT id, created_by, employee_id, applicant_name, applicant_erp_id, department,
+            department_id, designation, email, mobile, check_in_date, check_in_time, check_out_date, check_out_time,
             workflow_state, workflow_status, workflow_stage, overall_status
        FROM guesthouse_bookings WHERE id = ? FOR UPDATE`,
     [toPositiveInt(bookingId)],
@@ -163,23 +165,44 @@ const assertRoomAvailable = async (tx, {
 };
 
 const guesthouseModel = {
+  async beginTransaction() {
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+      return conn;
+    } catch (error) {
+      conn.release();
+      throw error;
+    }
+  },
   // ============================================
   // Bookings — core CRUD
   // ============================================
 
-  async createGuesthouseBooking(payload = {}, createdByUserId) {
+  async createGuesthouseBooking(payload = {}, createdByUserId, options = {}) {
     return withTransaction(async (tx) => {
       const applicant = payload.applicant || {};
       const beneficiary = payload.beneficiary || {};
       const requestedEmployeeId = toPositiveInt(applicant.employeeId);
       let employeeId = null;
+      let employeeProfile = null;
 
       if (requestedEmployeeId) {
         const [employeeRows] = await tx.query(
-          'SELECT id FROM master_employees WHERE id = ? LIMIT 1',
+          `SELECT e.id, e.erp_id, CONCAT(COALESCE(e.title, ''), ' ', e.first_name, ' ', COALESCE(e.last_name, '')) AS full_name,
+                  e.designation, e.email, e.mobile, d.name AS department, e.department_id
+             FROM master_employees e LEFT JOIN master_departments d ON d.id = e.department_id
+            WHERE e.id = ? AND e.status = 'Active' LIMIT 1`,
           [requestedEmployeeId],
         );
-        if (employeeRows.length) employeeId = requestedEmployeeId;
+        if (employeeRows.length) {
+          employeeId = requestedEmployeeId;
+          employeeProfile = employeeRows[0];
+        } else {
+          const error = new Error('Applicant employee profile is unavailable');
+          error.statusCode = 403;
+          throw error;
+        }
       }
       const beneficiaryType = normalizeText(beneficiary.beneficiaryType);
       const beneficiaryDepartmentName =
@@ -194,6 +217,15 @@ const guesthouseModel = {
           `SELECT id, name FROM master_departments WHERE id = ? AND is_active = 1 LIMIT 1`,
           [requestedDepartmentId],
         );
+        const expectedDepartmentName = beneficiaryDepartmentName || normalizeText(employeeProfile?.department || applicant.department);
+        if (
+          departmentRows.length && expectedDepartmentName &&
+          normalizeText(departmentRows[0].name).toLowerCase() !== expectedDepartmentName.toLowerCase()
+        ) {
+          const error = new Error('Selected department does not match the department name');
+          error.statusCode = 400;
+          throw error;
+        }
       }
       if (!departmentRows.length && beneficiaryDepartmentName) {
         [departmentRows] = await tx.query(
@@ -235,13 +267,13 @@ const guesthouseModel = {
          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           employeeId,
-          normalizeText(applicant.name) || null,
-          employeeId ? null : normalizeText(applicant.erpId || applicant.erp_id) || null,
+          normalizeText(employeeProfile?.full_name || applicant.name) || null,
+          employeeProfile?.erp_id || (employeeId ? null : normalizeText(applicant.erpId || applicant.erp_id) || null),
           workflowDepartmentName,
           workflowDepartmentId,
-          normalizeText(applicant.designation) || null,
-          normalizeText(applicant.email) || null,
-          normalizeText(applicant.mobile) || null,
+          normalizeText(employeeProfile?.designation || applicant.designation) || null,
+          normalizeText(employeeProfile?.email || applicant.email) || null,
+          normalizeText(employeeProfile?.mobile || applicant.mobile) || null,
           applicant.date || new Date().toISOString().slice(0, 10),
           normalizeText(beneficiary.beneficiaryType) || null,
           normalizeText(beneficiary.staffName) || null,
@@ -356,7 +388,7 @@ const guesthouseModel = {
       }
 
       return bookingId;
-    });
+    }, options);
   },
 
   /** Replace the editable booking detail rows in one transaction. Workflow data is retained. */
@@ -383,13 +415,33 @@ const guesthouseModel = {
       const lastStay = [...datedGuests].sort((a, b) =>
         `${b.travel.checkOutDate}T${b.travel.checkOutTime || '00:00'}`.localeCompare(`${a.travel.checkOutDate}T${a.travel.checkOutTime || '00:00'}`),
       )[0];
+      // Department scope is fixed when the request is created. Editing form
+      // fields must not silently clear or redirect the HOD queue assignment.
+      let workflowDepartmentName = normalizeText(currentBooking.department) || null;
+      let workflowDepartmentId = toPositiveInt(currentBooking.department_id);
+      if (!workflowDepartmentId && workflowDepartmentName) {
+        const [departmentRows] = await tx.query(
+          `SELECT id, name FROM master_departments
+            WHERE is_active = 1 AND LOWER(TRIM(name)) = LOWER(TRIM(?))
+            ORDER BY id ASC LIMIT 1`,
+          [workflowDepartmentName],
+        );
+        if (departmentRows.length) {
+          workflowDepartmentId = toPositiveInt(departmentRows[0].id);
+          workflowDepartmentName = normalizeText(departmentRows[0].name);
+        }
+      }
 
       // A guest with an allocation must not be replaced: its allocation references that guest id.
       const [allocated] = await tx.query(
         `SELECT 1 FROM guesthouse_room_allotments WHERE booking_id = ? LIMIT 1`,
         [normalizedId],
       );
-      if (allocated.length) throw new Error('This booking already has room allocations and cannot be edited.');
+      if (allocated.length) {
+        const error = new Error('This booking already has room allocations and cannot be edited.');
+        error.statusCode = 409;
+        throw error;
+      }
 
       const [updated] = await tx.query(
         `UPDATE guesthouse_bookings SET
@@ -400,13 +452,13 @@ const guesthouseModel = {
            number_of_days = ?, duration_label = ?, updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
-          normalizeText(applicant.name) || null,
-          normalizeText(applicant.erpId || applicant.erp_id) || null,
-          normalizeText(beneficiary.department || applicant.department) || null,
-          toPositiveInt(beneficiary.departmentId) || toPositiveInt(applicant.departmentId),
-          normalizeText(applicant.designation) || null,
-          normalizeText(applicant.email) || null,
-          normalizeText(applicant.mobile) || null,
+          normalizeText(currentBooking.applicant_name) || null,
+          normalizeText(currentBooking.applicant_erp_id) || null,
+          workflowDepartmentName,
+          workflowDepartmentId,
+          normalizeText(currentBooking.designation) || null,
+          normalizeText(currentBooking.email) || null,
+          normalizeText(currentBooking.mobile) || null,
           applicant.date || new Date().toISOString().slice(0, 10),
           beneficiaryType || null,
           normalizeText(beneficiary.staffName) || null,
@@ -460,7 +512,12 @@ const guesthouseModel = {
         await tx.query(
           `INSERT INTO guesthouse_food_requirements (booking_id, req_date, morning_refreshment, breakfast_veg, breakfast_nonveg,
              lunch_veg, lunch_nonveg, evening_refreshment, dinner_veg, dinner_nonveg)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE morning_refreshment = VALUES(morning_refreshment),
+             breakfast_veg = VALUES(breakfast_veg), breakfast_nonveg = VALUES(breakfast_nonveg),
+             lunch_veg = VALUES(lunch_veg), lunch_nonveg = VALUES(lunch_nonveg),
+             evening_refreshment = VALUES(evening_refreshment), dinner_veg = VALUES(dinner_veg),
+             dinner_nonveg = VALUES(dinner_nonveg)`,
           [normalizedId, req.date, Number(req.morningRefreshment) || 0, Number(req.breakfastVeg) || 0,
             Number(req.breakfastNonVeg || req.breakfastNonveg) || 0, Number(req.lunchVeg) || 0,
             Number(req.lunchNonVeg || req.lunchNonveg) || 0, Number(req.eveningRefreshment) || 0,
@@ -468,7 +525,7 @@ const guesthouseModel = {
         );
       }
       return true;
-    });
+    }, { tx: workflowGuard.tx || null });
   },
 
   async getGuesthouseBookingById(bookingId) {
@@ -650,7 +707,7 @@ const guesthouseModel = {
           throw error;
         }
         const { stage, status } = getWorkflowStageAndStatus(booking);
-        if ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(status)) {
+        if ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed'].includes(status)) {
           const error = new Error('This booking can no longer be deleted after approval has started');
           error.statusCode = 409;
           throw error;
@@ -1301,7 +1358,9 @@ const guesthouseModel = {
           if (!block || !roomNumber) continue;
           const key = `${block}::${roomNumber}`;
           if (roomAssignments.has(key)) {
-            throw new Error(`Room ${normalizeText(room.roomNumber)} in ${normalizeText(room.block)} is assigned more than once in this booking`);
+            const error = new Error(`Room ${normalizeText(room.roomNumber)} in ${normalizeText(room.block)} is assigned more than once in this booking`);
+            error.statusCode = 409;
+            throw error;
           }
           roomAssignments.add(key);
         }
