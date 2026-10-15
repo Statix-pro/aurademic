@@ -1,43 +1,331 @@
+import { BriefcaseBusiness, CheckCircle, Clock3, Eye, XCircle } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { BriefcaseBusiness, CheckCircle, Clock3, Eye, X, XCircle } from 'lucide-react';
+import { Badge } from 'react-bootstrap';
+
+import CustomButton from '../../../shared/components/ui/CustomButton';
+import CustomCard from '../../../shared/components/ui/CustomCard';
+import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
+import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import ResourcePersonDirectory from '../../resourcepersondirectory/ResourcePersonDirectory';
 
 type Filter = 'All' | 'Pending' | 'Approved' | 'Rejected';
-const statusStyle = (status: string) => status === 'Approved' ? { background: '#d9f8e5', color: '#087b43' } : status === 'Rejected' ? { background: '#fde1e5', color: '#c52d43' } : { background: '#fff0d2', color: '#a96800' };
+type Row = Record<string, any> & { id: number; approvalStatus?: Filter };
+const statusStyle = (s: string) =>
+  s === 'Approved'
+    ? { background: '#d9f8e5', color: '#087b43' }
+    : s === 'Rejected'
+      ? { background: '#fde1e5', color: '#c52d43' }
+      : { background: '#fff0d2', color: '#a96800' };
 
 export default function ResourcePersonApprovalPage() {
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [filter, setFilter] = useState<Filter>('All');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('All');
   const [loading, setLoading] = useState(true);
-  const [viewing, setViewing] = useState<any | null>(null);
+  const [viewing, setViewing] = useState<Row | null>(null);
   const [error, setError] = useState('');
   const [reviewingId, setReviewingId] = useState<number | null>(null);
-  const load = async () => { setLoading(true); try { const response = (await authenticityUtility.get('/admin/resource-person-submissions')) as any; setRows(response.data || []); } finally { setLoading(false); } };
-  useEffect(() => { void load(); }, []);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const response = (await authenticityUtility.get('/admin/resource-person-submissions')) as any;
+      setRows(response.data || []);
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load submissions.');
+    } finally {
+      setLoading(false);
+    }
+  };
+  useEffect(() => {
+    void load();
+  }, []);
   const review = async (id: number, decision: 'approve' | 'reject') => {
     setReviewingId(id);
     setError('');
     try {
-      await authenticityUtility.patch(`/admin/resource-person-submissions/${id}/review`, { decision });
-      await load();
+      await authenticityUtility.patch(`/admin/resource-person-submissions/${id}/review`, {
+        decision,
+      });
+      setRows((current) =>
+        current.map((row) =>
+          row.id === id
+            ? { ...row, approvalStatus: decision === 'approve' ? 'Approved' : 'Rejected' }
+            : row,
+        ),
+      );
     } catch (err: any) {
       setError(err?.message || 'Failed to review resource person.');
     } finally {
       setReviewingId(null);
     }
   };
-  const counts = useMemo(() => ({ total: rows.length, pending: rows.filter((row) => row.approvalStatus === 'Pending').length, approved: rows.filter((row) => row.approvalStatus === 'Approved').length, rejected: rows.filter((row) => row.approvalStatus === 'Rejected').length }), [rows]);
-  const filteredRows = rows.filter((row) => { const name = `${row.title || ''} ${row.first_name || ''} ${row.last_name || ''}`.trim(); const haystack = `${name} ${row.city || ''} ${row.organization || ''}`.toLowerCase(); return (filter === 'All' || row.approvalStatus === filter) && (!search.trim() || haystack.includes(search.trim().toLowerCase())) && (category === 'All' || row.category === category); });
-  const toFormPerson = (row: any) => ({ id: row.id, title: row.title || 'Dr.', firstName: row.first_name || '', lastName: row.last_name || '', name: `${row.title || ''} ${row.first_name || ''} ${row.last_name || ''}`.trim(), gender: row.gender || 'Male', dob: row.dob || '', status: row.person_status || row.status || 'In Service', category: row.category || 'Academic', tag: row.tag || '', specialization: row.specialization || '', mobile: row.mobile || '', personalEmail: row.personal_email || '', officialEmail: row.official_email || '', linkedIn: row.linkedin || '', professions: row.professions || [{ designation: row.designation || '', department: row.department || '', organization: row.organization || '', city: row.city || '', state: row.state || '', country: row.country || '', orgLinkedIn: '', status: 'Working' }], photoName: row.photo_name || '', resumeName: row.resume_name || '', date: row.created_at || '' });
-  const card = (label: string, value: number, icon: React.ReactNode, selected: Filter) => <button type="button" onClick={() => setFilter(selected)} style={{ flex: 1, minWidth: 160, height: 108, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', border: '1px solid #dbe4ed', borderRadius: 14, background: '#fff', cursor: 'pointer', boxShadow: '0 6px 18px rgba(15,42,70,.08)', outline: filter === selected ? '3px solid #d8eaf5' : 'none' }}><span style={{ width: 46, height: 46, borderRadius: 12, display: 'grid', placeItems: 'center', background: '#0878bd', color: '#fff' }}>{icon}</span><span style={{ textAlign: 'left' }}><span style={{ display: 'block', color: '#65758b', fontSize: 15 }}>{label}</span><strong style={{ display: 'block', color: '#29436a', fontSize: 26, lineHeight: 1.1 }}>{value}</strong></span></button>;
-  return <div style={{ minHeight: '100%', padding: 26, background: '#f1f6fb' }}><div style={{ maxWidth: 1250, margin: '0 auto', padding: 26, borderRadius: 18, background: '#fff', boxShadow: '0 8px 24px rgba(15,42,70,.08)' }}>
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap', marginBottom: 22 }}><div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><h1 style={{ margin: 0, color: '#082b50', fontSize: 24, fontWeight: 700 }}>Resource Person Directory Approval</h1><span style={{ padding: '8px 18px', borderRadius: 12, background: '#0878bd', color: '#fff', fontWeight: 700, fontSize: 14 }}>ADMIN</span></div><div style={{ display: 'flex', gap: 12 }}><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search resource person" style={{ width: 230, height: 40, padding: '0 12px', border: '1px solid #d3dfeb', borderRadius: 9 }} /><select value={category} onChange={(event) => setCategory(event.target.value)} style={{ width: 160, height: 40, padding: '0 10px', border: '1px solid #d3dfeb', borderRadius: 9 }}><option value="All">All categories</option>{['Academic', 'Industry', 'Scientist', 'Administration', 'Incubation', 'Government', 'Entrepreneur', 'Alumni', 'Social Activist'].map((item) => <option key={item}>{item}</option>)}</select></div></div>
-    {error && <div className="alert alert-danger" role="alert">{error}</div>}
-    <div style={{ display: 'flex', gap: 14, marginBottom: 26, flexWrap: 'wrap' }}>{card('Total', counts.total, <BriefcaseBusiness size={22} />, 'All')}{card('Pending', counts.pending, <Clock3 size={22} />, 'Pending')}{card('Approved', counts.approved, <CheckCircle size={22} />, 'Approved')}{card('Reject', counts.rejected, <XCircle size={22} />, 'Rejected')}</div>
-    <div style={{ overflowX: 'auto', border: '1px solid #cddceb', borderRadius: 13 }}><table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1050 }}><thead><tr style={{ background: '#eef5fd', color: '#006db4', textAlign: 'left' }}>{['RESOURCE PERSON', 'CATEGORY', 'ORGANIZATION', 'STATUS', 'VIEW', 'ACTION'].map((heading) => <th key={heading} style={{ padding: '15px 14px', fontSize: 14 }}>{heading}</th>)}</tr></thead><tbody>{loading ? <tr><td colSpan={6} style={{ padding: 40, textAlign: 'center' }}>Loading resource persons...</td></tr> : filteredRows.length ? filteredRows.map((row) => { const name = `${row.title || ''} ${row.first_name || ''} ${row.last_name || ''}`.trim(); const status = row.approvalStatus || 'Pending'; return <tr key={row.id} style={{ borderTop: '1px solid #e1e8f0' }}><td style={{ padding: '16px 14px', fontWeight: 700, color: '#092f59' }}>{name}</td><td style={{ padding: 14 }}>{row.category || '—'}</td><td style={{ padding: 14 }}>{row.organization || '—'}</td><td style={{ padding: 14 }}><span style={{ ...statusStyle(status), display: 'inline-block', padding: '7px 12px', borderRadius: 18, fontWeight: 700, fontSize: 13 }}>{status}</span></td><td style={{ padding: 14, textAlign: 'center' }}><button type="button" onClick={() => setViewing(toFormPerson(row))} aria-label="View resource person submission" title="View resource person submission" style={{ width: 36, height: 36, padding: 0, border: '1px solid #bfdbfe', borderRadius: 6, background: '#eff6ff', color: '#006db4', cursor: 'pointer' }}><Eye size={17} /></button></td><td style={{ padding: 14, whiteSpace: 'nowrap' }}>{status === 'Pending' && <><button type="button" disabled={reviewingId !== null} onClick={() => void review(row.id, 'approve')} style={{ marginRight: 8, padding: '8px 13px', border: 0, borderRadius: 6, background: '#178b58', color: '#fff', fontWeight: 700, fontSize: 13 }}>✓ Approve</button><button type="button" disabled={reviewingId !== null} onClick={() => void review(row.id, 'reject')} style={{ padding: '8px 13px', border: 0, borderRadius: 6, background: '#df3349', color: '#fff', fontWeight: 700, fontSize: 13 }}>× Reject</button></>}</td></tr>; }) : <tr><td colSpan={6} style={{ padding: 45, textAlign: 'center', color: '#1e3555', fontSize: 16 }}>No resource persons found.</td></tr>}</tbody></table></div>
-    {viewing && <div className="modal d-block" role="dialog" aria-modal="true" onClick={() => setViewing(null)}><div className="modal-dialog modal-dialog-scrollable" style={{ maxWidth: 1150, width: 'calc(100% - 32px)', margin: '1.75rem auto' }} onClick={(event) => event.stopPropagation()}><div className="modal-content"><div className="modal-header"><h5 className="modal-title">Resource Person Details</h5><button type="button" className="btn-close" aria-label="Close" onClick={() => setViewing(null)}><X size={20} /></button></div><div className="modal-body p-3"><ResourcePersonDirectory editingPerson={viewing} readOnly onSave={() => undefined} onCancel={() => setViewing(null)} /></div></div></div></div>}
-  </div></div>;
+  const counts = useMemo(
+    () => ({
+      total: rows.length,
+      pending: rows.filter((r) => (r.approvalStatus || 'Pending') === 'Pending').length,
+      approved: rows.filter((r) => r.approvalStatus === 'Approved').length,
+      rejected: rows.filter((r) => r.approvalStatus === 'Rejected').length,
+    }),
+    [rows],
+  );
+  const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))] as string[];
+  const categoryOptions: OptionType[] = [
+    { value: 'All', label: 'All categories' },
+    ...categories.map((item) => ({ value: item, label: item })),
+  ];
+  const filteredRows = rows.filter((row) => {
+    const name = `${row.title || ''} ${row.first_name || ''} ${row.last_name || ''}`.trim();
+    const haystack = `${name} ${row.city || ''} ${row.organization || ''}`.toLowerCase();
+    return (
+      (filter === 'All' || (row.approvalStatus || 'Pending') === filter) &&
+      (!search.trim() || haystack.includes(search.trim().toLowerCase())) &&
+      (category === 'All' || row.category === category)
+    );
+  });
+  const toFormPerson = (row: Row) => {
+    const fallbackProfession = {
+      designation: row.designation || '',
+      department: row.department || '',
+      organization: row.organization || '',
+      city: row.city || '',
+      state: row.state || '',
+      country: row.country || '',
+      orgLinkedIn: row.org_linked_in || row.orgLinkedIn || '',
+      status: row.profession_status || 'Working',
+    };
+    const professions =
+      Array.isArray(row.professions) && row.professions.length > 0
+        ? row.professions.map((profession: Record<string, any>) => ({
+            ...fallbackProfession,
+            ...profession,
+            orgLinkedIn: profession.orgLinkedIn || profession.org_linked_in || '',
+          }))
+        : [fallbackProfession];
+
+    return {
+      id: row.id,
+      title: row.title || 'Dr.',
+      firstName: row.firstName || row.first_name || '',
+      lastName: row.lastName || row.last_name || '',
+      name: row.name || `${row.title || ''} ${row.first_name || ''} ${row.last_name || ''}`.trim(),
+      gender: row.gender || 'Male',
+      dob: row.dob || '',
+      status: row.person_status || row.status || 'In Service',
+      category: row.category || 'Academic',
+      tag: row.tag || '',
+      specialization: row.specialization || '',
+      mobile: row.mobile || '',
+      personalEmail: row.personalEmail || row.personal_email || '',
+      officialEmail: row.officialEmail || row.official_email || '',
+      linkedIn: row.linkedIn || row.linked_in || '',
+      professions,
+      photoName: row.photoName || row.photo_name || '',
+      photoPath: row.photoPath || row.photo_path || '',
+      resumeName: row.resumeName || row.resume_name || '',
+      resumePath: row.resumePath || row.resume_path || '',
+      date: row.date || row.created_at || '',
+    };
+  };
+  const stat = (label: string, value: number, icon: React.ReactNode, selected: Filter) => (
+    <CustomCard
+      className="request-summary-card h-100 mb-0"
+      role="button"
+      tabIndex={0}
+      onClick={() => setFilter(selected)}
+    >
+      <div className="d-flex align-items-center gap-3">
+        <span
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 10,
+            background: '#0878bd',
+            color: '#fff',
+            display: 'grid',
+            placeItems: 'center',
+          }}
+        >
+          {icon}
+        </span>
+        <div>
+          <div className="text-muted">{label}</div>
+          <strong className="fs-4" style={{ color: '#29436a' }}>
+            {value}
+          </strong>
+        </div>
+      </div>
+    </CustomCard>
+  );
+  const columns = [
+    {
+      key: 'name',
+      label: 'RESOURCE PERSON',
+      render: (row: Row) => (
+        <strong>
+          {`${row.title || ''} ${row.first_name || ''} ${row.last_name || ''}`.trim()}
+        </strong>
+      ),
+    },
+    { key: 'category', label: 'CATEGORY', render: (row: Row) => row.category || '—' },
+    { key: 'organization', label: 'ORGANIZATION', render: (row: Row) => row.organization || '—' },
+    {
+      key: 'approvalStatus',
+      label: 'STATUS',
+      render: (row: Row) => {
+        const status = row.approvalStatus || 'Pending';
+        return (
+          <span
+            style={{
+              ...statusStyle(status),
+              display: 'inline-block',
+              padding: '7px 12px',
+              borderRadius: 18,
+              fontWeight: 700,
+              fontSize: 13,
+            }}
+          >
+            {status}
+          </span>
+        );
+      },
+    },
+    {
+      key: 'view',
+      label: 'VIEW',
+      render: (row: Row) => (
+        <CustomButton
+          variant="outline-primary"
+          className="resource-person-view-button"
+          aria-label="View resource person submission"
+          onClick={() => setViewing(row)}
+        >
+          <Eye size={17} />
+        </CustomButton>
+      ),
+    },
+  ];
+  return (
+    <div
+      className="resource-person-approval-page p-4"
+      style={{ minHeight: '100%', background: '#f1f6fb' }}
+    >
+      <style>{`.resource-person-approval-page .request-summary-card .card-body { padding: 1.25rem 2rem; } .resource-person-approval-page .resource-person-view-button { width: 38px; height: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #006db4; border-color: #bfdbfe; background: #eff6ff; } .resource-person-approval-page .resource-person-view-button:hover { color: #fff; background: #0878bd; border-color: #0878bd; } .resource-person-approval-page .custom-table { color: #29436a; } .resource-person-approval-page .custom-table thead th { color: #006db4; font-weight: 700; } .resource-person-approval-page .custom-table tbody td { vertical-align: middle; } .resource-person-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); } .resource-person-details-modal .modal-content { max-height: calc(100vh - 3.5rem); } .resource-person-details-modal .modal-body { overflow-y: auto; }`}</style>
+      <CustomCard className="mx-auto" style={{ maxWidth: 1250 }}>
+        <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
+          <div className="d-flex align-items-center gap-3">
+            <h2 className="h4 mb-0" style={{ color: '#082b50', fontWeight: 700 }}>
+              Resource Person Request
+            </h2>
+            <Badge
+              style={{
+                alignItems: 'center',
+                background: '#0069ab',
+                borderRadius: 14,
+                color: '#fff',
+                display: 'inline-flex',
+                fontWeight: 700,
+                height: 38,
+                justifyContent: 'center',
+                padding: 0,
+                width: 82,
+              }}
+            >
+              ADMIN
+            </Badge>
+          </div>
+          <div className="d-flex align-items-center gap-3">
+            <CustomInput
+              name="resource-person-search"
+              value={search}
+              onChange={setSearch}
+              placeholder="Search resource person"
+              className="mb-0"
+            />
+            <CustomDropdown
+              name="resource-person-category"
+              options={categoryOptions}
+              value={categoryOptions.find((o) => o.value === category)}
+              onChange={(option) => {
+                if (option && 'value' in option) setCategory(String(option.value));
+              }}
+            />
+          </div>
+        </div>
+        {error && (
+          <div className="alert alert-danger" role="alert">
+            {error}
+          </div>
+        )}
+        <div className="row g-3 mb-4">
+          <div className="col-12 col-sm-6 col-xl-3">
+            {stat('Total', counts.total, <BriefcaseBusiness size={22} />, 'All')}
+          </div>
+          <div className="col-12 col-sm-6 col-xl-3">
+            {stat('Pending', counts.pending, <Clock3 size={22} />, 'Pending')}
+          </div>
+          <div className="col-12 col-sm-6 col-xl-3">
+            {stat('Approved', counts.approved, <CheckCircle size={22} />, 'Approved')}
+          </div>
+          <div className="col-12 col-sm-6 col-xl-3">
+            {stat('Rejected', counts.rejected, <XCircle size={22} />, 'Rejected')}
+          </div>
+        </div>
+        <CustomTable
+          columns={columns}
+          data={filteredRows}
+          keyField="id"
+          loading={loading}
+          emptyMessage="No resource persons found."
+          actions={(row: Row) =>
+            (row.approvalStatus || 'Pending') === 'Pending' ? (
+              <div className="d-flex gap-1">
+                <CustomButton
+                  variant="success"
+                  className="px-2 py-1"
+                  style={{ fontSize: 12, minWidth: 78 }}
+                  loading={reviewingId === row.id}
+                  disabled={reviewingId !== null}
+                  onClick={() => void review(row.id, 'approve')}
+                >
+                  ✓ Approve
+                </CustomButton>
+                <CustomButton
+                  variant="danger"
+                  className="px-2 py-1"
+                  style={{ fontSize: 12, minWidth: 68 }}
+                  loading={reviewingId === row.id}
+                  disabled={reviewingId !== null}
+                  onClick={() => void review(row.id, 'reject')}
+                >
+                  × Reject
+                </CustomButton>
+              </div>
+            ) : null
+          }
+        />
+        <CustomModal
+          show={viewing !== null}
+          onHide={() => setViewing(null)}
+          title="Resource Person Details"
+          size="xl"
+          className="resource-person-details-modal"
+        >
+          {viewing && (
+            <div className="p-3">
+              <ResourcePersonDirectory
+                editingPerson={toFormPerson(viewing)}
+                readOnly
+                onSave={() => undefined}
+                onCancel={() => setViewing(null)}
+              />
+            </div>
+          )}
+        </CustomModal>
+      </CustomCard>
+    </div>
+  );
 }

@@ -45,10 +45,14 @@ export interface ResourcePerson {
   linkedIn: string;
   professions: ProfessionDetail[];
   photoName?: string;
+  photoPath?: string;
   resumeName?: string;
+  resumePath?: string;
   photoFile?: File;
   resumeFile?: File;
   date: string;
+  approvalStatus?: 'Pending' | 'Approved' | 'Rejected';
+  isOwner?: boolean;
 }
 
 interface ResourcePersonDirectoryProps {
@@ -134,6 +138,7 @@ interface UploadBoxProps {
   hint: string;
   accept: string;
   filename: string;
+  filePath?: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   disabled?: boolean;
 }
@@ -144,6 +149,7 @@ const UploadBox: React.FC<UploadBoxProps> = ({
   hint,
   accept,
   filename,
+  filePath,
   onChange,
   disabled,
 }) => {
@@ -158,7 +164,13 @@ const UploadBox: React.FC<UploadBoxProps> = ({
             <div
               style={{ marginTop: '4px', fontSize: '0.8rem', color: '#0069ab', fontWeight: '600' }}
             >
-              {filename}
+              {filePath ? (
+                <a href={filePath} target="_blank" rel="noreferrer">
+                  {filename}
+                </a>
+              ) : (
+                filename
+              )}
             </div>
           )}
         </div>
@@ -733,6 +745,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               hint="JPG, JPEG, PNG (Maximum 2 MB)"
               accept="image/*"
               filename={photoName}
+              filePath={editingPerson?.photoPath}
               onChange={handlePhoto}
               disabled={isReadOnly}
             />
@@ -742,6 +755,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               hint="PDF, DOC, DOCX (Maximum 5 MB)"
               accept=".pdf,.doc,.docx"
               filename={resumeName}
+              filePath={editingPerson?.resumePath}
               onChange={handleResume}
               disabled={isReadOnly}
             />

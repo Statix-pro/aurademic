@@ -98,6 +98,8 @@ const MODULE_LABELS = Object.freeze({
   finance: 'Finance request',
   expenditure: 'Expenditure request',
   budget: 'Budget proposal',
+  organization_directory: 'Organization directory submission',
+  resource_person_directory: 'Resource-person directory submission',
 });
 
 export const moduleLabel = (moduleKey) =>
@@ -264,6 +266,8 @@ export const NOTIFICATION_TYPES = Object.freeze({
   ...workflowEntries('finance', 'finance'),
   ...workflowEntries('expenditure', 'expenditure'),
   ...workflowEntries('budget', 'budget'),
+  ...workflowEntries('organization_directory', 'master_data'),
+  ...workflowEntries('resource_person_directory', 'master_data'),
 
   /* ---- budget-only transitions, which the generic engine has no analogue for ---- */
 

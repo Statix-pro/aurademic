@@ -126,7 +126,9 @@ const OrganizationDirectoryDashboard: React.FC = () => {
       setEditingOrg(null);
       setShowForm(false);
     } catch (err: any) {
-      setError(err?.message || err?.response?.data?.message || 'Failed to save record. Please try again.');
+      setError(
+        err?.message || err?.response?.data?.message || 'Failed to save record. Please try again.',
+      );
     }
   };
 
@@ -307,19 +309,26 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                             <td>{org.category}</td>
                             <td>{org.tag && <span className="org-tag-pill">{org.tag}</span>}</td>
                             <td>
-                              <span className={`org-status-pill ${org.approvalStatus === 'Approved' ? 'approved' : 'pending'}`}>
-                                {org.approvalStatus || ((org as Organization & { is_active?: boolean }).is_active ? 'Approved' : 'Pending')}
+                              <span
+                                className={`org-status-pill ${org.approvalStatus === 'Approved' ? 'approved' : 'pending'}`}
+                              >
+                                {org.approvalStatus ||
+                                  ((org as Organization & { is_active?: boolean }).is_active
+                                    ? 'Approved'
+                                    : 'Pending')}
                               </span>
                             </td>
                             <td style={{ textAlign: 'center' }}>
-                              <button
-                                type="button"
-                                className="org-action-edit-btn"
-                                onClick={() => handleEdit(org)}
-                                title="Edit Organization"
-                              >
-                                <Edit3 size={15} />
-                              </button>
+                              {org.isOwner && (
+                                <button
+                                  type="button"
+                                  className="org-action-edit-btn"
+                                  onClick={() => handleEdit(org)}
+                                  title="Edit Organization"
+                                >
+                                  <Edit3 size={15} />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );

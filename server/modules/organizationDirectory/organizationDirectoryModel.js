@@ -1,13 +1,26 @@
 import db from '../../config/connection.js';
+import { getDirectoryApprovalStatus } from '../shared/directoryApprovalStatus.js';
 import '../shared/workflow/directoryWorkflowAdapter.js';
 import workflowService from '../shared/workflow/workflowService.js';
 
 const ORG_FIELDS = [
-  'name', 'abbreviation', 'establishment_year', 'sector', 'category', 'tag',
-  'website', 'linked_in', 'address', 'city', 'state', 'country', 'pin_code', 'status',
+  'name',
+  'abbreviation',
+  'establishment_year',
+  'sector',
+  'category',
+  'tag',
+  'website',
+  'linked_in',
+  'address',
+  'city',
+  'state',
+  'country',
+  'pin_code',
+  'status',
 ];
 
-const normalizePayload = (input = {}) => {
+export const normalizePayload = (input = {}) => {
   const aliases = {
     establishment_year: 'establishmentYear',
     linked_in: 'linkedIn',
@@ -16,7 +29,9 @@ const normalizePayload = (input = {}) => {
   return Object.fromEntries(
     ORG_FIELDS.map((field) => {
       const value = input[field] ?? input[aliases[field]];
-      return [field, value === '' ? null : value ?? null];
+      if (field === 'category') return [field, value || 'Academic'];
+      if (field === 'tag') return [field, value || 'General'];
+      return [field, value === '' ? null : (value ?? null)];
     }),
   );
 };
@@ -37,7 +52,14 @@ export default {
        ORDER BY id DESC`,
       [userId || 0],
     );
-    return rows.map((row) => ({ ...serialize(row), approvalStatus: row.is_active ? 'Approved' : 'Pending' }));
+    return rows.map((row) => {
+      const isOwner = Number(row.created_by) === Number(userId);
+      return {
+        ...serialize(row),
+        approvalStatus: getDirectoryApprovalStatus(row, userId),
+        isOwner,
+      };
+    });
   },
 
   async submit(input, userId) {
@@ -48,11 +70,23 @@ export default {
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
-      const [result] = await connection.execute(`INSERT INTO organizations (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`, values);
-      await workflowService.startWorkflow({ moduleKey: 'organization_directory', recordId: result.insertId, tx: connection });
+      const [result] = await connection.execute(
+        `INSERT INTO organizations (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
+        values,
+      );
+      await workflowService.startWorkflow({
+        moduleKey: 'organization_directory',
+        recordId: result.insertId,
+        tx: connection,
+      });
       await connection.commit();
       return { id: result.insertId, status: 'Pending', ...payload };
-    } catch (error) { await connection.rollback(); throw error; } finally { connection.release(); }
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   },
 
   async update(id, input, userId) {
@@ -74,9 +108,14 @@ export default {
         `UPDATE organizations SET ${assignments}, is_active = 0, updated_by = NULL WHERE id = ?`,
         [...ORG_FIELDS.map((field) => payload[field]), id],
       );
-      await workflowService.startWorkflow({ moduleKey: 'organization_directory', recordId: id, tx: connection });
+      await workflowService.startWorkflow({
+        moduleKey: 'organization_directory',
+        recordId: id,
+        tx: connection,
+      });
       const [rows] = await connection.execute(
-        'SELECT *, DATE(created_at) AS date FROM organizations WHERE id = ?', [id],
+        'SELECT *, DATE(created_at) AS date FROM organizations WHERE id = ?',
+        [id],
       );
       await connection.commit();
       return serialize(rows[0]);
@@ -94,13 +133,27 @@ export default {
        FROM organizations o LEFT JOIN users u ON u.id = o.created_by
        ORDER BY o.created_at ASC`,
     );
-    return rows.map((row) => ({ ...serialize(row), approvalStatus: row.is_active ? 'Approved' : (row.updated_by ? 'Rejected' : 'Pending'),
-      submitted_by: row.created_by, submitted_by_name: row.submitted_by_name,
-      submitted_by_email: row.submitted_by_email }));
+    return rows.map((row) => ({
+      ...serialize(row),
+      approvalStatus: row.is_active ? 'Approved' : row.updated_by ? 'Rejected' : 'Pending',
+      submitted_by: row.created_by,
+      submitted_by_name: row.submitted_by_name,
+      submitted_by_email: row.submitted_by_email,
+    }));
   },
 
   async review(id, decision, actor, comment) {
-    await workflowService.actOnWorkflow({ moduleKey: 'organization_directory', recordId: id, decision: decision === 'approve' ? 'approved' : 'rejected', feedback: comment || (decision === 'reject' ? 'Rejected by super administrator' : null), actor, metadata: { origin: 'api', moduleMeta: { route: 'PATCH /api/admin/organization-submissions/:id/review' } } });
+    await workflowService.actOnWorkflow({
+      moduleKey: 'organization_directory',
+      recordId: id,
+      decision: decision === 'approve' ? 'approved' : 'rejected',
+      feedback: comment || (decision === 'reject' ? 'Rejected by super administrator' : null),
+      actor,
+      metadata: {
+        origin: 'api',
+        moduleMeta: { route: 'PATCH /api/admin/organization-submissions/:id/review' },
+      },
+    });
     return { id: Number(id), status: decision === 'approve' ? 'Approved' : 'Rejected' };
   },
 };

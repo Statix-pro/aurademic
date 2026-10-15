@@ -260,6 +260,27 @@ const SYSTEM_PERMISSION_SEED = [
     description: 'Create roles and assign access',
     is_system: true,
   },
+  {
+    module_key: 'directory',
+    action_key: 'read',
+    permission_key: 'directory.read',
+    description: 'View the organization and resource-person directories',
+    is_system: true,
+  },
+  {
+    module_key: 'directory',
+    action_key: 'create',
+    permission_key: 'directory.create',
+    description: 'Create organization and resource-person directory records',
+    is_system: true,
+  },
+  {
+    module_key: 'directory',
+    action_key: 'edit',
+    permission_key: 'directory.edit',
+    description: 'Edit owned organization and resource-person directory records',
+    is_system: true,
+  },
 ];
 
 const SYSTEM_PERMISSION_KEYS = new Set(
@@ -419,6 +440,16 @@ const ensureUserBaseRoleAssignment = async (userId, connection = db, assignedBy 
       VALUES (?, ?, ?)
     `,
     [parsedUserId, roleRows[0].id, assignedBy],
+  );
+
+  await connection.query(
+    `
+      INSERT IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT ?, id
+      FROM permissions
+      WHERE module_key = 'directory'
+    `,
+    [roleRows[0].id],
   );
 
   return true;

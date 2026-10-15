@@ -8,40 +8,6 @@ import ResourcePersonDirectory, {
   ResourcePerson,
 } from '../../resourcepersondirectory/ResourcePersonDirectory';
 
-type ResourcePersonApiRow = Partial<ResourcePerson> & {
-  first_name?: string;
-  last_name?: string;
-  personal_email?: string;
-  official_email?: string;
-  linked_in?: string;
-  photo_name?: string;
-  photo_path?: string;
-  resume_name?: string;
-  resume_path?: string;
-  created_at?: string;
-};
-
-// LEGACY: normalize rows from servers that have not yet deployed the camelCase
-// resource-person serializer. Remove after all API deployments do.
-const normalizeResourcePerson = (row: ResourcePersonApiRow): ResourcePerson => {
-  const firstName = row.firstName ?? row.first_name ?? '';
-  const lastName = row.lastName ?? row.last_name ?? '';
-
-  return {
-    ...row,
-    firstName,
-    lastName,
-    name: row.name ?? [row.title, firstName, lastName].filter(Boolean).join(' '),
-    personalEmail: row.personalEmail ?? row.personal_email ?? '',
-    officialEmail: row.officialEmail ?? row.official_email ?? '',
-    linkedIn: row.linkedIn ?? row.linked_in ?? '',
-    photoName: row.photoName ?? row.photo_name ?? '',
-    resumeName: row.resumeName ?? row.resume_name ?? '',
-    professions: row.professions ?? [],
-    date: row.date ?? row.created_at ?? '',
-  } as ResourcePerson;
-};
-
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
  * POST   /resource-persons          → { success: true, data: ResourcePerson }   (body: Omit<ResourcePerson, 'id'|'date'>)
@@ -51,7 +17,7 @@ const normalizeResourcePerson = (row: ResourcePersonApiRow): ResourcePerson => {
 
 const apiGetAll = async (): Promise<ResourcePerson[]> => {
   const res = (await authenticityUtility.get('/resource-persons')) as any;
-  if (res?.success && Array.isArray(res.data)) return res.data.map(normalizeResourcePerson);
+  if (res?.success && Array.isArray(res.data)) return res.data as ResourcePerson[];
   throw new Error(res?.message || 'Failed to load resource persons.');
 };
 
@@ -77,7 +43,7 @@ const apiCreate = async (
 ): Promise<ResourcePerson> => {
   const formData = buildPersonFormData(personData);
   const res = (await authenticityUtility.postFile('/resource-persons', formData)) as any;
-  if (res?.success && res.data) return normalizeResourcePerson(res.data);
+  if (res?.success && res.data) return res.data as ResourcePerson;
   throw new Error(res?.message || 'Failed to create resource person.');
 };
 
@@ -87,16 +53,13 @@ const apiUpdate = async (
 ): Promise<ResourcePerson> => {
   const formData = buildPersonFormData(personData);
   const res = (await authenticityUtility.putFile(`/resource-persons/${id}`, formData)) as any;
-  if (res?.success && res.data) return normalizeResourcePerson(res.data);
+  if (res?.success && res.data) return res.data as ResourcePerson;
   throw new Error(res?.message || 'Failed to update resource person.');
 };
 
 const getPrimary = (p: ResourcePerson) => {
   if (!p.professions?.length) return null;
-  return (
-    p.professions.find((x) => x.status === 'Working') ||
-    p.professions[0]
-  );
+  return p.professions.find((x) => x.status === 'Working') || p.professions[0];
 };
 
 /* ═══════════════════════════════════════════════════════════
@@ -316,7 +279,11 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                             </td>
                             <td>
                               <div className="rpd-name-cell">
-                                <strong>{person.name || `${person.title || ''} ${person.firstName || ''} ${person.lastName || ''}`.trim() || '—'}</strong>
+                                <strong>
+                                  {person.name ||
+                                    `${person.title || ''} ${person.firstName || ''} ${person.lastName || ''}`.trim() ||
+                                    '—'}
+                                </strong>
                                 <span>{primary?.designation || '—'}</span>
                               </div>
                             </td>
@@ -331,26 +298,33 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                               <span className="rpd-tag">{person.tag}</span>
                             </td>
                             <td>
-                              <span className={`rpd-status-pill ${
-                                (person as ResourcePerson & { approvalStatus?: string }).approvalStatus === 'Approved'
-                                  ? 'rpd-status-active'
-                                  : (person as ResourcePerson & { approvalStatus?: string }).approvalStatus === 'Rejected'
-                                    ? 'rpd-status-rejected'
-                                    : 'rpd-status-inactive'
-                              }`}>
-                                {(person as ResourcePerson & { approvalStatus?: string }).approvalStatus || 'Pending'}
+                              <span
+                                className={`rpd-status-pill ${
+                                  (person as ResourcePerson & { approvalStatus?: string })
+                                    .approvalStatus === 'Approved'
+                                    ? 'rpd-status-active'
+                                    : (person as ResourcePerson & { approvalStatus?: string })
+                                          .approvalStatus === 'Rejected'
+                                      ? 'rpd-status-rejected'
+                                      : 'rpd-status-inactive'
+                                }`}
+                              >
+                                {(person as ResourcePerson & { approvalStatus?: string })
+                                  .approvalStatus || 'Pending'}
                               </span>
                             </td>
 
                             <td className="rpd-center">
-                              <button
-                                type="button"
-                                className="rpd-icon-btn"
-                                onClick={() => handleEdit(person)}
-                                title="Edit Resource Person"
-                              >
-                                <Edit3 size={15} />
-                              </button>
+                              {person.isOwner && (
+                                <button
+                                  type="button"
+                                  className="rpd-icon-btn"
+                                  onClick={() => handleEdit(person)}
+                                  title="Edit Resource Person"
+                                >
+                                  <Edit3 size={15} />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );

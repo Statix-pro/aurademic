@@ -57,9 +57,23 @@ describe('notificationCatalog', () => {
       'events',
       'expenditure',
       'finance',
+      'master_data',
       'projects',
       'publications',
     ]);
+  });
+
+  it('registers directory notifications with their workflow recipients', () => {
+    for (const moduleKey of ['organization_directory', 'resource_person_directory']) {
+      expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.submitted`);
+      expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.approved`);
+      expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.rejected`);
+      expect(NOTIFICATION_TYPES[`${moduleKey}.submitted`].recipients).toEqual([
+        `approver:${moduleKey}`,
+      ]);
+      expect(NOTIFICATION_TYPES[`${moduleKey}.approved`].recipients).toEqual(['anyone']);
+      expect(NOTIFICATION_TYPES[`${moduleKey}.rejected`].recipients).toEqual(['anyone']);
+    }
   });
 
   it.each(entries)('%s declares the metadata the preferences screen needs', (_type, entry) => {

@@ -1,8 +1,8 @@
 -- schema/migrations/20260804_create_directory_module.sql
 -- Date: 2026-08-04
 -- Description: Tables backing the Organization Directory and Resource Person
---              Directory features added in PR #54, plus the master_data.*
---              permission rows their UI gates on.
+--              Directory features added in PR #54, plus the directory.*
+--              permission rows that authorize the directory API only.
 --
 -- Why this file exists: PR #54 shipped four new frontend files for these two
 -- directories, but the accompanying migration
@@ -171,49 +171,25 @@ CREATE TABLE IF NOT EXISTS `directory_resource_person_professions` (
 -- =====================================================
 -- 3. PERMISSIONS
 -- =====================================================
--- Both directories gate their Add button on ability.can('create','MasterData')
--- and their Edit button on can('edit','MasterData'), and ability.ts newly maps
--- master_data.read/edit/create/manage onto that subject. None of those
--- permission keys existed in `permissions`, so today only super_admin (which
--- gets can('manage','all')) can write to either directory.
+-- These directory-specific keys deliberately replace the generic master_data.*
+-- grants for the two directory endpoints. They do not alter authorization for
+-- any other master-data feature.
 --
--- Note: /api/master-data itself is still superAdminMiddleware-gated in
--- masterDataRoutes.js. These keys govern the new directory endpoints; if the
--- existing master-data routes should honour them too, swap that middleware for
--- permissionMiddleware in a separate change.
 INSERT INTO `permissions` (`module_key`, `action_key`, `permission_key`, `description`, `is_system`)
 VALUES
-  ('master_data', 'read', 'master_data.read', 'View master data and directories', 1),
-  ('master_data', 'create', 'master_data.create', 'Create master data and directory records', 1),
-  ('master_data', 'edit', 'master_data.edit', 'Edit master data and directory records', 1),
-  ('master_data', 'manage', 'master_data.manage', 'Full control over master data and directories', 1)
+  ('directory', 'read', 'directory.read', 'View organization and resource-person directories', 1),
+  ('directory', 'create', 'directory.create', 'Create organization and resource-person directory records', 1),
+  ('directory', 'edit', 'directory.edit', 'Edit owned organization and resource-person directory records', 1)
 ON DUPLICATE KEY UPDATE `description` = VALUES(`description`);
 
+-- Directory pages are available to every authenticated user. Role assignments
+-- may be global or contextual, so grant the directory keys to every role that
+-- already exists; runtime base-role seeding also grants them to roles created
+-- after this migration runs.
 INSERT INTO `role_permissions` (`role_id`, `permission_id`)
 SELECT r.id, p.id
 FROM `roles` r
-JOIN `permissions` p ON p.module_key = 'master_data'
-WHERE r.role_code = 'super_admin'
-ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
-
-INSERT INTO `role_permissions` (`role_id`, `permission_id`)
-SELECT r.id, p.id
-FROM `roles` r
-JOIN `permissions` p ON p.module_key = 'master_data'
-WHERE r.role_code = 'admin'
-ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
-
--- Every authenticated user may view, add, and edit directory records.
--- `master_data.manage` remains limited to admin and super_admin.
-INSERT INTO `role_permissions` (`role_id`, `permission_id`)
-SELECT r.id, p.id
-FROM `roles` r
-JOIN `permissions` p ON p.permission_key IN (
-  'master_data.read',
-  'master_data.create',
-  'master_data.edit'
-)
-WHERE r.role_code = 'user'
+JOIN `permissions` p ON p.module_key = 'directory'
 ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
 
 -- =====================================================
@@ -221,8 +197,8 @@ ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
 -- =====================================================
 -- Only directory objects are dropped. `resource_persons` and
 -- `resource_person_professions` belong to the Events module -- never drop them here.
--- DELETE FROM role_permissions WHERE permission_id IN (SELECT id FROM permissions WHERE module_key = 'master_data');
--- DELETE FROM permissions WHERE module_key = 'master_data';
+-- DELETE FROM role_permissions WHERE permission_id IN (SELECT id FROM permissions WHERE module_key = 'directory');
+-- DELETE FROM permissions WHERE module_key = 'directory';
 -- DROP TABLE IF EXISTS `directory_resource_person_professions`;
 -- DROP TABLE IF EXISTS `directory_resource_persons`;
 -- DROP TABLE IF EXISTS `organizations`;

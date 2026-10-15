@@ -22,12 +22,8 @@ export interface Organization {
   pinCode: string;
   date: string;
   status: string; // 'Active' | 'Inactive'
-  approvalStatus?: 'Pending' | 'Approved';
-  // LEGACY: accept organization rows from servers that have not yet deployed
-  // the camelCase response serializer. Remove after all API deployments do.
-  establishment_year?: string;
-  linked_in?: string;
-  pin_code?: string;
+  approvalStatus?: 'Pending' | 'Approved' | 'Rejected';
+  isOwner?: boolean;
 }
 
 interface OrganizationDirectoryProps {
@@ -82,16 +78,16 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       setCategory(editingOrg.category || 'Academic');
       setName(editingOrg.name || '');
       setAbbreviation(editingOrg.abbreviation || '');
-      setEstablishmentYear(editingOrg.establishmentYear ?? editingOrg.establishment_year ?? '');
+      setEstablishmentYear(editingOrg.establishmentYear || '');
       setSector(editingOrg.sector || '');
       setTag(editingOrg.tag || '');
       setWebsite(editingOrg.website || '');
-      setLinkedIn(editingOrg.linkedIn ?? editingOrg.linked_in ?? '');
+      setLinkedIn(editingOrg.linkedIn || '');
       setAddress(editingOrg.address || '');
       setCity(editingOrg.city || '');
       setState(editingOrg.state || '');
       setCountry(editingOrg.country || '');
-      setPinCode(editingOrg.pinCode ?? editingOrg.pin_code ?? '');
+      setPinCode(editingOrg.pinCode || '');
       setStatus(editingOrg.status || 'Active');
     }
   }, [editingOrg]);
@@ -329,18 +325,16 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
           {formError}
         </div>
       )}
-      {!readOnly && <div className="orgd-actions-row">
-        <button
-          type="button"
-          className="orgd-btn-save"
-          onClick={handleSubmit}
-        >
-          {editingOrg !== null ? 'Update Record' : 'Save Record'}
-        </button>
-        <button type="button" className="orgd-btn-cancel" onClick={onCancel}>
-          Cancel
-        </button>
-      </div>}
+      {!readOnly && (
+        <div className="orgd-actions-row">
+          <button type="button" className="orgd-btn-save" onClick={handleSubmit}>
+            {editingOrg !== null ? 'Update Record' : 'Save Record'}
+          </button>
+          <button type="button" className="orgd-btn-cancel" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+      )}
     </div>
   );
 };
