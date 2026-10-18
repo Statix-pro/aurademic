@@ -45,7 +45,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useAbility } from '../../shared/casl/AbilityContext';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { getGuesthouseWorkflowStage } from '../../shared/utils/permissionUtils';
-import BudgetSelect from '../../shared/components/ui/BudgetSelect';
+import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 import RecordHeaderBanner from '../../shared/components/ui/RecordHeaderBanner';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import './guesthousebooking.css';
@@ -70,6 +70,10 @@ const createNumericId = () => {
 const createUnsavedResourceId = () => 1_000_000_000 + (createNumericId() % 1_000_000_000);
 
 const toText = (value: unknown) => (value === null || value === undefined ? '' : String(value));
+const getDropdownValue = (selected: unknown) => {
+  if (!selected || typeof selected !== 'object' || Array.isArray(selected) || !('value' in selected)) return '';
+  return String(selected.value ?? '');
+};
 
 type GuestAmenityKey =
   | 'roomCleaning'
@@ -3430,18 +3434,19 @@ const GuestHouseBooking: React.FC = () => {
                 >
                   Beneficiary
                 </label>
-                <BudgetSelect
+                <CustomDropdown
                   value={
                     BENEFICIARY_TYPE_SELECT_OPTIONS.find(
                       (option) => option.value === beneficiaryDetails.beneficiaryType,
                     ) || null
                   }
                   onChange={(selected) =>
-                    updateBeneficiaryDetails('beneficiaryType', selected?.value || '')
+                    updateBeneficiaryDetails('beneficiaryType', getDropdownValue(selected))
                   }
                   options={BENEFICIARY_TYPE_SELECT_OPTIONS}
                   placeholder=""
-                  disabled={isViewingBooking}
+                  isDisabled={isViewingBooking}
+                  menuPlacement="auto"
                 />
                 </div>
               </div>
@@ -3517,14 +3522,14 @@ const GuestHouseBooking: React.FC = () => {
                     )}
                   </>
                 ) : (
-                  <BudgetSelect
+                  <CustomDropdown
                     value={
                       beneficiaryDetails.staffName
                         ? { value: beneficiaryDetails.staffName, label: beneficiaryDetails.staffName }
                         : null
                     }
                     onChange={(selected) => {
-                      const selectedName = selected?.value || '';
+                      const selectedName = getDropdownValue(selected);
                       const selectedOption = (
                         beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType.toUpperCase()] ||
                         beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
@@ -3543,22 +3548,24 @@ const GuestHouseBooking: React.FC = () => {
                       beneficiaryEntityOptions[beneficiaryDetails.beneficiaryType] ||
                       []).map((option) => ({ value: option.name, label: option.name }))}
                     placeholder={`Select ${beneficiaryDetails.beneficiaryType.toLowerCase()}`}
-                    disabled={isViewingBooking}
+                    isDisabled={isViewingBooking}
+                    menuPlacement="auto"
                   />
                 )}
               </div>
               <div className="guesthousebooking-beneficiary-field col-md-3">
                 <label className="guesthousebooking-beneficiary-label">Tag</label>
-                <BudgetSelect
+                <CustomDropdown
                   value={
                     beneficiaryDetails.tag
                       ? { value: beneficiaryDetails.tag, label: beneficiaryDetails.tag }
                       : null
                   }
-                  onChange={(selected) => updateBeneficiaryDetails('tag', selected?.value || '')}
+                  onChange={(selected) => updateBeneficiaryDetails('tag', getDropdownValue(selected))}
                   options={BENEFICIARY_TAG_OPTIONS.map((option) => ({ value: option, label: option }))}
                   placeholder=""
-                  disabled={isViewingBooking}
+                  isDisabled={isViewingBooking}
+                  menuPlacement="auto"
                 />
               </div>
                 </>

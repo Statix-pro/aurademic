@@ -11,6 +11,24 @@ const guesthouseWorkflowAdapter = {
     return ['hod', 'guesthouse_incharge', 'principal', 'guesthouse_admin'];
   },
 
+  canApplicantResubmit({ workflowState } = {}) {
+    const stage = String(workflowState?.currentStage || '').trim().toLowerCase();
+    const flow = Array.isArray(workflowState?.flow)
+      ? workflowState.flow.map((value) => String(value).trim().toLowerCase())
+      : [];
+    return String(workflowState?.status || '').trim().toLowerCase() === 'returned' && flow.includes(stage);
+  },
+
+  canAccessStageByRole({ actor = {}, stageKey = '' } = {}) {
+    const stage = String(stageKey || '').trim().toLowerCase();
+    const roles = Array.isArray(actor.roles) ? actor.roles : [];
+    return roles.some((role) => {
+      if (typeof role === 'string') return role.trim().toLowerCase() === stage;
+      return String(role?.role_code || role?.roleCode || role?.code || role?.role || '')
+        .trim().toLowerCase() === stage;
+    });
+  },
+
   async getRecordContext(recordId, options = {}) {
     return guesthouseModel.getGuesthouseRecordContext(recordId, options);
   },

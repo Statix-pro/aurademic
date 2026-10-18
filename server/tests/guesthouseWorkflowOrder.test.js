@@ -11,7 +11,7 @@ vi.mock('../modules/shared/workflow/workflowScopeResolver.js', () => ({
 
 import db from '../config/connection.js';
 import { registerWorkflowModule } from '../modules/shared/workflow/workflowModuleRegistry.js';
-import { actOnWorkflow, startWorkflow } from '../modules/shared/workflow/workflowService.js';
+import { actOnWorkflow, resubmitReturnedWorkflow, startWorkflow } from '../modules/shared/workflow/workflowService.js';
 
 const stages = ['hod', 'guesthouse_incharge', 'principal', 'guesthouse_admin'];
 let workflowState;
@@ -46,7 +46,10 @@ describe('Guest House workflow order and stage permissions', () => {
     workflowState = null;
     adapter = {
       resolveStartFlow: () => [...stages],
-      getRecordContext: vi.fn().mockResolvedValue({ beneficiaryType: 'Department' }),
+      getRecordContext: vi.fn().mockResolvedValue({ beneficiaryType: 'Department', applicantUserId: 101 }),
+      canApplicantResubmit: vi.fn(({ workflowState }) =>
+        workflowState?.status === 'returned' && stages.includes(workflowState?.currentStage),
+      ),
       updateRecordWorkflowSnapshot: vi.fn(async (_recordId, nextState) => {
         workflowState = nextState;
       }),
@@ -126,6 +129,28 @@ describe('Guest House workflow order and stage permissions', () => {
       actor: actorFor('principal'),
     });
     expect(returned.currentState).toMatchObject({ currentStage: 'principal', status: 'returned' });
+  });
+
+  it.each(stages)('allows the applicant to resubmit a request returned at %s', async (stage) => {
+    workflowState = {
+      version: 1,
+      flow: [...stages],
+      currentStage: stage,
+      status: 'returned',
+      lastFeedback: 'Please correct this request.',
+    };
+
+    const result = await resubmitReturnedWorkflow({
+      moduleKey: 'guesthouse',
+      recordId: 55,
+      actor: { id: 101, userId: 101, email: 'applicant@example.edu' },
+    });
+
+    expect(result.currentState).toMatchObject({ currentStage: stage, status: 'in_progress' });
+    expect(transaction.query).toHaveBeenCalledWith(
+      expect.stringContaining("VALUES (?, ?, ?, 'resubmitted'"),
+      expect.arrayContaining(['guesthouse', 55, stage]),
+    );
   });
 
   it('does not treat generic master-data admin access as a workflow approval permission', async () => {

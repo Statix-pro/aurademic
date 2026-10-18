@@ -4,6 +4,7 @@ import { actOnWorkflow, startWorkflow, unarchiveWorkflow, resubmitReturnedWorkfl
 import fs from 'fs';
 import path from 'path';
 import { safeResolvePath } from '../../utils/pathSecurity.js';
+import { resolveUploadPath } from '../shared/uploadPaths.js';
 
 const normalizeText = (value) => String(value ?? '').trim();
 const isPersonBeneficiary = (value) => ['faculty', 'staff'].includes(normalizeText(value).toLowerCase());
@@ -117,7 +118,7 @@ const canAccessGuesthouseBookingAtStage = async (
 const isApplicantEditable = (booking) => {
   const status = normalizeText(booking?.workflow_state?.status || booking?.workflow_status || booking?.overall_status).toLowerCase();
   const stage = normalizeText(booking?.workflow_state?.currentStage || booking?.workflow_stage).toLowerCase();
-  return stage === 'hod' && ['in_progress', 'pending', 'submitted', 'returned', ''].includes(status);
+  return status === 'returned' || (stage === 'hod' && ['in_progress', 'pending', 'submitted', ''].includes(status));
 };
 
 const isRoomAllotmentActionable = (booking) => {
@@ -148,7 +149,18 @@ const resolveSafeTempUploadPath = (unsafePath) => {
   if (!normalized) return null;
 
   const relativePath = path.relative(TEMP_UPLOAD_DIR, path.resolve(normalized));
-  return safeResolvePath(TEMP_UPLOAD_DIR, relativePath);
+  const tempPath = safeResolvePath(TEMP_UPLOAD_DIR, relativePath);
+  return tempPath ? resolveUploadPath(tempPath) : null;
+};
+
+const resolveSafeGuesthouseUploadPath = (baseDir, targetName) => {
+  const safePath = safeResolvePath(baseDir, targetName);
+  return safePath ? resolveUploadPath(safePath) : null;
+};
+
+const removeSafeUpload = async (candidate) => {
+  const safePath = resolveUploadPath(candidate);
+  if (safePath) await fs.promises.unlink(safePath).catch(() => {});
 };
 
 const isEligibleForPrincipalDocument = (booking) => {
@@ -171,6 +183,14 @@ const isEligibleForPrincipalDocument = (booking) => {
 const canManagePrincipalDocumentsRequest = (req) => {
   if (isSuperAdminRequest(req)) return true;
   return hasGuesthouseStagePermission(req, 'principal') || hasGuesthouseStagePermission(req, 'guesthouse_admin');
+};
+
+const resolveApplicantEmployeeId = async (req) => {
+  const directId = toPositiveInt(req.user?.employee_id || req.user?.employeeId);
+  if (directId) return directId;
+  const email = normalizeText(req.user?.email).toLowerCase();
+  if (!email) return null;
+  return guesthouseModel.getActiveEmployeeIdByEmail(email);
 };
 
 const guesthouseController = {
@@ -204,12 +224,9 @@ const guesthouseController = {
       }
       const applicant = { ...(payload.applicant || {}) };
       const mayOverrideApplicant = isSuperAdminRequest(req) ||
-        (Array.isArray(req.user?.permissions) && (
-          req.user.permissions.includes('guesthouse.applicant.override') ||
-          req.user.permissions.includes('guesthouse.manage')
-        ));
+        (Array.isArray(req.user?.permissions) && req.user.permissions.includes('guesthouse.manage'));
       if (!mayOverrideApplicant) {
-        applicant.employeeId = toPositiveInt(req.user?.employee_id || req.user?.employeeId);
+        applicant.employeeId = await resolveApplicantEmployeeId(req);
         if (!applicant.employeeId) {
           return res.status(403).json({ success: false, message: 'Your account is not linked to an employee profile' });
         }
@@ -250,31 +267,15 @@ const guesthouseController = {
         req.user?.permissions?.includes('guesthouse.workflow.guesthouse_admin'),
       );
       let accessibleBookingIds;
-
       if (!mineOnly && !isOwnerOnly && !canListAll) {
         const actor = normalizeActor(req);
-        const search = req.query.q || req.query.search;
         const visibleStages = GUESTHOUSE_WORKFLOW_STAGES.filter((stage) =>
-          hasGuesthouseStagePermission(req, stage),
-        );
-        const stageBookingIds = await Promise.all(visibleStages.map(async (stage) => {
-          const stageIds = [];
-          let page = 1;
-          let total = 0;
-          do {
-            const result = await listQueue({
-              moduleKey: 'guesthouse',
-              stage,
-              actor,
-              filters: { workflowStatus: 'all', q: search, page, limit: 100 },
-            });
-            stageIds.push(...result.items.map((item) => item.id));
-            total = result.total;
-            page += 1;
-          } while ((page - 1) * 100 < total);
-          return stageIds;
-        }));
-        accessibleBookingIds = [...new Set(stageBookingIds.flat().map(toPositiveInt).filter(Boolean))];
+          hasGuesthouseStagePermission(req, stage));
+        const scopedStages = await Promise.all(visibleStages.map(async (stage) => ({
+          stage,
+          filters: await getQueueScopeFilters({ moduleKey: 'guesthouse', stage, actor }),
+        })));
+        accessibleBookingIds = await guesthouseModel.listAccessibleGuesthouseBookingIds(scopedStages);
       }
 
       const result = await guesthouseModel.listGuesthouseBookings({
@@ -344,7 +345,7 @@ const guesthouseController = {
       );
       if (invalidGuest) return res.status(400).json({ success: false, message: 'Every guest needs a valid check-in and check-out stay' });
 
-      const shouldResubmit = isOwner && stage === 'hod' && status === 'returned';
+      const shouldResubmit = isOwner && status === 'returned';
       const tx = shouldResubmit ? await guesthouseModel.beginTransaction() : null;
       try {
         await guesthouseModel.updateGuesthouseBooking(bookingId, { ...payload, guests }, {
@@ -505,25 +506,10 @@ const guesthouseController = {
       if (!stage || !hasGuesthouseStagePermission(req, stage)) {
         return res.status(403).json({ success: false, message: 'Insufficient permissions for this Guest House workflow stage' });
       }
-
-      const isElevatedActor = isSuperAdminRequest(req);
-      let allowedDepartmentIds = null;
-      if (stage === 'hod' && !isElevatedActor) {
-        const scopeFilters = await getQueueScopeFilters({
-          moduleKey: 'guesthouse',
-          stage,
-          actor,
-        });
-        if (!scopeFilters.forceAll && scopeFilters.scopeType === 'department') {
-          allowedDepartmentIds = scopeFilters.forceEmpty
-            ? []
-            : Array.from(scopeFilters.departmentIds || []);
-        }
+      if (!(await canAccessGuesthouseRecord(req, booking))) {
+        return res.status(403).json({ success: false, message: 'Record is outside your workflow scope' });
       }
 
-      if (allowedDepartmentIds !== null && !allowedDepartmentIds.includes(toPositiveInt(booking.department_id))) {
-        return res.status(403).json({ success: false, message: 'Record is outside your department workflow scope' });
-      }
       const result = await actOnWorkflow({
         moduleKey: 'guesthouse', recordId: bookingId, decision: 'archived',
         feedback: normalizeText(req.body?.feedback), actor,
@@ -739,14 +725,38 @@ const guesthouseController = {
       if (!isSuperAdminRequest(req) && !ownerCanEdit && !approverCanEdit) {
         return res.status(409).json({ success: false, message: 'Travel schedule can only be changed while the booking is editable in its current workflow stage' });
       }
-      await guesthouseModel.updateGuesthouseTravelSchedule(bookingId, schedule, {
-        expectedWorkflowStage: isSuperAdminRequest(req) ? null : stage,
-        allowedWorkflowStatuses: isSuperAdminRequest(req)
-          ? null
-          : approverCanEdit
-            ? ['in_progress', 'pending', 'submitted', 'returned']
-            : ['in_progress', 'pending', 'submitted', 'returned'],
-      });
+      const shouldResubmit = ownerCanEdit && status === 'returned';
+      const tx = shouldResubmit ? await guesthouseModel.beginTransaction() : null;
+      try {
+        await guesthouseModel.updateGuesthouseTravelSchedule(bookingId, schedule, {
+          expectedWorkflowStage: isSuperAdminRequest(req) ? null : stage,
+          allowedWorkflowStatuses: isSuperAdminRequest(req)
+            ? null
+            : approverCanEdit
+              ? ['in_progress', 'pending', 'submitted', 'returned']
+              : ['in_progress', 'pending', 'submitted', 'returned'],
+          tx,
+        });
+        if (shouldResubmit) {
+          await resubmitReturnedWorkflow({
+            moduleKey: 'guesthouse',
+            recordId: bookingId,
+            actor: normalizeActor(req),
+            tx,
+            metadata: {
+              origin: 'api',
+              moduleMetaVersion: 1,
+              moduleMeta: { route: 'PATCH /api/guesthouse/:id/travel-schedule' },
+            },
+          });
+        }
+        if (tx) await tx.commit();
+      } catch (error) {
+        if (tx) await tx.rollback();
+        throw error;
+      } finally {
+        if (tx) tx.release();
+      }
       return res.json({ success: true, message: 'Travel schedule updated' });
     } catch (error) {
       return handleError(res, error, 'Error in updateTravelSchedule');
@@ -910,9 +920,7 @@ const guesthouseController = {
     try {
       const bookingId = toPositiveInt(req.params.id);
       if (!bookingId) {
-        if (uploadedFilePath) {
-          await fs.promises.unlink(uploadedFilePath).catch(() => {});
-        }
+        if (uploadedFilePath) await removeSafeUpload(uploadedFilePath);
         return res.status(400).json({
           success: false,
           message: 'Invalid booking ID',
@@ -920,9 +928,7 @@ const guesthouseController = {
       }
 
       if (!req.file) {
-        if (uploadedFilePath) {
-          await fs.promises.unlink(uploadedFilePath).catch(() => {});
-        }
+        if (uploadedFilePath) await removeSafeUpload(uploadedFilePath);
         return res.status(400).json({
           success: false,
           message: 'No file uploaded',
@@ -936,9 +942,7 @@ const guesthouseController = {
         originalName.toLowerCase().endsWith('.pdf');
 
       if (!isPdf || file.size >= 2 * 1024 * 1024) {
-        if (uploadedFilePath) {
-          await fs.promises.unlink(uploadedFilePath).catch(() => {});
-        }
+        if (uploadedFilePath) await removeSafeUpload(uploadedFilePath);
         return res.status(400).json({
           success: false,
           message: 'Only PDF files with a size less than 2MB are allowed.',
@@ -947,9 +951,7 @@ const guesthouseController = {
 
       const booking = await guesthouseModel.getGuesthouseBookingById(bookingId);
       if (!booking) {
-        if (uploadedFilePath) {
-          await fs.promises.unlink(uploadedFilePath).catch(() => {});
-        }
+        if (uploadedFilePath) await removeSafeUpload(uploadedFilePath);
         return res.status(404).json({
           success: false,
           message: 'Guest house booking not found',
@@ -957,9 +959,7 @@ const guesthouseController = {
       }
 
       if (!canManagePrincipalDocumentsRequest(req)) {
-        if (uploadedFilePath) {
-          await fs.promises.unlink(uploadedFilePath).catch(() => {});
-        }
+        if (uploadedFilePath) await removeSafeUpload(uploadedFilePath);
         return res.status(403).json({
           success: false,
           message: 'You do not have access to upload this document',
@@ -967,9 +967,7 @@ const guesthouseController = {
       }
 
       if (!isEligibleForPrincipalDocument(booking)) {
-        if (uploadedFilePath) {
-          await fs.promises.unlink(uploadedFilePath).catch(() => {});
-        }
+        if (uploadedFilePath) await removeSafeUpload(uploadedFilePath);
         return res.status(409).json({
           success: false,
           message:
@@ -981,7 +979,7 @@ const guesthouseController = {
 
       const extension = '.pdf';
       const storedName = `guesthouse-principal-${bookingId}-${Date.now()}-${Math.round(Math.random() * 1e9)}${extension}`;
-      const finalPath = safeResolvePath(GUESTHOUSE_PRINCIPAL_DOC_DIR, storedName);
+      const finalPath = resolveSafeGuesthouseUploadPath(GUESTHOUSE_PRINCIPAL_DOC_DIR, storedName);
       if (!finalPath) {
         throw new Error('Invalid principal document path');
       }
@@ -1004,7 +1002,7 @@ const guesthouseController = {
       });
 
       if (previousDocument?.file_path) {
-        const previousPath = safeResolvePath(GUESTHOUSE_PRINCIPAL_DOC_DIR, previousDocument.stored_name);
+        const previousPath = resolveSafeGuesthouseUploadPath(GUESTHOUSE_PRINCIPAL_DOC_DIR, previousDocument.stored_name);
         if (previousPath && previousPath !== savedFilePath) {
           await fs.promises.unlink(previousPath).catch(() => {});
         }
@@ -1024,7 +1022,7 @@ const guesthouseController = {
     } catch (error) {
       try {
         if (uploadedFilePath) {
-          await fs.promises.unlink(uploadedFilePath).catch(() => {});
+          await removeSafeUpload(uploadedFilePath);
         }
         if (savedFilePath) {
           await fs.promises.unlink(savedFilePath).catch(() => {});
@@ -1079,7 +1077,7 @@ const guesthouseController = {
 
       await guesthouseModel.updateGuesthousePrincipalDocument(bookingId, null);
 
-      const resolvedPath = safeResolvePath(GUESTHOUSE_PRINCIPAL_DOC_DIR, document.stored_name);
+      const resolvedPath = resolveSafeGuesthouseUploadPath(GUESTHOUSE_PRINCIPAL_DOC_DIR, document.stored_name);
       if (resolvedPath) await fs.promises.unlink(resolvedPath).catch(() => {});
 
       return res.status(200).json({

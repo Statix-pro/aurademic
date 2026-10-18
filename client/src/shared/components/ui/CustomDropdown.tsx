@@ -28,6 +28,7 @@ interface CustomDropdownProps {
   styles?: StylesConfig<OptionType, boolean>;
   menuPortalTarget?: HTMLElement | null;
   menuPosition?: 'absolute' | 'fixed';
+  menuPlacement?: 'auto' | 'bottom' | 'top';
   filterOption?: (candidate: any, input: string) => boolean;
 }
 
@@ -45,6 +46,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   styles: customStyles,
   menuPortalTarget,
   menuPosition = 'fixed',
+  menuPlacement = 'auto',
   ...props
 }) => {
   // Default styles (keep your existing ones)
@@ -146,6 +148,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
               : null
         }
         menuPosition={menuPosition}
+        menuPlacement={menuPlacement}
         {...props}
       />
       {error && <div className="custom-error-text">{error}</div>}

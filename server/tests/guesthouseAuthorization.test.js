@@ -3,8 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../modules/guesthouse/guesthouseModel.js', () => ({
   default: {
     listGuesthouseBookings: vi.fn(),
+    listAccessibleGuesthouseBookingIds: vi.fn(),
     createGuesthouseBooking: vi.fn(),
     listGuesthouseRooms: vi.fn(),
+    getActiveEmployeeIdByEmail: vi.fn(),
+    beginTransaction: vi.fn(),
+    getGuesthouseBookingById: vi.fn(),
   },
 }));
 
@@ -12,7 +16,7 @@ vi.mock('../modules/shared/workflow/workflowService.js', () => ({
   actOnWorkflow: vi.fn(),
   startWorkflow: vi.fn(),
   listQueue: vi.fn(),
-  getQueueScopeFilters: vi.fn(),
+  getQueueScopeFilters: vi.fn().mockResolvedValue({ forceAll: true }),
   getTimeline: vi.fn(),
   getWorkflowMetadata: vi.fn(),
 }));
@@ -23,7 +27,7 @@ vi.mock('../modules/shared/workflow/workflowModuleRegistry.js', () => ({
 
 import guesthouseController from '../modules/guesthouse/guesthouseController.js';
 import guesthouseModel from '../modules/guesthouse/guesthouseModel.js';
-import { listQueue } from '../modules/shared/workflow/workflowService.js';
+import { startWorkflow } from '../modules/shared/workflow/workflowService.js';
 
 const makeResponse = () => {
   const response = {
@@ -46,7 +50,7 @@ describe('Guest House authorization and date-time validation', () => {
   });
 
   it('limits workflow users to records visible in their authorized stage queues', async () => {
-    listQueue.mockResolvedValue({ items: [{ id: 42 }], total: 1 });
+    guesthouseModel.listAccessibleGuesthouseBookingIds.mockResolvedValue([42]);
     guesthouseModel.listGuesthouseBookings.mockResolvedValue({ items: [{ id: 42 }], total: 1, page: 1, limit: 20 });
     const response = makeResponse();
 
@@ -56,19 +60,48 @@ describe('Guest House authorization and date-time validation', () => {
     }, response);
 
     expect(response.statusCode).toBe(200);
-    expect(listQueue).toHaveBeenCalledTimes(1);
-    expect(listQueue).toHaveBeenCalledWith(expect.objectContaining({
-      moduleKey: 'guesthouse',
-      stage: 'hod',
-      filters: expect.objectContaining({ workflowStatus: 'all', page: 1, limit: 100 }),
-    }));
+    expect(guesthouseModel.listAccessibleGuesthouseBookingIds).toHaveBeenCalledTimes(1);
+    expect(guesthouseModel.listAccessibleGuesthouseBookingIds).toHaveBeenCalledWith([
+      { stage: 'hod', filters: { forceAll: true } },
+    ]);
     expect(guesthouseModel.listGuesthouseBookings).toHaveBeenCalledWith(expect.objectContaining({
       bookingIds: [42],
     }));
   });
 
+  it('creates a normal user booking using the employee profile linked by email', async () => {
+    const tx = { commit: vi.fn(), rollback: vi.fn(), release: vi.fn() };
+    guesthouseModel.getActiveEmployeeIdByEmail.mockResolvedValue(501);
+    guesthouseModel.beginTransaction.mockResolvedValue(tx);
+    guesthouseModel.createGuesthouseBooking.mockResolvedValue(91);
+    guesthouseModel.getGuesthouseBookingById.mockResolvedValue({ id: 91 });
+    startWorkflow.mockResolvedValue({ state: { currentStage: 'hod', status: 'in_progress' } });
+    const response = makeResponse();
+
+    await guesthouseController.createGuesthouseBooking({
+      user: { id: 17, email: 'staff@example.edu', permissions: [] },
+      body: {
+        applicant: { name: 'Forged name', employeeId: 999 },
+        beneficiary: { beneficiaryType: 'Guest', staffName: '' },
+        guests: [{ name: 'Guest', travel: {
+          checkInDate: '2026-11-01', checkOutDate: '2026-11-02',
+          checkInTime: '10:00', checkOutTime: '10:00',
+        } }],
+      },
+    }, response);
+
+    expect(response.statusCode).toBe(201);
+    expect(guesthouseModel.getActiveEmployeeIdByEmail).toHaveBeenCalledWith('staff@example.edu');
+    expect(guesthouseModel.createGuesthouseBooking).toHaveBeenCalledWith(
+      expect.objectContaining({ applicant: expect.objectContaining({ employeeId: 501 }) }),
+      17,
+      { tx },
+    );
+    expect(tx.commit).toHaveBeenCalledOnce();
+  });
+
   it('applies the same queue scope to role-assigned HODs without explicit permission strings', async () => {
-    listQueue.mockResolvedValue({ items: [{ id: 43 }], total: 1 });
+    guesthouseModel.listAccessibleGuesthouseBookingIds.mockResolvedValue([43]);
     guesthouseModel.listGuesthouseBookings.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 });
     const response = makeResponse();
 
@@ -78,7 +111,9 @@ describe('Guest House authorization and date-time validation', () => {
     }, response);
 
     expect(response.statusCode).toBe(200);
-    expect(listQueue).toHaveBeenCalledWith(expect.objectContaining({ stage: 'hod' }));
+    expect(guesthouseModel.listAccessibleGuesthouseBookingIds).toHaveBeenCalledWith([
+      { stage: 'hod', filters: { forceAll: true } },
+    ]);
     expect(guesthouseModel.listGuesthouseBookings).toHaveBeenCalledWith(expect.objectContaining({
       createdByUserId: undefined,
       bookingIds: [43],

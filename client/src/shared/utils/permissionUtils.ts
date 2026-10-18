@@ -145,32 +145,31 @@ export const canAccessFinanceWorkflow = (user?: User | null) =>
   canAccessModuleWorkflow(user, 'finance');
 
 export type GuesthouseWorkflowStage =
-  | 'admin'
   | 'hod'
   | 'guesthouse_incharge'
   | 'principal'
   | 'guesthouse_admin';
 
-export const getGuesthouseWorkflowStage = (user?: User | null): GuesthouseWorkflowStage | null => {
-  if (!user) return null;
-  if (isSuperAdmin(user)) {
-    return 'admin';
-  }
-  const stages: GuesthouseWorkflowStage[] = [
+const GUESTHOUSE_WORKFLOW_STAGES: GuesthouseWorkflowStage[] = [
     'hod',
     'guesthouse_incharge',
     'principal',
     'guesthouse_admin',
   ];
+
+export const getGuesthouseWorkflowStages = (user?: User | null): GuesthouseWorkflowStage[] => {
+  if (!user) return [];
+  if (isSuperAdmin(user)) return [...GUESTHOUSE_WORKFLOW_STAGES];
   const roleCodes = new Set(normalizeRoleCodes(user).map((role) => role.toLowerCase()));
-  const explicitRoleStage = stages.find((stage) => roleCodes.has(stage));
-  if (explicitRoleStage) return explicitRoleStage;
   const permissions = new Set(normalizePermissionKeys(user));
-  const explicitStage = stages.find((stage) =>
-    permissions.has(`guesthouse.workflow.${stage}`),
+  return GUESTHOUSE_WORKFLOW_STAGES.filter((stage) =>
+    roleCodes.has(stage) || permissions.has(`guesthouse.workflow.${stage}`),
   );
-  if (explicitStage) return explicitStage;
-  return null;
+};
+
+export const getGuesthouseWorkflowStage = (user?: User | null): GuesthouseWorkflowStage | null => {
+  if (isSuperAdmin(user)) return 'guesthouse_admin';
+  return getGuesthouseWorkflowStages(user)[0] || null;
 };
 
 export const canAccessGuesthouseWorkflow = (user?: User | null) => {
@@ -178,7 +177,7 @@ export const canAccessGuesthouseWorkflow = (user?: User | null) => {
     return false;
   }
 
-  return getGuesthouseWorkflowStage(user) !== null || canAccessAdminArea(user);
+  return getGuesthouseWorkflowStages(user).length > 0;
 };
 
 const isAdminOrWorkflowRole = (user?: User | null) => {

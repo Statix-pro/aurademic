@@ -165,6 +165,18 @@ const assertRoomAvailable = async (tx, {
 };
 
 const guesthouseModel = {
+  async getActiveEmployeeIdByEmail(email) {
+    const normalizedEmail = normalizeText(email).toLowerCase();
+    if (!normalizedEmail) return null;
+      const [rows] = await db.execute(
+      `SELECT id FROM master_employees
+        WHERE LOWER(TRIM(email)) = ? AND status = 'Active'
+        ORDER BY id ASC LIMIT 1`,
+      [normalizedEmail],
+    );
+    return toPositiveInt(rows[0]?.id);
+  },
+
   async beginTransaction() {
     const conn = await db.getConnection();
     try {
@@ -209,39 +221,25 @@ const guesthouseModel = {
         beneficiaryType.toLowerCase() === 'department'
           ? normalizeText(beneficiary.staffName)
           : normalizeText(beneficiary.department);
-      const requestedDepartmentId =
-        toPositiveInt(beneficiary.departmentId) || toPositiveInt(applicant.departmentId);
+      const requestedDepartmentId = beneficiaryType.toLowerCase() === 'department'
+        ? toPositiveInt(beneficiary.departmentId)
+        : toPositiveInt(employeeProfile?.department_id) || toPositiveInt(applicant.departmentId);
+      if (beneficiaryType.toLowerCase() === 'department' && !requestedDepartmentId) {
+        const error = new Error('Select a valid department before submitting this request');
+        error.statusCode = 400;
+        throw error;
+      }
       let departmentRows = [];
       if (requestedDepartmentId) {
         [departmentRows] = await tx.query(
           `SELECT id, name FROM master_departments WHERE id = ? AND is_active = 1 LIMIT 1`,
           [requestedDepartmentId],
         );
-        const expectedDepartmentName = beneficiaryDepartmentName || normalizeText(employeeProfile?.department || applicant.department);
-        if (
-          departmentRows.length && expectedDepartmentName &&
-          normalizeText(departmentRows[0].name).toLowerCase() !== expectedDepartmentName.toLowerCase()
-        ) {
-          const error = new Error('Selected department does not match the department name');
+        if (!departmentRows.length) {
+          const error = new Error('Selected department is invalid or inactive');
           error.statusCode = 400;
           throw error;
         }
-      }
-      if (!departmentRows.length && beneficiaryDepartmentName) {
-        [departmentRows] = await tx.query(
-          `SELECT id, name FROM master_departments
-           WHERE is_active = 1 AND LOWER(TRIM(name)) = LOWER(TRIM(?))
-           ORDER BY id ASC LIMIT 1`,
-          [beneficiaryDepartmentName],
-        );
-      }
-      if (!departmentRows.length && applicant.department) {
-        [departmentRows] = await tx.query(
-          `SELECT id, name FROM master_departments
-           WHERE is_active = 1 AND LOWER(TRIM(name)) = LOWER(TRIM(?))
-           ORDER BY id ASC LIMIT 1`,
-          [normalizeText(applicant.department)],
-        );
       }
       const workflowDepartmentId = toPositiveInt(departmentRows[0]?.id);
       const workflowDepartmentName = normalizeText(departmentRows[0]?.name) ||
@@ -534,7 +532,8 @@ const guesthouseModel = {
 
     // The view intentionally contains presentation fields only; get the raw
     // workflow JSON from the source table so workflow consumers receive it.
-    const [rows] = await db.query(`SELECT vgb.*, gb.workflow_state, gb.principal_document
+    const [rows] = await db.query(`SELECT vgb.*, gb.department_id, gb.created_by,
+      gb.workflow_state, gb.principal_document
       FROM v_guesthouse_bookings vgb
       INNER JOIN guesthouse_bookings gb ON gb.id = vgb.id
       WHERE vgb.id = ?`, [
@@ -680,6 +679,44 @@ const guesthouseModel = {
       page: safePage,
       limit: safeLimit,
     };
+  },
+
+  async listAccessibleGuesthouseBookingIds(stageFilters = []) {
+    const usableFilters = stageFilters.filter(({ stage, filters }) =>
+      normalizeText(stage) && !filters?.forceEmpty && !(filters?.forceAll === false &&
+        normalizeText(filters?.scopeType).toLowerCase() === 'department' &&
+        !Array.from(filters?.departmentIds || []).some((id) => toPositiveInt(id))));
+    if (!usableFilters.length) return [];
+    const clauses = [];
+    const params = [];
+    for (const { stage, filters = {} } of usableFilters) {
+      const normalizedStage = normalizeText(stage).toLowerCase();
+      const departmentIds = Array.from(filters.departmentIds || [])
+        .map((id) => toPositiveInt(id))
+        .filter(Boolean);
+      const scopeClause = !filters.forceAll && normalizeText(filters.scopeType).toLowerCase() === 'department'
+        ? ` AND gb.department_id IN (${departmentIds.map(() => '?').join(',')})`
+        : '';
+      if (scopeClause && !departmentIds.length) continue;
+      clauses.push(`((COALESCE(NULLIF(JSON_UNQUOTE(JSON_EXTRACT(gb.workflow_state, '$.currentStage')), 'null'), NULLIF(TRIM(gb.workflow_stage), ''), 'hod') = ?
+        OR EXISTS (
+          SELECT 1 FROM workflow_actions wa
+          INNER JOIN (SELECT record_id, stage, MAX(id) AS latest_id
+                        FROM workflow_actions WHERE module_key = 'guesthouse'
+                        GROUP BY record_id, stage) latest ON latest.latest_id = wa.id
+          WHERE wa.module_key = 'guesthouse' AND wa.record_id = gb.id
+            AND wa.stage COLLATE utf8mb4_unicode_ci = ? COLLATE utf8mb4_unicode_ci
+            AND wa.decision <> 'resubmitted'
+        ))${scopeClause})`);
+      params.push(normalizedStage, normalizedStage);
+      if (scopeClause) params.push(...departmentIds);
+    }
+    if (!clauses.length) return [];
+    const [rows] = await db.query(
+      `SELECT DISTINCT gb.id FROM guesthouse_bookings gb WHERE ${clauses.join(' OR ')}`,
+      params,
+    );
+    return rows.map((row) => toPositiveInt(row.id)).filter(Boolean);
   },
 
   async getGuesthouseOwner(bookingId) {
@@ -1191,144 +1228,6 @@ const guesthouseModel = {
     });
   },
 
-  async unarchiveGuesthouseBooking(bookingId, actor = {}) {
-    const normalizedId = toPositiveInt(bookingId);
-    if (!normalizedId) throw new Error('Invalid booking ID');
-
-    return withTransaction(async (tx) => {
-      const [bookingRows] = await tx.query(
-        `SELECT workflow_state FROM guesthouse_bookings WHERE id = ? FOR UPDATE`,
-        [normalizedId],
-      );
-      if (!bookingRows.length) throw new Error('Guest house booking not found');
-
-      const currentState = safeParseJSON(bookingRows[0].workflow_state, null);
-      if (String(currentState?.status || '').toLowerCase() !== 'archived') {
-        throw new Error('Guest House request is not archived');
-      }
-
-      const [archiveRows] = await tx.query(
-        `SELECT stage, actor_user_id, actor_email, snapshot_before
-           FROM workflow_actions
-          WHERE module_key = 'guesthouse' AND record_id = ? AND decision = 'archived'
-          ORDER BY decided_at DESC, id DESC LIMIT 1`,
-        [normalizedId],
-      );
-      if (!archiveRows.length) throw new Error('Cannot unarchive: archive record not found');
-
-      const archive = archiveRows[0];
-      const actorId = toPositiveInt(actor.userId || actor.id);
-      const archivedById = toPositiveInt(archive.actor_user_id);
-      const actorEmail = normalizeText(actor.email).toLowerCase();
-      const archivedByEmail = normalizeText(archive.actor_email).toLowerCase();
-      if (
-        !actor.isSuperAdmin &&
-        !(actorId && archivedById && actorId === archivedById) &&
-        !(actorEmail && archivedByEmail && actorEmail === archivedByEmail)
-      ) {
-        const error = new Error('Only the user who archived this request can unarchive it (or a super admin)');
-        error.statusCode = 403;
-        throw error;
-      }
-
-      const restoreState = safeParseJSON(archive.snapshot_before, null);
-      if (!restoreState?.currentStage || !restoreState?.flow) {
-        throw new Error('Cannot unarchive: original workflow state is missing');
-      }
-
-      await this.updateGuesthouseWorkflowSnapshot(normalizedId, restoreState, { tx });
-      await tx.query(
-        `INSERT INTO workflow_actions (
-           module_key, record_id, stage, decision, feedback, actor_user_id,
-           actor_email, actor_role, snapshot_before, meta
-         ) VALUES ('guesthouse', ?, ?, 'unarchived', ?, ?, ?, ?, ?, ?)`,
-        [
-          normalizedId,
-          normalizeText(archive.stage) || normalizeText(restoreState.currentStage),
-          `Restored to ${restoreState.currentStage}`,
-          actorId,
-          normalizeText(actor.email) || null,
-          normalizeText(actor.role) || null,
-          JSON.stringify(currentState),
-          JSON.stringify({ origin: 'api', action: 'archive-toggle' }),
-        ],
-      );
-
-      return restoreState;
-    });
-  },
-
-  async archiveGuesthouseBooking(bookingId, actor = {}, allowedDepartmentIds = null) {
-    const normalizedId = toPositiveInt(bookingId);
-    if (!normalizedId) throw new Error('Invalid booking ID');
-
-    return withTransaction(async (tx) => {
-      const [bookingRows] = await tx.query(
-        `SELECT workflow_state, workflow_stage, workflow_status, department_id,
-                department, beneficiary_type, beneficiary_value
-           FROM guesthouse_bookings WHERE id = ? FOR UPDATE`,
-        [normalizedId],
-      );
-      if (!bookingRows.length) throw new Error('Guest House booking not found');
-
-      const booking = bookingRows[0];
-      const currentState = safeParseJSON(booking.workflow_state, null);
-      if (!currentState?.flow || !currentState?.currentStage) {
-        throw new Error('Guest House workflow state is missing');
-      }
-      const currentStatus = normalizeText(
-        currentState.status || booking.workflow_status,
-      ).toLowerCase();
-      if (currentStatus === 'archived') throw new Error('Guest House request is already archived');
-      if (['completed', 'approved', 'rejected', 'returned'].includes(currentStatus)) {
-        throw new Error(`Archive not allowed for request status: ${currentStatus}`);
-      }
-
-      const departmentIds = Array.from(allowedDepartmentIds || [])
-        .map((id) => toPositiveInt(id))
-        .filter(Boolean);
-      if (allowedDepartmentIds !== null) {
-        const inScope = departmentIds.includes(toPositiveInt(booking.department_id));
-        if (!inScope) {
-          const error = new Error('Record is outside your department workflow scope');
-          error.statusCode = 403;
-          throw error;
-        }
-      }
-
-      const now = new Date().toISOString();
-      const archivedState = {
-        ...currentState,
-        status: 'archived',
-        lastDecision: 'archived',
-        lastFeedback: null,
-        updatedAt: now,
-        resolvedAt: now,
-        isEditableByApplicant: false,
-      };
-      const actorId = toPositiveInt(actor.userId || actor.id);
-
-      await tx.query(
-        `INSERT INTO workflow_actions (
-           module_key, record_id, stage, decision, feedback, actor_user_id,
-           actor_email, actor_role, snapshot_before, meta
-         ) VALUES ('guesthouse', ?, ?, 'archived', ?, ?, ?, ?, ?, ?)`,
-        [
-          normalizedId,
-          normalizeText(currentState.currentStage),
-          normalizeText(actor.feedback) || null,
-          actorId,
-          normalizeText(actor.email) || null,
-          normalizeText(actor.role) || null,
-          JSON.stringify(currentState),
-          JSON.stringify({ origin: 'api', action: 'archive-toggle' }),
-        ],
-      );
-      await this.updateGuesthouseWorkflowSnapshot(normalizedId, archivedState, { tx });
-      return archivedState;
-    });
-  },
-
   async getAllotmentBookingId(allotmentId) {
     const [rows] = await db.query('SELECT booking_id FROM guesthouse_room_allotments WHERE id = ?', [toPositiveInt(allotmentId)]);
     return toPositiveInt(rows[0]?.booking_id);
@@ -1693,7 +1592,7 @@ const guesthouseModel = {
         [checkInDate, checkInTime, checkOutDate, checkOutTime, normalizedId],
       );
       return result.affectedRows > 0 || result.changedRows === 0;
-    });
+    }, { tx: workflowGuard.tx || null });
   },
 
 };

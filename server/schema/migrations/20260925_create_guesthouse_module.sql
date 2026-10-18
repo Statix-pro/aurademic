@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS `guesthouse_bookings` (
   CONSTRAINT `fk_guesthouse_bookings_employee` FOREIGN KEY (`employee_id`) REFERENCES `master_employees` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_guesthouse_bookings_department` FOREIGN KEY (`department_id`) REFERENCES `master_departments` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_guesthouse_bookings_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- 2. Guests (one booking -> many guests)
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS `guesthouse_guests` (
   KEY `idx_guesthouse_guests_booking` (`booking_id`),
   KEY `idx_guesthouse_guests_sort` (`booking_id`,`sort_order`),
   CONSTRAINT `fk_guesthouse_guests_booking` FOREIGN KEY (`booking_id`) REFERENCES `guesthouse_bookings` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- 3. Room type requested per guest
@@ -125,7 +125,7 @@ CREATE TABLE IF NOT EXISTS `guesthouse_guest_room_requests` (
   UNIQUE KEY `uq_guesthouse_guest_room_request_type` (`guest_id`,`room_type`),
   KEY `idx_guesthouse_guest_room_requests_guest` (`guest_id`),
   CONSTRAINT `fk_guesthouse_guest_room_requests_guest` FOREIGN KEY (`guest_id`) REFERENCES `guesthouse_guests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- 4. Per-day food requirements
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS `guesthouse_food_requirements` (
   UNIQUE KEY `uq_guesthouse_food_booking_date` (`booking_id`,`req_date`),
   KEY `idx_guesthouse_food_date` (`req_date`),
   CONSTRAINT `fk_guesthouse_food_booking` FOREIGN KEY (`booking_id`) REFERENCES `guesthouse_bookings` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- 5. Master data: managed rooms
@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS `guesthouse_rooms` (
   KEY `idx_guesthouse_rooms_status` (`status`),
   KEY `idx_guesthouse_rooms_type` (`room_type`),
   CONSTRAINT `fk_guesthouse_rooms_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- 6. Master data: care takers
@@ -186,7 +186,7 @@ CREATE TABLE IF NOT EXISTS `guesthouse_caretakers` (
   UNIQUE KEY `uq_guesthouse_caretaker_name_mobile` (`name`,`mobile`),
   KEY `idx_guesthouse_caretakers_status` (`status`),
   CONSTRAINT `fk_guesthouse_caretakers_user` FOREIGN KEY (`created_by`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- 7. Room allotment header (one per guest per booking)
@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS `guesthouse_room_allotments` (
   CONSTRAINT `fk_guesthouse_allotment_booking` FOREIGN KEY (`booking_id`) REFERENCES `guesthouse_bookings` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_guesthouse_allotment_guest` FOREIGN KEY (`guest_id`) REFERENCES `guesthouse_guests` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_guesthouse_allotment_caretaker` FOREIGN KEY (`caretaker_id`) REFERENCES `guesthouse_caretakers` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- 8. Individual room rows under an allotment
@@ -229,7 +229,7 @@ CREATE TABLE IF NOT EXISTS `guesthouse_room_allotment_rows` (
   KEY `idx_guesthouse_allotment_rows_room` (`room_id`),
   CONSTRAINT `fk_guesthouse_allotment_rows_allotment` FOREIGN KEY (`allotment_id`) REFERENCES `guesthouse_room_allotments` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_guesthouse_allotment_rows_room` FOREIGN KEY (`room_id`) REFERENCES `guesthouse_rooms` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- 9. Named occupants per room
@@ -243,7 +243,7 @@ CREATE TABLE IF NOT EXISTS `guesthouse_room_allotment_row_occupants` (
   PRIMARY KEY (`id`),
   KEY `idx_guesthouse_allotment_row_occupants_row` (`allotment_row_id`),
   CONSTRAINT `fk_guesthouse_allotment_row_occupants_row` FOREIGN KEY (`allotment_row_id`) REFERENCES `guesthouse_room_allotment_rows` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
 -- 10. Approval workflow registration

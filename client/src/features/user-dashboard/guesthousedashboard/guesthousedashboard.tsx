@@ -26,8 +26,10 @@ import CustomModal from '../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import {  
   getGuesthouseWorkflowStage,  
+  getGuesthouseWorkflowStages,
   isSuperAdmin,
 } from '../../../shared/utils/permissionUtils';
+import type { GuesthouseWorkflowStage } from '../../../shared/utils/permissionUtils';
 
 interface GuesthouseCardItem {
   id: number;
@@ -122,7 +124,13 @@ interface GuesthouseDashboardProps {
 
 const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode = false }) => {
   const { user } = useAuth();
-  const approvalStage = getGuesthouseWorkflowStage(user);
+  const availableApprovalStages = getGuesthouseWorkflowStages(user);
+  const [selectedApprovalStage, setSelectedApprovalStage] = useState('');
+  const approvalStage = approvalMode
+    ? availableApprovalStages.includes(selectedApprovalStage as GuesthouseWorkflowStage)
+      ? selectedApprovalStage as GuesthouseWorkflowStage
+      : availableApprovalStages[0] || null
+    : getGuesthouseWorkflowStage(user);
   const formatFiscalYearValue = (startYear: number) =>
     `${startYear}-${String(startYear + 1).slice(-2)}`;
   const getCurrentFiscalYear = () => {
@@ -1165,6 +1173,19 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
             <div className="guesthousedashboard-header-single">
               <div className="header-left-section">
                  <h5 className="guesthousedashboard-title">Guest House Requests</h5>
+                 {approvalMode && availableApprovalStages.length > 1 && (
+                   <select
+                     aria-label="Guest House approval stage"
+                     value={approvalStage || ''}
+                     onChange={(event) => setSelectedApprovalStage(event.target.value)}
+                   >
+                     {availableApprovalStages.map((stage) => (
+                       <option key={stage} value={stage}>
+                         {stage.replace(/_/g, ' ').toUpperCase()}
+                       </option>
+                     ))}
+                   </select>
+                 )}
                  {approvalMode && approvalStageLabel && (
                    <>
                      <span className="guesthousedashboard-role-badge">
@@ -1300,7 +1321,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
                 </div>
               )}
 
-              {!loading && filteredData.length > 0 && (
+              {!loading && !queueError && filteredData.length > 0 && (
                 <div className="guesthousedashboard-list-container">
                   {paginatedData.map((item) => {
                     const status = getNormalizedStatus(item);

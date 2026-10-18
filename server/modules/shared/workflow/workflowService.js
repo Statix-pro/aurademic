@@ -476,11 +476,9 @@ const canAccessStageByRole = ({ moduleKey, actor = {}, stageKey = '' }) => {
     return false;
   }
 
-  if (normalizedModuleKey === 'guesthouse') {
-    // Guest House stage roles are named after their workflow stages. Keep
-    // this exact-role check in sync with the module's queue authorization;
-    // generic admin flags and the portal-wide `admin` role grant no stages.
-    return getNormalizedActorRoles(actor).includes(normalizedStage);
+  const adapterRoleCheck = getWorkflowModule(normalizedModuleKey)?.adapter?.canAccessStageByRole;
+  if (typeof adapterRoleCheck === 'function') {
+    return Boolean(adapterRoleCheck({ actor, stageKey: normalizedStage }));
   }
 
   if (normalizedStage === 'level1') {
@@ -952,11 +950,15 @@ export async function resubmitReturnedWorkflow({
     const previousState = await getWorkflowStateFromRecord(conn, moduleConfig, normalizedRecordId, {
       forUpdate: true,
     });
+    const resubmitStage = normalizeText(previousState?.currentStage).toLowerCase();
+    const canResubmit = typeof moduleConfig.adapter.canApplicantResubmit === 'function'
+      ? await moduleConfig.adapter.canApplicantResubmit({ context, workflowState: previousState })
+      : false;
     if (
       normalizeText(previousState?.status).toLowerCase() !== 'returned' ||
-      normalizeText(previousState?.currentStage).toLowerCase() !== 'hod'
+      !resubmitStage || !canResubmit
     ) {
-      throw new WorkflowError('Only requests returned at the HOD stage can be resubmitted', 409, 'WORKFLOW_NOT_RESUBMITTABLE');
+      throw new WorkflowError('This request is not eligible for applicant resubmission', 409, 'WORKFLOW_NOT_RESUBMITTABLE');
     }
 
     const nextState = {
@@ -981,8 +983,8 @@ export async function resubmitReturnedWorkflow({
       `INSERT INTO workflow_actions (
         module_key, record_id, stage, decision, feedback, actor_user_id,
         actor_email, actor_role, snapshot_before, meta
-      ) VALUES (?, ?, 'hod', 'resubmitted', ?, ?, ?, ?, ?, ?)`,
-      [normalizedModuleKey, normalizedRecordId,
+      ) VALUES (?, ?, ?, 'resubmitted', ?, ?, ?, ?, ?, ?)`,
+      [normalizedModuleKey, normalizedRecordId, resubmitStage,
         normalizeText(previousState.lastFeedback) || null,
         normalizedActor.userId, normalizedActor.email, normalizedActor.role,
         JSON.stringify(previousState), JSON.stringify(normalizedMeta)],

@@ -17,6 +17,9 @@ const { default: db } = await import('../config/connection.js');
 const { default: guesthouseModel } = await import('../modules/guesthouse/guesthouseModel.js');
 const runKey = `audit-${Date.now()}-${Math.floor(Math.random() * 1_000_000)}`;
 const bookingIds = [];
+let syntheticRowsRemain = false;
+let primaryError = null;
+let cleanupError = null;
 const roomIds = [];
 const allotmentIds = [];
 let assertions = 0;
@@ -268,7 +271,11 @@ try {
   };
   console.log(`Guest House MySQL audit integration: ${assertions} assertions passed on isolated database ${dbName}`);
   console.log(`Allocation contention run: ${virtualCallCount} simultaneous backend calls; ${concurrentSuccesses} succeeded, ${concurrentConflicts} returned 409; ${Math.round(concurrentElapsedMs)} ms total; per-call p50/p95/p99 ${percentile(0.5)}/${percentile(0.95)}/${percentile(0.99)} ms.`);
-} finally {
+} catch (error) {
+  primaryError = error;
+}
+
+try {
   if (bookingIds.length) {
     await db.query('DELETE FROM guesthouse_room_allotment_row_occupants WHERE allotment_row_id IN (SELECT id FROM guesthouse_room_allotment_rows WHERE allotment_id IN (?))', [allotmentIds]);
     await db.query('DELETE FROM guesthouse_room_allotment_rows WHERE allotment_id IN (?)', [allotmentIds]);
@@ -281,9 +288,20 @@ try {
     'SELECT COUNT(*) AS count FROM guesthouse_bookings WHERE applicant_name LIKE ?',
     [`${runKey}%`],
   );
-  if (Number(remainingSyntheticRows[0].count) !== 0) {
-    throw new Error('Synthetic Guest House audit records remained after cleanup');
+  syntheticRowsRemain = Number(remainingSyntheticRows[0].count) !== 0;
+  if (!syntheticRowsRemain) console.log('Synthetic Guest House audit booking rows cleaned: 0 remain.');
+} catch (error) {
+  cleanupError = error;
+} finally {
+  try {
+    await db.end();
+  } catch (error) {
+    cleanupError ||= error;
   }
-  console.log('Synthetic Guest House audit booking rows cleaned: 0 remain.');
-  await db.end();
+}
+
+if (primaryError) throw primaryError;
+if (cleanupError) throw cleanupError;
+if (syntheticRowsRemain) {
+  throw new Error('Synthetic Guest House audit records remained after cleanup');
 }
