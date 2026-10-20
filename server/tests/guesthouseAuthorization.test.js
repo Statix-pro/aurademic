@@ -101,7 +101,7 @@ describe('Guest House authorization and date-time validation', () => {
     expect(tx.commit).toHaveBeenCalledOnce();
   });
 
-  it('applies the same queue scope to role-assigned HODs without explicit permission strings', async () => {
+  it('limits role-only HODs without workflow permission strings to their own bookings', async () => {
     guesthouseModel.listAccessibleGuesthouseBookingIds.mockResolvedValue([43]);
     guesthouseModel.listGuesthouseBookings.mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 });
     const response = makeResponse();

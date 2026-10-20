@@ -108,7 +108,7 @@ const canAccessGuesthouseBookingAtStage = async (
 const isApplicantEditable = (booking) => {
   const status = normalizeText(booking?.workflow_state?.status || booking?.workflow_status || booking?.overall_status).toLowerCase();
   const stage = normalizeText(booking?.workflow_state?.currentStage || booking?.workflow_stage).toLowerCase();
-  return status === 'returned' || (stage === 'hod' && ['in_progress', 'pending', 'submitted', ''].includes(status));
+  return status === 'returned' || ((!stage || stage === 'hod') && ['in_progress', 'pending', 'submitted', ''].includes(status));
 };
 
 const isRoomAllotmentActionable = (booking) => {
@@ -336,7 +336,7 @@ const guesthouseController = {
       const tx = shouldResubmit ? await guesthouseModel.beginTransaction() : null;
       try {
         await guesthouseModel.updateGuesthouseBooking(bookingId, { ...payload, guests }, {
-          expectedWorkflowStage: isSuperAdminRequest(req) ? null : stage || 'hod',
+          expectedWorkflowStage: isSuperAdminRequest(req) ? null : stage || null,
           allowedWorkflowStatuses: isSuperAdminRequest(req)
             ? null
             : isApprover

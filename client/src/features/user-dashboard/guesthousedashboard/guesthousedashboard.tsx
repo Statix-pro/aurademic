@@ -46,6 +46,7 @@ interface GuesthouseCardItem {
   approved_total_amount?: number | string | null;
   overall_status: string;
   workflow_status?: string;
+  workflow_stage?: string;
   fiscal_year?: number | string | null;
   fiscalYear?: number | string | null;
   created_at: string;
@@ -141,6 +142,8 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   };
   const getCurrentFiscalYearStart = () => Number.parseInt(getCurrentFiscalYear().split('-')[0], 10);
   const [data, setData] = useState<GuesthouseCardItem[]>([]);
+  const dashboardRequestRef = useRef(0);
+  const kpiRequestRef = useRef(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [queueError, setQueueError] = useState('');
   const [statsError, setStatsError] = useState('');
@@ -190,6 +193,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   const [pendingArchive, setPendingArchive] = useState<GuesthouseCardItem | null>(null);
   useEffect(() => {
     fetchDashboard();
+    return () => {
+      dashboardRequestRef.current += 1;
+    };
   }, [approvalMode, approvalStage]);
 
   useEffect(() => {
@@ -198,6 +204,9 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
 
   useEffect(() => {
     fetchKpiStats();
+    return () => {
+      kpiRequestRef.current += 1;
+    };
   }, [approvalMode, approvalStage]);
 
   useEffect(() => {
@@ -262,6 +271,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   }, [activeInfoId]);
 
   const fetchDashboard = async () => {
+    const requestToken = ++dashboardRequestRef.current;
     try {
       setLoading(true);
       setQueueError('');
@@ -284,6 +294,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         pagination?: { total?: number };
       };
       const res = await fetchPage(1);
+      if (requestToken !== dashboardRequestRef.current) return;
       if (res.success === false) {
         throw new Error((res as any).message || 'Guest House queue request failed.');
       }
@@ -292,6 +303,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       const pageCount = Number.isFinite(total) && total > 0 ? Math.ceil(total / 100) : 1;
       for (let page = 2; page <= pageCount; page += 1) {
         const nextPage = await fetchPage(page);
+        if (requestToken !== dashboardRequestRef.current) return;
         if (nextPage.success === false) {
           throw new Error((nextPage as any).message || 'Guest House queue request failed.');
         }
@@ -300,6 +312,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       setData(items);
       if (res.scopeWarning) setQueueError(res.scopeWarning);
     } catch (err) {
+      if (requestToken !== dashboardRequestRef.current) return;
       console.error('Guesthouse dashboard error', err);
       setData([]);
       setQueueError(
@@ -308,7 +321,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
           'Unable to load Guest House requests. Check the server API.',
       );
     } finally {
-      setLoading(false);
+      if (requestToken === dashboardRequestRef.current) setLoading(false);
     }
   };
 
@@ -336,7 +349,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     ).toLowerCase();
 
   const getCurrentStage = (item: GuesthouseCardItem) =>
-    String(item.workflow_state?.currentStage || '').toLowerCase();
+    String(item.workflow_state?.currentStage || item.workflow_stage || '').toLowerCase();
 
   const getNormalizedStatus = (item: GuesthouseCardItem) => {
     const stageDecision = String(item.stage_decision || '').toLowerCase();
@@ -663,6 +676,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   };
 
   const fetchKpiStats = async () => {
+    const requestToken = ++kpiRequestRef.current;
     if (!approvalMode || !approvalStage) {
       return;
     }
@@ -677,6 +691,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         stats?: Partial<typeof kpiStats>;
         scopeWarning?: string;
       };
+      if (requestToken !== kpiRequestRef.current) return;
 
       const nextStats = response?.stats || response?.data;
       if (response?.success && nextStats) {
@@ -686,6 +701,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         throw new Error((response as any)?.message || 'Guest House queue statistics request failed.');
       }
     } catch (error) {
+      if (requestToken !== kpiRequestRef.current) return;
       console.error('Guesthouse KPI stats error', error);
       setStatsError(
         (error as any)?.response?.data?.message ||
@@ -952,12 +968,17 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
   };
 
   const canEditRequest = (item: GuesthouseCardItem) => {
-    // The dashboard lists the current user's requests; every one can be
-    // reopened for editing. The API independently verifies ownership.
-    if (approvalMode && ['approved', 'rejected', 'archived'].includes(getNormalizedStatus(item))) {
-      return false;
+    if (isSuperAdmin(user)) return true;
+
+    const status = getWorkflowStatus(item);
+    const stage = getCurrentStage(item);
+    const editableStatuses = ['in_progress', 'pending', 'submitted', 'returned'];
+    if (approvalMode) {
+      return stage === String(approvalStage || '').toLowerCase() && editableStatuses.includes(status);
     }
-    return Boolean(item) || isSuperAdmin(user);
+
+    return status === 'returned' ||
+      ((!stage || stage === 'hod') && editableStatuses.includes(status));
   };
 
   const handleEditClick = (item: GuesthouseCardItem) => {
@@ -1026,6 +1047,7 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
       const lowerSearch = searchTerm.toLowerCase();
       result = result.filter(
         (item) =>
+          getProposalRef(item).toLowerCase().includes(lowerSearch) ||
           (item.applicant_name?.toLowerCase() || '').includes(lowerSearch) ||
           (item.primary_head?.toLowerCase() || '').includes(lowerSearch),
       );
