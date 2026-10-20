@@ -72,6 +72,8 @@ try {
   await db.query(`
     CREATE TABLE IF NOT EXISTS guesthouse_bookings (
       id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      employee_id INT, applicant_erp_id VARCHAR(50), department VARCHAR(255),
+      department_id INT, designation VARCHAR(150), email VARCHAR(255), mobile VARCHAR(20),
       applicant_name VARCHAR(255), request_date DATE NOT NULL,
       created_by INT, check_in_date DATE, check_in_time VARCHAR(20),
       check_out_date DATE, check_out_time VARCHAR(20),

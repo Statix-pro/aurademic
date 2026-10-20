@@ -243,6 +243,14 @@ function App() {
                     }
                   />
                   <Route
+                    path="/guesthouse/:id/edit"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseBooking />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/guesthouse-dashboard"
                     element={
                       <ProtectedRoute>

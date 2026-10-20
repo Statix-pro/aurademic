@@ -16,5 +16,6 @@ describe('safeResolvePath', () => {
 
   it('rejects an empty path', () => {
     expect(safeResolvePath(path.resolve('uploads'), '')).toBeNull();
+    expect(safeResolvePath(path.resolve('uploads'), '.')).toBeNull();
   });
 });

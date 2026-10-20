@@ -271,17 +271,33 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
         setQueueError('No Guest House workflow stage is assigned to this account.');
         return;
       }
-      const res = (await authenticityUtility.get(approvalMode
+      const baseUrl = approvalMode
         ? `/guesthouse/queue/${approvalStage}?status=all&limit=100`
-        : '/guesthouse?mine=true')) as {
+        : '/guesthouse?mine=true&limit=100';
+      const fetchPage = async (page: number) => (await authenticityUtility.get(
+        `${baseUrl}&page=${page}`,
+      )) as {
         success?: boolean;
         items?: GuesthouseCardItem[];
         scopeWarning?: string;
+        total?: number;
+        pagination?: { total?: number };
       };
+      const res = await fetchPage(1);
       if (res.success === false) {
         throw new Error((res as any).message || 'Guest House queue request failed.');
       }
-      setData(Array.isArray(res.items) ? res.items : []);
+      const items = Array.isArray(res.items) ? [...res.items] : [];
+      const total = Number(res.total ?? res.pagination?.total);
+      const pageCount = Number.isFinite(total) && total > 0 ? Math.ceil(total / 100) : 1;
+      for (let page = 2; page <= pageCount; page += 1) {
+        const nextPage = await fetchPage(page);
+        if (nextPage.success === false) {
+          throw new Error((nextPage as any).message || 'Guest House queue request failed.');
+        }
+        if (Array.isArray(nextPage.items)) items.push(...nextPage.items);
+      }
+      setData(items);
       if (res.scopeWarning) setQueueError(res.scopeWarning);
     } catch (err) {
       console.error('Guesthouse dashboard error', err);
@@ -398,20 +414,6 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     getCurrentStage(item) === String(approvalStage || '').toLowerCase() &&
     ['in_progress', 'submitted', 'pending'].includes(getWorkflowStatus(item));
 
-  const getDisplayAmount = (item: GuesthouseCardItem) => {
-    const normalizedStatus = getNormalizedStatus(item);
-    const rawAmount =
-      normalizedStatus === 'approved'
-        ? (item.approved_total_amount ?? item.total_budget ?? item.proposed_amount ?? 0)
-        : (item.total_budget ??
-          item.proposed_amount ??
-          item.amount ??
-          item.workflow_state?.submittedTotalBudget ??
-          0);
-    const parsedAmount = Number(rawAmount);
-    return Number.isFinite(parsedAmount) ? parsedAmount : 0;
-  };
-
   const getPrincipalDocument = (item: GuesthouseCardItem) => item.principal_document || null;
 
   const getPrincipalDocumentUrl = (item: GuesthouseCardItem) => {
@@ -427,26 +429,18 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
     return `${authenticityUtility.getBaseURL()}${filePath}`;
   };
 
-  const isPrincipalUser = Boolean(
-    Array.isArray(user?.roles) &&
-    user.roles.some(
-      (role) =>
-        String(role || '')
-          .trim()
-          .toLowerCase() === 'principal',
-    ),
+  const isPrincipalUser = getGuesthouseWorkflowStages(user).some(
+    (stage) => stage === 'principal' || stage === 'guesthouse_admin',
   );
 
   const isPrincipalDocumentEligible = (item: GuesthouseCardItem) => {
-    const amount = getDisplayAmount(item);
     const workflowStatus = getWorkflowStatus(item);
-
     return (
-      amount > 10000 &&
       (workflowStatus === 'approved' ||
         workflowStatus === 'completed' ||
         workflowStatus === 'principal_approved' ||
-        workflowStatus === 'chairman_approved')
+        getCurrentStage(item) === 'principal' ||
+        getCurrentStage(item) === 'guesthouse_admin')
     );
   };
 

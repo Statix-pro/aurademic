@@ -17,7 +17,7 @@ export function safeResolvePath(baseDir, targetFile) {
 
   // A string-prefix check treats sibling paths such as /uploads-evil as
   // children of /uploads. Reject absolute relatives and parent traversal.
-  if (!relativeTarget || (!relativeTarget.startsWith(`..${path.sep}`) && relativeTarget !== '..' && !path.isAbsolute(relativeTarget))) {
+  if (relativeTarget && !relativeTarget.startsWith(`..${path.sep}`) && relativeTarget !== '..' && !path.isAbsolute(relativeTarget)) {
     return resolvedTarget;
   }
 

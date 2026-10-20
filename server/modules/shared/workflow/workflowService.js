@@ -1246,7 +1246,7 @@ export async function resubmitReturnedWorkflow({
       decision: 'resubmitted',
     });
 
-    await conn.query(
+    const [actionResult] = await conn.query(
       `INSERT INTO workflow_actions (
         module_key, record_id, stage, decision, feedback, actor_user_id,
         actor_email, actor_role, snapshot_before, meta
@@ -1257,6 +1257,18 @@ export async function resubmitReturnedWorkflow({
         JSON.stringify(previousState), JSON.stringify(normalizedMeta)],
     );
     await moduleConfig.adapter.updateRecordWorkflowSnapshot(normalizedRecordId, nextState, { tx: conn, metadata: normalizedMeta });
+    const resubmitActionId = toPositiveInt(actionResult?.insertId);
+    await notificationService.emit({
+      type: `${normalizedModuleKey}.resubmitted`,
+      actorUserId: normalizedActor.userId,
+      subject: notificationSubject(normalizedModuleKey, normalizedRecordId, context),
+      audience: [stageAudience(normalizedModuleKey, resubmitStage, context)],
+      data: { stage: resubmitStage },
+      dedupeKey: resubmitActionId
+        ? `${normalizedModuleKey}:${normalizedRecordId}:resubmitted:${resubmitStage}:${resubmitActionId}`
+        : null,
+      tx: conn,
+    });
     return { moduleKey: normalizedModuleKey, recordId: normalizedRecordId, previousState, currentState: nextState };
   }, { tx });
 }
