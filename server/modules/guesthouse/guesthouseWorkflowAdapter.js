@@ -4,6 +4,8 @@ import { registerWorkflowModule } from '../shared/workflow/workflowModuleRegistr
 const guesthouseWorkflowAdapter = {
   // Keep archived bookings at their original stage for scoped unarchive access.
   preserveStageOnArchive: true,
+  // Guest House stage access is granted by explicit workflow permissions, not role names.
+  permissionOnlyStageAccess: true,
 
   resolveStartFlow() {
     // Keep this in sync with 20260925_create_guesthouse_module.sql.

@@ -563,7 +563,7 @@ const guesthouseController = {
             page: Number.parseInt(req.query.page, 10) || 1,
             limit: Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 20, 1), 100),
           },
-          // Keep the established queue fields for existing guesthouse clients.
+          // LEGACY: guesthousedashboard.tsx reads these aliases; remove once it uses data/pagination.
           items: [],
           total: 0,
           page: Number.parseInt(req.query.page, 10) || 1,
@@ -589,7 +589,7 @@ const guesthouseController = {
           limit: result.limit,
           statusCounts: result.statusCounts,
         },
-        // Keep the established queue fields for existing guesthouse clients.
+        // LEGACY: guesthousedashboard.tsx reads these aliases; remove once it uses data/pagination.
         items: result.items,
         total: result.total,
         page: result.page,
@@ -788,6 +788,10 @@ const guesthouseController = {
 
   async getSpocOptions(req, res) {
     try {
+      if (!hasGuesthouseStagePermission(req, 'guesthouse_admin') &&
+          !(Array.isArray(req.user?.permissions) && req.user.permissions.includes('guesthouse.manage'))) {
+        return res.status(403).json({ success: false, message: 'Insufficient permissions' });
+      }
       const caretakers = await guesthouseModel.listGuesthouseCaretakers({ status: 'Active' });
       return res.json({ success: true, data: caretakers });
     } catch (error) {

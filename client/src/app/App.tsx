@@ -259,6 +259,14 @@ function App() {
                     }
                   />
                   <Route
+                    path="/guesthouse-approvals"
+                    element={
+                      <ProtectedRoute>
+                        <GuestHouseDashboard approvalMode />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/guesthouse-calendar"
                     element={
                       <ProtectedRoute>

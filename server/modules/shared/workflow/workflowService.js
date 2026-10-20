@@ -445,7 +445,11 @@ const canAccessStageByRole = ({ moduleKey, actor = {}, stageKey = '' }) => {
   if (!normalizedModuleKey || !normalizedStage) {
     return false;
   }
-  if (normalizedModuleKey === 'guesthouse') return false;
+  try {
+    if (getWorkflowModule(normalizedModuleKey).adapter?.permissionOnlyStageAccess) return false;
+  } catch {
+    // Some modules register lazily; without an adapter, retain shared defaults.
+  }
 
   // Role lists come from STAGE_ROLE_CODES so that this check and the inverse
   // lookup used to pick notification recipients can never disagree about who

@@ -1199,6 +1199,15 @@ const GuesthouseDashboard: React.FC<GuesthouseDashboardProps> = ({ approvalMode 
               </div>
 
               <div className="header-right-section">
+                {availableApprovalStages.length > 0 && (
+                  <button
+                    type="button"
+                    className="guesthousedashboard-manage-resources-button"
+                    onClick={() => navigate(approvalMode ? '/guesthouse-dashboard' : '/guesthouse-approvals')}
+                  >
+                    {approvalMode ? 'My requests' : 'Approval queue'}
+                  </button>
+                )}
                 <div className="search-box">
                   <Search size={18} className="search-icon" />
                   <input

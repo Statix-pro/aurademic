@@ -44,7 +44,7 @@ import 'bootstrap/dist/css/bootstrap.min.css';
 import { useAuth } from '../../contexts/AuthContext';
 import { useAbility } from '../../shared/casl/AbilityContext';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
-import { getGuesthouseWorkflowStage } from '../../shared/utils/permissionUtils';
+import { getGuesthouseWorkflowStages } from '../../shared/utils/permissionUtils';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 import RecordHeaderBanner from '../../shared/components/ui/RecordHeaderBanner';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
@@ -1108,7 +1108,7 @@ const GuestHouseBooking: React.FC = () => {
     new URLSearchParams(location.search).get('manageResources') === 'true';
   const isApprovalForm = new URLSearchParams(location.search).get('admin') === 'true';
   const isRoomAllotmentLink = new URLSearchParams(location.search).get('allotment') === 'true';
-  const isGuesthouseAdmin = getGuesthouseWorkflowStage(user) === 'guesthouse_admin';
+  const isGuesthouseAdmin = getGuesthouseWorkflowStages(user).includes('guesthouse_admin');
   const [adminView, setAdminView] = useState<'booking' | 'allotment'>(() =>
     isRoomAllotmentLink ? 'allotment' : 'booking',
   );

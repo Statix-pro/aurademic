@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../contexts/AuthContext';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import { getGuesthouseWorkflowStage } from '../../../shared/utils/permissionUtils';
+import { getGuesthouseWorkflowStages } from '../../../shared/utils/permissionUtils';
 import './GuestHouseCalendar.css';
 
 interface GuesthouseBooking {
@@ -84,7 +84,7 @@ const GuestHouseCalendar: React.FC = () => {
   const [error, setError] = useState('');
   const [bookingFilter, setBookingFilter] = useState<'all' | 'needs-room' | 'allocated'>('all');
 
-  const isGuesthouseAdmin = getGuesthouseWorkflowStage(user) === 'guesthouse_admin';
+  const isGuesthouseAdmin = getGuesthouseWorkflowStages(user).includes('guesthouse_admin');
   const selectedBookings = useMemo(
     () => bookings.filter((booking) => bookingIncludesDate(booking, selectedDate)),
     [bookings, selectedDate],

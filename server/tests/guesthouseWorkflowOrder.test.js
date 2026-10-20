@@ -46,6 +46,7 @@ describe('Guest House workflow order and stage permissions', () => {
   beforeEach(() => {
     workflowState = null;
     adapter = {
+      permissionOnlyStageAccess: true,
       resolveStartFlow: () => [...stages],
       getRecordContext: vi.fn().mockResolvedValue({ beneficiaryType: 'Department', applicantUserId: 101 }),
       canApplicantResubmit: vi.fn(({ workflowState }) =>

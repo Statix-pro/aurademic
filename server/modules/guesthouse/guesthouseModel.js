@@ -1109,7 +1109,11 @@ const guesthouseModel = {
         'SELECT id FROM guesthouse_guests WHERE id = ? AND booking_id = ? FOR UPDATE',
         [toPositiveInt(guestId), toPositiveInt(bookingId)],
       );
-      if (!guestRows.length) throw new Error('Room allotment guest does not belong to this booking');
+      if (!guestRows.length) {
+        const error = new Error('Room allotment guest does not belong to this booking');
+        error.statusCode = 400;
+        throw error;
+      }
       const [existing] = await tx.query(
         `SELECT id FROM guesthouse_room_allotments WHERE booking_id = ? AND guest_id = ?`,
         [bookingId, guestId],
@@ -1154,7 +1158,11 @@ const guesthouseModel = {
   async addRoomAllotmentRow(allotmentId, payload = {}) {
     return withTransaction(async (tx) => {
       const [allotments] = await tx.query('SELECT booking_id FROM guesthouse_room_allotments WHERE id = ?', [toPositiveInt(allotmentId)]);
-      if (!allotments.length) throw new Error('Room allotment not found');
+      if (!allotments.length) {
+        const error = new Error('Room allotment not found');
+        error.statusCode = 404;
+        throw error;
+      }
       const booking = await assertRoomAllocationActionable(tx, allotments[0].booking_id);
       const roomId = await assertRoomAvailable(tx, {
         bookingId: allotments[0].booking_id,
@@ -1274,7 +1282,9 @@ const guesthouseModel = {
       for (const allocation of Array.isArray(allotments) ? allotments : []) {
         const guestId = toPositiveInt(allocation?.guestId);
         if (!guestId || !bookingGuestIds.has(guestId)) {
-          throw new Error('Room allotment guest does not belong to this booking');
+          const error = new Error('Room allotment guest does not belong to this booking');
+          error.statusCode = 400;
+          throw error;
         }
 
         const [existing] = await tx.query(
