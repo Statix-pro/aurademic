@@ -33,14 +33,20 @@ const GUESTHOUSE_MANAGE_PERMISSIONS = ['guesthouse.manage'];
 const canAccessGuesthouseWorkflow = permissionMiddleware(GUESTHOUSE_WORKFLOW_PERMISSIONS);
 
 const canManageGuesthouseMasterData = permissionMiddleware(GUESTHOUSE_MANAGE_PERMISSIONS);
-const canReadGuesthouse = permissionMiddleware(['guesthouse.read', 'guesthouse.edit', 'guesthouse.workflow.*']);
+const canReadGuesthouse = permissionMiddleware([
+  'guesthouse.read',
+  'guesthouse.edit',
+  'guesthouse.workflow.*',
+]);
 const canEditGuesthouse = permissionMiddleware(['guesthouse.edit', 'guesthouse.workflow.*']);
 
 const canDeleteGuesthouseBooking = async (req, res, next) => {
   try {
     const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
     const hasWorkflowPermission = permissions.some((permission) =>
-      String(permission || '').trim().startsWith('guesthouse.workflow.'),
+      String(permission || '')
+        .trim()
+        .startsWith('guesthouse.workflow.'),
     );
 
     if (Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || hasWorkflowPermission) {
@@ -75,109 +81,243 @@ const canDeleteGuesthouseBooking = async (req, res, next) => {
   }
 };
 
-router.use(authMiddleware);
-// Queue permissions must reflect current Access Control assignments rather than
-// the potentially stale role/permission claims embedded in the login token.
-router.use(authorizationSnapshotMiddleware);
+router.get(
+  '/room-options',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canReadGuesthouse,
+  guesthouseController.getRoomOptions,
+);
+router.get(
+  '/spocs',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canReadGuesthouse,
+  guesthouseController.getSpocOptions,
+);
 
-router.get('/room-options', guesthouseRateLimiter, canReadGuesthouse, guesthouseController.getRoomOptions);
-router.get('/spocs', guesthouseRateLimiter, canReadGuesthouse, guesthouseController.getSpocOptions);
+router.post(
+  '/',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canEditGuesthouse,
+  guesthouseController.createGuesthouseBooking,
+);
+router.get(
+  '/',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canReadGuesthouse,
+  guesthouseController.listGuesthouseBookings,
+);
 
-router.post('/', guesthouseRateLimiter, canEditGuesthouse, guesthouseController.createGuesthouseBooking);
-router.get('/', guesthouseRateLimiter, canReadGuesthouse, guesthouseController.listGuesthouseBookings);
-
-router.get('/workflow/meta', guesthouseRateLimiter, canAccessGuesthouseWorkflow, guesthouseController.getWorkflowMeta);
+router.get(
+  '/workflow/meta',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canAccessGuesthouseWorkflow,
+  guesthouseController.getWorkflowMeta,
+);
 router.get(
   '/queue/:stage/kpi-stats',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canAccessGuesthouseWorkflow,
   guesthouseController.getGuesthouseKpiStats,
 );
-router.get('/queue/:stage', guesthouseRateLimiter, canAccessGuesthouseWorkflow, guesthouseController.getGuesthouseQueue);
+router.get(
+  '/queue/:stage',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canAccessGuesthouseWorkflow,
+  guesthouseController.getGuesthouseQueue,
+);
 
 router.post(
   '/allotments/:allotmentId/rooms',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canAccessGuesthouseWorkflow,
   guesthouseController.addRoomAllotmentRow,
 );
 router.delete(
   '/allotments/rooms/:rowId',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canAccessGuesthouseWorkflow,
   guesthouseController.deleteRoomAllotmentRow,
 );
 
-router.get('/admin/rooms', guesthouseRateLimiter, canManageGuesthouseMasterData, guesthouseController.listGuesthouseRooms);
-router.post('/admin/rooms', guesthouseRateLimiter, canManageGuesthouseMasterData, guesthouseController.createGuesthouseRoom);
-router.post('/admin/resources/bulk-import', guesthouseRateLimiter, canManageGuesthouseMasterData, guesthouseController.bulkImportResources);
+router.get(
+  '/admin/rooms',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canManageGuesthouseMasterData,
+  guesthouseController.listGuesthouseRooms,
+);
+router.post(
+  '/admin/rooms',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canManageGuesthouseMasterData,
+  guesthouseController.createGuesthouseRoom,
+);
+router.post(
+  '/admin/resources/bulk-import',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canManageGuesthouseMasterData,
+  guesthouseController.bulkImportResources,
+);
 router.put(
   '/admin/rooms/:id',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canManageGuesthouseMasterData,
   guesthouseController.updateGuesthouseRoom,
 );
 router.delete(
   '/admin/rooms/:id',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canManageGuesthouseMasterData,
   guesthouseController.deleteGuesthouseRoom,
 );
 
-router.get('/admin/caretakers', guesthouseRateLimiter, canManageGuesthouseMasterData, guesthouseController.listGuesthouseCaretakers);
+router.get(
+  '/admin/caretakers',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canManageGuesthouseMasterData,
+  guesthouseController.listGuesthouseCaretakers,
+);
 router.post(
   '/admin/caretakers',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canManageGuesthouseMasterData,
   guesthouseController.createGuesthouseCaretaker,
 );
 router.put(
   '/admin/caretakers/:id',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canManageGuesthouseMasterData,
   guesthouseController.updateGuesthouseCaretaker,
 );
 router.delete(
   '/admin/caretakers/:id',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canManageGuesthouseMasterData,
   guesthouseController.deleteGuesthouseCaretaker,
 );
 
-router.get('/:id', guesthouseRateLimiter, canReadGuesthouse, guesthouseController.getGuesthouseBooking);
-router.put('/:id', guesthouseRateLimiter, canEditGuesthouse, guesthouseController.updateGuesthouseBooking);
-router.delete('/:id', guesthouseRateLimiter, canEditGuesthouse, canDeleteGuesthouseBooking, guesthouseController.deleteGuesthouseBooking);
-router.get('/:id/status-updates', guesthouseRateLimiter, canReadGuesthouse, guesthouseController.getStatusUpdates);
+router.get(
+  '/:id',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canReadGuesthouse,
+  guesthouseController.getGuesthouseBooking,
+);
+router.put(
+  '/:id',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canEditGuesthouse,
+  guesthouseController.updateGuesthouseBooking,
+);
+router.delete(
+  '/:id',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canEditGuesthouse,
+  canDeleteGuesthouseBooking,
+  guesthouseController.deleteGuesthouseBooking,
+);
+router.get(
+  '/:id/status-updates',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canReadGuesthouse,
+  guesthouseController.getStatusUpdates,
+);
 router.post(
   '/:id/principal-document',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   permissionMiddleware(['guesthouse.workflow.principal', 'guesthouse.workflow.guesthouse_admin']),
   upload.single('file'),
   guesthouseController.uploadPrincipalDocument,
 );
-router.delete('/:id/principal-document', guesthouseRateLimiter, permissionMiddleware(['guesthouse.workflow.principal', 'guesthouse.workflow.guesthouse_admin']), guesthouseController.deletePrincipalDocument);
+router.delete(
+  '/:id/principal-document',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  permissionMiddleware(['guesthouse.workflow.principal', 'guesthouse.workflow.guesthouse_admin']),
+  guesthouseController.deletePrincipalDocument,
+);
 router.patch(
   '/:id/approval',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canAccessGuesthouseWorkflow,
   guesthouseController.approveGuesthouseWorkflow,
 );
 router.patch(
   '/:id/archive-toggle',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canAccessGuesthouseWorkflow,
   guesthouseController.toggleGuesthouseArchive,
 );
-router.patch('/:id/travel-schedule', guesthouseRateLimiter, canEditGuesthouse, guesthouseController.updateTravelSchedule);
+router.patch(
+  '/:id/travel-schedule',
+  guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
+  canEditGuesthouse,
+  guesthouseController.updateTravelSchedule,
+);
 router.put(
   '/:id/room-allotments',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canAccessGuesthouseWorkflow,
   guesthouseController.saveRoomAllotments,
 );
 router.put(
   '/:id/guests/:guestId/room-allotment',
   guesthouseRateLimiter,
+  authMiddleware,
+  authorizationSnapshotMiddleware,
   canAccessGuesthouseWorkflow,
   guesthouseController.upsertRoomAllotment,
 );
