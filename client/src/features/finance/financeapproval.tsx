@@ -32,6 +32,7 @@ import {
   getSubmittedTimestamp,
   getAnnexureOpenUrl,
   generateAndDownloadFinancePdf,
+  isTopupSubmissionEntry,
 } from './financeApprovalPdf';
 import { useAuth } from '../../contexts/AuthContext';
 import 'bootstrap/dist/css/bootstrap.min.css';
@@ -63,6 +64,10 @@ interface SelectOption {
 
 const FINANCE_CONFLICT_MESSAGE =
   'Finance request conflicts with approved budget allocation. Please check the budget head amounts and available balance.';
+
+// Matches the API guard in financeController.updateFinanceRequest.
+const TOPUP_CLOSED_MESSAGE =
+  'Top-up cannot be applied. The proposal has already been finalized and closed.';
 
 const normalizeErrorMessage = (value: unknown): string =>
   typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
@@ -1244,6 +1249,7 @@ const FinanceApproval: React.FC = () => {
         unplannedBudgetAmount,
         unplannedBudgetDescription,
         totalBudget,
+        requiresChairmanApproval,
         showIncomeSection,
         incomeRows,
         annexureSummary,
@@ -1944,6 +1950,18 @@ const FinanceApproval: React.FC = () => {
         }
       }
 
+      // A top-up cycle routes on the appended rows alone, so resubmitting the loaded
+      // breakup unchanged leaves nothing to approve. Catch it here with the remedy
+      // spelled out: topping up a head that is already in the request means adding a
+      // row and picking that same head again, not editing the locked row above.
+      if (isTopupWorkflow && budgetRows.length <= initialBudgetRowCount) {
+        showAlert(
+          'Add at least one top-up budget row before submitting. To top up a head that is already in this request, add a new row and select the same Budget Head and Sub Head.',
+          'warning',
+        );
+        return;
+      }
+
       for (let index = 0; index < budgetRows.length; index += 1) {
         const row = budgetRows[index];
         const requestedAmount = Number(row.amount || 0);
@@ -2405,6 +2423,7 @@ const FinanceApproval: React.FC = () => {
       setUnplannedBudgetDescription('');
       setBudgetRows([{ category: '', head: '', amount: '' }]);
       setInitialBudgetRowCount(0);
+      setLoadedTopupAt('');
       setBudgetLineMetaByRow({});
       setAmountProposed('');
       setShowIncomeSection(false);
@@ -2499,6 +2518,14 @@ const FinanceApproval: React.FC = () => {
   const [loadedWorkflowLastDecision, setLoadedWorkflowLastDecision] = useState<string>('');
   const [loadedWorkflowEditableByApplicant, setLoadedWorkflowEditableByApplicant] = useState(false);
   const [loadedCurrentStage, setLoadedCurrentStage] = useState<string>('');
+  // Set once the card has been finalized and closed from the Expenditure module.
+  const [loadedClosedAt, setLoadedClosedAt] = useState<string>('');
+  // Stamped when a top-up restarts the workflow. Present for the whole top-up cycle,
+  // so it identifies a record whose pre-top-up rows are already-approved money.
+  const [loadedTopupAt, setLoadedTopupAt] = useState<string>('');
+  // Approval stages of the current workflow cycle, used to decide whether the Chairman
+  // is part of this cycle's approval trail.
+  const [loadedWorkflowFlow, setLoadedWorkflowFlow] = useState<string[]>([]);
   const [workflowPermittedStages, setWorkflowPermittedStages] = useState<string[]>([]);
 
   const navigate = useNavigate();
@@ -2559,9 +2586,35 @@ const FinanceApproval: React.FC = () => {
   }, [isApprovalMode]);
 
   const normalizedWorkflowStatus = String(loadedWorkflowStatus || '').toLowerCase();
+  // A finalized & closed card is settled money — no further top-up may be drawn
+  // against it, so the top-up route must not switch the form into top-up mode.
+  const isFinanceCardClosed = Boolean(loadedClosedAt);
   const isTopupWorkflow = Boolean(
-    isEditMode && isTopupRoute && ['approved', 'completed'].includes(normalizedWorkflowStatus),
+    isEditMode &&
+    isTopupRoute &&
+    !isFinanceCardClosed &&
+    ['approved', 'completed'].includes(normalizedWorkflowStatus),
   );
+  // Reject the top-up route outright for a closed card, mirroring the API guard, so a
+  // bookmarked or hand-typed ?topup=true link cannot start a top-up request.
+  useEffect(() => {
+    if (!isEditMode || !isTopupRoute || !isFinanceCardClosed) return;
+    showAlert(TOPUP_CLOSED_MESSAGE, 'warning', 'Top-up not allowed', false, 'OK', () =>
+      navigate('/financecard'),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditMode, isTopupRoute, isFinanceCardClosed]);
+
+  // The approval trail splits Principal/Chairman into "Recommended by"/"Approved by"
+  // rows only when the Chairman is part of the cycle being documented. A top-up cycle
+  // is routed on the top-up amount alone, so its flow can stop at the Principal even
+  // when the proposal total exceeds 10k — the persisted flow is the source of truth.
+  // FALLBACK: records saved before workflow_state.flow existed fall back to the amount
+  // rule. Remove once every finance request carries a flow.
+  const requiresChairmanApproval = loadedWorkflowFlow.length
+    ? loadedWorkflowFlow.includes('chairman')
+    : totalBudget > 10000;
+
   const isSuperAdminUser =
     Boolean(user?.is_super_admin || (user as any)?.isSuperAdmin) ||
     (Array.isArray(user?.roles) &&
@@ -2569,14 +2622,43 @@ const FinanceApproval: React.FC = () => {
   // View mode is always read-only — editing (even for super admins on approved/
   // completed requests) must go through the dedicated Edit route.
   const canSuperAdminEditTerminalFinance = false;
-  const proposalFieldsReadOnly = isViewMode || isTopupWorkflow;
-  const incomeFieldsReadOnly = proposalFieldsReadOnly || isTopupWorkflow;
-  const isLockedBudgetRow = (index: number) => isTopupWorkflow && index < initialBudgetRowCount;
+  // A record already carrying a top-up cycle: everything that is not a top-up row was
+  // approved in an earlier cycle, so it is settled money.
+  const isTopupCycleRecord =
+    Boolean(loadedTopupAt) || budgetRows.some((row) => Boolean(row?.isTopup));
+  // Editing an in-flight top-up outside the applicant's top-up route — i.e. an approver
+  // (HOD, DOF, Principal, Chairman) or super admin opening Edit from the workflow queue,
+  // which routes to ?admin=true with a mid-workflow status so isTopupWorkflow is false.
+  // Only the top-up rows may change here; the already-approved amount stays read-only.
+  const isTopupCycleEdit = isEditMode && !isTopupWorkflow && isTopupCycleRecord;
+  const isReturnedFinanceResubmit =
+    isEditMode &&
+    !isAdminWorkflowContext &&
+    (normalizedWorkflowStatus.includes('returned') ||
+      loadedWorkflowLastDecision.includes('returned') ||
+      loadedWorkflowEditableByApplicant);
+  // The pre-top-up amount is locked for everyone (see isLockedBudgetRow), but the
+  // proposal narrative and its annexures stay open to the applicant when the workflow
+  // returned the top-up for correction — that is exactly what a return asks for, and the
+  // restarted cycle re-approves the whole record, so nothing changes behind an existing
+  // approval. Approvers never author these fields, so they stay read-only there.
+  const proposalFieldsReadOnly =
+    isViewMode || isTopupWorkflow || (isTopupCycleEdit && !isReturnedFinanceResubmit);
+  const incomeFieldsReadOnly = proposalFieldsReadOnly;
+  const isLockedBudgetRow = (index: number) => {
+    // Applicant appending a top-up right now: rows loaded before the append are locked.
+    if (isTopupWorkflow) return index < initialBudgetRowCount;
+    // Approver/admin editing the in-flight top-up: lock every loaded pre-top-up row.
+    // Rows past the loaded set are being appended right now, so they stay editable.
+    if (isTopupCycleEdit) return index < initialBudgetRowCount && !budgetRows[index]?.isTopup;
+    return false;
+  };
   const isBudgetRowEditable = (index: number) => !isViewMode && !isLockedBudgetRow(index);
   // A row is a top-up either because it was persisted as one (view/admin mode) or
   // because it is being appended right now in top-up mode (create/edit mode).
   const isTopupBudgetRow = (row: BudgetRow, index: number) =>
-    Boolean(row?.isTopup) || (isTopupWorkflow && index >= initialBudgetRowCount);
+    Boolean(row?.isTopup) ||
+    ((isTopupWorkflow || isTopupCycleEdit) && index >= initialBudgetRowCount);
   // Top-up rows are numbered T1, T2, T3… so they stay identifiable where the green
   // highlight cannot be relied on (printed page, PDF, grayscale).
   const getBudgetRowSerialLabel = (index: number) => {
@@ -2588,12 +2670,6 @@ const FinanceApproval: React.FC = () => {
     }
     return isTopupBudgetRow(budgetRows[index], index) ? `T${topupCount}` : String(originalCount);
   };
-  const isReturnedFinanceResubmit =
-    isEditMode &&
-    !isAdminWorkflowContext &&
-    (normalizedWorkflowStatus.includes('returned') ||
-      loadedWorkflowLastDecision.includes('returned') ||
-      loadedWorkflowEditableByApplicant);
   const hasDofApproval = statusUpdates.some((update: any) => {
     const stage = String(update?.stage || update?.role || '').toLowerCase();
     const decision = String(update?.decision || update?.status || '').toLowerCase();
@@ -2848,6 +2924,13 @@ const FinanceApproval: React.FC = () => {
         setLoadedWorkflowEditableByApplicant(Boolean(record.workflow_state?.isEditableByApplicant));
         setLoadedCurrentStage(
           String(record.workflow_state?.currentStage || record.workflow_stage || '').toLowerCase(),
+        );
+        setLoadedClosedAt(String(record.closed_at || ''));
+        setLoadedTopupAt(String(record.workflow_state?.topupAt || ''));
+        setLoadedWorkflowFlow(
+          Array.isArray(record.workflow_state?.flow)
+            ? record.workflow_state.flow.map((stage: unknown) => String(stage || '').toLowerCase())
+            : [],
         );
         setDirectorComments(String(record.director_comment || ''));
         setDirectorStatus(String(record.director_status || '').toLowerCase());
@@ -5926,16 +6009,18 @@ const FinanceApproval: React.FC = () => {
           const dofApprovalUi = getApprovalDetailUi(['dof']);
           const principalApprovalUi = getApprovalDetailUi(['principal']);
           const chairmanApprovalUi = getApprovalDetailUi(['chairman']);
+          // Keep the top-up submission row between the two approval cycles, matching the PDF.
           const approvalSteps = approvalHistory.filter(
             (entry) =>
-              entry.label === 'Approved' &&
-              !(
-                totalBudget > 10000 &&
-                (String(entry.stage).includes('principal') ||
-                  String(entry.stage).includes('chairman'))
-              ),
+              isTopupSubmissionEntry(entry) ||
+              (entry.label === 'Approved' &&
+                !(
+                  requiresChairmanApproval &&
+                  (String(entry.stage).includes('principal') ||
+                    String(entry.stage).includes('chairman'))
+                )),
           );
-          const showSeniorApprovalRow = totalBudget > 10000;
+          const showSeniorApprovalRow = requiresChairmanApproval;
 
           const renderPersonLine = (name?: string, mail?: string, timestamp?: string) => {
             const trimmedName = String(name || '').trim();
@@ -5985,12 +6070,18 @@ const FinanceApproval: React.FC = () => {
             const stageToken = String(entry?.stage || '').toLowerCase();
             const actorToken = String(entry?.actor || '').toLowerCase();
             const emailToken = String(entry?.email || '').toLowerCase();
+            // The Chairman is always the final approver when part of the cycle.
+            if (stageToken.includes('chairman')) return 'Approved by';
+
             const isPrincipalEntry =
               stageToken.includes('principal') ||
               actorToken.includes('principal') ||
               emailToken.includes('principal@');
 
-            return isPrincipalEntry ? 'Approved by' : 'Recommended by';
+            // The Principal only recommends when the Chairman signs off after them.
+            if (isPrincipalEntry)
+              return requiresChairmanApproval ? 'Recommended by' : 'Approved by';
+            return 'Recommended by';
           };
           const previewTimelineRowStyle: CSSProperties = {
             padding: '8px 10px',

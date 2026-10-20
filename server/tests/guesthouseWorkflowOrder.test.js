@@ -7,6 +7,7 @@ vi.mock('../config/connection.js', () => ({
 vi.mock('../modules/shared/workflow/workflowScopeResolver.js', () => ({
   assertRecordScopeAccess: vi.fn().mockResolvedValue(undefined),
   resolveQueueScopeFilters: vi.fn(),
+  resolveStagePolicy: vi.fn().mockResolvedValue({ scopeType: 'global', meta: null }),
 }));
 
 import db from '../config/connection.js';

@@ -15,38 +15,34 @@ import {
 import React, { useEffect, useMemo, useState } from 'react';
 
 import authenticityUtility from '../../utils/authenticityUtility';
+
+import type {
+  PayeeDirectory,
+  PayeeDirectoryBeneficiaryType,
+  PayeeDirectoryRecord,
+  PayeeDirectoryStatus,
+} from '../../hooks/usePayeeDirectory';
 import '../../components/AddPayeeModal.css';
 
-interface PendingPayeeRecord {
-  id: number;
-  payee_name?: string;
-  account_name?: string | null;
-  pan_number?: string | null;
-  account_no?: string;
-  account_type?: string | null;
-  ifsc?: string;
-  bank_name?: string;
-  branch_name?: string;
-  beneficiary_type?: string | null;
-  beneficiary_org?: string | null;
-  organization_type?: string | null;
-  msme?: string | null;
-  gstin?: string | null;
-  tds_details?: string | null;
-  tds_section?: string | null;
-  approval_status?: string | null;
-  rejection_reason?: string | null;
-  requested_at?: string | null;
-  approved_at?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-}
+type PendingPayeeRecord = PayeeDirectoryRecord;
 
 type PayeeFormDraft = PendingPayeeRecord & {
   confirm_account_no: string;
 };
 
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'] as const;
+
+const BENEFICIARY_CATEGORY_OPTIONS = ['Student', 'Faculty', 'Staff'] as const;
+
+/**
+ * Which population an internal individual belongs to. KSRCT and KSREI payees
+ * are people inside the institution and Finance reports on students, faculty
+ * and staff separately; an External payee is outside it and an organization is
+ * an entity rather than a person, so neither carries a category.
+ */
+const requiresBeneficiaryCategory = (beneficiaryType: unknown, beneficiaryOrg: unknown): boolean =>
+  normalizePayeeText(beneficiaryType).toLowerCase() !== 'organization' &&
+  ['KSRCT', 'KSREI'].includes(normalizePayeeText(beneficiaryOrg));
 
 const ORGANIZATION_TYPE_OPTIONS = [
   'Sole Proprietorship',
@@ -136,22 +132,19 @@ const INDIAN_BANK_OPTIONS = [
 ];
 
 interface PendingPayeeApprovalsProps {
-  pendingPayees: PendingPayeeRecord[];
-  pendingPayeesLoading: boolean;
+  directory: PayeeDirectory;
   onPayeeDecision: (id: number, decision: 'approved' | 'rejected') => Promise<boolean> | boolean;
   pendingPayeeActingId: number | null;
   onPayeeEdit: (id: number, payload: PendingPayeeRecord) => Promise<boolean> | boolean;
   pendingPayeeEditingId: number | null;
   apiBasePath: string;
   onPayeeDelete: (id: number) => Promise<boolean> | boolean;
-  searchTerm?: string;
-  onSearchTermChange?: (value: string) => void;
   showTopSearch?: boolean;
 }
 
 type PayeeModalMode = 'view' | 'edit';
-type PayeeFilterStatus = 'all' | 'pending' | 'approved' | 'rejected';
-type PayeeBeneficiaryFilter = 'all' | 'individual' | 'organization';
+type PayeeFilterStatus = PayeeDirectoryStatus;
+type PayeeBeneficiaryFilter = PayeeDirectoryBeneficiaryType;
 
 const overlayStyle: React.CSSProperties = {
   position: 'fixed',
@@ -285,6 +278,7 @@ const createDraftFromPayee = (payee: PendingPayeeRecord): PayeeFormDraft => ({
   beneficiary_org:
     normalizePayeeText(payee.beneficiary_org || '') ||
     (isBeneficiaryOrgValue(payee.payee_name) ? normalizePayeeText(payee.payee_name) : ''),
+  beneficiary_category: normalizePayeeText(payee.beneficiary_category || ''),
   organization_type: payee.organization_type || '',
   msme: payee.msme || '',
   gstin: payee.gstin || '',
@@ -453,6 +447,9 @@ const PayeeDetailModal: React.FC<{
         return {
           ...prev,
           beneficiary_type: beneficiaryType,
+          ...(requiresBeneficiaryCategory(beneficiaryType, prev.beneficiary_org)
+            ? {}
+            : { beneficiary_category: '' }),
           ...(beneficiaryType === 'organization'
             ? {
                 pan_number: extractPanFromGstin(prev.gstin) || prev.pan_number,
@@ -464,6 +461,18 @@ const PayeeDetailModal: React.FC<{
                 tds_details: '',
                 tds_section: '',
               }),
+        };
+      }
+
+      // A move to External leaves the stored category inapplicable, and a
+      // value nothing renders would still reach the payload.
+      if (key === 'beneficiary_org') {
+        return {
+          ...prev,
+          beneficiary_org: value,
+          ...(requiresBeneficiaryCategory(prev.beneficiary_type, value)
+            ? {}
+            : { beneficiary_category: '' }),
         };
       }
 
@@ -494,9 +503,14 @@ const PayeeDetailModal: React.FC<{
     const tdsDetails = normalizePayeeText(draft.tds_details);
     const tdsSection = normalizePayeeText(draft.tds_section);
     const accountType = normalizePayeeText(draft.account_type);
+    const categoryRequired = requiresBeneficiaryCategory(beneficiaryType, beneficiaryOrg);
+    const beneficiaryCategory = categoryRequired
+      ? normalizePayeeText(draft.beneficiary_category)
+      : '';
 
     const missingFields: string[] = [];
     if (!beneficiaryOrg) missingFields.push('Beneficiary');
+    if (categoryRequired && !beneficiaryCategory) missingFields.push('Category');
     if (!accountName) missingFields.push('Account Name');
     if (beneficiaryType === 'individual') {
       if (!panNumber) missingFields.push('PAN Number');
@@ -541,6 +555,7 @@ const PayeeDetailModal: React.FC<{
       branch_name: branchName,
       beneficiary_type: beneficiaryType,
       beneficiary_org: beneficiaryOrg,
+      beneficiary_category: beneficiaryCategory,
       organization_type: beneficiaryType === 'organization' ? organizationType : '',
       msme: beneficiaryType === 'organization' ? msme : '',
       gstin: beneficiaryType === 'organization' ? gstin : '',
@@ -652,6 +667,23 @@ const PayeeDetailModal: React.FC<{
                   <option value="organization">Organization</option>
                 </select>
               </div>
+              {requiresBeneficiaryCategory(draft.beneficiary_type, draft.beneficiary_org) ? (
+                <div>
+                  <label style={labelStyle}>Category *</label>
+                  <select
+                    style={inputStyle}
+                    value={normalizePayeeText(draft.beneficiary_category)}
+                    onChange={(e) => updateDraft('beneficiary_category', e.target.value)}
+                  >
+                    <option value="">Select Category</option>
+                    {BENEFICIARY_CATEGORY_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
               <div>
                 <label style={labelStyle}>Account Number</label>
                 <input
@@ -795,6 +827,25 @@ const PayeeDetailModal: React.FC<{
                 label="Beneficiary Type"
                 value={formatToken(effectivePayee.beneficiary_type)}
               />
+              {/* Every individual has a beneficiary — the organization branch
+                  below reads the same column under its own label — but only an
+                  internal one carries a category. */}
+              {String(effectivePayee.beneficiary_type || '')
+                .trim()
+                .toLowerCase() !== 'organization' ? (
+                <>
+                  <PayeeDetailField label="Beneficiary" value={effectivePayee.beneficiary_org} />
+                  {requiresBeneficiaryCategory(
+                    effectivePayee.beneficiary_type,
+                    effectivePayee.beneficiary_org,
+                  ) ? (
+                    <PayeeDetailField
+                      label="Category"
+                      value={effectivePayee.beneficiary_category}
+                    />
+                  ) : null}
+                </>
+              ) : null}
               {String(effectivePayee.beneficiary_type || '')
                 .trim()
                 .toLowerCase() === 'organization' ? (
@@ -1152,6 +1203,9 @@ const PayeeFormModal: React.FC<{
         return {
           ...prev,
           beneficiary_type: beneficiaryType,
+          ...(requiresBeneficiaryCategory(beneficiaryType, prev.beneficiary_org)
+            ? {}
+            : { beneficiary_category: '' }),
           ...(beneficiaryType === 'organization'
             ? {
                 pan_number: extractPanFromGstin(prev.gstin) || prev.pan_number,
@@ -1163,6 +1217,18 @@ const PayeeFormModal: React.FC<{
                 tds_details: '',
                 tds_section: '',
               }),
+        };
+      }
+
+      // A move to External leaves the stored category inapplicable, and a
+      // value nothing renders would still reach the payload.
+      if (key === 'beneficiary_org') {
+        return {
+          ...prev,
+          beneficiary_org: value,
+          ...(requiresBeneficiaryCategory(prev.beneficiary_type, value)
+            ? {}
+            : { beneficiary_category: '' }),
         };
       }
 
@@ -1203,9 +1269,14 @@ const PayeeFormModal: React.FC<{
     const tdsDetails = normalizePayeeText(draft.tds_details);
     const tdsSection = normalizePayeeText(draft.tds_section);
     const accountType = normalizePayeeText(draft.account_type);
+    const categoryRequired = requiresBeneficiaryCategory(beneficiaryType, beneficiaryOrg);
+    const beneficiaryCategory = categoryRequired
+      ? normalizePayeeText(draft.beneficiary_category)
+      : '';
 
     const missingFields: string[] = [];
     if (!beneficiaryOrg) missingFields.push('Beneficiary');
+    if (categoryRequired && !beneficiaryCategory) missingFields.push('Category');
     if (!accountName) missingFields.push('Account Name');
     if (beneficiaryType === 'organization') {
       if (!organizationType) missingFields.push('Organization Type');
@@ -1247,6 +1318,7 @@ const PayeeFormModal: React.FC<{
       branch_name: branchName,
       beneficiary_type: beneficiaryType,
       beneficiary_org: beneficiaryOrg,
+      beneficiary_category: beneficiaryCategory,
       organization_type: beneficiaryType === 'organization' ? organizationType : '',
       msme: beneficiaryType === 'organization' ? msme : '',
       gstin: beneficiaryType === 'organization' ? gstin : '',
@@ -1391,6 +1463,29 @@ const PayeeFormModal: React.FC<{
                     ))}
                   </div>
                 </div>
+
+                {requiresBeneficiaryCategory(beneficiaryType, formDraft.beneficiary_org) && (
+                  <div className="add-payee-modal-row">
+                    <label>Category *</label>
+                    <div className="add-payee-modal-radio-group">
+                      {BENEFICIARY_CATEGORY_OPTIONS.map((option) => (
+                        <label key={option} className="add-payee-modal-radio">
+                          <input
+                            type="radio"
+                            name="beneficiaryCategory"
+                            value={option}
+                            checked={normalizePayeeText(formDraft.beneficiary_category) === option}
+                            onChange={() =>
+                              !isReadOnly && updateDraft('beneficiary_category', option)
+                            }
+                            disabled={busy || isReadOnly}
+                          />
+                          <span>{option}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 <div className="add-payee-modal-row">
                   <label>Account Name</label>
@@ -1895,103 +1990,58 @@ const PayeeFormModal: React.FC<{
 };
 
 const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
-  pendingPayees,
-  pendingPayeesLoading,
+  directory,
   onPayeeDecision,
   pendingPayeeActingId,
   onPayeeEdit,
   pendingPayeeEditingId,
   apiBasePath,
   onPayeeDelete,
-  searchTerm: externalSearchTerm,
-  onSearchTermChange,
   showTopSearch = true,
 }) => {
   const [selectedPayeeId, setSelectedPayeeId] = useState<number | null>(null);
   const [selectedMode, setSelectedMode] = useState<PayeeModalMode>('view');
-  const [internalSearchTerm, setInternalSearchTerm] = useState('');
-  const searchTerm = externalSearchTerm ?? internalSearchTerm;
-  const setSearchTerm = (value: string) => {
-    if (onSearchTermChange) onSearchTermChange(value);
-    else setInternalSearchTerm(value);
-  };
-  const [statusFilter, setStatusFilter] = useState<PayeeFilterStatus>('all');
-  const [beneficiaryFilter, setBeneficiaryFilter] = useState<PayeeBeneficiaryFilter>('all');
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 20;
+
+  // Rows, counts and paging all come from the server, so this screen never
+  // holds more than one page of the payee master.
+  const {
+    rows: payees,
+    counts: statusCounts,
+    total,
+    totalPages,
+    loading,
+    hasLoaded,
+    error,
+    isFiltered,
+    search: searchTerm,
+    setSearch: setSearchTerm,
+    status: statusFilter,
+    setStatus: setStatusFilter,
+    beneficiaryType: beneficiaryFilter,
+    setBeneficiaryType: setBeneficiaryFilter,
+    page: currentPage,
+    setPage: setCurrentPage,
+    pageSize,
+  } = directory;
 
   const selectedQueuePayee = useMemo(
-    () => pendingPayees.find((payee) => Number(payee.id) === Number(selectedPayeeId)) || null,
-    [pendingPayees, selectedPayeeId],
+    () => payees.find((payee) => Number(payee.id) === Number(selectedPayeeId)) || null,
+    [payees, selectedPayeeId],
   );
 
-  const statusCounts = useMemo(() => {
-    return pendingPayees.reduce(
-      (acc, payee) => {
-        const status = getStatusToken(payee.approval_status);
-        if (status === 'pending' || status === 'approved' || status === 'rejected') {
-          acc[status] += 1;
-        }
-        acc.all += 1;
-        return acc;
-      },
-      { all: 0, pending: 0, approved: 0, rejected: 0 },
-    );
-  }, [pendingPayees]);
-
-  const filteredPayees = useMemo(() => {
-    const normalizedQuery = searchTerm.trim().toLowerCase();
-    return pendingPayees.filter((payee) => {
-      const status = getStatusToken(payee.approval_status);
-      if (statusFilter !== 'all' && status !== statusFilter) return false;
-      const beneficiaryType = String(payee.beneficiary_type || '')
-        .trim()
-        .toLowerCase();
-      if (beneficiaryFilter !== 'all' && beneficiaryType !== beneficiaryFilter) return false;
-      if (!normalizedQuery) return true;
-      const haystack = [
-        payee.payee_name,
-        payee.account_name,
-        payee.account_no,
-        payee.ifsc,
-        payee.bank_name,
-        payee.branch_name,
-        payee.pan_number,
-        payee.beneficiary_type,
-        payee.beneficiary_org,
-        payee.organization_type,
-      ]
-        .map((value) => String(value || '').toLowerCase())
-        .join(' ');
-      return haystack.includes(normalizedQuery);
-    });
-  }, [pendingPayees, searchTerm, statusFilter, beneficiaryFilter]);
-
-  const totalPages = useMemo(
-    () => Math.max(1, Math.ceil(filteredPayees.length / ITEMS_PER_PAGE)),
-    [filteredPayees.length],
-  );
-
-  const paginatedPayees = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredPayees.slice(start, start + ITEMS_PER_PAGE);
-  }, [currentPage, filteredPayees]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, statusFilter, beneficiaryFilter]);
-
-  useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
-    }
-  }, [currentPage, totalPages]);
-
-  if (pendingPayeesLoading) {
+  // Only the very first read may take over the panel. Once something has been
+  // shown, a reload or a failure must leave the search box, the tiles and any
+  // open payee modal in place — otherwise every debounced keystroke that
+  // returns nothing unmounts the input the user is still typing into.
+  if (!hasLoaded && loading) {
     return <div className="fw-state fw-payee-state-compact">Loading payees...</div>;
   }
 
-  if (pendingPayees.length === 0) {
+  if (error && !hasLoaded) {
+    return <div className="fw-state fw-payee-state-compact">{error}</div>;
+  }
+
+  if (!error && statusCounts.all === 0 && !isFiltered) {
     return (
       <div className="fw-state fw-payee-empty">
         <CreditCard size={48} className="fw-payee-empty-icon" />
@@ -2023,6 +2073,16 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
         <div style={{ display: 'grid', gap: '14px' }}>
           <div className="fw-payee-head">
             <div className="fw-payee-title">Payee Management</div>
+            <select
+              className="fw-control fw-payee-type-filter"
+              value={beneficiaryFilter}
+              onChange={(e) => setBeneficiaryFilter(e.target.value as PayeeBeneficiaryFilter)}
+              aria-label="Filter payee by beneficiary type"
+            >
+              <option value="all">All Types</option>
+              <option value="individual">Individual</option>
+              <option value="organization">Organization</option>
+            </select>
           </div>
           <div className="fw-payee-stats">
             {[
@@ -2083,24 +2143,9 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
           </div>
         </div>
 
-        <div className="fw-payee-toolbar">
-          <div className="fw-payee-count">
-            {statusFilter === 'all' ? 'All payees' : `${formatToken(statusFilter)} payees`} -{' '}
-            {filteredPayees.length} record{filteredPayees.length === 1 ? '' : 's'}
-          </div>
-          <select
-            className="fw-control fw-payee-type-filter"
-            value={beneficiaryFilter}
-            onChange={(e) => setBeneficiaryFilter(e.target.value as PayeeBeneficiaryFilter)}
-            aria-label="Filter payee by beneficiary type"
-          >
-            <option value="all">All Types</option>
-            <option value="individual">Individual</option>
-            <option value="organization">Organization</option>
-          </select>
-        </div>
-
-        {filteredPayees.length === 0 ? (
+        {error ? (
+          <div className="fw-state fw-payee-state-compact">{error}</div>
+        ) : total === 0 ? (
           <div className="fw-state fw-payee-empty">
             <CreditCard size={48} className="fw-payee-empty-icon" />
             <h4 className="fw-payee-empty-title">No matching payees</h4>
@@ -2108,7 +2153,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
           </div>
         ) : (
           <div className="fw-cards-container fw-payee-list">
-            {paginatedPayees.map((payee) => {
+            {payees.map((payee) => {
               const payeeName = normalizePayeeName(payee) || 'Unnamed payee';
               const busy = pendingPayeeActingId === Number(payee.id);
               const editing = pendingPayeeEditingId === Number(payee.id);
@@ -2128,8 +2173,8 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   style={{
                     background: '#ffffff',
                     border: '1px solid #e2e8f0',
-                    borderRadius: '16px',
-                    padding: '18px 20px',
+                    borderRadius: '14px',
+                    padding: '12px 16px',
                     display: 'grid',
                     gridTemplateColumns: 'minmax(0, 1fr) auto',
                     alignItems: 'center',
@@ -2149,8 +2194,8 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   >
                     <div
                       style={{
-                        width: '48px',
-                        height: '48px',
+                        width: '38px',
+                        height: '38px',
                         borderRadius: '50%',
                         background: '#f8fafc',
                         border: '1px solid #e2e8f0',
@@ -2161,7 +2206,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                         flexShrink: 0,
                       }}
                     >
-                      <CreditCard size={24} />
+                      <CreditCard size={18} />
                     </div>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div
@@ -2177,7 +2222,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                           style={{
                             fontWeight: 700,
                             color: '#0f172a',
-                            fontSize: '1.05rem',
+                            fontSize: '0.95rem',
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -2254,7 +2299,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                       aria-label="View"
                       className="fw-payee-action-btn fw-payee-action-btn--view"
                     >
-                      <Eye size={20} />
+                      <Eye size={16} />
                     </button>
                     <button
                       type="button"
@@ -2267,7 +2312,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                       aria-label={editing ? 'Editing' : 'Edit'}
                       className="fw-payee-action-btn fw-payee-action-btn--edit"
                     >
-                      <Edit2 size={20} />
+                      <Edit2 size={16} />
                     </button>
                     {isPending ? (
                       <>
@@ -2281,7 +2326,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                           aria-label="Approve"
                           className="fw-payee-action-btn fw-payee-action-btn--approve"
                         >
-                          <CheckCircle2 size={20} />
+                          <CheckCircle2 size={16} />
                         </button>
                         <button
                           type="button"
@@ -2293,7 +2338,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                           aria-label="Reject"
                           className="fw-payee-action-btn fw-payee-action-btn--reject"
                         >
-                          <XCircle size={20} />
+                          <XCircle size={16} />
                         </button>
                       </>
                     ) : null}
@@ -2307,7 +2352,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                       aria-label="Delete"
                       className="fw-payee-action-btn fw-payee-action-btn--delete"
                     >
-                      <Trash2 size={20} />
+                      <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
@@ -2324,14 +2369,13 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                 }}
               >
                 <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
-                  Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1}-
-                  {Math.min(currentPage * ITEMS_PER_PAGE, filteredPayees.length)} of{' '}
-                  {filteredPayees.length}
+                  Showing {(currentPage - 1) * pageSize + 1}-
+                  {Math.min(currentPage * pageSize, total)} of {total}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                    onClick={() => setCurrentPage(currentPage - 1)}
                     disabled={currentPage === 1}
                     style={{
                       border: '1px solid #cbd5e1',
@@ -2362,7 +2406,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
                     style={{
                       border: '1px solid #cbd5e1',

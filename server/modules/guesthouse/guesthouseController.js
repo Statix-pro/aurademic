@@ -63,17 +63,7 @@ const hasGuesthouseStagePermission = (req, stage) => {
 
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   const normalizedPermissions = permissions.map((p) => normalizeText(p).toLowerCase());
-  if (normalizedPermissions.includes(`guesthouse.workflow.${normalizedStage}`)) {
-    return true;
-  }
-
-  const roles = Array.isArray(req.user?.roles) ? req.user.roles : [];
-  return roles.some((role) => {
-    const roleCode = typeof role === 'string'
-      ? normalizeText(role).toLowerCase()
-      : normalizeText(role?.role_code || role?.roleCode || role?.code || role?.role).toLowerCase();
-    return roleCode === normalizedStage;
-  });
+  return normalizedPermissions.includes(`guesthouse.workflow.${normalizedStage}`);
 };
 
 const hasAnyGuesthouseStagePermission = (req) =>
@@ -262,10 +252,7 @@ const guesthouseController = {
     try {
       const mineOnly = normalizeText(req.query.mine).toLowerCase() === 'true';
       const isOwnerOnly = mineOnly || !hasAnyGuesthouseStagePermission(req);
-      const canListAll = Boolean(
-        isSuperAdminRequest(req) ||
-        req.user?.permissions?.includes('guesthouse.workflow.guesthouse_admin'),
-      );
+      const canListAll = isSuperAdminRequest(req);
       let accessibleBookingIds;
       if (!mineOnly && !isOwnerOnly && !canListAll) {
         const actor = normalizeActor(req);

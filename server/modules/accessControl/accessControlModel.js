@@ -94,6 +94,13 @@ const SYSTEM_PERMISSION_SEED = [
   },
   {
     module_key: 'budget_workflow',
+    action_key: 'ithead',
+    permission_key: 'budget.workflow.ithead',
+    description: 'View IT Head queue and process IT-Head-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'budget_workflow',
     action_key: 'dof',
     permission_key: 'budget.workflow.dof',
     description: 'View DoF queue and process DoF-stage approvals',
@@ -167,6 +174,20 @@ const SYSTEM_PERMISSION_SEED = [
     action_key: 'chairman',
     permission_key: 'finance.workflow.chairman',
     description: 'Process finance Chairman-stage approvals',
+    is_system: true,
+  },
+  {
+    module_key: 'expenditure_workflow',
+    action_key: 'dof',
+    permission_key: 'expenditure.workflow.dof',
+    description: 'Process expenditure DoF-stage approvals and verify payees',
+    is_system: true,
+  },
+  {
+    module_key: 'expenditure_workflow',
+    action_key: 'principal',
+    permission_key: 'expenditure.workflow.principal',
+    description: 'Process expenditure Principal-stage approvals',
     is_system: true,
   },
   {
@@ -403,11 +424,17 @@ const ensureUserBaseRoleAssignment = async (userId, connection = db, assignedBy 
   return true;
 };
 
+// `degraded` tells the caller whether this snapshot is an answer or an
+// apology. Every other field is the same shape either way, so without it a
+// deleted user and an unreadable RBAC schema are indistinguishable — both
+// arrive as an empty snapshot, and a caller that falls back to the token to
+// cover the second case silently re-arms the first.
 const getEmptyAuthorizationSnapshot = () => ({
   roles: [],
   permissions: [],
   isSuperAdmin: false,
   isAdmin: false,
+  degraded: false,
 });
 
 const groupUserRows = (rows = []) => {
@@ -554,6 +581,7 @@ const accessControlModel = {
         permissions: uniqueStringArray(permissions),
         isSuperAdmin,
         isAdmin: isSuperAdmin || hasAdminRole || legacyIsAdmin,
+        degraded: false,
       };
     } catch (error) {
       if (isMissingRbacTableError(error)) {
@@ -562,6 +590,7 @@ const accessControlModel = {
           permissions: fallbackPermissions,
           isSuperAdmin: false,
           isAdmin: legacyIsAdmin,
+          degraded: true,
         };
       }
 

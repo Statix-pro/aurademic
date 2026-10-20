@@ -3,6 +3,8 @@ import path from 'path';
 
 import multer from 'multer';
 
+import { sanitizeUploadFilename } from '../modules/shared/uploadPaths.js';
+
 const uploadDir = path.join(process.cwd(), 'uploads', 'temp');
 
 // Ensure upload directory exists
@@ -16,9 +18,11 @@ const storage = multer.diskStorage({
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    // Add timestamp to prevent filename collisions
+    // Add timestamp to prevent filename collisions. `originalname` is client-supplied and
+    // multer does not sanitize it, so path syntax is stripped before it reaches disk —
+    // otherwise a name containing `../` would place the file outside uploadDir.
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + '-' + file.originalname);
+    cb(null, `${uniqueSuffix}-${sanitizeUploadFilename(file.originalname)}`);
   },
 });
 

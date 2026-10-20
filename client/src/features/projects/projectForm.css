@@ -1,0 +1,2468 @@
+/* ==========================================================================
+   Research project form
+   Scoped to .pf-page so it cannot leak into the rest of the app. Colours come
+   from shared/styles/variables.css; only spacing and layout live here.
+   ========================================================================== */
+
+.pf-page {
+  --pf-radius: 14px;
+  --pf-gap: 18px;
+  --pf-field-height: 42px;
+
+  min-height: 100%;
+  padding: 32px 32px 28px;
+  background: var(--bg-light, #f0f6ff);
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.95rem;
+}
+
+/* Held to a reading width and centred, like the journal form, so the cards do
+   not run to the edges of a wide screen. */
+.pf-page__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pf-page--centered {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+  color: var(--text-muted, #6c757d);
+}
+
+.pf-spinner {
+  color: var(--primary-color, #0069ab);
+  animation: pf-spin 1s linear infinite;
+}
+
+@keyframes pf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ----------------------------------------------------------------- page bar */
+
+/* The form has no page heading; this bar only appears to confirm a save or to
+   offer the way out of view mode. */
+.pf-page__header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: var(--pf-gap);
+}
+
+.pf-page__saved {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #e6f6ed;
+  color: var(--success-color, #198754);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+/* --------------------------------------------------------------------- cards */
+
+.pf-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-gap);
+}
+
+.pf-card {
+  padding: 20px 22px;
+  border-radius: var(--pf-radius);
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 6px 22px rgb(0 62 105 / 6%);
+}
+
+.pf-card__header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e8eef7;
+}
+
+/* Inline sections (Result Announcement, Project Status, Outcome, Remarks) keep
+   the heading on the same row as the fields, as in the design. */
+.pf-card--inline {
+  padding: 14px 22px;
+}
+
+.pf-card--inline .pf-card__header--inline {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.pf-card--inline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: center;
+}
+
+.pf-card--inline .pf-card__header--inline {
+  flex: 0 0 auto;
+}
+
+.pf-card--inline .pf-card__body {
+  flex: 1 1 480px;
+  margin-top: 0;
+}
+
+.pf-card__title {
+  margin: 0;
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  font-size: 1.02rem;
+  white-space: nowrap;
+}
+
+/* Sits on the title's line, muted so it reads as an aside to the heading. */
+.pf-card__info {
+  display: inline-flex;
+  margin-left: 8px;
+  color: #7a8aa3;
+  vertical-align: -2px;
+  cursor: help;
+}
+
+.pf-card__info:hover,
+.pf-card__info:focus-visible {
+  color: var(--primary-color, #0069ab);
+}
+
+/* A card's help text is an aside, so it is set smaller and left-aligned rather
+   than at Bootstrap's default tooltip size, which read as a heading. */
+.pf-tooltip .tooltip-inner {
+  max-width: 300px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.pf-card__header-right {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.pf-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.pf-card__error {
+  margin: 12px 0 0;
+  color: var(--error-color, #dc3545);
+  font-size: 0.84rem;
+}
+
+.pf-switch.form-check.form-switch {
+  display: flex;
+  align-items: center;
+  min-height: auto;
+  margin: 0;
+  padding-left: 3em;
+}
+
+.pf-switch .form-check-input {
+  height: 1.45em;
+  width: 2.9em;
+  /* Bootstrap adds margin-top: 0.25em, which drops the switch below the
+     heading's optical centre in the card header. */
+  margin-top: 0;
+  margin-left: -3em;
+  cursor: pointer;
+}
+
+.pf-switch .form-check-input:checked {
+  border-color: var(--primary-color, #0069ab);
+  background-color: var(--primary-color, #0069ab);
+}
+
+/* Two-column band: Proposal Details next to Call for Details. */
+.pf-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: var(--pf-gap);
+}
+
+/* --------------------------------------------------------------- form fields */
+
+/* Proposal Details, Call for Details and the request modal stack their label
+   over the control, as in the design — these are the form's full-width fields. */
+.pf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* Everywhere else a field reads as one line: the label sits beside its control
+   and only a hint or an error drops underneath. A grid rather than a flex row
+   because grid columns cannot wrap — a long label can never end up stranded on
+   a line of its own. */
+.pf-inline-field {
+  display: grid;
+  grid-template-columns: auto minmax(120px, 1fr);
+  gap: 6px 10px;
+  align-items: center;
+}
+
+.pf-inline-field > .pf-field__hint,
+.pf-inline-field > .pf-field__error {
+  grid-column: 1 / -1;
+}
+
+/* Controls that carry their own width — the Yes/No pill, a radio row — keep it
+   instead of being stretched across the rest of the line. */
+.pf-yesno,
+.pf-radio-group {
+  justify-self: start;
+}
+
+/* A label never wraps onto a second line: it names a control sitting beside it,
+   and a wrapped label breaks the row's rhythm. */
+.pf-inline-field__label {
+  white-space: nowrap;
+}
+
+.pf-field__label,
+.pf-inline-field__label {
+  /* Bootstrap gives every <label> an 8px bottom margin. Centring a field's row
+     centres that margin too, which left the text sitting 4px above its box. */
+  margin: 0;
+  color: #3f4a5f;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.pf-inline-field__label--accent {
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-field__hint {
+  color: var(--text-muted, #6c757d);
+  font-size: 0.78rem;
+}
+
+.pf-field__error {
+  margin: 0;
+  color: var(--error-color, #dc3545);
+  font-size: 0.78rem;
+}
+
+.pf-input {
+  width: 100%;
+  height: var(--pf-field-height);
+  padding: 0 12px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.92rem;
+  font-family: inherit;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.pf-input::placeholder {
+  color: #a9b3c4;
+}
+
+.pf-input:focus {
+  border-color: var(--border-focus, #0069ab);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(0 105 171 / 12%);
+}
+
+.pf-input:disabled,
+.pf-input--readonly,
+.pf-input[readonly] {
+  background: #f1f3f7;
+  color: #6d7891;
+  cursor: default;
+}
+
+.pf-input.is-invalid {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-input--compact {
+  min-width: 78px;
+}
+
+.pf-input--count {
+  width: 78px;
+  text-align: center;
+}
+
+.pf-input--amount {
+  text-align: right;
+}
+
+.pf-textarea {
+  height: auto;
+  padding: 10px 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+/* Remarks is usually a line or two, so it starts at the standard field height
+   and is dragged taller when there is more to say. */
+.pf-textarea--remarks {
+  min-height: var(--pf-field-height);
+}
+
+.pf-readonly {
+  display: block;
+  min-height: var(--pf-field-height);
+  padding: 10px 12px;
+  border: 1px solid #e6eaf1;
+  border-radius: 10px;
+  background: #eceff4;
+  color: #56607a;
+  font-size: 0.92rem;
+  overflow-wrap: anywhere;
+}
+
+.pf-readonly__empty {
+  color: #a9b3c4;
+}
+
+.pf-website {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pf-website .pf-readonly {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pf-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.pf-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.pf-grid--budget {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+}
+
+.pf-duration {
+  display: flex;
+  gap: 8px;
+}
+
+/* Rows of label-beside-control fields (submission, presentation, sanction). */
+.pf-inline-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 26px;
+  align-items: center;
+}
+
+.pf-inline-field {
+  min-width: 160px;
+}
+
+/* Only meaningful inside a row: in a column container a flex-basis of 220px
+   would be read as a height and stretch the field into a tall empty box. The
+   cap stops a lone field on a row — a reference number, a status — from
+   stretching to the full card width, which reads as a mistake next to the
+   fixed-width fields beside it. */
+.pf-inline-grid > .pf-inline-field--grow,
+.pf-collaborator__contact > .pf-inline-field--grow {
+  flex: 1 1 220px;
+  max-width: 440px;
+}
+
+/* The fields a row is built around — a panelist list, a collaborating
+   organization, a contact email — still take what is left of the line. Written
+   as a compound selector so it outranks the capped rule above. */
+.pf-inline-field--grow.pf-inline-field--wide {
+  max-width: none;
+}
+
+.pf-inline-field--tight {
+  min-width: auto;
+}
+
+/* The contact strip's own balance. A contact name is the longest thing on that
+   line and the first to be clipped, so it takes what is left of it; an address
+   fits in far less than the 440px the shared grow cap allows, and letting it
+   take that was what squeezed the name. */
+/* Grows at twice the rate of the contact name beside it: an address is the
+   longer value, and a name box as wide as the email one sat mostly empty. */
+.pf-inline-field--email {
+  flex: 2 1 300px;
+  min-width: 240px;
+}
+
+/* Submission Details: two rows of three fields that share their columns, so the
+   middle field starts at the same x on both rows and the trailing ones line up
+   on the right. */
+.pf-submission-grid {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 16px 22px;
+  align-items: center;
+}
+
+/* "Submitted on" only needs room for a date, and every pixel it gives back goes
+   to the trailing field, which carries the longest label on the card. */
+.pf-submission-grid > .pf-inline-field:first-child {
+  grid-template-columns: auto 160px;
+  /* Column 1 is as wide as the CFRD question below it; without this the date
+     would be pushed to the far end of that column, against the next label. */
+  justify-self: start;
+}
+
+/* The middle field of each row: pushed to the end of its column with a control
+   of fixed width, so "Mode of Submission" and "Date" share both edges instead
+   of leaving a hole before the trailing field. */
+.pf-inline-field--paired {
+  /* A fixed track, not a max: a select is only as wide as its longest option,
+     so `minmax(0, 190px)` would leave the two controls different widths. */
+  grid-template-columns: auto 190px;
+  justify-self: end;
+}
+
+/* Closes a row on the right. Both rows of Submission Details end in one of
+   these, and the fixed control width plus the push to the edge is what makes
+   the Reference Number and Status boxes share their left and right edges. */
+.pf-inline-field--trailing {
+  grid-template-columns: auto minmax(0, 300px);
+  margin-left: auto;
+}
+
+.pf-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  /* No top margin: the group sits beside its label now, and the margin would
+     drop the radios below the label's centre line. */
+  margin: 0;
+}
+
+.pf-radio {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  /* Same Bootstrap label margin as above: it would push the radio row's centre
+     away from the group's own label. */
+  margin: 0;
+  color: #3f4a5f;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.pf-radio input[type='radio'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--primary-color, #0069ab);
+  cursor: pointer;
+}
+
+.pf-driven-by {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.pf-driven-by__label {
+  color: #3f4a5f;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.pf-driven-by .pf-radio span {
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------ native selects */
+
+.pf-select {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-select__control {
+  width: 100%;
+  height: var(--pf-field-height);
+  padding: 0 32px 0 12px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fbfcfe;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.92rem;
+  font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+
+.pf-select__control:focus {
+  border-color: var(--border-focus, #0069ab);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(0 105 171 / 12%);
+}
+
+.pf-select__control:disabled {
+  background: #f1f3f7;
+  color: #8a93a6;
+  cursor: default;
+}
+
+.pf-select__control.is-invalid {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-select__chevron {
+  position: absolute;
+  top: 50%;
+  right: 11px;
+  color: #7d879b;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+/* The select is a text input you can type into (see `SelectField`), so it takes
+   a caret where a native select took none — but it still reads as a dropdown:
+   it keeps `.pf-select__control`'s box and chevron, and looks the same closed. */
+.pf-combo__input {
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.pf-combo__input:focus {
+  cursor: text;
+}
+
+.pf-combo__input::placeholder {
+  color: #a9b3c4;
+}
+
+/* Sticky so a heading stays legible while its own options scroll under it, the
+   way the budget-head catalog's groups run longer than the menu. */
+.pf-combo__group {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
+  padding: 7px 10px 4px;
+  background: #fff;
+  color: var(--text-muted, #6c757d);
+  font-weight: 700;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Hover is not the only way in: the keyboard walks the same highlight. */
+.pf-combo__option[data-highlighted='true'] {
+  background: #f2f7ff;
+}
+
+/* The year the picker opens on, marked for as long as the menu is open: the
+   hover highlight moves with the pointer, so it cannot be what says "this one
+   is today's". */
+.pf-combo__option[data-current='true'] {
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+}
+
+.pf-combo__option[data-selected='true'] {
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------- yes/no pill */
+
+.pf-yesno {
+  display: inline-flex;
+  /* Sits a touch clear of its label: the pill has no border-radius gap of its
+     own, so at the field's 10px column gap it reads as glued to the text. */
+  margin-left: 6px;
+  align-self: center;
+  overflow: hidden;
+  height: 34px;
+  border: 1px solid #d8e2f0;
+  border-radius: 8px;
+  background: #eaf1fb;
+}
+
+.pf-yesno__option {
+  min-width: 44px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.pf-yesno__option.is-selected {
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-yesno__option:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------- buttons */
+
+.pf-btn {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.pf-btn--primary {
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-btn--primary:hover:not(:disabled) {
+  background: var(--primary-hover, #005492);
+}
+
+.pf-btn--ghost {
+  border-color: #d5deeb;
+  background: #fff;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-btn--ghost:hover:not(:disabled) {
+  background: #f2f7ff;
+}
+
+.pf-btn--sm {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.82rem;
+}
+
+.pf-btn--lg {
+  height: 44px;
+  padding: 0 30px;
+  font-size: 0.95rem;
+}
+
+.pf-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.pf-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 50%;
+  background: #eef4fd;
+  color: var(--primary-color, #0069ab);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.pf-icon-btn:hover:not(:disabled):not(.is-disabled) {
+  background: #dfeaf9;
+}
+
+.pf-icon-btn:disabled,
+.pf-icon-btn.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.pf-icon-btn--add {
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-icon-btn--add:hover:not(:disabled):not(.is-disabled) {
+  background: var(--primary-hover, #005492);
+}
+
+.pf-icon-btn--remove,
+.pf-icon-btn--danger {
+  background: #fdecec;
+  color: var(--error-color, #dc3545);
+}
+
+.pf-icon-btn--remove:hover:not(:disabled):not(.is-disabled),
+.pf-icon-btn--danger:hover:not(:disabled):not(.is-disabled) {
+  background: #fadcdc;
+}
+
+.pf-icon-btn--success {
+  background: #e6f6ed;
+  color: var(--success-color, #198754);
+}
+
+.pf-icon-btn--ghost {
+  background: #eef4fd;
+}
+
+.pf-row-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-visually-hidden {
+  position: absolute;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  width: 1px;
+  height: 1px;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------- investigators */
+
+.pf-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pf-investigator-row {
+  display: grid;
+  grid-template-columns: 20px 66px 150px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.1fr) 78px;
+  gap: 10px;
+  align-items: center;
+}
+
+.pf-investigator-row.is-dragging {
+  border-radius: 10px;
+  background: #f6faff;
+  box-shadow: 0 8px 22px rgb(0 62 105 / 12%);
+}
+
+.pf-investigator-row__country {
+  min-width: 0;
+}
+
+/* An external member carries one field more than an internal one (the
+   country of its organization), so the row gets its own columns rather than
+   wrapping onto a second line. The type column matches the internal row's
+   150px so the pickers line up down a mixed list. Tracks read left to right:
+   handle, role, type, name, department, organization, country, actions. */
+.pf-investigator-row--external {
+  grid-template-columns:
+    20px 66px 150px minmax(0, 1.3fr) minmax(0, 1fr)
+    minmax(0, 1.3fr) minmax(0, 0.7fr) 78px;
+}
+
+.pf-drag-handle {
+  display: inline-flex;
+  color: #b6bfd0;
+  cursor: grab;
+}
+
+/* The role pill doubles as the control: its text is the role the row's position
+   gives it, and filling it marks the chosen corresponding investigator. The
+   radio itself is hidden rather than removed, so the column stays a radio group
+   for the keyboard. */
+.pf-principal {
+  position: relative;
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+
+  /* Bootstrap gives every <label> a 0.5rem bottom margin. The row centres the
+     margin box, so that margin floated the pill half its height above the
+     fields beside it. */
+  margin: 0;
+  padding: 5px 6px;
+  border: 1px solid #dbe3ee;
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text-muted, #6c757d);
+  font-weight: 700;
+  font-size: 0.64rem;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.pf-principal:hover:not(.is-disabled):not(.is-selected) {
+  border-color: #b9cfe8;
+  background: #f4f8fd;
+}
+
+/* The selected pill darkens on hover instead of falling back to the unselected
+   tint — a plain :hover rule outranks .is-selected and would wash it out. */
+.pf-principal.is-selected:hover:not(.is-disabled) {
+  border-color: var(--primary-hover, #005492);
+  background: var(--primary-hover, #005492);
+}
+
+.pf-principal input[type='radio'] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.pf-principal__dot {
+  width: 7px;
+  height: 7px;
+  border: 1px solid #c3cddc;
+  border-radius: 50%;
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.pf-principal.is-selected {
+  border-color: var(--primary-color, #0069ab);
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-principal.is-selected .pf-principal__dot {
+  border-color: #fff;
+  background: #fff;
+}
+
+/* Keyboard focus has to show on the pill, since the radio itself is hidden. */
+.pf-principal:focus-within {
+  box-shadow: 0 0 0 3px rgb(0 105 171 / 20%);
+}
+
+.pf-principal.is-disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+/* ------------------------------------------------------------- search fields */
+
+.pf-search {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-search__menu,
+.pf-tags__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: 0;
+  z-index: 30;
+  overflow-y: auto;
+  max-height: 240px;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fff;
+  list-style: none;
+  box-shadow: 0 10px 26px rgb(0 62 105 / 12%);
+}
+
+.pf-search__option,
+.pf-tags__option {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.88rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pf-search__option:hover,
+.pf-tags__option:hover {
+  background: #f2f7ff;
+}
+
+.pf-search__name {
+  font-weight: 600;
+}
+
+.pf-search__meta {
+  color: var(--text-muted, #6c757d);
+  font-size: 0.78rem;
+}
+
+/* The tag menu renders into `document.body` (see TagSelectField), so it is
+   placed against the viewport from the control's measured box rather than
+   against a positioned ancestor — inside a table there is no ancestor left to
+   position against, and the one there was cropped it. Above the modal backdrop
+   the form uses, since a picker inside a dialog has to stay on top. */
+/* The same thin, pale scrollbar as the tables' (`.pf-table-wrap`), for the
+   lists long enough to need one — the browser default is a heavy grey bar that
+   read as part of the options. */
+.pf-search__menu,
+.pf-tags__menu {
+  scrollbar-width: thin;
+  scrollbar-color: #c3cede transparent;
+}
+
+.pf-search__menu::-webkit-scrollbar,
+.pf-tags__menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.pf-search__menu::-webkit-scrollbar-thumb,
+.pf-tags__menu::-webkit-scrollbar-thumb {
+  border-radius: 6px;
+  background: #c3cede;
+}
+
+.pf-tags__menu--floating {
+  position: fixed;
+  right: auto;
+  z-index: 1100;
+  /* As wide as the longest option; useFloatingMenu sets the min and max. */
+  width: max-content;
+}
+
+.pf-tags__empty {
+  padding: 10px;
+  color: var(--text-muted, #6c757d);
+  font-size: 0.84rem;
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- tag select */
+
+.pf-tags {
+  position: relative;
+  min-width: 0;
+}
+
+.pf-tags__control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-height: var(--pf-field-height);
+  padding: 6px 30px 6px 10px;
+  border: 1px solid #e2e8f2;
+  border-radius: 10px;
+  background: #fbfcfe;
+  cursor: text;
+}
+
+.pf-tags--invalid .pf-tags__control {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-tags--compact .pf-tags__control {
+  min-height: 38px;
+  padding-right: 10px;
+}
+
+/* One line, always. Chips keep their size and the strip scrolls sideways under
+   them, so picking a fourth role cannot make the box taller and push the
+   fields beside it out of line. */
+.pf-tags--single-line .pf-tags__control {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  height: var(--pf-field-height);
+  scrollbar-width: none;
+}
+
+.pf-tags--single-line .pf-tags__control::-webkit-scrollbar {
+  display: none;
+}
+
+.pf-tags--single-line .pf-chip {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.pf-tags--single-line .pf-chip span,
+.pf-tags--single-line .pf-tags__input {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pf-tags--single-line .pf-tags__input {
+  flex: 1 0 60px;
+}
+
+.pf-tags__input {
+  flex: 1 1 120px;
+  min-width: 90px;
+  border: 0;
+  background: transparent;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.pf-tags__input:focus {
+  outline: none;
+}
+
+.pf-tags__input::placeholder {
+  color: #a9b3c4;
+}
+
+/* Centred on the control's own height, not on `.pf-tags`: the wrapper also
+   holds the error message, and the chips can wrap onto a second line, so a
+   plain `top: 50%` would drift down as either appeared. The token keeps it
+   right in the modal too, where the fields are 38px rather than 42px. */
+.pf-tags__chevron {
+  position: absolute;
+  top: calc(var(--pf-field-height, 42px) / 2);
+  right: 11px;
+  color: #7d879b;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.pf-chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #e7f0fc;
+  color: var(--primary-color, #0069ab);
+  font-weight: 600;
+  font-size: 0.78rem;
+}
+
+.pf-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* -------------------------------------------------------------- collaborators */
+
+.pf-collaborator {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #eef2f8;
+  border-radius: 12px;
+  background: #fcfdff;
+}
+
+/* Two lines of fields on a shared six-column grid, so every field lands at the
+   same x on every collaborator — with the wrapping flex row this replaced, each
+   row sized itself to its own content and the pickers stepped sideways down the
+   card. Five labelled fields and the row buttons do not fit one line on a
+   laptop without squeezing the selects to a few characters, so the line above
+   carries Category and the role picker, and Organization, City and the MoU
+   switch take the one below.
+
+   Twelve columns rather than one per field: they let each field be given the
+   share of the line it actually needs — the roles are a chip list and take the
+   rest of the first line, an organization name is the longest value on the
+   second, and the MoU switch is a fixed-width pill that must not be cut — while
+   still cutting both lines on the same grid. */
+.pf-collaborator__main {
+  display: grid;
+  /* The buttons take a fixed column, not `auto`: only the last collaborator
+     carries an add button, so a content-sized column made that row's fields
+     narrower than the ones above and the pickers no longer lined up. */
+  grid-template-columns: repeat(12, minmax(0, 1fr)) 96px;
+  gap: 12px 18px;
+  align-items: center;
+}
+
+.pf-collaborator__category {
+  grid-column: 1 / span 3;
+}
+
+/* The rest of the line. Roles are picked several at a time and each one is a
+   chip, so this is the field that actually uses the width — which is why
+   Organization moved down to the line below rather than sharing this one. */
+.pf-collaborator__role {
+  grid-column: 4 / span 9;
+}
+
+.pf-collaborator__org {
+  grid-column: 1 / span 7;
+}
+
+.pf-collaborator__city {
+  grid-column: 8 / span 3;
+}
+
+/* The last two field columns plus the button track, which is empty on this
+   line: the field shrinks to its label and pill and sits against the right
+   edge, level with the row buttons above, so the slack goes to Organization
+   instead of trailing the pill as whitespace. */
+.pf-collaborator__mou {
+  grid-column: 11 / -1;
+  justify-self: end;
+}
+
+/* Pinned to the first row, in the last track — the fixed 96px button column
+   after the twelve field columns — so the fields below flow under the line
+   above rather than around the buttons. Counted from the end rather than
+   numbered, so the pin cannot drift into a field's columns again if the grid is
+   re-cut: it sat at column 4 from when the grid had four tracks, which put the
+   buttons where Role starts and pushed Role onto a line of its own. */
+.pf-collaborator__main > .pf-row-actions {
+  grid-row: 1;
+  grid-column: -2 / -1;
+  justify-content: flex-end;
+}
+
+.pf-collaborator__contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  align-items: center;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #eff5fe;
+}
+
+.pf-collaborator__contact .pf-inline-field {
+  min-width: 150px;
+}
+
+.pf-collaborator__main > .pf-inline-field {
+  min-width: 0;
+}
+
+/* The label still takes what it needs; the control gives way first, since the
+   row carries five of them and a label that wrapped would break the line. */
+.pf-collaborator__main > .pf-inline-field {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+/* --------------------------------------------------------------------- tables */
+
+.pf-table-wrap {
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #c3cede transparent;
+}
+
+.pf-table-wrap::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+
+.pf-table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pf-table-wrap::-webkit-scrollbar-thumb {
+  background: #c3cede;
+  border-radius: 999px;
+}
+
+.pf-table-wrap::-webkit-scrollbar-thumb:hover {
+  background: #a8b6cc;
+}
+
+.pf-table {
+  width: 100%;
+  border: 1px solid #e5eaf2;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.pf-table th,
+.pf-table td {
+  padding: 10px 12px;
+  border: 1px solid #e5eaf2;
+  vertical-align: middle;
+}
+
+.pf-table thead tr {
+  background: #eff5fe;
+}
+
+.pf-table th {
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Financial Contribution and Budget Sharing. Their Budget Head(s) cell is a
+   chip list, so under the default auto layout the column grew with every head
+   picked and took the width out of the Organization column beside it — the
+   table re-flowed while it was being filled in. A fixed layout settles the
+   columns before the chips are laid out: the three below hold their pixel
+   widths, Organization and Budget Head(s) split what is left equally whatever
+   is in them, and the chips wrap inside the cell. The floor keeps both usable
+   on a narrow window, where `.pf-table-wrap` scrolls instead of crushing
+   them. */
+.pf-table--fixed {
+  table-layout: fixed;
+  min-width: 760px;
+}
+
+.pf-table__sno {
+  width: 62px;
+  text-align: center;
+}
+
+.pf-table__amount {
+  width: 140px;
+}
+
+.pf-table__slot {
+  width: 88px;
+  text-align: center;
+}
+
+.pf-table__actions {
+  width: 96px;
+  text-align: center;
+}
+
+.pf-table tfoot td {
+  background: #f7faff;
+  font-weight: 700;
+}
+
+.pf-table__total-label {
+  color: var(--primary-color, #0069ab);
+  text-align: right;
+}
+
+.pf-table__total-value {
+  color: var(--primary-color, #0069ab);
+  text-align: right;
+}
+
+/* --------------------------------------------------------------------------
+   Tabs
+   -------------------------------------------------------------------------- */
+
+/* The journal form's pill toggle (`.category-toggle-container`), sized to its
+   labels rather than to the page: that one splits a fixed 350px between two
+   buttons, which three labels of unequal length cannot share evenly. */
+.pf-tabs {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 auto var(--pf-gap);
+  padding: 5px;
+  border-radius: 50px;
+  background: #e1f0ff;
+}
+
+.pf-tabs__tab {
+  padding: 8px 24px;
+  border: none;
+  border-radius: 50px;
+  background-color: transparent;
+  color: #5d6b8a;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.pf-tabs__tab.is-active {
+  background-color: var(--primary-color, #0069ab);
+  color: #fff;
+  box-shadow: 0 4px 10px rgb(0 105 171 / 30%);
+}
+
+/* Hidden panels stay mounted, so a tab keeps its scroll position and the
+   summary keeps its year filter while the user works on another tab. */
+.pf-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pf-gap);
+}
+
+.pf-panel[hidden] {
+  display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Finance sub-tabs
+   -------------------------------------------------------------------------- */
+
+/* Budget, Transaction and Summary as three equal segments of one card, each
+   with the figure that says where it stands. A second row of pills under the
+   tabs above read as the same control twice; a card of a different shape says
+   "these are the parts of Finance" instead. */
+.pf-finance-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border-radius: var(--pf-radius);
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 6px 22px rgb(0 62 105 / 6%);
+}
+
+.pf-finance-nav__item {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  /* A little more below than above: the Summary's bar sits in that room. */
+  padding: 9px 16px 12px;
+  border: 0;
+  border-left: 1px solid #e6edf6;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.pf-finance-nav__item:first-child {
+  border-left: 0;
+}
+
+.pf-finance-nav__item:hover {
+  background: #f7faff;
+}
+
+.pf-finance-nav__item:focus-visible {
+  outline: 2px solid var(--primary-color, #0069ab);
+  outline-offset: -2px;
+}
+
+/* The selected segment: filled with the primary colour, as the selected tab
+   above it is. A pale tint read as the page background showing through the
+   card rather than as a selection. */
+.pf-finance-nav__item.is-active,
+.pf-finance-nav__item.is-active:hover {
+  background: var(--primary-color, #0069ab);
+}
+
+/* White on the fill would vanish into an outline drawn in the same blue, so
+   the selected segment's focus ring is drawn in white instead. */
+.pf-finance-nav__item.is-active:focus-visible {
+  outline-color: #fff;
+}
+
+.pf-finance-nav__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #e1f0ff;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__icon {
+  background: #fff;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-finance-nav__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.pf-finance-nav__label {
+  color: #1f2d3d;
+  font-weight: 600;
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__label {
+  color: #fff;
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__caption {
+  color: rgb(255 255 255 / 85%);
+}
+
+/* One line, however long the figure: the segment keeps its height. */
+.pf-finance-nav__caption {
+  overflow: hidden;
+  color: #6b7a90;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How much of the budget is used, along the foot of the Summary segment.
+   Out of the text's flow, so Summary's label and caption sit level with the
+   other two segments' instead of riding up over the bar. It starts where the
+   text does: the item's padding plus the icon and the gap after it. */
+.pf-finance-nav__meter {
+  position: absolute;
+  right: 16px;
+  bottom: 5px;
+  left: calc(16px + 30px + 10px);
+  height: 3px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: #e1f0ff;
+}
+
+.pf-finance-nav__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary-color, #0069ab);
+}
+
+/* On the blue fill the bar turns white, over a faint white track. */
+.pf-finance-nav__item.is-active .pf-finance-nav__meter {
+  background: rgb(255 255 255 / 30%);
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__meter > span {
+  background: #fff;
+}
+
+@media (width <= 720px) {
+  .pf-finance-nav {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-finance-nav__item {
+    border-top: 1px solid #e6edf6;
+    border-left: 0;
+  }
+
+  .pf-finance-nav__item:first-child {
+    border-top: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Income heads
+   -------------------------------------------------------------------------- */
+
+/* One line of ticks on a laptop, wrapping rather than scrolling on anything
+   narrower — four short labels, so there is no point giving them a grid. */
+.pf-income-heads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 28px;
+  align-items: center;
+}
+
+.pf-income-heads__option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  /* Bootstrap's label margin, which would drop the text off the tick's centre. */
+  margin: 0;
+  color: #3f4a5f;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+/* --------------------------------------------------------------------------
+   Budget allotment matrix
+   -------------------------------------------------------------------------- */
+
+/* Both of these are floors, not just preferred widths. The matrix grows a
+   column per financial year, and a table set to `width: 100%` answers that by
+   compressing every column to fit its container — which clipped the head names
+   and the year labels to "Academic Eve..." and "2029-". With a floor per
+   column the table takes the width it actually needs and `.pf-table-wrap`
+   scrolls it, so however many years a project budgets across, each one can be
+   read in full. */
+.pf-matrix__head {
+  width: 180px;
+  min-width: 180px;
+}
+
+/* The wider of the pair: a head name is a word or two ("Manpower",
+   "Contingencies"), while the contributor is an organization's full name —
+   "K.S.Rangasamy College of Technology" was cut to "K.S.Rangasamy C…" at
+   168px. Same floor treatment as the others. */
+.pf-matrix__contribution {
+  width: 320px;
+  min-width: 320px;
+}
+
+/* Narrow enough that the Contribution column above earns its place without the
+   matrix growing, wide enough for a crore-scale figure: eight digits of entry,
+   and a column total of `9,99,99,999` under it. What stops it going lower is
+   the header, not the money — the year picker's own floor plus the delete
+   button beside it. The last column carries the add button as well and takes
+   the few extra pixels for it; `.pf-table` is auto-layout, so it can. */
+.pf-matrix__year {
+  width: 170px;
+  min-width: 170px;
+}
+
+/* The year column's own header is a control, not a label, so it needs the
+   normal cell padding rather than the header row's tight, centred text. */
+.pf-matrix__year-header {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Enough for a full "2029-30" beside the chevron: the select is what the
+   header's flex row would otherwise shrink first, and the column floor above
+   only holds if its contents refuse to collapse. */
+.pf-matrix__year-header .pf-select {
+  flex: 1;
+  min-width: 104px;
+}
+
+.pf-matrix thead .pf-row-actions {
+  flex: 0 0 auto;
+}
+
+/* --------------------------------------------------------------------------
+   Transaction summary
+   -------------------------------------------------------------------------- */
+
+/* The year filter sits in the card header, right of the title. It used to be a
+   grey band of its own above the table; on the title row it needs no band, only
+   to keep its label beside its select. */
+.pf-summary__filter {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.pf-summary__filter-label {
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pf-summary__filter .pf-select {
+  min-width: 190px;
+}
+
+/* A shared card header does not wrap, which is right for a title and a toggle.
+   A title plus a labelled 190px select is wider than that on a narrow window,
+   so this card's header lets the filter drop under the title rather than
+   squeezing either. */
+.pf-summary-card .pf-card__header {
+  flex-wrap: wrap;
+  row-gap: 10px;
+}
+
+.pf-summary td {
+  text-align: left;
+}
+
+.pf-summary .pf-table__amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Head names are short ("Manpower", "Bank Interest"), so Budget Head is held
+   to what they need and Contribution — an organization name, the longest value
+   in the table — takes whatever is left. At a fixed 168px the name wrapped to
+   three lines and made every contributed row three times as tall as the rest. */
+.pf-summary__head {
+  width: 250px;
+}
+
+.pf-summary__total td {
+  background: #eff5fe;
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+}
+
+.pf-summary__balance td {
+  background: #e3eefc;
+}
+
+.pf-summary__empty {
+  color: var(--text-muted, #8a8aa3);
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   Transaction ledger
+   -------------------------------------------------------------------------- */
+
+.pf-account {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.pf-account__label {
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pf-account__select {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Three of the nine columns moved into the expanding strip below each row, so
+   the table itself needs far less width before it starts scrolling. */
+.pf-ledger {
+  min-width: 760px;
+}
+
+.pf-ledger .pf-table__amount {
+  width: 120px;
+}
+
+/* Floors, for the same reason as the matrix columns above: the min-width on
+   the table lets it stop growing, and a table that has stopped growing pays
+   for it by squeezing these two — which clipped "2029-30" and any head longer
+   than a word once the window got narrow. */
+.pf-ledger__year {
+  width: 150px;
+  min-width: 134px;
+}
+
+/* Grant Disbursement. The year and the date are both fixed-shape values, so
+   they are held to what they need and Organization, which has no width of its
+   own, takes the rest of the line. Left to the auto layout, the date picker and
+   the year select each claimed a share of their own, and the organization name —
+   the longest value on the row — was the one truncated. The year matches the
+   ledger's; the date clears a native `dd-mm-yyyy` picker and its calendar
+   button. */
+.pf-disbursement__year {
+  width: 150px;
+  min-width: 134px;
+}
+
+.pf-disbursement__date {
+  width: 170px;
+  min-width: 160px;
+}
+
+.pf-ledger__head {
+  width: 260px;
+  min-width: 220px;
+}
+
+/* The expand toggle sits with the add / remove buttons, so it keeps their
+   shape — only the chevron turns to say which way the row is going. */
+.pf-ledger .pf-table__actions {
+  width: 132px;
+}
+
+.pf-ledger__toggle svg {
+  transition: transform 0.15s ease;
+}
+
+.pf-ledger__toggle.is-open svg {
+  transform: rotate(180deg);
+}
+
+/* Reads as part of the row above rather than as a row of its own: no zebra
+   striping, and the top border is left off so the two look joined. */
+.pf-ledger__detail-row > .pf-ledger__detail-cell {
+  padding: 12px 14px 16px;
+  background: #f7faff;
+  border-top: 0;
+}
+
+.pf-ledger__detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+}
+
+.pf-ledger__detail-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+}
+
+/* Particulars is free text and takes whatever the others leave. */
+.pf-ledger__detail-field--wide {
+  flex: 1 1 260px;
+  min-width: 240px;
+}
+
+/* A date and a reference number are both short and fixed in shape, so they are
+   held to what they need rather than to the strip's shared floor — the width
+   they were taking came out of Particulars, which is the one field here with
+   nothing to bound it. The floor still clears a native date picker, whose
+   `dd-mm-yyyy` and calendar button the browser draws at its own size. */
+.pf-ledger__detail-field--compact {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.pf-ledger__detail-field--compact .pf-input,
+.pf-ledger__detail-field--compact .pf-select {
+  flex: 0 1 auto;
+  width: 150px;
+  min-width: 150px;
+}
+
+/* An income row has no Actuals tick, and Contribution — an organization name,
+   the longest value on the strip after Particulars — takes the room it frees.
+   It grows alongside Particulars rather than being held compact. */
+.pf-ledger__detail-field--contribution {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.pf-ledger__detail-field--contribution .pf-select {
+  flex: 1 1 auto;
+  min-width: 150px;
+}
+
+/* Mode is the shortest value on the strip — `Cheque` is the longest word it
+   holds — so it is held tighter still rather than taking a text field's width
+   for a seven-item list. */
+.pf-ledger__detail-field--mode .pf-select {
+  width: 120px;
+  min-width: 120px;
+}
+
+.pf-ledger__detail-label {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: var(--primary-color, #0069ab);
+  white-space: nowrap;
+}
+
+.pf-ledger__detail-field .pf-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* The Actuals tick sits beside Ref. No. rather than stretching like the text
+   fields do, so it takes only the width of its box and its word. */
+.pf-ledger__detail-field--check {
+  flex: 0 0 auto;
+  min-width: 0;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.pf-checkbox {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  accent-color: var(--primary-color, #0069ab);
+  cursor: pointer;
+}
+
+.pf-checkbox:disabled {
+  cursor: default;
+}
+
+/* Which side of the ledger a row's head is on, on the head and on the one
+   column it fills: green for an income head and its Credit, red for an
+   expenditure head and its Debit. A validation error still wins, so a red
+   Debit is never mistaken for a field that needs fixing only by its colour —
+   the error text beneath says that. */
+.pf-ledger__side--income .pf-select__control:not(.is-invalid),
+.pf-input.pf-ledger__side--income:not(.is-invalid) {
+  border-color: var(--success-color, #198754);
+}
+
+.pf-ledger__side--expenditure .pf-select__control:not(.is-invalid),
+.pf-input.pf-ledger__side--expenditure:not(.is-invalid) {
+  border-color: var(--error-color, #dc3545);
+}
+
+.pf-ledger__side--income .pf-select__control:not(.is-invalid):focus,
+.pf-input.pf-ledger__side--income:not(.is-invalid):focus {
+  box-shadow: 0 0 0 3px rgb(25 135 84 / 15%);
+}
+
+.pf-ledger__side--expenditure .pf-select__control:not(.is-invalid):focus,
+.pf-input.pf-ledger__side--expenditure:not(.is-invalid):focus {
+  box-shadow: 0 0 0 3px rgb(220 53 69 / 15%);
+}
+
+/* Facility tab. Its detail strip reuses the ledger's `pf-ledger__detail*`
+   styles; only the column widths and the strip's second line are its own. */
+.pf-facility {
+  min-width: 760px;
+}
+
+.pf-facility .pf-table__amount {
+  width: 150px;
+}
+
+.pf-facility__type {
+  width: 200px;
+  min-width: 170px;
+}
+
+/* Clears a native `dd-mm-yyyy` picker and its calendar button. */
+.pf-facility__date {
+  width: 170px;
+  min-width: 160px;
+}
+
+.pf-facility .pf-table__actions {
+  width: 132px;
+}
+
+/* The strip's first line is five fields that belong on one row, so it is a
+   grid rather than the ledger's wrapping flex: as flex, I-STEM ID dropped onto
+   a line of its own at a laptop width. The fields share the width instead of
+   holding the compact fields' fixed 150px. */
+.pf-ledger__detail.pf-facility__detail {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.3fr)
+    minmax(0, 1.25fr);
+  gap: 12px 18px;
+}
+
+.pf-facility__detail .pf-ledger__detail-field {
+  min-width: 0;
+}
+
+.pf-facility__detail .pf-ledger__detail-field--compact .pf-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+}
+
+/* Supplier Details and Contact Details are two lines under the strip, each
+   split from the one above by the rule the design draws between them. They
+   share one grid so both lines' fields start at the same edge: the first
+   column is as wide as the longer label, and each line takes its columns
+   from the grid through `subgrid`. Name and Address each span two of the
+   four field tracks, so they split the line evenly; the contact's Mobile is
+   ten digits and gets the narrowest track. */
+.pf-facility__supplier {
+  display: grid;
+  grid-template-columns:
+    max-content minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.75fr)
+    minmax(0, 1.45fr);
+  column-gap: 12px;
+}
+
+.pf-facility__supplier-line {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f2;
+}
+
+.pf-facility__supplier-line .pf-ledger__detail-label {
+  margin-right: 10px;
+}
+
+.pf-facility__supplier-line .pf-input {
+  min-width: 0;
+}
+
+.pf-facility__supplier-name {
+  grid-column: 2 / span 2;
+}
+
+.pf-facility__supplier-address {
+  grid-column: 4 / span 2;
+}
+
+/* Manpower tab. Same strip as the Facility tab; Email and Remarks are the two
+   free-length values on it, so they share whatever DoJ, Mobile and DOR leave. */
+.pf-manpower {
+  min-width: 860px;
+}
+
+.pf-manpower__role {
+  width: 220px;
+  min-width: 190px;
+}
+
+.pf-manpower__qualification {
+  width: 200px;
+}
+
+/* Holds the upload icon, plus a rejected pick's message under it. */
+.pf-manpower__profile {
+  width: 90px;
+  text-align: center;
+}
+
+.pf-manpower__profile .pf-field__error {
+  margin: 4px 0 0;
+  text-align: left;
+}
+
+.pf-manpower .pf-table__amount {
+  width: 140px;
+}
+
+.pf-manpower .pf-table__actions {
+  width: 132px;
+}
+
+.pf-manpower__email {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.pf-manpower__remarks {
+  flex: 1 1 180px;
+  min-width: 160px;
+}
+
+/* Derived, so it is shown rather than typed — but keeps the shape of the
+   credit and debit fields beside it. */
+.pf-ledger__balance {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-slot-button {
+  position: relative;
+  display: inline-flex;
+}
+
+.pf-slot-button__clear {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: var(--error-color, #dc3545);
+  color: #fff;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ documents */
+
+.pf-document {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-width: 280px;
+  padding: 14px 16px;
+  border: 1px solid #e6ecf6;
+  border-radius: 12px;
+  background: #fcfdff;
+}
+
+.pf-document--invalid {
+  border-color: var(--error-color, #dc3545);
+  background: #fff8f8;
+}
+
+.pf-document__icon {
+  flex: 0 0 auto;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-document__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pf-document__label {
+  color: #3b4457;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.pf-document__meta {
+  overflow: hidden;
+  color: var(--text-muted, #6c757d);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pf-document__link {
+  color: var(--primary-color, #0069ab);
+  text-decoration: underline;
+}
+
+.pf-document__error {
+  color: var(--error-color, #dc3545);
+  font-size: 0.76rem;
+}
+
+.pf-document__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Two per row, as the design pairs the four final documents. */
+.pf-document-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(300px, 1fr));
+  gap: 14px;
+}
+
+.pf-presentation,
+.pf-sanction {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  gap: 18px;
+  align-items: start;
+}
+
+/* Date, Mode and Account are one column of labels, so the date box and both
+   radio rows start at the same edge. Each label sits in its own row's grid,
+   so they share the width of the longest ("Account") rather than a column. */
+.pf-sanction__label {
+  min-width: 4.25rem;
+}
+
+.pf-presentation__fields,
+.pf-sanction__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ------------------------------------------------------------------- outcomes */
+
+/* The four count cards at the top of the Outcomes tab: an icon tile and a
+   figure, one card per table below. */
+.pf-outcome-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--pf-gap);
+}
+
+.pf-outcome-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid #e2e8f2;
+  border-radius: var(--pf-radius);
+  background: #fff;
+}
+
+.pf-outcome-card__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  background: var(--primary-color, #0069ab);
+  color: #fff;
+}
+
+.pf-outcome-card__label {
+  display: block;
+  color: var(--text-main, #4f4f6e);
+  font-size: 0.92rem;
+}
+
+.pf-outcome-card__value {
+  display: block;
+  color: var(--primary-color, #0069ab);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.pf-outcome-legacy {
+  margin: 14px 0 0;
+  color: var(--text-muted, #6c757d);
+  font-size: 0.84rem;
+}
+
+/* Column widths shared by the Outcomes tab's four tables. The text column
+   with no class (DOI, IPR Number, Description, University) takes the rest. */
+.pf-outcome-table {
+  min-width: 720px;
+}
+
+.pf-outcome-table__type {
+  width: 230px;
+  min-width: 190px;
+}
+
+.pf-outcome-table__status {
+  width: 170px;
+  min-width: 150px;
+}
+
+.pf-outcome-table__trl {
+  width: 130px;
+  min-width: 120px;
+}
+
+.pf-outcome-table__candidate {
+  width: 260px;
+  min-width: 200px;
+}
+
+.pf-outcome-table__degree {
+  width: 170px;
+  min-width: 150px;
+}
+
+/* Holds the upload icon, plus a rejected pick's message under it. */
+.pf-outcome-table__document {
+  width: 100px;
+  text-align: center;
+}
+
+.pf-outcome-table__document .pf-field__error {
+  margin: 4px 0 0;
+  text-align: left;
+}
+
+/* Tech Transfer and candidate rows have no expand toggle, so their action
+   cell holds only add and remove. */
+.pf-outcome-table__actions {
+  width: 100px;
+}
+
+.pf-outcome-table .pf-table__actions {
+  width: 132px;
+}
+
+.pf-outcome-table__venue {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+
+.pf-ledger__detail-field--compact.pf-outcome-table__year .pf-input {
+  width: 90px;
+  min-width: 90px;
+}
+
+/* The DOI field and its Fetch button share the cell. */
+.pf-outcome-lookup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pf-outcome-lookup .pf-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pf-outcome-lookup__fetch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.pf-outcome-lookup + .pf-field__hint,
+.pf-outcome-lookup + .pf-field__error {
+  margin: 6px 0 0;
+}
+
+/* --------------------------------------------------------------- stage notes */
+
+/* Explains why the later sections are not on screen yet, so a hidden section
+   reads as "not applicable yet" rather than as something broken. */
+.pf-stage-note {
+  margin: -4px 0 0;
+  padding: 12px 18px;
+  border: 1px dashed #cfdcf0;
+  border-radius: var(--pf-radius);
+  color: var(--text-muted, #6c757d);
+  font-size: 0.86rem;
+}
+
+.pf-stage-note strong {
+  color: var(--primary-color, #0069ab);
+}
+
+/* -------------------------------------------------------------------- banners */
+
+.pf-banner {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin-bottom: var(--pf-gap);
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+}
+
+.pf-banner--error {
+  background: #fdecec;
+  color: #9e2530;
+}
+
+.pf-banner__list {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+/* -------------------------------------------------------------------- actions */
+
+.pf-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 8px 0 0;
+}
+
+/* --------------------------------------------------------------------- modal */
+
+/* The shared modal is 80% of the viewport, which leaves this short form adrift
+   on a wide screen. It is a handful of fields, so it gets a reading width. */
+.pf-modal .modal-dialog.modal-lg {
+  width: 100% !important;
+  max-width: 560px !important;
+}
+
+.pf-modal .modal-body {
+  overflow-y: auto;
+  max-height: calc(100vh - 190px);
+  padding: 16px 20px 18px;
+}
+
+.pf-modal .modal-header {
+  padding: 14px 20px 12px;
+}
+
+/* Compact controls: the modal is a quick side-request, not the main form. */
+.pf-modal {
+  --pf-field-height: 38px;
+}
+
+.pf-modal .pf-field__label {
+  font-size: 0.82rem;
+}
+
+.pf-modal .pf-textarea {
+  min-height: 74px;
+}
+
+.pf-modal__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Short fields pair up so the form stays inside one screen. */
+.pf-modal__pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+/* The choice of what to request is one short line, not a stacked field. */
+.pf-modal__type {
+  flex-direction: row;
+  gap: 16px;
+  align-items: center;
+}
+
+.pf-modal__actions {
+  padding-top: 2px;
+}
+
+.pf-modal__actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.pf-modal__done {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+/* ---------------------------------------------------------------- responsive */
+
+@media (width <= 1200px) {
+  .pf-columns,
+  .pf-presentation,
+  .pf-sanction {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* Grid columns cannot wrap, so the row is re-cut rather than squeezed: two
+     field columns and the button track. Every field is placed in a field
+     column explicitly — left to auto-flow, the third field of each line landed
+     in the 96px button track, which crushed Organization to 96px. The grouping
+     of the wide layout holds: Category and Role, then Organization across both
+     columns (it is the longest value), then City and the MoU switch. The
+     buttons keep their pin from the wide layout: first row, last track. */
+  .pf-collaborator__main {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 96px;
+  }
+
+  .pf-collaborator__category,
+  .pf-collaborator__city {
+    grid-column: 1;
+  }
+
+  .pf-collaborator__role,
+  .pf-collaborator__mou {
+    grid-column: 2;
+  }
+
+  .pf-collaborator__mou {
+    justify-self: start;
+  }
+
+  .pf-collaborator__org {
+    grid-column: 1 / span 2;
+  }
+}
+
+@media (width <= 992px) {
+  .pf-submission-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-inline-field--trailing,
+  .pf-inline-field--paired,
+  .pf-submission-grid > .pf-inline-field:first-child {
+    grid-template-columns: auto minmax(120px, 1fr);
+    justify-self: stretch;
+    margin-left: 0;
+  }
+
+  .pf-outcome-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .pf-investigator-row,
+  .pf-investigator-row--external {
+    grid-template-columns: 20px 66px minmax(0, 1fr) minmax(0, 1fr) 78px;
+    row-gap: 8px;
+  }
+
+  .pf-investigator-row__type {
+    grid-column: span 3;
+  }
+}
+
+@media (width <= 768px) {
+  .pf-outcome-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-document-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pf-page {
+    padding: 20px 14px 24px;
+  }
+
+  .pf-card {
+    padding: 16px 14px;
+  }
+
+  .pf-card--inline {
+    align-items: flex-start;
+  }
+
+  .pf-investigator-row,
+  .pf-investigator-row--external {
+    grid-template-columns: 20px 1fr 78px;
+  }
+
+  .pf-investigator-row > *:not(.pf-drag-handle):not(.pf-row-actions):not(.pf-principal) {
+    grid-column: 2 / 3;
+  }
+
+  .pf-grid--two,
+  .pf-grid--budget {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Documents tab. Shares the Outcomes tables' column classes; only the date and
+   the direction are its own. */
+.pf-doc-transactions {
+  min-width: 860px;
+}
+
+.pf-doc-transactions__date {
+  width: 170px;
+  min-width: 160px;
+}
+
+.pf-doc-transactions__direction {
+  width: 150px;
+  min-width: 140px;
+}

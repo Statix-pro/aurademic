@@ -1,0 +1,292 @@
+/* The record card shared by the Projects and Publications lists, so the two
+   read the same: an ID chip and the title with the status pills and actions on
+   one line, then label-over-value facts beneath.
+
+   Its own `pc-` classes: `research-card`, `detail-item` and the rest are
+   defined differently by each page's stylesheet, and both load globally. */
+
+.research-card.pc-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px 20px 14px;
+  border-color: #e6edf6;
+}
+
+/* A lift that jumped the card 3px and greyed it read as a drag handle; a
+   border and a soft shadow say "clickable" without moving anything. */
+.research-card.pc-card:hover {
+  transform: none;
+  background: #fff;
+  border-color: #b9d3ee;
+  box-shadow: 0 6px 18px rgb(0 62 105 / 8%);
+}
+
+.pc-card__header {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pc-card__heading {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.pc-card__id {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #eef5fd;
+  color: #0069ab;
+  font-weight: 600;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pc-card__title {
+  overflow: hidden;
+  margin: 0;
+  color: #1f2d3d;
+  font-weight: 600;
+  font-size: 1rem;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.research-card.pc-card:hover .pc-card__title {
+  color: #0069ab;
+}
+
+/* Label over value, three to a line: the values are names of different
+   lengths, and a run of "Label: value • Label: value" wrapped wherever it
+   happened to, leaving separators dangling at line ends. */
+.pc-card__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 24px;
+  margin: 0;
+  padding: 12px 0 0;
+  border-top: 1px solid #f0f3f8;
+}
+
+.pc-fact {
+  min-width: 0;
+}
+
+.pc-fact dt {
+  margin-bottom: 2px;
+  color: #8a97ab;
+  font-weight: 500;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pc-fact dd {
+  overflow: hidden;
+  margin: 0;
+  color: #3d4a5c;
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pc-fact__amount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.pc-card__aside {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.pc-card__actions {
+  display: flex;
+  gap: 6px;
+  padding-left: 14px;
+  border-left: 1px solid #e8eef6;
+}
+
+/* `margin: 0` because other pages' unscoped button rules load app-wide —
+   `EventForm.css` sets `.delete-btn { margin: auto }`, which pulled the delete
+   button away from the others into the middle of the strip. */
+.pc-card__actions .action-btn {
+  margin: 0;
+  min-width: 32px;
+  min-height: 32px;
+  font-size: 0.82rem;
+}
+
+/* One pill per stage, grouped by what the stage means: still being written or
+   waiting on someone, with the agency or publisher, decided, running,
+   finished — the same colour for the same meaning on both lists. */
+.pc-status {
+  flex: 0 0 auto;
+  /* Publication statuses arrive lowercase ("waiting"); project ones are labelled. */
+  text-transform: capitalize;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: #eef2f7;
+  color: #4f5d73;
+  font-weight: 600;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.pc-status--draft,
+.pc-status--pending,
+.pc-status--waiting,
+.pc-status--under-review,
+.pc-status--in-review {
+  border-color: #ffe6a3;
+  background: #fff8e1;
+  color: #8a6100;
+}
+
+.pc-status--submitted,
+.pc-status--accepted-for-evaluation,
+.pc-status--shortlisted,
+.pc-status--shortlisted-for-presentation {
+  border-color: #cfe2f7;
+  background: #eef5fd;
+  color: #0069ab;
+}
+
+.pc-status--result-announced {
+  border-color: #dcd3f5;
+  background: #f4f0fd;
+  color: #5b3fb0;
+}
+
+.pc-status--ongoing,
+.pc-status--in-press,
+.pc-status--proofing {
+  border-color: #bfe6ee;
+  background: #e8f7fa;
+  color: #0c6474;
+}
+
+.pc-status--completed,
+.pc-status--closed,
+.pc-status--published,
+.pc-status--accepted,
+.pc-status--approved {
+  border-color: #c9e8d2;
+  background: #edf8f0;
+  color: #1d6b35;
+}
+
+.pc-status--rejected {
+  border-color: #f5c9cd;
+  background: #fdeff0;
+  color: #b42332;
+}
+
+/* What kind of record it is (Journal, Note, Erratum…), not where it stands, so
+   it is outlined rather than filled and never competes with the status. */
+.pc-status--type {
+  border-color: #dbe3ee;
+  background: #fff;
+  color: #5d6b8a;
+}
+
+/* A publication title is often a sentence long, so it gets two lines before it
+   is cut, where a project title gets one. */
+.pc-card__title--clamp {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pc-card__header--top {
+  align-items: flex-start;
+}
+
+.pc-fact dd sup,
+.pc-fact__star {
+  color: #d63344;
+  font-weight: 700;
+}
+
+/* Authors lists run long; two lines, then cut. */
+.pc-fact__clamp {
+  display: -webkit-box;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pc-card__note {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid #e06470;
+  border-radius: 6px;
+  background: #fdf3f4;
+  color: #7a2530;
+  font-size: 0.85rem;
+}
+
+/* Requesting an edit is still an edit, so it looks like the Edit button with
+   its own icon — the amber paper plane read as a warning, or a send. */
+.pc-card__actions .request-edit-btn {
+  border-color: transparent;
+  background: #f0f6ff;
+  color: #0069ab;
+}
+
+.pc-card__actions .request-edit-btn:hover {
+  background: #e1f0ff;
+}
+
+/* A publication has four facts; on the three-column grid the date wrapped to
+   a line of its own and left the card half empty. Authors run longest. */
+.pc-card__facts--four {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 0.8fr);
+}
+
+/* Unavailable actions all look the same: a neutral outline with a slate icon.
+   Fading the button's own colour left a muddy pink delete and a ghostly link,
+   and its hover lift still fired on a button that does nothing. */
+.pc-card__actions .action-btn:disabled,
+.pc-card__actions .action-btn[aria-disabled='true'] {
+  border: 1px solid #e6ebf2;
+  background: #f8fafc;
+  color: #b4bfcd;
+  opacity: 1;
+  box-shadow: none;
+  transform: none;
+  cursor: not-allowed;
+}
+
+@media (width <= 768px) {
+  .pc-card__facts,
+  .pc-card__facts--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (width <= 480px) {
+  .pc-card__header {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pc-card__aside {
+    flex-wrap: wrap;
+  }
+
+  .pc-card__facts,
+  .pc-card__facts--four {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -538,3 +538,52 @@
     font-size: 11px;
   }
 }
+
+/* Select Project Type: the same tiles as the Publications page's Select
+   Publication Type, two to a row in a dialog of the same 500px width.
+   `CustomModal`'s `sm` is 400px, too narrow for two tiles that size. */
+.custom-modal.pc-type-modal .modal-dialog.modal-sm {
+  max-width: 500px !important;
+  width: calc(100% - 32px) !important;
+}
+
+.pc-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.pc-type-btn {
+  width: 100%;
+  padding: 20px;
+  border: 2px solid #0069ab;
+  border-radius: 8px;
+  background: #fff;
+  color: #0069ab;
+  font-weight: 500;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.pc-type-btn i {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 24px;
+}
+
+.pc-type-btn:hover,
+.pc-type-btn:focus-visible {
+  background: #0069ab;
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(0, 105, 171, 0.3);
+}
+
+.pc-type-btn:focus-visible {
+  outline: 2px solid #0069ab;
+  outline-offset: 2px;
+}

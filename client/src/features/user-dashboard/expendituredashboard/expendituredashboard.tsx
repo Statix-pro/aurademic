@@ -53,6 +53,25 @@ interface ExpenditureDialogConfig {
   onConfirm?: () => void | Promise<void>;
 }
 
+// AddPayeeModal reports its own validation through showAlert; map each of its
+// four kinds onto a dialog title and variant so an error never renders with a
+// "check your details" heading.
+type PayeeAlertType = 'success' | 'error' | 'warning' | 'info';
+
+const PAYEE_ALERT_TITLES: Record<PayeeAlertType, string> = {
+  success: 'Payee saved',
+  error: 'Payee error',
+  warning: 'Check payee details',
+  info: 'Payee',
+};
+
+const PAYEE_ALERT_VARIANTS: Record<PayeeAlertType, ExpenditureDialogConfig['variant']> = {
+  success: 'info',
+  error: 'danger',
+  warning: 'warning',
+  info: 'info',
+};
+
 interface DashboardReturnState {
   dashboardRowId?: string;
   rowReferenceId?: string;
@@ -570,7 +589,11 @@ const ExpenditureDashboard: React.FC = () => {
       !normalizeText(payee.bankName) ||
       !normalizeText(payee.branchName)
     ) {
-      window.alert('Please enter account name, account number, IFSC, bank name and branch name.');
+      showDialog({
+        title: 'Incomplete payee details',
+        message: 'Please enter account name, account number, IFSC, bank name and branch name.',
+        variant: 'warning',
+      });
       return;
     }
 
@@ -587,6 +610,7 @@ const ExpenditureDashboard: React.FC = () => {
         ifsc: normalizeText(payee.ifsc).toUpperCase(),
         beneficiary_type: payee.beneficiaryType,
         beneficiary_org: normalizeText(payee.beneficiaryOrg) || null,
+        beneficiary_category: normalizeText(payee.beneficiaryCategory) || null,
         organization_type:
           payee.beneficiaryType === 'organization'
             ? normalizeText(payee.organizationType) || null
@@ -603,15 +627,22 @@ const ExpenditureDashboard: React.FC = () => {
         throw new Error(response.message || 'Unable to send payee for approval');
       }
 
-      window.alert(response.message || 'Payee request submitted for DoF approval.');
       setShowAddPayeeModal(false);
+      showDialog({
+        title: 'Payee submitted',
+        message: response.message || 'Payee request submitted for DoF approval.',
+      });
     } catch (error) {
       console.error('Failed to submit payee:', error);
       const apiMessage =
         (error as any)?.response?.data?.message ||
         (error as any)?.response?.data?.error ||
         (error as any)?.message;
-      window.alert(apiMessage || 'Unable to send payee for approval right now.');
+      showDialog({
+        title: 'Payee submission failed',
+        message: apiMessage || 'Unable to send payee for approval right now.',
+        variant: 'danger',
+      });
     } finally {
       setIsSubmittingPayee(false);
     }
@@ -794,7 +825,6 @@ const ExpenditureDashboard: React.FC = () => {
       return String(item.beneficiarytype || '').trim() === selectedBeneficiary;
     });
 
-    let total = 0;
     let pending = 0;
     let returned = 0;
     let approved = 0;
@@ -802,6 +832,11 @@ const ExpenditureDashboard: React.FC = () => {
     // Closed renders as a grouped view, so the KPI counts finance cards rather
     // than individual requests (one card can hold several requests).
     const closedCardIds = new Set<string>();
+    // Active is the counterpart of Closed and must count the same unit - the
+    // finance cards the list renders. Counting requests instead under-reported a
+    // freshly approved card that is listed but has no advance/expenditure/
+    // settlement request raised against it yet.
+    const activeCardIds = new Set<string>();
 
     let totalAmount = 0;
     let pendingAmount = 0;
@@ -837,7 +872,6 @@ const ExpenditureDashboard: React.FC = () => {
         return;
       }
 
-      total++;
       totalAmount += itemAmount;
 
       if (matchesStatusFilter(item, 'pending', closedFinanceIds)) {
@@ -854,8 +888,24 @@ const ExpenditureDashboard: React.FC = () => {
       }
     });
 
+    // Counted off searchFilteredProposalCards, the same list the cards are rendered from, so
+    // this mirrors the "all" branch of filteredProposalCards exactly — including the ref
+    // search. Iterating the unfiltered proposalCards instead made the count contradict the
+    // list the moment a ref was typed, and "all" is precisely the view clicking this KPI
+    // opens. Beneficiary filtering is already applied by searchFilteredProposalCards.
+    searchFilteredProposalCards.forEach((card) => {
+      if (closedFinanceIds.has(card.financeRequestId)) return;
+
+      if (selectedTypeFilter !== 'all') {
+        const rows = cardRows[card.financeRequestId] ?? [];
+        if (!rows.some((row) => row.primaryChoice === selectedTypeFilter)) return;
+      }
+
+      activeCardIds.add(card.financeRequestId);
+    });
+
     return {
-      total,
+      total: activeCardIds.size,
       pending,
       returned,
       approved,
@@ -868,7 +918,14 @@ const ExpenditureDashboard: React.FC = () => {
       pendingPaymentAmount,
       closedAmount,
     };
-  }, [data, closedFinanceIds, selectedBeneficiary, selectedTypeFilter]);
+  }, [
+    cardRows,
+    closedFinanceIds,
+    data,
+    searchFilteredProposalCards,
+    selectedBeneficiary,
+    selectedTypeFilter,
+  ]);
 
   const kpiCards = [
     {
@@ -877,6 +934,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Active',
       value: stats.total,
       amount: stats.totalAmount,
+      hint: 'Proposals not yet finalized. Amount is what has been requested under them so far, so it stays 0 until the first request is raised.',
       icon: <FileText size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -885,6 +943,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Pending',
       value: stats.pending,
       amount: stats.pendingAmount,
+      hint: 'Requests awaiting approval, including resubmitted ones.',
       icon: <Clock size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -893,6 +952,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Return',
       value: stats.returned,
       amount: stats.returnedAmount,
+      hint: 'Requests sent back for correction.',
       icon: <RotateCcw size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -901,6 +961,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Approved',
       value: stats.approved,
       amount: stats.approvedAmount,
+      hint: 'Approved requests still awaiting payment.',
       icon: <CheckCircle2 size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -909,6 +970,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Paid',
       value: stats.pendingPayment,
       amount: stats.pendingPaymentAmount,
+      hint: 'Approved requests already paid, on active and closed proposals alike.',
       icon: <CreditCard size={20} className="expenditure-stats-icon" />,
     },
     {
@@ -917,6 +979,7 @@ const ExpenditureDashboard: React.FC = () => {
       label: 'Closed',
       value: stats.closed,
       amount: stats.closedAmount,
+      hint: 'Proposals finalized via Finalize & Close. Amount is what was requested under them.',
       icon: <Lock size={20} className="expenditure-stats-icon" />,
     },
   ];
@@ -2305,7 +2368,13 @@ const ExpenditureDashboard: React.FC = () => {
               if (!isSubmittingPayee) setShowAddPayeeModal(false);
             }}
             onAddPayee={submitPayeeForApproval}
-            showAlert={(message) => window.alert(String(message))}
+            showAlert={(message, type) =>
+              showDialog({
+                title: PAYEE_ALERT_TITLES[type] ?? 'Payee',
+                message,
+                variant: PAYEE_ALERT_VARIANTS[type] ?? 'info',
+              })
+            }
             submitLabel="Submit for Approval"
             isSubmitting={isSubmittingPayee}
           />
@@ -2325,6 +2394,7 @@ const ExpenditureDashboard: React.FC = () => {
                     onClick={() => setSelectedStatusFilter(card.key)}
                     aria-pressed={isActive}
                     aria-label={`Filter expenditure requests by ${card.label}`}
+                    title={card.hint}
                   >
                     <div className="expenditure-stats-icon-wrap">{card.icon}</div>
                     <div className="expenditure-stats-info">

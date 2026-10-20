@@ -2,8 +2,7 @@ import guesthouseModel from './guesthouseModel.js';
 import { registerWorkflowModule } from '../shared/workflow/workflowModuleRegistry.js';
 
 const guesthouseWorkflowAdapter = {
-  // Keep archived bookings in their original scoped queue so they can be
-  // unarchived by the actor who archived them (or by a super admin).
+  // Keep archived bookings at their original stage for scoped unarchive access.
   preserveStageOnArchive: true,
 
   resolveStartFlow() {
@@ -17,16 +16,6 @@ const guesthouseWorkflowAdapter = {
       ? workflowState.flow.map((value) => String(value).trim().toLowerCase())
       : [];
     return String(workflowState?.status || '').trim().toLowerCase() === 'returned' && flow.includes(stage);
-  },
-
-  canAccessStageByRole({ actor = {}, stageKey = '' } = {}) {
-    const stage = String(stageKey || '').trim().toLowerCase();
-    const roles = Array.isArray(actor.roles) ? actor.roles : [];
-    return roles.some((role) => {
-      if (typeof role === 'string') return role.trim().toLowerCase() === stage;
-      return String(role?.role_code || role?.roleCode || role?.code || role?.role || '')
-        .trim().toLowerCase() === stage;
-    });
   },
 
   async getRecordContext(recordId, options = {}) {

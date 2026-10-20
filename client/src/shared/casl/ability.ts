@@ -17,7 +17,6 @@ export type Subjects =
   | 'AccessControl'
   | 'MasterData'
   | 'GuestHouse'
-  | 'Vehicle'
   | 'Profile'
   | 'all'; // CASL's wildcard for "everything"
 
@@ -67,10 +66,6 @@ const PERMISSION_MAP: Record<string, { action: Actions; subject: Subjects }> = {
   // Access Control
   'access_control.read': { action: 'read', subject: 'AccessControl' },
   'access_control.manage': { action: 'manage', subject: 'AccessControl' },
-
-  // Vehicle booking
-  'vehicle.manage': { action: 'manage', subject: 'Vehicle' },
-  'guesthouse.manage': { action: 'manage', subject: 'GuestHouse' },
 };
 
 const parseDynamicPermission = (permissionKey: string) => {

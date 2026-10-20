@@ -1,9 +1,13 @@
+import { FilePen } from 'lucide-react';
 import React, { useState, useEffect, ChangeEvent, MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import '../../user-dashboard/userdashboard.css';
+import '../recordCard.css';
 import './PublicationsPage.css';
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomModal from '../../../shared/components/ui/CustomModal';
 import DeleteConfirmationModal from '../../../shared/components/ui/DeleteConfirmationModal';
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected';
@@ -56,6 +60,21 @@ const normalizeApprovalStatus = (value: string | null | undefined): ApprovalStat
 
 const PublicationsPage: React.FC = () => {
   const navigate = useNavigate();
+
+  // Feedback uses the app's own modal instead of window.alert, so it matches the rest of
+  // the product and does not announce the browser origin.
+  const [alertConfig, setAlertConfig] = useState<{
+    show: boolean;
+    message: React.ReactNode;
+    type: AlertType;
+    title?: string;
+  }>({ show: false, message: '', type: 'info' });
+
+  const closeAlert = () => setAlertConfig((prev) => ({ ...prev, show: false }));
+
+  const showAlert = (message: React.ReactNode, type: AlertType = 'info', title?: string) => {
+    setAlertConfig({ show: true, message, type, title });
+  };
   const [journals, setJournals] = useState<Journal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -253,13 +272,17 @@ const PublicationsPage: React.FC = () => {
       )) as any;
 
       if (response && response.success === true) {
-        alert(response.message || 'Edit request sent to admin for approval');
+        showAlert(
+          response.message || 'Edit request sent to admin for approval.',
+          'success',
+          'Request Sent',
+        );
       } else {
-        alert(response.message || 'Failed to send edit request');
+        showAlert(response.message || 'Failed to send edit request.', 'error');
       }
     } catch (error: any) {
       console.error('Error sending edit request:', error);
-      alert(error.response?.data?.message || 'Failed to send edit request');
+      showAlert(error.response?.data?.message || 'Failed to send edit request.', 'error');
     } finally {
       setShowEditRequestModal(false);
       setSelectedJournalForEditRequest(null);
@@ -306,88 +329,49 @@ const PublicationsPage: React.FC = () => {
           ? 'Rejected'
           : 'Pending Approval';
 
+    const statusKey = (value?: string | null) =>
+      (value ?? '').toLowerCase().replace(/[^a-z0-9]/g, '-');
+    const isPublished = journal.status === 'published';
+    const dateLabel = isPublished ? 'Published' : 'Submitted';
+    const dateValue =
+      isPublished && journal.available_online_date
+        ? formatMonthYear(journal.available_online_date)
+        : journal.date_of_submission
+          ? formatDate(journal.date_of_submission)
+          : '—';
+
     return (
-      <div key={journal.id} className="research-card compact-row">
-        <div className="d-flex w-100 align-items-start">
-          <div className="compact-content flex-grow-1 pe-3">
-            <div className="mb-2">
-              <h6
-                className="research-title mb-0"
-                style={{ fontSize: '1.1rem', fontWeight: '600', color: '#161616' }}
-              >
-                {journal.title}
-              </h6>
-            </div>
-
-            <div className="mb-2 text-truncate-2-lines">
-              <span className="text-muted" style={{ fontSize: '0.9rem', marginRight: '5px' }}>
-                Authors:
-              </span>
-              <span style={{ fontSize: '0.95rem', color: '#393939' }}>
-                {journal.authors?.split(', ').map((author, index) => {
-                  let displayName = author;
-                  let hasStar = false;
-
-                  // Check for first author asterisk
-                  if (displayName.endsWith('*')) {
-                    hasStar = true;
-                    displayName = displayName.slice(0, -1);
-                  }
-
-                  return (
-                    <span key={index}>
-                      {index > 0 && ', '}
-                      {displayName}
-                      {hasStar && <span style={{ color: 'red', fontWeight: 'bold' }}>*</span>}
-                    </span>
-                  );
-                })}
-              </span>
-            </div>
-
-            <div
-              className="d-flex flex-wrap align-items-center text-muted"
-              style={{ fontSize: '0.85rem' }}
-            >
-              <span className="me-2">
-                Journal: <span className="text-dark">{journal.journal_name}</span>
-              </span>
-              <span className="mx-2">•</span>
-              <span className="me-2">
-                Publisher: <span className="text-dark">{journal.publisher || 'Not specified'}</span>
-              </span>
-            </div>
-
-            {approvalStatus === 'rejected' && journal.admin_approval_comment ? (
-              <div className="approval-comment mt-2">
-                <span className="fw-semibold">Admin Comment:</span> {journal.admin_approval_comment}
-              </div>
-            ) : null}
+      <article key={journal.id} className="research-card pc-card">
+        <header className="pc-card__header pc-card__header--top">
+          <div className="pc-card__heading">
+            <span className="pc-card__id" aria-label={`Publication ID ${journal.id}`}>
+              #{journal.id}
+            </span>
+            <h6 className="pc-card__title pc-card__title--clamp" title={journal.title}>
+              {journal.title}
+            </h6>
           </div>
 
-          <div
-            className="metadata-fixed-column text-end"
-            style={{ minWidth: '250px', flexShrink: 0 }}
-          >
-            <div
-              className="research-actions mb-3 d-flex justify-content-end align-items-center"
-              role="group"
-              aria-label="Publication actions"
-            >
+          {/* The same line as the project card: what the record is and where it
+              stands, then what can be done with it. */}
+          <div className="pc-card__aside">
+            {journal.type && <span className="pc-status pc-status--type">{journal.type}</span>}
+            {journal.status && (
               <span
-                className={`type-badge me-2 type-${journal.type
-                  ?.toLowerCase()
-                  .replace(/[^a-z0-9]/g, '-')}`}
-                style={{
-                  padding: '6px 10px',
-                  fontSize: '0.75rem',
-                  borderRadius: '4px',
-                  height: 'fit-content',
-                }}
+                className={`pc-status pc-status--${statusKey(journal.status)}`}
+                title="Submission status"
               >
-                {journal.type}
+                {journal.status}
               </span>
+            )}
+            <span
+              className={`pc-status pc-status--${approvalStatus}`}
+              title="Admin approval status"
+            >
+              {approvalLabel}
+            </span>
 
+            <div className="pc-card__actions" role="group" aria-label="Publication actions">
               <button
                 className="action-btn view-btn"
                 onClick={() => handleView(journal.id)}
@@ -416,7 +400,6 @@ const PublicationsPage: React.FC = () => {
                   disabled
                   title="No DOI available"
                   aria-label="No DOI available"
-                  style={{ opacity: 0.4, cursor: 'not-allowed' }}
                 >
                   <i className="fas fa-link" aria-hidden="true"></i>
                 </button>
@@ -438,7 +421,7 @@ const PublicationsPage: React.FC = () => {
                   title="Request edit approval"
                   aria-label="Request edit approval"
                 >
-                  <i className="fas fa-paper-plane" aria-hidden="true"></i>
+                  <i className="fas fa-file-pen" aria-hidden="true"></i>
                 </button>
               ) : (
                 <button
@@ -446,7 +429,6 @@ const PublicationsPage: React.FC = () => {
                   disabled
                   title="Edit is currently unavailable"
                   aria-label="Edit unavailable"
-                  style={{ opacity: 0.4, cursor: 'not-allowed' }}
                 >
                   <i className="fas fa-edit" aria-hidden="true"></i>
                 </button>
@@ -462,49 +444,53 @@ const PublicationsPage: React.FC = () => {
                     : 'Delete is disabled after admin approval and publication'
                 }
                 aria-label="Delete publication"
-                style={canDelete ? undefined : { opacity: 0.4, cursor: 'not-allowed' }}
               >
                 <i className="fas fa-trash" aria-hidden="true"></i>
               </button>
             </div>
-
-            <div className="d-flex flex-column align-items-end gap-1 mt-2">
-              <div className="d-flex align-items-center gap-2">
-                <span
-                  className={`status-badge status-${journal.status
-                    ?.toLowerCase()
-                    .replace(/[^a-z0-9]/g, '-')}`}
-                  style={{
-                    padding: '4px 8px',
-                    fontSize: '0.75rem',
-                    borderRadius: '4px',
-                    display: 'inline-block',
-                  }}
-                  title="Submission Status"
-                >
-                  {journal.status}
-                </span>
-                <span
-                  className={`approval-badge approval-${approvalStatus}`}
-                  title="Admin Approval Status"
-                >
-                  {approvalLabel}
-                </span>
-              </div>
-              <span className="text-muted" style={{ fontSize: '0.75rem' }}>
-                {journal.status === 'published' ? 'Published: ' : 'Submitted: '}
-                {journal.status === 'published' && journal.available_online_date
-                  ? formatMonthYear(journal.available_online_date)
-                  : formatDate(journal.date_of_submission)}
-                <span className="mx-2">•</span>
-                <span className="research-id" aria-label={`Publication ID ${journal.id}`}>
-                  ID: {journal.id}
-                </span>
-              </span>
-            </div>
           </div>
-        </div>
-      </div>
+        </header>
+
+        <dl className="pc-card__facts pc-card__facts--four">
+          <div className="pc-fact">
+            <dt>Authors</dt>
+            <dd className="pc-fact__clamp" title={journal.authors?.replace(/\*/g, '')}>
+              {journal.authors
+                ? journal.authors.split(', ').map((author, index) => {
+                    // A trailing asterisk marks the first author.
+                    const hasStar = author.endsWith('*');
+                    const displayName = hasStar ? author.slice(0, -1) : author;
+                    return (
+                      <span key={index}>
+                        {index > 0 && ', '}
+                        {displayName}
+                        {hasStar && <span className="pc-fact__star">*</span>}
+                      </span>
+                    );
+                  })
+                : '—'}
+            </dd>
+          </div>
+          <div className="pc-fact">
+            <dt>Journal</dt>
+            <dd title={journal.journal_name}>{journal.journal_name || '—'}</dd>
+          </div>
+          <div className="pc-fact">
+            <dt>Publisher</dt>
+            <dd title={journal.publisher}>{journal.publisher || '—'}</dd>
+          </div>
+          <div className="pc-fact">
+            <dt>{dateLabel}</dt>
+            <dd>{dateValue}</dd>
+          </div>
+        </dl>
+
+        {approvalStatus === 'rejected' && journal.admin_approval_comment ? (
+          <p className="pc-card__note">
+            <strong>Admin comment:</strong> {journal.admin_approval_comment}
+          </p>
+        ) : null}
+      </article>
     );
   };
 
@@ -736,44 +722,39 @@ const PublicationsPage: React.FC = () => {
           </div>
         )}
 
-        {showEditRequestModal && selectedJournalForEditRequest && (
-          <div className="category-modal-overlay" onClick={handleCancelEditRequest}>
-            <div className="category-modal" onClick={(e: MouseEvent) => e.stopPropagation()}>
-              <div className="category-modal-header">
-                <h5 className="category-modal-title">Request Edit Access</h5>
-                <button
-                  type="button"
-                  className="category-modal-close"
-                  onClick={handleCancelEditRequest}
-                  aria-label="Close"
-                >
-                  ×
-                </button>
-              </div>
-              <div className="category-modal-body">
-                <p>
-                  Send edit request for <strong>{selectedJournalForEditRequest.title}</strong>?
-                </p>
-                <div className="d-flex justify-content-end gap-2 mt-4">
-                  <button
-                    type="button"
-                    className="btn btn-secondary"
-                    onClick={handleCancelEditRequest}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleConfirmEditRequest}
-                  >
-                    Confirm
-                  </button>
-                </div>
-              </div>
+        {/* Same compact dialog as the delete confirmation below, so the two
+            confirmations on this page look alike. */}
+        <CustomModal
+          show={showEditRequestModal && !!selectedJournalForEditRequest}
+          onHide={handleCancelEditRequest}
+          title="Request Edit Access"
+          size="sm"
+          centered
+          footer={
+            <div className="d-flex justify-content-end gap-2 w-100">
+              <button className="btn btn-secondary btn-sm" onClick={handleCancelEditRequest}>
+                Cancel
+              </button>
+              <button className="btn btn-primary btn-sm" onClick={handleConfirmEditRequest}>
+                Send Request
+              </button>
+            </div>
+          }
+        >
+          <div className="d-flex align-items-center p-3">
+            <div className="text-primary me-3">
+              <FilePen size={32} />
+            </div>
+            <div className="flex-grow-1">
+              <p className="mb-0 fw-semibold" style={{ fontSize: '0.95rem' }}>
+                Send edit request for {selectedJournalForEditRequest?.title}?
+              </p>
+              <small className="text-muted d-block" style={{ fontSize: '0.8rem' }}>
+                An admin must approve it before you can edit.
+              </small>
             </div>
           </div>
-        )}
+        </CustomModal>
         {/* Delete Confirmation Modal */}
         <DeleteConfirmationModal
           show={showDeleteModal}
@@ -781,6 +762,14 @@ const PublicationsPage: React.FC = () => {
           onConfirm={confirmDelete}
           itemName={journalToDelete?.title}
           isDeleting={isDeleting}
+        />
+
+        <AlertModal
+          show={alertConfig.show}
+          onHide={closeAlert}
+          message={alertConfig.message}
+          type={alertConfig.type}
+          title={alertConfig.title}
         />
       </div>
     </div>

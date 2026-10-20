@@ -50,6 +50,13 @@ export const hasAnyPermission = (user: User | null | undefined, permissionKeys: 
   return permissionKeys.some((permissionKey) => permissionSet.has(permissionKey));
 };
 
+export const isAdminActor = (user?: User | null) =>
+  Boolean(user) && (isSuperAdmin(user) || Boolean(user.is_admin));
+
+export const canManageFormOptions = (user?: User | null) =>
+  isAdminActor(user) &&
+  (isSuperAdmin(user) || hasAnyPermission(user, ['form_options.read', 'form_options.edit', 'form_options.manage']));
+
 export const canAccessAdminArea = (user?: User | null) => {
   if (!user) {
     return false;
@@ -160,10 +167,9 @@ const GUESTHOUSE_WORKFLOW_STAGES: GuesthouseWorkflowStage[] = [
 export const getGuesthouseWorkflowStages = (user?: User | null): GuesthouseWorkflowStage[] => {
   if (!user) return [];
   if (isSuperAdmin(user)) return [...GUESTHOUSE_WORKFLOW_STAGES];
-  const roleCodes = new Set(normalizeRoleCodes(user).map((role) => role.toLowerCase()));
   const permissions = new Set(normalizePermissionKeys(user));
   return GUESTHOUSE_WORKFLOW_STAGES.filter((stage) =>
-    roleCodes.has(stage) || permissions.has(`guesthouse.workflow.${stage}`),
+    permissions.has(`guesthouse.workflow.${stage}`),
   );
 };
 

@@ -9,6 +9,7 @@ vi.mock('../modules/guesthouse/guesthouseModel.js', () => ({
     getActiveEmployeeIdByEmail: vi.fn(),
     beginTransaction: vi.fn(),
     getGuesthouseBookingById: vi.fn(),
+    canAccessGuesthouseBookingInQueue: vi.fn(),
   },
 }));
 
@@ -111,13 +112,46 @@ describe('Guest House authorization and date-time validation', () => {
     }, response);
 
     expect(response.statusCode).toBe(200);
-    expect(guesthouseModel.listAccessibleGuesthouseBookingIds).toHaveBeenCalledWith([
-      { stage: 'hod', filters: { forceAll: true } },
-    ]);
+    expect(guesthouseModel.listAccessibleGuesthouseBookingIds).not.toHaveBeenCalled();
     expect(guesthouseModel.listGuesthouseBookings).toHaveBeenCalledWith(expect.objectContaining({
-      createdByUserId: undefined,
-      bookingIds: [43],
+      createdByUserId: 8,
+      bookingIds: undefined,
     }));
+  });
+
+  it('does not allow guesthouse.read to expose another user’s booking', async () => {
+    guesthouseModel.getGuesthouseBookingById.mockResolvedValue({
+      id: 55,
+      created_by: 99,
+      workflow_state: { flow: ['hod'], currentStage: 'hod', status: 'in_progress' },
+    });
+    const response = makeResponse();
+
+    await guesthouseController.getGuesthouseBooking({
+      params: { id: '55' },
+      user: { id: 7, permissions: ['guesthouse.read'] },
+    }, response);
+
+    expect(response.statusCode).toBe(403);
+    expect(response.body.success).toBe(false);
+    expect(guesthouseModel.canAccessGuesthouseBookingInQueue).not.toHaveBeenCalled();
+  });
+
+  it('does not treat a stage role name as workflow permission', async () => {
+    guesthouseModel.getGuesthouseBookingById.mockResolvedValue({
+      id: 56,
+      created_by: 99,
+      workflow_state: { flow: ['guesthouse_admin'], currentStage: 'guesthouse_admin', status: 'in_progress' },
+    });
+    const response = makeResponse();
+
+    await guesthouseController.getGuesthouseBooking({
+      params: { id: '56' },
+      user: { id: 7, roles: ['guesthouse_admin'], permissions: [] },
+    }, response);
+
+    expect(response.statusCode).toBe(403);
+    expect(guesthouseModel.canAccessGuesthouseBookingInQueue).not.toHaveBeenCalled();
   });
 
   it('rejects a same-day stay whose checkout instant is not after check-in', async () => {

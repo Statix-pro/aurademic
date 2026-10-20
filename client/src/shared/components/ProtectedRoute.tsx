@@ -6,7 +6,6 @@ import {
   canAccessAdminArea,
   canAccessBudgetApproval,
   canAccessFinanceWorkflow,
-  canAccessGuesthouseWorkflow,
   canAccessModuleWorkflow,
   canManageAccessControl,
   canAccessExpenditureWorkflow,
@@ -30,6 +29,13 @@ export const ProtectedRoute: React.FC<RouteProps> = ({ children }) => {
   return <>{children}</>;
 };
 
+/*
+ * A denied route sends the person to `/dashboard`, not `/home`. There has never
+ * been a `/home` route, so every one of these redirects landed on an unmatched
+ * path — which, before the catch-all in App.tsx, was a blank document. The
+ * dashboard is the one page everyone who is signed in can open.
+ */
+
 export const AdminRoute: React.FC<RouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
 
@@ -38,7 +44,7 @@ export const AdminRoute: React.FC<RouteProps> = ({ children }) => {
   }
 
   if (!user || !canAccessAdminArea(user)) {
-    return <Navigate to="/home" />;
+    return <Navigate to="/dashboard" />;
   }
 
   return <>{children}</>;
@@ -52,7 +58,7 @@ export const SuperAdminRoute: React.FC<RouteProps> = ({ children }) => {
   }
 
   if (!user || !canManageAccessControl(user)) {
-    return <Navigate to="/home" />;
+    return <Navigate to="/dashboard" />;
   }
 
   return <>{children}</>;
@@ -66,7 +72,7 @@ export const BudgetApprovalRoute: React.FC<RouteProps> = ({ children }) => {
   }
 
   if (!user || !canAccessBudgetApproval(user)) {
-    return <Navigate to="/home" />;
+    return <Navigate to="/dashboard" />;
   }
 
   return <>{children}</>;
@@ -80,21 +86,7 @@ export const FinanceWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
   }
 
   if (!user || !canAccessFinanceWorkflow(user)) {
-    return <Navigate to="/home" />;
-  }
-
-  return <>{children}</>;
-};
-
-export const GuesthouseWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
-  const { user, loading } = useAuth();
-
-  if (loading) {
-    return <div>Loading...</div>;
-  }
-
-  if (!user || !canAccessGuesthouseWorkflow(user)) {
-    return <Navigate to="/guesthouse-dashboard" />;
+    return <Navigate to="/dashboard" />;
   }
 
   return <>{children}</>;
@@ -112,7 +104,7 @@ export const ModuleWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
   }
 
   if (!user || !moduleKey || !canAccessModuleWorkflow(user, moduleKey)) {
-    return <Navigate to="/home" />;
+    return <Navigate to="/dashboard" />;
   }
 
   return <>{children}</>;

@@ -1,0 +1,81 @@
+/* Shared by the journal and project forms: says the record is open read-only and,
+   when the viewer may change it, offers the way into editing. */
+.view-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  margin-bottom: 1rem;
+  background: linear-gradient(90deg, #eaf4ff 0%, #ffffff 100%);
+  border: 1px solid #d4e6f8;
+  border-left: 4px solid #0069ab;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 105, 171, 0.06);
+}
+
+.view-mode-banner__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: #d8eaff;
+  color: #0069ab;
+}
+
+.view-mode-banner__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.view-mode-banner__text strong {
+  color: #0b3d63;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.view-mode-banner__text span {
+  color: #5a6b80;
+  font-size: 0.85rem;
+}
+
+.view-mode-banner__action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 7px 16px;
+  border: none;
+  border-radius: 8px;
+  background-color: #0069ab;
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.view-mode-banner__action:hover {
+  background-color: #005286;
+  color: #fff;
+}
+
+.view-mode-banner__action:disabled {
+  background-color: #e6ebf2;
+  color: #94a3b8;
+  opacity: 1;
+}
+
+@media (max-width: 576px) {
+  .view-mode-banner {
+    flex-wrap: wrap;
+  }
+
+  .view-mode-banner__action {
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -1,5 +1,115 @@
 import db from '../../config/connection.js';
 
+/**
+ * National/International is a property of the journal itself, curated by admins in
+ * Journal Management (`journal_options.category`). `journals.category` is only a
+ * snapshot of it, so it is always derived from the linked option rather than trusted
+ * from the submitted form — otherwise a publication keeps reporting the default
+ * 'National' after an admin has set the journal to 'International'.
+ */
+const VALID_CATEGORIES = ['National', 'International'];
+
+const normalizeCategory = (value, fallback = 'National') => {
+  const match = VALID_CATEGORIES.find(
+    (category) =>
+      category.toLowerCase() ===
+      String(value || '')
+        .trim()
+        .toLowerCase(),
+  );
+  return match || fallback;
+};
+
+/** Types that have no journal and therefore stand in with a placeholder registry row. */
+const PLACEHOLDER_OPTION_TYPES = ['Conference paper', 'Book Chapter', 'Book'];
+
+const usesPlaceholderOption = (type) => PLACEHOLDER_OPTION_TYPES.includes(type);
+
+/**
+ * Finds or creates the stand-in registry row for a book/chapter/conference. The lookup is
+ * confined to placeholder rows so a book never latches onto a real journal that happens
+ * to share its title (and vice versa).
+ */
+const resolvePlaceholderOptionId = async (executor, name) => {
+  const placeholderName = String(name || '').trim() || 'Placeholder';
+
+  const [existing] = await executor.query(
+    'SELECT id FROM journal_options WHERE journal_name = ? AND is_placeholder = 1 ORDER BY id LIMIT 1',
+    [placeholderName],
+  );
+  if (existing.length > 0) {
+    return existing[0].id;
+  }
+
+  const [inserted] = await executor.query(
+    `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, is_placeholder)
+     VALUES (?, '', '', '', '', 1)`,
+    [placeholderName],
+  );
+  return inserted.insertId;
+};
+
+/**
+ * Accepts the picker's `journal_options_id` only when the row it points at agrees with the
+ * rest of the submission. Two things have to hold:
+ *
+ *  - the row suits the publication type: a placeholder type (Book/Chapter/Conference) must
+ *    land on a placeholder row, and a Journal on a curated one;
+ *  - the row's name is the name that was submitted, since the picker fills that field from
+ *    the entry the user chose. An id that names a different journal is a stale or crafted
+ *    one, and honouring it would publish that journal's publisher, ISSNs and
+ *    National/International value on this publication.
+ *
+ * Two entries can legitimately share a name, so the check does not defeat the reason the
+ * id is preferred over the name in the first place. A submission that carries no name has
+ * nothing to contradict the id (Book and Book Chapter submit an empty name), so only a
+ * non-empty name is compared. Returning null falls back to resolution by name.
+ */
+const resolveRequestedOptionId = async (executor, rawId, publicationType, submittedName = '') => {
+  const requestedOptionId = Number(rawId);
+  if (!Number.isInteger(requestedOptionId) || requestedOptionId <= 0) {
+    return null;
+  }
+
+  const [rows] = await executor.query(
+    'SELECT id, journal_name, is_placeholder FROM journal_options WHERE id = ?',
+    [requestedOptionId],
+  );
+  if (rows.length === 0) {
+    return null;
+  }
+
+  const isPlaceholderRow = Boolean(rows[0].is_placeholder);
+  if (isPlaceholderRow !== usesPlaceholderOption(publicationType)) {
+    return null;
+  }
+
+  const normalize = (value) =>
+    String(value || '')
+      .trim()
+      .toLowerCase();
+  const requestedName = normalize(submittedName);
+  if (requestedName && normalize(rows[0].journal_name) !== requestedName) {
+    return null;
+  }
+
+  return rows[0].id;
+};
+
+const resolveOptionCategory = async (executor, journalOptionsId, submittedCategory) => {
+  if (!journalOptionsId) {
+    return normalizeCategory(submittedCategory);
+  }
+
+  const [rows] = await executor.query('SELECT category FROM journal_options WHERE id = ?', [
+    journalOptionsId,
+  ]);
+
+  // A placeholder option (Conference/Book/Book Chapter) carries no curated category,
+  // so those publications fall back to whatever the form reported.
+  return normalizeCategory(rows[0]?.category, normalizeCategory(submittedCategory));
+};
+
 const journalModel = {
   async create(journalData) {
     const connection = await db.getConnection();
@@ -9,49 +119,60 @@ const journalModel = {
       // First, get or create journal option with upsert logic
       // For Conference, Book Chapter, and Book, journal_name might be empty
       // In that case, we'll create a placeholder entry or use a default
-      let journalOptionsId;
 
       // Check if this is a type that uses publication_details instead of journal_options
-      const usesPublicationDetails =
-        journalData.type === 'Conference paper' ||
-        journalData.type === 'Book Chapter' ||
-        journalData.type === 'Book';
+      const usesPublicationDetails = usesPlaceholderOption(journalData.type);
 
-      if (usesPublicationDetails && !journalData.journal_name) {
-        // For these types, create a minimal journal_option entry with a placeholder name
-        // or use a default entry. We'll use the title as a placeholder.
-        const placeholderName = journalData.title || 'Placeholder';
-        const [existingOptions] = await connection.query(
-          'SELECT id FROM journal_options WHERE journal_name = ?',
-          [placeholderName],
+      // The picker knows exactly which registry entry the user chose, so prefer its id
+      // once the row is confirmed to suit this publication type. Resolving by name alone
+      // silently swapped in a different entry whenever two share a name — and since each
+      // copy carries its own National/International value, the publication came out on
+      // the wrong level.
+      let journalOptionsId = await resolveRequestedOptionId(
+        connection,
+        journalData.journal_options_id,
+        journalData.type,
+        journalData.journal_name,
+      );
+
+      if (journalOptionsId) {
+        // Already resolved by id; nothing to look up by name.
+      } else if (usesPublicationDetails) {
+        // Books, chapters and conference papers have no journal, but
+        // journals.journal_options_id is NOT NULL, so they get a stand-in row named after
+        // themselves. The type decides this, not whether a name happens to be present:
+        // a conference paper submits its conference title as the "journal name", which
+        // used to take the branch below and publish the conference into the picker as a
+        // selectable journal.
+        journalOptionsId = await resolvePlaceholderOptionId(
+          connection,
+          journalData.journal_name || journalData.title,
         );
-
-        if (existingOptions.length > 0) {
-          journalOptionsId = existingOptions[0].id;
-        } else {
-          const [result] = await connection.query(
-            'INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn) VALUES (?, ?, ?, ?, ?)',
-            [placeholderName, '', '', '', ''],
-          );
-          journalOptionsId = result.insertId;
-        }
       } else {
         // For Journal type, use the normal logic
+        // Deterministic fallback for submissions that carry no option id (older clients).
         const [existingOptions] = await connection.query(
-          'SELECT id FROM journal_options WHERE journal_name = ?',
+          'SELECT id FROM journal_options WHERE journal_name = ? ORDER BY id LIMIT 1',
           [journalData.journal_name],
         );
 
         if (existingOptions.length > 0) {
           journalOptionsId = existingOptions[0].id;
 
-          // Update existing journal_options with new data if provided
+          // Fill in registry gaps from the submission, but never blank a value the admin
+          // already curated: the publication form mirrors these fields read-only, so an
+          // empty string here means "not captured", not "clear it".
           const updateData = {};
-          if (journalData.publisher !== undefined) updateData.publisher = journalData.publisher;
-          if (journalData.website !== undefined) updateData.website = journalData.website;
-          if (journalData.print_issn !== undefined) updateData.print_issn = journalData.print_issn;
-          if (journalData.online_issn !== undefined)
-            updateData.online_issn = journalData.online_issn;
+          const fillIfProvided = (field) => {
+            const value = journalData[field];
+            if (typeof value === 'string' && value.trim() !== '') {
+              updateData[field] = value.trim();
+            }
+          };
+          fillIfProvided('publisher');
+          fillIfProvided('website');
+          fillIfProvided('print_issn');
+          fillIfProvided('online_issn');
 
           if (Object.keys(updateData).length > 0) {
             await connection.query('UPDATE journal_options SET ? WHERE id = ?', [
@@ -77,7 +198,7 @@ const journalModel = {
 
       // Prepare journal data
       const journalEntry = {
-        category: journalData.category,
+        category: await resolveOptionCategory(connection, journalOptionsId, journalData.category),
         title: journalData.title,
         book_chapter_title: journalData.book_chapter_title || null,
         type: journalData.type,
@@ -105,6 +226,9 @@ const journalModel = {
         doi: journalData.doi,
         credit_to: journalData.credit_to ? JSON.stringify(journalData.credit_to) : null,
         reference_number: journalData.reference_number,
+        // Who filed the submission. Access used to be inferred from authorship alone, so
+        // a submitter who did not credit themselves lost the record immediately.
+        created_by: journalData.created_by || null,
         accepted_date: journalData.accepted_date,
         available_online_date: journalData.available_online_date,
         publication_details: journalData.publication_details
@@ -180,33 +304,100 @@ const journalModel = {
     }
   },
 
-  async updateJournalAndOptions(journalId, journalData, journalOptionsData) {
+  /**
+   * Saves an edit to one publication.
+   *
+   * `journal_options` is a registry shared by every publication that cites the journal,
+   * so an edit here never writes to it: renaming it from one publication's form used to
+   * rename the journal for all of them (and a Book, which submits an empty name, blanked
+   * the row outright). Instead a changed name re-points this publication at the matching
+   * registry entry, and `journals.category` is re-derived from whatever entry it ends up on.
+   */
+  async updateJournalAndOptions(journalId, journalData, journalOptionsData = {}) {
+    const connection = await db.getConnection();
     try {
-      // Retrieve the journal_options_id from the journals table using the journalId directly
-      const [journalRows] = await db.query('SELECT journal_options_id FROM journals WHERE id = ?', [
-        journalId,
-      ]);
+      await connection.beginTransaction();
+
+      const [journalRows] = await connection.query(
+        `SELECT j.journal_options_id, j.type, jo.journal_name
+           FROM journals j
+           LEFT JOIN journal_options jo ON jo.id = j.journal_options_id
+          WHERE j.id = ?`,
+        [journalId],
+      );
       if (!journalRows || journalRows.length === 0) {
         throw new Error('Journal not found');
       }
-      const journalOptionsId = journalRows[0].journal_options_id;
 
-      // Update the journal_options table if there is data to update
-      if (Object.keys(journalOptionsData).length > 0) {
-        await db.query('UPDATE journal_options SET ? WHERE id = ?', [
-          journalOptionsData,
-          journalOptionsId,
-        ]);
+      let journalOptionsId = journalRows[0].journal_options_id;
+      const currentName = journalRows[0].journal_name || '';
+      const submittedName =
+        typeof journalOptionsData.journal_name === 'string'
+          ? journalOptionsData.journal_name.trim()
+          : '';
+
+      // An empty name means the form had nothing to say about the journal (Book and
+      // Book Chapter always do), not that the link should be dropped.
+      // The type on the record wins over anything the form claims, so a rename cannot
+      // turn a book's stand-in row into a real journal or vice versa.
+      const publicationType = journalData.type || journalRows[0].type;
+
+      // Prefer the id the picker sent, for the same reason create() does: two entries can
+      // share a name but carry different National/International values. The id is only
+      // honoured when the row suits `publicationType`.
+      const resolvedOptionId = await resolveRequestedOptionId(
+        connection,
+        journalOptionsData.journal_options_id,
+        publicationType,
+        submittedName,
+      );
+      const resolvedById = resolvedOptionId !== null;
+      if (resolvedById) {
+        journalOptionsId = resolvedOptionId;
       }
 
-      // Update the journals table if there is data to update
-      if (Object.keys(journalData).length > 0) {
-        await db.query('UPDATE journals SET ? WHERE id = ?', [journalData, journalId]);
+      if (!resolvedById && submittedName && submittedName !== currentName) {
+        if (usesPlaceholderOption(publicationType)) {
+          journalOptionsId = await resolvePlaceholderOptionId(connection, submittedName);
+        } else {
+          const [matchingOptions] = await connection.query(
+            'SELECT id FROM journal_options WHERE journal_name = ? AND is_placeholder = 0 ORDER BY id LIMIT 1',
+            [submittedName],
+          );
+
+          if (matchingOptions.length > 0) {
+            journalOptionsId = matchingOptions[0].id;
+          } else {
+            const [inserted] = await connection.query(
+              'INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn) VALUES (?, ?, ?, ?, ?)',
+              [
+                submittedName,
+                journalOptionsData.publisher || '',
+                journalOptionsData.website || '',
+                journalOptionsData.print_issn || '',
+                journalOptionsData.online_issn || '',
+              ],
+            );
+            journalOptionsId = inserted.insertId;
+          }
+        }
       }
 
+      const updateData = {
+        ...journalData,
+        journal_options_id: journalOptionsId,
+        category: await resolveOptionCategory(connection, journalOptionsId, journalData.category),
+      };
+
+      await connection.query('UPDATE journals SET ? WHERE id = ?', [updateData, journalId]);
+
+      await connection.commit();
       return { success: true };
     } catch (error) {
+      await connection.rollback();
       throw new Error(`Error updating journal: ${error.message}`);
+    } finally {
+      connection.release();
     }
   },
 
@@ -274,9 +465,12 @@ const journalModel = {
         if (existingStudentRows.length > 0) {
           studentId = existingStudentRows[0].id;
         } else {
+          // author_students has no country column; the country lives on the `authors` row
+          // created below. Including it here made every new student author fail with
+          // "Unknown column 'country' in 'field list'".
           const [studentInsert] = await connection.query(
-            'INSERT INTO author_students (student_unique_id, name, department, organization, country) VALUES (?, ?, ?, ?, ?)',
-            [author_id, name, department, organization, country],
+            'INSERT INTO author_students (student_unique_id, name, department, organization) VALUES (?, ?, ?, ?)',
+            [author_id, name, department, organization],
           );
           studentId = studentInsert.insertId;
         }
@@ -394,13 +588,21 @@ const journalModel = {
           v.organization,
           v.author_type,
           v.erp_id AS author_id,
+          v.student_ref,
+          -- For a student, v_authors puts the register number in erp_id. The form keeps
+          -- register numbers in their own field, and without this the row came back
+          -- looking like a faculty member whose ERP id was a register number.
+          CASE WHEN v.student_ref IS NOT NULL THEN v.erp_id END AS student_id,
           v.orcid_id,
           v.scopus_id,
+          a.country,
+          a.state,
           aj.id AS dbAuthorId,
           aj.is_first_author,
           aj.is_primary
         FROM v_authors v
         JOIN author_journal aj ON v.author_id = aj.author_id
+        LEFT JOIN authors a ON a.id = v.author_id
         WHERE aj.journal_id = ?`,
         [journalId],
       );
@@ -481,6 +683,62 @@ const journalModel = {
     }
   },
 
+  /**
+   * Removes one faculty/student author from a publication. External authors live in
+   * `journals.external_details` and are rewritten wholesale on save, so only the
+   * `author_journal` link needs deleting here; the shared `authors` row is left alone
+   * because other publications may still cite it.
+   */
+  async deleteAuthorFromJournal(journalId, dbAuthorId) {
+    try {
+      const [result] = await db.query(
+        'DELETE FROM author_journal WHERE id = ? AND journal_id = ?',
+        [dbAuthorId, journalId],
+      );
+      return result;
+    } catch (error) {
+      throw new Error(`Error removing author from journal: ${error.message}`);
+    }
+  },
+
+  /**
+   * Replaces the whole index set for a publication. The edit flow used to re-POST every
+   * selected index on each save, which duplicated rows and left de-selected indexes behind.
+   */
+  async replaceIndexes(journalId, indexNames) {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+
+      await connection.query('DELETE FROM journal_indexes WHERE journal_id = ?', [journalId]);
+
+      const seen = new Set();
+      const cleanNames = [];
+      (Array.isArray(indexNames) ? indexNames : []).forEach((name) => {
+        const trimmed = String(name || '').trim();
+        const key = trimmed.toLowerCase();
+        if (trimmed && !seen.has(key)) {
+          seen.add(key);
+          cleanNames.push(trimmed);
+        }
+      });
+
+      if (cleanNames.length > 0) {
+        await connection.query('INSERT INTO journal_indexes (journal_id, index_name) VALUES ?', [
+          cleanNames.map((name) => [journalId, name]),
+        ]);
+      }
+
+      await connection.commit();
+      return cleanNames;
+    } catch (error) {
+      await connection.rollback();
+      throw new Error(`Error replacing indexes: ${error.message}`);
+    } finally {
+      connection.release();
+    }
+  },
+
   async addIndex(journalId, indexName) {
     try {
       const [result] = await db.query('INSERT INTO journal_indexes SET ?', {
@@ -521,8 +779,10 @@ const journalModel = {
             jo.print_issn as printISSN,
             jo.online_issn as onlineISSN,
             jo.impact_factor as impactFactor,
-            jo.cite_score as citeScore
+            jo.cite_score as citeScore,
+            jo.category
           FROM journal_options jo
+          WHERE jo.is_placeholder = 0
           ORDER BY jo.journal_name
           LIMIT 20
         `;
@@ -537,9 +797,11 @@ const journalModel = {
             jo.print_issn as printISSN,
             jo.online_issn as onlineISSN,
             jo.impact_factor as impactFactor,
-            jo.cite_score as citeScore
+            jo.cite_score as citeScore,
+            jo.category
           FROM journal_options jo
           WHERE jo.journal_name LIKE ?
+            AND jo.is_placeholder = 0
           ORDER BY jo.journal_name
           LIMIT 20
         `;
@@ -574,7 +836,8 @@ const journalModel = {
               INNER JOIN v_authors va2 ON va2.author_id = aj2.author_id
               WHERE aj2.journal_id = j.id
                 AND va2.email = ?
-            ) AS is_author
+            ) AS is_author,
+            (j.created_by IS NOT NULL AND j.created_by = ?) AS is_creator
           FROM journals j
           LEFT JOIN (
             SELECT er1.entity_id, er1.status
@@ -592,7 +855,7 @@ const journalModel = {
           WHERE j.id = ?
           LIMIT 1
         `,
-        [userEmail, userId, userId, journalId],
+        [userEmail, userId, userId, userId, journalId],
       );
 
       if (!rows.length) {
@@ -605,6 +868,10 @@ const journalModel = {
         admin_approval_status: row.admin_approval_status || 'pending',
         edit_request_status: row.edit_request_status || 'none',
         is_author: Boolean(row.is_author),
+        is_creator: Boolean(row.is_creator),
+        // The submitter may correct their own record even when the paper credits
+        // other people; being credited is not what grants access.
+        can_manage: Boolean(row.is_author) || Boolean(row.is_creator),
       };
     } catch (error) {
       throw new Error(`Error retrieving journal workflow access: ${error.message}`);
@@ -631,25 +898,32 @@ j.*,
 
       if (!journal[0]) return null;
 
-      // Get authors using v_authors view (pulls faculty data from master_employees)
+      // Get authors using v_authors view (pulls faculty data from master_employees).
+      // country/state are not part of the view, so they come from the authors row itself —
+      // without them the form reopened with a blank country and wrote that blank back.
       const [authors] = await db.query(
         `SELECT
-v.author_id AS id,
-  v.author_name AS name,
-    v.email,
-    v.designation,
-    v.department,
-    v.organization,
-    v.author_type,
-    v.erp_id AS author_id,
-      v.orcid_id,
-      v.scopus_id,
-      aj.id AS dbAuthorId,
-        aj.is_first_author,
-        aj.is_primary
+          v.author_id AS id,
+          v.author_name AS name,
+          v.email,
+          v.designation,
+          v.department,
+          v.organization,
+          v.author_type,
+          v.erp_id AS author_id,
+          v.student_ref,
+          CASE WHEN v.student_ref IS NOT NULL THEN v.erp_id END AS student_id,
+          v.orcid_id,
+          v.scopus_id,
+          a.country,
+          a.state,
+          aj.id AS dbAuthorId,
+          aj.is_first_author,
+          aj.is_primary
         FROM v_authors v
         JOIN author_journal aj ON v.author_id = aj.author_id
-        WHERE aj.journal_id = ? `,
+        LEFT JOIN authors a ON a.id = v.author_id
+        WHERE aj.journal_id = ?`,
         [id],
       );
 
@@ -774,6 +1048,25 @@ v.author_id AS id,
     } catch (error) {
       throw new Error(`Error retrieving status updates: ${error.message} `);
     }
+  },
+
+  /**
+   * Just enough about a status update to address a notification about it: who
+   * posted it, which paper it is on, and that paper's title. Used by both the
+   * "update posted" and "admin replied" notifications, so the recipient and
+   * the wording come from one query rather than two guesses.
+   */
+  async getStatusUpdateContext(statusUpdateId) {
+    const [rows] = await db.query(
+      `SELECT su.id, su.journal_id, su.user_id, su.user_comment, j.title
+         FROM journal_status_updates su
+         JOIN journals j ON j.id = su.journal_id
+        WHERE su.id = ?
+        LIMIT 1`,
+      [statusUpdateId],
+    );
+
+    return rows[0] || null;
   },
 
   async updateStatusUpdateAdminReply(statusUpdateId, adminReply) {

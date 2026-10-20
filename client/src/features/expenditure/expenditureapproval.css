@@ -1259,6 +1259,63 @@
   color: #b42318;
 }
 
+.bulk-transaction-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.bulk-transaction-segmented {
+  display: inline-flex;
+  padding: 4px;
+  border: 1px solid #cfe2ff;
+  border-radius: 12px;
+  background: #f4f8ff;
+}
+
+.bulk-transaction-segmented--bank {
+  border-color: #e0e7ff;
+  background: #f6f7ff;
+}
+
+.bulk-transaction-segment {
+  border: none;
+  border-radius: 9px;
+  padding: 8px 18px;
+  background: transparent;
+  color: #4b5563;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.bulk-transaction-segment:hover:not(:disabled):not(.is-active) {
+  background: #e5efff;
+  color: #0069ab;
+}
+
+.bulk-transaction-segment.is-active {
+  background: #0069ab;
+  color: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 105, 171, 0.35);
+}
+
+.bulk-transaction-segment:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.bulk-transaction-hint {
+  color: #6b7280;
+  font-size: 0.82rem;
+}
+
 .bulk-neft-panel {
   display: flex;
   align-items: center;
@@ -1275,8 +1332,10 @@
   display: none;
 }
 
+/* Empty state: dashed and muted, so it reads as a placeholder. */
 .bulk-neft-file-name {
   flex: 1;
+  min-width: 0;
   margin-bottom: 0;
   padding: 12px 16px;
   border: 1px dashed #d1d5db;
@@ -1288,6 +1347,44 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 10px;
+}
+
+.bulk-neft-file-name p {
+  margin-bottom: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Uploaded state: solid tinted chip, left-aligned with an icon and a status badge, so
+   it is unmistakably different from the placeholder above. */
+.bulk-neft-file-name.has-file {
+  border: 1px solid #a7d3ee;
+  background: #eef7fd;
+  color: #0b4f75;
+  font-weight: 600;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.bulk-neft-file-icon {
+  flex-shrink: 0;
+  color: #0069ab;
+}
+
+.bulk-neft-file-badge {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #0069ab;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .bulk-neft-actions {
@@ -1556,6 +1653,19 @@
   .bulk-neft-panel {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .bulk-transaction-controls {
+    align-items: flex-start;
+  }
+
+  .bulk-transaction-segmented {
+    width: 100%;
+  }
+
+  .bulk-transaction-segment {
+    flex: 1;
+    padding: 8px 10px;
   }
 }
 

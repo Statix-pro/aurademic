@@ -102,11 +102,14 @@ FRONTEND_URL=http://localhost:3000
 # 1. Create database
 mysql -u your_user -p -e "CREATE DATABASE your_db_name;"
 
-# 2. Load the latest dump
-mysql -u your_user -p your_db_name < schema/dump/dump-research-YYYYMMDD.sql
+# 2. Load the schema (no rows — see schema/README.md)
+mysql -u your_user -p your_db_name < schema/structure.sql
 
-# 3. Run any newer migrations (check dates after the dump)
+# 3. Apply every migration dated after it, in date order
 mysql -u your_user -p your_db_name < schema/migrations/YYYYMMDD_description.sql
+
+# 4. Seed enough rows to log in
+mysql -u your_user -p your_db_name < schema/developer_seed.sql
 ```
 
 > 📖 See `schema/README.md` for detailed documentation on migrations and best practices.

@@ -4,10 +4,16 @@ import path from 'path';
 import financeModel from './financeModel.js';
 import financeWorkflowAdapter from './financeWorkflowAdapter.js';
 import db from '../../config/connection.js';
+import notificationService from '../notification/notificationService.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
 const normalizeText = (value) => String(value || '').trim();
+
+// Shown whenever a top-up is attempted against a finance card that was already
+// finalized and closed from the Expenditure module.
+const TOPUP_CLOSED_MESSAGE =
+  'Top-up cannot be applied. The proposal has already been finalized and closed.';
 
 const parseBooleanLike = (value) => {
   if (typeof value === 'boolean') return value;
@@ -75,6 +81,57 @@ const hasFinanceWorkflowPermission = (req) => {
 
 const canManagePrincipalDocumentsRequest = (req) =>
   Boolean(req.user?.is_super_admin || req.user?.isSuperAdmin) || isPrincipalRoleRequest(req);
+
+const FINANCE_CHAIRMAN_THRESHOLD = 10000;
+
+const resolveFinanceAmountBand = (amount) =>
+  Number(amount || 0) > FINANCE_CHAIRMAN_THRESHOLD ? 'gt_10k' : 'lte_10k';
+
+// A top-up cycle is routed on the top-up request amount alone, not the proposal total:
+// up to 10k Principal approval closes it, above 10k it also goes to the Chairman. The
+// cycle amount is stamped on workflow_state.topupAmount when the top-up restarts the
+// workflow so later recalculations (edit, resubmit) use the same figure.
+const resolveTopupCycleAmount = (workflowState, financeRecord, fallbackAmount = 0) => {
+  const stateAmount = Number(workflowState?.topupAmount);
+  if (Number.isFinite(stateAmount) && stateAmount > 0) {
+    return stateAmount;
+  }
+
+  // FALLBACK: top-ups submitted before workflow_state.topupAmount existed have no cycle
+  // amount, so fall back to the cumulative top-up total (which equals the cycle amount
+  // for a first top-up). Remove once no in-flight top-up predates topupAmount.
+  const legacyTopupAmount = Number(financeRecord?.topup_amount);
+  if (Number.isFinite(legacyTopupAmount) && legacyTopupAmount > 0) {
+    return legacyTopupAmount;
+  }
+
+  // With no cycle amount recoverable, route on the proposal total: an unknown top-up
+  // amount must never silently drop the Chairman from a >10k flow.
+  const resolvedFallback = Number(fallbackAmount);
+  return Number.isFinite(resolvedFallback) ? resolvedFallback : 0;
+};
+
+const isTopupWorkflowCycle = (workflowState) => Boolean(workflowState?.topupAt);
+
+// The edit form groups the persisted breakup by budget head + sub-head + top-up flag
+// before rendering, so one visible row can stand for several stored rows: a head-only
+// match is split across every budget line it draws from, and a request may legitimately
+// hold two rows on the same head. The top-up submission therefore posts one row per
+// GROUP, and counting the stored rows overshoots it — slicing by that count swallowed
+// the appended top-up row and rejected a valid submission with "At least one new topup
+// budget row is required". Count the groups the form would have rendered instead.
+const countGroupedBudgetRows = (rows = []) => {
+  const groupKeys = new Set(
+    rows.map((row) =>
+      [
+        normalizeText(row?.budget_head).toLowerCase(),
+        normalizeText(row?.sub_head).toLowerCase(),
+        parseBooleanLike(row?.is_topup) ? 'topup' : 'original',
+      ].join('|'),
+    ),
+  );
+  return groupKeys.size;
+};
 
 const isEligibleForPrincipalDocument = (finance) => {
   const totalBudget = Number(finance?.total_budget || finance?.proposed_amount || 0);
@@ -532,6 +589,17 @@ const financeController = {
       const isWorkflowEditor = hasFinanceWorkflowEditorAccess(req);
       const workflowStatus = normalizeText(finance.workflow_state?.status).toLowerCase();
       const isTopupMode = parseBooleanLike(req.body?.topup_mode || req.body?.topupMode);
+
+      // A finance card that has been finalized and closed in the Expenditure module is
+      // settled money: no further top-up may be drawn against it.
+      if (isTopupMode && finance.closed_at) {
+        return res.status(409).json({
+          success: false,
+          message: TOPUP_CLOSED_MESSAGE,
+          error: TOPUP_CLOSED_MESSAGE,
+        });
+      }
+
       const isTopupEditable = isTopupMode && ['approved', 'completed'].includes(workflowStatus);
       const isTerminalWorkflow = ['approved', 'rejected', 'archived', 'completed'].includes(
         workflowStatus,
@@ -587,6 +655,17 @@ const financeController = {
             });
           }
 
+          // Re-check under the row lock so a Finalize & Close committed between the
+          // eligibility check above and this transaction still blocks the top-up.
+          if (lockedFinanceContext.closedAt) {
+            await connection.rollback();
+            return res.status(409).json({
+              success: false,
+              message: TOPUP_CLOSED_MESSAGE,
+              error: TOPUP_CLOSED_MESSAGE,
+            });
+          }
+
           const lockedWorkflowStatus = normalizeText(
             lockedFinanceContext.workflowStatus,
           ).toLowerCase();
@@ -605,7 +684,7 @@ const financeController = {
             ? req.body.budget_rows
             : [];
           const appendedBudgetRows = submittedBudgetRows
-            .slice(existingBudgetRows.length)
+            .slice(countGroupedBudgetRows(existingBudgetRows))
             .map((row) => {
               const sanitizedRow = { ...(row || {}) };
               delete sanitizedRow.approved_amount;
@@ -618,9 +697,16 @@ const financeController = {
             await connection.rollback();
             return res.status(400).json({
               success: false,
-              message: 'At least one new topup budget row is required',
+              message:
+                'Add at least one top-up budget row before submitting. To top up a head that is already in this request, add a new row and select the same Budget Head and Sub Head.',
             });
           }
+
+          // The routing amount for this cycle is the top-up delta only.
+          const topupCycleAmount = appendedBudgetRows.reduce(
+            (sum, row) => sum + Number(row?.amount || 0),
+            0,
+          );
 
           const updatePayload = {
             budget_rows: [...existingBudgetRows, ...appendedBudgetRows],
@@ -639,10 +725,6 @@ const financeController = {
             });
           }
 
-          const updatedFinanceContext = await financeModel.getFinanceRecordContext(financeId, {
-            tx: connection,
-            forUpdate: true,
-          });
           const financeMeta = {
             unplannedBudgetEnabled: Boolean(finance.unplanned_budget_enabled),
             unplannedBudgetAmount:
@@ -663,8 +745,9 @@ const financeController = {
               moduleMetaVersion: 1,
               moduleMeta: {
                 trigger: 'finance_topup',
-                amountBand:
-                  Number(updatedFinanceContext?.totalBudget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+                // Routed on the top-up request amount, not the proposal total: <= 10k
+                // ends at Principal, above 10k also requires the Chairman.
+                amountBand: resolveFinanceAmountBand(topupCycleAmount),
                 beneficiaryType: normalizeText(finance.beneficiary_type) || null,
                 financeMeta,
               },
@@ -677,6 +760,9 @@ const financeController = {
             {
               ...(restartResult.state || {}),
               topupAt: topupStartedAt,
+              // Kept so any later flow recalculation for this cycle re-derives the same
+              // band from the top-up amount instead of the proposal total.
+              topupAmount: topupCycleAmount,
               updatedAt: topupStartedAt,
               lastDecision: 'topup_submitted',
               lastFeedback: null,
@@ -720,7 +806,44 @@ const financeController = {
         }
       }
 
-      const result = await financeModel.updateFinanceRequest(financeId, req.body || {}, actor);
+      // A top-up cycle only puts its own top-up rows up for decision — every pre-top-up
+      // row is money already approved in an earlier cycle. This path replaces the whole
+      // breakup, so an approver (HOD, DOF, Principal, Chairman) or super admin editing
+      // the in-flight top-up could otherwise rewrite those approved amounts. Rebuild the
+      // pre-top-up rows from the database and keep only the submitted top-up rows,
+      // mirroring the topup submission path above.
+      const updateBody = { ...(req.body || {}) };
+      if (
+        isTopupWorkflowCycle(finance.workflow_state) &&
+        Object.prototype.hasOwnProperty.call(updateBody, 'budget_rows')
+      ) {
+        const existingBudgetRows = await financeModel.getBudgetBreakup(financeId);
+        const approvedBudgetRows = existingBudgetRows.filter(
+          (row) => !parseBooleanLike(row?.is_topup),
+        );
+        const submittedTopupRows = (
+          Array.isArray(updateBody.budget_rows) ? updateBody.budget_rows : []
+        )
+          .filter((row) => parseBooleanLike(row?.is_topup))
+          .map((row) => {
+            const sanitizedRow = { ...(row || {}) };
+            delete sanitizedRow.approved_amount;
+            delete sanitizedRow.remaining_amount_snapshot;
+            sanitizedRow.is_topup = 1;
+            return sanitizedRow;
+          });
+
+        if (!submittedTopupRows.length) {
+          return res.status(400).json({
+            success: false,
+            message: 'At least one topup budget row is required',
+          });
+        }
+
+        updateBody.budget_rows = [...approvedBudgetRows, ...submittedTopupRows];
+      }
+
+      const result = await financeModel.updateFinanceRequest(financeId, updateBody, actor);
 
       if (result.affectedRows > 0) {
         try {
@@ -729,7 +852,12 @@ const financeController = {
             const currentState = updatedFinanceContext.workflowState;
             if (currentState.status === 'in_progress' || currentState.status === 'returned') {
               const currentTotal = Number(updatedFinanceContext.totalBudget || 0);
-              const newAmountBand = currentTotal > 10000 ? 'gt_10k' : 'lte_10k';
+              // A top-up cycle keeps routing on its top-up amount, so an edit must not
+              // pull the Chairman back in just because the proposal total exceeds 10k.
+              const routingAmount = isTopupWorkflowCycle(currentState)
+                ? resolveTopupCycleAmount(currentState, finance, currentTotal)
+                : currentTotal;
+              const newAmountBand = resolveFinanceAmountBand(routingAmount);
 
               const newFlow = financeWorkflowAdapter.resolveStartFlow({
                 metadata: {
@@ -841,13 +969,18 @@ const financeController = {
         unplannedBudgetDescription: normalizeText(finance.unplanned_budget_description) || null,
       };
 
+      // A returned top-up keeps routing on its top-up amount when resubmitted.
+      const resubmitRoutingAmount = isTopupWorkflowCycle(workflowState)
+        ? resolveTopupCycleAmount(workflowState, finance, Number(finance.total_budget || 0))
+        : Number(finance.total_budget || 0);
+
       const resubmitMetadata = {
         origin: 'resubmit',
         requestId: null,
         moduleMetaVersion: 1,
         moduleMeta: {
           trigger: 'applicant_resubmit',
-          amountBand: Number(finance.total_budget || 0) > 10000 ? 'gt_10k' : 'lte_10k',
+          amountBand: resolveFinanceAmountBand(resubmitRoutingAmount),
           beneficiaryType: normalizeText(finance.beneficiary_type) || null,
           financeMeta,
         },
@@ -862,6 +995,11 @@ const financeController = {
       const resubmittedAt = new Date().toISOString();
       await financeModel.updateFinanceWorkflowSnapshot(financeId, {
         ...(restartResult.state || {}),
+        // startWorkflow returns a fresh state, so carry the top-up markers over or the
+        // resubmitted cycle would lose its Top-up badge and its routing amount.
+        ...(isTopupWorkflowCycle(workflowState)
+          ? { topupAt: workflowState.topupAt, topupAmount: resubmitRoutingAmount }
+          : {}),
         status: 'in_progress',
         currentStage: restartResult.state?.currentStage || 'level1',
         isEditableByApplicant: false,
@@ -958,6 +1096,29 @@ const financeController = {
 
       await financeModel.deleteFinanceRequest(financeId, normalizeActor(req));
 
+      // Only meaningful when a super admin deletes someone else's request: an
+      // applicant deleting their own is the actor and is excluded.
+      await notificationService.emit({
+        type: 'finance.deleted',
+        actorUserId: userId,
+        subject: {
+          moduleKey: 'finance',
+          recordId: financeId,
+          applicantUserId: finance.applicant_user_id || finance.created_by || null,
+        },
+        audience:
+          finance.applicant_user_id || finance.created_by
+            ? [
+                {
+                  kind: 'user',
+                  userId: finance.applicant_user_id || finance.created_by,
+                  recipientRole: 'applicant',
+                },
+              ]
+            : [],
+        dedupeKey: `finance:${financeId}:deleted`,
+      });
+
       return res.status(200).json({
         success: true,
         message: 'Finance request deleted successfully',
@@ -1010,6 +1171,7 @@ const financeController = {
         ALREADY_CLOSED: 409,
         NOT_ELIGIBLE: 409,
         NOT_SETTLED: 409,
+        PENDING_WORKFLOW: 409,
         MIGRATION_REQUIRED: 503,
       };
       const statusCode = statusByCode[code] || 500;
@@ -1522,6 +1684,67 @@ const financeController = {
       });
     } catch (error) {
       return handleWorkflowError(res, error, 'Error in getFinanceQueue');
+    }
+  },
+
+  /**
+   * Same queue, unpaginated, with each request's budget breakdown rows — backs the
+   * admin "Export CSV" action so the file covers every filtered request rather than
+   * just the page on screen.
+   */
+  async getFinanceQueueExport(req, res) {
+    try {
+      const stage = normalizeText(req.params.stage).toLowerCase();
+      const {
+        workflowStatus,
+        statusCategory,
+        level1Role,
+        q,
+        allProposals,
+        fiscalYear,
+        dateFrom,
+        dateTo,
+      } = req.query;
+      const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
+      const effectiveLevel1Role =
+        stage === 'level1'
+          ? ['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveFinanceLevel1QueueRole(req)
+          : null;
+
+      const queue = await workflowService.listQueueForExport({
+        moduleKey: 'finance',
+        stage,
+        actor: normalizeActor(req),
+        filters: {
+          workflowStatus,
+          statusCategory,
+          // An explicit date range replaces the fiscal-year scoping so the export can
+          // span years; the client blanks fiscalYear when it sends a range.
+          fiscalYear,
+          dateFrom,
+          dateTo,
+          level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
+        },
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: queue.items.map((row) => sanitizeFinanceRecordForUser(req, row)),
+        lineItems: queue.lineItems,
+        pagination: {
+          total: queue.total,
+          exported: queue.items.length,
+          truncated: queue.truncated,
+          maxRows: queue.maxRows,
+          statusCounts: queue.statusCounts,
+        },
+      });
+    } catch (error) {
+      return handleWorkflowError(res, error, 'Error in getFinanceQueueExport');
     }
   },
 

@@ -20,7 +20,7 @@
 | 5   | Auth Middleware      | Dual-key JWT normalization (`id`/`userId`, `role`/`roles`, snake_case) | ✅ Safe |
 | 6   | Auth Middleware      | `toRequestUser()` backward-compat aliases                              | ✅ Safe |
 | 7   | Auth Controller      | `is_admin` baked into JWT via OR fallback                              | ✅ Safe |
-| 8   | Auth Model           | Commented-out old `authModel` (lines 1–82)                             | ✅ Safe |
+| 8   | Auth Model           | Commented-out old `authModel` (lines 1–82)                             | ✔ Done  |
 | 9   | Pre-Event Controller | Snake_case field name fallbacks                                        | ✅ Safe |
 | 10  | Documents Controller | "Legacy mode" for missing `events.status` col                          | ✅ Safe |
 | 11  | Budget Catalog       | Text-matching fallback when `budget_head_id IS NULL`                   | ✅ Safe |
@@ -43,14 +43,16 @@
 | 28  | Client (finance)     | Legacy annexure flat-column fallback                                   | ✅ Safe |
 | 29  | Client (workflow)    | `user.role` singular read                                              | ✅ Safe |
 | 30  | Client (finance)     | `stageRoleFallback` role-name matching                                 | ⚠️ Keep |
+| 31  | Expenditure (API)    | Bulk NEFT → Bulk Transaction rename aliases                            | ✅ Safe |
 
-**Legend:** ✅ Safe = remove on fresh deploy. ⚠️ Keep = functional safety net, not just legacy compat.
+**Legend:** ✅ Safe = remove on fresh deploy. ⚠️ Keep = functional safety net, not just legacy
+compat. ✔ Done = already removed.
 
 ---
 
 ## 1. Access Control — `LEGACY_ADMIN_PERMISSION_KEYS`
 
-**File:** [accessControlModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/accessControl/accessControlModel.js#L11-L29)
+**File:** [accessControlModel.js](../../server/modules/accessControl/accessControlModel.js#L11-L29)
 
 ```js
 const LEGACY_ADMIN_PERMISSION_KEYS = [
@@ -70,7 +72,7 @@ const LEGACY_ADMIN_PERMISSION_KEYS = [
 
 ## 2. Access Control — `legacyIsAdmin` / `fallbackPermissions`
 
-**File:** [accessControlModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/accessControl/accessControlModel.js#L492-L569)
+**File:** [accessControlModel.js](../../server/modules/accessControl/accessControlModel.js#L492-L569)
 
 **What it does (3 fallback layers):**
 
@@ -87,7 +89,7 @@ const LEGACY_ADMIN_PERMISSION_KEYS = [
 
 ## 3. Access Control — `syncLegacyAdminFlag()`
 
-**File:** [accessControlModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/accessControl/accessControlModel.js#L1240-L1260)
+**File:** [accessControlModel.js](../../server/modules/accessControl/accessControlModel.js#L1240-L1260)
 
 ```js
 async syncLegacyAdminFlag(connection, userId) {
@@ -105,7 +107,7 @@ async syncLegacyAdminFlag(connection, userId) {
 
 ## 4. Access Control — `users.is_admin` reads everywhere
 
-**File:** [accessControlModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/accessControl/accessControlModel.js) — Lines 439, 492, 500, 1147, 1173, 1468
+**File:** [accessControlModel.js](../../server/modules/accessControl/accessControlModel.js) — Lines 439, 492, 500, 1147, 1173, 1468
 
 Every query that reads user data includes `u.is_admin` and exposes it in the returned objects (`groupUserRows`, `getUsersWithRoles`, `getUserByIdWithRoles`).
 
@@ -117,7 +119,7 @@ Every query that reads user data includes `u.is_admin` and exposes it in the ret
 
 ## 5. Auth Middleware — Dual-Key JWT Normalization
 
-**File:** [authMiddleware.js](file:///Users/mahesh/Personal/aurademic/server/modules/../middleware/authMiddleware.js#L57-L92)
+**File:** [authMiddleware.js](../../server/middleware/authMiddleware.js#L57-L92)
 
 Two functions handle old JWT shapes:
 
@@ -142,7 +144,7 @@ Same pattern for `req.user` objects set by other middleware.
 
 ## 6. Auth Middleware — `toRequestUser()` Backward-Compat Aliases
 
-**File:** [authMiddleware.js](file:///Users/mahesh/Personal/aurademic/server/modules/../middleware/authMiddleware.js#L94-L107)
+**File:** [authMiddleware.js](../../server/middleware/authMiddleware.js#L94-L107)
 
 ```js
 const toRequestUser = (user) => ({
@@ -162,18 +164,18 @@ const toRequestUser = (user) => ({
 
 > **Client-side cleanup:** The following files read `is_admin` from the user object and should be updated to use `isAdmin`:
 >
-> - [ability.ts](file:///Users/mahesh/Personal/aurademic/client/src/shared/casl/ability.ts#L112) — `if (user.is_admin)`
-> - [permissionUtils.ts](file:///Users/mahesh/Personal/aurademic/client/src/shared/utils/permissionUtils.ts#L49) — `user.is_admin`
-> - [types/index.ts](file:///Users/mahesh/Personal/aurademic/client/src/types/index.ts#L16) — `is_admin: boolean` type definition
-> - [adminbudget.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/admin/budget/budget-approval/adminbudget.tsx#L1177) — `edit.is_admin ?? edit.isAdmin` dual-key
-> - [budgetdashboard.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/user-dashboard/budgetdashboard/budgetdashboard.tsx#L616) — `edit.is_admin ?? edit.isAdmin` dual-key
+> - [ability.ts](../../client/src/shared/casl/ability.ts#L112) — `if (user.is_admin)`
+> - [permissionUtils.ts](../../client/src/shared/utils/permissionUtils.ts#L49) — `user.is_admin`
+> - [types/index.ts](../../client/src/types/index.ts#L16) — `is_admin: boolean` type definition
+> - [adminbudget.tsx](../../client/src/features/admin/budget/budget-approval/adminbudget.tsx#L1177) — `edit.is_admin ?? edit.isAdmin` dual-key
+> - [budgetdashboard.tsx](../../client/src/features/user-dashboard/budgetdashboard/budgetdashboard.tsx#L616) — `edit.is_admin ?? edit.isAdmin` dual-key
 
 ---
 
 ## 7. Auth Controller — `is_admin` Baked Into JWT
 
-**File:** [authController.js](file:///Users/mahesh/Personal/aurademic/server/modules/auth/authController.js) — Lines 46–58, 120–132  
-**File:** [authModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/auth/authModel.js) — Line 163
+**File:** [authController.js](../../server/modules/auth/authController.js) — Lines 46–58, 120–132  
+**File:** [authModel.js](../../server/modules/auth/authModel.js) — Line 163
 
 ```js
 // authModel.js line 163
@@ -188,19 +190,20 @@ The `|| Boolean(user.is_admin)` is a fallback for users who have the old `is_adm
 
 ---
 
-## 8. Auth Model — Commented-Out Old Version
+## 8. Auth Model — Commented-Out Old Version ✔ Done
 
-**File:** [authModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/auth/authModel.js#L1-L82)
+**File:** [authModel.js](../../server/modules/auth/authModel.js)
 
-Lines 1–82 contain the entire old `authModel` implementation commented out. It directly returned `is_admin` from the DB column with no RBAC integration.
+Lines 1–82 held the entire old `authModel` implementation commented out. It returned `is_admin`
+straight from the DB column with no RBAC integration.
 
-**Cleanup:** Delete the commented-out code block.
+**Cleanup:** Done — the commented-out block was deleted; the live `authModel` is untouched.
 
 ---
 
 ## 9. Pre-Event Controller — Snake_Case Field Name Fallbacks
 
-**File:** [preEventController.js](file:///Users/mahesh/Personal/aurademic/server/modules/events/preevents/preEventController.js#L115-L128)
+**File:** [preEventController.js](../../server/modules/events/preevents/preEventController.js#L115-L128)
 
 ```js
 // Handle legacy field names for backward compatibility
@@ -221,7 +224,7 @@ const end_date = endDate || req.body.end_date;
 
 ## 10. Documents Controller — "Legacy Mode" for Missing `events.status`
 
-**File:** [documentsController.js](file:///Users/mahesh/Personal/aurademic/server/modules/events/documents/documentsController.js)
+**File:** [documentsController.js](../../server/modules/events/documents/documentsController.js)
 
 Three functions have identical catch blocks that handle the case where `events.status` column doesn't exist yet:
 
@@ -241,7 +244,7 @@ Three functions have identical catch blocks that handle the case where `events.s
 
 ## 11. Budget Catalog — Text-Matching Fallback for `budget_head_id IS NULL`
 
-**File:** [budgetCatalogResolver.js](file:///Users/mahesh/Personal/aurademic/server/modules/budgetCatalog/budgetCatalogResolver.js#L1-L11)
+**File:** [budgetCatalogResolver.js](../../server/modules/budgetCatalog/budgetCatalogResolver.js#L1-L11)
 
 ```js
 // LEGACY: if the catalog has no row matching the submitted name (e.g. older
@@ -259,7 +262,7 @@ The resolver returns `{ budget_head_id: null, budget_sub_head_id: null }` when t
 
 ## 12. Budget Model — Catalog ID Resolver Fallback
 
-**File:** [budgetModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/budget/budgetModel.js#L1719)
+**File:** [budgetModel.js](../../server/modules/budget/budgetModel.js#L1719)
 
 ```js
 // LEGACY: if the submitted head/sub_head doesn't exist in the catalog
@@ -276,7 +279,7 @@ When inserting `budget_proposal_lines`, the model calls `resolveCatalogIds()` an
 
 ## 13. Finance Model — Text-Based Budget Matching
 
-**File:** [financeModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/finance/financeModel.js)
+**File:** [financeModel.js](../../server/modules/finance/financeModel.js)
 
 The budget availability calculation has a dual-path join:
 
@@ -293,7 +296,7 @@ This dual-path pattern appears in availability queries, usage rollup calculation
 
 ## 14. Expenditure Model — `createExpenditureLegacy()`
 
-**File:** [expenditureModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/expenditure/expenditureModel.js#L2552)
+**File:** [expenditureModel.js](../../server/modules/expenditure/expenditureModel.js#L2552)
 
 A complete alternate creation function that inserts expenditure requests using the old schema (flat columns like `head`, `sub_head`, `amount`, `budget_line_id`) instead of the modern normalized rows (`expenditure_advance_rows`, `expenditure_line_rows`, etc.).
 
@@ -305,7 +308,7 @@ A complete alternate creation function that inserts expenditure requests using t
 
 ## 15. Expenditure Model — `deriveLegacyAnchorRequestIds()`
 
-**File:** [expenditureModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/expenditure/expenditureModel.js#L481-L515)
+**File:** [expenditureModel.js](../../server/modules/expenditure/expenditureModel.js#L481-L515)
 
 Derives the set of "anchor" expenditure request IDs that belong to the same finance request, using both the modern `expenditure_request_refs` table and a fallback direct `finance_request_id` column on the request.
 
@@ -319,7 +322,7 @@ Derives the set of "anchor" expenditure request IDs that belong to the same fina
 
 ## 16. Expenditure Model — `legacy_totals` Text-Matching SQL
 
-**File:** [expenditureModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/expenditure/expenditureModel.js#L670-L870)
+**File:** [expenditureModel.js](../../server/modules/expenditure/expenditureModel.js#L670-L870)
 
 A large block that builds a SQL subquery (`legacy_totals`) to sum advance amounts from old-format expenditure requests that have flat `head`, `sub_head`, `budget_line_id`, and `amount` columns instead of the modern `expenditure_advance_rows` table.
 
@@ -335,7 +338,7 @@ The final query does: `COALESCE(row_totals.total, 0) + COALESCE(legacy_totals.to
 
 ## 17. Expenditure Model — `resolveCanonicalBeneficiaryOrg()`
 
-**File:** [expenditureModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/expenditure/expenditureModel.js#L59-L66)
+**File:** [expenditureModel.js](../../server/modules/expenditure/expenditureModel.js#L59-L66)
 
 ```js
 const resolveCanonicalBeneficiaryOrg = (beneficiaryOrg, legacyPayeeName) => {
@@ -353,7 +356,7 @@ const resolveCanonicalBeneficiaryOrg = (beneficiaryOrg, legacyPayeeName) => {
 
 ## 18. Admin Budget Model — Legacy Text Snapshot Reads
 
-**File:** [adminBudgetModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/adminbudget/adminBudgetModel.js#L2606)
+**File:** [adminBudgetModel.js](../../server/modules/adminbudget/adminBudgetModel.js#L2606)
 
 ```js
 // LEGACY: text snapshot columns remain authoritative for old rows whose
@@ -370,8 +373,8 @@ Various queries in the admin budget model read both `budget_head` (text) and `bu
 
 ## 19. ⚠️ KEEP — Admin Budget Model — `parent_dept_fallback` JOINs
 
-**File:** [adminBudgetModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/adminbudget/adminBudgetModel.js#L2922-L2933)  
-**File:** [budgetModel.js](file:///Users/mahesh/Personal/aurademic/server/modules/budget/budgetModel.js#L1798-L1825)
+**File:** [adminBudgetModel.js](../../server/modules/adminbudget/adminBudgetModel.js#L2922-L2933)  
+**File:** [budgetModel.js](../../server/modules/budget/budgetModel.js#L1798-L1825)
 
 ```sql
 COALESCE(emp_parent_dept.name, emp_parent_dept_fallback.name, emp_dept.name) AS user_department
@@ -387,7 +390,7 @@ LEFT JOIN master_departments emp_parent_dept_fallback
 
 ## 20. ⚠️ KEEP — Role Sync Service — Default `'CELL'` Entity Type
 
-**File:** [roleSyncService.js](file:///Users/mahesh/Personal/aurademic/server/modules/accessControl/roleSyncService.js#L73)
+**File:** [roleSyncService.js](../../server/modules/accessControl/roleSyncService.js#L73)
 
 ```js
 let entityTypeEnum = 'CELL'; // Default fallback
@@ -409,24 +412,24 @@ Multiple frontend files read the legacy snake_case fields from the user object a
 
 #### `is_admin` reads
 
-| File                                                                                                         | Line    | Pattern                                                                 |
-| ------------------------------------------------------------------------------------------------------------ | ------- | ----------------------------------------------------------------------- |
-| [ability.ts](file:///Users/mahesh/Personal/aurademic/client/src/shared/casl/ability.ts#L112)                 | 112     | `if (user.is_admin)` — grants admin dashboard CASL abilities            |
-| [permissionUtils.ts](file:///Users/mahesh/Personal/aurademic/client/src/shared/utils/permissionUtils.ts#L49) | 49, 143 | `user.is_admin` in `canAccessAdminArea()` and `isAdminOrWorkflowRole()` |
-| [types/index.ts](file:///Users/mahesh/Personal/aurademic/client/src/types/index.ts#L16)                      | 16      | `is_admin: boolean` type definition on `User` interface                 |
-| [shared/types/index.ts](file:///Users/mahesh/Personal/aurademic/client/src/shared/types/index.ts#L8)         | 8       | `//   is_admin: boolean;` (commented out, dead code)                    |
+| File                                                                       | Line    | Pattern                                                                 |
+| -------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------- |
+| [ability.ts](../../client/src/shared/casl/ability.ts#L112)                 | 112     | `if (user.is_admin)` — grants admin dashboard CASL abilities            |
+| [permissionUtils.ts](../../client/src/shared/utils/permissionUtils.ts#L49) | 49, 143 | `user.is_admin` in `canAccessAdminArea()` and `isAdminOrWorkflowRole()` |
+| [types/index.ts](../../client/src/types/index.ts#L16)                      | 16      | `is_admin: boolean` type definition on `User` interface                 |
+| [shared/types/index.ts](../../client/src/shared/types/index.ts#L8)         | 8       | `//   is_admin: boolean;` (commented out, dead code)                    |
 
 #### `is_super_admin` reads
 
-| File                                                                                                         | Line | Pattern                                            |
-| ------------------------------------------------------------------------------------------------------------ | ---- | -------------------------------------------------- |
-| [types/index.ts](file:///Users/mahesh/Personal/aurademic/client/src/types/index.ts#L17)                      | 17   | `is_super_admin?: boolean` type definition         |
-| [ability.ts](file:///Users/mahesh/Personal/aurademic/client/src/shared/casl/ability.ts#L90)                  | 90   | `if (user.is_super_admin) return true`             |
-| [permissionUtils.ts](file:///Users/mahesh/Personal/aurademic/client/src/shared/utils/permissionUtils.ts#L23) | 23   | `Boolean(user.is_super_admin)` in `isSuperAdmin()` |
+| File                                                                       | Line | Pattern                                            |
+| -------------------------------------------------------------------------- | ---- | -------------------------------------------------- |
+| [types/index.ts](../../client/src/types/index.ts#L17)                      | 17   | `is_super_admin?: boolean` type definition         |
+| [ability.ts](../../client/src/shared/casl/ability.ts#L90)                  | 90   | `if (user.is_super_admin) return true`             |
+| [permissionUtils.ts](../../client/src/shared/utils/permissionUtils.ts#L23) | 23   | `Boolean(user.is_super_admin)` in `isSuperAdmin()` |
 
 **On fresh deploy:** Standardize the API to always return camelCase (`isAdmin`, `isSuperAdmin`). Update the `User` type and all reads.
 
-**Cleanup:** Update the `User` interface in [types/index.ts](file:///Users/mahesh/Personal/aurademic/client/src/types/index.ts) to use `isAdmin` and `isSuperAdmin`. Update all reads across ability, permissionUtils, and other files.
+**Cleanup:** Update the `User` interface in [types/index.ts](../../client/src/types/index.ts) to use `isAdmin` and `isSuperAdmin`. Update all reads across ability, permissionUtils, and other files.
 
 ---
 
@@ -434,12 +437,12 @@ Multiple frontend files read the legacy snake_case fields from the user object a
 
 Several components detect super admin status with a belt-and-suspenders approach, checking both snake_case and camelCase:
 
-| File                                                                                                                             | Line | Code                                                                      |
-| -------------------------------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------- |
-| [expenditureapproval.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/expenditure/expenditureapproval.tsx#L1066) | 1066 | `Boolean(user?.is_super_admin \|\| (user as any)?.isSuperAdmin)`          |
-| [financeapproval.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/finance/financeapproval.tsx#L2498)             | 2498 | `Boolean(user?.is_super_admin \|\| (user as any)?.isSuperAdmin)`          |
-| [financecard.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/user-dashboard/financecard/financecard.tsx#L130)   | 130  | `Boolean((user as any)?.is_super_admin \|\| (user as any)?.isSuperAdmin)` |
-| [budget.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/budget/budget.tsx#L571)                                 | 571  | `Boolean(user?.is_super_admin) \|\| Boolean((user as any)?.isSuperAdmin)` |
+| File                                                                                           | Line | Code                                                                      |
+| ---------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------------- |
+| [expenditureapproval.tsx](../../client/src/features/expenditure/expenditureapproval.tsx#L1066) | 1066 | `Boolean(user?.is_super_admin \|\| (user as any)?.isSuperAdmin)`          |
+| [financeapproval.tsx](../../client/src/features/finance/financeapproval.tsx#L2498)             | 2498 | `Boolean(user?.is_super_admin \|\| (user as any)?.isSuperAdmin)`          |
+| [financecard.tsx](../../client/src/features/user-dashboard/financecard/financecard.tsx#L130)   | 130  | `Boolean((user as any)?.is_super_admin \|\| (user as any)?.isSuperAdmin)` |
+| [budget.tsx](../../client/src/features/budget/budget.tsx#L571)                                 | 571  | `Boolean(user?.is_super_admin) \|\| Boolean((user as any)?.isSuperAdmin)` |
 
 **On fresh deploy:** After standardizing the `User` type to `isSuperAdmin`, simplify all these to `Boolean(user?.isSuperAdmin)`.
 
@@ -451,10 +454,10 @@ Several components detect super admin status with a belt-and-suspenders approach
 
 Budget components use a 4-way fallback to detect whether an edit/approval was made by an admin:
 
-| File                                                                                                                                       | Line       | Code                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ---------------------------------------------------------------------------------------- |
-| [adminbudget.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/admin/budget/budget-approval/adminbudget.tsx#L1177)          | 1177, 1283 | `Boolean(edit.is_admin ?? edit.isAdmin ?? edit.updated_by_admin ?? edit.updatedByAdmin)` |
-| [budgetdashboard.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/user-dashboard/budgetdashboard/budgetdashboard.tsx#L616) | 616, 718   | Same 4-way fallback                                                                      |
+| File                                                                                                     | Line       | Code                                                                                     |
+| -------------------------------------------------------------------------------------------------------- | ---------- | ---------------------------------------------------------------------------------------- |
+| [adminbudget.tsx](../../client/src/features/admin/budget/budget-approval/adminbudget.tsx#L1177)          | 1177, 1283 | `Boolean(edit.is_admin ?? edit.isAdmin ?? edit.updated_by_admin ?? edit.updatedByAdmin)` |
+| [budgetdashboard.tsx](../../client/src/features/user-dashboard/budgetdashboard/budgetdashboard.tsx#L616) | 616, 718   | Same 4-way fallback                                                                      |
 
 **Why it exists:** The server API response format for budget audit logs changed from snake_case to camelCase at some point. Both old and new response shapes must be handled.
 
@@ -468,11 +471,11 @@ Budget components use a 4-way fallback to detect whether an edit/approval was ma
 
 The expenditure approval form creates synthetic dropdown options with `legacy-` prefixed values when an existing expenditure request references a budget head/sub-head that doesn't exist in the current approved budget options:
 
-| File                                                                                                                                   | Lines     | Code                                                         |
-| -------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------ |
-| [expenditureapproval.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/expenditure/expenditureapproval.tsx#L2157-L2166) | 2157–2166 | `value: \`legacy-head::${fallbackHead}\``                    |
-| [expenditureapproval.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/expenditure/expenditureapproval.tsx#L2232-L2242) | 2232–2242 | `value: \`legacy-sub::${fallbackHead}::${fallbackSubHead}\`` |
-| [expenditureapproval.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/expenditure/expenditureapproval.tsx#L2323-L2332) | 2323–2332 | `value: \`account::legacy::${row.headOfAccount}\``           |
+| File                                                                                                 | Lines     | Code                                                         |
+| ---------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------ |
+| [expenditureapproval.tsx](../../client/src/features/expenditure/expenditureapproval.tsx#L2157-L2166) | 2157–2166 | `value: \`legacy-head::${fallbackHead}\``                    |
+| [expenditureapproval.tsx](../../client/src/features/expenditure/expenditureapproval.tsx#L2232-L2242) | 2232–2242 | `value: \`legacy-sub::${fallbackHead}::${fallbackSubHead}\`` |
+| [expenditureapproval.tsx](../../client/src/features/expenditure/expenditureapproval.tsx#L2323-L2332) | 2323–2332 | `value: \`account::legacy::${row.headOfAccount}\``           |
 
 **Why it exists:** Old expenditure requests may reference budget heads that no longer exist in the current fiscal year's approved proposals. The synthetic options prevent the dropdown from showing blank.
 
@@ -486,10 +489,10 @@ The expenditure approval form creates synthetic dropdown options with `legacy-` 
 
 Two components define identical hardcoded tag option lists used when the API call to fetch dynamic tags fails:
 
-| File                                                                                                                            | Line    | Constant                                      |
-| ------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------- |
-| [budget.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/budget/budget.tsx#L81)                                 | 81–95   | `FALLBACK_TAG_OPTIONS` (13 options)           |
-| [expenditureapproval.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/expenditure/expenditureapproval.tsx#L410) | 410–424 | `FALLBACK_TAG_OPTIONS` (identical 13 options) |
+| File                                                                                          | Line    | Constant                                      |
+| --------------------------------------------------------------------------------------------- | ------- | --------------------------------------------- |
+| [budget.tsx](../../client/src/features/budget/budget.tsx#L81)                                 | 81–95   | `FALLBACK_TAG_OPTIONS` (13 options)           |
+| [expenditureapproval.tsx](../../client/src/features/expenditure/expenditureapproval.tsx#L410) | 410–424 | `FALLBACK_TAG_OPTIONS` (identical 13 options) |
 
 **Why it exists:** If the `/budget-catalog/tags` API fails, the UI still needs to show tag options. On a fresh deploy with the catalog seeded, the API should always succeed.
 
@@ -503,7 +506,7 @@ Two components define identical hardcoded tag option lists used when the API cal
 
 The expenditure approval form has a hardcoded map of beneficiary sub-categories used when the master data API fails:
 
-**File:** [expenditureapproval.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/expenditure/expenditureapproval.tsx#L383-L409) — Lines 383–409
+**File:** [expenditureapproval.tsx](../../client/src/features/expenditure/expenditureapproval.tsx#L383-L409) — Lines 383–409
 
 ```ts
 const FALLBACK_SUBCATEGORY_OPTIONS: Record<string, string[]> = {
@@ -524,7 +527,7 @@ const FALLBACK_SUBCATEGORY_OPTIONS: Record<string, string[]> = {
 
 ### 27. Client — `FALLBACK_BENEFICIARY_OPTIONS` in Workflow Page
 
-**File:** [WorkflowApprovalPage.tsx](file:///Users/mahesh/Personal/aurademic/client/src/shared/pages/workflow/WorkflowApprovalPage.tsx#L37-L47) — Lines 37–47
+**File:** [WorkflowApprovalPage.tsx](../../client/src/shared/pages/workflow/WorkflowApprovalPage.tsx#L37-L47) — Lines 37–47
 
 ```ts
 const FALLBACK_BENEFICIARY_OPTIONS = [
@@ -550,7 +553,7 @@ const FALLBACK_BENEFICIARY_OPTIONS = [
 
 ### 28. Client — Legacy Annexure Field Fallback in Finance Approval
 
-**File:** [financeapproval.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/finance/financeapproval.tsx#L2685-L2700) — Lines 2685–2700
+**File:** [financeapproval.tsx](../../client/src/features/finance/financeapproval.tsx#L2685-L2700) — Lines 2685–2700
 
 ```ts
 const fallbackLegacyAnnexure =
@@ -572,7 +575,7 @@ const effectiveAnnexures = annexuresFromApi.length
 
 ### 29. Client — `user.role` Singular Read in Workflow Page
 
-**File:** [WorkflowApprovalPage.tsx](file:///Users/mahesh/Personal/aurademic/client/src/shared/pages/workflow/WorkflowApprovalPage.tsx#L204-L206) — Lines 204–206
+**File:** [WorkflowApprovalPage.tsx](../../client/src/shared/pages/workflow/WorkflowApprovalPage.tsx#L204-L206) — Lines 204–206
 
 ```ts
 if (user?.role) {
@@ -592,7 +595,7 @@ Inside `getNormalizedUserRoles()`, the code reads both `user.roles` (modern arra
 
 ### 30. ⚠️ KEEP — Client — `stageRoleFallback` in Finance Approval
 
-**File:** [financeapproval.tsx](file:///Users/mahesh/Personal/aurademic/client/src/features/finance/financeapproval.tsx#L2523-L2529) — Lines 2523–2529
+**File:** [financeapproval.tsx](../../client/src/features/finance/financeapproval.tsx#L2523-L2529) — Lines 2523–2529
 
 ```ts
 const stageRoleFallback: Record<string, string[]> = {
@@ -692,3 +695,32 @@ ALTER TABLE finance_requests
 > **⚠️ WARNING:** Do NOT run these column drops until all code in Phases 1–6
 > has been cleaned up and deployed. Dropping a column while code still reads it
 > will cause runtime errors.
+
+---
+
+## 31. Expenditure — Bulk NEFT → Bulk Transaction rename aliases
+
+**Files:** `expenditureRoutes.js`, `expenditureController.js`, `expenditureModel.js`,
+`expenditureapproval.tsx`
+
+"Bulk NEFT" was renamed to "Bulk Transaction" (modes NEFT / RTGS / UPI / DD). The API
+field names were renamed with the UI; these aliases keep an older deployed client working:
+
+| Where                 | Legacy alias                              | Replacement                                                                                           |
+| --------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Upload field (routes) | `bulk_neft_file`                          | `bulk_transaction_file`                                                                               |
+| Template route        | `GET /templates/bulk-neft`                | `GET /templates/bulk-transaction`                                                                     |
+| Payload keys          | `showbulkneft`, `bulknefttemplateversion` | `showbulktransaction`, `bulktransactiontype`, `bulktransactionbank`, `bulktransactiontemplateversion` |
+| Response key          | `bulk_neft_file`                          | `bulk_transaction_file`                                                                               |
+| Client load path      | `record.bulk_neft_file` fallback          | `record.bulk_transaction_file`                                                                        |
+
+**When to remove:** once no deployed client posts the old field/payload names or reads the
+old response key. Search for `LEGACY: pre-rename` to find every site.
+
+**Not legacy (keep):** the DB table `expenditure_bulk_neft_files` and the column
+`expenditure_requests.show_bulk_neft` were deliberately left un-renamed — only the API
+and UI were renamed. A future rename would need a migration plus a data move.
+
+**Also removed as part of this change:** the `chk_expenditure_bulk_neft_excel_name` CHECK
+constraint, since DD uploads accept any file format (validated per transaction type in
+`expenditureController.js` instead).

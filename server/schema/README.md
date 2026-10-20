@@ -7,8 +7,9 @@ This guide explains how to manage database schemas for the Aurademic Research Po
 ```
 schema/
 ├── README.md              # This file
-├── dump/                  # Full database backups (use this for setup)
-│   └── dump-research-YYYYMMDD.sql
+├── structure.sql          # Schema only, no rows (use this for setup)
+├── developer_seed.sql     # Minimal rows to log in and click around
+├── dump/                  # Untracked. A real dump, if someone hands you one
 ├── migrations/            # Incremental schema changes
 │   └── YYYYMMDD_description.sql
 └── legacy/                # Old individual schema files (reference only)
@@ -22,15 +23,45 @@ schema/
 # 1. Create the database
 mysql -u root -p -e "CREATE DATABASE research;"
 
-# 2. Load the latest dump
-mysql -u root -p research < schema/dump/dump-research-YYYYMMDD.sql
+# 2. Load the schema
+mysql -u root -p research < schema/structure.sql
 
-# 3. Run any newer migrations (check dates after the dump)
-# For each migration file newer than the dump:
+# 3. Apply every migration dated after structure.sql was regenerated, in date order
 mysql -u root -p research < schema/migrations/YYYYMMDD_description.sql
+
+# 4. Seed enough data to log in
+mysql -u root -p research < schema/developer_seed.sql
 ```
 
-✅ Done! You have a complete copy of the database.
+✅ Done! You have the schema and enough rows to work with.
+
+`structure.sql` is `mysqldump --no-data`, so it carries no rows. That is
+deliberate: the full dump it replaced held 555 real staff email addresses and
+the institution's financial history, in a public repository. **Never commit a
+dump with rows in it.** If you need production-like data, ask for a dump
+directly and restore it locally — `schema/dump/` is gitignored for that.
+
+---
+
+## 🔔 Notification retention
+
+The notification tables (`notification_events`, `notifications`,
+`notification_deliveries`) grow with every approval in the system and nothing
+prunes them automatically.
+
+```bash
+npm run purge:notifications -- --dry-run    # report only
+npm run purge:notifications                 # 90 / 180 day defaults
+npm run purge:notifications -- --read-days=30 --event-days=90
+```
+
+Read notifications past the window are **archived, not deleted** — they leave the
+bell but stay readable for audit. Unread notifications are never touched however
+old they are. Finished outbox events past the longer window are deleted, and
+their notification rows go with them by `ON DELETE CASCADE`.
+
+Schedule this (Task Scheduler on the IIS box, or cron) rather than running it by
+hand.
 
 ---
 
@@ -100,13 +131,32 @@ CREATE TABLE IF NOT EXISTS `notifications` (
 After making schema changes, **update the dump** so future developers get the latest version:
 
 ```bash
-# Create new dump with today's date
-mysqldump -u root -p research > schema/dump/dump-research-$(date +%Y%m%d).sql
+# Schema only — no rows, safe to commit. The sed strips DEFINER clauses.
+mysqldump -u root -p --no-data --skip-comments research \
+  | sed -E 's/ DEFINER=`[^`]*`@`[^`]*`//g' > schema/structure.sql
 
-# Commit it
-git add schema/dump/dump-research-*.sql
-git commit -m "Updated database dump"
-git push
+git add schema/structure.sql
+git commit -m "Regenerate schema structure"
+```
+
+Check the diff before committing. If `git diff` shows an `INSERT INTO`, the
+`--no-data` flag was missed and real rows are about to be published.
+
+**Why the `sed`.** `mysqldump` stamps every view with the account that created
+it — `` DEFINER=`research`@`%` `` — and MySQL refuses to read a view whose
+definer does not exist. That account exists only on the production box, so on
+any other machine all eight views (`v_budget_summary`, `v_finance_requests`,
+`v_authors`, `v_employees`, `master_cells`, `master_centres`, `master_clubs`,
+`master_professional_bodies`) are dead and every statement touching one fails
+with `ERROR 1449`. Removing the clause makes them run as the invoking user,
+which is what a developer box wants. There is no `--skip-definer` flag; the
+`sed` is the standard workaround.
+
+Verify after loading — this should print eight rows, not an error:
+
+```bash
+mysql -u root -p research -e "SELECT table_name FROM information_schema.views \
+  WHERE table_schema='research';"
 ```
 
 ---

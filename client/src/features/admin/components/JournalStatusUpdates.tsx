@@ -232,7 +232,7 @@ const JournalStatusUpdates: React.FC = () => {
   return (
     <div className="journal-status-updates">
       <div className="filter-controls">
-        <h4 className="m-0 fs-5 fw-bold text-dark">Status Updates</h4>
+        <h4 className="m-0 fs-6 fw-bold text-dark">Status Updates</h4>
         <div className="ms-auto d-flex gap-2">
           <Form.Select
             className="status-filter"

@@ -15,6 +15,9 @@ import {
   resolveAccessRoleFromPermissions,
   getAuthorizedRole,
 } from '../shared/budget/controllerPermissions.js';
+// Stricter than the local isValidDateOnlyString below: it rejects real-looking but
+// impossible dates (2026-02-31), matching what the model will actually filter on.
+import { normalizeDateOnly } from '../shared/dateRangeFilter.js';
 
 function isValidDateOnlyString(value) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ''))) return false;
@@ -1423,6 +1426,109 @@ export async function search(req, res) {
     return res.status(500).json({
       success: false,
       message: 'Search failed',
+    });
+  }
+}
+
+// Caps a runaway export; anything beyond it comes back flagged as `truncated` so the
+// UI can warn rather than silently shortening the file.
+const BUDGET_EXPORT_MAX_ROWS = 1000;
+
+/**
+ * Unpaginated variant of the queue listings, plus each proposal's line items — backs
+ * the admin "Export CSV" action. Scope resolution mirrors the matching getXBudgets
+ * handler so the export can never widen what the caller is allowed to see; the route
+ * layer applies the same per-queue permission middleware.
+ */
+export async function exportQueueBudgets(req, res, role) {
+  const normalizedRole = normalizeText(role).toLowerCase();
+
+  try {
+    const {
+      status,
+      fiscalYear,
+      q,
+      departmentFilter,
+      beneficiaryType,
+      dateFrom,
+      dateTo,
+      allFiscalYears,
+      scope: scopeParam,
+    } = req.query;
+    // An explicit date range replaces the fiscal-year scoping so the export can span
+    // years. Only honoured alongside a range, so a stray flag can't widen the scope.
+    const exportAllFiscalYears =
+      ['true', '1'].includes(String(allFiscalYears || '').toLowerCase()) &&
+      Boolean(normalizeDateOnly(dateFrom) || normalizeDateOnly(dateTo));
+    const isSuperAdminUser = hasSuperAdminAccess(req);
+    const userId = getUserId(req);
+    const userEmail = normalizeText(req.user?.email);
+
+    const scopeContext = { userId, userEmail };
+
+    if (normalizedRole === 'hod') {
+      scopeContext.department = await resolveUserDepartment(req);
+      scopeContext.departmentId = await resolveUserDepartmentId(req);
+
+      if (
+        !isSuperAdminUser &&
+        !scopeContext.department &&
+        !scopeContext.departmentId &&
+        !userEmail
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'HOD queue context unavailable',
+        });
+      }
+    }
+
+    if (normalizedRole === 'coordinator' && !isSuperAdminUser && !userEmail && !userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Coordinator queue context unavailable',
+      });
+    }
+
+    const budgets = await AdminBudgetModel.listBudgets({
+      ...scopeContext,
+      role: normalizedRole === 'admin' ? getAuthorizedRole(req, scopeParam) : normalizedRole,
+      superAdminQueueView: isSuperAdminUser,
+      page: 1,
+      limit: BUDGET_EXPORT_MAX_ROWS,
+      status: status || undefined,
+      fiscalYear: fiscalYear ? Number.parseInt(fiscalYear, 10) : undefined,
+      q,
+      departmentFilter,
+      beneficiaryType,
+      dateFrom,
+      dateTo,
+      allFiscalYears: exportAllFiscalYears,
+    });
+
+    const items = budgets.budgets || [];
+    const lineItems = await AdminBudgetModel.listProposalLinesForExport(
+      items.map((item) => item?.id),
+    );
+    const total = Number(budgets.pagination?.total ?? items.length);
+
+    return res.json({
+      success: true,
+      data: items,
+      lineItems,
+      pagination: {
+        total,
+        exported: items.length,
+        // Only flag truncation when the row cap is what bound the result.
+        truncated: items.length >= BUDGET_EXPORT_MAX_ROWS && total > items.length,
+        maxRows: BUDGET_EXPORT_MAX_ROWS,
+      },
+    });
+  } catch (error) {
+    console.error(`Budget queue export error (${normalizedRole}):`, error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to export budget proposals',
     });
   }
 }

@@ -19,6 +19,8 @@ export interface AddPayeeModalPayee {
   ifsc: string;
   beneficiaryType: AddPayeeBeneficiaryType;
   beneficiaryOrg: string;
+  /** Student / Faculty / Staff — carried only by a KSRCT or KSREI individual. */
+  beneficiaryCategory?: string;
   organizationType?: string;
   msme?: string;
   gstin?: string;
@@ -41,6 +43,7 @@ interface AddPayeeModalProps {
 
 interface PayeeTypeDraft {
   payeeName: string;
+  beneficiaryCategory: string;
   accountName: string;
   panNumber: string;
   accountNo: string;
@@ -60,6 +63,20 @@ interface OrganizationDraft extends PayeeTypeDraft {
 }
 
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'] as const;
+
+const BENEFICIARY_CATEGORY_OPTIONS = ['Student', 'Faculty', 'Staff'] as const;
+
+/**
+ * A KSRCT or KSREI beneficiary is someone from inside the institution, and
+ * Finance reports on students, faculty and staff separately — so those two
+ * ask for a category. An External payee is outside the institution and has
+ * none, and an organization is an entity rather than a person.
+ */
+const requiresBeneficiaryCategory = (
+  beneficiaryType: AddPayeeBeneficiaryType,
+  beneficiaryOrg: string,
+): boolean =>
+  beneficiaryType === 'individual' && (beneficiaryOrg === 'KSRCT' || beneficiaryOrg === 'KSREI');
 
 const ORGANIZATION_TYPE_OPTIONS = [
   'Sole Proprietorship',
@@ -150,6 +167,7 @@ const INDIAN_BANK_OPTIONS = [
 
 const emptyIndividualData: PayeeTypeDraft = {
   payeeName: '',
+  beneficiaryCategory: '',
   accountName: '',
   panNumber: '',
   accountNo: '',
@@ -294,6 +312,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
   const [organizationData, setOrganizationData] =
     useState<OrganizationDraft>(emptyOrganizationData);
   const [newPayeeName, setNewPayeeName] = useState('');
+  const [newBeneficiaryCategory, setNewBeneficiaryCategory] = useState('');
   const [newAccountName, setNewAccountName] = useState('');
   const [newPanNumber, setNewPanNumber] = useState('');
   const [newAccountNo, setNewAccountNo] = useState('');
@@ -311,6 +330,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
 
   const resetToEmpty = () => {
     setNewPayeeName('');
+    setNewBeneficiaryCategory('');
     setNewAccountName('');
     setNewPanNumber('');
     setNewAccountNo('');
@@ -331,6 +351,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     if (beneficiaryType === 'individual') {
       setIndividualData({
         payeeName: newPayeeName,
+        beneficiaryCategory: newBeneficiaryCategory,
         accountName: newAccountName,
         panNumber: newPanNumber,
         accountNo: newAccountNo,
@@ -345,6 +366,8 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
 
     setOrganizationData({
       payeeName: newPayeeName,
+      // The Organization tab never offers a category, so nothing to carry.
+      beneficiaryCategory: '',
       accountName: newAccountName,
       organizationType: orgType,
       msme: msmeValue,
@@ -364,6 +387,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
   const loadDataForType = (type: AddPayeeBeneficiaryType) => {
     const data = type === 'individual' ? individualData : organizationData;
     setNewPayeeName(data.payeeName);
+    setNewBeneficiaryCategory(data.beneficiaryCategory);
     setNewAccountName(data.accountName);
     setNewPanNumber(data.panNumber);
     setNewAccountNo(data.accountNo);
@@ -433,6 +457,8 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     const branchName = capitalizeFirstLetter(newBranchName);
     const ifsc = sanitizeUppercaseAlphaNumeric(newIfsc, 11);
     const beneficiary = normalizePayeeText(newPayeeName);
+    const beneficiaryCategory = normalizePayeeText(newBeneficiaryCategory);
+    const categoryRequired = requiresBeneficiaryCategory(beneficiaryType, beneficiary);
     const accountName = normalizePayeeText(newAccountName).toUpperCase();
     const panNumber = sanitizeUppercaseAlphaNumeric(newPanNumber, 10);
     const orgPan = sanitizeUppercaseAlphaNumeric(
@@ -449,6 +475,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
     const missingFields: string[] = [];
 
     if (!beneficiary) missingFields.push('Beneficiary');
+    if (categoryRequired && !beneficiaryCategory) missingFields.push('Category');
     if (!accountName) missingFields.push('Account Name');
     if (beneficiaryType === 'individual') {
       if (!panNumber) missingFields.push('PAN Number');
@@ -498,6 +525,7 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
       accountType,
       beneficiaryType,
       beneficiaryOrg: resolveCanonicalBeneficiaryOrg('', newPayeeName),
+      beneficiaryCategory: categoryRequired ? beneficiaryCategory : '',
       ...(beneficiaryType === 'individual' && { panNumber }),
       ...(beneficiaryType === 'organization' && {
         organizationType,
@@ -567,7 +595,15 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                         name="beneficiaryInd"
                         value={option}
                         checked={newPayeeName === option}
-                        onChange={() => setNewPayeeName(option)}
+                        onChange={() => {
+                          setNewPayeeName(option);
+                          // Moving to External drops the category rather than
+                          // keeping one that no longer applies — it would sit
+                          // there unseen and still reach the payload.
+                          if (!requiresBeneficiaryCategory('individual', option)) {
+                            setNewBeneficiaryCategory('');
+                          }
+                        }}
                         disabled={isSubmitting}
                       />
                       <span>{option}</span>
@@ -575,6 +611,26 @@ const AddPayeeModal: React.FC<AddPayeeModalProps> = ({
                   ))}
                 </div>
               </div>
+              {requiresBeneficiaryCategory('individual', newPayeeName) && (
+                <div className="add-payee-modal-row">
+                  <label>Category *</label>
+                  <div className="add-payee-modal-radio-group">
+                    {BENEFICIARY_CATEGORY_OPTIONS.map((option) => (
+                      <label key={option} className="add-payee-modal-radio">
+                        <input
+                          type="radio"
+                          name="beneficiaryCategoryInd"
+                          value={option}
+                          checked={newBeneficiaryCategory === option}
+                          onChange={() => setNewBeneficiaryCategory(option)}
+                          disabled={isSubmitting}
+                        />
+                        <span>{option}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="add-payee-modal-row">
                 <label>Account Name</label>
                 <input

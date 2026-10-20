@@ -4,6 +4,9 @@ import { fileURLToPath } from 'url';
 
 import * as expenditureModel from './expenditureModel.js';
 import './expenditureWorkflowAdapter.js';
+import notificationService from '../notification/notificationService.js';
+import { isFinanceRequestOwner } from '../shared/financeOwnership.js';
+import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import workflowService from '../shared/workflow/workflowService.js';
 import { WorkflowError } from '../shared/workflow/workflowValidators.js';
 
@@ -11,15 +14,93 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const EXPENDITURE_TEMPLATE_DIR = path.resolve(__dirname, '../../templates/expenditure');
-const BULK_NEFT_TEMPLATE_PATH = path.join(EXPENDITURE_TEMPLATE_DIR, 'bulk-neft-template.xls');
-const SAMPLE_BULK_NEFT_TEMPLATE_PATH = path.join(
-  EXPENDITURE_TEMPLATE_DIR,
+
+// Bulk transaction modes. NEFT/RTGS/UPI are uploaded on the bank's Excel template;
+// DD is a physical instrument, so a document or image scan of it is accepted too.
+const BULK_TRANSACTION_TYPES = ['NEFT', 'RTGS', 'UPI', 'DD'];
+const DEFAULT_BULK_TRANSACTION_TYPE = 'NEFT';
+const EXCEL_ONLY_BULK_TRANSACTION_TYPES = new Set(['NEFT', 'RTGS', 'UPI']);
+const EXCEL_FILE_EXTENSIONS = new Set(['.xlsx', '.xls']);
+// DD scans. Kept in sync with BULK_TRANSACTION_ALLOWED_EXTENSIONS in expenditureRoutes.js,
+// which is the outer multer guard. Browser-renderable active formats (.html, .svg, .xml)
+// are excluded on purpose: /uploads is served by express.static, so a stored one would be
+// a same-origin XSS URL for whoever opens the request.
+const DD_FILE_EXTENSIONS = new Set([
+  ...EXCEL_FILE_EXTENSIONS,
+  '.pdf',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.webp',
+  '.tif',
+  '.tiff',
+  '.doc',
+  '.docx',
+]);
+
+// Each bank publishes its own Excel layout. The files themselves are dropped into
+// server/templates/expenditure/ — until then the shared template below is served.
+const BULK_TRANSACTION_BANKS = ['AXIS', 'DBS'];
+const DEFAULT_BULK_TRANSACTION_BANK = 'AXIS';
+const BULK_TRANSACTION_BANK_LABELS = { AXIS: 'Axis Bank', DBS: 'DBS' };
+const BULK_TRANSACTION_BANK_TEMPLATE_FILES = {
+  AXIS: ['bulk-transaction-axis-template.xlsx', 'bulk-transaction-axis-template.xls'],
+  DBS: ['bulk-transaction-dbs-template.xlsx', 'bulk-transaction-dbs-template.xls'],
+};
+// FALLBACK: single shared template used before the per-bank Axis/DBS files exist.
+// Remove the fallbacks once both bank templates are in place.
+const FALLBACK_BULK_TRANSACTION_TEMPLATE_FILES = [
+  'bulk-transaction-template.xls',
+  'bulk-neft-template.xls',
   'sample-bulk-neft-template.xls',
-);
-const BULK_NEFT_TEMPLATE_DOWNLOAD_NAME = 'bulk-neft-template.xls';
+];
+
+const normalizeBulkTransactionType = (value) => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  return BULK_TRANSACTION_TYPES.includes(normalized) ? normalized : null;
+};
+
+const normalizeBulkTransactionBank = (value) => {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase();
+  return BULK_TRANSACTION_BANKS.includes(normalized) ? normalized : null;
+};
+
+const isExcelOnlyBulkTransactionType = (type) => EXCEL_ONLY_BULK_TRANSACTION_TYPES.has(type);
+
+// Only the bank-routed transfers are filed on a bank's own layout. UPI payouts use a
+// single sheet whatever the debit bank, so they carry no bank code. Mirrors
+// BANK_TEMPLATE_BULK_TRANSACTION_TYPES in expenditureapproval.tsx.
+const BANK_TEMPLATE_BULK_TRANSACTION_TYPES = new Set(['NEFT', 'RTGS']);
+const bulkTransactionTypeNeedsBank = (type) => BANK_TEMPLATE_BULK_TRANSACTION_TYPES.has(type);
 
 const normalizeText = (value) => String(value || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+const BENEFICIARY_CATEGORY_OPTIONS = ['Student', 'Faculty', 'Staff'];
+const INTERNAL_BENEFICIARY_ORGS = ['KSRCT', 'KSREI'];
+/**
+ * Mirrors the model's `resolveCanonicalBeneficiaryOrg`: a payload that names no
+ * beneficiary can still carry one in `payee_name`, which is where the older
+ * clients put it. Reading it the same way here keeps the check below from
+ * waving through the very rows the model then files as internal.
+ */
+const resolveBeneficiaryOrg = (beneficiaryOrg, payeeName) => {
+  const submitted = normalizeText(beneficiaryOrg);
+  if (submitted) return submitted;
+
+  const fromPayeeName = normalizeText(payeeName);
+  return BENEFICIARY_ORG_OPTIONS.includes(fromPayeeName) ? fromPayeeName : '';
+};
+// A KSRCT / KSREI individual is someone inside the institution, and which
+// population they belong to is part of identifying them — so the category is
+// as mandatory as the beneficiary itself. External payees and organizations
+// carry none; the model stores NULL for them either way.
+const beneficiaryCategoryRequired = (beneficiaryType, beneficiaryOrg, payeeName) =>
+  normalizeText(beneficiaryType).toLowerCase() !== 'organization' &&
+  INTERNAL_BENEFICIARY_ORGS.includes(resolveBeneficiaryOrg(beneficiaryOrg, payeeName));
 
 const toMoney = (value) => {
   const parsed = Number(String(value ?? '').replace(/,/g, ''));
@@ -150,6 +231,29 @@ const resolveCanonicalPayeeName = (payeeName, accountName) => {
 const toPositiveInt = (value) => {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+/**
+ * Payee notifications are per submission round, not per save. `upsertPayee`
+ * resets `requested_at` on every save and it is the only round marker the row
+ * carries, so it is the dedupe scope: a Save clicked twice — or two saves of
+ * the same bank details racing, which `upsertPayee` now resolves instead of
+ * failing — collapses to one notification, while a genuine resubmission later
+ * is news again and gets through.
+ *
+ * With no `requested_at` to hand, dedupe is left off rather than keyed on
+ * `Date.now()`: a key that can never match is not deduplication, it just fills
+ * the unique index with single-use values and reads like an idempotency
+ * guarantee that is not there. Same choice, and the same reason, as
+ * `budgetNotifications`.
+ */
+const payeeRoundKey = (payeeId, suffix, requestedAt) => {
+  const id = toPositiveInt(payeeId);
+  const round = requestedAt ? new Date(requestedAt).getTime() : Number.NaN;
+  // Seconds, not milliseconds: MySQL stores the timestamp to the second, but a
+  // driver configured for date strings can still hand back a value that parses
+  // with millisecond noise.
+  return id && Number.isFinite(round) ? `payee:${id}:${suffix}:${Math.floor(round / 1000)}` : null;
 };
 
 const parseWorkflowState = (value) => {
@@ -286,11 +390,51 @@ const parseRequestPayload = (req) => {
 
 const getExpenditureUploads = (req) => ({
   billFiles: Array.isArray(req.files?.bill_files) ? req.files.bill_files : [],
-  bulkNeftFile: Array.isArray(req.files?.bulk_neft_file) ? req.files.bulk_neft_file[0] : null,
+  bulkTransactionFile: Array.isArray(req.files?.bulk_transaction_file)
+    ? req.files.bulk_transaction_file[0]
+    : // LEGACY: pre-rename field name. Remove with the route's bulk_neft_file entry.
+      Array.isArray(req.files?.bulk_neft_file)
+      ? req.files.bulk_neft_file[0]
+      : null,
   paymentProofFiles: Array.isArray(req.files?.payment_proof_files)
     ? req.files.payment_proof_files
     : [],
 });
+
+// `file.path` is derived from the client-supplied `originalname`, so the delete is routed
+// through deleteUploadedFile, which refuses any path resolving outside `uploads/`.
+const discardUploadedFile = (file) => {
+  if (!file?.path) return;
+  deleteUploadedFile(file.path);
+};
+
+// Multer has already written every part of the multipart request to disk by the time a
+// handler can reject it, so all of them have to go — not just the offending one.
+const discardExpenditureUploads = (uploads = {}) => {
+  [
+    uploads.bulkTransactionFile,
+    ...(Array.isArray(uploads.billFiles) ? uploads.billFiles : []),
+    ...(Array.isArray(uploads.paymentProofFiles) ? uploads.paymentProofFiles : []),
+  ].forEach(discardUploadedFile);
+};
+
+/**
+ * NEFT/RTGS/UPI files must be the bank's Excel template; DD also accepts a document or
+ * image scan. Returns an error message when the upload does not match the selected mode.
+ */
+const validateBulkTransactionUpload = (file, transactionType) => {
+  if (!file) return null;
+
+  const extension = path.extname(file.originalname || '').toLowerCase();
+
+  if (isExcelOnlyBulkTransactionType(transactionType)) {
+    if (EXCEL_FILE_EXTENSIONS.has(extension)) return null;
+    return `${transactionType} bulk transaction upload only accepts Excel files (.xlsx or .xls)`;
+  }
+
+  if (DD_FILE_EXTENSIONS.has(extension)) return null;
+  return `DD bulk transaction upload accepts only ${[...DD_FILE_EXTENSIONS].join(', ')} files`;
+};
 
 const VALID_REQUEST_TYPES = new Set(['Advance', 'Settlement', 'Expenditure']);
 
@@ -414,12 +558,53 @@ const normalizeIncomingPayload = (payload = {}) => {
   if (normalized.paymentdebitaccount && !normalized.payment_debit_account) {
     normalized.payment_debit_account = normalized.paymentdebitaccount;
   }
-  if (normalized.showbulkneft !== undefined && normalized.show_bulk_neft === undefined) {
-    normalized.show_bulk_neft = normalized.showbulkneft;
+  if (
+    normalized.showbulktransaction !== undefined &&
+    normalized.show_bulk_transaction === undefined
+  ) {
+    normalized.show_bulk_transaction = normalized.showbulktransaction;
   }
-  if (normalized.bulknefttemplateversion && !normalized.bulk_neft_template_version) {
-    normalized.bulk_neft_template_version = normalized.bulknefttemplateversion;
+  if (normalized.bulktransactiontemplateversion && !normalized.bulk_transaction_template_version) {
+    normalized.bulk_transaction_template_version = normalized.bulktransactiontemplateversion;
   }
+  if (normalized.bulktransactiontype && !normalized.bulk_transaction_type) {
+    normalized.bulk_transaction_type = normalized.bulktransactiontype;
+  }
+  if (normalized.bulktransactionbank && !normalized.bulk_transaction_bank) {
+    normalized.bulk_transaction_bank = normalized.bulktransactionbank;
+  }
+  // Tri-state: absent means "this client does not manage the bulk transaction section",
+  // which must not be read as "the stored file was deleted".
+  if (
+    normalized.bulktransactionfileretained !== undefined &&
+    normalized.bulk_transaction_file_retained === undefined
+  ) {
+    normalized.bulk_transaction_file_retained = normalized.bulktransactionfileretained;
+  }
+  normalized.bulk_transaction_file_retained =
+    normalized.bulk_transaction_file_retained === undefined
+      ? undefined
+      : parseBoolean(normalized.bulk_transaction_file_retained);
+  // LEGACY: pre-"Bulk Transaction" payload keys. Remove once no deployed client sends them.
+  if (normalized.showbulkneft !== undefined && normalized.show_bulk_transaction === undefined) {
+    normalized.show_bulk_transaction = normalized.showbulkneft;
+  }
+  if (normalized.show_bulk_neft !== undefined && normalized.show_bulk_transaction === undefined) {
+    normalized.show_bulk_transaction = normalized.show_bulk_neft;
+  }
+  if (normalized.bulknefttemplateversion && !normalized.bulk_transaction_template_version) {
+    normalized.bulk_transaction_template_version = normalized.bulknefttemplateversion;
+  }
+  if (normalized.bulk_neft_template_version && !normalized.bulk_transaction_template_version) {
+    normalized.bulk_transaction_template_version = normalized.bulk_neft_template_version;
+  }
+
+  normalized.bulk_transaction_type =
+    normalizeBulkTransactionType(normalized.bulk_transaction_type) || DEFAULT_BULK_TRANSACTION_TYPE;
+  normalized.bulk_transaction_bank = bulkTransactionTypeNeedsBank(normalized.bulk_transaction_type)
+    ? normalizeBulkTransactionBank(normalized.bulk_transaction_bank) ||
+      DEFAULT_BULK_TRANSACTION_BANK
+    : null;
 
   if (Array.isArray(normalized.advancerows) && !normalized.advance_rows) {
     normalized.advance_rows = normalized.advancerows;
@@ -486,10 +671,23 @@ const sendAccessDeniedError = (res, err) => {
   return true;
 };
 
-const resolveBulkNeftTemplatePath = () => {
-  if (fs.existsSync(BULK_NEFT_TEMPLATE_PATH)) return BULK_NEFT_TEMPLATE_PATH;
-  if (fs.existsSync(SAMPLE_BULK_NEFT_TEMPLATE_PATH)) return SAMPLE_BULK_NEFT_TEMPLATE_PATH;
-  return null;
+/**
+ * Locates the template to serve for a bank. `isBankSpecific` is false when the shared
+ * fallback template was served instead of that bank's own layout — the caller must not
+ * then name the download after the bank, or users fill in the wrong layout.
+ */
+const resolveBulkTransactionTemplate = (bank) => {
+  for (const candidate of BULK_TRANSACTION_BANK_TEMPLATE_FILES[bank] || []) {
+    const candidatePath = path.join(EXPENDITURE_TEMPLATE_DIR, candidate);
+    if (fs.existsSync(candidatePath)) return { templatePath: candidatePath, isBankSpecific: true };
+  }
+
+  for (const candidate of FALLBACK_BULK_TRANSACTION_TEMPLATE_FILES) {
+    const candidatePath = path.join(EXPENDITURE_TEMPLATE_DIR, candidate);
+    if (fs.existsSync(candidatePath)) return { templatePath: candidatePath, isBankSpecific: false };
+  }
+
+  return { templatePath: null, isBankSpecific: false };
 };
 
 const isSuperAdminRequest = (req) =>
@@ -552,21 +750,35 @@ const canAccessExpenditureRecord = (req, record) => {
   const userId = toPositiveInt(req.user?.id);
   if (!record) return false;
   if (isSuperAdminRequest(req)) return true;
-  if (userId && userId === toPositiveInt(record.created_by)) return true;
+  // Creator OR the applicant it was raised for — the dashboard and list show a claim to both,
+  // so both have to be able to open it. See shared/financeOwnership.js.
+  if (isFinanceRequestOwner(record, userId)) return true;
   if (hasAnyExpenditureWorkflowPermission(req)) return true;
   return canAccessExpenditureByRole(req);
 };
 
 const expenditureController = {
-  async downloadBulkNeftTemplate(req, res) {
+  async downloadBulkTransactionTemplate(req, res) {
     try {
-      const templatePath = resolveBulkNeftTemplatePath();
-      if (!templatePath) return sendError(res, 404, 'Bulk NEFT template not found');
+      const bank = normalizeBulkTransactionBank(req.query?.bank) || DEFAULT_BULK_TRANSACTION_BANK;
+      const { templatePath, isBankSpecific } = resolveBulkTransactionTemplate(bank);
+      if (!templatePath) {
+        return sendError(
+          res,
+          404,
+          `${BULK_TRANSACTION_BANK_LABELS[bank]} bulk transaction template not found`,
+        );
+      }
 
+      // FALLBACK: the shared template is not the bank's layout, so it is not named after
+      // the bank. Remove this branch once both Axis and DBS templates are in place.
+      const downloadName = isBankSpecific
+        ? `bulk-transaction-${bank.toLowerCase()}-template${path.extname(templatePath)}`
+        : `bulk-transaction-template${path.extname(templatePath)}`;
       res.setHeader('Content-Type', 'application/vnd.ms-excel');
-      return res.download(templatePath, BULK_NEFT_TEMPLATE_DOWNLOAD_NAME);
+      return res.download(templatePath, downloadName);
     } catch (err) {
-      return handleError(res, err, 'Error downloading Bulk NEFT template');
+      return handleError(res, err, 'Error downloading bulk transaction template');
     }
   },
 
@@ -632,8 +844,26 @@ const expenditureController = {
       const dashboardRowId = normalizeText(req.query.dashboard_row_id);
       const workflowRowRef = normalizeText(req.query.workflowrowref || req.query.workflow_row_ref);
 
+      // The applicant the form is being filled for, so the running total covers claims a shared
+      // department login raised for them too. It arrives from the query string, so honour it
+      // only for a caller entitled to that applicant's figures — an unrelated employee_id would
+      // otherwise report someone else's advances. A finance request pins the card on its own,
+      // making the applicant filter redundant, so skip the lookup on that path.
+      const requestedEmployeeId = toPositiveInt(req.query.employee_id);
+      const canScopeToApplicant =
+        Boolean(requestedEmployeeId) &&
+        !financeRequestId &&
+        (isSuperAdminRequest(req) ||
+          hasAnyExpenditureWorkflowPermission(req) ||
+          (await expenditureModel.canReadApplicantAdvanceTotals({
+            userId,
+            employeeId: requestedEmployeeId,
+          })));
+      const employeeId = canScopeToApplicant ? requestedEmployeeId : null;
+
       const summary = await expenditureModel.getAdvanceSummary({
         userId,
+        employeeId,
         budgetLineId,
         head,
         subHead,
@@ -679,7 +909,7 @@ const expenditureController = {
       const context = await expenditureModel.getFinanceRequestContext(financeId);
       if (!context) return sendError(res, 404, 'Finance request not found');
 
-      const isOwner = userId && toPositiveInt(context.created_by) === userId;
+      const isOwner = isFinanceRequestOwner(context, userId);
       if (
         !isSuperAdmin &&
         !isOwner &&
@@ -708,6 +938,41 @@ const expenditureController = {
       return res.json({ status: 'success', data: payees });
     } catch (err) {
       return handleError(res, err, 'Error listing payees');
+    }
+  },
+
+  async listPayeeDirectory(req, res) {
+    try {
+      const {
+        search = '',
+        status = 'all',
+        beneficiary_type: beneficiaryType = 'all',
+        limit = 20,
+        offset = 0,
+      } = req.query;
+
+      const result = await expenditureModel.listPayeeDirectory({
+        search,
+        status,
+        beneficiaryType,
+        limit,
+        offset,
+      });
+
+      return res.json({
+        status: 'success',
+        success: true,
+        data: result.rows,
+        meta: {
+          total: result.total,
+          counts: result.counts,
+          pending_total: result.pendingTotal,
+          limit: result.limit,
+          offset: result.offset,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error listing payee directory');
     }
   },
 
@@ -741,8 +1006,18 @@ const expenditureController = {
         data: payee,
       });
     } catch (err) {
+      // `updatePayeeById` reports a bad payload by throwing, in two shapes: a
+      // missing field ("... is required") and a field outside its vocabulary
+      // ("account_type must be Savings or Current", "beneficiary_category must
+      // be Student, Faculty or Staff"). Both are the caller's mistake, so both
+      // answer 400 — without the second pattern a category the form left blank
+      // came back as a 500 the user could not act on.
       const message = normalizeText(err.message);
-      if (message.includes('required') || message.includes('Invalid')) {
+      if (
+        message.includes('required') ||
+        message.includes('Invalid') ||
+        message.includes('must be')
+      ) {
         return sendError(res, 400, message);
       }
       return handleError(res, err, 'Error updating payee');
@@ -763,6 +1038,27 @@ const expenditureController = {
       });
 
       if (!updated) return sendError(res, 404, 'Payee not found');
+
+      // Read after the update so the notification carries the payee's name;
+      // `created_by` is who submitted the details and so who has to fix them.
+      const payee = await expenditureModel.getPayeeById(id);
+
+      await notificationService.emit({
+        type: decision === 'approved' ? 'payee.approved' : 'payee.rejected',
+        actorUserId: toPositiveInt(req.user?.id),
+        subject: {
+          moduleKey: 'expenditure',
+          recordId: id,
+          name: payee?.payee_name || payee?.account_name || null,
+        },
+        audience: payee?.created_by
+          ? [{ kind: 'user', userId: payee.created_by, recipientRole: 'applicant' }]
+          : [],
+        data: { feedback: rejectionReason || null },
+        // One decision per submission round; a double-clicked Approve is the
+        // same decision, not a second one.
+        dedupeKey: payeeRoundKey(id, decision, payee?.requested_at),
+      });
 
       return res.json({
         status: 'success',
@@ -798,7 +1094,17 @@ const expenditureController = {
   async createPayee(req, res) {
     try {
       const userId = toPositiveInt(req.user?.id);
-      const { payee_name, account_name, account_no, ifsc, bank_name, branch_name } = req.body || {};
+      const {
+        payee_name,
+        account_name,
+        account_no,
+        ifsc,
+        bank_name,
+        branch_name,
+        beneficiary_type,
+        beneficiary_org,
+        beneficiary_category,
+      } = req.body || {};
       const canonicalPayeeName = resolveCanonicalPayeeName(payee_name, account_name);
 
       if (!canonicalPayeeName || !account_no || !ifsc || !bank_name || !branch_name) {
@@ -807,6 +1113,13 @@ const expenditureController = {
           400,
           'accountant name, account_no, ifsc, bank_name and branch_name are required',
         );
+      }
+
+      if (
+        beneficiaryCategoryRequired(beneficiary_type, beneficiary_org, payee_name) &&
+        !BENEFICIARY_CATEGORY_OPTIONS.includes(normalizeText(beneficiary_category))
+      ) {
+        return sendError(res, 400, 'category must be Student, Faculty or Staff');
       }
 
       const payeeId = await expenditureModel.upsertPayee(
@@ -818,6 +1131,31 @@ const expenditureController = {
         userId,
       );
       const payee = await expenditureModel.getPayeeById(payeeId);
+
+      // upsertPayee forces approval_status back to 'pending' on both the
+      // insert and the update path, so every save here needs vetting.
+      //
+      // Addressed to the DoF rather than to everyone the route lets through
+      // (admin/hod/coordinator/dof/principal/entity_approver): the payee
+      // directory is a DoF-curated list, and notifying six roles for every
+      // bank-detail edit would be noise nobody reads.
+      await notificationService.emit({
+        type: 'payee.submitted',
+        actorUserId: userId,
+        subject: { moduleKey: 'expenditure', recordId: payeeId, name: canonicalPayeeName },
+        audience: [
+          { kind: 'role', roleCodes: ['dof'], recipientRole: 'approver' },
+          {
+            kind: 'permission',
+            permissions: ['expenditure.workflow.dof'],
+            recipientRole: 'approver',
+          },
+        ],
+        data: { applicantName: req.user?.name || null },
+        // Details can be corrected and resubmitted, and each round needs a
+        // fresh look.
+        dedupeKey: payeeRoundKey(payeeId, 'submitted', payee?.requested_at),
+      });
 
       return res.status(201).json({
         status: 'success',
@@ -902,6 +1240,15 @@ const expenditureController = {
         );
       }
       const uploads = getExpenditureUploads(req);
+
+      const bulkTransactionUploadError = validateBulkTransactionUpload(
+        uploads.bulkTransactionFile,
+        payload.bulk_transaction_type,
+      );
+      if (bulkTransactionUploadError) {
+        discardExpenditureUploads(uploads);
+        return sendError(res, 400, bulkTransactionUploadError);
+      }
 
       const result = await expenditureModel.createExpenditureRequest(payload, userId, uploads);
       const submittedTotal = calculateSubmittedExpenditureTotal(payload);
@@ -1021,7 +1368,7 @@ const expenditureController = {
       const record = await expenditureModel.getExpenditureById(id);
       if (!record) return sendError(res, 404, 'Expenditure request not found');
 
-      const isOwner = userId && userId === toPositiveInt(record.created_by);
+      const isOwner = isFinanceRequestOwner(record, userId);
       const isWorkflowEditor = hasAnyExpenditureWorkflowPermission(req) || isSuperAdminRequest(req);
       const workflowState = parseWorkflowState(record.workflow_state) || null;
       const workflowStatus = normalizeText(
@@ -1079,6 +1426,8 @@ const expenditureController = {
       const hasProposalPayload = Boolean(
         req.body?.payload ||
         req.files?.bill_files ||
+        req.files?.bulk_transaction_file ||
+        // LEGACY: pre-rename field name. Remove with the route's bulk_neft_file entry.
         req.files?.bulk_neft_file ||
         req.body?.workflowrequesttype ||
         req.body?.workflow_request_type ||
@@ -1109,6 +1458,15 @@ const expenditureController = {
           );
         }
         const uploads = getExpenditureUploads(req);
+
+        const bulkTransactionUploadError = validateBulkTransactionUpload(
+          uploads.bulkTransactionFile,
+          payload.bulk_transaction_type,
+        );
+        if (bulkTransactionUploadError) {
+          discardExpenditureUploads(uploads);
+          return sendError(res, 400, bulkTransactionUploadError);
+        }
 
         const result = await expenditureModel.updateExpenditureRequest(
           id,
@@ -1161,7 +1519,7 @@ const expenditureController = {
       const record = await expenditureModel.getExpenditureById(id);
       if (!record) return sendError(res, 404, 'Expenditure request not found');
 
-      if (!isSuperAdmin && (!userId || toPositiveInt(record.created_by) !== userId)) {
+      if (!isSuperAdmin && !isFinanceRequestOwner(record, userId)) {
         return sendError(res, 403, 'Only applicant can delete this request');
       }
 
@@ -1188,6 +1546,20 @@ const expenditureController = {
       }
 
       await expenditureModel.deleteExpenditure(id, { isSuperAdmin });
+
+      // Only meaningful when a super admin deletes someone else's request: an
+      // applicant deleting their own is the actor and is excluded.
+      const ownerUserId = toPositiveInt(record.created_by);
+      await notificationService.emit({
+        type: 'expenditure.deleted',
+        actorUserId: userId,
+        subject: { moduleKey: 'expenditure', recordId: id, applicantUserId: ownerUserId },
+        audience: ownerUserId
+          ? [{ kind: 'user', userId: ownerUserId, recipientRole: 'applicant' }]
+          : [],
+        dedupeKey: `expenditure:${id}:deleted`,
+      });
+
       return res.json({ status: 'success', message: 'Expenditure request deleted' });
     } catch (err) {
       if (normalizeText(err.message).toLowerCase().includes('only pending'))
@@ -1286,6 +1658,69 @@ const expenditureController = {
       });
     } catch (err) {
       return handleError(res, err, 'Error in getExpenditureQueue');
+    }
+  },
+
+  /**
+   * Same queue, unpaginated, with every request's advance/expenditure/settlement rows —
+   * backs the admin "Export CSV" action so the file covers the whole filtered set.
+   */
+  async getExpenditureQueueExport(req, res) {
+    try {
+      const stage = normalizeText(req.params.stage).toLowerCase();
+      const {
+        workflowStatus,
+        statusCategory,
+        level1Role,
+        q,
+        allProposals,
+        fiscalYear,
+        dateFrom,
+        dateTo,
+      } = req.query;
+      const normalizedLevel1Role = normalizeText(level1Role).toLowerCase();
+      const effectiveLevel1Role =
+        stage === 'level1'
+          ? ['hod', 'coordinator'].includes(normalizedLevel1Role)
+            ? normalizedLevel1Role
+            : resolveExpenditureLevel1QueueRole(req)
+          : null;
+
+      const queue = await workflowService.listQueueForExport({
+        moduleKey: 'expenditure',
+        stage,
+        actor: resolveActor(req),
+        filters: {
+          workflowStatus,
+          statusCategory,
+          // An explicit date range replaces the fiscal-year scoping so the export can
+          // span years; the client blanks fiscalYear when it sends a range.
+          fiscalYear,
+          dateFrom,
+          dateTo,
+          level1Role: effectiveLevel1Role,
+          q,
+          allProposals: String(allProposals || '').toLowerCase() === 'true' || allProposals === '1',
+        },
+      });
+
+      return res.status(200).json({
+        // `status` keeps this in line with the rest of the expenditure module; `success`
+        // satisfies the project-wide response contract.
+        success: true,
+        status: 'success',
+        data: queue.items,
+        lineItems: queue.lineItems,
+        pagination: {
+          total: queue.total,
+          exported: queue.items.length,
+          truncated: queue.truncated,
+          maxRows: queue.maxRows,
+          statusCounts: queue.statusCounts,
+        },
+      });
+    } catch (err) {
+      return handleError(res, err, 'Error in getExpenditureQueueExport');
     }
   },
 
@@ -1487,7 +1922,7 @@ const expenditureController = {
         return sendError(res, 404, 'Expenditure request not found');
       }
 
-      if (!userId || toPositiveInt(record.created_by) !== userId) {
+      if (!isFinanceRequestOwner(record, userId)) {
         return sendError(res, 403, 'Only applicant can resubmit this request');
       }
 

@@ -16,11 +16,25 @@ import {
   beneficiaryTypeToEntityTypeCode,
 } from '../shared/budget/budgetUtils.js';
 import { searchApplicant as searchEmployeeApplicants } from '../shared/budget/userResolvers.js';
+import { buildDateRangeCondition } from '../shared/dateRangeFilter.js';
+import { buildSettledAdvanceExpr, resolveAdvanceUsageAmount } from '../shared/expenditureClaims.js';
+import {
+  buildClaimedExpenditureStatusCondition,
+  buildExpenditureDisplayRefExpr,
+  buildExpenditureFiscalYearCondition,
+  collateBudgetText,
+} from '../shared/expenditureFilters.js';
+import {
+  buildFinanceOwnerCondition,
+  buildFinanceOwnerParams,
+  isFinanceRequestOwner,
+} from '../shared/financeOwnership.js';
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 
 const normalizeText = (v) => String(v || '').trim();
 const BENEFICIARY_ORG_OPTIONS = ['KSRCT', 'KSREI', 'External'];
+const BENEFICIARY_CATEGORY_OPTIONS = ['Student', 'Faculty', 'Staff'];
 const ACCOUNT_TYPE_OPTIONS = ['Savings', 'Current'];
 const EXPENDITURE_REQUEST_COLUMN_EXISTS_CACHE = new Map();
 
@@ -29,6 +43,17 @@ const normalizeAccountType = (value) =>
   ACCOUNT_TYPE_OPTIONS.find(
     (option) => option.toLowerCase() === normalizeText(value).toLowerCase(),
   ) || null;
+const normalizeBeneficiaryCategory = (value) =>
+  BENEFICIARY_CATEGORY_OPTIONS.find(
+    (option) => option.toLowerCase() === normalizeText(value).toLowerCase(),
+  ) || '';
+/**
+ * Only an individual from inside the institution has a Student / Faculty /
+ * Staff category: an External payee is outside it and an organization is an
+ * entity rather than a person, so both are stored with no category at all.
+ */
+const beneficiaryCategoryApplies = (beneficiaryType, beneficiaryOrg) =>
+  beneficiaryType !== 'organization' && (beneficiaryOrg === 'KSRCT' || beneficiaryOrg === 'KSREI');
 const sanitizeAlphaNumericUpper = (value, maxLength) =>
   normalizeText(value)
     .toUpperCase()
@@ -78,6 +103,30 @@ const hasFinanceRequestColumn = async (columnName, { tx = db } = {}) => {
   );
   const exists = Number(rows?.[0]?.count || 0) > 0;
   FINANCE_REQUEST_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
+  return exists;
+};
+
+const BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE = new Map();
+
+// transaction_type / bank_code are added by the 20260810 migration; guard reads and
+// writes so a not-yet-migrated database keeps working.
+const hasBulkTransactionFileColumn = async (columnName, { tx = db } = {}) => {
+  const normalizedColumn = normalizeText(columnName);
+  if (!normalizedColumn) return false;
+  if (BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE.has(normalizedColumn)) {
+    return BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE.get(normalizedColumn) === true;
+  }
+
+  const [rows] = await tx.query(
+    `SELECT COUNT(*) AS count
+       FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = 'expenditure_bulk_neft_files'
+        AND COLUMN_NAME = ?`,
+    [normalizedColumn],
+  );
+  const exists = Number(rows?.[0]?.count || 0) > 0;
+  BULK_TRANSACTION_FILE_COLUMN_EXISTS_CACHE.set(normalizedColumn, exists);
   return exists;
 };
 
@@ -346,7 +395,20 @@ const FINANCE_BREAKUP_APPROVED_BASE_SQL = `
 `;
 
 const VALID_REQUEST_TYPES = new Set(['Advance', 'Settlement', 'Expenditure']);
-const DEFAULT_BULK_NEFT_TEMPLATE_VERSION = '2026-04-11';
+const DEFAULT_BULK_TRANSACTION_TEMPLATE_VERSION = '2026-04-11';
+const VALID_BULK_TRANSACTION_TYPES = new Set(['NEFT', 'RTGS', 'UPI', 'DD']);
+const DEFAULT_BULK_TRANSACTION_TYPE = 'NEFT';
+const VALID_BULK_TRANSACTION_BANKS = new Set(['AXIS', 'DBS']);
+
+const normalizeBulkTransactionType = (value) => {
+  const type = normalizeText(value).toUpperCase();
+  return VALID_BULK_TRANSACTION_TYPES.has(type) ? type : DEFAULT_BULK_TRANSACTION_TYPE;
+};
+
+const normalizeBulkTransactionBank = (value) => {
+  const bank = normalizeText(value).toUpperCase();
+  return VALID_BULK_TRANSACTION_BANKS.has(bank) ? bank : null;
+};
 
 const normalizeRequestType = (value) => {
   const type = normalizeText(value);
@@ -381,20 +443,6 @@ const normalizeSqlDate = (value) => {
 
 const ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL = `
   LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) NOT IN ('rejected', 'deleted', 'archived')
-`;
-
-// Normalize a text column to a single charset/collation so it can be combined
-// across tables in a UNION. Different expenditure tables were created with
-// differing column collations, which triggers ER_CANT_AGGREGATE_NCOLLATIONS
-// (Illegal mix of collations) on UNION. Force a common collation here.
-const collateBudgetText = (expr) => `CONVERT(${expr} USING utf8mb4) COLLATE utf8mb4_unicode_ci`;
-
-const FINALIZED_EXPENDITURE_REQUEST_STATUS_SQL = `
-  (
-    LOWER(TRIM(COALESCE(er.overall_status, ''))) IN ('approved', 'completed')
-    OR LOWER(TRIM(COALESCE(er.workflow_status, ''))) IN ('approved', 'completed')
-    OR LOWER(TRIM(COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.status')), ''))) IN ('approved', 'completed')
-  )
 `;
 
 const WORKFLOW_ROW_REF_SQL_EXPR = `
@@ -705,10 +753,20 @@ const hasSettlementRowsForClosure = (rows = []) =>
       hasBudgetLineSelection(row),
   );
 
+// LEGACY: expenditure requests raised before `expenditure_requests.employee_id` existed carry
+// NULL there, so the creating login is the only claimant identity available for them. Remove
+// once every row has employee_id populated.
+const LEGACY_NULL_APPLICANT_CLAIMANT_SQL = '(er.employee_id IS NULL AND er.created_by = ?)';
+
 async function getCumulativeAdvanceSummary(
   connOrDb,
   {
     userId,
+    // The applicant the claim is FOR. A cumulative advance belongs to the applicant, not to
+    // the login that typed it — a shared department account and the applicant's own login can
+    // both raise claims against the same head and both have to count. See
+    // shared/financeOwnership.js for why the two are routinely different people.
+    employeeId = null,
     budgetLineId,
     head,
     subHead,
@@ -803,19 +861,26 @@ async function getCumulativeAdvanceSummary(
       `;
   }
 
-  let targetUid = uid;
+  // Who the prior advances have to belong to, in order of precision:
+  //   1. a finance request pins the card, which is narrower than any person — no person filter.
+  //   2. the applicant employee, when known: every claim raised FOR them counts, whichever
+  //      login typed it. Callers must authorize the applicant first — see
+  //      `canReadApplicantAdvanceTotals`.
+  //   3. otherwise the caller's own identity — creator OR the applicant whose login this is —
+  //      which is the same rule the dashboard and list use.
+  const claimantEmployeeId = toPositiveInt(employeeId);
+  let claimantClause;
+  let claimantParams;
   if (financeId) {
-    const [frOwnerRows] = await source.execute(
-      `SELECT created_by FROM finance_requests WHERE id = ? LIMIT 1`,
-      [financeId],
-    );
-    if (frOwnerRows && frOwnerRows.length > 0) {
-      targetUid = toPositiveInt(frOwnerRows[0].created_by) || uid;
-    }
+    claimantClause = '1 = 1';
+    claimantParams = [];
+  } else if (claimantEmployeeId) {
+    claimantClause = `(er.employee_id = ? OR ${LEGACY_NULL_APPLICANT_CLAIMANT_SQL})`;
+    claimantParams = [claimantEmployeeId, uid];
+  } else {
+    claimantClause = buildFinanceOwnerCondition('er');
+    claimantParams = buildFinanceOwnerParams(uid);
   }
-
-  const creatorClause = financeId ? '1 = 1' : 'er.created_by = ?';
-  const creatorParams = financeId ? [] : [targetUid];
 
   const exclusionClause = excludedExpenditureId ? 'AND er.id <> ?' : '';
   const exclusionParams = excludedExpenditureId ? [excludedExpenditureId] : [];
@@ -865,14 +930,22 @@ async function getCumulativeAdvanceSummary(
       legacyMatchParams = [lineId, normalizedHead, normalizedSubHead];
     }
   } else if (!lineId) {
-    // NEW: prefer ID match; fall back to text for un-backfilled rows.
+    // NEW: the ID match catches rows whose head/sub was renamed in the catalog. The text match
+    // runs beside it — never instead of it — for two reasons:
+    //   LEGACY: rows pre-dating the catalog, which carry snapshot text and no IDs. Remove this
+    //     reason once every advance row is backfilled:
+    //       SELECT COUNT(*) FROM expenditure_advance_rows WHERE budget_head_id IS NULL;
+    //   Rows pointing at a DUPLICATE catalog entry of the same name. No backfill fixes those,
+    //     so this reason stands until duplicates are merged out of the catalog.
+    // Both arms must count, whatever the other one holds — callers that resolve IDs (settlement
+    // validation) and callers that don't (the advance-summary endpoint the form reads) have to
+    // arrive at the same total or the form's figure gets rejected.
     if (headIdVal && subIdVal) {
       rowMatchClause = `
         (
           (ar.budget_head_id = ? AND ar.budget_sub_head_id = ?)
           OR (
-            ar.budget_head_id IS NULL
-            AND LOWER(TRIM(ar.budget_head)) = ?
+            LOWER(TRIM(ar.budget_head)) = ?
             AND LOWER(TRIM(ar.sub_head)) = ?
           )
         )
@@ -907,7 +980,7 @@ async function getCumulativeAdvanceSummary(
          COUNT(DISTINCT er.id)               AS cnt
        FROM expenditure_advance_rows ar
        JOIN expenditure_requests er ON er.id = ar.expenditure_id
-      WHERE ${creatorClause}
+      WHERE ${claimantClause}
         AND er.request_type = 'Advance'
         AND ${activeStatusClause}
         ${scopeClause}
@@ -919,7 +992,7 @@ async function getCumulativeAdvanceSummary(
          COALESCE(SUM(${legacyAmountExpr}), 0) AS total_advanced,
          COUNT(*)                              AS cnt
        FROM expenditure_requests er
-      WHERE ${creatorClause}
+      WHERE ${claimantClause}
         AND er.request_type = 'Advance'
         AND ${activeStatusClause}
         ${scopeClause}
@@ -932,11 +1005,11 @@ async function getCumulativeAdvanceSummary(
         )
      ) AS legacy_totals`,
     [
-      ...creatorParams,
+      ...claimantParams,
       ...scopeParams,
       ...exclusionParams,
       ...rowMatchParams,
-      ...creatorParams,
+      ...claimantParams,
       ...scopeParams,
       ...exclusionParams,
       ...legacyMatchParams,
@@ -1386,8 +1459,12 @@ async function getApprovedFinanceRequestOwner(connOrDb, financeRequestId) {
 
   const source = connOrDb || db;
   const [rows] = await source.execute(
-    `SELECT fr.id, fr.created_by
+    // `applicant_user_id` is the login of the applicant the request was raised FOR, which is a
+    // different person from `created_by` whenever a shared department account submitted it.
+    // Both count as the owner — see shared/financeOwnership.js.
+    `SELECT fr.id, fr.created_by, emp_owner.user_id AS applicant_user_id
        FROM finance_requests fr
+       LEFT JOIN master_employees emp_owner ON emp_owner.id = fr.employee_id
       WHERE fr.id = ?
         AND (
           LOWER(TRIM(COALESCE(fr.overall_status, ''))) = 'approved'
@@ -1762,11 +1839,61 @@ export async function getApprovedBudgets({
 // ─── Pre-advance summary ──────────────────────────────────────────────────────
 
 /**
- * Total amount already advanced by this user on a given budget line.
+ * May this login read the cumulative advance total of this applicant?
+ *
+ * The advance-summary endpoint takes its applicant from the query string, and that total is a
+ * money figure, so an arbitrary employee_id must not be honoured — otherwise any authenticated
+ * user could probe any employee's advances. Entitled callers are:
+ *
+ *   - the applicant themselves (their login is `master_employees.user_id`);
+ *   - a login that has already raised a finance or expenditure request FOR that applicant,
+ *     which is the shared department-account case this whole rule exists for.
+ *
+ * Everyone else falls back to their own totals — see `getAdvanceSummary`. Workflow actors and
+ * super admins are allowed by the caller, since they already see every claim.
+ */
+export async function canReadApplicantAdvanceTotals({ userId, employeeId } = {}) {
+  const uid = toPositiveInt(userId);
+  const empId = toPositiveInt(employeeId);
+  if (!uid || !empId) return false;
+
+  const [rows] = await db.execute(
+    `SELECT 1
+       FROM master_employees me
+      WHERE me.id = ?
+        AND (
+          me.user_id = ?
+          OR EXISTS (
+            SELECT 1
+              FROM finance_requests fr
+             WHERE fr.employee_id = me.id
+               AND fr.created_by = ?
+          )
+          OR EXISTS (
+            SELECT 1
+              FROM expenditure_requests er
+             WHERE er.employee_id = me.id
+               AND er.created_by = ?
+          )
+        )
+      LIMIT 1`,
+    [empId, uid, uid, uid],
+  );
+
+  return rows.length > 0;
+}
+
+/**
+ * Total amount already advanced for a given applicant on a given budget line.
  * First-time → preAdvance = 0.
+ *
+ * Pass `employeeId` whenever the caller knows the applicant AND has authorized it via
+ * `canReadApplicantAdvanceTotals`: it is the identity the total belongs to, and without it the
+ * total covers only claims the calling login owns.
  */
 export async function getAdvanceSummary({
   userId,
+  employeeId = null,
   budgetLineId,
   head,
   subHead,
@@ -1778,13 +1905,24 @@ export async function getAdvanceSummary({
   dashboardRowId = null,
   workflowRowRef = null,
 } = {}) {
+  // Resolve the catalog IDs the settlement validation resolves too, so the total the form
+  // reads here and the total the submission is checked against come from the same matching.
+  const resolvedIds =
+    toPositiveInt(budgetHeadId) || toPositiveInt(budgetSubHeadId)
+      ? {
+          budget_head_id: toPositiveInt(budgetHeadId),
+          budget_sub_head_id: toPositiveInt(budgetSubHeadId),
+        }
+      : await resolveCatalogIds(db, head, subHead);
+
   return getCumulativeAdvanceSummary(db, {
     userId,
+    employeeId,
     budgetLineId,
     head,
     subHead,
-    budgetHeadId,
-    budgetSubHeadId,
+    budgetHeadId: resolvedIds?.budget_head_id ?? null,
+    budgetSubHeadId: resolvedIds?.budget_sub_head_id ?? null,
     financeRequestId,
     rowIndex,
     sourceRequestId,
@@ -1794,6 +1932,183 @@ export async function getAdvanceSummary({
 }
 
 // ─── Payee master ─────────────────────────────────────────────────────────────
+
+const PAYEE_SEARCHABLE_COLUMNS_SQL = `
+  LOWER(CONCAT_WS(' ',
+    COALESCE(ep.payee_name, ''),
+    COALESCE(ep.account_name, ''),
+    COALESCE(ep.account_no, ''),
+    COALESCE(ep.bank_name, ''),
+    COALESCE(ep.branch_name, ''),
+    COALESCE(ep.ifsc, ''),
+    COALESCE(ep.pan_number, ''),
+    COALESCE(ep.beneficiary_type, ''),
+    COALESCE(ep.beneficiary_org, ''),
+    COALESCE(ep.beneficiary_category, ''),
+    COALESCE(ep.organization_type, ''),
+    COALESCE(ep.msme, ''),
+    COALESCE(ep.gstin, ''),
+    COALESCE(ep.tds_details, ''),
+    COALESCE(ep.tds_section, '')
+  ))
+`;
+
+// Mirrors normalizePayeeRecord() so the SQL tiles and the rendered badges can
+// never disagree: blank status means pending unless the row was approved.
+const PAYEE_STATUS_SQL = `
+  LOWER(TRIM(COALESCE(
+    NULLIF(TRIM(ep.approval_status), ''),
+    CASE WHEN ep.approved_at IS NOT NULL THEN 'approved' ELSE 'pending' END
+  )))
+`;
+
+const PAYEE_BENEFICIARY_TYPE_SQL = `
+  LOWER(TRIM(COALESCE(NULLIF(TRIM(ep.beneficiary_type), ''), 'individual')))
+`;
+
+// Mirrors resolveCanonicalPayeeName(): a legacy row can carry the beneficiary
+// org ('KSRCT'/'KSREI'/'External') in payee_name, and the screen then renders
+// account_name instead. Now that paging is server-side, the sort has to follow
+// the name that is actually rendered, or an alphabetical list breaks across
+// page boundaries. CAST(... AS BINARY) keeps the match case-sensitive, as
+// isBeneficiaryOrgValue() is.
+const PAYEE_DISPLAY_NAME_SQL = `
+  COALESCE(
+    NULLIF(
+      CASE
+        WHEN CAST(TRIM(COALESCE(ep.payee_name, '')) AS BINARY)
+             IN (${BENEFICIARY_ORG_OPTIONS.map((option) => `'${option}'`).join(', ')})
+          THEN ''
+        ELSE TRIM(COALESCE(ep.payee_name, ''))
+      END,
+      ''
+    ),
+    NULLIF(TRIM(COALESCE(ep.account_name, '')), ''),
+    TRIM(COALESCE(ep.payee_name, '')),
+    ''
+  )
+`;
+
+const PAYEE_DIRECTORY_STATUSES = ['pending', 'approved', 'rejected'];
+const PAYEE_DIRECTORY_BENEFICIARY_TYPES = ['individual', 'organization'];
+const PAYEE_DIRECTORY_MAX_LIMIT = 100;
+
+// A payee search is a literal substring match, so `%`, `_` and `\` typed into
+// the box must not be read as LIKE syntax — without this, searching "50%"
+// matches every payee and a trailing backslash escapes the closing wildcard.
+const escapeLikeLiteral = (value) => value.replace(/[\\%_]/g, '\\$&');
+
+const buildPayeeDirectoryFilters = ({ search, beneficiaryType }) => {
+  const clauses = ['ep.is_active = 1'];
+  const params = [];
+
+  const normalizedBeneficiaryType = normalizeText(beneficiaryType).toLowerCase();
+  if (PAYEE_DIRECTORY_BENEFICIARY_TYPES.includes(normalizedBeneficiaryType)) {
+    clauses.push(`${PAYEE_BENEFICIARY_TYPE_SQL} = ?`);
+    params.push(normalizedBeneficiaryType);
+  }
+
+  normalizeText(search)
+    .split(/\s+/)
+    .map((term) => term.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 8)
+    .forEach((term) => {
+      clauses.push(`${PAYEE_SEARCHABLE_COLUMNS_SQL} LIKE ? ESCAPE '\\\\'`);
+      params.push(`%${escapeLikeLiteral(term)}%`);
+    });
+
+  return { where: clauses.join('\n    AND '), params };
+};
+
+/**
+ * Count of every active payee still awaiting approval, ignoring the directory's
+ * search and beneficiary filters — the figure the "Payees" nav badge shows.
+ */
+async function countPendingPayees() {
+  const [[row]] = await db.execute(
+    `SELECT COUNT(*) AS pending_count
+       FROM expenditure_payees ep
+      WHERE ep.is_active = 1
+        AND ${PAYEE_STATUS_SQL} = 'pending'`,
+    [],
+  );
+  return Number(row?.pending_count || 0);
+}
+
+/**
+ * Paged reader for the payee management directory.
+ *
+ * Unlike listPayees() (a typeahead helper that returns a bare array), this
+ * returns one page of rows plus server-side totals, so the screen never has to
+ * hold the whole payee master in memory to know how many records exist.
+ */
+export async function listPayeeDirectory({
+  search = '',
+  status = 'all',
+  beneficiaryType = 'all',
+  limit = 20,
+  offset = 0,
+} = {}) {
+  const limitNum = Math.min(Math.max(Number(limit) || 20, 1), PAYEE_DIRECTORY_MAX_LIMIT);
+  const offsetNum = Math.max(Number(offset) || 0, 0);
+  const normalizedStatus = normalizeText(status).toLowerCase();
+  const statusFilter = PAYEE_DIRECTORY_STATUSES.includes(normalizedStatus) ? normalizedStatus : '';
+  const { where, params } = buildPayeeDirectoryFilters({ search, beneficiaryType });
+
+  // Status counts deliberately ignore the status filter so every tile keeps its
+  // full value while one status is being browsed.
+  const [[countRow]] = await db.execute(
+    `SELECT
+       COUNT(*) AS all_count,
+       ${PAYEE_DIRECTORY_STATUSES.map(
+         (value) =>
+           `SUM(CASE WHEN ${PAYEE_STATUS_SQL} = '${value}' THEN 1 ELSE 0 END) AS ${value}_count`,
+       ).join(',\n       ')}
+     FROM expenditure_payees ep
+     WHERE ${where}`,
+    params,
+  );
+
+  const counts = {
+    all: Number(countRow?.all_count || 0),
+    pending: Number(countRow?.pending_count || 0),
+    approved: Number(countRow?.approved_count || 0),
+    rejected: Number(countRow?.rejected_count || 0),
+  };
+  const total = statusFilter ? counts[statusFilter] : counts.all;
+
+  // counts.pending narrows with the search box, which is right for the tile but
+  // wrong for the "Payees" nav badge — that has to keep saying how many payees
+  // await approval in total, not how many the current query happens to show.
+  const isFiltered = params.length > 0;
+  const pendingTotal = isFiltered ? await countPendingPayees() : counts.pending;
+
+  if (!total) {
+    return { rows: [], total: 0, counts, pendingTotal, limit: limitNum, offset: offsetNum };
+  }
+
+  const [rows] = await db.execute(
+    `SELECT ep.* FROM expenditure_payees ep
+      WHERE ${where}
+        ${statusFilter ? `AND ${PAYEE_STATUS_SQL} = ?` : ''}
+      ORDER BY
+        CASE WHEN ${PAYEE_STATUS_SQL} = 'pending' THEN 0 ELSE 1 END,
+        ${PAYEE_DISPLAY_NAME_SQL} ASC,
+        ep.id ASC
+      LIMIT ${limitNum} OFFSET ${offsetNum}`,
+    statusFilter ? [...params, statusFilter] : params,
+  );
+
+  return {
+    rows: rows.map(normalizePayeeRecord),
+    total,
+    counts,
+    pendingTotal,
+    limit: limitNum,
+    offset: offsetNum,
+  };
+}
 
 export async function listPayees({ search = '', limit = 20, offset = 0, status = 'all' } = {}) {
   const q = normalizeText(search);
@@ -1817,24 +2132,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
   const rowAccountCompareSql = `
     REPLACE(REPLACE(REPLACE(LOWER(TRIM(COALESCE(epr.account_no, ''))), ' ', ''), '-', ''), '\t', '')
   `;
-  const payeeSearchableColumns = `
-    LOWER(CONCAT_WS(' ',
-      COALESCE(ep.payee_name, ''),
-      COALESCE(ep.account_name, ''),
-      COALESCE(ep.account_no, ''),
-      COALESCE(ep.bank_name, ''),
-      COALESCE(ep.branch_name, ''),
-      COALESCE(ep.ifsc, ''),
-      COALESCE(ep.pan_number, ''),
-      COALESCE(ep.beneficiary_type, ''),
-      COALESCE(ep.beneficiary_org, ''),
-      COALESCE(ep.organization_type, ''),
-      COALESCE(ep.msme, ''),
-      COALESCE(ep.gstin, ''),
-      COALESCE(ep.tds_details, ''),
-      COALESCE(ep.tds_section, '')
-    ))
-  `;
+  const payeeSearchableColumns = PAYEE_SEARCHABLE_COLUMNS_SQL;
   const payeeRowSearchableColumns = `
     LOWER(CONCAT_WS(' ',
       COALESCE(epr.payee_name, ''),
@@ -1873,6 +2171,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
            UPPER(TRIM(COALESCE(ifsc, ''))) AS ifsc,
            beneficiary_type,
            beneficiary_org,
+           beneficiary_category,
            organization_type,
            msme,
            gstin,
@@ -1906,6 +2205,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
            UPPER(TRIM(COALESCE(NULLIF(TRIM(epr.ifsc), ''), ep.ifsc, ''))) AS ifsc,
            COALESCE(NULLIF(TRIM(epr.beneficiary_type), ''), ep.beneficiary_type) AS beneficiary_type,
            COALESCE(NULLIF(TRIM(epr.beneficiary_org), ''), ep.beneficiary_org) AS beneficiary_org,
+           ep.beneficiary_category,
            COALESCE(NULLIF(TRIM(epr.organization_type), ''), ep.organization_type) AS organization_type,
            COALESCE(NULLIF(TRIM(epr.msme), ''), ep.msme) AS msme,
            COALESCE(NULLIF(TRIM(epr.gstin), ''), ep.gstin) AS gstin,
@@ -1975,6 +2275,7 @@ export async function listPayees({ search = '', limit = 20, offset = 0, status =
        UPPER(TRIM(COALESCE(NULLIF(TRIM(epr.ifsc), ''), ep.ifsc, ''))) AS ifsc,
        COALESCE(NULLIF(TRIM(epr.beneficiary_type), ''), ep.beneficiary_type) AS beneficiary_type,
        COALESCE(NULLIF(TRIM(epr.beneficiary_org), ''), ep.beneficiary_org) AS beneficiary_org,
+       ep.beneficiary_category,
        COALESCE(NULLIF(TRIM(epr.organization_type), ''), ep.organization_type) AS organization_type,
        COALESCE(NULLIF(TRIM(epr.msme), ''), ep.msme) AS msme,
        COALESCE(NULLIF(TRIM(epr.gstin), ''), ep.gstin) AS gstin,
@@ -2044,6 +2345,10 @@ export async function updatePayeeById(id, payeeData = {}) {
     ? beneficiaryOrgRaw
     : null;
   const accountType = normalizeAccountType(payeeData.account_type);
+  const categoryApplies = beneficiaryCategoryApplies(beneficiaryType, beneficiaryOrg);
+  const beneficiaryCategory = categoryApplies
+    ? normalizeBeneficiaryCategory(payeeData.beneficiary_category)
+    : '';
   const gstin = sanitizeAlphaNumericUpper(payeeData.gstin, 15);
   const panNumber = sanitizeAlphaNumericUpper(
     payeeData.pan_number || extractPanFromGstin(gstin),
@@ -2055,6 +2360,12 @@ export async function updatePayeeById(id, payeeData = {}) {
   }
   if (!beneficiaryOrg) throw new Error('beneficiary_org is required');
   if (!accountType) throw new Error('account_type must be Savings or Current');
+  // Unlike upsertPayee, this path is only ever reached from a payee form, so
+  // an internal individual arriving without a category is an incomplete edit
+  // rather than an unrelated save that should leave the stored one alone.
+  if (categoryApplies && !beneficiaryCategory) {
+    throw new Error('beneficiary_category must be Student, Faculty or Staff');
+  }
 
   const [existingRows] = await db.execute(
     'SELECT id FROM expenditure_payees WHERE id = ? AND is_active = 1 LIMIT 1',
@@ -2077,6 +2388,7 @@ export async function updatePayeeById(id, payeeData = {}) {
             branch_name = ?,
             beneficiary_type = ?,
             beneficiary_org = ?,
+            beneficiary_category = ?,
             organization_type = ?,
             msme = ?,
             gstin = ?,
@@ -2096,6 +2408,7 @@ export async function updatePayeeById(id, payeeData = {}) {
       branchName,
       beneficiaryType,
       beneficiaryOrg,
+      beneficiaryCategory || null,
       normalizeText(payeeData.organization_type) || null,
       normalizeText(payeeData.msme) || null,
       beneficiaryType === 'organization' ? gstin || null : null,
@@ -2167,8 +2480,11 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
   }
 
   const fyStart = toPositiveInt(fiscalYear);
-  const financeParams = [uid];
-  const expenditureParams = [uid];
+  // Two bind values each: the owner predicate matches creator OR applicant. See
+  // shared/financeOwnership.js — a card submitted by a shared department login has to reach
+  // the applicant it was raised for.
+  const financeParams = buildFinanceOwnerParams(uid);
+  const expenditureParams = buildFinanceOwnerParams(uid);
   let financeFySql = '';
   let requestFinanceFySql = '';
 
@@ -2254,7 +2570,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Advance'
-             AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
            THEN COALESCE(er.advance_total_amount, er.total_amount, 0)
            ELSE 0
          END
@@ -2262,7 +2578,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Expenditure'
-             AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
            THEN COALESCE(er.expenditure_total_amount, er.total_amount, 0)
            ELSE 0
          END
@@ -2270,18 +2586,31 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
        COALESCE(SUM(
          CASE
            WHEN er.request_type = 'Settlement'
-             AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
            THEN COALESCE(er.settlement_total_amount, er.total_amount, 0)
            ELSE 0
          END
        ), 0) AS settlement_amount,
-       COUNT(DISTINCT er.id) AS expenditure_request_count
+       COALESCE(SUM(
+         CASE
+           WHEN er.request_type = 'Settlement'
+             AND ${buildClaimedExpenditureStatusCondition('er')}
+           THEN ${buildSettledAdvanceExpr('er')}
+           ELSE 0
+         END
+       ), 0) AS settled_advance_amount,
+       -- Counted over the same requests the amounts above are summed over. A bare
+       -- COUNT(DISTINCT er.id) also counted deleted and rejected requests, so a card could
+       -- report requests raised against it while every amount beside the count read zero.
+       COUNT(DISTINCT
+         CASE WHEN ${buildClaimedExpenditureStatusCondition('er')} THEN er.id END
+       ) AS expenditure_request_count
      FROM finance_requests fr
      LEFT JOIN finance_request_refs frr ON frr.finance_request_id = fr.id
      LEFT JOIN master_employees emp ON emp.id = fr.employee_id
      LEFT JOIN master_departments dept ON dept.id = emp.department_id
      LEFT JOIN expenditure_requests er ON er.finance_request_id = fr.id
-     WHERE fr.created_by = ?
+     WHERE ${buildFinanceOwnerCondition('fr')}
        AND (
          LOWER(TRIM(COALESCE(fr.overall_status, ''))) = 'approved'
          OR LOWER(TRIM(COALESCE(fr.workflow_status, ''))) IN ('approved', 'completed')
@@ -2364,7 +2693,7 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
          ) ranked
          WHERE ranked.rn = 1
        ) sample_row ON sample_row.expenditure_id = er.id
-       WHERE er.created_by = ?
+       WHERE ${buildFinanceOwnerCondition('er')}
        AND LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'
        AND (
          LOWER(TRIM(COALESCE(fr_req.overall_status, ''))) = 'approved'
@@ -2382,7 +2711,11 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
       const advanceAmount = toMoney(row.advance_amount);
       const settlementAmount = toMoney(row.settlement_amount);
       const expenditureAmount = toMoney(row.expenditure_amount);
-      const effectiveUsageAmount = settlementAmount > 0 ? settlementAmount : advanceAmount;
+      const effectiveUsageAmount = resolveAdvanceUsageAmount({
+        advanceAmount,
+        settlementAmount,
+        settledAdvanceAmount: row.settled_advance_amount,
+      });
       const sourceFiscalYear = toPositiveInt(row.source_fiscal_year);
       return {
         finance_request_id: toPositiveInt(row.finance_request_id),
@@ -2452,6 +2785,7 @@ export async function getFinanceRequestContext(financeRequestId) {
        fr.id AS finance_request_id,
        fr.created_by,
        fr.employee_id,
+       emp.user_id AS applicant_user_id,
        COALESCE(frr.request_ref, CONCAT('#F-', fr.id)) AS request_ref,
        COALESCE(
          NULLIF(TRIM(CONCAT(COALESCE(emp.title, ''), ' ', COALESCE(emp.first_name, ''), ' ', COALESCE(emp.last_name, ''))), ''),
@@ -2502,6 +2836,9 @@ export async function getFinanceRequestContext(financeRequestId) {
     finance_request_id: toPositiveInt(row.finance_request_id),
     created_by: toPositiveInt(row.created_by),
     employee_id: toPositiveInt(row.employee_id),
+    // Consumed by the controller's owner check, so an applicant can open a card a shared
+    // department login submitted for them.
+    applicant_user_id: toPositiveInt(row.applicant_user_id) || null,
     request_ref: normalizeText(row.request_ref),
     applicant_name: normalizeText(row.applicant_name),
     designation: normalizeText(row.designation),
@@ -2555,6 +2892,10 @@ export async function upsertPayee(payeeData, userId, conn = db) {
     ? beneficiaryOrgRaw
     : null;
   const accountType = normalizeAccountType(payeeData.account_type);
+  const categoryApplies = beneficiaryCategoryApplies(beneficiaryType, beneficiaryOrg);
+  const beneficiaryCategory = categoryApplies
+    ? normalizeBeneficiaryCategory(payeeData.beneficiary_category)
+    : '';
   const gstin = sanitizeAlphaNumericUpper(payeeData.gstin, 15);
   const panNumber = sanitizeAlphaNumericUpper(
     payeeData.pan_number || extractPanFromGstin(gstin),
@@ -2564,13 +2905,16 @@ export async function upsertPayee(payeeData, userId, conn = db) {
   if (!beneficiaryOrg) throw new Error('beneficiary_org is required');
   if (!accountType) throw new Error('account_type must be Savings or Current');
 
-  const [existing] = await conn.execute(
-    'SELECT id FROM expenditure_payees WHERE account_no = ? AND ifsc = ? LIMIT 1',
-    [accountNo, ifsc],
-  );
+  const findExisting = async () => {
+    const [rows] = await conn.execute(
+      'SELECT id FROM expenditure_payees WHERE account_no = ? AND ifsc = ? LIMIT 1',
+      [accountNo, ifsc],
+    );
+    return rows.length ? toPositiveInt(rows[0].id) : null;
+  };
 
-  if (existing.length) {
-    await conn.execute(
+  const updateExisting = (payeeId) =>
+    conn.execute(
       `UPDATE expenditure_payees
           SET payee_name   = COALESCE(?, payee_name),
               account_name = COALESCE(?, account_name),
@@ -2580,6 +2924,12 @@ export async function upsertPayee(payeeData, userId, conn = db) {
               branch_name  = COALESCE(?, branch_name),
               beneficiary_type = COALESCE(?, beneficiary_type),
               beneficiary_org  = COALESCE(?, beneficiary_org),
+              -- Cleared outright once the payee is External or an
+              -- organization, so a category picked under a previous
+              -- beneficiary cannot linger. While it still applies, a save
+              -- that carries no category (an expenditure request reusing
+              -- these bank details) leaves the stored one alone.
+              beneficiary_category = IF(?, COALESCE(?, beneficiary_category), NULL),
               organization_type = COALESCE(?, organization_type),
               msme         = COALESCE(?, msme),
               gstin        = COALESCE(?, gstin),
@@ -2602,45 +2952,64 @@ export async function upsertPayee(payeeData, userId, conn = db) {
         payeeData.branch_name || null,
         beneficiaryType,
         beneficiaryOrg,
+        categoryApplies ? 1 : 0,
+        beneficiaryCategory || null,
         payeeData.organization_type || null,
         payeeData.msme || null,
         beneficiaryType === 'organization' ? gstin || null : null,
         payeeData.tds_details || null,
         payeeData.tds_section || null,
-        existing[0].id,
+        payeeId,
       ],
     );
-    return toPositiveInt(existing[0].id);
+
+  const existingId = await findExisting();
+  if (existingId) {
+    await updateExisting(existingId);
+    return existingId;
   }
 
-  const [result] = await conn.execute(
-    `INSERT INTO expenditure_payees
-       (payee_name, account_name, account_no, account_type,
-        bank_name, branch_name, ifsc, beneficiary_type,
-        beneficiary_org, organization_type, msme,
-        pan_number, gstin, tds_details, tds_section,
-        approval_status, requested_at, approved_by, approved_at, rejection_reason, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
-    [
-      canonicalPayeeName,
-      canonicalPayeeName || null,
-      accountNo,
-      accountType,
-      normalizeText(payeeData.bank_name),
-      normalizeText(payeeData.branch_name || ''),
-      ifsc,
-      beneficiaryType,
-      beneficiaryOrg,
-      payeeData.organization_type || null,
-      payeeData.msme || null,
-      panNumber || null,
-      beneficiaryType === 'organization' ? gstin || null : null,
-      payeeData.tds_details || null,
-      payeeData.tds_section || null,
-      userId || null,
-    ],
-  );
-  return result.insertId;
+  try {
+    const [result] = await conn.execute(
+      `INSERT INTO expenditure_payees
+         (payee_name, account_name, account_no, account_type,
+          bank_name, branch_name, ifsc, beneficiary_type,
+          beneficiary_org, beneficiary_category, organization_type, msme,
+          pan_number, gstin, tds_details, tds_section,
+          approval_status, requested_at, approved_by, approved_at, rejection_reason, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, NULL, NULL, NULL, ?)`,
+      [
+        canonicalPayeeName,
+        canonicalPayeeName || null,
+        accountNo,
+        accountType,
+        normalizeText(payeeData.bank_name),
+        normalizeText(payeeData.branch_name || ''),
+        ifsc,
+        beneficiaryType,
+        beneficiaryOrg,
+        beneficiaryCategory || null,
+        payeeData.organization_type || null,
+        payeeData.msme || null,
+        panNumber || null,
+        beneficiaryType === 'organization' ? gstin || null : null,
+        payeeData.tds_details || null,
+        payeeData.tds_section || null,
+        userId || null,
+      ],
+    );
+    return result.insertId;
+  } catch (err) {
+    if (err?.code !== 'ER_DUP_ENTRY') throw err;
+    // The lookup above and this insert are not atomic, so two saves for the
+    // same (account_no, ifsc) — a double-clicked Save, or two users entering
+    // the same bank details — can both miss and then both insert. The row is
+    // there now, so treat the loser as the update path instead of a 500.
+    const racedId = await findExisting();
+    if (!racedId) throw err;
+    await updateExisting(racedId);
+    return racedId;
+  }
 }
 
 // ─── Core SELECT for expenditure_requests ────────────────────────────────────
@@ -2717,6 +3086,9 @@ __OPTIONAL_UNPLANNED_HEAD_COLUMNS__
     COALESCE(NULLIF(TRIM(e.email), ''), NULLIF(TRIM(er.email), ''), '') AS email,
     COALESCE(NULLIF(TRIM(e.mobile), ''), NULLIF(TRIM(er.mobile), ''), '') AS mobile,
     e.erp_id,
+    -- The applicant's own login, which is NOT the creator when a shared department account
+    -- submitted the claim. Both count as the owner -- see shared/financeOwnership.js.
+    e.user_id AS applicant_user_id,
     creator_user.email AS created_by_email
   FROM expenditure_requests er
   LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
@@ -2923,8 +3295,11 @@ async function createExpenditureLegacy(data, userId) {
     // NEW: prefer catalog IDs for matching; falls back to text for
     // un-backfilled legacy rows.
     const preAdvanceIds = await resolveCatalogIds(conn, lineRow.head, lineRow.sub_head);
+    const employeeId = toPositiveInt(data.employee_id);
     const { preAdvance } = await getCumulativeAdvanceSummary(conn, {
       userId,
+      // No finance request pins this path, so the applicant is what scopes the running total.
+      employeeId,
       budgetLineId,
       head: lineRow.head,
       subHead: lineRow.sub_head,
@@ -2933,7 +3308,6 @@ async function createExpenditureLegacy(data, userId) {
     });
 
     // ── 4. Resolve department from employee ─────────────────────────────────
-    const employeeId = toPositiveInt(data.employee_id);
     const workflowContext = await resolveExpenditureWorkflowContext(conn, {
       employee_id: data.employee_id,
       beneficiary_type: data.beneficiary_type,
@@ -3152,7 +3526,7 @@ export async function createExpenditure(data, userId) {
       normalizeText(paymentDetails.debitAccount || data.payment_debit_account) || null,
   };
 
-  return createExpenditureRequest(payload, userId, { billFiles: [], bulkNeftFile: null });
+  return createExpenditureRequest(payload, userId, { billFiles: [], bulkTransactionFile: null });
 }
 
 function sanitizeRowValue(value) {
@@ -3431,8 +3805,20 @@ async function insertSettlementRows(
   } = {},
 ) {
   const validRows = Array.isArray(rows) ? rows : [];
+  // Same per-head/sub allocation the submitted totals were validated against, so the stored
+  // advance_amount of the rows adds up to the advance the settlement was checked against.
+  const advanceAllocations = await allocateSettlementAdvances(conn, validRows, {
+    userId,
+    financeRequestId,
+    rowIndex,
+    sourceRequestId,
+    dashboardRowId,
+    workflowRowRef,
+    excludeExpenditureId,
+  });
   let sortOrder = 0;
-  for (const row of validRows) {
+  for (let rowPosition = 0; rowPosition < validRows.length; rowPosition += 1) {
+    const row = validRows[rowPosition];
     const budgetHead = sanitizeRowValue(row.budgetHead || row.budget_head);
     const subHead = sanitizeRowValue(row.subHead || row.sub_head);
     const budgetAmount = moneyOrNull(row.budget);
@@ -3447,25 +3833,13 @@ async function insertSettlementRows(
         budgetHead,
         subHead,
       }));
-    const settlementAmount = toMoney(row.settlement || row.settlement_amount);
-    if (!budgetHead && !subHead && settlementAmount === 0) continue;
+    const settlementAmount = getSettlementRowSettlementAmount(row);
+    // Same rule `allocateSettlementAdvances` skipped by, so the allocation stays aligned.
+    if (isEmptySettlementRow(row)) continue;
 
     // NEW: catalog IDs alongside snapshot text.
     const setIds = await resolveCatalogIds(conn, budgetHead, subHead);
-    const advanceAmount = await getSettlementAdvanceAmount(conn, row, {
-      userId,
-      financeRequestId,
-      rowIndex,
-      sourceRequestId,
-      dashboardRowId,
-      workflowRowRef,
-      excludeExpenditureId,
-      budgetHead,
-      subHead,
-      budgetLineId,
-      budgetHeadId: setIds.budget_head_id,
-      budgetSubHeadId: setIds.budget_sub_head_id,
-    });
+    const advanceAmount = toMoney(advanceAllocations[rowPosition]);
 
     await conn.execute(
       `INSERT INTO expenditure_settlement_rows
@@ -3512,6 +3886,9 @@ async function getSettlementAdvanceAmount(
     budgetLineId = null,
     budgetHeadId = null,
     budgetSubHeadId = null,
+    // Narrow the lookup to the row's own budget line instead of the whole head/sub. Only the
+    // per-line split inside `allocateSettlementAdvances` wants this; validation never does.
+    matchByBudgetLine = false,
   } = {},
 ) {
   const uid = toPositiveInt(userId);
@@ -3533,23 +3910,18 @@ async function getSettlementAdvanceAmount(
         }
       : await resolveCatalogIds(conn, resolvedBudgetHead, resolvedSubHead);
 
-  // For a carry-forward settlement the original advance sits on the SOURCE-year
-  // budget line while the settlement uses the TARGET-year line — so an exact
-  // budget_line_id match never finds the advance (advanceTotal = 0). When this
-  // finance request has an active carry-forward, match the advance by head/sub
-  // instead; the row-identity scope (finance + dashboard row) already pins the
-  // correct card, and head/sub is stable across the year boundary.
-  let advanceMatchLineId = resolvedBudgetLineId;
-  if (advanceMatchLineId && toPositiveInt(financeRequestId)) {
-    const [cfRows] = await conn.execute(
-      `SELECT 1 FROM finance_carry_forward_allocations
-        WHERE finance_request_id = ?
-          AND LOWER(TRIM(COALESCE(status, 'active'))) = 'active'
-        LIMIT 1`,
-      [toPositiveInt(financeRequestId)],
-    );
-    if (cfRows.length) advanceMatchLineId = null;
-  }
+  // Match the advance by head/sub across every budget line, never by a single
+  // budget_line_id, because that is exactly what the settlement form did when it
+  // showed the user the advance to adjust: it groups all budget lines sharing a
+  // head/sub into one option and calls /expenditure/advance-summary once WITHOUT a
+  // budget_line_id. An advance booked across two lines of the same head/sub (or on
+  // the SOURCE-year line of a carry-forward, while the settlement uses the
+  // TARGET-year line) would otherwise be counted here only in part, and the
+  // settlement the form showed as fully adjusted gets rejected as a mismatch.
+  // The row-identity scope (finance request + dashboard row) already pins the card,
+  // so widening from line to head/sub cannot pull in another card's advance.
+  const advanceMatchLineId =
+    resolvedBudgetHead && resolvedSubHead && !matchByBudgetLine ? null : resolvedBudgetLineId;
 
   const summary = await getCumulativeAdvanceSummary(conn, {
     userId: uid,
@@ -3569,40 +3941,103 @@ async function getSettlementAdvanceAmount(
   return toMoney(summary.preAdvance);
 }
 
-async function getSettlementAdvanceTotal(
-  conn,
-  rows = [],
-  {
-    userId = null,
-    financeRequestId = null,
-    rowIndex = null,
-    sourceRequestId = null,
-    dashboardRowId = null,
-    workflowRowRef = null,
-    excludeExpenditureId = null,
-  } = {},
-) {
+const getSettlementRowSettlementAmount = (row = {}) =>
+  toMoney(row.settlement || row.settlement_amount);
+
+const getSettlementRowBudgetLineId = (row = {}) =>
+  toPositiveInt(row.budgetLineId || row.budget_line_id);
+
+const isEmptySettlementRow = (row = {}) =>
+  !sanitizeRowValue(row.budgetHead || row.budget_head) &&
+  !sanitizeRowValue(row.subHead || row.sub_head) &&
+  getSettlementRowSettlementAmount(row) === 0;
+
+const getSettlementAdvanceGroupKey = (row = {}) => {
+  const head = normalizeText(sanitizeRowValue(row.budgetHead || row.budget_head)).toLowerCase();
+  const subHead = normalizeText(sanitizeRowValue(row.subHead || row.sub_head)).toLowerCase();
+  if (head && subHead) return `head::${head}::${subHead}`;
+  return `line::${getSettlementRowBudgetLineId(row)}`;
+};
+
+/**
+ * The advance each settlement row discharges, aligned index-for-index with `rows`.
+ *
+ * The advance is looked up per head/sub GROUP, because that is the unit the settlement form
+ * works in: it collapses every budget line sharing a head/sub into one option and reads the
+ * advance for the group. Looking it up per row instead would report the group's whole advance
+ * on each row of the group and double it.
+ *
+ * Inside a group the total is then split back out per budget line, so `advance_amount` keeps
+ * saying WHICH advance each row discharged — `resolveAdvanceUsageAmount` reads it back to tell
+ * a settled advance from one still outstanding, and it reads it per row.
+ */
+async function allocateSettlementAdvances(conn, rows = [], options = {}) {
   const validRows = Array.isArray(rows) ? rows : [];
-  let total = 0;
+  const allocations = new Array(validRows.length).fill(0);
+  const groupPositions = new Map();
 
-  for (const row of validRows) {
-    const settlementAmount = toMoney(row.settlement || row.settlement_amount);
-    const budgetHead = sanitizeRowValue(row.budgetHead || row.budget_head);
-    const subHead = sanitizeRowValue(row.subHead || row.sub_head);
-    if (!budgetHead && !subHead && settlementAmount === 0) continue;
-
-    total += await getSettlementAdvanceAmount(conn, row, {
-      userId,
-      financeRequestId,
-      rowIndex,
-      sourceRequestId,
-      dashboardRowId,
-      workflowRowRef,
-      excludeExpenditureId,
-    });
+  for (let index = 0; index < validRows.length; index += 1) {
+    if (isEmptySettlementRow(validRows[index])) continue;
+    const groupKey = getSettlementAdvanceGroupKey(validRows[index]);
+    const positions = groupPositions.get(groupKey) || [];
+    positions.push(index);
+    groupPositions.set(groupKey, positions);
   }
 
-  return toMoney(total);
+  for (const positions of groupPositions.values()) {
+    // The group's whole advance, across every budget line under this head/sub — the same
+    // figure the form showed the user and validated the payee amounts against.
+    let unallocated = await getSettlementAdvanceAmount(conn, validRows[positions[0]], options);
+    const seenBudgetLineIds = new Set();
+
+    for (const position of positions) {
+      if (unallocated <= 0) break;
+      // A row recording no spend cannot hold any of the advance: `buildSettledAdvanceExpr`
+      // counts advance_amount only where settlement_amount > 0, so an advance parked here
+      // would be reported as still outstanding after the settlement that discharged it. Its
+      // line's advance stays unallocated and reaches a spend-bearing row as the remainder
+      // below. Skipped before `seenBudgetLineIds`, so a later row that does record spend on
+      // the same budget line still gets that line's share.
+      if (getSettlementRowSettlementAmount(validRows[position]) <= 0) continue;
+      const budgetLineId = getSettlementRowBudgetLineId(validRows[position]);
+      // Two rows on one budget line share that line's advance; it is allocated once.
+      if (!budgetLineId || seenBudgetLineIds.has(budgetLineId)) continue;
+      seenBudgetLineIds.add(budgetLineId);
+
+      const lineAdvance = await getSettlementAdvanceAmount(conn, validRows[position], {
+        ...options,
+        matchByBudgetLine: true,
+      });
+      // Capped by what is left, so a row that also matches line-less legacy advances by
+      // head/sub text cannot claim more of the group than the group holds.
+      const share = toMoney(Math.min(lineAdvance, unallocated));
+      if (share <= 0) continue;
+      allocations[position] = toMoney(allocations[position] + share);
+      unallocated = toMoney(unallocated - share);
+    }
+
+    // Advance sitting on budget lines this settlement has no spend row for is still discharged
+    // by it, so it has to land somewhere. It goes on a row that records spend, because the claim
+    // accounting (`buildSettledAdvanceExpr`) only counts advance_amount where
+    // settlement_amount > 0 — parking it on a zero-spend row would report the advance as still
+    // outstanding.
+    if (unallocated > 0) {
+      const carrier =
+        positions.find((position) => getSettlementRowSettlementAmount(validRows[position]) > 0) ??
+        positions[0];
+      allocations[carrier] = toMoney(allocations[carrier] + unallocated);
+    }
+  }
+
+  return allocations;
+}
+
+// Exported for tests: the per-row split is the part with the interesting edge cases.
+export const allocateSettlementAdvancesForTest = allocateSettlementAdvances;
+
+export async function getSettlementAdvanceTotal(conn, rows = [], options = {}) {
+  const allocations = await allocateSettlementAdvances(conn, rows, options);
+  return toMoney(allocations.reduce((sum, amount) => sum + toMoney(amount), 0));
 }
 
 const formatMoney = (value) =>
@@ -3856,30 +4291,88 @@ async function linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeReq
   }
 }
 
-async function upsertBulkNeftFile(conn, expenditureId, file = null, templateVersion = null) {
-  if (!file?.filename || !file?.path) return;
+/**
+ * Persists the bulk transaction payout file for a request.
+ *
+ * `meta.fileRetained` tells us what the client did with an already-stored file when no
+ * new one was uploaded: `false` means the user deleted it (drop the row), `true` means
+ * they kept it but may have switched mode/bank (update those columns only). Undefined —
+ * a caller that does not manage this section at all — leaves the row untouched.
+ */
+async function upsertBulkTransactionFile(conn, expenditureId, file = null, meta = {}) {
+  const transactionType = normalizeBulkTransactionType(meta.transactionType);
+  const bankCode = normalizeBulkTransactionBank(meta.bankCode);
+
+  if (!file?.filename || !file?.path) {
+    if (meta.fileRetained === false) {
+      await conn.execute('DELETE FROM expenditure_bulk_neft_files WHERE expenditure_id = ?', [
+        expenditureId,
+      ]);
+      return;
+    }
+
+    if (meta.fileRetained !== true) return;
+
+    // File kept as-is; only the mode/bank selection can have changed.
+    const assignments = [];
+    const assignmentValues = [];
+    if (await hasBulkTransactionFileColumn('transaction_type', { tx: conn })) {
+      assignments.push('transaction_type = ?');
+      assignmentValues.push(transactionType);
+    }
+    if (await hasBulkTransactionFileColumn('bank_code', { tx: conn })) {
+      assignments.push('bank_code = ?');
+      assignmentValues.push(bankCode);
+    }
+    if (!assignments.length) return;
+
+    await conn.execute(
+      `UPDATE expenditure_bulk_neft_files
+          SET ${assignments.join(', ')},
+              updated_at = CURRENT_TIMESTAMP
+        WHERE expenditure_id = ?`,
+      [...assignmentValues, expenditureId],
+    );
+    return;
+  }
+
+  const columns = ['expenditure_id', 'template_version'];
+  const values = [
+    expenditureId,
+    sanitizeRowValue(meta.templateVersion) || DEFAULT_BULK_TRANSACTION_TEMPLATE_VERSION,
+  ];
+
+  if (await hasBulkTransactionFileColumn('transaction_type', { tx: conn })) {
+    columns.push('transaction_type');
+    values.push(transactionType);
+  }
+  if (await hasBulkTransactionFileColumn('bank_code', { tx: conn })) {
+    columns.push('bank_code');
+    values.push(bankCode);
+  }
+
+  columns.push('original_name', 'stored_name', 'file_path', 'mime_type', 'file_size');
+  values.push(
+    sanitizeRowValue(file.originalname),
+    sanitizeRowValue(file.filename),
+    toStoredUploadPath(file.path),
+    sanitizeRowValue(file.mimetype),
+    Number(file.size) || 0,
+  );
+
+  const updateSql = columns
+    .filter((column) => column !== 'expenditure_id')
+    .map((column) => `${column} = VALUES(${column})`)
+    .join(',\n       ');
 
   await conn.execute(
     `INSERT INTO expenditure_bulk_neft_files
-       (expenditure_id, template_version, original_name, stored_name, file_path, mime_type, file_size)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+       (${columns.join(', ')})
+     VALUES (${columns.map(() => '?').join(', ')})
      ON DUPLICATE KEY UPDATE
-       template_version = VALUES(template_version),
-       original_name = VALUES(original_name),
-       stored_name = VALUES(stored_name),
-       file_path = VALUES(file_path),
-       mime_type = VALUES(mime_type),
-       file_size = VALUES(file_size),
+       ${updateSql},
        updated_at = CURRENT_TIMESTAMP`,
-    [
-      expenditureId,
-      sanitizeRowValue(templateVersion) || DEFAULT_BULK_NEFT_TEMPLATE_VERSION,
-      sanitizeRowValue(file.originalname),
-      sanitizeRowValue(file.filename),
-      toStoredUploadPath(file.path),
-      sanitizeRowValue(file.mimetype),
-      Number(file.size) || 0,
-    ],
+    values,
   );
 }
 
@@ -4446,7 +4939,7 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
     if (!financeOwner) {
       throw new Error('Finance request not found or not approved');
     }
-    if (toPositiveInt(financeOwner.created_by) !== uid) {
+    if (!isFinanceRequestOwner(financeOwner, uid)) {
       throw new Error('Access denied for this finance request');
     }
 
@@ -4641,7 +5134,9 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       credit_status: normalizeText(data.credit_status) || null,
       debit_status: normalizeDebitStatus(data.debit_status),
       partial_amount: moneyOrNull(data.partial_amount),
-      show_bulk_neft: parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile) ? 1 : 0,
+      // DB column keeps its original name; the API/UI field is show_bulk_transaction.
+      show_bulk_neft:
+        parseBoolean(data.show_bulk_transaction) || Boolean(uploads.bulkTransactionFile) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
       payment_date: paymentDetails.date || data.payment_date || null,
@@ -4757,12 +5252,12 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
     await insertBillFiles(conn, expenditureId, uploads.billFiles);
     await insertBillFiles(conn, expenditureId, uploads.paymentProofFiles, 'payment_proof');
     await linkFinanceAnnexuresToExpenditure(conn, expenditureId, financeRequestId);
-    await upsertBulkNeftFile(
-      conn,
-      expenditureId,
-      uploads.bulkNeftFile,
-      data.bulk_neft_template_version,
-    );
+    await upsertBulkTransactionFile(conn, expenditureId, uploads.bulkTransactionFile, {
+      templateVersion: data.bulk_transaction_template_version,
+      transactionType: data.bulk_transaction_type,
+      bankCode: data.bulk_transaction_bank,
+      fileRetained: data.bulk_transaction_file_retained,
+    });
 
     return { expenditureId, requestRef: ref };
   });
@@ -4860,7 +5355,7 @@ export async function updateExpenditureRequest(
     if (!financeOwner) {
       throw new Error('Finance request not found or not approved');
     }
-    if (!canBypassFinanceOwnerCheck && toPositiveInt(financeOwner.created_by) !== uid) {
+    if (!canBypassFinanceOwnerCheck && !isFinanceRequestOwner(financeOwner, uid)) {
       throw new Error('Access denied for this finance request');
     }
 
@@ -5093,7 +5588,9 @@ export async function updateExpenditureRequest(
       credit_status: normalizeText(data.credit_status) || null,
       debit_status: normalizeDebitStatus(data.debit_status),
       partial_amount: moneyOrNull(data.partial_amount),
-      show_bulk_neft: parseBoolean(data.show_bulk_neft) || Boolean(uploads.bulkNeftFile) ? 1 : 0,
+      // DB column keeps its original name; the API/UI field is show_bulk_transaction.
+      show_bulk_neft:
+        parseBoolean(data.show_bulk_transaction) || Boolean(uploads.bulkTransactionFile) ? 1 : 0,
       payment_mode: normalizeText(paymentDetails.mode || data.payment_mode) || null,
       payment_ref_no: normalizeText(paymentDetails.refNo || data.payment_ref_no) || null,
       payment_date: normalizedPaymentDate,
@@ -5255,12 +5752,12 @@ export async function updateExpenditureRequest(
       'payment_proof',
     );
     await linkFinanceAnnexuresToExpenditure(conn, normalizedExpenditureId, financeRequestId);
-    await upsertBulkNeftFile(
-      conn,
-      normalizedExpenditureId,
-      uploads.bulkNeftFile,
-      data.bulk_neft_template_version,
-    );
+    await upsertBulkTransactionFile(conn, normalizedExpenditureId, uploads.bulkTransactionFile, {
+      templateVersion: data.bulk_transaction_template_version,
+      transactionType: data.bulk_transaction_type,
+      bankCode: data.bulk_transaction_bank,
+      fileRetained: data.bulk_transaction_file_retained,
+    });
 
     return {
       expenditureId: normalizedExpenditureId,
@@ -5282,6 +5779,37 @@ export async function getExpenditureById(id) {
   return rows[0] || null;
 }
 
+/**
+ * Bulk transaction payout file for a request, with the transaction type / bank the
+ * file was prepared for. Both are selected only when the 20260810 migration has run.
+ */
+async function getBulkTransactionFileRow(expenditureId) {
+  const optionalColumns = [];
+  for (const column of ['transaction_type', 'bank_code']) {
+    const exists = await hasBulkTransactionFileColumn(column);
+    optionalColumns.push(exists ? `${column},` : `NULL AS ${column},`);
+  }
+
+  const [rows] = await db.execute(
+    `SELECT id, template_version, ${optionalColumns.join(' ')}
+            original_name, stored_name, file_path, mime_type, file_size,
+            created_at, updated_at
+       FROM expenditure_bulk_neft_files
+      WHERE expenditure_id = ?
+      LIMIT 1`,
+    [expenditureId],
+  );
+
+  const row = rows[0] || null;
+  if (!row) return null;
+
+  return withUploadAccess({
+    ...row,
+    transaction_type: normalizeBulkTransactionType(row.transaction_type),
+    bank_code: normalizeBulkTransactionBank(row.bank_code),
+  });
+}
+
 export async function getExpenditureDetails(id) {
   const expenditureId = toPositiveInt(id);
   if (!expenditureId) {
@@ -5294,6 +5822,8 @@ export async function getExpenditureDetails(id) {
       unplanned_rows: [],
       bill_files: [],
       payment_proof_files: [],
+      bulk_transaction_file: null,
+      // LEGACY: pre-rename response key, kept for older clients. Remove once unused.
       bulk_neft_file: null,
     };
   }
@@ -5306,7 +5836,7 @@ export async function getExpenditureDetails(id) {
     expenditureRowsResult,
     billFilesResult,
     paymentProofFilesResult,
-    bulkNeftFileResult,
+    bulkTransactionFileResult,
   ] = await Promise.all([
     db.execute(
       `SELECT id, income_source, contribution, amount, status, remarks, credit_account, sort_order,
@@ -5374,14 +5904,7 @@ export async function getExpenditureDetails(id) {
         ORDER BY sort_order ASC, id ASC`,
       [expenditureId],
     ),
-    db.execute(
-      `SELECT id, template_version, original_name, stored_name, file_path, mime_type, file_size,
-              created_at, updated_at
-         FROM expenditure_bulk_neft_files
-        WHERE expenditure_id = ?
-        LIMIT 1`,
-      [expenditureId],
-    ),
+    getBulkTransactionFileRow(expenditureId),
   ]);
 
   const [income_rows] = incomeRowsResult;
@@ -5391,7 +5914,7 @@ export async function getExpenditureDetails(id) {
   const [expenditure_rows] = expenditureRowsResult;
   const [bill_files] = billFilesResult;
   const [payment_proof_files] = paymentProofFilesResult;
-  const [bulkNeftRows] = bulkNeftFileResult;
+  const bulkTransactionRow = bulkTransactionFileResult;
   let unplanned_rows = [];
   try {
     const [unplannedRowsResult] = await db.execute(
@@ -5417,7 +5940,9 @@ export async function getExpenditureDetails(id) {
     unplanned_rows,
     bill_files: bill_files.map(withUploadAccess),
     payment_proof_files: payment_proof_files.map(withUploadAccess),
-    bulk_neft_file: withUploadAccess(bulkNeftRows[0] || null),
+    bulk_transaction_file: bulkTransactionRow,
+    // LEGACY: pre-rename response key, kept for older clients. Remove once unused.
+    bulk_neft_file: bulkTransactionRow,
   };
 }
 
@@ -5439,8 +5964,10 @@ export async function listExpenditures({
   const params = [];
 
   if (mine && userId) {
-    conditions.push('er.created_by = ?');
-    params.push(toPositiveInt(userId));
+    // Same rule as the expenditure dashboard, so "my requests" and the dashboard cannot
+    // disagree about which claims belong to the caller. See shared/financeOwnership.js.
+    conditions.push(buildFinanceOwnerCondition('er'));
+    params.push(...buildFinanceOwnerParams(userId));
   }
   if (status) {
     conditions.push('LOWER(TRIM(er.overall_status)) = ?');
@@ -5758,18 +6285,8 @@ const WORKFLOW_STAGE_SQL_EXPR = `
   )
 `;
 
-const QUEUE_DISPLAY_REF_SQL_EXPR = `
-  COALESCE(
-    (
-      SELECT err_display.request_ref
-        FROM expenditure_request_refs err_display
-       WHERE err_display.expenditure_request_id = er.id
-       ORDER BY err_display.id ASC
-       LIMIT 1
-    ),
-    CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))
-  )
-`;
+/** Shared with the report, which searches on this expression. */
+const QUEUE_DISPLAY_REF_SQL_EXPR = buildExpenditureDisplayRefExpr('er');
 
 const normalizeWorkflowState = (workflowState) => {
   if (!workflowState) return null;
@@ -6203,6 +6720,62 @@ export async function getLatestArchiveAction(recordId, { tx = db } = {}) {
   };
 }
 
+/**
+ * Bulk row breakdown for the workflow CSV export: every advance, expenditure and
+ * settlement row for the given requests, grouped by expenditure id. One query per
+ * row table so the export stays a fixed number of round trips.
+ */
+export async function listExpenditureRowsForExport(expenditureIds = [], { tx = db } = {}) {
+  const normalizedIds = Array.from(
+    new Set(
+      (Array.isArray(expenditureIds) ? expenditureIds : [])
+        .map((value) => toPositiveInt(value))
+        .filter(Boolean),
+    ),
+  );
+
+  if (!normalizedIds.length) {
+    return {};
+  }
+
+  const placeholders = normalizedIds.map(() => '?').join(', ');
+  const [rows] = await tx.query(
+    `SELECT expenditure_id, 'Advance' AS row_kind, budget_head, sub_head, amount_source,
+            budget_amount, advance_amount AS amount, sort_order, id
+       FROM expenditure_advance_rows
+      WHERE expenditure_id IN (${placeholders})
+     UNION ALL
+     SELECT expenditure_id, 'Expenditure' AS row_kind, budget_head, sub_head, amount_source,
+            budget_amount, auto_sum_amount AS amount, sort_order, id
+       FROM expenditure_line_rows
+      WHERE expenditure_id IN (${placeholders})
+     UNION ALL
+     SELECT expenditure_id, 'Settlement' AS row_kind, budget_head, sub_head, amount_source,
+            budget_amount, settlement_amount AS amount, sort_order, id
+       FROM expenditure_settlement_rows
+      WHERE expenditure_id IN (${placeholders})
+      ORDER BY expenditure_id ASC, row_kind ASC, sort_order ASC, id ASC`,
+    [...normalizedIds, ...normalizedIds, ...normalizedIds],
+  );
+
+  const grouped = {};
+  for (const row of rows || []) {
+    const key = String(toPositiveInt(row.expenditure_id));
+    if (!grouped[key]) {
+      grouped[key] = [];
+    }
+    grouped[key].push({
+      row_kind: row.row_kind,
+      budget_head: row.budget_head,
+      sub_head: row.sub_head,
+      amount_source: row.amount_source,
+      budget_amount: row.budget_amount,
+      amount: row.amount,
+    });
+  }
+  return grouped;
+}
+
 export async function getExpenditureBillsByExpenditureIds(expenditureIds = [], { tx = db } = {}) {
   const normalizedIds = Array.from(
     new Set(
@@ -6280,49 +6853,19 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
   const whereParts = [`LOWER(TRIM(COALESCE(er.overall_status, 'pending'))) <> 'deleted'`];
   const whereParams = [];
 
+  // Same expression the queue and the CSV's Date column display, so a date-filtered
+  // export can never contain a row dated outside the requested window.
+  const dateRange = buildDateRangeCondition('COALESCE(er.request_date, DATE(er.created_at))', {
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+  });
+  if (dateRange.sql) {
+    whereParts.push(dateRange.sql);
+    whereParams.push(...dateRange.params);
+  }
+
   if (fiscalYear) {
-    whereParts.push(`(
-      EXISTS (
-        SELECT 1
-          FROM expenditure_advance_rows ar_fy
-          JOIN budget_proposals bp_fy ON bp_fy.id = ar_fy.budget_proposal_id
-         WHERE ar_fy.expenditure_id = er.id
-           AND bp_fy.fiscal_year = ?
-      )
-      OR EXISTS (
-        SELECT 1
-          FROM expenditure_settlement_rows sr_fy
-          JOIN budget_proposals bp_fy ON bp_fy.id = sr_fy.budget_proposal_id
-         WHERE sr_fy.expenditure_id = er.id
-           AND bp_fy.fiscal_year = ?
-      )
-      OR EXISTS (
-        SELECT 1
-          FROM expenditure_line_rows lr_fy
-          JOIN budget_proposals bp_fy ON bp_fy.id = lr_fy.budget_proposal_id
-         WHERE lr_fy.expenditure_id = er.id
-           AND bp_fy.fiscal_year = ?
-      )
-      OR EXISTS (
-        -- Carry-forward: a proposal carried into the target year must surface
-        -- under that target year for approvers too — matching finance/budget
-        -- (financeModel.listFinanceQueueRecords) and the creator dashboard.
-        SELECT 1
-          FROM finance_carry_forward_allocations cf_fy
-         WHERE cf_fy.finance_request_id = er.finance_request_id
-           AND cf_fy.target_fiscal_year = ?
-           AND LOWER(TRIM(COALESCE(cf_fy.status, 'active'))) = 'active'
-      )
-      OR (
-        NOT EXISTS (SELECT 1 FROM expenditure_advance_rows ar_any WHERE ar_any.expenditure_id = er.id AND ar_any.budget_proposal_id IS NOT NULL)
-        AND NOT EXISTS (SELECT 1 FROM expenditure_settlement_rows sr_any WHERE sr_any.expenditure_id = er.id AND sr_any.budget_proposal_id IS NOT NULL)
-        AND NOT EXISTS (SELECT 1 FROM expenditure_line_rows lr_any WHERE lr_any.expenditure_id = er.id AND lr_any.budget_proposal_id IS NOT NULL)
-        AND (
-          YEAR(COALESCE(er.request_date, er.created_at))
-            - (MONTH(COALESCE(er.request_date, er.created_at)) < 4)
-        ) = ?
-      )
-    )`);
+    whereParts.push(buildExpenditureFiscalYearCondition('er'));
     whereParams.push(fiscalYear, fiscalYear, fiscalYear, fiscalYear, fiscalYear);
   }
 
@@ -6587,6 +7130,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        COALESCE(err.request_ref, CONCAT('#EX-', YEAR(COALESCE(er.request_date, er.created_at)), '-', LPAD(er.id, 4, '0'))) AS proposal_ref,
        er.request_type,
        er.finance_request_id,
+       COALESCE(frr.request_ref, '') AS finance_request_ref,
        (
          -- Carry-forward eligibility for the Advance card: unsettled advance for
          -- this finance request = all approved advances - all approved settlements.
@@ -6614,6 +7158,8 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        er.beneficiary_type,
        er.beneficiary_value,
        er.beneficiary_entity_id,
+       er.budget_tag,
+       er.description,
        er.primary_head,
        er.total_amount,
        er.approved_total_amount,
@@ -6639,6 +7185,7 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
        er.updated_at
      FROM expenditure_requests er
      LEFT JOIN expenditure_request_refs err ON err.expenditure_request_id = er.id
+     LEFT JOIN finance_request_refs frr ON frr.finance_request_id = er.finance_request_id
      LEFT JOIN master_employees emp ON emp.id = er.employee_id
      ${whereClause}
      ORDER BY
@@ -6649,7 +7196,12 @@ export async function listExpenditureQueueRecords(stage, filters = {}, { tx = db
          ELSE 1
        END,
        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(er.workflow_state, '$.resubmittedAt')), '') DESC,
-       er.created_at DESC
+       er.created_at DESC,
+       -- created_at is a second-precision TIMESTAMP, so requests raised in the same
+       -- second tie. Without a unique final key the LIMIT/OFFSET order is undefined
+       -- between pages, which makes the CSV export (10 pages of 100) repeat some rows
+       -- and drop others.
+       er.id DESC
      LIMIT ? OFFSET ?`,
     [statusStageScope, statusStageScope, ...whereParams, limit, offset],
   );
