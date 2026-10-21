@@ -906,7 +906,10 @@ const expenditureController = {
       if (!financeId) return sendError(res, 400, 'Invalid finance request ID');
       if (!userId && !isSuperAdmin) return sendError(res, 401, 'Invalid user context');
 
-      const context = await expenditureModel.getFinanceRequestContext(financeId);
+      // When editing a saved request, its own unplanned claim must not count against it.
+      const context = await expenditureModel.getFinanceRequestContext(financeId, {
+        excludeExpenditureId: toPositiveInt(req.query.expenditure_request_id),
+      });
       if (!context) return sendError(res, 404, 'Finance request not found');
 
       const isOwner = isFinanceRequestOwner(context, userId);
