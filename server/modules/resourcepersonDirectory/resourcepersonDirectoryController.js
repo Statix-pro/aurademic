@@ -14,6 +14,13 @@ const fail = (res, e) => {
   if (/^first name and last name are required$/i.test(e?.message || '')) {
     return res.status(400).json({ success: false, message: e.message });
   }
+  const statusCode = Number(e?.statusCode ?? e?.status);
+  if (Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600) {
+    return res.status(statusCode).json({
+      success: false,
+      message: statusCode < 500 ? e.message : 'Internal server error',
+    });
+  }
   return res.status(500).json({ success: false, message: 'Internal server error' });
 };
 export const list = async (req, res) => {
@@ -29,13 +36,11 @@ const discardUploads = (files = {}) =>
     .forEach((file) => deleteUploadedFile(file.path));
 export const submit = async (req, res) => {
   try {
-    return res
-      .status(201)
-      .json({
-        success: true,
-        data: await model.submit(req.body, req.files || {}, req.user?.id),
-        message: 'Submitted for approval',
-      });
+    return res.status(201).json({
+      success: true,
+      data: await model.submit(req.body, req.files || {}, req.user?.id),
+      message: 'Submitted for approval',
+    });
   } catch (e) {
     discardUploads(req.files);
     return fail(res, e);

@@ -1,5 +1,6 @@
 import { Search, X, Edit3 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import './OrganizationDirectoryDashboard.css';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
@@ -51,6 +52,8 @@ const CATEGORY_OPTIONS = [
    ═══════════════════════════════════════════════════════════ */
 
 const OrganizationDirectoryDashboard: React.FC = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [records, setRecords] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +84,14 @@ const OrganizationDirectoryDashboard: React.FC = () => {
   useEffect(() => {
     fetchRecords();
   }, []);
+
+  useEffect(() => {
+    if (location.state?.openOrganizationForm) {
+      setEditingOrg(null);
+      setShowForm(true);
+      navigate(location.pathname, { replace: true, state: null });
+    }
+  }, [location.pathname, location.state, navigate]);
 
   const filtered = useMemo(() => {
     const nameFilter = searchName.trim().toLowerCase();
@@ -310,7 +321,13 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                             <td>{org.tag && <span className="org-tag-pill">{org.tag}</span>}</td>
                             <td>
                               <span
-                                className={`org-status-pill ${org.approvalStatus === 'Approved' ? 'approved' : 'pending'}`}
+                                className={`org-status-pill ${
+                                  org.approvalStatus === 'Approved'
+                                    ? 'approved'
+                                    : org.approvalStatus === 'Rejected'
+                                      ? 'rejected'
+                                      : 'pending'
+                                }`}
                               >
                                 {org.approvalStatus ||
                                   ((org as Organization & { is_active?: boolean }).is_active

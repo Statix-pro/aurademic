@@ -136,6 +136,13 @@ export default function ResourcePersonApprovalPage() {
       role="button"
       tabIndex={0}
       onClick={() => setFilter(selected)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          setFilter(selected);
+        }
+      }}
+      aria-label={`Show ${label.toLowerCase()} resource people`}
     >
       <div className="d-flex align-items-center gap-3">
         <span
@@ -312,6 +319,7 @@ export default function ResourcePersonApprovalPage() {
           onHide={() => setViewing(null)}
           title="Resource Person Details"
           size="xl"
+          scrollable
           className="resource-person-details-modal"
         >
           {viewing && (

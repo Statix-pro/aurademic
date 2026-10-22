@@ -15,6 +15,7 @@ import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomCard from '../../../shared/components/ui/CustomCard';
 import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
 import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomModal from '../../../shared/components/ui/CustomModal';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import OrganizationDirectory, {
@@ -360,65 +361,49 @@ export default function OrganizationApprovalPage() {
             ) : null
           }
         />
-        {viewing && (
-          <div
-            className="modal d-block"
-            role="dialog"
-            aria-modal="true"
-            onClick={() => setViewing(null)}
-          >
-            <div
-              className="modal-dialog modal-dialog-scrollable"
-              style={{ maxWidth: '1150px', width: 'calc(100% - 32px)', margin: '1.75rem auto' }}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <div className="modal-content">
-                <div className="modal-header">
-                  <h5 className="modal-title">Organization Details</h5>
-                  <button
-                    type="button"
-                    className="btn-close"
-                    onClick={() => setViewing(null)}
-                    aria-label="Close"
-                  />
-                </div>
-                <div className="modal-body p-0">
-                  <OrganizationDirectory
-                    editingOrg={viewing as OrganizationForm}
-                    readOnly
-                    onSave={() => undefined}
-                    onCancel={() => setViewing(null)}
-                  />
-                </div>
-                {(viewing.approvalStatus === 'Pending' || !viewing.approvalStatus) && (
-                  <div className="modal-footer">
-                    <CustomButton
-                      variant="success"
-                      disabled={reviewingId !== null}
-                      loading={reviewingId === viewing.id}
-                      onClick={() => {
-                        void review(viewing.id, 'approve');
-                        setViewing(null);
-                      }}
-                    >
-                      <Check size={15} /> Approve
-                    </CustomButton>
-                    <CustomButton
-                      variant="danger"
-                      disabled={reviewingId !== null}
-                      onClick={() => {
-                        void review(viewing.id, 'reject');
-                        setViewing(null);
-                      }}
-                    >
-                      <X size={15} /> Reject
-                    </CustomButton>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        <CustomModal
+          show={viewing !== null}
+          onHide={() => setViewing(null)}
+          title="Organization Details"
+          size="xl"
+          scrollable
+          footer={
+            viewing && (viewing.approvalStatus === 'Pending' || !viewing.approvalStatus) ? (
+              <>
+                <CustomButton
+                  variant="success"
+                  disabled={reviewingId !== null}
+                  loading={reviewingId === viewing.id}
+                  onClick={() => {
+                    void review(viewing.id, 'approve');
+                    setViewing(null);
+                  }}
+                >
+                  <Check size={15} /> Approve
+                </CustomButton>
+                <CustomButton
+                  variant="danger"
+                  disabled={reviewingId !== null}
+                  onClick={() => {
+                    void review(viewing.id, 'reject');
+                    setViewing(null);
+                  }}
+                >
+                  <X size={15} /> Reject
+                </CustomButton>
+              </>
+            ) : undefined
+          }
+        >
+          {viewing && (
+            <OrganizationDirectory
+              editingOrg={viewing as OrganizationForm}
+              readOnly
+              onSave={() => undefined}
+              onCancel={() => setViewing(null)}
+            />
+          )}
+        </CustomModal>
       </CustomCard>
     </div>
   );

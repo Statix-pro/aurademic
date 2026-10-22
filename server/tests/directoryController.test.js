@@ -11,7 +11,7 @@ vi.mock(
   },
 );
 vi.mock('../modules/resourcepersonDirectory/resourcepersonDirectoryModel.js', () => ({
-  default: { list: vi.fn(), review: vi.fn(), update: vi.fn() },
+  default: { list: vi.fn(), submit: vi.fn(), review: vi.fn(), update: vi.fn() },
 }));
 
 import organizationController from '../modules/organizationDirectory/organizationDirectoryController.js';
@@ -146,6 +146,21 @@ describe('directory controller error envelopes', () => {
     expect(res.json).toHaveBeenCalledWith({ success: false, message });
   });
 
+  it('returns 400 for malformed resource-person profession payloads', async () => {
+    const error = new Error('Professions must be a JSON array');
+    error.status = 400;
+    resourcePersonModel.submit.mockRejectedValueOnce(error);
+    const res = response();
+
+    await resourcePersonController.submit(request(), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith({
+      success: false,
+      message: 'Professions must be a JSON array',
+    });
+  });
+
   it.each([
     ['organization', organizationController, organizationModel],
     ['resource person', resourcePersonController, resourcePersonModel],
@@ -184,6 +199,27 @@ describe('directory controller error envelopes', () => {
   );
 
   it.each([
+    ['organization', organizationController, organizationModel],
+    ['resource person', resourcePersonController, resourcePersonModel],
+  ])(
+    'preserves terminal workflow status codes for %s reviews',
+    async (_name, controller, model) => {
+      const error = new Error('Workflow is already in a terminal state');
+      error.statusCode = 409;
+      model.review.mockRejectedValueOnce(error);
+      const res = response();
+
+      await controller.review(request({ body: { decision: 'approve' } }), res);
+
+      expect(res.status).toHaveBeenCalledWith(409);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        message: 'Workflow is already in a terminal state',
+      });
+    },
+  );
+
+  it.each([
     ['organization', organizationController, organizationModel, 'list', 'listApproved'],
     ['resource person', resourcePersonController, resourcePersonModel, 'list', 'list'],
   ])(
@@ -199,10 +235,11 @@ describe('directory controller error envelopes', () => {
     },
   );
 
-  it('defaults an organization payload category and tag', () => {
+  it('defaults an organization payload category, tag, and status', () => {
     expect(normalizePayload({ name: 'X' })).toMatchObject({
       category: 'Academic',
       name: 'X',
+      status: 'Active',
       tag: 'General',
     });
   });

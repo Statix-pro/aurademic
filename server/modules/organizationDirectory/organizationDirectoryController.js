@@ -14,6 +14,13 @@ const sendError = (res, error) => {
   if (/^organization name is required$/i.test(error?.message || '')) {
     return res.status(400).json({ success: false, message: error.message });
   }
+  const statusCode = Number(error?.statusCode ?? error?.status);
+  if (Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600) {
+    return res.status(statusCode).json({
+      success: false,
+      message: statusCode < 500 ? error.message : 'Internal server error',
+    });
+  }
   return res.status(500).json({ success: false, message: 'Internal server error' });
 };
 
@@ -21,21 +28,19 @@ export const list = async (req, res) => {
   try {
     return res.json({ success: true, data: await model.listApproved(req.user?.id) });
   } catch (error) {
-    return sendError(res, error, 'Failed to load organizations');
+    return sendError(res, error);
   }
 };
 
 export const submit = async (req, res) => {
   try {
-    return res
-      .status(201)
-      .json({
-        success: true,
-        data: await model.submit(req.body, req.user?.id),
-        message: 'Submitted for superadmin approval',
-      });
+    return res.status(201).json({
+      success: true,
+      data: await model.submit(req.body, req.user?.id),
+      message: 'Submitted for superadmin approval',
+    });
   } catch (error) {
-    return sendError(res, error, 'Failed to submit organization');
+    return sendError(res, error);
   }
 };
 
@@ -46,7 +51,7 @@ export const update = async (req, res) => {
       data: await model.update(req.params.id, req.body, req.user?.id),
     });
   } catch (error) {
-    return sendError(res, error, 'Failed to update organization');
+    return sendError(res, error);
   }
 };
 
@@ -54,7 +59,7 @@ export const pending = async (req, res) => {
   try {
     return res.json({ success: true, data: await model.listPending() });
   } catch (error) {
-    return sendError(res, error, 'Failed to load pending organizations');
+    return sendError(res, error);
   }
 };
 
@@ -70,7 +75,7 @@ export const review = async (req, res) => {
       data: await model.review(req.params.id, decision, req.user, req.body?.comment),
     });
   } catch (error) {
-    return sendError(res, error, 'Failed to review organization');
+    return sendError(res, error);
   }
 };
 

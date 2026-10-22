@@ -442,16 +442,6 @@ const ensureUserBaseRoleAssignment = async (userId, connection = db, assignedBy 
     [parsedUserId, roleRows[0].id, assignedBy],
   );
 
-  await connection.query(
-    `
-      INSERT IGNORE INTO role_permissions (role_id, permission_id)
-      SELECT ?, id
-      FROM permissions
-      WHERE module_key = 'directory'
-    `,
-    [roleRows[0].id],
-  );
-
   return true;
 };
 

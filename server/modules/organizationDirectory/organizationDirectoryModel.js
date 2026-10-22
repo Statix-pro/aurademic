@@ -31,6 +31,7 @@ export const normalizePayload = (input = {}) => {
       const value = input[field] ?? input[aliases[field]];
       if (field === 'category') return [field, value || 'Academic'];
       if (field === 'tag') return [field, value || 'General'];
+      if (field === 'status') return [field, value || 'Active'];
       return [field, value === '' ? null : (value ?? null)];
     }),
   );
@@ -108,9 +109,16 @@ export default {
         `UPDATE organizations SET ${assignments}, is_active = 0, updated_by = NULL WHERE id = ?`,
         [...ORG_FIELDS.map((field) => payload[field]), id],
       );
-      await workflowService.startWorkflow({
+      const workflow = await workflowService.startWorkflow({
         moduleKey: 'organization_directory',
         recordId: id,
+        tx: connection,
+      });
+      await workflowService.logWorkflowResubmission({
+        moduleKey: 'organization_directory',
+        recordId: id,
+        stage: workflow?.state?.currentStage || 'level1',
+        actor: { userId },
         tx: connection,
       });
       const [rows] = await connection.execute(

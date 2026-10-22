@@ -13,6 +13,8 @@ import React, { useState, useEffect } from 'react';
 import './ResourcePersonDirectory.css';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 
+import type { Organization } from '../organizationdirectory/OrganizationDirectory';
+
 /* ─── Types ─────────────────────────────────────────────── */
 
 export interface ProfessionDetail {
@@ -57,6 +59,8 @@ export interface ResourcePerson {
 
 interface ResourcePersonDirectoryProps {
   editingPerson: ResourcePerson | null;
+  organizations?: Organization[];
+  onAddOrganization?: () => void;
   onSave: (personData: Omit<ResourcePerson, 'id' | 'date'>) => void;
   onCancel: () => void;
   readOnly?: boolean;
@@ -73,6 +77,8 @@ const CATEGORY_OPTIONS = [
   'Alumni',
   'Social Activist',
 ];
+
+const ADD_ORGANIZATION_VALUE = '__add_organization__';
 
 const newProfessionId = (): string => crypto.randomUUID();
 
@@ -202,6 +208,8 @@ const UploadBox: React.FC<UploadBoxProps> = ({
 
 const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   editingPerson,
+  organizations = [],
+  onAddOrganization,
   onSave,
   onCancel,
   readOnly = false,
@@ -265,6 +273,17 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
     setProfessions((prev) => prev.filter((_, idx) => idx !== i));
   const changeProfession = (i: number, field: keyof ProfessionDetail, val: string) =>
     setProfessions((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: val } : p)));
+  const organizationOptions = [
+    ...organizations.map((organization) => ({
+      value: organization.name,
+      label: organization.approvalStatus
+        ? `${organization.name} (${organization.approvalStatus})`
+        : organization.name,
+    })),
+    ...(onAddOrganization
+      ? [{ value: ADD_ORGANIZATION_VALUE, label: 'Add an organization...' }]
+      : []),
+  ];
 
   /* ── File handlers ── */
   const handlePhoto = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -630,7 +649,6 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       [
                         { label: 'Designation', field: 'designation', ph: 'e.g. Professor' },
                         { label: 'Department', field: 'department', ph: 'e.g. Computer Science' },
-                        { label: 'Organization', field: 'organization', ph: 'e.g. IIT Madras' },
                       ] as { label: string; field: keyof ProfessionDetail; ph: string }[]
                     ).map(({ label, field, ph }) => (
                       <div key={field} className="rpd-field" style={{ marginBottom: 0 }}>
@@ -644,6 +662,30 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                         />
                       </div>
                     ))}
+                    <div className="rpd-field" style={{ marginBottom: 0 }}>
+                      <label>Organization</label>
+                      <CustomDropdown
+                        name={`organization-${idx}`}
+                        value={
+                          prof.organization
+                            ? (organizationOptions.find(
+                                (option) => option.value === prof.organization,
+                              ) ?? { value: prof.organization, label: prof.organization })
+                            : null
+                        }
+                        onChange={(option: any) => {
+                          if (option?.value === ADD_ORGANIZATION_VALUE) {
+                            onAddOrganization?.();
+                            return;
+                          }
+                          changeProfession(idx, 'organization', option ? String(option.value) : '');
+                        }}
+                        options={organizationOptions}
+                        placeholder="Select organization"
+                        styles={customDropdownStyles}
+                        isDisabled={isReadOnly}
+                      />
+                    </div>
                   </div>
                   <div
                     style={{
@@ -745,7 +787,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               hint="JPG, JPEG, PNG (Maximum 2 MB)"
               accept="image/*"
               filename={photoName}
-              filePath={editingPerson?.photoPath}
+              filePath={photoFile ? undefined : editingPerson?.photoPath}
               onChange={handlePhoto}
               disabled={isReadOnly}
             />
@@ -755,7 +797,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               hint="PDF, DOC, DOCX (Maximum 5 MB)"
               accept=".pdf,.doc,.docx"
               filename={resumeName}
-              filePath={editingPerson?.resumePath}
+              filePath={resumeFile ? undefined : editingPerson?.resumePath}
               onChange={handleResume}
               disabled={isReadOnly}
             />

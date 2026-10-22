@@ -63,12 +63,16 @@ describe('notificationCatalog', () => {
     ]);
   });
 
-  it('registers directory notifications with their workflow recipients', () => {
+  it('declares directory notification recipient classes in the catalog', () => {
     for (const moduleKey of ['organization_directory', 'resource_person_directory']) {
       expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.submitted`);
+      expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.resubmitted`);
       expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.approved`);
       expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.rejected`);
       expect(NOTIFICATION_TYPES[`${moduleKey}.submitted`].recipients).toEqual([
+        `approver:${moduleKey}`,
+      ]);
+      expect(NOTIFICATION_TYPES[`${moduleKey}.resubmitted`].recipients).toEqual([
         `approver:${moduleKey}`,
       ]);
       expect(NOTIFICATION_TYPES[`${moduleKey}.approved`].recipients).toEqual(['anyone']);

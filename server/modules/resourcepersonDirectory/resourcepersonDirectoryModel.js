@@ -1,5 +1,8 @@
+import path from 'path';
+
 import db from '../../config/connection.js';
 import { getDirectoryApprovalStatus } from '../shared/directoryApprovalStatus.js';
+import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import '../shared/workflow/directoryWorkflowAdapter.js';
 import workflowService from '../shared/workflow/workflowService.js';
 
@@ -120,6 +123,31 @@ const normalize = (input = {}, files = {}) => ({
   resume_mime_type: files.resumeFile?.[0]?.mimetype || text(input.resumeMimeType),
   resume_file_size: files.resumeFile?.[0]?.size || Number(input.resumeFileSize) || null,
 });
+const parseProfessions = (value) => {
+  let professions = value || [];
+  if (typeof professions === 'string') {
+    try {
+      professions = professions ? JSON.parse(professions) : [];
+    } catch {
+      const error = new Error('Professions must be a JSON array');
+      error.status = 400;
+      throw error;
+    }
+  }
+  if (
+    !Array.isArray(professions) ||
+    professions.some(
+      (profession) => !profession || typeof profession !== 'object' || Array.isArray(profession),
+    )
+  ) {
+    const error = new Error('Professions must be a JSON array');
+    error.status = 400;
+    throw error;
+  }
+  return professions;
+};
+const storedUploadPath = (storedPath) =>
+  path.resolve(process.cwd(), String(storedPath).replace(/^[/\\]+/, ''));
 
 export default {
   async list(userId) {
@@ -143,6 +171,7 @@ export default {
     const person = normalize(input, files);
     if (!person.first_name || !person.last_name)
       throw new Error('First name and last name are required');
+    const professions = parseProfessions(input.professions);
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
@@ -151,7 +180,6 @@ export default {
         `INSERT INTO directory_resource_persons (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
         [...fields.map((f) => person[f]), 0, userId || null],
       );
-      const professions = JSON.parse(input.professions || '[]');
       for (const [i, p] of professions.entries())
         await connection.execute(
           'INSERT INTO directory_resource_person_professions (resource_person_id, designation, department, organization, city, state, country, org_linked_in, status, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)',
@@ -190,6 +218,7 @@ export default {
     const person = normalize(input, files);
     if (!person.first_name || !person.last_name)
       throw new Error('First name and last name are required');
+    const professions = parseProfessions(input.professions);
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
@@ -243,7 +272,6 @@ export default {
         `UPDATE directory_resource_persons SET ${updateFields.map((field) => `${field} = ?`).join(', ')} WHERE id = ?`,
         values,
       );
-      const professions = JSON.parse(input.professions || '[]');
       await connection.execute(
         'DELETE FROM directory_resource_person_professions WHERE resource_person_id = ?',
         [id],
@@ -264,12 +292,29 @@ export default {
             index,
           ],
         );
-      await workflowService.startWorkflow({
+      const workflow = await workflowService.startWorkflow({
         moduleKey: 'resource_person_directory',
         recordId: id,
         tx: connection,
       });
+      await workflowService.logWorkflowResubmission({
+        moduleKey: 'resource_person_directory',
+        recordId: id,
+        stage: workflow?.state?.currentStage || 'level1',
+        actor: { userId },
+        tx: connection,
+      });
       await connection.commit();
+      if (files.photoFile?.[0] && current.photo_path && current.photo_path !== person.photo_path) {
+        deleteUploadedFile(storedUploadPath(current.photo_path));
+      }
+      if (
+        files.resumeFile?.[0] &&
+        current.resume_path &&
+        current.resume_path !== person.resume_path
+      ) {
+        deleteUploadedFile(storedUploadPath(current.resume_path));
+      }
       const savedPerson = {
         id: Number(id),
         ...person,

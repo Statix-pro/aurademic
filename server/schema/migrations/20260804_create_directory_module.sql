@@ -184,8 +184,8 @@ ON DUPLICATE KEY UPDATE `description` = VALUES(`description`);
 
 -- Directory pages are available to every authenticated user. Role assignments
 -- may be global or contextual, so grant the directory keys to every role that
--- already exists; runtime base-role seeding also grants them to roles created
--- after this migration runs.
+-- exists when this migration runs. Authorization checks must not re-grant
+-- permissions after an administrator revokes them.
 INSERT INTO `role_permissions` (`role_id`, `permission_id`)
 SELECT r.id, p.id
 FROM `roles` r

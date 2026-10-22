@@ -11,31 +11,20 @@ import accessControlModel from '../modules/accessControl/accessControlModel.js';
 describe('directory permission resolution', () => {
   beforeEach(() => query.mockReset());
 
-  it('grants directory permissions when the base user role is created after migration', async () => {
+  it('does not restore revoked directory permissions while resolving user authorization', async () => {
     query
       .mockResolvedValueOnce([[{ id: 9, is_admin: 0 }]])
       .mockResolvedValueOnce([{}])
       .mockResolvedValueOnce([[{ id: 15 }]])
       .mockResolvedValueOnce([{}])
-      .mockResolvedValueOnce([{}])
       .mockResolvedValueOnce([[{ role_code: 'user', is_admin_role: 0 }]])
-      .mockResolvedValueOnce([
-        [
-          { permission_key: 'directory.create' },
-          { permission_key: 'directory.edit' },
-          { permission_key: 'directory.read' },
-        ],
-      ]);
+      .mockResolvedValueOnce([[{ permission_key: 'events.read' }]]);
 
     const snapshot = await accessControlModel.getUserAuthorizationSnapshot(9);
-    const grantQuery = query.mock.calls.find(([sql]) =>
-      /INSERT IGNORE INTO role_permissions/.test(sql),
-    );
 
-    expect(grantQuery[0]).toMatch(
-      /SELECT \?, id\s+FROM permissions\s+WHERE module_key = 'directory'/,
+    expect(query.mock.calls.some(([sql]) => /INSERT IGNORE INTO role_permissions/.test(sql))).toBe(
+      false,
     );
-    expect(grantQuery[1]).toEqual([15]);
-    expect(snapshot.permissions).toEqual(['directory.create', 'directory.edit', 'directory.read']);
+    expect(snapshot.permissions).toEqual(['events.read']);
   });
 });

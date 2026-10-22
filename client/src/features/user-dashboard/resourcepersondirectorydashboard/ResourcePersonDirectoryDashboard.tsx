@@ -1,5 +1,6 @@
 import { Search, Plus, X, Edit3 } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
@@ -7,6 +8,8 @@ import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import ResourcePersonDirectory, {
   ResourcePerson,
 } from '../../resourcepersondirectory/ResourcePersonDirectory';
+
+import type { Organization } from '../../organizationdirectory/OrganizationDirectory';
 
 /* ─── API Contract (backend must implement) ────────────────────────────────
  * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
@@ -19,6 +22,12 @@ const apiGetAll = async (): Promise<ResourcePerson[]> => {
   const res = (await authenticityUtility.get('/resource-persons')) as any;
   if (res?.success && Array.isArray(res.data)) return res.data as ResourcePerson[];
   throw new Error(res?.message || 'Failed to load resource persons.');
+};
+
+const apiGetOrganizations = async (): Promise<Organization[]> => {
+  const res = (await authenticityUtility.get('/organizations')) as any;
+  if (res?.success && Array.isArray(res.data)) return res.data as Organization[];
+  throw new Error(res?.message || 'Failed to load organizations.');
 };
 
 // Helper: build multipart FormData for ResourcePerson operations
@@ -67,10 +76,13 @@ const getPrimary = (p: ResourcePerson) => {
    ═══════════════════════════════════════════════════════════ */
 
 const ResourcePersonDirectoryDashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [records, setRecords] = useState<ResourcePerson[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [organizationLoadError, setOrganizationLoadError] = useState<string | null>(null);
 
   const [showForm, setShowForm] = useState(false);
   const [editingPerson, setEditingPerson] = useState<ResourcePerson | null>(null);
@@ -94,8 +106,18 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
     }
   };
 
+  const fetchOrganizations = async () => {
+    setOrganizationLoadError(null);
+    try {
+      setOrganizations(await apiGetOrganizations());
+    } catch (err: any) {
+      setOrganizationLoadError(err?.message || 'Failed to load organizations.');
+    }
+  };
+
   useEffect(() => {
     fetchRecords();
+    fetchOrganizations();
   }, []);
 
   const filtered = useMemo(() => {
@@ -114,6 +136,9 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
     setEditingPerson(null);
     setShowForm(true);
   };
+
+  const handleAddOrganization = () =>
+    navigate('/organizationdirectorydashboard', { state: { openOrganizationForm: true } });
 
   const handleCancel = () => {
     setEditingPerson(null);
@@ -171,8 +196,22 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                 {error}
               </div>
             )}
+            {organizationLoadError && (
+              <div className="alert alert-warning mb-3" role="alert">
+                <span>{organizationLoadError}</span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-outline-warning ms-3"
+                  onClick={fetchOrganizations}
+                >
+                  Retry
+                </button>
+              </div>
+            )}
             <ResourcePersonDirectory
               editingPerson={editingPerson}
+              organizations={organizations}
+              onAddOrganization={handleAddOrganization}
               onSave={handleSave}
               onCancel={handleCancel}
             />
