@@ -29,6 +29,11 @@ interface CustomDropdownProps {
   menuPortalTarget?: HTMLElement | null;
   menuPosition?: 'absolute' | 'fixed';
   filterOption?: (candidate: any, input: string) => boolean;
+  /** For server-side search: fires as the user types, before options are filtered. */
+  onInputChange?: (value: string) => void;
+  isLoading?: boolean;
+  noOptionsMessage?: (obj: { inputValue: string }) => React.ReactNode;
+  isClearable?: boolean;
 }
 
 const CustomDropdown: React.FC<CustomDropdownProps> = ({

@@ -389,6 +389,85 @@
   border-bottom: 1px solid #e6eef8;
 }
 
+/* Tinted panel inside Article Details for where the work appeared (journal,
+   conference or book) — it groups the values that come from one source. */
+.publication-source-panel {
+  background-color: #eaf4fd;
+  border-radius: 16px;
+  padding: 16px 20px 20px;
+  margin-bottom: 1.25rem;
+}
+
+.publication-source-panel .section-title-divider {
+  border-bottom-color: #cfe1f3;
+}
+
+.publication-source-panel .form-control:not(:disabled):not([readonly]) {
+  background-color: #fff;
+}
+
+.website-field {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.website-field > .form-control {
+  flex: 1;
+  min-width: 0;
+}
+
+.website-link {
+  display: inline-flex;
+  color: #0069ab;
+  flex-shrink: 0;
+}
+
+.website-link:hover {
+  color: #005286;
+}
+
+.website-link.is-disabled {
+  color: #b6c4d4;
+}
+
+.quartile-info-icon {
+  display: inline-flex;
+  color: #5b8fd0;
+  cursor: help;
+}
+
+/* Sits beside the Index input, so it takes the input's height to line up. */
+.quartile-radio-group {
+  min-height: 38px;
+  flex-wrap: nowrap;
+}
+
+/* The shared tag inputs and dropdown bring a 16px bottom margin for stacked forms; in
+   this card's rows it would push them out of line with the plain inputs beside them. */
+.article-details-card .custom-input-group {
+  margin-bottom: 0;
+}
+
+/* The shared dropdown is a 45px control; inside the form it matches the 38px inputs
+   beside it. */
+.publisher-select .react-select__control,
+.publisher-select .react-select__value-container,
+.publisher-select .react-select__indicators {
+  min-height: 38px !important;
+  height: 38px !important;
+}
+
+.publisher-select .react-select__control {
+  border-radius: 12px !important;
+  border-color: #e0e0e0 !important;
+  background-color: #fff !important;
+}
+
+.publisher-select .react-select__control--is-disabled {
+  background-color: #f6f9fd !important;
+}
+
 /* Citation count next to Reference Nos input */
 .reference-citation-count {
   color: #0069ab;
