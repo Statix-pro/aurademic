@@ -13,10 +13,11 @@
   /* Text Colors */
   --text-main: #4f4f6e;
   --text-muted: #6c757d;
-  /* Placeholder hints: lighter than typed text (7.8:1 and up) so they never read as a
-     value, but at least 4.5:1 on every input background (#fff, #fcfdff, #f8f9fa) — the
-     WCAG minimum for text, placeholders included. The earlier #9aa5b4 was 2.5:1. */
-  --placeholder-color: #667383;
+  /* Placeholder hints, portal-wide: a light grey so a hint never reads as a typed value
+     (3.7:1 lighter than typed #2f3b4c), kept at 3:1 on the field so it stays legible.
+     The owner chose this over #667383 (4.75:1, flagged as too dark to read as a hint)
+     on 2026-10-22, trading full WCAG text contrast for a clearly secondary hint. */
+  --placeholder-color: #8a95a4;
   --text-light: #ffffff;
 
   /* Border Colors */

@@ -115,7 +115,7 @@
 }
 
 .expenditure-search-input::placeholder {
-  color: #8aa0b8;
+  color: var(--placeholder-color);
 }
 
 .expenditure-search-input:focus {
