@@ -16,7 +16,7 @@ const {
  * "cannot exceed Head of Accounts balance ₹5,000" — and the server summed planned and unplanned
  * against the same ₹16,000 line. Unplanned money is its own approved allowance.
  */
-const makeConn = ({ enabled = 1, approved = 36000, used = 0 } = {}) => {
+const makeConn = ({ enabled = 1, approved = 36000, used = 0, legacyUsed = 0 } = {}) => {
   const executed = [];
   return {
     executed,
@@ -28,6 +28,10 @@ const makeConn = ({ enabled = 1, approved = 36000, used = 0 } = {}) => {
       executed.push({ sql, params });
       if (sql.includes('FROM finance_requests')) {
         return [[{ unplanned_budget_enabled: enabled, unplanned_budget_amount: approved }]];
+      }
+      // LEGACY claims (a single amount on expenditure_requests) are summed separately.
+      if (sql.includes('used_amount') && sql.includes('unplanned_budget_enabled = 1')) {
+        return [[{ used_amount: legacyUsed }]];
       }
       if (sql.includes('used_amount')) {
         return [[{ used_amount: used }]];
@@ -90,8 +94,49 @@ describe('unplanned expenditure allowance', () => {
     });
     const financeLookup = conn.executed.find(({ sql }) => sql.includes('FROM finance_requests'));
     expect(financeLookup.sql).toContain('FOR UPDATE');
-    const usageLookup = conn.executed.find(({ sql }) => sql.includes('used_amount'));
-    expect(usageLookup.params).toEqual([299, 812, 812, 299, 812, 812]);
+    const usageLookups = conn.executed.filter(({ sql }) => sql.includes('used_amount'));
+    expect(usageLookups).toHaveLength(2);
+    for (const lookup of usageLookups) expect(lookup.params).toEqual([299, 812, 812]);
+  });
+
+  it('adds legacy single-amount claims to the rows-based ones', async () => {
+    const conn = makeConn({ used: 4000, legacyUsed: 6000 });
+
+    const state = await getFinanceUnplannedBudgetState(conn, { financeRequestId: 299 });
+
+    expect(state.usedAmount).toBe(10000);
+    expect(state.remainingAmount).toBe(26000);
+  });
+
+  /**
+   * Greptile on PR #85: under REPEATABLE READ, createExpenditureRequest's earlier plain reads
+   * fix its snapshot, so a claim another request committed while this one waited on the
+   * finance row lock was invisible to a plain SUM — two ₹600 claims both passed against
+   * ₹1,000 (reproduced on MySQL). Under the lock the usage must be locking reads, which see
+   * the latest committed rows; the legacy query's NOT EXISTS needs its own lock clause, since
+   * an outer one does not reach a subquery.
+   */
+  it('reads usage with locking reads when checking under the finance row lock', async () => {
+    const conn = makeConn();
+
+    await assertUnplannedWithinFinanceUnplannedBudget(conn, {
+      financeRequestId: 299,
+      normalizedUnplanned: unplanned(100),
+    });
+
+    const usageLookups = conn.executed.filter(({ sql }) => sql.includes('used_amount'));
+    expect(usageLookups).toHaveLength(2);
+    for (const { sql } of usageLookups) expect(sql.trimEnd()).toMatch(/FOR SHARE$/);
+    const legacy = usageLookups.find(({ sql }) => sql.includes('NOT EXISTS'));
+    expect(legacy.sql.match(/FOR SHARE/g)).toHaveLength(2);
+  });
+
+  it('keeps plain reads for a balance shown outside a transaction', async () => {
+    const conn = makeConn();
+
+    await getFinanceUnplannedBudgetState(conn, { financeRequestId: 299 });
+
+    for (const { sql } of conn.executed) expect(sql).not.toMatch(/FOR (SHARE|UPDATE)/);
   });
 });
 

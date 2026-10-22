@@ -1305,43 +1305,42 @@ export async function getFinanceUnplannedBudgetState(
   const enabled = Boolean(Number(financeRow?.unplanned_budget_enabled));
   const approvedAmount = enabled ? toMoney(financeRow?.unplanned_budget_amount) : 0;
 
+  // Under the lock the usage must be read as locking reads. A plain read in a REPEATABLE
+  // READ transaction answers from the snapshot taken at the transaction's first read —
+  // createExpenditureRequest makes several before it gets here — so a claim that another
+  // request committed while this one waited on the finance row stayed invisible, and two
+  // ₹600 claims both passed against a ₹1,000 allowance. A locking read sees the latest
+  // committed rows and holds them until this transaction ends.
+  const lockClause = forUpdate ? ' FOR SHARE' : '';
   const excludedRequestId = toPositiveInt(excludeExpenditureId);
-  const [usageRows] = await source.execute(
-    `SELECT COALESCE(SUM(usage_rows.amount), 0) AS used_amount
-       FROM (
-         SELECT eur.amount
-           FROM expenditure_unplanned_rows eur
-           JOIN expenditure_requests er ON er.id = eur.expenditure_id
-          WHERE er.finance_request_id = ?
-            AND (? IS NULL OR er.id <> ?)
-            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
-
-         UNION ALL
-
-         -- LEGACY: requests saved before expenditure_unplanned_rows existed keep their single
-         -- unplanned amount on expenditure_requests. Remove once those rows are migrated.
-         SELECT er.unplanned_budget_amount AS amount
-           FROM expenditure_requests er
-          WHERE er.finance_request_id = ?
-            AND (? IS NULL OR er.id <> ?)
-            AND er.unplanned_budget_enabled = 1
-            AND NOT EXISTS (
-              SELECT 1
-                FROM expenditure_unplanned_rows eur_existing
-               WHERE eur_existing.expenditure_id = er.id
-            )
-            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
-       ) AS usage_rows`,
-    [
-      financeId,
-      excludedRequestId,
-      excludedRequestId,
-      financeId,
-      excludedRequestId,
-      excludedRequestId,
-    ],
+  const [claimedRows] = await source.execute(
+    `SELECT COALESCE(SUM(eur.amount), 0) AS used_amount
+         FROM expenditure_unplanned_rows eur
+         JOIN expenditure_requests er ON er.id = eur.expenditure_id
+        WHERE er.finance_request_id = ?
+          AND (? IS NULL OR er.id <> ?)
+          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}${lockClause}`,
+    [financeId, excludedRequestId, excludedRequestId],
   );
-  const usedAmount = toMoney(usageRows?.[0]?.used_amount);
+  // LEGACY: requests saved before expenditure_unplanned_rows existed keep their single
+  // unplanned amount on expenditure_requests. Remove once those rows are migrated.
+  const [legacyRows] = await source.execute(
+    `SELECT COALESCE(SUM(er.unplanned_budget_amount), 0) AS used_amount
+         FROM expenditure_requests er
+        WHERE er.finance_request_id = ?
+          AND (? IS NULL OR er.id <> ?)
+          AND er.unplanned_budget_enabled = 1
+          AND NOT EXISTS (
+            SELECT 1
+              FROM expenditure_unplanned_rows eur_existing
+             WHERE eur_existing.expenditure_id = er.id${lockClause}
+          )
+          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}${lockClause}`,
+    [financeId, excludedRequestId, excludedRequestId],
+  );
+  const usedAmount = toMoney(
+    toMoney(claimedRows?.[0]?.used_amount) + toMoney(legacyRows?.[0]?.used_amount),
+  );
 
   return {
     enabled,
