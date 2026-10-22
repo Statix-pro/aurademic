@@ -12,6 +12,20 @@ import { withSelectedOption } from '../selectOptions';
 import type { CollaboratorRow, ProjectFormState, ProjectOrganization } from '../types';
 
 /**
+ * LEGACY: collaborators saved while the organization was typed (development builds of
+ * 2026-10, before it became a master-list pick) carry `organization_name` with no
+ * `organization_id`. Their name is offered under this value so it still shows, and saving
+ * the row unchanged keeps it. Remove once no project_collaborators row has a name without
+ * an id.
+ */
+const LEGACY_ORGANIZATION_PREFIX = 'legacy-org::';
+
+const organizationValue = (row: CollaboratorRow): string => {
+  if (row.organizationId) return String(row.organizationId);
+  return row.organizationName ? `${LEGACY_ORGANIZATION_PREFIX}${row.organizationName}` : '';
+};
+
+/**
  * Keeps a role that is not in the list selectable — the field was free text
  * before it was a multi-select, so a project saved then still carries whatever
  * was typed, and an edit to any other cell would otherwise save the row without
@@ -62,6 +76,9 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
   );
 
   const selectOrganization = (index: number, value: string) => {
+    // LEGACY: re-picking a typed name changes nothing; see LEGACY_ORGANIZATION_PREFIX.
+    if (value.startsWith(LEGACY_ORGANIZATION_PREFIX)) return;
+
     const organization = organizations.find((item) => String(item.id) === value);
 
     update(index, {
@@ -129,11 +146,11 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                 <div className="pf-inline-field pf-collaborator__org">
                   <span className="pf-inline-field__label">Organization</span>
                   <SelectField
-                    value={row.organizationId ? String(row.organizationId) : ''}
+                    value={organizationValue(row)}
                     onChange={(value) => selectOrganization(index, value)}
                     options={withSelectedOption(
                       organizationOptions,
-                      row.organizationId ? String(row.organizationId) : '',
+                      organizationValue(row),
                       row.organizationName,
                     )}
                     disabled={disabled}
