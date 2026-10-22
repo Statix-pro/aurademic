@@ -471,6 +471,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // so it is what makes a WoS ID apply.
   const hasIndex = (name: string) =>
     selectedIndexes.some((index) => index.trim().toLowerCase() === name.toLowerCase());
+  // Removing an index clears its ID. Only a removal does: a record saved with an ID but
+  // not its index keeps the ID, and shows the field, rather than having it wiped unseen by
+  // the next save of an unrelated change.
+  const handleIndexesChange = (values: string[]) => {
+    const next = dedupeTagsCaseInsensitive(values);
+    const removed = (name: string) =>
+      hasIndex(name) && !next.some((index) => index.trim().toLowerCase() === name.toLowerCase());
+    if (removed('Scopus')) setScopusId('');
+    if (removed('SCIE')) setWosId('');
+    if (removed('PubMed')) setPubmedPmid('');
+    setSelectedIndexes(next);
+  };
   const [indexSearchQuery, setIndexSearchQuery] = useState<string>('');
   const [referenceNumber, setReferenceNumber] = useState<string>('');
   const [bookChapterTitle, setBookChapterTitle] = useState<string>('');
@@ -2659,8 +2671,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
           : null,
       article_number: pageOrArticleChoice === 'article' ? getFormValue('articleNumberInput') : null,
       doi: getFormValue('doiInput'),
-      // An ID is kept only while its index is picked; removing the index clears it.
-      scopus_id: hasIndex('Scopus') ? scopusId : null,
+      // Removing an index clears its ID (handleIndexesChange), so these are sent as held.
+      scopus_id: scopusId,
       scie_id: scieId,
       credit_to: selectedCreditTo,
       reference_number: isBook ? null : referenceNumber,
@@ -2668,8 +2680,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
       available_online_date: getFormValue('availableDateInput'),
       open_access: openAccess || null,
       year: year || null,
-      wos_id: hasIndex('SCIE') ? wosId || null : null,
-      pubmed_pmid: hasIndex('PubMed') ? pubmedPmid || null : null,
+      wos_id: wosId || null,
+      pubmed_pmid: pubmedPmid || null,
     };
 
     // Add publication_details for Conference, Book Chapter, and Book
@@ -3484,7 +3496,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     <CustomTagInput
                       name="index"
                       value={selectedIndexes}
-                      onChange={(values) => setSelectedIndexes(dedupeTagsCaseInsensitive(values))}
+                      onChange={handleIndexesChange}
                       suggestions={(() => {
                         // Google Scholar is no longer offered; a record that has it keeps the tag.
                         const availableIndexes = ['SCIE', 'Scopus', 'PubMed'];
@@ -4275,7 +4287,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     </div>
 
                     {/* Scopus EID */}
-                    {hasIndex('Scopus') && (
+                    {(hasIndex('Scopus') || scopusId !== '') && (
                       <div className="col-lg-6 d-flex align-items-center">
                         <label
                           className="form-label mb-0 me-3 font-weight-bold"
@@ -4303,7 +4315,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     )}
 
                     {/* WoS ID */}
-                    {hasIndex('SCIE') && (
+                    {(hasIndex('SCIE') || wosId !== '') && (
                       <div className="col-lg-6 d-flex align-items-center">
                         <label
                           className="form-label mb-0 me-3 font-weight-bold"
@@ -4332,7 +4344,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     )}
 
                     {/* PubMed PMID */}
-                    {hasIndex('PubMed') && (
+                    {(hasIndex('PubMed') || pubmedPmid !== '') && (
                       <div className="col-lg-6 d-flex align-items-center">
                         <label
                           className="form-label mb-0 me-3 font-weight-bold"
