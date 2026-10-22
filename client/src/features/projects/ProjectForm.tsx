@@ -999,7 +999,13 @@ const ProjectForm: React.FC = () => {
               />
             </div>
 
-            <CollaboratorsSection form={form} patch={patch} errors={errors} disabled={isReadOnly} />
+            <CollaboratorsSection
+              form={form}
+              patch={patch}
+              organizations={lookups.organizations}
+              errors={errors}
+              disabled={isReadOnly}
+            />
 
             <FinanceRowsSection
               title="Financial Contribution"

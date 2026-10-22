@@ -7,8 +7,9 @@ import TagSelectField from '../components/TagSelectField';
 import YesNoSwitch from '../components/YesNoSwitch';
 import { COLLABORATOR_CATEGORIES, COLLABORATOR_ROLES, MAX_COLLABORATORS } from '../constants';
 import { createCollaboratorRow, removeAt, replaceAt } from '../projectFormState';
+import { withSelectedOption } from '../selectOptions';
 
-import type { CollaboratorRow, ProjectFormState } from '../types';
+import type { CollaboratorRow, ProjectFormState, ProjectOrganization } from '../types';
 
 /**
  * Keeps a role that is not in the list selectable — the field was free text
@@ -34,6 +35,7 @@ const withStoredRoles = (
 interface CollaboratorsSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
+  organizations: ProjectOrganization[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -41,10 +43,35 @@ interface CollaboratorsSectionProps {
 const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
   form,
   patch,
+  organizations,
   errors,
   disabled,
 }) => {
   const rows = form.collaborators;
+
+  // Picked from the organization master, never typed: the finance tables offer a
+  // collaborator as a party by its organization id (`financeOrganizations`), and free
+  // text let one institution be saved as several spellings. A missing organization is
+  // requested through Add Scheme and appears here once an admin approves it.
+  const organizationOptions = useMemo(
+    () =>
+      organizations
+        .filter((organization) => organization.is_internal !== 1)
+        .map((organization) => ({ value: String(organization.id), label: organization.name })),
+    [organizations],
+  );
+
+  const selectOrganization = (index: number, value: string) => {
+    const organization = organizations.find((item) => String(item.id) === value);
+
+    update(index, {
+      organizationId: organization?.id ?? null,
+      organizationName: organization?.name ?? '',
+      // The master list knows where the organization is, so the city follows
+      // the pick unless the user has already typed one.
+      city: organization?.city && !rows[index].city ? organization.city : rows[index].city,
+    });
+  };
 
   const roleOptions = useMemo(
     () => COLLABORATOR_ROLES.map((role) => ({ value: role, label: role })),
@@ -101,22 +128,17 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
               <div className="pf-collaborator__line">
                 <div className="pf-inline-field pf-collaborator__org">
                   <span className="pf-inline-field__label">Organization</span>
-                  {/* Typed in for now. It is to be picked from the organization
-                      directory once that exists; a typed name is saved as
-                      `organization_name` with no `organization_id`, which the
-                      server already accepts. */}
-                  <input
-                    type="text"
-                    className={`pf-input ${errors[`collaborators[${index}].organization`] ? 'is-invalid' : ''}`.trim()}
-                    value={row.organizationName}
-                    onChange={(event) =>
-                      // A name typed over one picked from the old master list is
-                      // a different organization, so the stored id is dropped.
-                      update(index, { organizationId: null, organizationName: event.target.value })
-                    }
+                  <SelectField
+                    value={row.organizationId ? String(row.organizationId) : ''}
+                    onChange={(value) => selectOrganization(index, value)}
+                    options={withSelectedOption(
+                      organizationOptions,
+                      row.organizationId ? String(row.organizationId) : '',
+                      row.organizationName,
+                    )}
                     disabled={disabled}
-                    maxLength={255}
-                    aria-label="Collaborating organization"
+                    invalid={Boolean(errors[`collaborators[${index}].organization`])}
+                    ariaLabel="Collaborating organization"
                   />
                 </div>
 
