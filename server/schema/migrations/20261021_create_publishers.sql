@@ -51,23 +51,30 @@ CREATE TABLE IF NOT EXISTS `publishers` (
 --       FROM journals
 --      WHERE JSON_TYPE(JSON_EXTRACT(publication_details, '$.publisher')) = 'STRING'
 --        AND TRIM(JSON_UNQUOTE(JSON_EXTRACT(publication_details, '$.publisher'))) <> ''
---   ) used GROUP BY name ORDER BY name;
+--   ) used GROUP BY CAST(name AS BINARY), name ORDER BY name, uses DESC;
 --
--- Insert-only into the new table; no existing row is changed. INSERT IGNORE
--- folds names that differ only in case or accents into the first one seen
--- and makes a re-run a no-op.
+-- Insert-only into the new table; no existing row is changed. Spellings that
+-- differ only in case or accents ('Elsevier', 'ELSEVIER') share one row under
+-- the unique key, so INSERT IGNORE keeps the first one inserted — and the
+-- rows go in most-used spelling first, so that is the one kept. Each spelling
+-- is counted exactly (BINARY), not folded by the collation. A re-run is a no-op.
 -- ------------------------------------------------------------------
 INSERT IGNORE INTO `publishers` (`name`, `status`)
-SELECT DISTINCT LEFT(used.name, 255), 'approved'
+SELECT spelling.name, 'approved'
   FROM (
-    SELECT TRIM(publisher) AS name FROM journal_options
-     WHERE publisher IS NOT NULL AND TRIM(publisher) <> ''
-    UNION
-    SELECT TRIM(JSON_UNQUOTE(JSON_EXTRACT(publication_details, '$.publisher')))
-      FROM journals
-     WHERE JSON_TYPE(JSON_EXTRACT(publication_details, '$.publisher')) = 'STRING'
-       AND TRIM(JSON_UNQUOTE(JSON_EXTRACT(publication_details, '$.publisher'))) <> ''
-  ) used;
+    SELECT LEFT(used.name, 255) AS name, COUNT(*) AS uses
+      FROM (
+        SELECT TRIM(publisher) AS name FROM journal_options
+         WHERE publisher IS NOT NULL AND TRIM(publisher) <> ''
+        UNION ALL
+        SELECT TRIM(JSON_UNQUOTE(JSON_EXTRACT(publication_details, '$.publisher')))
+          FROM journals
+         WHERE JSON_TYPE(JSON_EXTRACT(publication_details, '$.publisher')) = 'STRING'
+           AND TRIM(JSON_UNQUOTE(JSON_EXTRACT(publication_details, '$.publisher'))) <> ''
+      ) used
+     GROUP BY CAST(LEFT(used.name, 255) AS BINARY), LEFT(used.name, 255)
+  ) spelling
+ ORDER BY spelling.uses DESC, spelling.name;
 
 -- ==================================================================
 -- ROLLBACK (keep commented)
