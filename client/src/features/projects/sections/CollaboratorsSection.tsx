@@ -3,27 +3,13 @@ import React, { useMemo } from 'react';
 import { SelectField } from '../components/FormFields';
 import RowActions from '../components/RowActions';
 import SectionCard from '../components/SectionCard';
+import SuggestInput from '../components/SuggestInput';
 import TagSelectField from '../components/TagSelectField';
 import YesNoSwitch from '../components/YesNoSwitch';
 import { COLLABORATOR_CATEGORIES, COLLABORATOR_ROLES, MAX_COLLABORATORS } from '../constants';
 import { createCollaboratorRow, removeAt, replaceAt } from '../projectFormState';
-import { withSelectedOption } from '../selectOptions';
 
 import type { CollaboratorRow, ProjectFormState, ProjectOrganization } from '../types';
-
-/**
- * LEGACY: collaborators saved while the organization was typed (development builds of
- * 2026-10, before it became a master-list pick) carry `organization_name` with no
- * `organization_id`. Their name is offered under this value so it still shows, and saving
- * the row unchanged keeps it. Remove once no project_collaborators row has a name without
- * an id.
- */
-const LEGACY_ORGANIZATION_PREFIX = 'legacy-org::';
-
-const organizationValue = (row: CollaboratorRow): string => {
-  if (row.organizationId) return String(row.organizationId);
-  return row.organizationName ? `${LEGACY_ORGANIZATION_PREFIX}${row.organizationName}` : '';
-};
 
 /**
  * Keeps a role that is not in the list selectable — the field was free text
@@ -63,31 +49,59 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
 }) => {
   const rows = form.collaborators;
 
-  // Picked from the organization master, never typed: the finance tables offer a
-  // collaborator as a party by its organization id (`financeOrganizations`), and free
-  // text let one institution be saved as several spellings. A missing organization is
-  // requested through Add Scheme and appears here once an admin approves it.
-  const organizationOptions = useMemo(
-    () =>
-      organizations
-        .filter((organization) => organization.is_internal !== 1)
-        .map((organization) => ({ value: String(organization.id), label: organization.name })),
+  // Typed, with the organization master offered as suggestions, until the collaborator
+  // field is connected to the organization directory. A name that matches a master entry
+  // (in any capitals) is linked to it — its id is what makes the collaborator a party in
+  // the finance tables (`financeOrganizations`) — and takes the entry's own spelling once
+  // the field is left, so one institution is not saved as several. A name not in the
+  // master is saved as typed, with no id.
+  const externalOrganizations = useMemo(
+    () => organizations.filter((organization) => organization.is_internal !== 1),
     [organizations],
   );
 
-  const selectOrganization = (index: number, value: string) => {
-    // LEGACY: re-picking a typed name changes nothing; see LEGACY_ORGANIZATION_PREFIX.
-    if (value.startsWith(LEGACY_ORGANIZATION_PREFIX)) return;
+  const organizationSuggestions = useMemo(
+    () =>
+      externalOrganizations.map((organization) => ({
+        value: String(organization.id),
+        label: organization.name,
+      })),
+    [externalOrganizations],
+  );
 
-    const organization = organizations.find((item) => String(item.id) === value);
+  const findOrganization = (name: string) => {
+    const needle = name.trim().toLowerCase();
+    return needle
+      ? externalOrganizations.find((organization) => organization.name.toLowerCase() === needle)
+      : undefined;
+  };
 
+  /** Links the row to a master entry, filling the city from it unless one was typed. */
+  const linkOrganization = (index: number, organization: ProjectOrganization) =>
     update(index, {
-      organizationId: organization?.id ?? null,
-      organizationName: organization?.name ?? '',
-      // The master list knows where the organization is, so the city follows
-      // the pick unless the user has already typed one.
-      city: organization?.city && !rows[index].city ? organization.city : rows[index].city,
+      organizationId: organization.id,
+      organizationName: organization.name,
+      city: organization.city && !rows[index].city ? organization.city : rows[index].city,
     });
+
+  const typeOrganization = (index: number, text: string) => {
+    const match = findOrganization(text);
+    update(index, {
+      organizationName: text,
+      organizationId: match?.id ?? null,
+      city: match?.city && !rows[index].city ? match.city : rows[index].city,
+    });
+  };
+
+  const pickOrganization = (index: number, option: { value: string }) => {
+    const organization = externalOrganizations.find((item) => String(item.id) === option.value);
+    if (organization) linkOrganization(index, organization);
+  };
+
+  // Leaving the field settles a matching name on the master's spelling.
+  const settleOrganization = (index: number) => {
+    const match = findOrganization(rows[index].organizationName);
+    if (match && match.name !== rows[index].organizationName) linkOrganization(index, match);
   };
 
   const roleOptions = useMemo(
@@ -145,16 +159,16 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
               <div className="pf-collaborator__line">
                 <div className="pf-inline-field pf-collaborator__org">
                   <span className="pf-inline-field__label">Organization</span>
-                  <SelectField
-                    value={organizationValue(row)}
-                    onChange={(value) => selectOrganization(index, value)}
-                    options={withSelectedOption(
-                      organizationOptions,
-                      organizationValue(row),
-                      row.organizationName,
-                    )}
+                  <SuggestInput
+                    value={row.organizationName}
+                    onChange={(text) => typeOrganization(index, text)}
+                    onPick={(option) => pickOrganization(index, option)}
+                    onBlur={() => settleOrganization(index)}
+                    suggestions={organizationSuggestions}
+                    placeholder="Type or pick an organization"
                     disabled={disabled}
                     invalid={Boolean(errors[`collaborators[${index}].organization`])}
+                    maxLength={255}
                     ariaLabel="Collaborating organization"
                   />
                 </div>
