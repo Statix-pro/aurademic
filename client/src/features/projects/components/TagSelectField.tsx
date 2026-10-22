@@ -118,7 +118,12 @@ const TagSelectField: React.FC<TagSelectFieldProps> = ({
         <input
           id={id}
           type="text"
-          className="pf-tags__input"
+          // Idle — chips picked and nothing typed — the input shrinks to a
+          // caret so it does not wrap onto a line of its own; it takes its
+          // full width, and a new line if it needs one, once typing starts.
+          className={`pf-tags__input ${
+            !query && selectedOptions.length > 0 ? 'pf-tags__input--idle' : ''
+          }`.trim()}
           value={query}
           placeholder={selectedOptions.length === 0 ? placeholder : ''}
           onChange={(event) => {

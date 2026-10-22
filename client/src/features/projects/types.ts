@@ -325,6 +325,8 @@ export interface ProjectFormState {
   fundingOrganizationId: number | null;
   /** A `FUNDING_SOURCE_OPTIONS` value; '' when unstated. */
   fundingSource: string;
+  /** A curated Domains entry; '' when unstated. The project's own, not the scheme's. */
+  domain: string;
   schemeId: number | null;
   /**
    * Names of the stored agency and scheme, kept so a selection that has since
@@ -466,12 +468,25 @@ export interface BudgetHeadOption {
   head_group: string;
 }
 
+/**
+ * An entry on one of the admin-curated lists (`project_vocabulary_options`):
+ * National Initiatives, Domains, or a project type's Categories. Stored on
+ * projects and schemes by name, so value and label are one.
+ */
+export interface VocabularyEntry {
+  list_key: 'national_initiative' | 'domain' | 'category';
+  /** The project type a category is for; '' on the other two lists. */
+  project_type: string;
+  name: string;
+}
+
 export interface ProjectLookups {
   organizations: ProjectOrganization[];
   schemes: ProjectScheme[];
   departments: DepartmentOption[];
   accounts: AccountOption[];
   budgetHeads: BudgetHeadOption[];
+  vocabulary: VocabularyEntry[];
 }
 
 export interface EmployeeSearchResult {

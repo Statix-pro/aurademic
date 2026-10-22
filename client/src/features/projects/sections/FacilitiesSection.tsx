@@ -264,10 +264,10 @@ const FacilitiesSection: React.FC<FacilitiesSectionProps> = ({ rows, patch, erro
                             onChange={(event) =>
                               updateRow(index, { supplierName: event.target.value })
                             }
-                            placeholder="Supplier Name"
+                            placeholder="Supplier Organization"
                             disabled={disabled}
                             maxLength={255}
-                            aria-label="Supplier name"
+                            aria-label="Supplier organization"
                           />
                           <input
                             type="text"

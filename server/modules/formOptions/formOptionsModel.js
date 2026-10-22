@@ -1,5 +1,7 @@
 import db from '../../config/connection.js';
+import { VOCABULARY_LISTS, loadProjectVocabulary } from '../shared/projectVocabularyStore.js';
 import {
+  SCHEME_PROJECT_TYPES,
   toSchemeCategory,
   toSchemeDomain,
   toSchemeProjectType,
@@ -116,6 +118,106 @@ const formOptionsModel = {
     } catch (error) {
       console.error('Database error in deleteJournalOption:', error);
       throw new Error(`Error deleting journal option: ${error.message}`);
+    }
+  },
+
+  // ==========================================================================
+  // Publishers (Conference, Book and Book Chapter records)
+  // ==========================================================================
+
+  /** Pending first, since those are the ones waiting on an admin. */
+  async getPublishers() {
+    try {
+      const [rows] = await db.query(
+        `SELECT p.id, p.name, p.status, p.requested_by, p.reviewed_at, p.created_at,
+                requester.name AS requested_by_name,
+                (SELECT COUNT(*) FROM journals j
+                  WHERE JSON_EXTRACT(j.publication_details, '$.publisher_id') = p.id) AS usage_count
+           FROM publishers p
+           LEFT JOIN users requester ON requester.id = p.requested_by
+          ORDER BY p.status = 'pending' DESC, p.name`,
+      );
+      return rows;
+    } catch (error) {
+      throw new Error(`Error getting publishers: ${error.message}`);
+    }
+  },
+
+  /** An admin's own add is approved on the spot; there is nobody else to review it. */
+  async addPublisher(name, reviewerId) {
+    try {
+      const [result] = await db.query(
+        `INSERT INTO publishers (name, status, reviewed_by, reviewed_at)
+         VALUES (?, 'approved', ?, CURRENT_TIMESTAMP)`,
+        [name, reviewerId],
+      );
+      return { id: result.insertId, name, status: 'approved' };
+    } catch (error) {
+      if (error.code === 'ER_DUP_ENTRY') {
+        const duplicate = new Error(`A publisher named "${name}" already exists.`);
+        duplicate.statusCode = 409;
+        throw duplicate;
+      }
+      throw new Error(`Error adding publisher: ${error.message}`);
+    }
+  },
+
+  /**
+   * Renames and/or approves/rejects. A status change records who reviewed it and when;
+   * a rename alone leaves the review stamp as it was.
+   */
+  async updatePublisher(id, { name, status }, reviewerId) {
+    try {
+      // MySQL applies SET assignments left to right, so the review stamps must come
+      // before `status = ?` to compare against the status the row had.
+      const [result] = await db.query(
+        `UPDATE publishers
+            SET reviewed_by = IF(status <> ?, ?, reviewed_by),
+                reviewed_at = IF(status <> ?, CURRENT_TIMESTAMP, reviewed_at),
+                name = ?,
+                status = ?
+          WHERE id = ?`,
+        [status, reviewerId, status, name, status, id],
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      if (error.code === 'ER_DUP_ENTRY') {
+        const duplicate = new Error(`A publisher named "${name}" already exists.`);
+        duplicate.statusCode = 409;
+        throw duplicate;
+      }
+      throw new Error(`Error updating publisher: ${error.message}`);
+    }
+  },
+
+  /**
+   * Refuses once a publication links to the publisher: the record would be left holding
+   * an id that resolves to nothing. Rejecting hides it from the picker instead.
+   */
+  async deletePublisher(id) {
+    try {
+      // publisher_id is a JSON number, and MySQL compares a JSON number with a string
+      // as unequal — the route's '5' would count no references and delete a publisher
+      // that records still point at. Bind it as a number.
+      const [[usage]] = await db.query(
+        `SELECT COUNT(*) AS references_count FROM journals
+          WHERE JSON_EXTRACT(publication_details, '$.publisher_id') = ?`,
+        [Number(id)],
+      );
+
+      if (Number(usage.references_count) > 0) {
+        const error = new Error(
+          `This publisher is used by ${usage.references_count} publication(s), so it cannot be deleted. Reject it to hide it from the picker instead.`,
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const [result] = await db.query('DELETE FROM publishers WHERE id = ?', [id]);
+      return result.affectedRows > 0;
+    } catch (error) {
+      if (error.statusCode) throw error;
+      throw new Error(`Error deleting publisher: ${error.message}`);
     }
   },
 
@@ -252,21 +354,31 @@ const formOptionsModel = {
   async addProjectScheme(data) {
     try {
       const projectType = toSchemeProjectType(data.project_type);
+      // A new value must be one the lists still offer.
+      const { domains, categoriesByType } = await loadProjectVocabulary();
+      // Answered with what was stored — the curated spelling and the
+      // normalized website — rather than echoing what was sent.
+      const stored = {
+        project_type: projectType,
+        domain: toSchemeDomain(data.domain, projectType, domains),
+        category: toSchemeCategory(data.category, projectType, categoriesByType),
+        website: toStoredWebsite(data.website),
+      };
       const [result] = await db.query(
         `INSERT INTO project_schemes
            (organization_id, project_type, name, domain, category, website, sort_order)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           data.organization_id,
-          projectType,
+          stored.project_type,
           data.name,
-          toSchemeDomain(data.domain, projectType),
-          toSchemeCategory(data.category, projectType),
-          toStoredWebsite(data.website),
+          stored.domain,
+          stored.category,
+          stored.website,
           Number(data.sort_order) || 0,
         ],
       );
-      return { id: result.insertId, ...data };
+      return { id: result.insertId, ...data, ...stored };
     } catch (error) {
       // A rejected website carries its own status; keep it instead of masking
       // a bad request as a server fault.
@@ -297,21 +409,26 @@ const formOptionsModel = {
       if (!current) return false;
       const typeChanged = current.project_type !== projectType;
 
-      // LEGACY: a scheme saved before domain and category became closed lists
-      // may hold free text. Resubmitting that same value is let through, so
+      // A scheme may hold a value the lists no longer offer — one an
+      // administrator has since renamed or retired, or free text saved before
+      // the lists existed. Resubmitting that same value is let through, so
       // editing the scheme's name or website is not blocked by a field the
-      // admin did not touch; changing it must pick a listed value. Remove once
-      // every `project_schemes` row holds a listed domain and category.
+      // admin did not touch; changing it must pick a value the lists offer.
       // Only while the type is unchanged: under a new type the value is checked
       // against that type's list like any other.
       // Trimmed on both sides: free text could have been saved with a stray
       // space, which the form's select does not send back.
-      const legacyKeep = (value, stored, toListed) =>
+      const { domains, categoriesByType } = await loadProjectVocabulary();
+      const keepStored = (value, stored, toListed) =>
         !typeChanged && stored && String(value ?? '').trim() === String(stored).trim()
           ? stored
-          : toListed(value, projectType);
-      const domain = legacyKeep(data.domain, current.domain, toSchemeDomain);
-      const category = legacyKeep(data.category, current.category, toSchemeCategory);
+          : toListed(value);
+      const domain = keepStored(data.domain, current.domain, (value) =>
+        toSchemeDomain(value, projectType, domains),
+      );
+      const category = keepStored(data.category, current.category, (value) =>
+        toSchemeCategory(value, projectType, categoriesByType),
+      );
 
       // A project's scheme must match both its agency and its type, so either
       // move strands the projects already on the scheme.
@@ -531,6 +648,169 @@ const formOptionsModel = {
       return result.affectedRows > 0;
     } catch (error) {
       throw new Error(`Error deleting project budget head: ${error.message}`);
+    }
+  },
+
+  // ==========================================================================
+  // Project vocabulary — National Initiatives, Domains, Categories
+  //
+  // The curated lists the project form offers (`project_vocabulary_options`).
+  // Like budget heads, a value is stored by name wherever it is used, so a
+  // rename or retirement here changes only what is offered next; projects and
+  // schemes that hold the old name keep it.
+  // ==========================================================================
+
+  /**
+   * The entry as it will be stored, refused when it is blank or already on its
+   * list. A category belongs to one project type's list; the other two lists
+   * are not split by type and store ''.
+   */
+  async assertVocabularyEntryIsFree(listKey, data, excludeId = null) {
+    if (!VOCABULARY_LISTS.includes(listKey)) {
+      throw Object.assign(new Error('Unknown list.'), { statusCode: 400 });
+    }
+
+    const name = String(data.name ?? '').trim();
+    if (!name) {
+      throw Object.assign(new Error('A name is required.'), { statusCode: 400 });
+    }
+    if (name.length > 255) {
+      throw Object.assign(new Error('The name is longer than 255 characters.'), {
+        statusCode: 400,
+      });
+    }
+
+    let projectType = '';
+    if (listKey === 'category') {
+      projectType = String(data.project_type ?? '').trim();
+      if (!SCHEME_PROJECT_TYPES.includes(projectType)) {
+        throw Object.assign(new Error('Choose the project type the category is for.'), {
+          statusCode: 400,
+        });
+      }
+    }
+
+    const params = [listKey, projectType, name];
+    let sql = `SELECT id FROM project_vocabulary_options
+                WHERE list_key = ? AND project_type = ? AND name = ?`;
+    if (excludeId) {
+      sql += ' AND id <> ?';
+      params.push(excludeId);
+    }
+
+    const [rows] = await db.query(sql, params);
+    if (rows.length > 0) {
+      throw Object.assign(new Error(`"${name}" is already on this list.`), { statusCode: 409 });
+    }
+
+    return { name, project_type: projectType };
+  },
+
+  async getProjectVocabulary(listKey) {
+    try {
+      const [rows] = await db.query(
+        `SELECT id, list_key, project_type, name, is_active
+           FROM project_vocabulary_options
+          WHERE list_key = ?
+          -- Alphabetical within a list. Categories are grouped by project type
+          -- first, in the order the type picker offers them.
+          ORDER BY FIELD(project_type, ?), name`,
+        [listKey, SCHEME_PROJECT_TYPES],
+      );
+      return rows;
+    } catch (error) {
+      throw new Error(`Error getting project vocabulary: ${error.message}`);
+    }
+  },
+
+  async addProjectVocabularyEntry(listKey, data) {
+    try {
+      const entry = await formOptionsModel.assertVocabularyEntryIsFree(listKey, data);
+      const [result] = await db.query(
+        `INSERT INTO project_vocabulary_options (list_key, project_type, name, is_active)
+         VALUES (?, ?, ?, ?)`,
+        [
+          listKey,
+          entry.project_type,
+          entry.name,
+          data.is_active === undefined ? 1 : Number(Boolean(data.is_active)),
+        ],
+      );
+      return { id: result.insertId, list_key: listKey, ...data, ...entry };
+    } catch (error) {
+      if (error.statusCode) throw error;
+      throw new Error(`Error adding project vocabulary entry: ${error.message}`);
+    }
+  },
+
+  /** Renaming changes only what the form offers next; see the section note. */
+  async updateProjectVocabularyEntry(listKey, id, data) {
+    try {
+      const entry = await formOptionsModel.assertVocabularyEntryIsFree(listKey, data, id);
+      const [result] = await db.query(
+        `UPDATE project_vocabulary_options
+            SET project_type = ?, name = ?, is_active = ?
+          WHERE id = ? AND list_key = ?`,
+        [
+          entry.project_type,
+          entry.name,
+          data.is_active === undefined ? 1 : Number(Boolean(data.is_active)),
+          id,
+          listKey,
+        ],
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      if (error.statusCode) throw error;
+      throw new Error(`Error updating project vocabulary entry: ${error.message}`);
+    }
+  },
+
+  /**
+   * Deactivates instead of deleting once a project or scheme holds the value,
+   * the way budget heads do: the row here is what says the stored name was a
+   * real entry rather than a typo, and it is still matched when that record
+   * is saved again.
+   */
+  async deleteProjectVocabularyEntry(listKey, id) {
+    try {
+      const [[entry]] = await db.query(
+        `SELECT name, project_type FROM project_vocabulary_options
+          WHERE id = ? AND list_key = ? LIMIT 1`,
+        [id, listKey],
+      );
+      if (!entry) return false;
+
+      const usageSql = {
+        national_initiative: `SELECT COUNT(*) AS references_count FROM project_tags
+                               WHERE tag_type = 'national_initiative' AND tag_value = ?`,
+        domain: `SELECT
+                   (SELECT COUNT(*) FROM research_projects WHERE domain = ?) +
+                   (SELECT COUNT(*) FROM project_schemes WHERE domain = ?)
+                   AS references_count`,
+        category: `SELECT COUNT(*) AS references_count FROM project_schemes
+                    WHERE category = ? AND project_type = ?`,
+      }[listKey];
+      const usageParams = {
+        national_initiative: [entry.name],
+        domain: [entry.name, entry.name],
+        category: [entry.name, entry.project_type],
+      }[listKey];
+
+      const [[usage]] = await db.query(usageSql, usageParams);
+
+      if (Number(usage.references_count) > 0) {
+        const [result] = await db.query(
+          'UPDATE project_vocabulary_options SET is_active = 0 WHERE id = ?',
+          [id],
+        );
+        return result.affectedRows > 0 ? { deactivated: true } : false;
+      }
+
+      const [result] = await db.query('DELETE FROM project_vocabulary_options WHERE id = ?', [id]);
+      return result.affectedRows > 0;
+    } catch (error) {
+      throw new Error(`Error deleting project vocabulary entry: ${error.message}`);
     }
   },
 };

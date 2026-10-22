@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 
+import { AddPublisherModal, PublisherSelect } from './PublisherPicker';
 import { useAuth } from '../../contexts/AuthContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
@@ -22,6 +23,7 @@ import {
   FileText,
   CheckCircle,
   ExternalLink,
+  Info,
   Pencil,
 } from 'lucide-react';
 
@@ -52,11 +54,32 @@ interface JournalDetails {
 
 interface PublicationDetails {
   conference_title: string;
+  /**
+   * LEGACY: no longer on the form. Records filed before the 2026-10 redesign may carry
+   * it, so it is loaded and saved back untouched rather than wiped. Remove once nothing
+   * reads publication_details.source.
+   */
   source: string;
   publisher: string;
+  /** The publisher master row; null for a record filed before the master existed. */
+  publisher_id?: number | null;
   print_isbn: string;
   online_isbn: string;
+  city?: string;
+  dates?: string;
 }
+
+/**
+ * The registry's website is admin-entered text. Link it only when it is a web address
+ * (adding https:// to a bare domain), never a javascript: or other scheme.
+ */
+const toExternalHref = (website: string | undefined): string => {
+  const value = (website || '').trim();
+  if (!value) return '';
+  if (/^https?:\/\//i.test(value)) return value;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return '';
+  return `https://${value}`;
+};
 
 interface Metrics {
   impactFactor: boolean;
@@ -405,6 +428,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     cite_score: '',
     category: '',
   });
+  const [showAddPublisherModal, setShowAddPublisherModal] = useState<boolean>(false);
   const [journalRequestLoading, setJournalRequestLoading] = useState<boolean>(false);
   const [journalRequestError, setJournalRequestError] = useState<string>('');
 
@@ -463,9 +487,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
   // Check if we're in view mode based on URL
   // An embedded form has no query string of its own, so the caller states the mode.
+  // A saved record with no `?mode=` (every notification links to a bare /journal/:id)
+  // opens in view, the same default `editMode` starts from. Reading it as edit here made
+  // the two effects that sync URL and editMode undo each other on every render, until
+  // React aborted with "Maximum update depth exceeded".
   const isViewMode = modeProp
     ? modeProp === 'view'
-    : !!(journalId && window.location.search.includes('mode=view'));
+    : !!(journalId && new URLSearchParams(window.location.search).get('mode') !== 'edit');
 
   // Parse category from URL path
   const pathname = window.location.pathname;
@@ -505,6 +533,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // Validation and the save payload must follow the same category the form is showing,
   // or editing a book chapter would submit it as a journal article and drop its
   // publication details.
+  const journalWebsiteHref = toExternalHref(journalDetails.website);
   const isJournal = effectiveIsJournal;
   const isConference = effectiveIsConference;
   const isBook = effectiveIsBook;
@@ -1070,8 +1099,11 @@ const JournalForm: React.FC<JournalFormProps> = ({
             conference_title: pubDetails.conference_title || '',
             source: pubDetails.source || '',
             publisher: pubDetails.publisher || '',
+            publisher_id: Number(pubDetails.publisher_id) || null,
             print_isbn: pubDetails.print_isbn || '',
             online_isbn: pubDetails.online_isbn || '',
+            city: pubDetails.city || '',
+            dates: pubDetails.dates || '',
           });
         } catch (e) {
           console.error('Error parsing publication_details:', e);
@@ -2392,12 +2424,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
     // For Conference, require conference title
     if (isConference && !publicationDetails.conference_title?.trim()) {
-      errors.push('Conference Title is required');
-    }
-
-    // For Book Chapter and Book, require Source
-    if ((isBook || isBookChapter) && !publicationDetails.source?.trim()) {
-      errors.push('Source is required');
+      errors.push('Conference Name is required');
     }
 
     // For Journal only, require quartile (updated logic for new validation)
@@ -2505,32 +2532,23 @@ const JournalForm: React.FC<JournalFormProps> = ({
       acknowledgementData.otherValue = otherAcknowledgement.trim();
     }
 
-    // Build publication_details JSON for Conference, Book Chapter, and Book
+    // Build publication_details JSON for Conference, Book Chapter, and Book. The publisher
+    // name is sent beside its id for older readers of the JSON; the server overwrites it
+    // with the master row's name.
     let publicationDetailsData: PublicationDetails | null = null;
-    if (isConference) {
+    if (isConference || isBookChapter || isBook) {
       publicationDetailsData = {
-        conference_title: publicationDetails.conference_title?.trim() || '',
-        publisher: publicationDetails.publisher?.trim() || '',
+        conference_title: isConference ? publicationDetails.conference_title?.trim() || '' : '',
         source: publicationDetails.source?.trim() || '',
+        publisher: publicationDetails.publisher?.trim() || '',
+        publisher_id: publicationDetails.publisher_id ?? null,
         print_isbn: publicationDetails.print_isbn?.trim() || '',
         online_isbn: publicationDetails.online_isbn?.trim() || '',
       };
-    } else if (isBookChapter) {
-      publicationDetailsData = {
-        conference_title: '',
-        source: publicationDetails.source?.trim() || '',
-        publisher: publicationDetails.publisher?.trim() || '',
-        print_isbn: publicationDetails.print_isbn?.trim() || '',
-        online_isbn: publicationDetails.online_isbn?.trim() || '',
-      };
-    } else if (isBook) {
-      publicationDetailsData = {
-        conference_title: '',
-        source: publicationDetails.source?.trim() || '',
-        publisher: publicationDetails.publisher?.trim() || '',
-        print_isbn: publicationDetails.print_isbn?.trim() || '',
-        online_isbn: publicationDetails.online_isbn?.trim() || '',
-      };
+      if (isConference) {
+        publicationDetailsData.city = publicationDetails.city?.trim() || '';
+        publicationDetailsData.dates = publicationDetails.dates?.trim() || '';
+      }
     }
 
     // Prepare the journal data object with category-specific fields
@@ -2611,13 +2629,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
       journalData.external_details = null;
     }
 
+    // Quartile is asked of every category (required only for journal articles, above).
+    journalData.quartile = getFormValue('quartile') || null;
+
     // Add Journal-specific fields only for Journal types
     if (isJournalType) {
-      const quartileValue = getFormValue('quartile');
       const impactFactorValue = getFormValue('impactFactorInput');
       const citeScoreValue = getFormValue('citeScoreInput');
-
-      journalData.quartile = quartileValue || null;
 
       // Parse Impact Factor and Cite Score - always collect if present
       journalData.impact_factor =
@@ -3031,33 +3049,39 @@ const JournalForm: React.FC<JournalFormProps> = ({
                 ))}
               </div>
 
-              <div className="row g-4">
-                <div className="col-lg-6">
-                  {/* Left Column Card */}
-                  <div className="form-card h-100" style={{ padding: '24px' }}>
-                    <h6 className="form-section-title section-title-divider mb-3">
-                      Article Details
-                    </h6>
-                    <div className="mb-3">
-                      <label className="form-label">
-                        {effectiveIsBook
-                          ? 'Book Title'
-                          : effectiveIsBookChapter
-                            ? 'Book Chapter Title'
-                            : 'Title'}
-                      </label>
-                      <input
-                        type="text"
-                        id="title"
-                        name="title"
-                        className="form-control"
-                        placeholder={effectiveIsBookChapter ? 'Enter book chapter title' : 'Title'}
-                        required
-                        disabled={!editMode && isViewMode}
-                      />
-                    </div>
+              {/* One Article Details card: the title, a tinted panel for where the work was
+                  published (journal, conference or book), then the fields every category
+                  shares. It used to be two side-by-side cards of stacked full-width fields,
+                  which put related values (ISSNs, metrics) far apart and ran very long. */}
+              <div className="form-card article-details-card" style={{ padding: '24px' }}>
+                <h6 className="form-section-title section-title-divider mb-3">
+                  {effectiveIsBook ? 'Book Details' : 'Article Details'}
+                </h6>
 
-                    <div className="mb-3">
+                <div className="row g-3 mb-3">
+                  <div className={effectiveIsJournal ? 'col-lg-9' : 'col-12'}>
+                    <label className="form-label" htmlFor="title">
+                      {effectiveIsBook
+                        ? 'Book Title'
+                        : effectiveIsBookChapter
+                          ? 'Book Chapter Title'
+                          : effectiveIsConference
+                            ? 'Conference Article Title'
+                            : 'Title'}
+                    </label>
+                    <input
+                      type="text"
+                      id="title"
+                      name="title"
+                      className="form-control"
+                      placeholder="Enter Title"
+                      required
+                      disabled={!editMode && isViewMode}
+                    />
+                  </div>
+
+                  {effectiveIsJournal ? (
+                    <div className="col-lg-3">
                       <label className="form-label" htmlFor="typeSelect">
                         Type
                       </label>
@@ -3071,56 +3095,324 @@ const JournalForm: React.FC<JournalFormProps> = ({
                           value={currentType}
                           onChange={(e) => setCurrentType(e.target.value)}
                           required
-                          disabled={
-                            (!editMode && isViewMode) ||
-                            effectiveIsConference ||
-                            effectiveIsBookChapter ||
-                            effectiveIsBook
-                          }
+                          disabled={!editMode && isViewMode}
                         >
-                          <option value="">Select Type</option>
-                          {effectiveIsJournal && (
-                            <>
-                              <option value="Article">Article</option>
-                              <option value="Erratum">Erratum</option>
-                              <option value="Editorial">Editorial</option>
-                              <option value="Note">Note</option>
-                              <option value="Review">Review</option>
-                              <option value="Retraction">Retraction</option>
-                            </>
-                          )}
-                          {effectiveIsConference && (
-                            <option value="Conference paper">Conference paper</option>
-                          )}
-                          {effectiveIsBookChapter && (
-                            <option value="Book Chapter">Book Chapter</option>
-                          )}
-                          {effectiveIsBook && <option value="Book">Book</option>}
+                          <option value="">Select Article Type</option>
+                          <option value="Article">Article</option>
+                          <option value="Erratum">Erratum</option>
+                          <option value="Editorial">Editorial</option>
+                          <option value="Note">Note</option>
+                          <option value="Review">Review</option>
+                          <option value="Retraction">Retraction</option>
                         </select>
                       )}
                     </div>
+                  ) : (
+                    // Conference, Book and Book Chapter each have exactly one type, fixed
+                    // by the page they were opened from, so it is carried rather than asked.
+                    <input type="hidden" name="type" value={currentType} />
+                  )}
+                </div>
 
-                    {effectiveIsJournal && (
-                      <div className="mb-3">
-                        <label className="form-label">Scopus Quartile</label>
-                        <div className="radio-group">
-                          {['Q1', 'Q2', 'Q3', 'Q4', 'Nil'].map((q) => (
-                            <div className="radio-item" key={q}>
-                              <input
-                                type="radio"
-                                id={q.toLowerCase()}
-                                name="quartile"
-                                value={q === 'Nil' ? 'NA' : q}
-                                disabled={!editMode && isViewMode}
-                              />
-                              <label htmlFor={q.toLowerCase()}>{q}</label>
-                            </div>
-                          ))}
+                <div className="publication-source-panel">
+                  <div className="d-flex justify-content-between align-items-center mb-3 section-title-divider">
+                    <h6 className="form-section-title mb-0">
+                      {effectiveIsJournal
+                        ? 'Journal Details'
+                        : effectiveIsConference
+                          ? 'Conference Details'
+                          : 'Book Details'}
+                    </h6>
+                    {/* Adding to a master list is an authoring action, so it is absent
+                        from a read-only embedded record. */}
+                    {!embedded &&
+                      (effectiveIsJournal ? (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-add-journal"
+                          onClick={openJournalRequestModal}
+                          disabled={!editMode && isViewMode}
+                        >
+                          Add Journal
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-add-journal"
+                          onClick={() => setShowAddPublisherModal(true)}
+                          disabled={!editMode && isViewMode}
+                        >
+                          Add Publisher
+                        </button>
+                      ))}
+                  </div>
+
+                  {effectiveIsJournal && (
+                    <>
+                      <div className="row g-3 mb-3">
+                        <div className="col-lg-5 position-relative">
+                          <label htmlFor="journalSearch" className="form-label">
+                            Journal Name
+                          </label>
+                          <input
+                            type="text"
+                            id="journalSearch"
+                            className="form-control"
+                            placeholder="Search for a Journal"
+                            value={journalSearchQuery}
+                            onChange={handleJournalSearchChange}
+                            onFocus={() => {
+                              // Show dropdown on focus
+                              if (!isViewMode && editMode) {
+                                searchJournals(journalSearchQuery || '');
+                              }
+                            }}
+                            onBlur={() => setTimeout(() => setShowJournalSuggestions(false), 150)}
+                            disabled={!editMode && isViewMode}
+                            autoComplete="off"
+                          />
+                          {showJournalSuggestions &&
+                            journalSearchResults.length > 0 &&
+                            !isViewMode &&
+                            editMode && (
+                              <ul className="list-group" style={suggestionsStyle}>
+                                {journalSearchResults.map((journal, index) => (
+                                  <li
+                                    key={index}
+                                    className="list-group-item list-group-item-action"
+                                    onMouseDown={() => selectJournal(journal)}
+                                  >
+                                    {journal.name}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                        </div>
+                        <div className="col-lg-3">
+                          <label className="form-label">Level</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={
+                              journalDetails.name
+                                ? isInternational
+                                  ? 'International'
+                                  : 'National'
+                                : ''
+                            }
+                            readOnly
+                          />
+                        </div>
+                        <div className="col-lg-4">
+                          <label className="form-label">Publisher</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={journalDetails.publisher}
+                            readOnly
+                          />
                         </div>
                       </div>
-                    )}
 
-                    <div className="mb-3">
+                      {/* Everything on this row comes from the journal registry, so it is
+                          read-only here; admins curate it in Publication Management. */}
+                      <div className="row g-3 mb-3">
+                        <div className="col-lg-3">
+                          <label className="form-label">Website</label>
+                          <div className="website-field">
+                            <input
+                              type="text"
+                              className="form-control"
+                              value={journalDetails.website}
+                              readOnly
+                            />
+                            {journalWebsiteHref ? (
+                              <a
+                                href={journalWebsiteHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="website-link"
+                                title="Open journal website"
+                                aria-label="Open journal website"
+                              >
+                                <ExternalLink size={22} />
+                              </a>
+                            ) : (
+                              <span className="website-link is-disabled" aria-hidden="true">
+                                <ExternalLink size={22} />
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="col-lg">
+                          <label className="form-label">Print ISSN</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={journalDetails.printISSN || ''}
+                            readOnly
+                          />
+                        </div>
+                        <div className="col-lg">
+                          <label className="form-label">Online ISSN</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            value={journalDetails.onlineISSN || ''}
+                            readOnly
+                          />
+                        </div>
+                        <div className="col-lg">
+                          <label className="form-label">Impact Factor</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            id="impactFactorInput"
+                            name="impactFactorInput"
+                            className="form-control"
+                            disabled={true}
+                            readOnly
+                          />
+                        </div>
+                        <div className="col-lg">
+                          <label className="form-label">Cite Score</label>
+                          <input
+                            type="number"
+                            step="0.001"
+                            id="citeScoreInput"
+                            name="citeScoreInput"
+                            className="form-control"
+                            disabled={true}
+                            readOnly
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {effectiveIsConference && (
+                    <div className="row g-3 mb-3">
+                      <div className="col-lg-8">
+                        <label className="form-label">Conference Name</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Enter Conference Name"
+                          value={publicationDetails.conference_title || ''}
+                          onChange={(e) =>
+                            setPublicationDetails((prev) => ({
+                              ...prev,
+                              conference_title: e.target.value,
+                            }))
+                          }
+                          disabled={!editMode && isViewMode}
+                        />
+                      </div>
+                      <div className="col-lg-4">
+                        <label className="form-label">City</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Enter City"
+                          value={publicationDetails.city || ''}
+                          onChange={(e) =>
+                            setPublicationDetails((prev) => ({ ...prev, city: e.target.value }))
+                          }
+                          disabled={!editMode && isViewMode}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {effectiveIsBookChapter && (
+                    <div className="row g-3 mb-3">
+                      <div className="col-12">
+                        <label className="form-label">Book Name</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Enter Book Title"
+                          value={bookChapterTitle}
+                          onChange={(e) => setBookChapterTitle(e.target.value)}
+                          disabled={!editMode && isViewMode}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {!effectiveIsJournal && (
+                    <div className="row g-3 mb-3">
+                      {effectiveIsConference && (
+                        <div className="col-lg-2">
+                          <label className="form-label">Date(s)</label>
+                          {/* Free text: a conference may run one day or several, and
+                              the mockup asks for "Date(s)" rather than a range. */}
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Enter Date(s)"
+                            value={publicationDetails.dates || ''}
+                            onChange={(e) =>
+                              setPublicationDetails((prev) => ({ ...prev, dates: e.target.value }))
+                            }
+                            disabled={!editMode && isViewMode}
+                          />
+                        </div>
+                      )}
+                      <div className={effectiveIsConference ? 'col-lg-4' : 'col-lg-6'}>
+                        <label className="form-label" htmlFor="publisherSelect">
+                          Publisher
+                        </label>
+                        <PublisherSelect
+                          publisherId={publicationDetails.publisher_id ?? null}
+                          publisherName={publicationDetails.publisher || ''}
+                          onChange={({ id, name }) =>
+                            setPublicationDetails((prev) => ({
+                              ...prev,
+                              publisher: name,
+                              publisher_id: id,
+                            }))
+                          }
+                          disabled={!editMode && isViewMode}
+                        />
+                      </div>
+                      <div className="col-lg-3">
+                        <label className="form-label">Print ISBN</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Enter Print ISBN"
+                          value={publicationDetails.print_isbn || ''}
+                          onChange={(e) =>
+                            setPublicationDetails((prev) => ({
+                              ...prev,
+                              print_isbn: e.target.value,
+                            }))
+                          }
+                          disabled={!editMode && isViewMode}
+                        />
+                      </div>
+                      <div className="col-lg-3">
+                        <label className="form-label">Online ISBN</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          placeholder="Enter Online ISBN"
+                          value={publicationDetails.online_isbn || ''}
+                          onChange={(e) =>
+                            setPublicationDetails((prev) => ({
+                              ...prev,
+                              online_isbn: e.target.value,
+                            }))
+                          }
+                          disabled={!editMode && isViewMode}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="row g-3">
+                    <div className="col-lg-8">
                       <label className="form-label">Index</label>
                       <CustomTagInput
                         name="index"
@@ -3136,744 +3428,357 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         })()}
                         onSearch={setIndexSearchQuery}
                         placeholder={
-                          selectedIndexes.length === 0 ? 'Type to search and select indexes' : ''
+                          selectedIndexes.length === 0 ? 'Type to Search and Select Indexing' : ''
                         }
                         disabled={!editMode && isViewMode}
                       />
                     </div>
-
-                    {/* Collaboration Section - SDG-style multi-select */}
-                    <div className="mb-3">
-                      <label className="form-label">Collaboration</label>
-                      <CustomTagInput
-                        name="collaboration"
-                        value={selectedCollaborations}
-                        onChange={setSelectedCollaborations}
-                        suggestions={allCollaborations.filter(
-                          (collab) =>
-                            collab.toLowerCase().includes(collaborationSearchQuery.toLowerCase()) &&
-                            !selectedCollaborations.includes(collab),
-                        )}
-                        onSearch={setCollaborationSearchQuery}
-                        placeholder={
-                          selectedCollaborations.length === 0
-                            ? 'Type to search and select collaborations'
-                            : ''
-                        }
-                        disabled={!editMode && isViewMode}
-                      />
-
-                      {/* "Others" checkbox and input */}
-                      {/* <div className="mt-2">
-                        <div className="form-check">
-                          <input
-                            className="form-check-input"
-                            type="checkbox"
-                            id="others-collaboration"
-                            checked={othersSelected}
-                            onChange={handleOthersChange}
-                            disabled={!editMode && isViewMode}
-                          />
-                          <label className="form-check-label" htmlFor="others-collaboration">
-                            Others
-                          </label>
-                        </div>
-                        {othersSelected && (
-                          <input
-                            type="text"
-                            className="form-control mt-2"
-                            placeholder="Please Specify"
-                            value={othersValue}
-                            onChange={handleOthersInputChange}
-                            disabled={!editMode && isViewMode}
-                          />
-                        )}
-                      </div> */}
-                    </div>
-
-                    {/* Acknowledgement Section - SDG-style multi-select - Hidden for Book category */}
-                    {!effectiveIsBook && (
-                      <div className="mb-3 mt-3">
-                        <label className="form-label">Acknowledgement</label>
-                        <CustomTagInput
-                          name="acknowledgement"
-                          value={selectedAcknowledgements}
-                          onChange={(newTags) => {
-                            if (
-                              newTags.includes('Nil') &&
-                              !selectedAcknowledgements.includes('Nil')
-                            ) {
-                              setSelectedAcknowledgements(['Nil']);
-                              setOtherAcknowledgement('');
-                            } else if (newTags.length > 1 && newTags.includes('Nil')) {
-                              // If currently have "Nil" and added something else, remove "Nil"
-                              const withoutNil = newTags.filter((t) => t !== 'Nil');
-                              setSelectedAcknowledgements(withoutNil);
-                            } else {
-                              setSelectedAcknowledgements(newTags);
-                            }
-                          }}
-                          suggestions={allAcknowledgements.filter(
-                            (ack) =>
-                              ack
-                                .toLowerCase()
-                                .includes(acknowledgementSearchQuery.toLowerCase()) &&
-                              !selectedAcknowledgements.includes(ack),
-                          )}
-                          onSearch={setAcknowledgementSearchQuery}
-                          placeholder={
-                            selectedAcknowledgements.length === 0
-                              ? 'Type to search and select acknowledgements'
-                              : ''
-                          }
-                          disabled={!editMode && isViewMode}
-                        />
+                    <div className="col-lg-4">
+                      <label className="form-label d-flex align-items-center gap-2">
+                        Scopus Quartile
+                        <span
+                          className="quartile-info-icon"
+                          title="Required for journal articles; optional for conference papers and books."
+                        >
+                          <Info size={16} aria-hidden="true" />
+                        </span>
+                      </label>
+                      <div className="radio-group quartile-radio-group">
+                        {['Q1', 'Q2', 'Q3', 'Q4', 'Nil'].map((q) => (
+                          <div className="radio-item" key={q}>
+                            <input
+                              type="radio"
+                              id={q.toLowerCase()}
+                              name="quartile"
+                              value={q === 'Nil' ? 'NA' : q}
+                              disabled={!editMode && isViewMode}
+                            />
+                            <label htmlFor={q.toLowerCase()}>{q}</label>
+                          </div>
+                        ))}
                       </div>
-                    )}
-
-                    {/* Sustainable Development Goals Section */}
-                    <div className="mb-3">
-                      <label className="form-label">Sustainable Development Goals (SDGs)</label>
-                      <CustomTagInput
-                        name="sdgs"
-                        value={selectedSDGs}
-                        onChange={setSelectedSDGs}
-                        suggestions={allSDGs.filter(
-                          (sdg) =>
-                            sdg.toLowerCase().includes(sdgSearchQuery.toLowerCase()) &&
-                            !selectedSDGs.includes(sdg),
-                        )}
-                        onSearch={setSdgSearchQuery}
-                        placeholder={
-                          selectedSDGs.length === 0 ? 'Type to search and select SDGs' : ''
-                        }
-                        disabled={!editMode && isViewMode}
-                        renderTag={(tag) =>
-                          typeof tag === 'string' && tag.includes('.') ? tag.split('.')[0] : tag
-                        }
-                      />
                     </div>
                   </div>
                 </div>
 
-                <div className="col-lg-6">
-                  {/* Right Column Card */}
-                  <div className="form-card h-100" style={{ padding: '24px' }}>
-                    <div className="d-flex justify-content-between align-items-center mb-3 section-title-divider">
-                      <h6 className="form-section-title mb-0">Journal Details</h6>
-                      {/* Requesting a new journal is an authoring action, so it is absent
-                          from a read-only embedded record. */}
-                      {effectiveIsJournal && !embedded && (
-                        <button
-                          type="button"
-                          className="btn btn-sm btn-add-journal"
-                          onClick={openJournalRequestModal}
+                <div className="row g-3 mb-3">
+                  <div className="col-lg-6">
+                    <label className="form-label">Collaboration</label>
+                    <CustomTagInput
+                      name="collaboration"
+                      value={selectedCollaborations}
+                      onChange={setSelectedCollaborations}
+                      suggestions={allCollaborations.filter(
+                        (collab) =>
+                          collab.toLowerCase().includes(collaborationSearchQuery.toLowerCase()) &&
+                          !selectedCollaborations.includes(collab),
+                      )}
+                      onSearch={setCollaborationSearchQuery}
+                      placeholder={
+                        selectedCollaborations.length === 0
+                          ? 'Type to Search and Select Collaboration'
+                          : ''
+                      }
+                      disabled={!editMode && isViewMode}
+                    />
+                  </div>
+                  <div className="col-lg-6">
+                    <label className="form-label">Sustainable Development Goals (SDGs)</label>
+                    <CustomTagInput
+                      name="sdgs"
+                      value={selectedSDGs}
+                      onChange={setSelectedSDGs}
+                      suggestions={allSDGs.filter(
+                        (sdg) =>
+                          sdg.toLowerCase().includes(sdgSearchQuery.toLowerCase()) &&
+                          !selectedSDGs.includes(sdg),
+                      )}
+                      onSearch={setSdgSearchQuery}
+                      placeholder={
+                        selectedSDGs.length === 0 ? 'Type to Search and Select relevant SDGs' : ''
+                      }
+                      disabled={!editMode && isViewMode}
+                      renderTag={(tag) =>
+                        typeof tag === 'string' && tag.includes('.') ? tag.split('.')[0] : tag
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="row g-3">
+                  <div className="col-lg-6">
+                    <label className="form-label">Acknowledgement</label>
+                    <CustomTagInput
+                      name="acknowledgement"
+                      value={selectedAcknowledgements}
+                      onChange={(newTags) => {
+                        if (newTags.includes('Nil') && !selectedAcknowledgements.includes('Nil')) {
+                          setSelectedAcknowledgements(['Nil']);
+                          setOtherAcknowledgement('');
+                        } else if (newTags.length > 1 && newTags.includes('Nil')) {
+                          // If currently have "Nil" and added something else, remove "Nil"
+                          const withoutNil = newTags.filter((t) => t !== 'Nil');
+                          setSelectedAcknowledgements(withoutNil);
+                        } else {
+                          setSelectedAcknowledgements(newTags);
+                        }
+                      }}
+                      suggestions={allAcknowledgements.filter(
+                        (ack) =>
+                          ack.toLowerCase().includes(acknowledgementSearchQuery.toLowerCase()) &&
+                          !selectedAcknowledgements.includes(ack),
+                      )}
+                      onSearch={setAcknowledgementSearchQuery}
+                      placeholder={
+                        selectedAcknowledgements.length === 0
+                          ? 'Type to Search and Select Facilities Acknowledged'
+                          : ''
+                      }
+                      disabled={!editMode && isViewMode}
+                    />
+                  </div>
+                  <div className="col-lg-3">
+                    <label className="form-label" htmlFor="dateOfSubmissionInput">
+                      Submitted on
+                    </label>
+                    <input
+                      type="date"
+                      id="dateOfSubmissionInput"
+                      name="dateOfSubmissionInput"
+                      className="form-control"
+                      disabled={!editMode && isViewMode}
+                    />
+                  </div>
+                  <div className="col-lg-3">
+                    <label className="form-label" htmlFor="statusDropdown">
+                      Status
+                    </label>
+                    <div className="d-flex align-items-center gap-2">
+                      <div className="position-relative flex-grow-1">
+                        <select
+                          id="statusDropdown"
+                          className="form-control"
+                          value={status}
+                          onChange={handleStatusChange}
                           disabled={!editMode && isViewMode}
                         >
-                          Add Journal
-                        </button>
+                          <option value="submitted">Submitted</option>
+                          <option value="underReview">Under Review</option>
+                          <option value="revisionSubmitted">Revision Submitted</option>
+                          <option value="accepted">Accepted</option>
+                          <option value="published">Published</option>
+                        </select>
+                        <ChevronDown
+                          size={12}
+                          style={{
+                            position: 'absolute',
+                            right: '10px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            pointerEvents: 'none',
+                            color: '#6c757d',
+                          }}
+                        />
+                      </div>
+                      {status === 'published' && (
+                        <CheckCircle size={22} className="status-check-icon" />
                       )}
                     </div>
-                    {/* Only show journal search for Journal */}
-                    {effectiveIsJournal && (
-                      <div className="mb-3 position-relative">
-                        <div className="mb-2">
-                          <label htmlFor="journalSearch" className="form-label mb-0">
-                            Journal Name
-                          </label>
-                        </div>
-                        <input
-                          type="text"
-                          id="journalSearch"
-                          className="form-control"
-                          placeholder="Search for a Journal"
-                          value={journalSearchQuery}
-                          onChange={handleJournalSearchChange}
-                          onFocus={() => {
-                            // Show dropdown on focus
-                            if (!isViewMode && editMode) {
-                              searchJournals(journalSearchQuery || '');
-                            }
-                          }}
-                          onBlur={() => setTimeout(() => setShowJournalSuggestions(false), 150)}
-                          disabled={!editMode && isViewMode}
-                          autoComplete="off"
-                        />
-                        {showJournalSuggestions &&
-                          journalSearchResults.length > 0 &&
-                          !isViewMode &&
-                          editMode && (
-                            <ul className="list-group" style={suggestionsStyle}>
-                              {journalSearchResults.map((journal, index) => (
-                                <li
-                                  key={index}
-                                  className="list-group-item list-group-item-action"
-                                  onMouseDown={() => selectJournal(journal)}
-                                >
-                                  {journal.name}
-                                </li>
-                              ))}
-                            </ul>
-                          )}
-                      </div>
-                    )}
+                  </div>
+                </div>
 
-                    {/* For Conference, show manual input fields */}
-                    {effectiveIsConference && (
-                      <>
-                        <div className="mb-3">
-                          <label className="form-label">Conference Title</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Enter conference title"
-                            value={publicationDetails.conference_title || ''}
-                            onChange={(e) =>
-                              setPublicationDetails((prev) => ({
-                                ...prev,
-                                conference_title: e.target.value,
-                              }))
-                            }
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                        <div className="mb-3">
-                          <label className="form-label">Publisher</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Enter publisher name"
-                            value={publicationDetails.publisher || ''}
-                            onChange={(e) =>
-                              setPublicationDetails((prev) => ({
-                                ...prev,
-                                publisher: e.target.value,
-                              }))
-                            }
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                        <div className="mb-3">
-                          <label className="form-label">Source</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Enter source (International/National)"
-                            value={publicationDetails.source || ''}
-                            onChange={(e) =>
-                              setPublicationDetails((prev) => ({
-                                ...prev,
-                                source: e.target.value,
-                              }))
-                            }
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {/* For Book Chapter, show manual input fields */}
-                    {effectiveIsBookChapter && (
-                      <>
-                        <div className="mb-3">
-                          <label className="form-label">Book Title</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Enter book title"
-                            value={bookChapterTitle}
-                            onChange={(e) => setBookChapterTitle(e.target.value)}
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                        <div className="mb-3">
-                          <label className="form-label">Source</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Enter source name"
-                            value={publicationDetails.source || ''}
-                            onChange={(e) =>
-                              setPublicationDetails((prev) => ({
-                                ...prev,
-                                source: e.target.value,
-                              }))
-                            }
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                        <div className="mb-3">
-                          <label className="form-label">Publisher</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Enter publisher name"
-                            value={publicationDetails.publisher || ''}
-                            onChange={(e) =>
-                              setPublicationDetails((prev) => ({
-                                ...prev,
-                                publisher: e.target.value,
-                              }))
-                            }
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {/* For Book, show manual input fields */}
-                    {effectiveIsBook && (
-                      <>
-                        <div className="mb-3">
-                          <label className="form-label">Source</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Enter source name"
-                            value={publicationDetails.source || ''}
-                            onChange={(e) =>
-                              setPublicationDetails((prev) => ({
-                                ...prev,
-                                source: e.target.value,
-                              }))
-                            }
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                        <div className="mb-3">
-                          <label className="form-label">Publisher</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            placeholder="Enter publisher name"
-                            value={publicationDetails.publisher || ''}
-                            onChange={(e) =>
-                              setPublicationDetails((prev) => ({
-                                ...prev,
-                                publisher: e.target.value,
-                              }))
-                            }
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {/* For Journal, show read-only Level and Publisher */}
-                    {effectiveIsJournal && (
-                      <>
-                        <div className="mb-3">
-                          <label className="form-label">Level</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={
-                              journalDetails.name
-                                ? isInternational
-                                  ? 'International'
-                                  : 'National'
-                                : ''
-                            }
-                            readOnly
-                          />
-                        </div>
-                        <div className="mb-3">
-                          <label className="form-label">Publisher</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={journalDetails.publisher}
-                            readOnly
-                          />
-                        </div>
-                        <div className="mb-3">
-                          <label className="form-label">Website</label>
-                          <input
-                            type="text"
-                            className="form-control"
-                            value={journalDetails.website}
-                            readOnly
-                          />
-                        </div>
-                      </>
-                    )}
-
-                    {/* ISBN/ISSN fields - different handling for different categories */}
-                    <div className="row mb-3">
-                      <div className="col-6">
-                        <label className="form-label">
-                          {effectiveIsConference || effectiveIsBook || effectiveIsBookChapter
-                            ? 'Print ISBN'
-                            : 'Print ISSN'}
-                        </label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={
-                            effectiveIsConference || effectiveIsBook || effectiveIsBookChapter
-                              ? publicationDetails.print_isbn || ''
-                              : journalDetails.printISSN || ''
-                          }
-                          onChange={(e) => {
-                            if (
-                              effectiveIsConference ||
-                              effectiveIsBook ||
-                              effectiveIsBookChapter
-                            ) {
-                              setPublicationDetails((prev) => ({
-                                ...prev,
-                                print_isbn: e.target.value,
-                              }));
-                            } else {
-                              setJournalDetails((prev) => ({
-                                ...prev,
-                                printISSN: e.target.value,
-                              }));
-                            }
-                          }}
-                          disabled={!editMode && isViewMode}
-                          readOnly={effectiveIsJournal}
-                          placeholder={
-                            effectiveIsConference || effectiveIsBook || effectiveIsBookChapter
-                              ? 'Enter ISBN'
-                              : ''
-                          }
-                        />
-                      </div>
-                      <div className="col-6">
-                        <label className="form-label">
-                          {effectiveIsConference || effectiveIsBook
-                            ? 'Online ISBN'
-                            : effectiveIsBookChapter
-                              ? 'Online ISBN'
-                              : 'Online ISSN'}
-                        </label>
-                        <input
-                          type="text"
-                          className="form-control"
-                          value={
-                            effectiveIsConference || effectiveIsBook || effectiveIsBookChapter
-                              ? publicationDetails.online_isbn || ''
-                              : journalDetails.onlineISSN || ''
-                          }
-                          onChange={(e) => {
-                            if (
-                              effectiveIsConference ||
-                              effectiveIsBook ||
-                              effectiveIsBookChapter
-                            ) {
-                              setPublicationDetails((prev) => ({
-                                ...prev,
-                                online_isbn: e.target.value,
-                              }));
-                            } else {
-                              setJournalDetails((prev) => ({
-                                ...prev,
-                                onlineISSN: e.target.value,
-                              }));
-                            }
-                          }}
-                          disabled={!editMode && isViewMode}
-                          readOnly={effectiveIsJournal}
-                          placeholder={
-                            effectiveIsConference || effectiveIsBook || effectiveIsBookChapter
-                              ? 'Enter ISBN'
-                              : ''
-                          }
-                        />
-                      </div>
-                    </div>
-
-                    {/* Journal Request Modal.
-                        Rendered into document.body: its own <form> would otherwise sit
-                        inside the publication <form>, which is invalid HTML, and a
-                        fixed-position dialog buried in the layout is at the mercy of any
-                        ancestor that creates a containing block. */}
-                    {showJournalRequestModal &&
-                      createPortal(
-                        <>
-                          <div className="modal-backdrop fade show"></div>
-                          <div
-                            className="modal fade show"
-                            style={{ display: 'block' }}
-                            tabIndex={-1}
-                            onClick={(e) => {
-                              // Click on the scroll area outside the dialog dismisses it;
-                              // the currentTarget check keeps clicks inside the dialog alive.
-                              if (e.target === e.currentTarget) setShowJournalRequestModal(false);
-                            }}
-                          >
-                            <div className="modal-dialog">
-                              <div className="modal-content">
-                                <div className="modal-header">
-                                  <h5 className="modal-title">Request Custom Journal</h5>
+                {/* Journal Request Modal.
+                    Rendered into document.body: its own <form> would otherwise sit
+                    inside the publication <form>, which is invalid HTML, and a
+                    fixed-position dialog buried in the layout is at the mercy of any
+                    ancestor that creates a containing block. */}
+                {showJournalRequestModal &&
+                  createPortal(
+                    <>
+                      <div className="modal-backdrop fade show"></div>
+                      <div
+                        className="modal fade show"
+                        style={{ display: 'block' }}
+                        tabIndex={-1}
+                        onClick={(e) => {
+                          // Click on the scroll area outside the dialog dismisses it;
+                          // the currentTarget check keeps clicks inside the dialog alive.
+                          if (e.target === e.currentTarget) setShowJournalRequestModal(false);
+                        }}
+                      >
+                        <div className="modal-dialog">
+                          <div className="modal-content">
+                            <div className="modal-header">
+                              <h5 className="modal-title">Request Custom Journal</h5>
+                              <button
+                                type="button"
+                                className="btn-close"
+                                onClick={() => setShowJournalRequestModal(false)}
+                              ></button>
+                            </div>
+                            <div className="modal-body">
+                              {journalRequestError && (
+                                <div className="alert alert-danger">{journalRequestError}</div>
+                              )}
+                              <form onSubmit={handleJournalRequestSubmit} noValidate>
+                                <div className="mb-3">
+                                  <label className="form-label">Journal Name *</label>
+                                  <input
+                                    type="text"
+                                    className="form-control"
+                                    value={journalRequest.journal_name}
+                                    onChange={(e) =>
+                                      handleJournalRequestChange('journal_name', e.target.value)
+                                    }
+                                    required
+                                  />
+                                </div>
+                                <div className="mb-3">
+                                  <label className="form-label">Level *</label>
+                                  <div className="position-relative">
+                                    <select
+                                      className="form-control"
+                                      value={journalRequest.category}
+                                      onChange={(e) =>
+                                        handleJournalRequestChange('category', e.target.value)
+                                      }
+                                      required
+                                    >
+                                      <option value="">Select Level</option>
+                                      <option value="National">National</option>
+                                      <option value="International">International</option>
+                                    </select>
+                                    <ChevronDown
+                                      size={12}
+                                      style={{
+                                        position: 'absolute',
+                                        right: '10px',
+                                        top: '50%',
+                                        transform: 'translateY(-50%)',
+                                        pointerEvents: 'none',
+                                        color: '#6c757d',
+                                      }}
+                                    />
+                                  </div>
+                                </div>
+                                <div className="mb-3">
+                                  <label className="form-label">Publisher *</label>
+                                  <input
+                                    type="text"
+                                    className="form-control"
+                                    value={journalRequest.publisher}
+                                    onChange={(e) =>
+                                      handleJournalRequestChange('publisher', e.target.value)
+                                    }
+                                    required
+                                  />
+                                </div>
+                                <div className="mb-3">
+                                  <label className="form-label">Website *</label>
+                                  <input
+                                    type="url"
+                                    className="form-control"
+                                    value={journalRequest.website}
+                                    onChange={(e) =>
+                                      handleJournalRequestChange('website', e.target.value)
+                                    }
+                                    required
+                                  />
+                                </div>
+                                <div className="row mb-3">
+                                  <div className="col-6">
+                                    <label className="form-label">Print ISSN *</label>
+                                    <input
+                                      type="text"
+                                      className="form-control"
+                                      value={journalRequest.print_issn}
+                                      onChange={(e) =>
+                                        handleJournalRequestChange('print_issn', e.target.value)
+                                      }
+                                      required
+                                    />
+                                  </div>
+                                  <div className="col-6">
+                                    <label className="form-label">Online ISSN *</label>
+                                    <input
+                                      type="text"
+                                      className="form-control"
+                                      value={journalRequest.online_issn}
+                                      onChange={(e) =>
+                                        handleJournalRequestChange('online_issn', e.target.value)
+                                      }
+                                      required
+                                    />
+                                  </div>
+                                </div>
+                                <div className="row mb-3">
+                                  <div className="col-6">
+                                    <label className="form-label">Impact Factor *</label>
+                                    <input
+                                      type="number"
+                                      step="0.001"
+                                      className="form-control"
+                                      value={journalRequest.impact_factor}
+                                      onChange={(e) =>
+                                        handleJournalRequestChange('impact_factor', e.target.value)
+                                      }
+                                      placeholder="e.g., 5.123"
+                                      required
+                                    />
+                                  </div>
+                                  <div className="col-6">
+                                    <label className="form-label">Cite Score *</label>
+                                    <input
+                                      type="number"
+                                      step="0.001"
+                                      className="form-control"
+                                      value={journalRequest.cite_score}
+                                      onChange={(e) =>
+                                        handleJournalRequestChange('cite_score', e.target.value)
+                                      }
+                                      placeholder="e.g., 8.5"
+                                      required
+                                    />
+                                  </div>
+                                </div>
+                                <div className="d-flex justify-content-end journal-request-actions">
                                   <button
                                     type="button"
-                                    className="btn-close"
+                                    className="btn btn-secondary me-2"
                                     onClick={() => setShowJournalRequestModal(false)}
-                                  ></button>
+                                    disabled={journalRequestLoading}
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={journalRequestLoading}
+                                  >
+                                    {journalRequestLoading ? 'Submitting...' : 'Submit Request'}
+                                  </button>
                                 </div>
-                                <div className="modal-body">
-                                  {journalRequestError && (
-                                    <div className="alert alert-danger">{journalRequestError}</div>
-                                  )}
-                                  <form onSubmit={handleJournalRequestSubmit} noValidate>
-                                    <div className="mb-3">
-                                      <label className="form-label">Journal Name *</label>
-                                      <input
-                                        type="text"
-                                        className="form-control"
-                                        value={journalRequest.journal_name}
-                                        onChange={(e) =>
-                                          handleJournalRequestChange('journal_name', e.target.value)
-                                        }
-                                        required
-                                      />
-                                    </div>
-                                    <div className="mb-3">
-                                      <label className="form-label">Level *</label>
-                                      <div className="position-relative">
-                                        <select
-                                          className="form-control"
-                                          value={journalRequest.category}
-                                          onChange={(e) =>
-                                            handleJournalRequestChange('category', e.target.value)
-                                          }
-                                          required
-                                        >
-                                          <option value="">Select Level</option>
-                                          <option value="National">National</option>
-                                          <option value="International">International</option>
-                                        </select>
-                                        <ChevronDown
-                                          size={12}
-                                          style={{
-                                            position: 'absolute',
-                                            right: '10px',
-                                            top: '50%',
-                                            transform: 'translateY(-50%)',
-                                            pointerEvents: 'none',
-                                            color: '#6c757d',
-                                          }}
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="mb-3">
-                                      <label className="form-label">Publisher *</label>
-                                      <input
-                                        type="text"
-                                        className="form-control"
-                                        value={journalRequest.publisher}
-                                        onChange={(e) =>
-                                          handleJournalRequestChange('publisher', e.target.value)
-                                        }
-                                        required
-                                      />
-                                    </div>
-                                    <div className="mb-3">
-                                      <label className="form-label">Website *</label>
-                                      <input
-                                        type="url"
-                                        className="form-control"
-                                        value={journalRequest.website}
-                                        onChange={(e) =>
-                                          handleJournalRequestChange('website', e.target.value)
-                                        }
-                                        required
-                                      />
-                                    </div>
-                                    <div className="row mb-3">
-                                      <div className="col-6">
-                                        <label className="form-label">Print ISSN *</label>
-                                        <input
-                                          type="text"
-                                          className="form-control"
-                                          value={journalRequest.print_issn}
-                                          onChange={(e) =>
-                                            handleJournalRequestChange('print_issn', e.target.value)
-                                          }
-                                          required
-                                        />
-                                      </div>
-                                      <div className="col-6">
-                                        <label className="form-label">Online ISSN *</label>
-                                        <input
-                                          type="text"
-                                          className="form-control"
-                                          value={journalRequest.online_issn}
-                                          onChange={(e) =>
-                                            handleJournalRequestChange(
-                                              'online_issn',
-                                              e.target.value,
-                                            )
-                                          }
-                                          required
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="row mb-3">
-                                      <div className="col-6">
-                                        <label className="form-label">Impact Factor *</label>
-                                        <input
-                                          type="number"
-                                          step="0.001"
-                                          className="form-control"
-                                          value={journalRequest.impact_factor}
-                                          onChange={(e) =>
-                                            handleJournalRequestChange(
-                                              'impact_factor',
-                                              e.target.value,
-                                            )
-                                          }
-                                          placeholder="e.g., 5.123"
-                                          required
-                                        />
-                                      </div>
-                                      <div className="col-6">
-                                        <label className="form-label">Cite Score *</label>
-                                        <input
-                                          type="number"
-                                          step="0.001"
-                                          className="form-control"
-                                          value={journalRequest.cite_score}
-                                          onChange={(e) =>
-                                            handleJournalRequestChange('cite_score', e.target.value)
-                                          }
-                                          placeholder="e.g., 8.5"
-                                          required
-                                        />
-                                      </div>
-                                    </div>
-                                    <div className="d-flex justify-content-end journal-request-actions">
-                                      <button
-                                        type="button"
-                                        className="btn btn-secondary me-2"
-                                        onClick={() => setShowJournalRequestModal(false)}
-                                        disabled={journalRequestLoading}
-                                      >
-                                        Cancel
-                                      </button>
-                                      <button
-                                        type="submit"
-                                        className="btn btn-primary"
-                                        disabled={journalRequestLoading}
-                                      >
-                                        {journalRequestLoading ? 'Submitting...' : 'Submit Request'}
-                                      </button>
-                                    </div>
-                                  </form>
-                                </div>
-                              </div>
+                              </form>
                             </div>
                           </div>
-                        </>,
-                        document.body,
-                      )}
-
-                    {/* Metrics & Status Section */}
-                    {effectiveIsJournal && (
-                      <div className="mb-3 mt-4">
-                        <div className="row g-3">
-                          <div className="col-6">
-                            <label
-                              className="form-label"
-                              style={{ fontSize: '14px', marginBottom: '0.5rem' }}
-                            >
-                              Impact Factor
-                            </label>
-                            <input
-                              type="number"
-                              step="0.001"
-                              id="impactFactorInput"
-                              name="impactFactorInput"
-                              className="form-control"
-                              disabled={true}
-                              readOnly
-                            />
-                          </div>
-                          <div className="col-6">
-                            <label
-                              className="form-label"
-                              style={{ fontSize: '14px', marginBottom: '0.5rem' }}
-                            >
-                              Cite Score
-                            </label>
-                            <input
-                              type="number"
-                              step="0.001"
-                              id="citeScoreInput"
-                              name="citeScoreInput"
-                              className="form-control"
-                              disabled={true}
-                              readOnly
-                            />
-                          </div>
                         </div>
                       </div>
-                    )}
-                    <div className="row g-3 mb-2">
-                      <div className="col-6">
-                        <label
-                          className="form-label"
-                          style={{ fontSize: '14px', marginBottom: '0.5rem' }}
-                        >
-                          Submitted on
-                        </label>
-                        <div className="d-flex align-items-center gap-2">
-                          <input
-                            type="date"
-                            id="dateOfSubmissionInput"
-                            name="dateOfSubmissionInput"
-                            className="form-control"
-                            disabled={!editMode && isViewMode}
-                          />
-                        </div>
-                      </div>
-                      <div className="col-6">
-                        <label
-                          className="form-label"
-                          style={{ fontSize: '14px', marginBottom: '0.5rem' }}
-                        >
-                          Status
-                        </label>
-                        <div className="d-flex align-items-center gap-2">
-                          <div className="position-relative flex-grow-1">
-                            <select
-                              id="statusDropdown"
-                              className="form-control"
-                              value={status}
-                              onChange={handleStatusChange}
-                              disabled={!editMode && isViewMode}
-                            >
-                              <option value="submitted">Submitted</option>
-                              <option value="underReview">Under Review</option>
-                              <option value="revisionSubmitted">Revision Submitted</option>
-                              <option value="accepted">Accepted</option>
-                              <option value="published">Published</option>
-                            </select>
-                            <ChevronDown
-                              size={12}
-                              style={{
-                                position: 'absolute',
-                                right: '10px',
-                                top: '50%',
-                                transform: 'translateY(-50%)',
-                                pointerEvents: 'none',
-                                color: '#6c757d',
-                              }}
-                            />
-                          </div>
-                          {status === 'published' && (
-                            <CheckCircle size={22} className="status-check-icon" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Backdrops now render inside each modal's portal, so the dialog and
-                        its backdrop always share one stacking context. */}
-                  </div>
-                </div>
+                    </>,
+                    document.body,
+                  )}
+                <AddPublisherModal
+                  show={showAddPublisherModal}
+                  onHide={() => setShowAddPublisherModal(false)}
+                  onAdded={(publisher, message) => {
+                    setPublicationDetails((prev) => ({
+                      ...prev,
+                      publisher: publisher.name,
+                      publisher_id: publisher.id,
+                    }));
+                    setShowAddPublisherModal(false);
+                    if (message) showAlert(message, 'success');
+                  }}
+                />
               </div>
 
               {/* Conditional Bottom Cards (Published only) */}

@@ -236,7 +236,7 @@
 }
 
 .master-data-modal .form-control::placeholder {
-  color: var(--text-muted);
+  color: var(--placeholder-color);
 }
 
 .master-data-modal .form-control:focus,
@@ -290,7 +290,7 @@
 }
 
 .master-data-modal .react-select__placeholder {
-  color: #94a3b8;
+  color: var(--placeholder-color);
   font-size: 0.9rem;
 }
 

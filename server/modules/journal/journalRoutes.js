@@ -57,6 +57,16 @@ router.put(
 //Uploads
 router.post('/journals/:id/upload', upload.single('file'), journalController.uploadFile);
 
+// Publisher master (Conference, Book and Book Chapter publishers).
+// Sign-in only, like every publication-form route in this file: faculty (role `user`)
+// hold no `publications.*` permission, yet they are the ones filing publications, so a
+// permission gate would take the publisher picker away from them. The repo owner
+// approved this exception to AGENTS.md hard rule 1 on 2026-10-21. Search returns names
+// only; an add is a pending entry visible to its requester until an admin reviews it
+// under /api/form-options/publishers, which is permission-gated.
+router.get('/publishers', journalController.searchPublishers);
+router.post('/publishers', journalController.requestPublisher);
+
 // Journal Request routes
 router.post('/journal-requests', journalController.createJournalRequest);
 router.get('/journal-requests', journalController.getUserJournalRequests);

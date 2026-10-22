@@ -5,17 +5,19 @@ import SectionCard from '../components/SectionCard';
 import TagSelectField from '../components/TagSelectField';
 import {
   LEVEL_OPTIONS,
-  NATIONAL_INITIATIVES,
   RESEARCH_TYPE_OPTIONS,
   SUSTAINABLE_DEVELOPMENT_GOALS,
   projectTypeRules,
 } from '../constants';
+import { vocabularyOptions } from '../selectOptions';
 
-import type { ProjectFormState } from '../types';
+import type { ProjectFormState, VocabularyEntry } from '../types';
 
 interface ProposalDetailsSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
+  /** The admin-curated lists; National Initiatives is read from them. */
+  vocabulary: VocabularyEntry[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -25,10 +27,16 @@ const toOptions = (values: string[]) => values.map((value) => ({ value, label: v
 const ProposalDetailsSection: React.FC<ProposalDetailsSectionProps> = ({
   form,
   patch,
+  vocabulary,
   errors,
   disabled,
 }) => {
-  const initiativeOptions = useMemo(() => toOptions(NATIONAL_INITIATIVES), []);
+  // An initiative the admin has since retired stays on the project as a chip:
+  // TagSelectField shows a value that is no longer offered.
+  const initiativeOptions = useMemo(
+    () => vocabularyOptions(vocabulary, 'national_initiative'),
+    [vocabulary],
+  );
   const sdgOptions = useMemo(() => toOptions(SUSTAINABLE_DEVELOPMENT_GOALS), []);
   // The type itself is not asked here: it is picked in the dialog the Projects
   // page's Add opens, and decides which of these fields the form shows.

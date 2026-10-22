@@ -12,6 +12,20 @@ import { withSelectedOption } from '../selectOptions';
 import type { CollaboratorRow, ProjectFormState, ProjectOrganization } from '../types';
 
 /**
+ * LEGACY: collaborators saved while the organization was typed (development builds of
+ * 2026-10, before it became a master-list pick) carry `organization_name` with no
+ * `organization_id`. Their name is offered under this value so it still shows, and saving
+ * the row unchanged keeps it. Remove once no project_collaborators row has a name without
+ * an id.
+ */
+const LEGACY_ORGANIZATION_PREFIX = 'legacy-org::';
+
+const organizationValue = (row: CollaboratorRow): string => {
+  if (row.organizationId) return String(row.organizationId);
+  return row.organizationName ? `${LEGACY_ORGANIZATION_PREFIX}${row.organizationName}` : '';
+};
+
+/**
  * Keeps a role that is not in the list selectable — the field was free text
  * before it was a multi-select, so a project saved then still carries whatever
  * was typed, and an edit to any other cell would otherwise save the row without
@@ -49,11 +63,10 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
 }) => {
   const rows = form.collaborators;
 
-  const roleOptions = useMemo(
-    () => COLLABORATOR_ROLES.map((role) => ({ value: role, label: role })),
-    [],
-  );
-
+  // Picked from the organization master, never typed: the finance tables offer a
+  // collaborator as a party by its organization id (`financeOrganizations`), and free
+  // text let one institution be saved as several spellings. A missing organization is
+  // requested through Add Scheme and appears here once an admin approves it.
   const organizationOptions = useMemo(
     () =>
       organizations
@@ -62,10 +75,10 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
     [organizations],
   );
 
-  const update = (index: number, changes: Partial<CollaboratorRow>) =>
-    patch({ collaborators: replaceAt(rows, index, changes) });
-
   const selectOrganization = (index: number, value: string) => {
+    // LEGACY: re-picking a typed name changes nothing; see LEGACY_ORGANIZATION_PREFIX.
+    if (value.startsWith(LEGACY_ORGANIZATION_PREFIX)) return;
+
     const organization = organizations.find((item) => String(item.id) === value);
 
     update(index, {
@@ -76,6 +89,14 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
       city: organization?.city && !rows[index].city ? organization.city : rows[index].city,
     });
   };
+
+  const roleOptions = useMemo(
+    () => COLLABORATOR_ROLES.map((role) => ({ value: role, label: role })),
+    [],
+  );
+
+  const update = (index: number, changes: Partial<CollaboratorRow>) =>
+    patch({ collaborators: replaceAt(rows, index, changes) });
 
   return (
     <SectionCard
@@ -121,43 +142,45 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
                 />
               </div>
 
-              <div className="pf-inline-field pf-collaborator__org">
-                <span className="pf-inline-field__label">Organization</span>
-                <SelectField
-                  value={row.organizationId ? String(row.organizationId) : ''}
-                  onChange={(value) => selectOrganization(index, value)}
-                  options={withSelectedOption(
-                    organizationOptions,
-                    row.organizationId ? String(row.organizationId) : '',
-                    row.organizationName,
-                  )}
-                  disabled={disabled}
-                  invalid={Boolean(errors[`collaborators[${index}].organization`])}
-                  ariaLabel="Collaborating organization"
-                />
-              </div>
+              <div className="pf-collaborator__line">
+                <div className="pf-inline-field pf-collaborator__org">
+                  <span className="pf-inline-field__label">Organization</span>
+                  <SelectField
+                    value={organizationValue(row)}
+                    onChange={(value) => selectOrganization(index, value)}
+                    options={withSelectedOption(
+                      organizationOptions,
+                      organizationValue(row),
+                      row.organizationName,
+                    )}
+                    disabled={disabled}
+                    invalid={Boolean(errors[`collaborators[${index}].organization`])}
+                    ariaLabel="Collaborating organization"
+                  />
+                </div>
 
-              <div className="pf-inline-field pf-collaborator__city">
-                <span className="pf-inline-field__label">City</span>
-                <input
-                  type="text"
-                  className="pf-input"
-                  value={row.city}
-                  onChange={(event) => update(index, { city: event.target.value })}
-                  disabled={disabled}
-                  aria-label="City"
-                />
-              </div>
+                <div className="pf-inline-field pf-collaborator__city">
+                  <span className="pf-inline-field__label">City</span>
+                  <input
+                    type="text"
+                    className="pf-input"
+                    value={row.city}
+                    onChange={(event) => update(index, { city: event.target.value })}
+                    disabled={disabled}
+                    aria-label="City"
+                  />
+                </div>
 
-              <div className="pf-inline-field pf-inline-field--tight pf-collaborator__mou">
-                <span className="pf-inline-field__label">Active MoU</span>
-                <YesNoSwitch
-                  name={`mou-${row.key}`}
-                  value={row.hasActiveMou}
-                  onChange={(value) => update(index, { hasActiveMou: value })}
-                  disabled={disabled}
-                  label="Active MoU"
-                />
+                <div className="pf-inline-field pf-inline-field--tight pf-collaborator__mou">
+                  <span className="pf-inline-field__label">Active MoU</span>
+                  <YesNoSwitch
+                    name={`mou-${row.key}`}
+                    value={row.hasActiveMou}
+                    onChange={(value) => update(index, { hasActiveMou: value })}
+                    disabled={disabled}
+                    label="Active MoU"
+                  />
+                </div>
               </div>
 
               <RowActions

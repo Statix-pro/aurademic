@@ -200,6 +200,8 @@ interface FinanceRequestContext {
   unplanned_budget_enabled?: boolean;
   unplanned_budget_amount?: number | null;
   unplanned_budget_description?: string | null;
+  unplanned_budget_used_amount?: number | null;
+  unplanned_budget_remaining_amount?: number | null;
   finance_annexures?: FinanceAnnexureRecord[];
 }
 interface FinanceAnnexureRecord {
@@ -674,10 +676,11 @@ const BUDGET_SELECT_STYLES = {
       textAlign: 'center !important',
     },
   }),
-  placeholder: (base: any) => ({
+  // Light grey, and hidden while disabled, like every placeholder (index.css).
+  placeholder: (base: any, state: any) => ({
     ...base,
     textAlign: 'center',
-    color: '#999',
+    color: state.isDisabled ? 'transparent' : 'var(--placeholder-color)',
     margin: 0,
     position: 'static',
     transform: 'none',
@@ -1030,6 +1033,9 @@ const ExpenditureApproval: React.FC = () => {
   const [budgetRows, setBudgetRows] = useState([{ category: '', head: '', amount: '' }]);
   const [showUnplannedBudget, setShowUnplannedBudget] = useState<boolean>(false);
   const [financeUnplannedAllowed, setFinanceUnplannedAllowed] = useState<boolean>(false);
+  // Unplanned Expenditure is capped by what finance approved as unplanned, less what other
+  // requests on this finance request already claimed; null until finance-context loads.
+  const [financeUnplannedRemaining, setFinanceUnplannedRemaining] = useState<number | null>(null);
   const [unplannedRows, setUnplannedRows] = useState<UnplannedBudgetRow[]>([
     createUnplannedBudgetRow(),
   ]);
@@ -1206,8 +1212,11 @@ const ExpenditureApproval: React.FC = () => {
 
     const loadFinanceContext = async () => {
       try {
+        const contextQuery = submittedRequestIdFromState
+          ? `?expenditure_request_id=${encodeURIComponent(String(submittedRequestIdFromState))}`
+          : '';
         const response = (await authenticityUtility.get(
-          `/expenditure/finance-context/${resolvedFinanceRequestId}`,
+          `/expenditure/finance-context/${resolvedFinanceRequestId}${contextQuery}`,
         )) as {
           success?: boolean;
           status?: string;
@@ -1244,6 +1253,10 @@ const ExpenditureApproval: React.FC = () => {
         setCategoryType((prev) => prev || nextCategoryType);
         setCategoryItem((prev) => prev || financeContext.beneficiary_value || '');
         setFinanceUnplannedAllowed(Boolean(financeContext.unplanned_budget_enabled));
+        const unplannedRemaining = Number(financeContext.unplanned_budget_remaining_amount);
+        setFinanceUnplannedRemaining(
+          Number.isFinite(unplannedRemaining) ? unplannedRemaining : null,
+        );
         if (financeContext.payment_debit_account) {
           setPaymentDetails((prev) => ({
             ...prev,
@@ -1294,7 +1307,7 @@ const ExpenditureApproval: React.FC = () => {
     return () => {
       isCancelled = true;
     };
-  }, [resolvedFinanceRequestId]);
+  }, [resolvedFinanceRequestId, submittedRequestIdFromState]);
 
   useEffect(() => {
     if (!pendingPrefillTag) return;
@@ -2663,27 +2676,10 @@ const ExpenditureApproval: React.FC = () => {
       : null;
   };
 
-  const getUnplannedHeadOfAccountAmount = (row: UnplannedBudgetRow): number | null => {
-    const selected = getUnplannedHeadOfAccountSelectedOption(row);
-    if (
-      selected &&
-      selected.remainingAmount === undefined &&
-      selected.approvedAmount === undefined
-    ) {
-      return null;
-    }
-    const amount = Number(selected?.remainingAmount ?? selected?.approvedAmount ?? 0);
-    return Number.isFinite(amount) ? amount : 0;
-  };
-
-  const getUnplannedBudgetAmountPlaceholder = (row: UnplannedBudgetRow): string => {
-    const amount = getUnplannedHeadOfAccountAmount(row);
-    return amount === null
+  const getUnplannedBudgetAmountPlaceholder = (): string =>
+    financeUnplannedRemaining === null
       ? 'Balance unavailable'
-      : amount > 0
-        ? `₹ ${amount.toLocaleString('en-IN')}`
-        : '₹ 0';
-  };
+      : `₹ ${financeUnplannedRemaining.toLocaleString('en-IN')}`;
 
   const getUnplannedBudgetHeadOptions = (): Array<
     OptionType | { label: string; options: OptionType[] }
@@ -4887,11 +4883,7 @@ const ExpenditureApproval: React.FC = () => {
           return;
         }
 
-        const totalsByHeadOfAccount = new Map<
-          number,
-          { amount: number; balance: number | null; rowNumber: number }
-        >();
-
+        let unplannedTotal = 0;
         for (const [index, row] of effectiveUnplannedRows.entries()) {
           const rowNumber = index + 1;
           const rowAmount = getUnplannedRowAmountValue(row);
@@ -4909,27 +4901,17 @@ const ExpenditureApproval: React.FC = () => {
             );
             return;
           }
-
-          const lineId = unplannedHeadOfAccountBudgetLineId;
-          const selectedHeadBalance = getUnplannedHeadOfAccountAmount(firstUnplannedRow);
-          const current = totalsByHeadOfAccount.get(lineId) || {
-            amount: 0,
-            balance: selectedHeadBalance,
-            rowNumber: 1,
-          };
-          current.amount += rowAmount;
-          current.balance = selectedHeadBalance;
-          totalsByHeadOfAccount.set(lineId, current);
+          unplannedTotal += rowAmount;
         }
 
-        for (const { amount, balance } of totalsByHeadOfAccount.values()) {
-          if (balance !== null && amount > balance) {
-            showAlert(
-              `Unplanned Expenditure amount cannot exceed Head of Accounts balance ₹ ${balance.toLocaleString('en-IN')}.`,
-              'warning',
-            );
-            return;
-          }
+        // The cap is the unplanned amount finance approved, not the planned Head of Accounts
+        // balance: unplanned money is approved on top of the planned lines.
+        if (financeUnplannedRemaining !== null && unplannedTotal > financeUnplannedRemaining) {
+          showAlert(
+            `Unplanned Expenditure amount cannot exceed the unplanned balance ₹ ${financeUnplannedRemaining.toLocaleString('en-IN')} approved on this finance request.`,
+            'warning',
+          );
+          return;
         }
       }
 
@@ -5874,8 +5856,8 @@ const ExpenditureApproval: React.FC = () => {
             ['14%', amountColumnLabel],
             ['6%', 'Action'],
           ];
-    const amountInputPlaceholder = (row: UnplannedBudgetRow) =>
-      activeTab === 'Advance' ? '₹ 0' : getUnplannedBudgetAmountPlaceholder(row);
+    const amountInputPlaceholder =
+      activeTab === 'Advance' ? '₹ 0' : getUnplannedBudgetAmountPlaceholder();
 
     return (
       <div style={{ overflowX: 'visible' }}>
@@ -5953,7 +5935,7 @@ const ExpenditureApproval: React.FC = () => {
                     <td style={{ padding: '12px', border: '1px solid #e0e0e0' }}>
                       <input
                         type="text"
-                        value={getUnplannedBudgetAmountPlaceholder(firstUnplannedRow)}
+                        value={getUnplannedBudgetAmountPlaceholder()}
                         readOnly
                         style={{
                           border: '1px solid #d7dee7',
@@ -5980,7 +5962,7 @@ const ExpenditureApproval: React.FC = () => {
                               amount: e.target.value.replace(/[^\d.]/g, ''),
                             })
                           }
-                          placeholder={amountInputPlaceholder(row)}
+                          placeholder={amountInputPlaceholder}
                           style={{
                             border: '1px solid #d7dee7',
                             borderRadius: '12px',

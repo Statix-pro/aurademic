@@ -7,7 +7,12 @@
  * `disbursement__<key>__<slot>` part names the server parses.
  */
 
-import { DISBURSEMENT_SLOTS, MANPOWER_SLOTS, OUTCOME_DOCUMENT_SLOTS } from './constants';
+import {
+  DISBURSEMENT_SLOTS,
+  MANPOWER_SLOTS,
+  OUTCOME_DOCUMENT_SLOTS,
+  statusHasClosingDate,
+} from './constants';
 import { PROJECT_DOCUMENT_TYPES, allotmentKey } from './projectFormState';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
@@ -87,6 +92,7 @@ export function buildProjectPayload(form: ProjectFormState) {
 
     funding_organization_id: form.fundingOrganizationId,
     funding_source: form.fundingSource || null,
+    domain: form.domain || null,
     scheme_id: form.schemeId,
 
     collaborators_enabled: form.collaboratorsEnabled,
@@ -154,7 +160,9 @@ export function buildProjectPayload(form: ProjectFormState) {
     })),
 
     project_start_date: form.projectStartDate || null,
-    project_closing_date: form.projectClosingDate || null,
+    project_closing_date: statusHasClosingDate(form.projectStatus)
+      ? form.projectClosingDate || null
+      : null,
     project_status: form.projectStatus || null,
 
     // The six typed outcome counts are not sent: the Outcomes tab's rows
@@ -373,6 +381,7 @@ const projectsApi = {
       departments: response.data?.departments ?? [],
       accounts: response.data?.accounts ?? [],
       budgetHeads: response.data?.budgetHeads ?? [],
+      vocabulary: response.data?.vocabulary ?? [],
     };
   },
 
@@ -461,7 +470,6 @@ const projectsApi = {
     organization_id?: number | null;
     organization_name?: string;
     project_type?: string | null;
-    domain?: string;
     category?: string;
     website?: string;
   }): Promise<void> {

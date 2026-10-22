@@ -9,30 +9,39 @@ import {
   projectTypeRules,
   safeExternalUrl,
 } from '../constants';
-import { withSelectedOption } from '../selectOptions';
+import { vocabularyOptions, withSelectedOption } from '../selectOptions';
 
-import type { ProjectFormState, ProjectOrganization, ProjectScheme } from '../types';
+import type {
+  ProjectFormState,
+  ProjectOrganization,
+  ProjectScheme,
+  VocabularyEntry,
+} from '../types';
 
 interface CallForDetailsSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
   organizations: ProjectOrganization[];
   schemes: ProjectScheme[];
+  /** The admin-curated lists; Domains is read from them. */
+  vocabulary: VocabularyEntry[];
   errors: Record<string, string>;
   disabled: boolean;
   onRequestOption: () => void;
 }
 
 /**
- * Funding agency and scheme, plus the scheme's own metadata. Domain, category
- * and website are read-only because they belong to the scheme in the master
- * list, not to this project.
+ * Funding agency, scheme and the project's domain, plus the scheme's own
+ * metadata. Category and website are read-only because they belong to the
+ * scheme in the master list; the domain is the project's own, since projects
+ * under one scheme can work in different domains.
  */
 const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
   form,
   patch,
   organizations,
   schemes,
+  vocabulary,
   errors,
   disabled,
   onRequestOption,
@@ -74,6 +83,13 @@ const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
         form.schemeName,
       ),
     [schemes, form.fundingOrganizationId, form.projectType, selectedSchemeValue, form.schemeName],
+  );
+
+  // A domain the admin has since renamed or retired is still the project's, so
+  // it stays selectable rather than rendering blank.
+  const domainOptions = useMemo(
+    () => withSelectedOption(vocabularyOptions(vocabulary, 'domain'), form.domain, form.domain),
+    [vocabulary, form.domain],
   );
 
   const projectTypeLabel =
@@ -161,10 +177,18 @@ const CallForDetailsSection: React.FC<CallForDetailsSectionProps> = ({
         />
       </Field>
 
-      {/* A travel grant scheme has no domain. */}
+      {/* A travel grant has no domain. */}
       {projectTypeRules(form.projectType).schemeHasDomain && (
-        <Field label="Domain">
-          <ReadOnlyValue value={selectedScheme?.domain} />
+        <Field label="Domain" htmlFor="pf-domain" error={errors.domain}>
+          <SelectField
+            id="pf-domain"
+            value={form.domain}
+            onChange={(domain) => patch({ domain })}
+            options={domainOptions}
+            placeholder="Select Domain"
+            disabled={disabled}
+            invalid={Boolean(errors.domain)}
+          />
         </Field>
       )}
 

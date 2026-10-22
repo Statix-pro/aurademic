@@ -2,40 +2,63 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../config/connection.js', () => ({ default: { execute: vi.fn(), query: vi.fn() } }));
 
+// The curated lists, as `project_vocabulary_options` would hold them. Mocked at
+// the loader so the scheme-update tests below see the same `db.query` calls
+// they pin, with the lists read from here.
+const DOMAINS = ['Artificial Intelligence', 'Energy'];
+const CATEGORIES_BY_TYPE = {
+  research_project: ['Research Project', 'Industrial R&D'],
+  event: ['Seminar'],
+  travel_grant: ['Conference Travel Grant'],
+  fellowship: ['Women Scientist'],
+};
+vi.mock('../modules/shared/projectVocabularyStore.js', () => ({
+  VOCABULARY_LISTS: ['national_initiative', 'domain', 'category'],
+  loadProjectVocabulary: vi.fn(async () => ({
+    nationalInitiatives: [],
+    domains: DOMAINS,
+    categoriesByType: CATEGORIES_BY_TYPE,
+  })),
+}));
+
 const db = (await import('../config/connection.js')).default;
 const { default: formOptionsModel } = await import('../modules/formOptions/formOptionsModel.js');
 const { toSchemeCategory, toSchemeDomain, toSchemeProjectType } =
   await import('../modules/shared/schemeVocabulary.js');
 
 /**
- * A scheme's domain and category are picked from closed lists and stored as the
- * label, which the project form shows read-only. A value off the list would
- * show there but never be offered by the dropdowns, so it is refused at the
- * point it is stored — as a 400, since the person submitting can fix it.
+ * A new domain or category for a scheme is picked from the curated lists and
+ * stored as the label. A value off the list would never be offered by the
+ * dropdowns, so it is refused at the point it is stored — as a 400, since the
+ * person submitting can fix it.
  */
 describe('scheme domain and category', () => {
+  const domain = (value, type = 'research_project') => toSchemeDomain(value, type, DOMAINS);
+  const category = (value, type = 'research_project') =>
+    toSchemeCategory(value, type, CATEGORIES_BY_TYPE);
+
   it('stores the listed label, whatever case it arrives in', () => {
-    expect(toSchemeDomain('artificial intelligence')).toBe('Artificial Intelligence');
-    expect(toSchemeCategory(' Industrial R&D ')).toBe('Industrial R&D');
+    expect(domain('artificial intelligence')).toBe('Artificial Intelligence');
+    expect(category(' Industrial R&D ')).toBe('Industrial R&D');
   });
 
   it('treats an empty value as "not stated"', () => {
-    expect(toSchemeDomain('')).toBeNull();
-    expect(toSchemeCategory(undefined)).toBeNull();
+    expect(domain('')).toBeNull();
+    expect(category(undefined)).toBeNull();
   });
 
   // Each kind of grant has its own categories: a Seminar is an event's, not a
   // research project's, and a travel grant scheme has no domain at all.
   it("checks the category against the scheme type's own list", () => {
-    expect(toSchemeCategory('seminar', 'event')).toBe('Seminar');
-    expect(toSchemeCategory('Women Scientist', 'fellowship')).toBe('Women Scientist');
-    expect(() => toSchemeCategory('Seminar', 'research_project')).toThrowError(/category/);
-    expect(() => toSchemeCategory('Research Project', 'travel_grant')).toThrowError(/category/);
+    expect(category('seminar', 'event')).toBe('Seminar');
+    expect(category('Women Scientist', 'fellowship')).toBe('Women Scientist');
+    expect(() => category('Seminar', 'research_project')).toThrowError(/category/);
+    expect(() => category('Research Project', 'travel_grant')).toThrowError(/category/);
   });
 
   it('keeps no domain on a travel grant scheme', () => {
-    expect(toSchemeDomain('Energy', 'travel_grant')).toBeNull();
-    expect(toSchemeDomain('Energy', 'event')).toBe('Energy');
+    expect(domain('Energy', 'travel_grant')).toBeNull();
+    expect(domain('Energy', 'event')).toBe('Energy');
   });
 
   it('reads an unstated scheme type as a research project and refuses an unknown one', () => {
@@ -46,7 +69,7 @@ describe('scheme domain and category', () => {
   it('answers 400 for a value off the list', () => {
     let caught;
     try {
-      toSchemeCategory('Consultancy');
+      category('Consultancy');
     } catch (error) {
       caught = error;
     }
@@ -76,8 +99,9 @@ describe('scheme update with a pre-list value', () => {
       ...changes,
     });
 
-  // Editing a scheme's name must not be blocked by a free-text domain saved
-  // before the lists existed, which the admin did not touch.
+  // Editing a scheme's name must not be blocked by a domain the lists no
+  // longer offer — renamed or retired in the admin, or free text saved before
+  // the lists existed — which the admin did not touch.
   it('keeps an untouched free-text value', async () => {
     db.query.mockResolvedValueOnce([[stored]]).mockResolvedValueOnce([{ affectedRows: 1 }]);
 

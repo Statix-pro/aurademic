@@ -166,6 +166,41 @@ describe('normalizeProjectPayload', () => {
     );
   });
 
+  // The domain is the project's own, picked from the admin-curated list. A
+  // value is stored in the list's spelling; one the list does not have — an
+  // entry renamed or retired since the project saved it — is kept as it is
+  // rather than refused, so the project still saves. A Travel Grant, which has
+  // no domain, keeps none.
+  it("stores the project's domain in the curated list's spelling", () => {
+    const vocabulary = { domains: ['Artificial Intelligence', 'Energy'], nationalInitiatives: [] };
+    const domain = (payload) => {
+      const { aggregate, errors } = normalizeProjectPayload(validPayload(payload), { vocabulary });
+      expect(errors).toEqual([]);
+      return aggregate.project.domain;
+    };
+
+    expect(domain({ domain: 'artificial intelligence' })).toBe('Artificial Intelligence');
+    expect(domain({})).toBeNull();
+    expect(domain({ domain: ' Renewable Energy ' })).toBe('Renewable Energy');
+    expect(domain({ project_type: 'travel_grant', domain: 'Energy' })).toBeNull();
+  });
+
+  // `project_tags` is unique on the value under a case-insensitive collation,
+  // so two casings of one initiative must reach it as one tag, or the save
+  // fails on the duplicate key.
+  it('stores national initiatives once each, in the curated spelling', () => {
+    const vocabulary = { domains: [], nationalInitiatives: ['Make in India', 'Digital India'] };
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        national_initiatives: ['make in india', 'Make In India', 'Local Mission', 'local mission'],
+      }),
+      { vocabulary },
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.tags.national_initiative).toEqual(['Make in India', 'local mission']);
+  });
+
   it('rejects negative amounts', () => {
     const { errors } = normalizeProjectPayload(validPayload({ project_cost: '-5' }));
 
@@ -194,10 +229,36 @@ describe('normalizeProjectPayload', () => {
 
   it('flags a closing date that precedes the start date', () => {
     const { errors } = normalizeProjectPayload(
-      validPayload({ project_start_date: '2026-06-01', project_closing_date: '2026-05-31' }),
+      validPayload({
+        project_status: 'completed',
+        project_start_date: '2026-06-01',
+        project_closing_date: '2026-05-31',
+      }),
     );
 
     expect(errorFields(errors)).toContain('project_closing_date');
+  });
+
+  // The form shows Closing Date only for a completed or closed project. A date
+  // left in state after the status went back to Ongoing — or with no status
+  // picked — is hidden, so it is neither saved nor checked against the start.
+  it('keeps a closing date only for a completed or closed project', () => {
+    const dated = { project_start_date: '2026-06-01', project_closing_date: '2026-05-31' };
+    const closingDate = (status) => {
+      const { aggregate, errors } = normalizeProjectPayload(
+        validPayload({ ...dated, project_closing_date: '2027-05-31', project_status: status }),
+      );
+      expect(errors).toEqual([]);
+      return aggregate.project.project_closing_date;
+    };
+
+    expect(closingDate('completed')).toBe('2027-05-31');
+    expect(closingDate('closed')).toBe('2027-05-31');
+    expect(closingDate('ongoing')).toBeNull();
+    expect(closingDate(undefined)).toBeNull();
+
+    const ongoing = normalizeProjectPayload(validPayload({ ...dated, project_status: 'ongoing' }));
+    expect(errorFields(ongoing.errors)).not.toContain('project_closing_date');
   });
 
   it('requires the funding agency when a scheme is picked', () => {

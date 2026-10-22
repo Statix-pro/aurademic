@@ -14,6 +14,7 @@ import JournalStatusDetails from './components/JournalStatusDetails';
 import JournalStatusUpdates from './components/JournalStatusUpdates';
 import JournalManagement from './formManagement/JournalFormOptions';
 import ProjectFormOptions from './formManagement/ProjectFormOptions';
+import PublisherFormOptions from './formManagement/PublisherFormOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import { canManageFormOptions } from '../../shared/utils/permissionUtils';
@@ -147,6 +148,7 @@ type TabType =
   | 'project-requests'
   | 'journal-status-updates'
   | 'journal-management'
+  | 'publisher-management'
   | 'project-management';
 
 const defaultColumnConfig: ColumnConfig = {
@@ -575,7 +577,10 @@ const Dashboard: React.FC = () => {
         { key: 'journal-requests', label: 'Publication Requests' },
         { key: 'journal-status-updates', label: 'Publication Status Updates' },
         ...(showFormOptions
-          ? [{ key: 'journal-management' as TabType, label: 'Publication Management' }]
+          ? [
+              { key: 'journal-management' as TabType, label: 'Publication Management' },
+              { key: 'publisher-management' as TabType, label: 'Publishers' },
+            ]
           : []),
       ];
 
@@ -872,12 +877,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const darkHeaderCellStyle: React.CSSProperties = {
-    backgroundColor: '#323a40',
-    color: '#ffffff',
-    borderBottom: '2px solid #dee2e6',
-  };
-
   const handleViewDetails = async (id: number) => {
     // A publication gets its own page: the reviewer needs the whole submission, and a
     // record under review should be linkable and survive a refresh. Projects still open
@@ -909,18 +908,18 @@ const Dashboard: React.FC = () => {
         <table className="table table-striped">
           <thead className="table-dark">
             <tr style={{ background: 'inherit' }}>
-              <th style={darkHeaderCellStyle}>Journal Name</th>
-              <th style={darkHeaderCellStyle}>Category</th>
-              <th style={darkHeaderCellStyle}>Publisher</th>
-              <th style={darkHeaderCellStyle}>Website</th>
-              <th style={darkHeaderCellStyle}>Print ISSN</th>
-              <th style={darkHeaderCellStyle}>Online ISSN</th>
-              <th style={darkHeaderCellStyle}>Impact Factor</th>
-              <th style={darkHeaderCellStyle}>Cite Score</th>
-              <th style={darkHeaderCellStyle}>Requested By</th>
-              <th style={darkHeaderCellStyle}>Status</th>
-              <th style={darkHeaderCellStyle}>Date</th>
-              <th style={darkHeaderCellStyle}>Actions</th>
+              <th>Journal Name</th>
+              <th>Category</th>
+              <th>Publisher</th>
+              <th>Website</th>
+              <th>Print ISSN</th>
+              <th>Online ISSN</th>
+              <th>Impact Factor</th>
+              <th>Cite Score</th>
+              <th>Requested By</th>
+              <th>Status</th>
+              <th>Date</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -2072,13 +2071,13 @@ const Dashboard: React.FC = () => {
         <table className="table table-striped">
           <thead>
             <tr>
-              <th style={darkHeaderCellStyle}>User</th>
-              <th style={darkHeaderCellStyle}>Request Type</th>
-              <th style={darkHeaderCellStyle}>Name</th>
-              <th style={darkHeaderCellStyle}>Description</th>
-              <th style={darkHeaderCellStyle}>Status</th>
-              <th style={darkHeaderCellStyle}>Created At</th>
-              <th style={darkHeaderCellStyle}>Actions</th>
+              <th>User</th>
+              <th>Request Type</th>
+              <th>Name</th>
+              <th>Description</th>
+              <th>Status</th>
+              <th>Created At</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -2154,9 +2153,10 @@ const Dashboard: React.FC = () => {
             {showColumnToggle && (
               <div className="dashboard-tabs__actions">{renderColumnToggleDropdown()}</div>
             )}
-            {activeTab === 'journal-management' && showFormOptions && (
-              <div className="dashboard-tabs__actions" ref={setJournalActionsSlot} />
-            )}
+            {(activeTab === 'journal-management' || activeTab === 'publisher-management') &&
+              showFormOptions && (
+                <div className="dashboard-tabs__actions" ref={setJournalActionsSlot} />
+              )}
           </div>
         </div>
 
@@ -2192,6 +2192,9 @@ const Dashboard: React.FC = () => {
                 an empty white band around them. */}
             {activeTab === 'journal-management' && showFormOptions && (
               <JournalManagement actionSlot={journalActionsSlot} />
+            )}
+            {activeTab === 'publisher-management' && showFormOptions && (
+              <PublisherFormOptions actionSlot={journalActionsSlot} />
             )}
             {activeTab === 'project-management' && showFormOptions && (
               <ProjectFormOptions embedded />

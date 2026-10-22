@@ -29,6 +29,11 @@ interface CustomDropdownProps {
   menuPortalTarget?: HTMLElement | null;
   menuPosition?: 'absolute' | 'fixed';
   filterOption?: (candidate: any, input: string) => boolean;
+  /** For server-side search: fires as the user types, before options are filtered. */
+  onInputChange?: (value: string) => void;
+  isLoading?: boolean;
+  noOptionsMessage?: (obj: { inputValue: string }) => React.ReactNode;
+  isClearable?: boolean;
 }
 
 const CustomDropdown: React.FC<CustomDropdownProps> = ({
@@ -111,9 +116,11 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
       ...provided,
       color: 'var(--text-main)',
     }),
-    placeholder: (provided: any) => ({
+    // Light grey like every other hint, and hidden while the field is disabled
+    // (see the placeholder rules in shared/styles/index.css).
+    placeholder: (provided: any, state: any) => ({
       ...provided,
-      color: 'var(--text-muted)',
+      color: state.isDisabled ? 'transparent' : 'var(--placeholder-color)',
     }),
   };
 
