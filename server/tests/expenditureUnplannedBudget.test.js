@@ -5,8 +5,10 @@ vi.mock('../config/connection.js', () => ({ default: { execute: vi.fn(), query: 
 const db = (await import('../config/connection.js')).default;
 const {
   assertUnplannedWithinFinanceUnplannedBudget,
+  createExpenditureRequest,
   getApprovedBudgets,
   getFinanceUnplannedBudgetState,
+  updateExpenditureRequest,
 } = await import('../modules/expenditure/expenditureModel.js');
 
 /**
@@ -16,7 +18,7 @@ const {
  * "cannot exceed Head of Accounts balance ₹5,000" — and the server summed planned and unplanned
  * against the same ₹16,000 line. Unplanned money is its own approved allowance.
  */
-const makeConn = ({ enabled = 1, approved = 36000, used = 0, legacyUsed = 0 } = {}) => {
+const makeConn = ({ enabled = 1, approved = 36000, used = 0 } = {}) => {
   const executed = [];
   return {
     executed,
@@ -28,10 +30,6 @@ const makeConn = ({ enabled = 1, approved = 36000, used = 0, legacyUsed = 0 } = 
       executed.push({ sql, params });
       if (sql.includes('FROM finance_requests')) {
         return [[{ unplanned_budget_enabled: enabled, unplanned_budget_amount: approved }]];
-      }
-      // LEGACY claims (a single amount on expenditure_requests) are summed separately.
-      if (sql.includes('used_amount') && sql.includes('unplanned_budget_enabled = 1')) {
-        return [[{ used_amount: legacyUsed }]];
       }
       if (sql.includes('used_amount')) {
         return [[{ used_amount: used }]];
@@ -94,29 +92,19 @@ describe('unplanned expenditure allowance', () => {
     });
     const financeLookup = conn.executed.find(({ sql }) => sql.includes('FROM finance_requests'));
     expect(financeLookup.sql).toContain('FOR UPDATE');
-    const usageLookups = conn.executed.filter(({ sql }) => sql.includes('used_amount'));
-    expect(usageLookups).toHaveLength(2);
-    for (const lookup of usageLookups) expect(lookup.params).toEqual([299, 812, 812]);
-  });
-
-  it('adds legacy single-amount claims to the rows-based ones', async () => {
-    const conn = makeConn({ used: 4000, legacyUsed: 6000 });
-
-    const state = await getFinanceUnplannedBudgetState(conn, { financeRequestId: 299 });
-
-    expect(state.usedAmount).toBe(10000);
-    expect(state.remainingAmount).toBe(26000);
+    const usageLookup = conn.executed.find(({ sql }) => sql.includes('used_amount'));
+    expect(usageLookup.params).toEqual([299, 812, 812, 299, 812, 812]);
   });
 
   /**
-   * Greptile on PR #85: under REPEATABLE READ, createExpenditureRequest's earlier plain reads
-   * fix its snapshot, so a claim another request committed while this one waited on the
-   * finance row lock was invisible to a plain SUM — two ₹600 claims both passed against
-   * ₹1,000 (reproduced on MySQL). Under the lock the usage must be locking reads, which see
-   * the latest committed rows; the legacy query's NOT EXISTS needs its own lock clause, since
-   * an outer one does not reach a subquery.
+   * PR #85 review: the cap check read usage from a REPEATABLE READ snapshot fixed by the
+   * save's earlier plain reads, so a claim committed while it waited on the finance lock
+   * was missed and two ₹600 claims passed against ₹1,000. A FOR SHARE fix then deadlocked
+   * two concurrent edits (each scan waited on the other's locked row; both reproduced on
+   * MySQL). The usage read stays a plain read, and each save takes the finance lock before
+   * any plain read, so the snapshot is fixed after earlier claims committed.
    */
-  it('reads usage with locking reads when checking under the finance row lock', async () => {
+  it('reads usage without locking other requests rows', async () => {
     const conn = makeConn();
 
     await assertUnplannedWithinFinanceUnplannedBudget(conn, {
@@ -124,11 +112,8 @@ describe('unplanned expenditure allowance', () => {
       normalizedUnplanned: unplanned(100),
     });
 
-    const usageLookups = conn.executed.filter(({ sql }) => sql.includes('used_amount'));
-    expect(usageLookups).toHaveLength(2);
-    for (const { sql } of usageLookups) expect(sql.trimEnd()).toMatch(/FOR SHARE$/);
-    const legacy = usageLookups.find(({ sql }) => sql.includes('NOT EXISTS'));
-    expect(legacy.sql.match(/FOR SHARE/g)).toHaveLength(2);
+    const usageLookup = conn.executed.find(({ sql }) => sql.includes('used_amount'));
+    expect(usageLookup.sql).not.toMatch(/FOR (SHARE|UPDATE)/);
   });
 
   it('keeps plain reads for a balance shown outside a transaction', async () => {
@@ -299,5 +284,64 @@ describe('planned line balance', () => {
 
     expect(usageSql).toContain('COALESCE(fr_unplanned.unplanned_budget_enabled, 0) = 0');
     expect(budget.remainingAmount).toBe(5000);
+  });
+});
+
+describe('claim saves lock the finance request first', () => {
+  const FINANCE_LOCK = 'SELECT id FROM finance_requests WHERE id = ? FOR UPDATE';
+
+  /** A pooled connection that records every statement, in order. */
+  const recordingConnection = (respond = () => [[]]) => {
+    const statements = [];
+    const conn = {
+      statements,
+      beginTransaction: vi.fn(),
+      commit: vi.fn(),
+      rollback: vi.fn(),
+      release: vi.fn(),
+      execute: vi.fn(async (sql, params) => {
+        statements.push({ sql: String(sql).replace(/\s+/g, ' ').trim(), params });
+        return respond(String(sql));
+      }),
+      query: vi.fn(async (sql, params) => {
+        statements.push({ sql: String(sql).replace(/\s+/g, ' ').trim(), params });
+        return [[]];
+      }),
+    };
+    db.getConnection = vi.fn(async () => conn);
+    return conn;
+  };
+
+  it('takes it before any other statement when creating a request', async () => {
+    const conn = recordingConnection();
+
+    // The finance request is not found, so the save stops early — after the lock.
+    await expect(
+      createExpenditureRequest({ request_type: 'Advance', finance_request_id: 299 }, 7),
+    ).rejects.toThrow();
+
+    expect(conn.statements[0]).toEqual({ sql: FINANCE_LOCK, params: [299] });
+  });
+
+  it('takes it right after its own row, before any plain read, when updating', async () => {
+    const conn = recordingConnection((sql) =>
+      sql.includes('FROM expenditure_requests er')
+        ? [
+            [
+              {
+                id: 812,
+                finance_request_id: 299,
+                request_type: 'advance',
+                overall_status: 'pending',
+              },
+            ],
+          ]
+        : [[]],
+    );
+
+    await expect(updateExpenditureRequest(812, { request_type: 'Advance' }, 7)).rejects.toThrow();
+
+    expect(conn.statements[0].sql).toMatch(/FROM expenditure_requests er .* FOR UPDATE$/);
+    expect(conn.statements[1]).toEqual({ sql: FINANCE_LOCK, params: [299] });
   });
 });

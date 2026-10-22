@@ -1305,42 +1305,47 @@ export async function getFinanceUnplannedBudgetState(
   const enabled = Boolean(Number(financeRow?.unplanned_budget_enabled));
   const approvedAmount = enabled ? toMoney(financeRow?.unplanned_budget_amount) : 0;
 
-  // Under the lock the usage must be read as locking reads. A plain read in a REPEATABLE
-  // READ transaction answers from the snapshot taken at the transaction's first read —
-  // createExpenditureRequest makes several before it gets here — so a claim that another
-  // request committed while this one waited on the finance row stayed invisible, and two
-  // ₹600 claims both passed against a ₹1,000 allowance. A locking read sees the latest
-  // committed rows and holds them until this transaction ends.
-  const lockClause = forUpdate ? ' FOR SHARE' : '';
+  // A plain read, so it never locks another request's rows. It is current because callers
+  // that check a claim take the finance row lock (lockFinanceRequestForClaim) before any
+  // plain read in their transaction: REPEATABLE READ fixes the snapshot at the first plain
+  // read, so it then already holds every claim committed by earlier lock holders.
   const excludedRequestId = toPositiveInt(excludeExpenditureId);
-  const [claimedRows] = await source.execute(
-    `SELECT COALESCE(SUM(eur.amount), 0) AS used_amount
-         FROM expenditure_unplanned_rows eur
-         JOIN expenditure_requests er ON er.id = eur.expenditure_id
-        WHERE er.finance_request_id = ?
-          AND (? IS NULL OR er.id <> ?)
-          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}${lockClause}`,
-    [financeId, excludedRequestId, excludedRequestId],
+  const [usageRows] = await source.execute(
+    `SELECT COALESCE(SUM(usage_rows.amount), 0) AS used_amount
+       FROM (
+         SELECT eur.amount
+           FROM expenditure_unplanned_rows eur
+           JOIN expenditure_requests er ON er.id = eur.expenditure_id
+          WHERE er.finance_request_id = ?
+            AND (? IS NULL OR er.id <> ?)
+            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+
+         UNION ALL
+
+         -- LEGACY: requests saved before expenditure_unplanned_rows existed keep their single
+         -- unplanned amount on expenditure_requests. Remove once those rows are migrated.
+         SELECT er.unplanned_budget_amount AS amount
+           FROM expenditure_requests er
+          WHERE er.finance_request_id = ?
+            AND (? IS NULL OR er.id <> ?)
+            AND er.unplanned_budget_enabled = 1
+            AND NOT EXISTS (
+              SELECT 1
+                FROM expenditure_unplanned_rows eur_existing
+               WHERE eur_existing.expenditure_id = er.id
+            )
+            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+       ) AS usage_rows`,
+    [
+      financeId,
+      excludedRequestId,
+      excludedRequestId,
+      financeId,
+      excludedRequestId,
+      excludedRequestId,
+    ],
   );
-  // LEGACY: requests saved before expenditure_unplanned_rows existed keep their single
-  // unplanned amount on expenditure_requests. Remove once those rows are migrated.
-  const [legacyRows] = await source.execute(
-    `SELECT COALESCE(SUM(er.unplanned_budget_amount), 0) AS used_amount
-         FROM expenditure_requests er
-        WHERE er.finance_request_id = ?
-          AND (? IS NULL OR er.id <> ?)
-          AND er.unplanned_budget_enabled = 1
-          AND NOT EXISTS (
-            SELECT 1
-              FROM expenditure_unplanned_rows eur_existing
-             WHERE eur_existing.expenditure_id = er.id${lockClause}
-          )
-          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}${lockClause}`,
-    [financeId, excludedRequestId, excludedRequestId],
-  );
-  const usedAmount = toMoney(
-    toMoney(claimedRows?.[0]?.used_amount) + toMoney(legacyRows?.[0]?.used_amount),
-  );
+  const usedAmount = toMoney(usageRows?.[0]?.used_amount);
 
   return {
     enabled,
@@ -1348,6 +1353,27 @@ export async function getFinanceUnplannedBudgetState(
     usedAmount,
     remainingAmount: toMoney(Math.max(0, approvedAmount - usedAmount)),
   };
+}
+
+/**
+ * Serialises every claim against one finance request. Must be the first lock a create or
+ * update takes and must come before any plain read in its transaction:
+ *
+ * - The plain usage reads above see claims committed by earlier holders only if the
+ *   REPEATABLE READ snapshot is fixed after this lock is held. Taken later, a request that
+ *   waited here kept an older snapshot, and two ₹600 claims both passed a ₹1,000 cap.
+ * - Finance edits take this row before `finance_budget_breakup`, and expenditure saves
+ *   lock the breakup rows in the planned-head check; taking this row first keeps every
+ *   writer in the same order (finance row → breakup rows), so none can deadlock.
+ *
+ * An update locks its own expenditure row first (a locking read, which fixes no snapshot)
+ * to learn its finance request. No transaction holding this lock then waits on another
+ * request's row, so that order cannot cycle.
+ */
+async function lockFinanceRequestForClaim(conn, financeRequestId) {
+  const financeId = toPositiveInt(financeRequestId);
+  if (!financeId) return;
+  await conn.execute('SELECT id FROM finance_requests WHERE id = ? FOR UPDATE', [financeId]);
 }
 
 export async function assertUnplannedWithinFinanceUnplannedBudget(
@@ -5018,6 +5044,9 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
       throw new Error('Invalid request type. Expected Advance, Settlement, or Expenditure.');
     }
 
+    // Before any read: see lockFinanceRequestForClaim.
+    await lockFinanceRequestForClaim(conn, data.finance_request_id);
+
     const employeeId = toPositiveInt(data.employee_id);
     let departmentId = null;
     let employee = null;
@@ -5431,6 +5460,13 @@ export async function updateExpenditureRequest(
     if (!existingRecord) {
       throw new Error('Expenditure request not found');
     }
+
+    // Before any plain read: see lockFinanceRequestForClaim. Moving a request to another
+    // finance request only lowers the old one's usage, so the target is the one to lock.
+    await lockFinanceRequestForClaim(
+      conn,
+      toPositiveInt(data.finance_request_id) || toPositiveInt(existingRecord.finance_request_id),
+    );
 
     const requestType = inferRequestType(data) || normalizeRequestType(existingRecord.request_type);
     if (!requestType) {
