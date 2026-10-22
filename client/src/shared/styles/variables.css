@@ -13,8 +13,10 @@
   /* Text Colors */
   --text-main: #4f4f6e;
   --text-muted: #6c757d;
-  /* Placeholder hints: a light grey, so they never read as a typed value. */
-  --placeholder-color: #9aa5b4;
+  /* Placeholder hints: lighter than typed text (7.8:1 and up) so they never read as a
+     value, but at least 4.5:1 on every input background (#fff, #fcfdff, #f8f9fa) — the
+     WCAG minimum for text, placeholders included. The earlier #9aa5b4 was 2.5:1. */
+  --placeholder-color: #667383;
   --text-light: #ffffff;
 
   /* Border Colors */

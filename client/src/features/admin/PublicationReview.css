@@ -135,7 +135,7 @@
 }
 
 .journal-review-comment.form-control::placeholder {
-  color: #9aa5b4;
+  color: var(--placeholder-color);
 }
 
 .journal-review-comment.form-control:focus {
