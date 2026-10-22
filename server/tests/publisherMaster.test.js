@@ -238,6 +238,77 @@ describe('saving a publication linked to a publisher', () => {
   });
 });
 
+/**
+ * Greptile on PR #85: the save only checked that the publisher row existed, so a picker
+ * opened before an admin rejected a publisher could still link a new record to it. A new
+ * or changed link to a rejected publisher is refused; a record already linked keeps it.
+ */
+describe('linking a rejected publisher', () => {
+  const rejected = { id: 4, name: 'Predatory Press', status: 'rejected' };
+  const conferencePayload = (publisherId) => ({
+    title: 'A paper',
+    type: 'Conference paper',
+    category: 'National',
+    journal_name: 'Conf',
+    acknowledgement: {},
+    author_affiliation: [],
+    publication_details: { conference_title: 'Conf', publisher_id: publisherId },
+  });
+  const allowEdit = () => {
+    vi.spyOn(journalModel, 'getJournalWorkflowAccess').mockResolvedValue({
+      can_manage: true,
+      admin_approval_status: 'pending',
+      edit_request_status: 'none',
+    });
+    vi.spyOn(journalModel, 'updateJournalAndOptions').mockResolvedValue({ success: true });
+  };
+
+  it('refuses it on a new publication', async () => {
+    accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue(snapshot([]));
+    vi.spyOn(journalModel, 'getPublisherById').mockResolvedValue(rejected);
+    vi.spyOn(journalModel, 'create');
+
+    const response = await request(app)
+      .post('/api/journals')
+      .set('Authorization', `Bearer ${token}`)
+      .send(conferencePayload(4));
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain('rejected');
+    expect(journalModel.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses switching an existing publication to it', async () => {
+    accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue(snapshot([]));
+    allowEdit();
+    vi.spyOn(journalModel, 'getLinkedPublisherId').mockResolvedValue(3);
+    vi.spyOn(journalModel, 'getPublisherById').mockResolvedValue(rejected);
+
+    const response = await request(app)
+      .put('/api/journals/77')
+      .set('Authorization', `Bearer ${token}`)
+      .send(conferencePayload(4));
+
+    expect(response.status).toBe(400);
+    expect(journalModel.updateJournalAndOptions).not.toHaveBeenCalled();
+  });
+
+  it('lets a publication already linked to it be saved again', async () => {
+    accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue(snapshot([]));
+    allowEdit();
+    vi.spyOn(journalModel, 'getLinkedPublisherId').mockResolvedValue(4);
+    vi.spyOn(journalModel, 'getPublisherById').mockResolvedValue(rejected);
+
+    const response = await request(app)
+      .put('/api/journals/77')
+      .set('Authorization', `Bearer ${token}`)
+      .send(conferencePayload(4));
+
+    expect(response.status).toBe(200);
+    expect(journalModel.updateJournalAndOptions).toHaveBeenCalled();
+  });
+});
+
 describe('admin publisher review (/api/form-options/publishers)', () => {
   it('is closed to a signed-in user who is not an admin', async () => {
     accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue(snapshot([]));

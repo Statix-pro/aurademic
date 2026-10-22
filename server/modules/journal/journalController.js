@@ -94,9 +94,14 @@ const journalEditIsFrozen = (req, workflowAccess) => {
  * the request, so a record cannot carry an id that says one publisher and a name that
  * says another. Records without an id (filed before the master existed) pass through.
  *
- * Returns an error message for an id that does not exist, otherwise null.
+ * A rejected publisher cannot be newly linked — an admin has said it should not be used,
+ * and a picker opened before the rejection would otherwise still submit it. A record that
+ * already links to it keeps it when saved again (`currentPublisherId`), so a rejection
+ * never blocks editing an older record's other fields.
+ *
+ * Returns an error message for an id that does not exist or is rejected, otherwise null.
  */
-const applyLinkedPublisher = async (journalData) => {
+const applyLinkedPublisher = async (journalData, { currentPublisherId = null } = {}) => {
   const details = journalData.publication_details;
   if (!details || typeof details !== 'object' || details.publisher_id == null) {
     return null;
@@ -108,6 +113,9 @@ const applyLinkedPublisher = async (journalData) => {
     : null;
   if (!publisher) {
     return 'The selected publisher no longer exists. Please pick it again.';
+  }
+  if (publisher.status === 'rejected' && publisher.id !== currentPublisherId) {
+    return `"${publisher.name}" was rejected by an administrator. Please pick another publisher.`;
   }
 
   journalData.publication_details = {
@@ -316,7 +324,9 @@ const journalController = {
         });
       }
 
-      const publisherError = await applyLinkedPublisher(journalData);
+      const publisherError = await applyLinkedPublisher(journalData, {
+        currentPublisherId: await journalModel.getLinkedPublisherId(id),
+      });
       if (publisherError) {
         return res.status(400).json({ status: 'error', message: publisherError });
       }

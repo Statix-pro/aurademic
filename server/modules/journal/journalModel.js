@@ -1048,6 +1048,18 @@ j.*,
     }
   },
 
+  /** The publisher a saved publication links to now, or null (none, or filed before the master). */
+  async getLinkedPublisherId(journalId) {
+    const [rows] = await db.query(
+      `SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(publication_details, '$.publisher_id')) AS UNSIGNED)
+              AS publisher_id
+         FROM journals
+        WHERE id = ?`,
+      [journalId],
+    );
+    return Number(rows[0]?.publisher_id) || null;
+  },
+
   async getPublisherById(id) {
     const [rows] = await db.query('SELECT id, name, status FROM publishers WHERE id = ?', [id]);
     return rows[0] || null;
