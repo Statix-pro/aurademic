@@ -14,6 +14,7 @@ import JournalStatusDetails from './components/JournalStatusDetails';
 import JournalStatusUpdates from './components/JournalStatusUpdates';
 import JournalManagement from './formManagement/JournalFormOptions';
 import ProjectFormOptions from './formManagement/ProjectFormOptions';
+import PublisherFormOptions from './formManagement/PublisherFormOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
 import { canManageFormOptions } from '../../shared/utils/permissionUtils';
@@ -147,6 +148,7 @@ type TabType =
   | 'project-requests'
   | 'journal-status-updates'
   | 'journal-management'
+  | 'publisher-management'
   | 'project-management';
 
 const defaultColumnConfig: ColumnConfig = {
@@ -575,7 +577,10 @@ const Dashboard: React.FC = () => {
         { key: 'journal-requests', label: 'Publication Requests' },
         { key: 'journal-status-updates', label: 'Publication Status Updates' },
         ...(showFormOptions
-          ? [{ key: 'journal-management' as TabType, label: 'Publication Management' }]
+          ? [
+              { key: 'journal-management' as TabType, label: 'Publication Management' },
+              { key: 'publisher-management' as TabType, label: 'Publishers' },
+            ]
           : []),
       ];
 
@@ -2154,9 +2159,10 @@ const Dashboard: React.FC = () => {
             {showColumnToggle && (
               <div className="dashboard-tabs__actions">{renderColumnToggleDropdown()}</div>
             )}
-            {activeTab === 'journal-management' && showFormOptions && (
-              <div className="dashboard-tabs__actions" ref={setJournalActionsSlot} />
-            )}
+            {(activeTab === 'journal-management' || activeTab === 'publisher-management') &&
+              showFormOptions && (
+                <div className="dashboard-tabs__actions" ref={setJournalActionsSlot} />
+              )}
           </div>
         </div>
 
@@ -2192,6 +2198,9 @@ const Dashboard: React.FC = () => {
                 an empty white band around them. */}
             {activeTab === 'journal-management' && showFormOptions && (
               <JournalManagement actionSlot={journalActionsSlot} />
+            )}
+            {activeTab === 'publisher-management' && showFormOptions && (
+              <PublisherFormOptions actionSlot={journalActionsSlot} />
             )}
             {activeTab === 'project-management' && showFormOptions && (
               <ProjectFormOptions embedded />
