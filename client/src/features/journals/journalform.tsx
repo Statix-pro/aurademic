@@ -487,9 +487,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
   // Check if we're in view mode based on URL
   // An embedded form has no query string of its own, so the caller states the mode.
+  // A saved record with no `?mode=` (every notification links to a bare /journal/:id)
+  // opens in view, the same default `editMode` starts from. Reading it as edit here made
+  // the two effects that sync URL and editMode undo each other on every render, until
+  // React aborted with "Maximum update depth exceeded".
   const isViewMode = modeProp
     ? modeProp === 'view'
-    : !!(journalId && window.location.search.includes('mode=view'));
+    : !!(journalId && new URLSearchParams(window.location.search).get('mode') !== 'edit');
 
   // Parse category from URL path
   const pathname = window.location.pathname;
