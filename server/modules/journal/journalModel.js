@@ -957,6 +957,16 @@ j.*,
       journalResult.publication_details = safeParseJSON(journalResult.publication_details, null);
       journalResult.external_details = safeParseJSON(journalResult.external_details, []);
 
+      // The stored name is a snapshot; an admin may have corrected the master entry's
+      // spelling since, so a linked record shows the publisher's current name.
+      const publisherId = Number(journalResult.publication_details?.publisher_id);
+      if (publisherId) {
+        const publisher = await this.getPublisherById(publisherId);
+        if (publisher) {
+          journalResult.publication_details.publisher = publisher.name;
+        }
+      }
+
       return {
         ...journalResult,
         authors: authors,
@@ -965,6 +975,82 @@ j.*,
     } catch (error) {
       throw new Error(`Error retrieving journal details: ${error.message} `);
     }
+  },
+
+  // ==========================================================================
+  // Publishers (Conference, Book and Book Chapter records)
+  // ==========================================================================
+
+  /**
+   * The publication form's picker: approved publishers, plus the requester's own pending
+   * ones so a publisher they just added is usable before an admin gets to it.
+   */
+  async searchPublishers(query, userId, limit = 25) {
+    const filters = ["(status = 'approved' OR (status = 'pending' AND requested_by = ?))"];
+    const params = [userId];
+
+    if (query) {
+      filters.push('name LIKE ?');
+      params.push(`%${query}%`);
+    }
+
+    const [rows] = await db.query(
+      `SELECT id, name, status
+         FROM publishers
+        WHERE ${filters.join(' AND ')}
+        ORDER BY name
+        LIMIT ?`,
+      [...params, limit],
+    );
+    return rows;
+  },
+
+  /**
+   * Add Publisher. A name that already exists (in any spelling the collation folds
+   * together) returns that row instead of failing, so two people adding the same
+   * house end up on one entry. A rejected name is refused: an admin has already said
+   * it should not be used.
+   */
+  async requestPublisher(name, userId) {
+    const [existing] = await db.query('SELECT id, name, status FROM publishers WHERE name = ?', [
+      name,
+    ]);
+
+    if (existing[0]) {
+      if (existing[0].status === 'rejected') {
+        const error = new Error(
+          `"${existing[0].name}" was rejected by an administrator. Please pick another publisher.`,
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+      return { publisher: existing[0], created: false };
+    }
+
+    try {
+      const [result] = await db.query(
+        "INSERT INTO publishers (name, status, requested_by) VALUES (?, 'pending', ?)",
+        [name, userId],
+      );
+      return {
+        publisher: { id: result.insertId, name, status: 'pending' },
+        created: true,
+      };
+    } catch (error) {
+      // Lost a race with someone adding the same name: hand back their row.
+      if (error.code === 'ER_DUP_ENTRY') {
+        const [rows] = await db.query('SELECT id, name, status FROM publishers WHERE name = ?', [
+          name,
+        ]);
+        if (rows[0]) return { publisher: rows[0], created: false };
+      }
+      throw error;
+    }
+  },
+
+  async getPublisherById(id) {
+    const [rows] = await db.query('SELECT id, name, status FROM publishers WHERE id = ?', [id]);
+    return rows[0] || null;
   },
 
   // Journal Request methods

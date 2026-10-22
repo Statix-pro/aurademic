@@ -443,6 +443,20 @@ export const NOTIFICATION_TYPES = Object.freeze({
     link: () => '/admin/journals',
   },
 
+  // The requester can use the publisher at once, so this asks for a review rather than
+  // unblocking anyone; it is what tells an admin there is something under Publishers.
+  'journal.publisher_requested': {
+    recipients: REVIEWERS,
+    category: 'publications',
+    label: 'New publisher added',
+    description: 'Someone added a publisher to the master list from the publication form.',
+    severity: 'info',
+    defaultChannels: IN_APP_ONLY,
+    title: (d) => `Publisher "${asText(d.name, 'Untitled')}" awaits review`,
+    body: (d) => `Added by ${asText(d.applicantName, 'a user')}.`,
+    link: () => '/admin/journals',
+  },
+
   'journal.request_approved': {
     recipients: ANYONE,
     category: 'publications',

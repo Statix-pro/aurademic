@@ -1,4 +1,5 @@
 import formOptionsModel from './formOptionsModel.js';
+import { PUBLISHER_STATUSES, assertValidPublisherName } from '../shared/publishers.js';
 
 /**
  * A model error that carries a statusCode is a rejected request (a website that
@@ -7,6 +8,15 @@ import formOptionsModel from './formOptionsModel.js';
  */
 const respondWithError = (res, error) =>
   res.status(error.statusCode ?? 500).json({ status: 'error', message: error.message });
+
+/** The publisher routes answer in the `{ success, data?, message? }` envelope. */
+const respondWithPublisherError = (res, error, fallbackMessage) => {
+  if (error.statusCode) {
+    return res.status(error.statusCode).json({ success: false, message: error.message });
+  }
+  console.error(fallbackMessage, error);
+  return res.status(500).json({ success: false, message: fallbackMessage });
+};
 
 const formOptionsController = {
   async getAllOptions(req, res) {
@@ -82,6 +92,67 @@ const formOptionsController = {
         status: 'error',
         message: error.message,
       });
+    }
+  },
+
+  // ==========================================================================
+  // Publishers
+  // ==========================================================================
+
+  async getPublishers(req, res) {
+    try {
+      const publishers = await formOptionsModel.getPublishers();
+      return res.json({ success: true, data: publishers });
+    } catch (error) {
+      console.error('Error in getPublishers:', error);
+      return res.status(500).json({ success: false, message: 'Failed to load publishers.' });
+    }
+  },
+
+  async addPublisher(req, res) {
+    try {
+      const name = assertValidPublisherName(req.body?.name);
+      const publisher = await formOptionsModel.addPublisher(name, req.user.id);
+      return res.status(201).json({ success: true, data: publisher });
+    } catch (error) {
+      return respondWithPublisherError(res, error, 'Failed to add publisher.');
+    }
+  },
+
+  async updatePublisher(req, res) {
+    try {
+      const name = assertValidPublisherName(req.body?.name);
+      const status = String(req.body?.status ?? '');
+      if (!PUBLISHER_STATUSES.includes(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Status must be one of: ${PUBLISHER_STATUSES.join(', ')}.`,
+        });
+      }
+
+      const updated = await formOptionsModel.updatePublisher(
+        req.params.id,
+        { name, status },
+        req.user.id,
+      );
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Publisher not found' });
+      }
+      return res.json({ success: true, message: 'Publisher updated successfully' });
+    } catch (error) {
+      return respondWithPublisherError(res, error, 'Failed to update publisher.');
+    }
+  },
+
+  async deletePublisher(req, res) {
+    try {
+      const deleted = await formOptionsModel.deletePublisher(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ success: false, message: 'Publisher not found' });
+      }
+      return res.json({ success: true, message: 'Publisher deleted successfully' });
+    } catch (error) {
+      return respondWithPublisherError(res, error, 'Failed to delete publisher.');
     }
   },
 

@@ -22,6 +22,12 @@ router.post('/journals', canEditFormOptions, formOptionsController.addOption);
 router.put('/journals/:id', canEditFormOptions, formOptionsController.updateOption);
 router.delete('/journals/:id', canEditFormOptions, formOptionsController.deleteOption);
 
+// Publisher master: review what users added from the publication form, and curate it
+router.get('/publishers', canReadFormOptions, formOptionsController.getPublishers);
+router.post('/publishers', canEditFormOptions, formOptionsController.addPublisher);
+router.put('/publishers/:id', canEditFormOptions, formOptionsController.updatePublisher);
+router.delete('/publishers/:id', canEditFormOptions, formOptionsController.deletePublisher);
+
 // Project organization routes (funding agencies, collaborating institutes)
 router.get(
   '/project-options/organizations',

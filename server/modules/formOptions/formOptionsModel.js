@@ -120,6 +120,106 @@ const formOptionsModel = {
   },
 
   // ==========================================================================
+  // Publishers (Conference, Book and Book Chapter records)
+  // ==========================================================================
+
+  /** Pending first, since those are the ones waiting on an admin. */
+  async getPublishers() {
+    try {
+      const [rows] = await db.query(
+        `SELECT p.id, p.name, p.status, p.requested_by, p.reviewed_at, p.created_at,
+                requester.name AS requested_by_name,
+                (SELECT COUNT(*) FROM journals j
+                  WHERE JSON_EXTRACT(j.publication_details, '$.publisher_id') = p.id) AS usage_count
+           FROM publishers p
+           LEFT JOIN users requester ON requester.id = p.requested_by
+          ORDER BY p.status = 'pending' DESC, p.name`,
+      );
+      return rows;
+    } catch (error) {
+      throw new Error(`Error getting publishers: ${error.message}`);
+    }
+  },
+
+  /** An admin's own add is approved on the spot; there is nobody else to review it. */
+  async addPublisher(name, reviewerId) {
+    try {
+      const [result] = await db.query(
+        `INSERT INTO publishers (name, status, reviewed_by, reviewed_at)
+         VALUES (?, 'approved', ?, CURRENT_TIMESTAMP)`,
+        [name, reviewerId],
+      );
+      return { id: result.insertId, name, status: 'approved' };
+    } catch (error) {
+      if (error.code === 'ER_DUP_ENTRY') {
+        const duplicate = new Error(`A publisher named "${name}" already exists.`);
+        duplicate.statusCode = 409;
+        throw duplicate;
+      }
+      throw new Error(`Error adding publisher: ${error.message}`);
+    }
+  },
+
+  /**
+   * Renames and/or approves/rejects. A status change records who reviewed it and when;
+   * a rename alone leaves the review stamp as it was.
+   */
+  async updatePublisher(id, { name, status }, reviewerId) {
+    try {
+      // MySQL applies SET assignments left to right, so the review stamps must come
+      // before `status = ?` to compare against the status the row had.
+      const [result] = await db.query(
+        `UPDATE publishers
+            SET reviewed_by = IF(status <> ?, ?, reviewed_by),
+                reviewed_at = IF(status <> ?, CURRENT_TIMESTAMP, reviewed_at),
+                name = ?,
+                status = ?
+          WHERE id = ?`,
+        [status, reviewerId, status, name, status, id],
+      );
+      return result.affectedRows > 0;
+    } catch (error) {
+      if (error.code === 'ER_DUP_ENTRY') {
+        const duplicate = new Error(`A publisher named "${name}" already exists.`);
+        duplicate.statusCode = 409;
+        throw duplicate;
+      }
+      throw new Error(`Error updating publisher: ${error.message}`);
+    }
+  },
+
+  /**
+   * Refuses once a publication links to the publisher: the record would be left holding
+   * an id that resolves to nothing. Rejecting hides it from the picker instead.
+   */
+  async deletePublisher(id) {
+    try {
+      // publisher_id is a JSON number, and MySQL compares a JSON number with a string
+      // as unequal — the route's '5' would count no references and delete a publisher
+      // that records still point at. Bind it as a number.
+      const [[usage]] = await db.query(
+        `SELECT COUNT(*) AS references_count FROM journals
+          WHERE JSON_EXTRACT(publication_details, '$.publisher_id') = ?`,
+        [Number(id)],
+      );
+
+      if (Number(usage.references_count) > 0) {
+        const error = new Error(
+          `This publisher is used by ${usage.references_count} publication(s), so it cannot be deleted. Reject it to hide it from the picker instead.`,
+        );
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const [result] = await db.query('DELETE FROM publishers WHERE id = ?', [id]);
+      return result.affectedRows > 0;
+    } catch (error) {
+      if (error.statusCode) throw error;
+      throw new Error(`Error deleting publisher: ${error.message}`);
+    }
+  },
+
+  // ==========================================================================
   // Project organizations (funding agencies, collaborating institutes)
   // ==========================================================================
 

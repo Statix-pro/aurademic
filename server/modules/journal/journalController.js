@@ -4,6 +4,7 @@ import path from 'path';
 import journalModel from './journalModel.js';
 import { reviewerAudience, userAudience } from '../notification/audiences.js';
 import notificationService from '../notification/notificationService.js';
+import { assertValidPublisherName, normalizePublisherName } from '../shared/publishers.js';
 
 /**
  * Multer writes uploads into uploads/temp under a sanitized name, but `req.file.path`
@@ -87,6 +88,36 @@ const journalEditIsFrozen = (req, workflowAccess) => {
   return !canDirectEdit;
 };
 
+/**
+ * A Conference, Book or Book Chapter picked from the publisher master sends the row's id
+ * in publication_details. The name stored beside it is taken from the master, never from
+ * the request, so a record cannot carry an id that says one publisher and a name that
+ * says another. Records without an id (filed before the master existed) pass through.
+ *
+ * Returns an error message for an id that does not exist, otherwise null.
+ */
+const applyLinkedPublisher = async (journalData) => {
+  const details = journalData.publication_details;
+  if (!details || typeof details !== 'object' || details.publisher_id == null) {
+    return null;
+  }
+
+  const publisherId = Number(details.publisher_id);
+  const publisher = Number.isInteger(publisherId)
+    ? await journalModel.getPublisherById(publisherId)
+    : null;
+  if (!publisher) {
+    return 'The selected publisher no longer exists. Please pick it again.';
+  }
+
+  journalData.publication_details = {
+    ...details,
+    publisher_id: publisher.id,
+    publisher: publisher.name,
+  };
+  return null;
+};
+
 const FROZEN_EDIT_RESPONSE = {
   status: 'error',
   message: 'Direct edit is disabled for approved publications. Please request edit access.',
@@ -147,6 +178,11 @@ const journalController = {
 
       // For non-Journal types, make these fields optional instead of required
       // (they can still be provided but won't cause validation errors if missing)
+
+      const publisherError = await applyLinkedPublisher(journalData);
+      if (publisherError) {
+        return res.status(400).json({ status: 'error', message: publisherError });
+      }
 
       // Create the journal entry, recording who filed it so they keep access to it
       // even when the paper credits other people.
@@ -278,6 +314,11 @@ const journalController = {
           status: 'error',
           message: 'Quartile is required for Journal articles',
         });
+      }
+
+      const publisherError = await applyLinkedPublisher(journalData);
+      if (publisherError) {
+        return res.status(400).json({ status: 'error', message: publisherError });
       }
 
       // Define the fields that exist in the "journals" table only.
@@ -770,6 +811,54 @@ const journalController = {
         status: 'error',
         message: error.message,
       });
+    }
+  },
+
+  /** GET /publishers?query= — the publication form's publisher picker. */
+  async searchPublishers(req, res) {
+    try {
+      const publishers = await journalModel.searchPublishers(
+        normalizePublisherName(req.query.query),
+        req.user.id,
+      );
+      res.json({ success: true, data: publishers });
+    } catch (error) {
+      console.error('Error searching publishers:', error);
+      res.status(500).json({ success: false, message: 'Failed to search publishers.' });
+    }
+  },
+
+  /** POST /publishers — Add Publisher from the publication form. */
+  async requestPublisher(req, res) {
+    try {
+      const name = assertValidPublisherName(req.body?.name);
+      const { publisher, created } = await journalModel.requestPublisher(name, req.user.id);
+
+      // Only a new row needs a review; picking an existing name adds nothing to check.
+      if (created) {
+        await notificationService.emit({
+          type: 'journal.publisher_requested',
+          actorUserId: req.user.id,
+          subject: { moduleKey: 'journal', recordId: publisher.id, name: publisher.name },
+          audience: [reviewerAudience()],
+          data: { applicantName: req.user?.name || null },
+          dedupeKey: `publisher:${publisher.id}:requested`,
+        });
+      }
+
+      res.status(created ? 201 : 200).json({
+        success: true,
+        data: publisher,
+        message: created
+          ? 'Publisher added. You can use it now; an administrator will review it.'
+          : 'This publisher already exists, so it has been selected.',
+      });
+    } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ success: false, message: error.message });
+      }
+      console.error('Error adding publisher:', error);
+      return res.status(500).json({ success: false, message: 'Failed to add publisher.' });
     }
   },
 
