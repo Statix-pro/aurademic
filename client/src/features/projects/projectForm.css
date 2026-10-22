@@ -278,7 +278,7 @@
 }
 
 .pf-input::placeholder {
-  color: #a9b3c4;
+  color: var(--placeholder-color);
 }
 
 .pf-input:focus {
@@ -558,7 +558,7 @@
 }
 
 .pf-combo__input::placeholder {
-  color: #a9b3c4;
+  color: var(--placeholder-color);
 }
 
 /* Sticky so a heading stays legible while its own options scroll under it, the
@@ -1058,7 +1058,7 @@
 }
 
 .pf-tags__input::placeholder {
-  color: #a9b3c4;
+  color: var(--placeholder-color);
 }
 
 /* Centred on the control's own height, not on `.pf-tags`: the wrapper also

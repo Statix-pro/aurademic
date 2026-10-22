@@ -383,6 +383,26 @@
   cursor: not-allowed;
 }
 
+/* Help text inside fields. Inputs are 16px, so their hints inherited a size larger than
+   the 14px labels around them and read as content. Hints match the labels instead; the
+   grey comes from --placeholder-color (shared/styles/index.css). */
+.journal-form-body input::placeholder,
+.journal-form-body textarea::placeholder,
+.journal-form-body .react-select__placeholder {
+  font-size: 14px;
+}
+
+/* A select with nothing picked shows its first option ("Department") as a hint, styled
+   like the input hints beside it; the options in the open list read as normal text. */
+.journal-form-body select.journal-select-empty {
+  color: var(--placeholder-color);
+  font-size: 14px;
+}
+
+.journal-form-body select.journal-select-empty option {
+  color: #212529;
+}
+
 /* Card section title with hairline divider (matches mockup card headers) */
 .section-title-divider {
   padding-bottom: 0.5rem;
@@ -1498,12 +1518,6 @@ input[type='checkbox'],
   width: 100% !important;
 }
 
-/* DOI Input - Lighter placeholder text */
-#doiInput::placeholder {
-  color: #999 !important;
-  opacity: 0.4 !important;
-}
-
 /* Delete File Button */
 .btn-delete-file {
   background-color: #f8d7da;
@@ -1619,6 +1633,12 @@ input[type='checkbox'],
   border-radius: 8px;
   padding: 16px;
   border: 1px solid #dce4f0;
+}
+
+/* Credits to (left) and Published Article (right) close the two Publication Details
+   columns and sit level with each other; one height keeps their tops level too. */
+.pub-bottom-box {
+  min-height: 80px;
 }
 
 .border-dashed-blue {
@@ -1761,4 +1781,48 @@ input[type='checkbox'],
    #0069ab — bring the form's inline labels back onto the palette. */
 .journal-form-body .text-primary {
   color: #0069ab !important;
+}
+
+/* Status updates: a floating bell (the budget page's guidelines trigger, in this
+   form's palette) that opens the updates in a panel over the form. */
+.journal-updates-trigger {
+  position: fixed;
+  top: 85px;
+  right: 40px;
+  padding: 10px;
+  z-index: 900;
+}
+
+.journal-updates-button {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  color: #0069ab;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.journal-updates-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+}
+
+/* The updates modal's body takes the form page's tint, so its white cards read as they
+   do on the page; `.journal-form-body` inside it carries the form styles over. */
+.journal-updates-modal .modal-body {
+  background: #f5f8fd;
+}
+
+/* This file and forms.css cap every .modal-dialog at 500px for the compact alerts;
+   the updates form and history table need the width the old panel had. */
+.journal-updates-modal .modal-dialog {
+  max-width: min(960px, calc(100% - 32px));
 }
