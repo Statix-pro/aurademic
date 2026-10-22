@@ -5,6 +5,7 @@ import { useParams } from 'react-router-dom';
 import { AddPublisherModal, PublisherSelect } from './PublisherPicker';
 import { useAuth } from '../../contexts/AuthContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import CustomModal from '../../shared/components/ui/CustomModal';
 import CustomTagInput from '../../shared/components/ui/CustomTagInput';
 import ViewModeBanner from '../../shared/components/ui/ViewModeBanner';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
@@ -25,7 +26,6 @@ import {
   ExternalLink,
   Info,
   Bell,
-  XCircle,
   Pencil,
 } from 'lucide-react';
 
@@ -155,18 +155,6 @@ const normalizeApprovalStatus = (value: string | null | undefined): ApprovalWork
   return 'pending';
 };
 
-const debounce = <T extends (...args: any[]) => any>(func: T, wait: number = 300): T => {
-  let timeout: ReturnType<typeof setTimeout>;
-  return ((...args: any[]) => {
-    const later = () => {
-      clearTimeout(timeout);
-      func(...args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  }) as T;
-};
-
 const dedupeTagsCaseInsensitive = (values: string[] = []): string[] => {
   const seen = new Set<string>();
   const deduped: string[] = [];
@@ -285,6 +273,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // Numbers each journal search so only the latest one may open the list: an older answer
   // arriving late, or one still in flight when a journal is picked, is dropped.
   const journalSearchSeqRef = useRef<number>(0);
+  const journalSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null); // Debounce
   const activeAuthorSearchIndexRef = useRef<number | null>(null); // Row whose search input currently has focus
   const authorSearchTokenRef = useRef<number[]>([]); // Latest request token per row, to drop stale responses
   const authorSearchTimerRef = useRef<Array<ReturnType<typeof setTimeout> | null>>([]); // Per-row debounce timers
@@ -448,24 +437,37 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // Active departments for a student author's Department dropdown. A student is not in
   // the employee master, so the row stores the department by name.
   const [departments, setDepartments] = useState<{ id: number; name: string }[]>([]);
+  // A failed load says so in the dropdown and retries when it is next focused: with no
+  // options a student row cannot be completed, and validation would block the save.
+  const [departmentsLoadFailed, setDepartmentsLoadFailed] = useState(false);
+  const departmentsLoadingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  const loadDepartments = useCallback(async () => {
+    if (departmentsLoadingRef.current) return;
+    departmentsLoadingRef.current = true;
+    try {
+      const response = (await authenticityUtility.get('/journal-departments')) as {
+        data?: { id: number; name: string }[];
+      };
+      if (!isMountedRef.current) return;
+      setDepartments(Array.isArray(response?.data) ? response.data : []);
+      setDepartmentsLoadFailed(false);
+    } catch (loadError) {
+      console.error('Error loading departments:', loadError);
+      if (isMountedRef.current) setDepartmentsLoadFailed(true);
+    } finally {
+      departmentsLoadingRef.current = false;
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const response = (await authenticityUtility.get('/journal-departments')) as {
-          data?: { id: number; name: string }[];
-        };
-        if (!cancelled) setDepartments(Array.isArray(response?.data) ? response.data : []);
-      } catch (loadError) {
-        // The dropdown is left with only its saved value rather than failing the form.
-        console.error('Error loading departments:', loadError);
-      }
-    })();
+    isMountedRef.current = true;
+    loadDepartments();
     return () => {
-      cancelled = true;
+      isMountedRef.current = false;
     };
-  }, []);
+  }, [loadDepartments]);
   // Whether an index is picked, ignoring case: the Scopus, WoS and PubMed ID fields are
   // shown only for the indexes the publication is in. SCIE is part of Web of Science,
   // so it is what makes a WoS ID apply.
@@ -710,16 +712,6 @@ const JournalForm: React.FC<JournalFormProps> = ({
       fetchStatusUpdates();
     }
   }, [showUpdates, journalId]);
-
-  // Escape closes the updates panel, as it does the budget guidelines panel.
-  useEffect(() => {
-    if (!showUpdates) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setShowUpdates(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [showUpdates]);
 
   const searchJournals = async (journalSearchQuery?: string) => {
     // Allow empty query to show default list on focus
@@ -1497,16 +1489,21 @@ const JournalForm: React.FC<JournalFormProps> = ({
     }
   };
 
-  const debouncedSearch = debounce((query: string) => {
-    searchJournals(query);
-  }, 300);
-
   const handleJournalSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const query = event.target.value;
     setJournalSearchQuery(query);
 
+    // Every edit, clearing included, cancels the pending search and invalidates one in
+    // flight, so an answer for text no longer in the box cannot reopen the list.
+    if (journalSearchTimerRef.current) clearTimeout(journalSearchTimerRef.current);
+    journalSearchTimerRef.current = null;
+    journalSearchSeqRef.current += 1;
+
     if (query.trim().length >= 2) {
-      debouncedSearch(query);
+      journalSearchTimerRef.current = setTimeout(() => {
+        journalSearchTimerRef.current = null;
+        searchJournals(query);
+      }, 300);
     } else {
       setJournalSearchResults([]);
       setShowJournalSuggestions(false);
@@ -1941,10 +1938,17 @@ const JournalForm: React.FC<JournalFormProps> = ({
               onChange={(e) =>
                 handleManualAuthorChange(index, e.target.name as keyof Author, e.target.value)
               }
+              onFocus={() => {
+                if (departmentsLoadFailed) loadDepartments();
+              }}
               disabled={!editMode && isViewMode}
               aria-label="Department"
+              aria-invalid={departmentsLoadFailed || undefined}
+              title={departmentsLoadFailed ? 'Departments could not be loaded' : undefined}
             >
-              <option value="">Department</option>
+              <option value="">
+                {departmentsLoadFailed ? 'Could not load — reopen to retry' : 'Department'}
+              </option>
               {author.department &&
                 !departments.some((department) => department.name === author.department) && (
                   <option value={author.department}>{author.department}</option>
@@ -4388,148 +4392,136 @@ const JournalForm: React.FC<JournalFormProps> = ({
             </div>
           </form>
 
-          {/* The updates panel, opened from the bell. Rendered into document.body: it
-              holds a <form> of its own, which may not sit inside the publication form,
-              and the publication form stays mounted behind it, so switching to updates
-              no longer unmounts — and loses — the values typed into the form. */}
-          {showUpdates &&
-            journalId &&
-            createPortal(
-              <div className="journal-updates-overlay" onClick={() => setShowUpdates(false)}>
-                <div
-                  className="journal-updates-panel journal-form-body"
-                  role="dialog"
-                  aria-modal="true"
-                  aria-label="Status updates"
-                  onClick={(event) => event.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    className="journal-updates-close"
-                    aria-label="Close status updates"
-                    onClick={() => setShowUpdates(false)}
-                  >
-                    <XCircle size={20} />
-                  </button>
-                  {!journalId ? (
-                    <div className="form-card">
-                      <div className="empty-state">
-                        <h5>No Journal Found</h5>
-                        <p>Please create a journal entry first to track status updates</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Status Update Form */}
-                      <div className="form-card">
-                        <h6 className="form-section-title mb-3">Add Status Update</h6>
-                        <form onSubmit={handleStatusUpdateSubmit} className="status-update-form">
-                          <div className="row">
-                            <div className="col-md-4">
-                              <label className="form-label">Status</label>
-                              <select
-                                className="form-control"
-                                value={newStatusUpdate.status}
-                                onChange={(e) =>
-                                  setNewStatusUpdate((prev) => ({
-                                    ...prev,
-                                    status: e.target.value,
-                                  }))
-                                }
-                                required
-                              >
-                                <option value="">Select Status</option>
-                                <option value="submitted">Submitted</option>
-                                <option value="under_review">Under Review</option>
-                                <option value="revision_requested">Revision Requested</option>
-                                <option value="revision_submitted">Revision Submitted</option>
-                                <option value="accepted">Accepted</option>
-                                <option value="rejected">Rejected</option>
-                                <option value="published">Published</option>
-                              </select>
-                            </div>
-                            <div className="col-md-6">
-                              <label className="form-label">Your Comment</label>
-                              <input
-                                type="text"
-                                className="form-control"
-                                placeholder="Add your comment (optional)"
-                                value={newStatusUpdate.userComment}
-                                onChange={(e) =>
-                                  setNewStatusUpdate((prev) => ({
-                                    ...prev,
-                                    userComment: e.target.value,
-                                  }))
-                                }
-                              />
-                            </div>
-                            <div className="col-md-2 d-flex align-items-end">
-                              <button
-                                type="submit"
-                                className="btn btn-primary w-100"
-                                disabled={loadingStatusUpdate}
-                              >
-                                {loadingStatusUpdate ? 'Adding...' : 'Add Update'}
-                              </button>
-                            </div>
-                          </div>
-                        </form>
-                      </div>
-
-                      {/* Status Updates Table */}
-                      <div className="form-card">
-                        <h6 className="form-section-title mb-3">Status History</h6>
-                        {statusUpdates.length === 0 ? (
-                          <div className="empty-state">
-                            <p>No status updates yet</p>
-                          </div>
-                        ) : (
-                          <div className="table-responsive">
-                            <table className="table table-striped">
-                              <thead>
-                                <tr>
-                                  <th>S.No.</th>
-                                  <th>Date</th>
-                                  <th>Status</th>
-                                  <th>User Comment</th>
-                                  <th>Admin Reply</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {statusUpdates.map((update, index) => (
-                                  <tr key={update.id}>
-                                    <td>{index + 1}</td>
-                                    <td>{new Date(update.created_at).toLocaleDateString()}</td>
-                                    <td>
-                                      <span
-                                        className={`badge ${
-                                          update.status === 'accepted'
-                                            ? 'bg-success'
-                                            : update.status === 'rejected'
-                                              ? 'bg-danger'
-                                              : update.status === 'published'
-                                                ? 'bg-primary'
-                                                : 'bg-warning'
-                                        }`}
-                                      >
-                                        {update.status.replace('_', ' ').toUpperCase()}
-                                      </span>
-                                    </td>
-                                    <td>{update.user_comment || '-'}</td>
-                                    <td>{update.admin_reply || '-'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  )}
+          {/* The updates panel, opened from the bell. The modal renders into document.body
+              — it holds a <form> of its own, which may not sit inside the publication
+              form — keeps focus inside itself, and hands it back to the bell on close.
+              The publication form stays mounted behind it, so switching to updates no
+              longer unmounts, and loses, the values typed into the form. */}
+          <CustomModal
+            show={showUpdates && !!journalId}
+            onHide={() => setShowUpdates(false)}
+            title="Status Updates"
+            size="xl"
+            className="journal-updates-modal"
+          >
+            <div className="journal-form-body">
+              {!journalId ? (
+                <div className="form-card">
+                  <div className="empty-state">
+                    <h5>No Journal Found</h5>
+                    <p>Please create a journal entry first to track status updates</p>
+                  </div>
                 </div>
-              </div>,
-              document.body,
-            )}
+              ) : (
+                <>
+                  {/* Status Update Form */}
+                  <div className="form-card">
+                    <h6 className="form-section-title mb-3">Add Status Update</h6>
+                    <form onSubmit={handleStatusUpdateSubmit} className="status-update-form">
+                      <div className="row">
+                        <div className="col-md-4">
+                          <label className="form-label">Status</label>
+                          <select
+                            className="form-control"
+                            value={newStatusUpdate.status}
+                            onChange={(e) =>
+                              setNewStatusUpdate((prev) => ({
+                                ...prev,
+                                status: e.target.value,
+                              }))
+                            }
+                            required
+                          >
+                            <option value="">Select Status</option>
+                            <option value="submitted">Submitted</option>
+                            <option value="under_review">Under Review</option>
+                            <option value="revision_requested">Revision Requested</option>
+                            <option value="revision_submitted">Revision Submitted</option>
+                            <option value="accepted">Accepted</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="published">Published</option>
+                          </select>
+                        </div>
+                        <div className="col-md-6">
+                          <label className="form-label">Your Comment</label>
+                          <input
+                            type="text"
+                            className="form-control"
+                            placeholder="Add your comment (optional)"
+                            value={newStatusUpdate.userComment}
+                            onChange={(e) =>
+                              setNewStatusUpdate((prev) => ({
+                                ...prev,
+                                userComment: e.target.value,
+                              }))
+                            }
+                          />
+                        </div>
+                        <div className="col-md-2 d-flex align-items-end">
+                          <button
+                            type="submit"
+                            className="btn btn-primary w-100"
+                            disabled={loadingStatusUpdate}
+                          >
+                            {loadingStatusUpdate ? 'Adding...' : 'Add Update'}
+                          </button>
+                        </div>
+                      </div>
+                    </form>
+                  </div>
+
+                  {/* Status Updates Table */}
+                  <div className="form-card">
+                    <h6 className="form-section-title mb-3">Status History</h6>
+                    {statusUpdates.length === 0 ? (
+                      <div className="empty-state">
+                        <p>No status updates yet</p>
+                      </div>
+                    ) : (
+                      <div className="table-responsive">
+                        <table className="table table-striped">
+                          <thead>
+                            <tr>
+                              <th>S.No.</th>
+                              <th>Date</th>
+                              <th>Status</th>
+                              <th>User Comment</th>
+                              <th>Admin Reply</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {statusUpdates.map((update, index) => (
+                              <tr key={update.id}>
+                                <td>{index + 1}</td>
+                                <td>{new Date(update.created_at).toLocaleDateString()}</td>
+                                <td>
+                                  <span
+                                    className={`badge ${
+                                      update.status === 'accepted'
+                                        ? 'bg-success'
+                                        : update.status === 'rejected'
+                                          ? 'bg-danger'
+                                          : update.status === 'published'
+                                            ? 'bg-primary'
+                                            : 'bg-warning'
+                                    }`}
+                                  >
+                                    {update.status.replace('_', ' ').toUpperCase()}
+                                  </span>
+                                </td>
+                                <td>{update.user_comment || '-'}</td>
+                                <td>{update.admin_reply || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          </CustomModal>
         </div>
 
         <AlertModal
