@@ -392,15 +392,27 @@
   font-size: 14px;
 }
 
-/* A select with nothing picked shows its first option ("Department") as a hint, styled
-   like the input hints beside it; the options in the open list read as normal text. */
-.journal-form-body select.journal-select-empty {
-  color: var(--placeholder-color);
+/* The same 14px for the other two kinds of hint here: a select showing its empty first
+   option (greyed portal-wide in shared/styles/index.css), and a date input's dd-mm-yyyy,
+   which the browser draws and CSS cannot tell from a date — the form marks empty ones
+   with data-empty (see journalform.tsx). On a disabled date, as for other hints, none. */
+.journal-form-body select:has(option[value='']:checked) {
   font-size: 14px;
 }
 
-.journal-form-body select.journal-select-empty option {
-  color: #212529;
+.journal-form-body select:has(option[value='']:checked) option {
+  font-size: 16px;
+}
+
+.journal-form-body input[type='date'][data-empty='true'] {
+  font-size: 14px;
+  color: var(--placeholder-color);
+  -webkit-text-fill-color: var(--placeholder-color);
+}
+
+.journal-form-body input[type='date'][data-empty='true']:disabled {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
 }
 
 /* Card section title with hairline divider (matches mockup card headers) */

@@ -603,6 +603,22 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // on a tab of their own — the form stays in place behind them.
   const [showUpdates, setShowUpdates] = useState(false);
 
+  // An empty date input shows the browser's dd-mm-yyyy, which CSS cannot tell apart from a
+  // date, so empty ones are marked for journalform.css to grey like the hints beside them.
+  // The dates are uncontrolled — loading a record writes them straight into the DOM — so
+  // they are re-marked after every render as well as on every edit.
+  const publicationFormRef = useRef<HTMLFormElement>(null);
+  const markDateEmptiness = (target: EventTarget | null) => {
+    if (target instanceof HTMLInputElement && target.type === 'date') {
+      target.dataset.empty = String(!target.value);
+    }
+  };
+  useEffect(() => {
+    publicationFormRef.current
+      ?.querySelectorAll<HTMLInputElement>('input[type="date"]')
+      .forEach(markDateEmptiness);
+  });
+
   // Add new state for status tracking
   const [statusUpdates, setStatusUpdates] = useState<StatusUpdate[]>([]);
   const [newStatusUpdate, setNewStatusUpdate] = useState<NewStatusUpdate>({
@@ -1932,7 +1948,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                 in the employee master. A saved name that is no longer listed stays
                 selectable rather than rendering blank. */}
             <select
-              className={`form-control${author.department ? '' : ' journal-select-empty'}`}
+              className="form-control"
               name="department"
               value={author.department || ''}
               onChange={(e) =>
@@ -2983,7 +2999,13 @@ const JournalForm: React.FC<JournalFormProps> = ({
               native bubbles competed with that — and worse, a required control that had
               gone blank (a Type select whose option list no longer held the saved value,
               say) silently cancelled the submit with no message at all. */}
-          <form onSubmit={handleSubmit} noValidate>
+          <form
+            ref={publicationFormRef}
+            onSubmit={handleSubmit}
+            noValidate
+            onInput={(event) => markDateEmptiness(event.target)}
+            onChange={(event) => markDateEmptiness(event.target)}
+          >
             {/* Author Card */}
             {/* --- Merged and Refined Author Card (Final Version) --- */}
             <div className="form-card">

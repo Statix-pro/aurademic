@@ -147,3 +147,24 @@ textarea:disabled::placeholder {
 .select--is-disabled .select__placeholder {
   visibility: hidden;
 }
+
+/* And for native selects showing their empty first option ("Select Author", "Select
+   Article Type"): that option is the select's hint, so it reads like one. The open
+   list's options are real values and stay in body text. -webkit-text-fill-color as
+   for inputs above, so a read-only form's fill colour cannot paint the hint dark.
+   A select whose empty option is a real choice — a filter's "All Status", a "None" —
+   carries data-empty-is-value and keeps body text. */
+select:not([data-empty-is-value]):has(option[value='']:checked) {
+  color: var(--placeholder-color);
+  -webkit-text-fill-color: var(--placeholder-color);
+}
+
+select:not([data-empty-is-value]):has(option[value='']:checked) option {
+  color: var(--bs-body-color);
+  -webkit-text-fill-color: var(--bs-body-color);
+}
+
+select:disabled:not([data-empty-is-value]):has(option[value='']:checked) {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
