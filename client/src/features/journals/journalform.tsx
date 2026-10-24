@@ -11,7 +11,6 @@ import ViewModeBanner from '../../shared/components/ui/ViewModeBanner';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 import './journalform.css';
-import '../../shared/styles/forms.css';
 import '../../shared/components/ui/common.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';
@@ -2101,7 +2100,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       style={{
                         fontWeight: '600',
                         color: '#333',
-                        fontSize: '13px',
+                        fontSize: 'var(--font-size-body)',
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
@@ -2109,7 +2108,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
                     >
                       {result?.name || ''}
                     </div>
-                    <div style={{ fontSize: '11px', color: '#6c757d' }}>
+                    <div style={{ fontSize: 'var(--font-size-secondary)', color: '#6c757d' }}>
                       {result?.author_id || ''} | {result?.designation || 'Faculty'} |{' '}
                       {result?.department || ''}
                     </div>
@@ -4249,7 +4248,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
                               <Upload size={16} /> View
                             </a>
                           ) : (
-                            <span className="text-muted" style={{ fontSize: '13px' }}>
+                            <span
+                              className="text-muted"
+                              style={{ fontSize: 'var(--font-size-secondary)' }}
+                            >
                               No file
                             </span>
                           )

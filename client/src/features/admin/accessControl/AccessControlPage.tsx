@@ -244,7 +244,7 @@ const AccessControlPage: React.FC = () => {
             gap: '8px',
             color: 'var(--bs-primary)',
             fontWeight: 700,
-            fontSize: '11px',
+            fontSize: 'var(--font-size-tertiary)',
             textTransform: 'uppercase',
             letterSpacing: '0.5px',
           }}
@@ -927,7 +927,7 @@ const AccessControlPage: React.FC = () => {
               <div className="accordion-wrapper mt-3 bg-white border rounded shadow-sm">
                 <div
                   className="d-flex align-items-center text-muted fw-bold px-4 py-3 border-bottom bg-light bg-opacity-50"
-                  style={{ fontSize: '0.85rem' }}
+                  style={{ fontSize: 'var(--font-size-secondary)' }}
                 >
                   <div style={{ flex: '0 0 35%' }}>USER</div>
                   <div style={{ flex: '1' }}>ROLE SUMMARY</div>
@@ -1002,7 +1002,7 @@ const AccessControlPage: React.FC = () => {
                                     {r.type === 'context' && (r as any).entity_name && (
                                       <span
                                         className="ms-1 opacity-75"
-                                        style={{ fontSize: '0.9em' }}
+                                        style={{ fontSize: 'var(--font-size-tertiary)' }}
                                       >
                                         : {(r as any).entity_name}
                                       </span>
@@ -1095,7 +1095,7 @@ const AccessControlPage: React.FC = () => {
                                         menuPortal: (base) => ({ ...base, zIndex: 9999 }),
                                         control: (base) => ({
                                           ...base,
-                                          minHeight: '38px',
+                                          minHeight: 'var(--control-height)',
                                           borderRadius: '8px',
                                         }),
                                       }}
@@ -1130,7 +1130,7 @@ const AccessControlPage: React.FC = () => {
                                         menuPortal: (base) => ({ ...base, zIndex: 9999 }),
                                         control: (base) => ({
                                           ...base,
-                                          minHeight: '38px',
+                                          minHeight: 'var(--control-height)',
                                           borderRadius: '8px',
                                         }),
                                       }}
@@ -1144,14 +1144,18 @@ const AccessControlPage: React.FC = () => {
                                         <div
                                           key={`${accessUser.id}-${er.role_code}-${er.entity_id}-${idx}`}
                                           className="d-inline-flex align-items-center bg-light text-dark rounded-pill px-3 py-1 mb-1 border shadow-sm"
-                                          style={{ fontSize: '11px', fontWeight: 500 }}
+                                          style={{
+                                            fontSize: 'var(--font-size-tertiary)',
+                                            fontWeight: 500,
+                                          }}
                                         >
                                           <span
                                             className="fw-bold text-muted me-2"
                                             style={{
                                               textTransform: 'uppercase',
                                               letterSpacing: '0.5px',
-                                              fontSize: '10px',
+                                              fontWeight: 'var(--weight-bold)',
+                                              fontSize: 'var(--font-size-tertiary)',
                                             }}
                                           >
                                             {er.role_name}:
@@ -1238,8 +1242,8 @@ const AccessControlPage: React.FC = () => {
                           className="border rounded shadow-sm d-inline-block w-auto"
                           style={{
                             minWidth: '70px',
-                            padding: '0.25rem 2.25rem 0.25rem 0.75rem',
-                            fontSize: '0.85rem',
+                            padding: '0 2.25rem 0 0.75rem',
+                            fontSize: 'var(--font-size-body)',
                           }}
                           value={rowsPerPage}
                           onChange={(e) => {

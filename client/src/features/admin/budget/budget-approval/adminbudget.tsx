@@ -24,6 +24,7 @@ import ExportOptionsModal, {
   type ExportRunResult,
 } from '../../../../shared/components/export/ExportOptionsModal';
 import AlertModal, { type AlertType } from '../../../../shared/components/ui/AlertModal';
+import CustomModal from '../../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
 import {
   buildCsvFilename,
@@ -1793,7 +1794,7 @@ const AdminBudget: React.FC = () => {
                       hasPermission(user, 'budget.workflow.principal')) && (
                       <select
                         className="adminbudget-control"
-                        // The empty option ("All …") is a real filter choice, not a hint; see shared/styles/index.css.
+                        // The empty option ("All …") is a real filter choice, not a hint; see shared/styles/base.css.
                         data-empty-is-value
                         value={departmentFilter}
                         onChange={(e) => setDepartmentFilter(e.target.value)}
@@ -1988,7 +1989,7 @@ const AdminBudget: React.FC = () => {
                                           className="adminbudget-amount-label"
                                           style={{
                                             margin: 0,
-                                            fontSize: '0.78rem',
+                                            fontSize: 'var(--font-size-secondary)',
                                             fontWeight: 600,
                                             opacity: 0.75,
                                           }}
@@ -1997,7 +1998,7 @@ const AdminBudget: React.FC = () => {
                                         </p>
                                         <p
                                           className="adminbudget-amount"
-                                          style={{ margin: 0, fontSize: '1.1rem' }}
+                                          style={{ margin: 0, fontSize: 'var(--font-size-body)' }}
                                         >
                                           ₹ {displayAmountValue.toLocaleString('en-IN')}
                                         </p>
@@ -2265,7 +2266,9 @@ const AdminBudget: React.FC = () => {
               {actionType === 'return' ? 'Return Budget' : 'Reject Budget'} - Comments
             </h5>
 
-            <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+            <div
+              style={{ fontSize: 'var(--font-size-secondary)', color: '#666', marginBottom: 10 }}
+            >
               Budget ID: <b>{actionRef}</b>
             </div>
 
@@ -2293,7 +2296,9 @@ const AdminBudget: React.FC = () => {
                   border: '1px solid #ddd',
                   background: '#fff',
                   borderRadius: 10,
-                  padding: '8px 14px',
+                  height: 'var(--control-height)',
+                  minWidth: 'var(--button-min-width)',
+                  padding: '0 var(--button-padding-x)',
                   cursor: 'pointer',
                 }}
               >
@@ -2308,7 +2313,9 @@ const AdminBudget: React.FC = () => {
                   background: actionType === 'reject' ? '#dc3545' : '#f0ad4e',
                   color: '#fff',
                   borderRadius: 10,
-                  padding: '8px 14px',
+                  height: 'var(--control-height)',
+                  minWidth: 'var(--button-min-width)',
+                  padding: '0 var(--button-padding-x)',
                   cursor: 'pointer',
                 }}
               >
@@ -2383,7 +2390,7 @@ const AdminBudget: React.FC = () => {
               <Trash2 size={48} />
             </div>
             <h4 style={{ margin: '0 0 8px 0', color: '#333' }}>Confirm Deletion</h4>
-            <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: '14px' }}>
+            <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: 'var(--font-size-body)' }}>
               Are you sure you want to permanently delete budget request{' '}
               <strong>{deleteRef}</strong>? This action cannot be undone.
             </p>
@@ -2396,9 +2403,11 @@ const AdminBudget: React.FC = () => {
                   border: '1px solid #ddd',
                   background: '#fff',
                   borderRadius: 8,
-                  padding: '8px 24px',
+                  height: 'var(--control-height)',
+                  minWidth: 'var(--button-min-width)',
+                  padding: '0 var(--button-padding-x)',
                   cursor: 'pointer',
-                  fontWeight: 500,
+                  fontWeight: 600,
                 }}
               >
                 Cancel
@@ -2413,10 +2422,11 @@ const AdminBudget: React.FC = () => {
                   background: deleteCountdown > 0 ? '#e9ecef' : '#dc3545',
                   color: deleteCountdown > 0 ? '#6c757d' : '#fff',
                   borderRadius: 8,
-                  padding: '8px 24px',
+                  height: 'var(--control-height)',
+                  padding: '0 var(--button-padding-x)',
                   cursor: deleteCountdown > 0 ? 'not-allowed' : 'pointer',
-                  fontWeight: 500,
-                  minWidth: '120px',
+                  fontWeight: 600,
+                  minWidth: 'var(--button-min-width)',
                   transition: 'all 0.2s',
                 }}
               >
@@ -2427,139 +2437,107 @@ const AdminBudget: React.FC = () => {
         </div>
       )}
 
-      {logPopupOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 999999,
-            padding: 16,
-          }}
-          onClick={closeLogPopup}
-        >
-          <div
-            style={{
-              width: 'min(760px, 96vw)',
-              maxHeight: '80vh',
-              overflow: 'auto',
-              background: '#fff',
-              borderRadius: 12,
-              padding: 0,
-              boxShadow: '0 10px 35px rgba(0,0,0,0.25)',
-            }}
-            onClick={(e) => e.stopPropagation()}
+      <CustomModal
+        show={logPopupOpen}
+        onHide={closeLogPopup}
+        title="Submission Logs"
+        size="lg"
+        centered
+        scrollable
+        className="adminbudget-log-modal"
+        footer={
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            onClick={closeLogPopup}
           >
-            <div className="budgetdashboard-log-header">Submission Logs</div>
-            <div className="budgetdashboard-log-body adminbudget-log-body">
-              <div className="budgetdashboard-log-item">
-                <span className="log-label">Proposal:</span>
-                <span className="log-value">{logRef || '--'}</span>
-              </div>
-
-              {(logProposal?.updated_at || logProposal?.updatedAt) &&
-                (logProposal?.created_at || logProposal?.createdAt) &&
-                parseDateMsForLog(logProposal.updated_at || logProposal.updatedAt) >
-                  parseDateMsForLog(logProposal.created_at || logProposal.createdAt) && (
-                  <div className="budgetdashboard-log-item">
-                    <span className="log-label">Last Edited:</span>
-                    <span className="log-value">
-                      {formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}
-                    </span>
-                  </div>
-                )}
-
-              {logLoading && (
-                <div className="adminbudget-state" style={{ padding: '24px 0' }}>
-                  Loading logs...
-                </div>
-              )}
-              {!logLoading && buildAdminLogEvents.length === 0 && (
-                <div className="adminbudget-state" style={{ padding: '24px 0' }}>
-                  No logs available.
-                </div>
-              )}
-
-              {!logLoading && buildAdminLogEvents.length > 0 && (
-                <div className="budgetdashboard-log-approvals">
-                  {buildAdminLogEvents.map((event) => (
-                    <div
-                      key={event.key}
-                      className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
-                    >
-                      {event.actorBadgeLabel && (
-                        <span className="log-admin-mark" title="Updated by Admin">
-                          {`\u2605 ${event.actorBadgeLabel}`}
-                        </span>
-                      )}
-                      <div className="log-approval-meta">
-                        <span
-                          className={`log-decision log-decision--${event.decision || 'approved'}`}
-                        >
-                          {event.title.toUpperCase()}
-                        </span>
-                        <span className="log-role">
-                          {expandedLogDetails[event.key] && event.fullSubtitle
-                            ? event.fullSubtitle
-                            : event.subtitle || 'Status update'}
-                        </span>
-                        {event.fullSubtitle && event.fullSubtitle !== event.subtitle && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExpandedLogDetails((prev) => ({
-                                ...prev,
-                                [event.key]: !prev[event.key],
-                              }));
-                            }}
-                            style={{
-                              marginTop: '4px',
-                              alignSelf: 'flex-start',
-                              border: 'none',
-                              background: 'transparent',
-                              color: '#0d6efd',
-                              cursor: 'pointer',
-                              padding: 0,
-                              fontSize: '12px',
-                              fontWeight: 600,
-                            }}
-                          >
-                            {expandedLogDetails[event.key] ? 'Show less' : 'Show full changes'}
-                          </button>
-                        )}
-                        {event.actorLine && (
-                          <span className="log-actor-line">{event.actorLine}</span>
-                        )}
-                        <span className="log-date">{event.dateLabel}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 16px 16px' }}>
-              <button
-                type="button"
-                onClick={closeLogPopup}
-                style={{
-                  border: '1px solid #ddd',
-                  background: '#fff',
-                  borderRadius: 8,
-                  padding: '8px 20px',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                Close
-              </button>
-            </div>
+            Close
+          </button>
+        }
+      >
+        <div className="budgetdashboard-log-body adminbudget-log-body">
+          <div className="budgetdashboard-log-item">
+            <span className="log-label">Proposal:</span>
+            <span className="log-value">{logRef || '--'}</span>
           </div>
+
+          {(logProposal?.updated_at || logProposal?.updatedAt) &&
+            (logProposal?.created_at || logProposal?.createdAt) &&
+            parseDateMsForLog(logProposal.updated_at || logProposal.updatedAt) >
+              parseDateMsForLog(logProposal.created_at || logProposal.createdAt) && (
+              <div className="budgetdashboard-log-item">
+                <span className="log-label">Last Edited:</span>
+                <span className="log-value">
+                  {formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}
+                </span>
+              </div>
+            )}
+
+          {logLoading && (
+            <div className="adminbudget-state" style={{ padding: '24px 0' }}>
+              Loading logs...
+            </div>
+          )}
+          {!logLoading && buildAdminLogEvents.length === 0 && (
+            <div className="adminbudget-state" style={{ padding: '24px 0' }}>
+              No logs available.
+            </div>
+          )}
+
+          {!logLoading && buildAdminLogEvents.length > 0 && (
+            <div className="budgetdashboard-log-approvals">
+              {buildAdminLogEvents.map((event) => (
+                <div
+                  key={event.key}
+                  className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
+                >
+                  {event.actorBadgeLabel && (
+                    <span className="log-admin-mark" title="Updated by Admin">
+                      {`\u2605 ${event.actorBadgeLabel}`}
+                    </span>
+                  )}
+                  <div className="log-approval-meta">
+                    <span className={`log-decision log-decision--${event.decision || 'approved'}`}>
+                      {event.title.toUpperCase()}
+                    </span>
+                    <span className="log-role">
+                      {expandedLogDetails[event.key] && event.fullSubtitle
+                        ? event.fullSubtitle
+                        : event.subtitle || 'Status update'}
+                    </span>
+                    {event.fullSubtitle && event.fullSubtitle !== event.subtitle && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedLogDetails((prev) => ({
+                            ...prev,
+                            [event.key]: !prev[event.key],
+                          }));
+                        }}
+                        style={{
+                          marginTop: '4px',
+                          alignSelf: 'flex-start',
+                          border: 'none',
+                          background: 'transparent',
+                          color: '#0d6efd',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: 'var(--font-size-tertiary)',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {expandedLogDetails[event.key] ? 'Show less' : 'Show full changes'}
+                      </button>
+                    )}
+                    {event.actorLine && <span className="log-actor-line">{event.actorLine}</span>}
+                    <span className="log-date">{event.dateLabel}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </CustomModal>
     </>
   );
 };

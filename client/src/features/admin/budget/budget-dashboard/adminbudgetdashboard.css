@@ -2,7 +2,6 @@
   background: #f3f7fb;
   min-height: calc(100vh - 64px);
   padding: 24px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .adminbudgetdashboard-container {
@@ -31,13 +30,16 @@
   border: none;
   background-color: transparent;
   color: #5d6b8a;
-  padding: 6px 20px;
+  height: var(--chip-height);
+  padding: 0 20px;
   border-radius: 50px;
-  font-weight: 500;
+  font-weight: var(--weight-semibold);
   white-space: nowrap;
   transition: all 0.3s ease;
   flex: 0 0 auto;
-  font-size: 0.95rem;
+  /* As wide as its label: the shared toggle track sizes to its content. */
+  width: auto;
+  font-size: var(--font-size-secondary);
 }
 
 .adminbudgetdashboard-tab-toggle button.active {
@@ -75,22 +77,23 @@
 .adminbudgetdashboard-title {
   margin: 0;
   padding-left: 8px;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   color: #0a2540;
-  font-size: 1.4rem;
-  line-height: 1;
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
 }
 
 .adminbudgetdashboard-role-pill {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 14px;
+  height: var(--tag-height);
+  padding: 0 14px;
   border-radius: 999px;
   background: #0069ab;
   color: #fff;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   line-height: 1;
 }
 
@@ -120,11 +123,11 @@
 
 .adminbudgetdashboard-search {
   width: 100%;
-  height: 42px;
-  padding: 10px 12px;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
   border: 1px solid rgba(15, 23, 42, 0.18);
   border-radius: 12px;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   font-weight: 500;
   color: #0f172a;
   outline: none;
@@ -155,7 +158,7 @@
 .adminbudgetdashboard-state {
   text-align: center;
   padding: 60px 0;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   color: #6b7280;
 }
 
@@ -186,8 +189,8 @@
   color: #137a3a;
   padding: 14px 12px;
   text-align: left;
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-secondary);
   border-bottom: 2px solid #d7f1e3;
 }
 
@@ -195,7 +198,7 @@
   padding: 15px 12px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
-  font-size: 0.88rem;
+  font-size: var(--font-size-body);
   color: #1f2937;
 }
 
@@ -266,7 +269,7 @@
 
 .adminbudgetdashboard-total-row td {
   background: #f3f6f9 !important;
-  font-weight: 800 !important;
+  font-weight: var(--weight-bold) !important;
   border-top: 2px solid #d8dee5 !important;
   border-bottom: none !important;
 }
@@ -286,9 +289,9 @@
 .adminbudgetdashboard-detail-title {
   margin: 0;
   color: #0a2540;
-  font-size: 1.4rem;
-  font-weight: 500;
-  line-height: 1;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-section-title);
 }
 
 .adminbudgetdashboard-detail-header {
@@ -304,8 +307,9 @@
   max-width: 100%;
   border: 1px solid #d0d8e2;
   border-radius: 10px;
-  padding: 8px 10px;
-  font-size: 0.9rem;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
   color: #1f2937;
   background: #fff;
 }
@@ -335,15 +339,15 @@
   color: #a97900;
   padding: 14px 12px;
   text-align: left;
-  font-weight: 600;
-  font-size: 0.9rem;
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-secondary);
   border-bottom: 2px solid #f3e8a5;
 }
 
 .adminbudgetdashboard-detail-table td {
   padding: 14px 12px;
   border-bottom: 1px solid #f1f5f9;
-  font-size: 0.88rem;
+  font-size: var(--font-size-body);
   color: #1f2937;
   vertical-align: middle;
 }
@@ -374,7 +378,7 @@
 }
 
 .adminbudgetdashboard-detail-table td:nth-child(3) {
-  font-size: 0.88rem;
+  font-size: var(--font-size-body);
   color: #1f2937;
 }
 
@@ -426,8 +430,7 @@
   }
 
   .adminbudgetdashboard-tab-toggle button {
-    padding: 8px 10px;
-    font-size: 0.9rem;
+    padding: 0 10px;
   }
 
   .adminbudgetdashboard-header {
@@ -440,7 +443,6 @@
   }
 
   .adminbudgetdashboard-title {
-    font-size: 1.5rem;
     padding-left: 0;
   }
 
@@ -469,8 +471,7 @@
 
 @media (max-width: 480px) {
   .adminbudgetdashboard-role-pill {
-    font-size: 0.82rem;
-    padding: 6px 10px;
+    padding: 0 10px;
   }
 
   .adminbudgetdashboard-table th,
@@ -478,6 +479,41 @@
   .adminbudgetdashboard-detail-table th,
   .adminbudgetdashboard-detail-table td {
     padding: 8px 6px;
-    font-size: 0.82rem;
   }
+}
+
+/* The Budget Head / Beneficiary Summary segmented toggle — only this page uses it. Kept after
+   the .adminbudgetdashboard-tab-toggle rules above: on equal specificity these must win. */
+/* Category Toggle Buttons */
+.category-toggle-container {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  margin-bottom: 2rem;
+  background-color: #e1f0ff;
+  border-radius: 10px;
+  padding: 4px;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* A segmented toggle: chip-sized, as wide as its text. */
+.category-toggle-container button {
+  border: none;
+  background-color: transparent;
+  color: #5d6b8a;
+  height: var(--chip-height);
+  padding: 0 14px;
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.category-toggle-container button.active {
+  background-color: #0069ab;
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
 }

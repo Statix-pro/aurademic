@@ -93,7 +93,7 @@ const AlertModal: React.FC<AlertModalProps> = ({
         <div className="me-3 flex-shrink-0">{getIcon()}</div>
         {/* A div, not a p: messages carry lists (a form's validation errors, for one),
             and a ul inside a p is invalid markup the browser silently reshuffles. */}
-        <div className="flex-grow-1 mb-0 fw-medium" style={{ fontSize: '0.95rem' }}>
+        <div className="flex-grow-1 mb-0 fw-medium" style={{ fontSize: 'var(--font-size-body)' }}>
           {message}
         </div>
       </div>

@@ -3,7 +3,13 @@
   background-color: #f0f6ff;
   min-height: 100vh;
   padding: 20px;
-  font-family: 'Inter', sans-serif;
+}
+
+/* The event's name heads the screen. */
+.event-summary h1 {
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
+  font-weight: 700;
 }
 
 /* Tab buttons */

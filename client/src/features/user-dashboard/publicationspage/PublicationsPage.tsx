@@ -746,10 +746,13 @@ const PublicationsPage: React.FC = () => {
               <FilePen size={32} />
             </div>
             <div className="flex-grow-1">
-              <p className="mb-0 fw-semibold" style={{ fontSize: '0.95rem' }}>
+              <p className="mb-0 fw-semibold" style={{ fontSize: 'var(--font-size-body)' }}>
                 Send edit request for {selectedJournalForEditRequest?.title}?
               </p>
-              <small className="text-muted d-block" style={{ fontSize: '0.8rem' }}>
+              <small
+                className="text-muted d-block"
+                style={{ fontSize: 'var(--font-size-secondary)' }}
+              >
                 An admin must approve it before you can edit.
               </small>
             </div>

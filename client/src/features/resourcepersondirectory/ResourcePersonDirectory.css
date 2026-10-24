@@ -32,9 +32,9 @@
 
 .budget-card-header h5 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-size-section-title);
   color: #0069ab;
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
 }
 
 .budget-card-content {
@@ -56,12 +56,11 @@
   background-color: #f0f6ff;
   color: #0069ab;
   border: 1px solid #d6e4f3;
-  /* 32px: the standard chip height (Material/MUI). */
-  height: 32px;
+  height: var(--chip-height);
   padding: 0 14px;
   border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all 0.25s ease;
 }
@@ -77,38 +76,6 @@
   box-shadow: 0 4px 12px rgba(0, 105, 171, 0.2);
 }
 
-/* Form inputs & controls styles */
-.formGroup {
-  margin-bottom: 0;
-}
-
-.formGroup label {
-  font-size: 13px;
-  color: #495057;
-  margin-bottom: 6px;
-  font-weight: 600;
-  display: block;
-}
-
-.formGroup input,
-.formGroup select {
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid #e0e0e0;
-  padding: 8px 12px;
-  font-size: 0.95rem;
-  background-color: #fcfdff;
-  transition: all 0.3s ease;
-  font-family: inherit;
-  outline: none;
-}
-
-.formGroup input:focus,
-.formGroup select:focus {
-  border-color: #0069ab;
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
-}
-
 /* Chip buttons for Gender & Service Status */
 .gender-chips-group,
 .status-chips-group {
@@ -118,14 +85,14 @@
 
 .gender-chip-btn,
 .status-chip-btn {
-  flex: 1;
   background-color: #fcfdff;
   color: #495057;
   border: 1px solid #e0e0e0;
-  padding: 10px 12px;
+  height: var(--chip-height);
+  padding: 0 14px;
   border-radius: 12px;
-  font-size: 0.92rem;
-  font-weight: 500;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all 0.2s ease;
   text-align: center;
@@ -142,7 +109,7 @@
   background-color: #0069ab;
   color: #ffffff;
   border-color: #0069ab;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 /* Input Icon Wrapper */
@@ -264,15 +231,15 @@
   padding: 0 14px;
   white-space: nowrap !important;
   min-width: 0;
-  font-size: 13px;
+  font-size: var(--font-size-secondary);
   border-radius: 8px;
   border: 1.5px solid #dde3ec;
   background: #fff;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: #475569;
   cursor: pointer;
   transition: all 0.18s;
-  height: 32px;
+  height: var(--chip-height);
 }
 
 .rpd-toggle-btn.active {
@@ -344,21 +311,21 @@
 }
 
 .rpd-upload-label {
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   color: #0f172a;
 }
 
 .rpd-upload-hint {
-  font-size: 0.82rem;
+  font-size: var(--font-size-secondary);
   color: #64748b;
   margin-top: 2px;
 }
 
 .rpd-upload-filename {
   margin-top: 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   color: #0069ab;
   overflow-wrap: anywhere;
 }
@@ -376,12 +343,12 @@
 }
 
 .rpd-upload-button .btn {
-  padding: 0 24px !important;
+  padding: 0 var(--button-padding-x) !important;
   border-radius: 12px !important;
-  font-size: 14px !important;
-  font-weight: 600 !important;
+  font-size: var(--font-size-body) !important;
+  font-weight: var(--weight-semibold) !important;
   gap: 6px !important;
-  height: 40px !important;
+  height: var(--control-height) !important;
 }
 
 .rpd-choose-btn {
@@ -392,7 +359,7 @@
   border-radius: 10px;
   background-color: #0069ab;
   color: #ffffff;
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   border: none;
   gap: 6px;
@@ -402,7 +369,7 @@
 
 .rpd-btn-save,
 .rpd-btn-cancel {
-  min-width: 140px;
+  min-width: var(--button-min-width);
 }
 
 .rpd-btn-save {
@@ -419,8 +386,8 @@
 .rpd-field label {
   display: block;
   margin-bottom: 6px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   color: #344054;
 }
 
@@ -431,10 +398,9 @@
   width: 100%;
   border: 1px solid #dbeafe;
   border-radius: 12px;
-  /* !important: a global `.form-control { padding: 0.4rem 1rem !important }` otherwise wins. */
-  padding: 0 12px !important;
+  padding: 0 var(--control-padding-x);
   height: var(--control-height);
-  font-size: 14px;
+  font-size: var(--font-size-body);
   background: #ffffff;
   transition:
     border-color 0.2s ease,
@@ -462,18 +428,18 @@
   gap: 8px;
   border: 1px solid #dbeafe;
   border-radius: 12px;
-  padding: 0 12px;
+  padding: 0 var(--control-padding-x);
   background: #ffffff;
   transition:
     border-color 0.2s ease,
     background 0.2s ease;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   height: var(--control-height);
 }
 
 .rpd-input-icon svg {
   flex-shrink: 0;
-  color: #94a3b8;
+  color: var(--placeholder-color);
 }
 
 /* CustomInput's wrapper fills the row beside the icon; its label is kept for
@@ -566,16 +532,16 @@
   color: #0069ab;
   padding: 4px 10px;
   border-radius: 6px;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
 }
 
 .profession-remove-link {
   background: none;
   border: none;
   color: #ef4444;
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -594,9 +560,10 @@
   color: #334155;
   border: none;
   border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 0.8rem;
-  font-weight: 700;
+  height: var(--button-sm-height);
+  padding: 0 10px;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -650,21 +617,21 @@
 }
 
 .upload-label {
-  font-weight: 700;
-  font-size: 0.95rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-body);
   color: #1e293b;
 }
 
 .upload-subtext {
-  font-size: 0.8rem;
+  font-size: var(--font-size-secondary);
   color: #64748b;
   margin-top: 2px;
 }
 
 .upload-filename {
-  font-size: 0.82rem;
+  font-size: var(--font-size-secondary);
   color: #16a34a;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   margin-top: 4px;
 }
 
@@ -676,8 +643,8 @@
   color: #fff;
   border-radius: 8px;
   padding: 8px 14px;
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -699,9 +666,10 @@
   color: #fff;
   border: none;
   border-radius: 10px;
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  font-weight: 700;
+  height: var(--control-height);
+  padding: 0 var(--button-padding-x);
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   box-shadow: 0 4px 12px rgba(22, 163, 74, 0.2);
   transition: all 0.2s ease;
@@ -717,9 +685,10 @@
   color: #0f172a;
   border: 1px solid #cbd5e1;
   border-radius: 10px;
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  font-weight: 600;
+  height: var(--control-height);
+  padding: 0 var(--button-padding-x);
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -741,7 +710,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
@@ -760,7 +730,7 @@
   border: none;
   outline: none;
   background: transparent;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   color: #0f172a;
 }
 
@@ -786,14 +756,15 @@
   padding: 12px 14px;
   text-align: left;
   border-bottom: 1px solid #eff2f7;
-  font-size: 0.92rem;
+  font-size: var(--font-size-body);
   color: #1f2937;
 }
 
 .resource-directory-table th {
   background: #f0f6ff;
   color: #0069ab;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-bold);
   border-bottom: 2px solid #d6e4f3;
 }
 
@@ -809,7 +780,7 @@
 
 .resource-directory-name-cell span {
   color: #64748b;
-  font-size: 0.85rem;
+  font-size: var(--font-size-secondary);
 }
 
 .resource-directory-tag {
@@ -818,8 +789,8 @@
   border-radius: 999px;
   background: #f0f6ff;
   color: #0069ab;
-  font-weight: 600;
-  font-size: 0.82rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
   border: 1px solid #d6e4f3;
 }
 
@@ -829,8 +800,8 @@
   border-radius: 999px;
   background: #e0f2fe;
   color: #0369a1;
-  font-weight: 600;
-  font-size: 0.82rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
 }
 
 .resource-directory-actions {
@@ -842,9 +813,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
+  border-radius: var(--border-radius-sm);
   border: none;
   background: #f1f5f9;
   color: #475569;
@@ -864,24 +835,6 @@
 .view-profile-btn:hover {
   background-color: #e0eeff;
   color: #005495;
-}
-
-.edit-btn {
-  color: #475569;
-}
-
-.edit-btn:hover {
-  color: #1e293b;
-}
-
-.delete-btn {
-  color: #ef4444;
-  background-color: #fef2f2;
-}
-
-.delete-btn:hover {
-  background-color: #fee2e2;
-  color: #dc2626;
 }
 
 /* Premium Profile Details Preview Modal styles */
@@ -928,30 +881,19 @@
   background-color: #fcfdff;
 }
 
-.avatar-placeholder {
-  width: 56px;
-  height: 56px;
-  background: #e0eeff;
-  color: #0069ab;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cce2ff;
-}
-
 .profile-modal-title {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 800;
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+  font-weight: var(--weight-semibold);
   color: #0f172a;
 }
 
 .profile-badge-category {
   background-color: #e0f2fe;
   color: #0369a1;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   padding: 3px 8px;
   border-radius: 6px;
 }
@@ -959,8 +901,8 @@
 .profile-badge-status {
   background-color: #dcfce7;
   color: #15803d;
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   padding: 3px 8px;
   border-radius: 6px;
 }
@@ -991,14 +933,14 @@
 }
 
 .section-title-mod {
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #0069ab;
   margin-bottom: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   border-left: 3px solid #0069ab;
   padding-left: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .profile-meta-grid {
@@ -1014,22 +956,22 @@
 }
 
 .meta-item span {
-  font-size: 0.8rem;
+  font-size: var(--font-size-secondary);
   color: #64748b;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .meta-item strong {
-  font-size: 0.92rem;
+  font-size: var(--font-size-body);
   color: #0f172a;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .meta-item a {
-  font-size: 0.92rem;
+  font-size: var(--font-size-body);
   color: #0069ab;
   text-decoration: none;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .meta-item a:hover {
@@ -1050,8 +992,8 @@
 }
 
 .prof-status-badge {
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   padding: 2px 8px;
   border-radius: 4px;
   text-transform: capitalize;
@@ -1081,17 +1023,17 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.85rem;
+  font-size: var(--font-size-body);
 }
 
 .doc-preview-item span {
   color: #64748b;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .doc-preview-item strong {
   color: #1e293b;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1174,44 +1116,44 @@
    { margin-bottom: 0 }`, which lifted Date of Birth above its neighbours in modals. */
 .rpd-form-wrapper .rpd-field .custom-label {
   margin-bottom: 6px;
-  font-size: 13px;
+  font-size: var(--font-size-secondary);
 }
 
 /* ── Typography (AGENTS.md §17 "Typography — the font standard") ── */
 .budget-card-header h5 {
-  font-size: 16px;
-  line-height: 24px;
-  font-weight: 600;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
   color: var(--primary-color);
 }
 
 .rpd-subsection-title {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-semibold);
   color: var(--primary-color);
 }
 
 .rpd-form-wrapper .rpd-field label,
 .rpd-form-wrapper .rpd-field .custom-label {
-  line-height: 18px;
+  line-height: var(--leading-secondary);
   color: var(--text-body);
 }
 
 .rpd-form-wrapper .rpd-upload-label {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-semibold);
   color: var(--text-strong);
 }
 
 .rpd-form-wrapper .rpd-upload-hint {
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
   color: var(--text-soft);
 }
 
 .rpd-form-wrapper .rpd-upload-filename {
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
 }

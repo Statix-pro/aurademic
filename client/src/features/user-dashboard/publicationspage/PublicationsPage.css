@@ -4,7 +4,6 @@
   /* Light blue background - matching journalform theme */
   min-height: 100vh;
   padding: 20px;
-  font-family: 'Roboto', sans-serif;
   color: #4f4f6e;
 }
 
@@ -30,14 +29,15 @@
 }
 
 .score-card-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
   color: #0069ab;
   /* Primary blue - matching journalform theme */
   margin: 0;
+  line-height: var(--leading-section-title);
 }
 
-.filter-controls {
+.publications-page .filter-controls {
   display: flex;
   gap: 12px;
   align-items: center;
@@ -49,9 +49,10 @@
   border-radius: 12px;
   background: #fcfdff;
   /* Very light blue tint - matching journalform theme */
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
+  height: var(--control-height);
 }
 
 .sort-btn {
@@ -61,10 +62,12 @@
   border: none;
   padding: 8px 16px;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+  height: var(--control-height);
+  font-weight: var(--weight-semibold);
 }
 
 .sort-btn:hover {
@@ -84,14 +87,15 @@
 .kpi-card {
   background: white;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 14px;
+  padding: 14px 20px;
   display: flex;
   align-items: center;
   gap: 16px;
   transition:
     transform 0.2s,
     box-shadow 0.2s;
+  min-height: 80px;
 }
 
 .kpi-card:hover {
@@ -100,15 +104,16 @@
 }
 
 .kpi-icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   background: #0069ab;
   /* Primary blue - matching journalform theme */
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 20px;
 }
 
@@ -119,17 +124,19 @@
 }
 
 .kpi-label {
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
-  font-weight: 500;
+  font-weight: var(--weight-regular);
 }
 
 .kpi-value {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--font-size-kpi);
+  font-weight: var(--weight-bold);
   color: #4f4f6e;
   /* Darker blue-gray - matching journalform theme */
+  line-height: var(--leading-kpi);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Research Details Section */
@@ -148,28 +155,30 @@
 }
 
 .research-details-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
   color: #0069ab;
   /* Primary blue - matching journalform theme */
   margin: 0;
+  line-height: var(--leading-section-title);
 }
 
-.add-btn {
+.publications-page .add-btn {
   background: #0069ab;
   /* Primary blue - matching journalform theme */
   color: white;
   border: none;
   padding: 10px 20px;
   border-radius: 12px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+  height: var(--control-height);
 }
 
-.add-btn:hover {
+.publications-page .add-btn:hover {
   background: #005492;
   /* Darker blue on hover - matching journalform theme */
   transform: translateY(-1px);
@@ -212,8 +221,8 @@
   color: white;
   padding: 3px 10px;
   border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   font-family: 'Roboto Mono', 'Courier New', monospace;
   letter-spacing: 0.5px;
 }
@@ -234,11 +243,11 @@
 }
 
 .research-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
   color: #2c3e50;
   margin: 0;
-  line-height: 1.4;
+  line-height: var(--leading-section-title);
   flex: 1;
   transition: color 0.2s ease;
 }
@@ -252,8 +261,8 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
   padding-top: 4px;
 }
 
@@ -263,20 +272,20 @@
   gap: 4px;
 }
 
-.detail-label {
+.publications-page .detail-label {
   color: #7c8ba1;
-  font-weight: 500;
-  font-size: 13px;
+  font-weight: var(--weight-medium);
+  font-size: var(--font-size-secondary);
 }
 
-.detail-value {
+.publications-page .detail-value {
   color: #4a5568;
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 
 .detail-separator {
   color: #cbd5e0;
-  font-weight: 400;
+  font-weight: var(--weight-regular);
   user-select: none;
 }
 
@@ -284,8 +293,8 @@
 .status-badge {
   padding: 4px 12px;
   border-radius: 16px;
-  font-weight: 600;
-  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
   text-transform: capitalize;
   display: inline-block;
   transition: all 0.2s ease;
@@ -341,8 +350,8 @@
 .type-badge {
   padding: 4px 12px;
   border-radius: 16px;
-  font-weight: 600;
-  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
   display: inline-block;
   transition: all 0.2s ease;
 }
@@ -385,7 +394,7 @@
 
 .doi-value {
   font-family: 'Courier New', monospace;
-  font-size: 12px;
+  font-size: var(--font-size-body);
   color: #546e7a;
   background: #eceff1;
   padding: 2px 6px;
@@ -399,14 +408,15 @@
 }
 
 .action-btn {
-  min-width: 40px;
-  min-height: 40px;
+  min-width: var(--icon-action-size);
+  min-height: var(--icon-action-size);
   border: none;
   border-radius: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   transition: all 0.2s ease;
 }
@@ -453,12 +463,12 @@
   box-shadow: 0 4px 8px rgba(0, 105, 171, 0.2);
 }
 
-.delete-btn {
+.publications-page .delete-btn {
   background: #ffe1e1;
   color: #dc3545;
 }
 
-.delete-btn:hover {
+.publications-page .delete-btn:hover {
   background: #ffb3b3;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(220, 53, 69, 0.2);
@@ -470,7 +480,7 @@
   padding: 40px;
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
-  font-size: 16px;
+  font-size: var(--font-size-body);
 }
 
 /* Pagination Controls */
@@ -489,13 +499,18 @@
   border-radius: 12px;
   background: #fcfdff;
   /* Very light blue tint - matching journalform theme */
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
+  height: var(--control-height);
 }
 
 .pagination-controls button {
-  padding: 8px 16px;
+  /* A fixed chip height: the label is centred by flex, not by vertical padding. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
   border: 1px solid #e0e0e0;
   border-radius: 12px;
   background: #fcfdff;
@@ -503,8 +518,9 @@
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   transition: all 0.3s ease;
+  height: var(--chip-height);
 }
 
 .pagination-controls button:hover:not(:disabled) {
@@ -524,7 +540,7 @@
 .pagination-controls span {
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 /* Responsive Design */
@@ -539,7 +555,7 @@
     align-items: flex-start;
   }
 
-  .filter-controls {
+  .publications-page .filter-controls {
     width: 100%;
     justify-content: flex-start;
   }
@@ -581,7 +597,7 @@
   }
 
   .kpi-card {
-    padding: 16px;
+    padding: 14px 20px;
   }
 
   .research-card {
@@ -593,7 +609,7 @@
   }
 
   .compact-details {
-    font-size: 11px;
+    font-size: var(--font-size-body);
   }
 }
 
@@ -651,14 +667,16 @@
 
 .category-modal-title {
   color: #0069ab !important;
-  font-size: 18px !important;
-  font-weight: 600 !important;
+  font-size: var(--font-size-modal-title) !important;
+  font-weight: var(--weight-semibold) !important;
   margin: 0 !important;
+  line-height: var(--leading-modal-title) !important;
 }
 
 .category-modal-close {
   background: transparent !important;
   border: none !important;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 28px !important;
   color: #666 !important;
   cursor: pointer !important;
@@ -700,7 +718,7 @@
   border-radius: 8px;
   padding: 20px;
   color: #0069ab;
-  font-weight: 500;
+  font-weight: var(--weight-semibold);
   transition: all 0.3s ease;
   cursor: pointer;
   width: 100%;
@@ -732,6 +750,7 @@
 }
 
 .category-btn i {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 24px;
   margin-bottom: 8px;
   display: block;
@@ -749,12 +768,13 @@
 }
 
 .publication-section-title {
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #334155;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   margin-bottom: 0.75rem;
+  line-height: var(--leading-body);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .approval-badge {
@@ -762,8 +782,8 @@
   align-items: center;
   padding: 4px 8px;
   border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   line-height: 1;
 }
 
@@ -783,8 +803,9 @@
 }
 
 .approval-comment {
-  font-size: 0.8rem;
+  font-size: var(--font-size-secondary);
   color: #b91c1c;
+  font-weight: var(--weight-medium);
 }
 
 .request-edit-btn {

@@ -279,7 +279,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
         <span
           className="text-danger"
           style={{
-            fontSize: '0.75rem',
+            fontSize: 'var(--font-size-tertiary)',
             maxWidth: '150px',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -297,7 +297,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
       label = 'Pending Approval';
       if (pendingActions.length > 1) {
         subText = (
-          <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>
+          <span className="text-danger fw-bold" style={{ fontSize: 'var(--font-size-tertiary)' }}>
             MULTIPLE ACTIONS REQ.
           </span>
         );
@@ -305,7 +305,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
         subText = <span className="workflow-subtext-resubmitted">Resubmitted</span>;
       } else {
         subText = (
-          <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>
+          <span className="text-danger fw-bold" style={{ fontSize: 'var(--font-size-tertiary)' }}>
             REQ. APPROVAL
           </span>
         );
@@ -314,7 +314,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
       variant = 'warning';
       label = 'Edit Requested';
       subText = (
-        <span className="text-danger fw-bold" style={{ fontSize: '0.75rem' }}>
+        <span className="text-danger fw-bold" style={{ fontSize: 'var(--font-size-tertiary)' }}>
           REQ. REVIEW
         </span>
       );
@@ -328,7 +328,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
         variant = 'success';
         label = pubStatus.charAt(0).toUpperCase() + pubStatus.slice(1);
         subText = (
-          <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+          <span className="text-muted" style={{ fontSize: 'var(--font-size-tertiary)' }}>
             Processed
           </span>
         );
@@ -341,7 +341,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
         variant = 'warning';
         label = 'Peer Review';
         subText = (
-          <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+          <span className="text-muted" style={{ fontSize: 'var(--font-size-tertiary)' }}>
             In Progress
           </span>
         );
@@ -350,7 +350,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
         variant = 'primary';
         label = 'Archived';
         subText = (
-          <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+          <span className="text-muted" style={{ fontSize: 'var(--font-size-tertiary)' }}>
             Legacy Status
           </span>
         );
@@ -364,7 +364,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
         variant = 'info';
         label = 'Approved';
         subText = (
-          <span className="text-muted" style={{ fontSize: '0.75rem' }}>
+          <span className="text-muted" style={{ fontSize: 'var(--font-size-tertiary)' }}>
             Awaiting Publication
           </span>
         );
@@ -407,7 +407,7 @@ const JournalWorkflowCell: React.FC<JournalWorkflowCellProps> = ({
                 className={`workflow-badge-dot rounded-circle me-1 bg-${variant}`}
                 style={{ width: '8px', height: '8px' }}
               ></span>
-              <span style={{ fontSize: '0.8rem' }}>{label}</span>
+              <span style={{ fontSize: 'var(--font-size-tertiary)' }}>{label}</span>
             </span>
             {subText && <div className="workflow-subtext mt-1 lh-1">{subText}</div>}
           </>
@@ -1187,7 +1187,7 @@ const Dashboard: React.FC = () => {
                     {hasAsterisk ? (
                       <>
                         {cleanName.slice(0, -1)}
-                        <span style={{ color: 'red', fontWeight: 'bold' }}>*</span>
+                        <span style={{ color: 'var(--error-color)', fontWeight: 'bold' }}>*</span>
                       </>
                     ) : (
                       cleanName
@@ -1473,6 +1473,7 @@ const Dashboard: React.FC = () => {
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
                             style={{
+                              fontSize: 'var(--font-size-secondary)',
                               ...provided.draggableProps.style,
                               opacity: snapshot.isDragging ? 0.8 : 1,
                               cursor: snapshot.isDragging ? 'grabbing' : 'grab',

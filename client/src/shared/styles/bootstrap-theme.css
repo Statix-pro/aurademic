@@ -1,0 +1,582 @@
+/* The portal's one Bootstrap theme: colours, form controls, buttons, modals, tables, badges,
+   alerts and Bootstrap utilities, sized to AGENTS.md §17. Loaded after Bootstrap and after every
+   feature stylesheet (see index.css), so on equal specificity these win. Change Bootstrap's look
+   here, for every screen — never from a feature file. */
+
+/* Form elements */
+.form-label {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  color: var(--text-body);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+/* No !important on padding: a screen that needs room for an icon inside a field sets
+   its own padding and wins on specificity alone. */
+.form-control,
+.form-select {
+  border-radius: 12px !important;
+  border: 1px solid #e0e0e0;
+  padding: 0.4rem var(--control-padding-x);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  background-color: #fcfdff;
+}
+
+.form-select {
+  padding-right: 2.25rem;
+}
+
+/* Every single-line field sits on the shared control height. Textareas, the
+   tag input (a div styled as a field) and file pickers size to their content. */
+input.form-control:not([type='file']):not([type='color']):not([type='range']),
+select.form-control,
+.form-select:not([multiple]):not([size]) {
+  height: var(--control-height);
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: #0069ab !important;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15) !important;
+}
+
+.form-control:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+}
+
+.btn-primary {
+  background-color: #0069ab !important;
+  border-color: #0069ab !important;
+  color: #fff !important;
+}
+
+.btn-primary:hover {
+  background-color: #005492 !important;
+  border-color: #005492 !important;
+  color: #fff !important;
+}
+
+.btn-secondary {
+  background-color: #5d6b8a !important;
+  border-color: #5d6b8a !important;
+  color: #fff !important;
+}
+
+.btn-secondary:hover {
+  background-color: #4a5575 !important;
+  border-color: #4a5575 !important;
+  color: #fff !important;
+}
+
+.btn-warning {
+  background-color: #0069ab !important;
+  border-color: #0069ab !important;
+  color: #fff !important;
+}
+
+.btn-warning:hover {
+  background-color: #005492 !important;
+  border-color: #005492 !important;
+  color: #fff !important;
+}
+
+/* Lists and hovers */
+.list-group-item-action:hover {
+  background-color: #f0f6ff !important;
+  color: #0069ab !important;
+}
+
+/* Checks & radios */
+.form-check-input:checked {
+  background-color: #0069ab !important;
+  border-color: #0069ab !important;
+}
+
+.form-check-input:focus {
+  border-color: #0069ab !important;
+  box-shadow: 0 0 0 0.25rem rgba(0, 105, 171, 0.25) !important;
+}
+
+/* Native accents */
+input[type='radio'],
+input[type='checkbox'],
+.form-check-input {
+  accent-color: #0069ab !important;
+}
+
+/* Request Journal and Preview Button Styles */
+.btn-outline-secondary {
+  background-color: transparent !important;
+  border: 1px solid #0069ab !important;
+  color: #0069ab !important;
+  transition: all 0.3s ease !important;
+}
+
+.btn-outline-secondary:hover {
+  background-color: rgba(0, 105, 171, 0.1) !important;
+  /* Subtle blue background instead of solid fill */
+  color: #005492 !important;
+  border-color: #005492 !important;
+  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.2) !important;
+}
+
+.btn-outline-secondary:focus {
+  background-color: transparent !important;
+  color: #0069ab !important;
+  border-color: #0069ab !important;
+  box-shadow: 0 0 0 0.25rem rgba(0, 105, 171, 0.25) !important;
+}
+
+/* No `.modal`/`.modal-backdrop` background here on purpose. Both used to be
+   painted 50% black keyed on `.show`, which is a state, not a style: the colour
+   appeared and vanished in one frame while Bootstrap's backdrop was still
+   fading its opacity over 150ms, so opening and closing a dialog stepped
+   through two different shades instead of fading through one. The backdrop
+   alone does the darkening now, the way Bootstrap fades it. */
+
+/* Modal dialog and content styling - Compact */
+.modal-dialog {
+  margin: 3% auto;
+  max-width: 500px;
+}
+
+.modal-content {
+  border: none !important;
+  border-radius: 15px !important;
+  box-shadow: 0 4px 20px rgba(0, 105, 171, 0.15) !important;
+  overflow: hidden;
+}
+
+/* Modal header styling - Compact */
+.modal-header {
+  background-color: #f0f6ff !important;
+  border-bottom: 1px solid #b3d9ff !important;
+  border-radius: 15px 15px 0 0 !important;
+  padding: 0.75rem 1rem;
+}
+
+.modal-title {
+  color: #0069ab !important;
+  font-weight: 600;
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+}
+
+/* Modal body styling - Compact */
+.modal-body {
+  padding: 1rem;
+  background-color: white;
+}
+
+/* Form controls within modal - Compact */
+.modal-body .form-control,
+.modal-body .form-select {
+  border-radius: 12px !important;
+  border: 1px solid #e0e0e0;
+  background-color: #fcfdff;
+  transition: all 0.3s ease;
+  font-size: var(--font-size-body);
+}
+
+.modal-body .form-control:focus,
+.modal-body .form-select:focus {
+  border-color: #0069ab !important;
+  box-shadow: 0 0 0 2px rgba(0, 105, 171, 0.15) !important;
+  background-color: white;
+}
+
+.modal-body .form-label {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  color: var(--text-body);
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+/* Form group spacing - Compact */
+.modal-body .mb-3 {
+  margin-bottom: 0.5rem !important;
+}
+
+.modal-body .row .mb-3 {
+  margin-bottom: 0.75rem !important;
+}
+
+.modal-body .row {
+  margin-left: -0.25rem;
+  margin-right: -0.25rem;
+}
+
+.modal-body .row > [class*='col-'] {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+/* Modal close button styling */
+.modal-header .btn-close {
+  background-color: transparent !important;
+  border: none !important;
+  opacity: 0.8;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%230069ab'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e") !important;
+  background-size: 14px 14px;
+  background-repeat: no-repeat;
+  background-position: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  /* margin-left:auto keeps the X pinned to the right edge of the header;
+     a bare `margin: 0` would kill Bootstrap's own auto margin. */
+  margin: 0 0 0 auto;
+  flex-shrink: 0;
+}
+
+.modal-header .btn-close:hover {
+  opacity: 1;
+  background-color: rgba(0, 105, 171, 0.1) !important;
+  border-radius: 50%;
+}
+
+/* ---------------------------------------------------------------------------
+   Bootstrap components, portal-wide. These used to live unscoped in
+   features/journals/journalform.css, so they already applied to every screen;
+   they are kept here as the one deliberate theme, sized to AGENTS.md §17.
+   --------------------------------------------------------------------------- */
+
+.alert-info {
+  background-color: #e1f0ff !important;
+  border-color: #b3d9ff !important;
+  color: #0069ab !important;
+}
+
+.alert-danger {
+  background-color: #ffe1e1 !important;
+  border-color: #ffb3b3 !important;
+  color: #dc3545 !important;
+}
+
+.text-muted {
+  color: #5d6b8a !important;
+}
+
+.list-group-item-action:focus {
+  background-color: #e1f0ff !important;
+  color: #0069ab !important;
+}
+
+/* A blue close cross on a clear background. (The journal copy also filled the button
+   blue, which hid the cross wherever it sat outside a modal header.) */
+.btn-close {
+  filter: none !important;
+  opacity: 0.8;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%230069ab'%3e%3cpath d='m.5 3.5 1-1L8 8.5 14.5 2l1 1L9 10.5l-6.5 6.5-1-1L7 9.5.5 3.5z'/%3e%3c/svg%3e") !important;
+}
+
+.btn-close:hover {
+  opacity: 1;
+}
+
+.btn-close-white {
+  background-color: transparent !important;
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23ffffff'%3e%3cpath d='M.293.293a1 1 0 0 1 1.414 0L8 6.586 14.293.293a1 1 0 1 1 1.414 1.414L9.414 8l6.293 6.293a1 1 0 0 1-1.414 1.414L8 9.414l-6.293 6.293a1 1 0 0 1-1.414-1.414L6.586 8 .293 1.707a1 1 0 0 1 0-1.414z'/%3e%3c/svg%3e") !important;
+  opacity: 0.8;
+}
+
+.btn-close-white:hover {
+  opacity: 1;
+}
+
+/* Tables. No overflow rule here: Bootstrap's own `overflow-x: auto` on
+   .table-responsive is what lets a wide table scroll instead of being cut off. */
+.table-responsive {
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.table {
+  margin-bottom: 0;
+  background-color: #fff;
+}
+
+.table thead th {
+  background-color: #f0f6ff;
+  color: #0069ab;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  border: none;
+  padding: var(--table-cell-padding);
+}
+
+.table tbody td {
+  padding: var(--table-cell-padding);
+  border-top: 1px solid #e9ecef;
+  vertical-align: middle;
+}
+
+.table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* Status pills */
+.badge {
+  font-size: var(--font-size-tertiary);
+  line-height: var(--leading-tertiary);
+  padding: 0.25rem 0.625rem;
+  border-radius: 20px;
+  font-weight: 600;
+}
+
+.bg-success {
+  background-color: #28a745 !important;
+}
+
+.bg-danger {
+  background-color: #dc3545 !important;
+}
+
+.bg-primary {
+  background-color: #0069ab !important;
+}
+
+/* Darker than Bootstrap's #0dcaf0, which white text sat on at 2:1. */
+.bg-info {
+  background-color: #087f97 !important;
+}
+
+.bg-warning {
+  background-color: #ffc107 !important;
+  color: #212529 !important;
+}
+
+/* Modal footer: its answers are form action buttons. */
+.modal-footer {
+  border-top: 1px solid #e9ecef;
+  padding: 0.75rem 1.5rem;
+  background-color: #f8f9fa;
+  border-radius: 0 0 15px 15px;
+  gap: 0.5rem;
+}
+
+.modal-footer .btn {
+  --bs-btn-font-size: var(--font-size-body);
+  --bs-btn-line-height: var(--leading-body);
+  --bs-btn-padding-x: var(--button-padding-x);
+  --bs-btn-padding-y: calc((var(--control-height) - var(--leading-body) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-md);
+  min-width: var(--button-min-width);
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.modal-footer .btn-secondary {
+  background-color: #6c757d !important;
+  border-color: #6c757d !important;
+  color: white !important;
+}
+
+.modal-footer .btn-secondary:hover {
+  background-color: #5a6268 !important;
+  border-color: #545b62 !important;
+  color: white !important;
+}
+
+.modal-footer .btn-primary {
+  background-color: #0069ab !important;
+  border-color: #0069ab !important;
+  color: white !important;
+}
+
+.modal-footer .btn-primary:hover {
+  background-color: #005492 !important;
+  border-color: #005492 !important;
+  color: white !important;
+  box-shadow: 0 2px 8px rgba(0, 105, 171, 0.3) !important;
+}
+
+.modal-footer .btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+.modal-body .alert {
+  border-radius: 8px;
+  border: 1px solid;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  font-size: var(--font-size-body);
+}
+
+.modal-body .alert-danger {
+  background-color: #ffe1e1 !important;
+  border-color: #ffb3b3 !important;
+  color: #dc3545 !important;
+}
+
+.modal-body .form-control.is-invalid {
+  border-color: #dc3545 !important;
+  box-shadow: 0 0 0 0.15rem rgba(220, 53, 69, 0.25) !important;
+}
+
+.modal-body .form-control.is-valid {
+  border-color: #28a745 !important;
+  box-shadow: 0 0 0 0.15rem rgba(40, 167, 69, 0.25) !important;
+}
+
+/* Bootstrap overrides */
+.container-fluid {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.fs-1,
+.fs-2,
+.fs-3 {
+  font-size: var(--font-size-page-title) !important;
+}
+
+.fs-4 {
+  font-size: var(--font-size-modal-title) !important;
+}
+
+.fs-5 {
+  font-size: var(--font-size-section-title) !important;
+}
+
+.fs-6 {
+  font-size: var(--font-size-body) !important;
+}
+
+.fw-light,
+.fw-lighter {
+  font-weight: var(--weight-regular) !important;
+}
+
+.fw-bolder {
+  font-weight: var(--weight-bold) !important;
+}
+
+.invalid-feedback {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.table {
+  --bs-table-color: var(--text-body);
+}
+
+.dropdown-menu {
+  --bs-dropdown-font-size: var(--font-size-body);
+}
+
+.pagination {
+  --bs-pagination-font-size: var(--font-size-body);
+}
+
+.tooltip {
+  --bs-tooltip-font-size: var(--font-size-secondary);
+}
+
+.popover {
+  --bs-popover-font-size: var(--font-size-body);
+  --bs-popover-header-font-size: var(--font-size-body);
+}
+
+.accordion-button {
+  font-size: var(--font-size-body);
+}
+
+.nav-link {
+  font-size: var(--font-size-body);
+}
+
+.modal-title {
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+}
+
+/* Buttons: every .btn is a 40px control with 14px semibold text; .btn-sm is the 32px
+   secondary size. Heights come from padding around a fixed line height, so a button
+   keeps Bootstrap's inline-block layout and still lines up with the inputs beside it. */
+.btn {
+  --bs-btn-font-size: var(--font-size-body);
+  --bs-btn-line-height: var(--leading-body);
+  --bs-btn-font-weight: var(--weight-semibold);
+  --bs-btn-padding-x: 1rem;
+  --bs-btn-padding-y: calc((var(--control-height) - var(--leading-body) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-md);
+}
+
+.btn-sm,
+.btn-group-sm > .btn {
+  --bs-btn-font-size: var(--font-size-secondary);
+  --bs-btn-line-height: var(--leading-secondary);
+  --bs-btn-padding-x: 0.75rem;
+  --bs-btn-padding-y: calc((var(--button-sm-height) - var(--leading-secondary) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-sm);
+}
+
+.btn-lg,
+.btn-group-lg > .btn {
+  --bs-btn-font-size: var(--font-size-body);
+  --bs-btn-line-height: var(--leading-body);
+  --bs-btn-padding-x: var(--button-padding-x);
+  --bs-btn-padding-y: calc((var(--control-height) - var(--leading-body) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-md);
+}
+
+.card {
+  border: 1px solid rgba(0, 0, 0, 0.125);
+  border-radius: 0.375rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+  font-weight: 600;
+}
+
+.spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Alert styles */
+.alert {
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1.25rem;
+  position: relative;
+}
+
+.alert-success {
+  background-color: #d4edda;
+  border-color: #c3e6cb;
+  color: #155724;
+}
+
+.alert-danger {
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+.alert-warning {
+  background-color: #fff3cd;
+  border-color: #ffeaa7;
+  color: #856404;
+}
+
+.alert-info {
+  background-color: #d1ecf1;
+  border-color: #bee5eb;
+  color: #0c5460;
+}

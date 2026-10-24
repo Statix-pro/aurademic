@@ -304,8 +304,9 @@ const BudgetDashboard: React.FC = () => {
 
     const rect = trigger.getBoundingClientRect();
     const viewportPadding = 10;
+    const gap = 10;
     const preferredWidth = 320;
-    const estimatedHeight = popoverRef.current?.offsetHeight || 360;
+    const naturalHeight = popoverRef.current?.scrollHeight || 360;
 
     let left = rect.left;
     if (left + preferredWidth > window.innerWidth - viewportPadding) {
@@ -315,19 +316,33 @@ const BudgetDashboard: React.FC = () => {
       left = viewportPadding;
     }
 
-    let top = rect.bottom + 10;
-    if (top + estimatedHeight > window.innerHeight - viewportPadding) {
-      top = rect.top - estimatedHeight - 10;
+    // The fixed top bar covers the top of the viewport, so the popover's usable band starts below
+    // it — clamping to the viewport edge alone hid the "Submission Logs" header behind the bar.
+    const topBarBottom = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0;
+    const safeTop = topBarBottom + viewportPadding;
+    const safeBottom = window.innerHeight - viewportPadding;
+    const spaceBelow = safeBottom - (rect.bottom + gap);
+    const spaceAbove = rect.top - gap - safeTop;
+
+    // Below the icon if it fits, otherwise on the side with more room; the height is capped to that
+    // room and the log list scrolls inside, so the header always stays on screen.
+    let top: number;
+    let maxHeight: number;
+    if (naturalHeight <= spaceBelow || spaceBelow >= spaceAbove) {
+      top = rect.bottom + gap;
+      maxHeight = spaceBelow;
+    } else {
+      maxHeight = spaceAbove;
+      top = rect.top - gap - Math.min(naturalHeight, spaceAbove);
     }
-    if (top < viewportPadding) {
-      top = viewportPadding;
-    }
+    top = Math.max(top, safeTop);
 
     setLogPopoverStyle({
       position: 'fixed',
       top: `${top}px`,
       left: `${left}px`,
       width: `${preferredWidth}px`,
+      maxHeight: `${Math.max(maxHeight, 160)}px`,
       zIndex: 1000,
     });
   };
@@ -349,9 +364,15 @@ const BudgetDashboard: React.FC = () => {
     const reflowPopover = () => updatePopoverPosition(activeLogId);
     window.addEventListener('resize', reflowPopover);
     window.addEventListener('scroll', reflowPopover, true);
+    // The logs load after the popover opens, so it is first placed at its "Loading…" height; place
+    // it again whenever it grows. Placement reads the content's full height, which the max-height
+    // cap does not change, so this settles instead of looping.
+    const resizeObserver = new ResizeObserver(reflowPopover);
+    if (popoverRef.current) resizeObserver.observe(popoverRef.current);
     return () => {
       window.removeEventListener('resize', reflowPopover);
       window.removeEventListener('scroll', reflowPopover, true);
+      resizeObserver.disconnect();
     };
   }, [activeLogId]);
   // --- Fetch Data ---
@@ -1269,11 +1290,46 @@ const BudgetDashboard: React.FC = () => {
                             >
                               <thead>
                                 <tr>
-                                  <th style={{ width: '50px' }}>S.No</th>
-                                  <th style={{ width: '300px' }}>Budget Head</th>
-                                  <th style={{ width: '300px' }}>Sub Head</th>
-                                  <th style={{ width: '150px' }}>Proposed</th>
-                                  <th style={{ width: '150px' }}>Approved</th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '50px',
+                                    }}
+                                  >
+                                    S.No
+                                  </th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '300px',
+                                    }}
+                                  >
+                                    Budget Head
+                                  </th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '300px',
+                                    }}
+                                  >
+                                    Sub Head
+                                  </th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '150px',
+                                    }}
+                                  >
+                                    Proposed
+                                  </th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '150px',
+                                    }}
+                                  >
+                                    Approved
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody>
@@ -1291,7 +1347,7 @@ const BudgetDashboard: React.FC = () => {
                                     </td>
                                     <td>{line.subHead}</td>
                                     <td>₹{formatINR(line.proposedAmount)}</td>
-                                    <td>₹{formatINR(line.approvedAmount)}</td>{' '}
+                                    <td>₹{formatINR(line.approvedAmount)}</td>
                                     {/* 0 until fully approved */}
                                   </tr>
                                 ))}
@@ -1336,7 +1392,7 @@ const BudgetDashboard: React.FC = () => {
                   }}
                 >
                   <div className="budgetdashboard-pagination-left">
-                    <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                    <span style={{ fontSize: 'var(--font-size-secondary)', color: '#6b7280' }}>
                       Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
                       {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
                       {pagination.total} proposals
@@ -1351,7 +1407,10 @@ const BudgetDashboard: React.FC = () => {
                       disabled={pagination.page <= 1}
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       style={{
-                        padding: '8px 16px',
+                        height: 'var(--chip-height)',
+                        padding: '0 14px',
+                        fontSize: 'var(--font-size-secondary)',
+                        fontWeight: 600,
                         borderRadius: '6px',
                         border: '1px solid #d1d5db',
                         background: pagination.page <= 1 ? '#f3f4f6' : 'white',
@@ -1361,7 +1420,7 @@ const BudgetDashboard: React.FC = () => {
                     >
                       Previous
                     </button>
-                    <span style={{ fontSize: '14px', fontWeight: 500 }}>
+                    <span style={{ fontSize: 'var(--font-size-secondary)', fontWeight: 500 }}>
                       Page {pagination.page} of {pagination.pages}
                     </span>
                     <button
@@ -1369,7 +1428,10 @@ const BudgetDashboard: React.FC = () => {
                       disabled={pagination.page >= pagination.pages}
                       onClick={() => setCurrentPage((p) => Math.min(pagination.pages, p + 1))}
                       style={{
-                        padding: '8px 16px',
+                        height: 'var(--chip-height)',
+                        padding: '0 14px',
+                        fontSize: 'var(--font-size-secondary)',
+                        fontWeight: 600,
                         borderRadius: '6px',
                         border: '1px solid #d1d5db',
                         background: pagination.page >= pagination.pages ? '#f3f4f6' : 'white',

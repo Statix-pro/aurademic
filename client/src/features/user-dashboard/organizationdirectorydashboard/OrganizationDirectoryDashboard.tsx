@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import './OrganizationDirectoryDashboard.css';
+// The add/edit form reuses the resource-person directory's form styles (.rpd-form-wrapper).
+import '../../resourcepersondirectory/ResourcePersonDirectory.css';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
 import CustomInput from '../../../shared/components/ui/CustomInput';
@@ -72,7 +74,7 @@ const CATEGORY_FILTER_STYLES = {
     '&:hover': { borderColor: 'var(--border-focus)' },
   }),
   // Text per AGENTS.md typography: 14px, primary-text colour.
-  container: (provided: any) => ({ ...provided, fontSize: '14px' }),
+  container: (provided: any) => ({ ...provided, fontSize: 'var(--font-size-body)' }),
   singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
   valueContainer: (provided: any) => ({
     ...provided,
@@ -341,7 +343,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                         style={{
                           position: 'absolute',
                           right: '10px',
-                          color: '#94a3b8',
+                          color: 'var(--placeholder-color)',
                           pointerEvents: 'none',
                         }}
                       />
@@ -375,7 +377,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                 <div
                   className="alert alert-warning d-flex align-items-center justify-content-between mb-0"
                   role="alert"
-                  style={{ borderRadius: '8px', fontSize: '0.875rem' }}
+                  style={{ borderRadius: '8px', fontSize: 'var(--font-size-body)' }}
                 >
                   <span>{loadError}</span>
                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>

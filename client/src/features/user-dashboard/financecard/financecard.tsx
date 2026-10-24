@@ -1206,7 +1206,7 @@ const FinanceCard: React.FC = () => {
               {!loading && filteredData.length === 0 && (
                 <div
                   className="financecard-state"
-                  style={{ padding: '60px 20px', fontSize: '15px' }}
+                  style={{ padding: '60px 20px', fontSize: 'var(--font-size-body)' }}
                 >
                   No finance requests found
                 </div>
@@ -1238,9 +1238,9 @@ const FinanceCard: React.FC = () => {
                             {Boolean(item.workflow_state?.topupAt) && (
                               <span
                                 style={{
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                  color: '#059669',
+                                  fontSize: 'var(--font-size-tertiary)',
+                                  fontWeight: 700,
+                                  color: '#047857',
                                   backgroundColor: '#d1fae5',
                                   border: '1px solid #10b981',
                                   borderRadius: '12px',
@@ -1486,81 +1486,83 @@ const FinanceCard: React.FC = () => {
           </div>
         </div>
       </section>
-      {activeInfoItem && (
-        <div className="financecard-log-overlay" onClick={() => setActiveInfoId(null)}>
-          <div className="financecard-log-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="financecard-log-header">Submission Logs</div>
-            <div className="financecard-log-body financecard-log-body-modal">
-              <div className="financecard-log-summary">
-                <div className="financecard-log-summary-row">
-                  <span className="financecard-log-label">Proposal:</span>
-                  <span className="financecard-log-value">{getProposalRef(activeInfoItem)}</span>
-                </div>
-                <div className="financecard-log-summary-row">
-                  <span className="financecard-log-label">Last Edited:</span>
-                  <span className="financecard-log-value">
-                    {formatDateTime(activeInfoItem.updated_at || activeInfoItem.created_at)}
-                  </span>
-                </div>
+      <CustomModal
+        show={Boolean(activeInfoItem)}
+        onHide={() => setActiveInfoId(null)}
+        title="Submission Logs"
+        size="lg"
+        centered
+        scrollable
+        className="financecard-log-dialog"
+        footer={
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            onClick={() => setActiveInfoId(null)}
+          >
+            Close
+          </button>
+        }
+      >
+        {activeInfoItem && (
+          <div className="financecard-log-body financecard-log-body-modal">
+            <div className="financecard-log-summary">
+              <div className="financecard-log-summary-row">
+                <span className="financecard-log-label">Proposal:</span>
+                <span className="financecard-log-value">{getProposalRef(activeInfoItem)}</span>
               </div>
-
-              <div className="financecard-log-timeline">
-                {loadingInfoId === activeInfoItem.id ? (
-                  <div className="financecard-log-empty">Loading updates...</div>
-                ) : (
-                  activeLogEvents.map((event) => (
-                    <div
-                      key={event.key}
-                      className={`financecard-log-entry financecard-log-entry-modal${event.actorBadgeLabel ? ' financecard-log-entry--admin' : ''}`}
-                    >
-                      {event.actorBadgeLabel === 'SUPERADMIN' && (
-                        <span className="financecard-log-admin-mark" title="Updated by Admin">
-                          {`\u2605 ${event.actorBadgeLabel}`}
-                        </span>
-                      )}
-                      <div className="financecard-log-entry-top">
-                        <div className="financecard-log-entry-title">
-                          <span
-                            className={`financecard-log-badge financecard-log-badge--${event.badge.toLowerCase()}`}
-                          >
-                            {event.badge}
-                          </span>
-                          <span className="financecard-log-title-text">{event.title}</span>
-                        </div>
-                        {event.actorBadgeLabel &&
-                          !['SUPERADMIN', 'HOD', 'DOF'].includes(event.actorBadgeLabel) && (
-                            <span className="financecard-log-stage-pill">
-                              {event.actorBadgeLabel}
-                            </span>
-                          )}
-                      </div>
-                      <div className="financecard-log-role">
-                        {event.subtitle || 'Status update'}
-                      </div>
-                      <div className="financecard-log-actor-line">
-                        <strong>{event.actorLabel}:</strong> {event.actorValue}
-                      </div>
-                      <div className="financecard-log-date financecard-log-date-right">
-                        {event.dateLabel}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="financecard-log-footer">
-                <button
-                  type="button"
-                  className="financecard-log-close-btn"
-                  onClick={() => setActiveInfoId(null)}
-                >
-                  Close
-                </button>
+              <div className="financecard-log-summary-row">
+                <span className="financecard-log-label">Last Edited:</span>
+                <span className="financecard-log-value">
+                  {formatDateTime(activeInfoItem.updated_at || activeInfoItem.created_at)}
+                </span>
               </div>
             </div>
+
+            <div className="financecard-log-timeline">
+              {loadingInfoId === activeInfoItem.id ? (
+                <div className="financecard-log-empty">Loading updates...</div>
+              ) : (
+                activeLogEvents.map((event) => (
+                  <div
+                    key={event.key}
+                    className={`financecard-log-entry financecard-log-entry-modal${event.actorBadgeLabel ? ' financecard-log-entry--admin' : ''}`}
+                  >
+                    {event.actorBadgeLabel === 'SUPERADMIN' && (
+                      <span className="financecard-log-admin-mark" title="Updated by Admin">
+                        {`\u2605 ${event.actorBadgeLabel}`}
+                      </span>
+                    )}
+                    <div className="financecard-log-entry-top">
+                      <div className="financecard-log-entry-title">
+                        <span
+                          className={`financecard-log-badge financecard-log-badge--${event.badge.toLowerCase()}`}
+                        >
+                          {event.badge}
+                        </span>
+                        <span className="financecard-log-title-text">{event.title}</span>
+                      </div>
+                      {event.actorBadgeLabel &&
+                        !['SUPERADMIN', 'HOD', 'DOF'].includes(event.actorBadgeLabel) && (
+                          <span className="financecard-log-stage-pill">
+                            {event.actorBadgeLabel}
+                          </span>
+                        )}
+                    </div>
+                    <div className="financecard-log-role">{event.subtitle || 'Status update'}</div>
+                    <div className="financecard-log-actor-line">
+                      <strong>{event.actorLabel}:</strong> {event.actorValue}
+                    </div>
+                    <div className="financecard-log-date financecard-log-date-right">
+                      {event.dateLabel}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </CustomModal>
       <CustomModal
         show={previewRecordId !== null}
         onHide={() => setPreviewRecordId(null)}

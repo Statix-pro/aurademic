@@ -38,7 +38,9 @@ const CustomTable: React.FC<CustomTableProps> = ({
                 {col.label}
               </th>
             ))}
-            {actions && <th style={{ width: '100px' }}>Actions</th>}
+            {actions && (
+              <th style={{ fontSize: 'var(--font-size-secondary)', width: '100px' }}>Actions</th>
+            )}
           </tr>
         </thead>
         <tbody>

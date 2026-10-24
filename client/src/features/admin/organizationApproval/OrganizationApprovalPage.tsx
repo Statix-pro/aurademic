@@ -49,7 +49,7 @@ const FILTER_DROPDOWN_STYLES = {
     height: 'calc(var(--control-height) - 2px)',
   }),
   // Text per AGENTS.md typography: 14px, primary-text colour.
-  container: (provided: any) => ({ ...provided, fontSize: '14px' }),
+  container: (provided: any) => ({ ...provided, fontSize: 'var(--font-size-body)' }),
   singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
   // No bar before the chevron, like the plain selects on the other list pages.
   indicatorSeparator: () => ({ display: 'none' }),
@@ -166,12 +166,20 @@ export default function OrganizationApprovalPage() {
           {icon}
         </span>
         <div>
-          <div style={{ fontSize: 13, lineHeight: '18px', color: 'var(--text-soft)' }}>{label}</div>
+          <div
+            style={{
+              fontSize: 'var(--font-size-secondary)',
+              lineHeight: 'var(--leading-secondary)',
+              color: 'var(--text-soft)',
+            }}
+          >
+            {label}
+          </div>
           <div
             style={{
               color: 'var(--text-strong)',
-              fontSize: 24,
-              lineHeight: '28px',
+              fontSize: 'var(--font-size-kpi)',
+              lineHeight: 'var(--leading-kpi)',
               fontWeight: 700,
             }}
           >
@@ -210,8 +218,8 @@ export default function OrganizationApprovalPage() {
           status === 'Approved'
             ? { background: '#d9f8e5', color: '#087b43' }
             : status === 'Rejected'
-              ? { background: '#fde1e5', color: '#c52d43' }
-              : { background: '#fff0d2', color: '#a96800' };
+              ? { background: '#fde1e5', color: '#c12c41' }
+              : { background: '#fff0d2', color: '#9b5f00' };
         return (
           <span
             style={{
@@ -220,7 +228,7 @@ export default function OrganizationApprovalPage() {
               padding: '7px 12px',
               borderRadius: 18,
               fontWeight: 600,
-              fontSize: 12,
+              fontSize: 'var(--font-size-tertiary)',
             }}
           >
             {status}
@@ -241,8 +249,10 @@ export default function OrganizationApprovalPage() {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 32,
-            height: 32,
+            width: 'var(--icon-action-size)',
+            height: 'var(--icon-action-size)',
+            minWidth: 0,
+            minHeight: 0,
             padding: 0,
             border: '1px solid #bfdbfe',
             borderRadius: 8,
@@ -265,21 +275,21 @@ export default function OrganizationApprovalPage() {
         .organization-details-modal .modal-content { max-height: calc(100vh - 3.5rem); }
         .organization-details-modal .modal-body { overflow-y: auto; }
         .organization-approval-card { max-width: 1250px; border: 0; border-radius: 18px; background: #fff; box-shadow: 0 8px 24px rgba(15,42,70,.08); }
-        .organization-approval-title { color: var(--text-strong) !important; font-size: 24px; line-height: 32px; font-weight: 700; }
-        .organization-admin-badge { background: #0878bd !important; border-radius: 6px !important; color: #fff !important; display: inline-flex; align-items: center; justify-content: center; height: 24px; font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 0 10px !important; }
+        .organization-approval-title { color: var(--text-strong) !important; font-size: var(--font-size-page-title); line-height: var(--leading-page-title); font-weight: 700; }
+        .organization-admin-badge { background: #0878bd !important; border-radius: 6px !important; color: #fff !important; display: inline-flex; align-items: center; justify-content: center; height: var(--tag-height); font-size: var(--font-size-tertiary); font-weight: 700; letter-spacing: .04em; padding: 0 10px !important; }
         .organization-approval-header-controls { align-items: center !important; }
         .organization-approval-header-controls > .position-relative { width: 285px; height: var(--control-height); }
         .organization-approval-header-controls > .position-relative > svg { left: 14px; z-index: 2; color: #006db4 !important; }
-        .organization-approval-header-controls .custom-input { height: var(--control-height); font-size: 14px; margin: 0 !important; padding-left: 50px !important; }
+        .organization-approval-header-controls .custom-input { height: var(--control-height); font-size: var(--font-size-body); margin: 0 !important; padding-left: 50px !important; }
         .organization-approval-header-controls > div[style*='min-width'] { height: var(--control-height); }
         .organization-approval-card .row.g-3 > [class*='col-'] > .card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); }
         .organization-approval-card .row.g-3 > [class*='col-'] > .card .card-body { padding: 14px 20px; }
-        .organization-approval-table.custom-table { min-width: 980px; margin-bottom: 0; table-layout: auto; color: var(--text-body); font-size: 14px; }
-        .organization-approval-table.custom-table thead th { padding: 15px 10px; background: #eef5fd; border-bottom: 1px solid #cddceb; color: var(--primary-color); font-size: 13px; line-height: 18px; font-weight: 600; text-align: left; }
-        .organization-approval-table.custom-table tbody td { padding: 16px 10px; border-color: #e1e8f0; color: var(--text-body); font-size: 14px; line-height: 20px; vertical-align: middle; }
+        .organization-approval-table.custom-table { min-width: 980px; margin-bottom: 0; table-layout: auto; color: var(--text-body); font-size: var(--font-size-body); }
+        .organization-approval-table.custom-table thead th { padding: 15px 10px; background: #eef5fd; border-bottom: 1px solid #cddceb; color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); text-align: left; }
+        .organization-approval-table.custom-table tbody td { padding: 16px 10px; border-color: #e1e8f0; color: var(--text-body); font-size: var(--font-size-body); line-height: var(--leading-body); vertical-align: middle; }
         .organization-approval-table.custom-table tbody td:first-child { color: var(--text-strong); font-weight: 700; }
         .organization-approval-table.custom-table tbody td:first-child strong { font-weight: 700; }
-        .organization-details-modal .modal-title { font-size: 18px; line-height: 24px; font-weight: 600; }
+        .organization-details-modal .modal-title { font-size: var(--font-size-modal-title); line-height: var(--leading-modal-title); font-weight: 600; }
         .organization-approval-table.custom-table th:nth-child(1), .organization-approval-table.custom-table td:nth-child(1) { width: 18%; }
         .organization-approval-table.custom-table th:nth-child(2), .organization-approval-table.custom-table td:nth-child(2) { width: 14%; }
         .organization-approval-table.custom-table th:nth-child(3), .organization-approval-table.custom-table td:nth-child(3) { width: 11%; }
@@ -377,16 +387,18 @@ export default function OrganizationApprovalPage() {
                         onClick={() => void review(row.id, 'approve')}
                         disabled={reviewingId !== null}
                         style={{
-                          height: 28,
+                          minWidth: 0,
+                          height: 'var(--inline-action-height)',
+                          minHeight: 0,
                           whiteSpace: 'nowrap',
                           flexShrink: 0,
                           padding: '0 10px',
                           border: 0,
                           borderRadius: 6,
-                          background: '#178b58',
+                          background: '#168554',
                           color: '#fff',
                           fontWeight: 700,
-                          fontSize: 12,
+                          fontSize: 'var(--font-size-tertiary)',
                           cursor: 'pointer',
                         }}
                       >
@@ -398,16 +410,17 @@ export default function OrganizationApprovalPage() {
                         disabled={reviewingId !== null}
                         style={{
                           minWidth: 68,
-                          height: 28,
+                          height: 'var(--inline-action-height)',
+                          minHeight: 0,
                           whiteSpace: 'nowrap',
                           flexShrink: 0,
                           padding: '0 10px',
                           border: 0,
                           borderRadius: 6,
-                          background: '#df3349',
+                          background: '#da3147',
                           color: '#fff',
                           fontWeight: 700,
-                          fontSize: 12,
+                          fontSize: 'var(--font-size-tertiary)',
                           cursor: 'pointer',
                         }}
                       >

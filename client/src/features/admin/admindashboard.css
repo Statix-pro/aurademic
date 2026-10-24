@@ -26,11 +26,6 @@
   padding: 0.5rem 2rem 2rem;
   background-color: var(--admin-bg);
   min-height: 100vh;
-  font-family:
-    'Inter',
-    system-ui,
-    -apple-system,
-    sans-serif;
 }
 
 /* Tabs left, the page's one action right, on one row. The action used to take
@@ -75,7 +70,7 @@
 .publication-approval-dashboard .table th,
 .publication-approval-dashboard .table td {
   padding: 1.1rem 1.25rem;
-  font-size: 0.8rem;
+  font-size: var(--font-size-body);
   color: var(--admin-text-primary);
   border-bottom: 1px solid var(--admin-border);
   vertical-align: middle;
@@ -84,8 +79,8 @@
 .publication-approval-dashboard .table th {
   background-color: #f1f5f9 !important;
   color: #0069ab;
-  font-weight: 700;
-  font-size: 0.8rem;
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-secondary);
   text-transform: none !important;
   letter-spacing: 0.01em;
   position: sticky;
@@ -98,7 +93,7 @@
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
-  font-size: 0.75rem;
+  font-size: var(--font-size-tertiary);
   font-weight: 600;
   border-radius: 9999px;
   text-transform: capitalize;
@@ -134,6 +129,14 @@
   border: 1px solid #bfdbfe;
 }
 
+/* Status badges with no bg-* variant (project and submission statuses) were white on
+   white — unreadable. They take the neutral pill. */
+.publication-approval-dashboard .badge:not([class*='bg-']) {
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1px solid var(--admin-border);
+}
+
 .publication-approval-dashboard .badge.bg-primary {
   background-color: #eff6ff !important;
   color: var(--admin-accent) !important;
@@ -145,7 +148,7 @@
   border: 1px solid var(--admin-border);
   color: var(--admin-text-primary);
   padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
+  font-size: var(--font-size-secondary);
 }
 
 .publication-approval-dashboard .pagination .page-item.active .page-link {
@@ -154,7 +157,7 @@
   color: white;
 }
 
-.pagination .page-link:hover:not(.active) {
+.publication-approval-dashboard .pagination .page-link:hover:not(.active) {
   background-color: var(--admin-hover-bg);
 }
 
@@ -188,7 +191,7 @@
   border-radius: 0.5rem;
   text-align: center;
   margin: 1rem 0;
-  font-size: 0.875rem;
+  font-size: var(--font-size-body);
   font-weight: 500;
 }
 
@@ -223,16 +226,16 @@
 }
 
 .adminbudget-rows-label {
-  font-size: 0.85rem;
+  font-size: var(--font-size-secondary);
   color: #475569;
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
 }
 
 .adminbudget-rows-select {
   width: 52px;
   min-width: 52px;
-  height: 38px;
-  padding: 6px 22px 6px 8px;
+  height: var(--control-height);
+  padding: 0 22px 0 8px;
   border-radius: 10px;
   border: 1px solid rgba(15, 23, 42, 0.18);
   background: #ffffff;
@@ -246,18 +249,19 @@
 }
 
 .adminbudget-pagecount {
-  font-size: 0.9rem;
+  font-size: var(--font-size-secondary);
   color: #64748b;
   font-weight: 600;
 }
 
 .adminbudget-pagebtn {
-  padding: 8px 16px;
+  height: var(--chip-height);
+  padding: 0 16px;
   border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.18);
   background: rgba(255, 255, 255, 0.92);
   cursor: pointer;
-  font-size: 0.875rem;
+  font-size: var(--font-size-secondary);
   font-weight: 600;
   transition: all 0.2s ease;
   color: #475569;
@@ -279,7 +283,7 @@
 }
 
 .adminbudget-pageinfo {
-  font-size: 0.9rem;
+  font-size: var(--font-size-secondary);
   color: #475569;
   font-weight: 700;
 }
@@ -294,7 +298,7 @@
 }
 
 .publication-approval-dashboard .workflow-badge {
-  font-size: 0.75rem;
+  font-size: var(--font-size-tertiary);
   letter-spacing: 0.01em;
   white-space: nowrap;
 }
@@ -305,12 +309,12 @@
 }
 
 .publication-approval-dashboard .workflow-subtext {
-  font-size: 0.75rem;
+  font-size: var(--font-size-tertiary);
   font-weight: 500;
 }
 
 .workflow-subtext-resubmitted {
-  font-size: 0.74rem;
+  font-size: var(--font-size-tertiary);
   font-weight: 600;
   color: #5f6b7a;
   letter-spacing: 0.01em;
@@ -333,8 +337,8 @@
 
 .details-modal .modal-title {
   color: #0069ab;
-  font-weight: 700;
-  font-size: 1.1rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-modal-title);
 }
 
 .details-modal .modal-body-scroll {
@@ -344,8 +348,8 @@
 }
 
 .details-modal .project-details h3 {
-  font-size: 2rem;
-  line-height: 1.2;
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
   font-weight: 500;
   margin-bottom: 0.75rem;
   color: #2f3654;
@@ -357,15 +361,16 @@
 }
 
 .details-modal .detail-section h4 {
-  font-size: 1rem;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 700;
   margin-bottom: 0.75rem;
   color: #2f3654;
 }
 
 .details-modal .detail-section p {
-  font-size: 0.98rem;
-  line-height: 1.55;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
   margin-bottom: 0.65rem;
   color: #3a4260;
   word-break: break-word;
@@ -395,10 +400,6 @@
 @media (max-width: 768px) {
   .details-modal .modal-body-scroll {
     padding: 16px;
-  }
-
-  .details-modal .project-details h3 {
-    font-size: 1.6rem;
   }
 }
 
@@ -468,14 +469,14 @@
 }
 
 .workflow-action-title {
-  font-size: 0.7rem;
+  font-size: var(--font-size-tertiary);
   line-height: 1;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: #6b778a;
-  font-weight: 700;
+  font-weight: var(--weight-bold);
   white-space: nowrap;
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .workflow-inline-actions {
@@ -498,7 +499,7 @@
 
 .workflow-action-btn {
   width: auto;
-  height: 26px;
+  height: var(--inline-action-height);
   flex: 1 1 0;
   border: none;
   display: inline-flex;
@@ -534,8 +535,8 @@
 
 .workflow-date {
   width: auto;
-  font-size: 0.68rem;
-  color: #7b8595;
+  font-size: var(--font-size-tertiary);
+  color: #667085;
   font-weight: 600;
   letter-spacing: 0.01em;
   white-space: nowrap;
@@ -549,7 +550,7 @@
 }
 
 .workflow-actions .dropdown-item {
-  font-size: 0.85rem;
+  font-size: var(--font-size-body);
   color: var(--admin-text-secondary);
 }
 
@@ -567,10 +568,11 @@
 .publication-approval-dashboard .column-toggle-button {
   background: white;
   border: 1px solid var(--admin-border);
-  padding: 0.55rem 1.1rem;
+  height: var(--control-height);
+  padding: 0 1.1rem;
   border-radius: 10px;
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: var(--font-size-body);
   color: var(--admin-text-primary);
   display: flex;
   align-items: center;
@@ -614,15 +616,15 @@
 }
 
 .publication-approval-dashboard .column-group-title {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   color: var(--admin-text-secondary);
   border-bottom: 1px solid var(--admin-border);
   padding-bottom: 0.3rem;
   margin-bottom: 0.5rem;
   margin-top: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .publication-approval-dashboard .column-group-title:first-child {
@@ -630,7 +632,7 @@
 }
 
 .publication-approval-dashboard .form-check-label {
-  font-size: 0.875rem;
+  font-size: var(--font-size-body);
   font-weight: 500;
   color: var(--admin-text-primary);
   cursor: pointer;
@@ -648,8 +650,8 @@
 }
 
 .publication-approval-dashboard .column-config-dropdown .form-check-label {
-  font-size: 0.78rem;
-  line-height: 1.3;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
 }
 
 @media (max-width: 768px) {

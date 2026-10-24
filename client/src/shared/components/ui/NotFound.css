@@ -24,8 +24,8 @@
 .not-found-code {
   color: var(--primary-color, #0069ab);
   font-weight: 700;
-  font-size: 3.5rem;
-  line-height: 1;
+  font-size: var(--font-size-display);
+  line-height: var(--leading-display);
   letter-spacing: 0.02em;
 }
 
@@ -34,14 +34,15 @@
   margin-bottom: var(--space-3, 12px);
   color: var(--text-main, #4f4f6e);
   font-weight: 700;
-  font-size: 1.5rem;
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
 }
 
 .not-found-message {
   margin-bottom: var(--space-6, 24px);
   color: var(--text-muted, #6c757d);
-  font-size: 1rem;
-  line-height: 1.6;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
 }
 
 /* The path itself, so a mistyped or stale link is recognisable — it is the one
@@ -55,7 +56,7 @@
   border-radius: var(--border-radius-sm, 6px);
   background: var(--surface-muted, #f4f7fc);
   color: var(--text-soft, #51607a);
-  font-size: 0.85rem;
+  font-size: var(--font-size-secondary);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   word-break: break-all;
 }
@@ -89,6 +90,7 @@
   }
 
   .not-found-code {
-    font-size: 2.5rem;
+    font-size: var(--font-size-page-title);
+    line-height: var(--leading-page-title);
   }
 }

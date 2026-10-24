@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 
 import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
+// The add/edit form reuses the resource-person directory's form styles (.rpd-form-wrapper).
+import '../../resourcepersondirectory/ResourcePersonDirectory.css';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomInput from '../../../shared/components/ui/CustomInput';
 import CustomModal from '../../../shared/components/ui/CustomModal';
@@ -221,7 +223,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
           <span
             className="rpd-status-dot"
             style={{
-              backgroundColor: person.status === 'In Service' ? '#137a3a' : '#a97900',
+              backgroundColor: person.status === 'In Service' ? '#137a3a' : '#8f6600',
             }}
             title={person.status}
           />
@@ -428,7 +430,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                 <div
                   className="alert alert-warning d-flex align-items-center justify-content-between mb-0"
                   role="alert"
-                  style={{ borderRadius: '8px', fontSize: '0.875rem' }}
+                  style={{ borderRadius: '8px', fontSize: 'var(--font-size-body)' }}
                 >
                   <span>{loadError}</span>
                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>

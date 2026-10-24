@@ -19,6 +19,7 @@
     "typecheck": "npm run typecheck --prefix client",
     "check:server": "find server -path 'server/node_modules' -prune -o \\( -name '*.js' -o -name '*.cjs' \\) -print0 | xargs -0 -n1 node --check",
     "test:server": "npm test --prefix server",
+    "check:ui": "node client/scripts/check-ui-standard.mjs --self-test && node client/scripts/check-ui-standard.mjs",
     "reconcile:budget-annual": "npm run reconcile:budget-annual --prefix server --",
     "purge:notifications": "npm run purge:notifications --prefix server --",
     "build": "npm run build --prefix client",
@@ -31,6 +32,9 @@
     ],
     "*.{json,md,mdx,yml,yaml,css,scss,html}": [
       "prettier --write"
+    ],
+    "client/src/**/*.{css,tsx}": [
+      "node client/scripts/check-ui-standard.mjs"
     ]
   },
   "devDependencies": {

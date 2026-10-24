@@ -170,11 +170,11 @@ const modalStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  minHeight: '42px',
+  height: 'var(--control-height)',
   borderRadius: '10px',
   border: '1px solid #cbd5e1',
-  padding: '10px 12px',
-  fontSize: '0.95rem',
+  padding: '0 var(--control-padding-x)',
+  fontSize: 'var(--font-size-body)',
   color: '#0f172a',
   background: '#fff',
 };
@@ -182,14 +182,14 @@ const inputStyle: React.CSSProperties = {
 const labelStyle: React.CSSProperties = {
   display: 'block',
   marginBottom: '6px',
-  fontSize: '0.85rem',
+  fontSize: 'var(--font-size-secondary)',
   fontWeight: 600,
   color: '#334155',
 };
 
 const detailLabelStyle: React.CSSProperties = {
-  fontSize: '0.78rem',
-  fontWeight: 700,
+  fontSize: 'var(--font-size-secondary)',
+  fontWeight: 600,
   color: '#64748b',
   letterSpacing: '0.02em',
   textTransform: 'uppercase',
@@ -197,7 +197,7 @@ const detailLabelStyle: React.CSSProperties = {
 };
 
 const detailValueStyle: React.CSSProperties = {
-  fontSize: '0.95rem',
+  fontSize: 'var(--font-size-body)',
   color: '#0f172a',
   wordBreak: 'break-word',
 };
@@ -601,8 +601,19 @@ const PayeeDetailModal: React.FC<{
           }}
         >
           <div>
-            <div style={{ fontSize: '1.08rem', fontWeight: 700, color: '#0f172a' }}>{title}</div>
-            <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
+            <div
+              style={{
+                fontSize: 'var(--font-size-modal-title)',
+                lineHeight: 'var(--leading-modal-title)',
+                fontWeight: 600,
+                color: '#0f172a',
+              }}
+            >
+              {title}
+            </div>
+            <div
+              style={{ fontSize: 'var(--font-size-secondary)', color: '#64748b', marginTop: '4px' }}
+            >
               {mode === 'edit'
                 ? 'Update payee details before approval.'
                 : 'Review the full payee record before taking action.'}
@@ -638,7 +649,11 @@ const PayeeDetailModal: React.FC<{
             Loading payee details...
           </div>
         ) : error ? (
-          <div style={{ padding: '24px 22px', color: '#b91c1c', fontSize: '0.95rem' }}>{error}</div>
+          <div
+            style={{ padding: '24px 22px', color: '#b91c1c', fontSize: 'var(--font-size-body)' }}
+          >
+            {error}
+          </div>
         ) : mode === 'edit' && draft ? (
           <div style={{ padding: '22px', display: 'grid', gap: '16px' }}>
             <div
@@ -1373,8 +1388,19 @@ const PayeeFormModal: React.FC<{
           }}
         >
           <div>
-            <div style={{ fontSize: '1.08rem', fontWeight: 700, color: '#0f172a' }}>{title}</div>
-            <div style={{ fontSize: '0.85rem', color: '#64748b', marginTop: '4px' }}>
+            <div
+              style={{
+                fontSize: 'var(--font-size-modal-title)',
+                lineHeight: 'var(--leading-modal-title)',
+                fontWeight: 600,
+                color: '#0f172a',
+              }}
+            >
+              {title}
+            </div>
+            <div
+              style={{ fontSize: 'var(--font-size-secondary)', color: '#64748b', marginTop: '4px' }}
+            >
               {isReadOnly
                 ? 'Review the full payee record before taking action.'
                 : 'Update payee details before approval.'}
@@ -1417,8 +1443,8 @@ const PayeeFormModal: React.FC<{
                 style={{
                   padding: '14px 22px 0',
                   color: '#b91c1c',
-                  fontSize: '0.95rem',
-                  lineHeight: 1.5,
+                  fontSize: 'var(--font-size-body)',
+                  lineHeight: 'var(--leading-body)',
                 }}
               >
                 {error}
@@ -1982,7 +2008,11 @@ const PayeeFormModal: React.FC<{
             </div>
           </>
         ) : error ? (
-          <div style={{ padding: '24px 22px', color: '#b91c1c', fontSize: '0.95rem' }}>{error}</div>
+          <div
+            style={{ padding: '24px 22px', color: '#b91c1c', fontSize: 'var(--font-size-body)' }}
+          >
+            {error}
+          </div>
         ) : null}
       </div>
     </div>
@@ -2222,7 +2252,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                           style={{
                             fontWeight: 700,
                             color: '#0f172a',
-                            fontSize: '0.95rem',
+                            fontSize: 'var(--font-size-body)',
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -2239,8 +2269,8 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                             background: statusTheme.bg,
                             color: statusTheme.color,
                             border: `1px solid ${statusTheme.border}`,
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
+                            fontSize: 'var(--font-size-tertiary)',
+                            fontWeight: 600,
                           }}
                         >
                           {formatToken(status)}
@@ -2252,7 +2282,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                           flexWrap: 'wrap',
                           alignItems: 'center',
                           gap: '8px',
-                          fontSize: '0.85rem',
+                          fontSize: 'var(--font-size-secondary)',
                           color: '#64748b',
                         }}
                       >
@@ -2368,7 +2398,13 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   flexWrap: 'wrap',
                 }}
               >
-                <div style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>
+                <div
+                  style={{
+                    fontSize: 'var(--font-size-tertiary)',
+                    color: '#64748b',
+                    fontWeight: 600,
+                  }}
+                >
                   Showing {(currentPage - 1) * pageSize + 1}-
                   {Math.min(currentPage * pageSize, total)} of {total}
                 </div>
@@ -2382,8 +2418,8 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                       background: '#fff',
                       color: '#334155',
                       borderRadius: '10px',
-                      width: '36px',
-                      height: '36px',
+                      width: 'var(--chip-height)',
+                      height: 'var(--chip-height)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -2395,7 +2431,7 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                   </button>
                   <span
                     style={{
-                      fontSize: '0.9rem',
+                      fontSize: 'var(--font-size-body)',
                       fontWeight: 700,
                       color: '#334155',
                       minWidth: '72px',
@@ -2413,8 +2449,8 @@ const PendingPayeeApprovals: React.FC<PendingPayeeApprovalsProps> = ({
                       background: '#fff',
                       color: '#334155',
                       borderRadius: '10px',
-                      width: '36px',
-                      height: '36px',
+                      width: 'var(--chip-height)',
+                      height: 'var(--chip-height)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',

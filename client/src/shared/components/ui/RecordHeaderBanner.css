@@ -14,8 +14,9 @@
   background-color: #0069ab;
   color: #ffffff;
   font-weight: 700;
-  font-size: 14px;
-  padding: 8px 18px;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  padding: 6px 18px;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -23,6 +24,6 @@
 .record-header-banner-creator {
   color: #0069ab;
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   white-space: nowrap;
 }

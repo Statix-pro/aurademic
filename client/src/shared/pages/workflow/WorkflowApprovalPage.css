@@ -5,7 +5,6 @@
   background: #f3f7fb;
   min-height: calc(100vh - 64px);
   padding: 24px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 .fw-container {
@@ -69,9 +68,10 @@
 
 .fw-title {
   margin: 0;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   color: #0a2540;
-  font-size: 1.4rem;
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
 }
 
 .fw-header-actions {
@@ -83,18 +83,18 @@
 }
 
 .fw-control {
-  height: 42px;
+  height: var(--control-height);
   min-width: 160px;
   max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding: 10px 12px;
+  padding: 0 var(--control-padding-x);
   border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.18);
   background: rgba(255, 255, 255, 0.92);
   box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   color: #0f172a;
   outline: none;
   transition:
@@ -119,16 +119,16 @@
 }
 
 .fw-amount-filter-btn {
-  height: 42px;
+  height: var(--chip-height);
   min-width: 40px;
-  padding: 10px 14px;
+  padding: 0 14px;
   border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.16);
   background: #f8fafc;
   color: #334155;
   box-shadow: 0 6px 18px rgba(2, 6, 23, 0.06);
-  font-size: 0.92rem;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   line-height: 1;
   cursor: pointer;
   transition:
@@ -169,11 +169,12 @@
   gap: 7px;
   border: none;
   background: transparent;
-  color: #64748b;
+  color: var(--text-soft);
   border-radius: 7px;
-  padding: 7px 14px;
-  font-size: 0.86rem;
-  font-weight: 600;
+  height: var(--chip-height);
+  padding: 0 14px;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   line-height: 1;
   cursor: pointer;
   transition:
@@ -193,10 +194,10 @@
 }
 
 .fw-view-tab-badge {
-  background: #ef4444;
+  background: #d43c3c;
   color: #ffffff;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   line-height: 1;
   padding: 3px 6px;
   border-radius: 999px;
@@ -218,9 +219,10 @@
   background: #f8fafc;
   color: #334155;
   border-radius: 10px;
-  padding: 7px 14px;
-  font-size: 0.86rem;
-  font-weight: 700;
+  height: var(--chip-height);
+  padding: 0 14px;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   line-height: 1;
   cursor: pointer;
   transition:
@@ -255,9 +257,10 @@
   background: transparent;
   color: #475569;
   border-radius: 10px;
-  padding: 8px 14px;
-  font-size: 0.82rem;
-  font-weight: 700;
+  height: var(--control-height);
+  padding: 0 14px;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   line-height: 1;
   cursor: pointer;
   transition:
@@ -303,10 +306,10 @@
   justify-content: flex-start;
   gap: 14px;
   width: 175px;
-  height: 86px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  font-weight: 700;
+  min-height: 80px;
+  padding: 14px 20px;
+  border-radius: 14px;
+  font-weight: var(--weight-bold);
   background: #ffffff;
   border: 1px solid #e5e7eb;
   box-shadow: 0 6px 16px rgba(2, 6, 23, 0.08);
@@ -330,9 +333,9 @@
 }
 
 .fw-stats-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -349,10 +352,11 @@
 }
 
 .fw-stats-number {
-  line-height: 1;
+  line-height: var(--leading-kpi);
   margin-top: 6px;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--font-size-kpi);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
   color: #4f4f6e;
 }
 
@@ -366,8 +370,8 @@
 /* Stats card colors */
 .fw-stats-card.total {
   color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: var(--weight-regular);
+  font-size: var(--font-size-secondary);
 }
 .fw-stats-card.total .fw-stats-icon {
   background: #0069ab;
@@ -375,8 +379,8 @@
 }
 .fw-stats-card.pending {
   color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: var(--weight-regular);
+  font-size: var(--font-size-secondary);
 }
 .fw-stats-card.pending .fw-stats-icon {
   background: #0069ab;
@@ -384,8 +388,8 @@
 }
 .fw-stats-card.approved {
   color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: var(--weight-regular);
+  font-size: var(--font-size-secondary);
 }
 .fw-stats-card.approved .fw-stats-icon {
   background: #0069ab;
@@ -393,8 +397,8 @@
 }
 .fw-stats-card.returned {
   color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: var(--weight-regular);
+  font-size: var(--font-size-secondary);
 }
 .fw-stats-card.returned .fw-stats-icon {
   background: #0069ab;
@@ -402,8 +406,8 @@
 }
 .fw-stats-card.rejected {
   color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: var(--weight-regular);
+  font-size: var(--font-size-secondary);
 }
 .fw-stats-card.rejected .fw-stats-icon {
   background: #0069ab;
@@ -411,8 +415,8 @@
 }
 .fw-stats-card.archived {
   color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: var(--weight-regular);
+  font-size: var(--font-size-secondary);
 }
 .fw-stats-card.archived .fw-stats-icon {
   background: #0069ab;
@@ -427,7 +431,7 @@
 .fw-state {
   text-align: center;
   padding: 60px 0;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   color: #6b7280;
 }
 
@@ -510,15 +514,15 @@
   color: #fff;
   padding: 5px 10px;
   border-radius: 999px;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   white-space: nowrap;
 }
 
 .fw-name {
   margin: 0;
-  font-size: 0.98rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #0f172a;
   white-space: nowrap;
   overflow: hidden;
@@ -534,8 +538,8 @@
   border-radius: 999px;
   background: #dbeaf5;
   color: #3b6d91;
-  font-size: 0.82rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   line-height: 1;
   white-space: nowrap;
 }
@@ -547,9 +551,9 @@
 }
 
 .fw-icon-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
+  border-radius: var(--border-radius-sm);
   border: none;
   background: #f1f5f9;
   color: #475569;
@@ -580,17 +584,18 @@
 
 .fw-amount-label {
   margin: 0;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   opacity: 0.75;
   color: #64748b;
 }
 
 .fw-amount {
   margin: 0;
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #0f172a;
+  font-variant-numeric: tabular-nums;
 }
 
 .fw-amount--approved {
@@ -613,14 +618,14 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
   padding: 2px 0;
   width: 100%;
 }
 
 .fw-label {
   color: #64748b;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   white-space: nowrap;
   position: relative;
 }
@@ -634,7 +639,7 @@
 
 .fw-value {
   color: #0f172a;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   text-align: left;
   margin-left: 8px;
   flex: 1;
@@ -663,14 +668,14 @@
   display: inline-block;
   padding: 6px 10px;
   border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.4px;
 }
 
 .fw-status--pending {
   background: #fff4d6;
-  color: #a97900;
+  color: #8f6600;
   border: 1px solid #f3e8a5;
 }
 
@@ -702,8 +707,8 @@
   display: inline-block;
   padding: 6px 10px;
   border-radius: 999px;
-  font-size: 0.74rem;
-  font-weight: 800;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.3px;
 }
 
@@ -715,7 +720,7 @@
 
 .fw-principal-indicator--pending {
   background: #fff4d6;
-  color: #a97900;
+  color: #8f6600;
   border: 1px solid #f3e8a5;
 }
 
@@ -727,9 +732,9 @@
 }
 
 .fw-action-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
+  border-radius: var(--border-radius-sm);
   border: none;
   display: flex;
   align-items: center;
@@ -802,8 +807,8 @@
   color: #184d92;
   border-radius: 999px;
   padding: 3px 8px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   display: inline-block;
 }
 
@@ -838,16 +843,16 @@
 }
 
 .fw-rows-label {
-  font-size: 0.85rem;
+  font-size: var(--font-size-secondary);
   color: #475569;
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
 }
 
 .fw-rows-select {
   width: 52px;
   min-width: 52px;
-  height: 38px;
-  padding: 6px 22px 6px 8px;
+  height: var(--control-height);
+  padding: 0 22px 0 8px;
   border-radius: 10px;
   border: 1px solid rgba(15, 23, 42, 0.18);
   background: #ffffff;
@@ -857,17 +862,18 @@
   background-position: right 8px center;
   background-size: 10px 6px;
   color: #0f172a;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .fw-pagecount {
-  font-size: 0.9rem;
+  font-size: var(--font-size-secondary);
   color: #64748b;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .fw-pagebtn {
-  padding: 10px 14px;
+  height: var(--chip-height);
+  padding: 0 14px;
   border-radius: 12px;
   border: 1px solid rgba(15, 23, 42, 0.18);
   background: rgba(255, 255, 255, 0.92);
@@ -886,17 +892,17 @@
 }
 
 .fw-pageinfo {
-  font-size: 0.95rem;
+  font-size: var(--font-size-secondary);
   color: #475569;
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
 }
 
 /* Log Modal Styles */
 .fw-log-header {
   background: #f8fafc;
   padding: 12px 16px;
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-body);
   color: #0f172a;
   border-bottom: 1px solid #e2e8f0;
 }
@@ -911,17 +917,17 @@
   display: flex;
   justify-content: space-between;
   margin-bottom: 8px;
-  font-size: 0.85rem;
+  font-size: var(--font-size-body);
 }
 
 .fw-log-label {
   color: #64748b;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .fw-log-value {
   color: #1e293b;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .fw-log-approvals {
@@ -948,8 +954,8 @@
 }
 
 .fw-log-decision {
-  font-size: 0.65rem;
-  font-weight: 800;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -980,13 +986,13 @@
 }
 
 .fw-log-role {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   color: #475569;
 }
 
 .fw-log-feedback {
-  font-size: 0.7rem;
+  font-size: var(--font-size-secondary);
   color: #856404;
   background: #fff3cd;
   padding: 2px 6px;
@@ -1001,22 +1007,22 @@
   color: #0d6efd;
   cursor: pointer;
   padding: 0;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
 }
 
 .fw-log-actor-line {
   display: block;
   width: 100%;
   margin-top: 4px;
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-bold);
   color: #334155;
 }
 
 .fw-log-date {
-  font-size: 0.7rem;
-  color: #94a3b8;
+  font-size: var(--font-size-tertiary);
+  color: #667085;
   margin-left: auto;
 }
 
@@ -1085,7 +1091,7 @@
 
   .fw-stats-card {
     width: 200px;
-    height: 86px;
+    min-height: 80px;
   }
 }
 .adminbudget-action-btn--delete {
@@ -1108,13 +1114,13 @@
 
 .fw-proposal-filter-btn {
   min-width: 42px;
-  height: 38px;
+  height: var(--chip-height);
   border-radius: 10px;
   border: 1px solid #d7deea;
   background: #ffffff;
   color: #0b5f97;
-  font-weight: 700;
-  font-size: 0.92rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
   padding: 0 14px;
@@ -1126,7 +1132,7 @@
 
 .fw-proposal-filter-btn--advance.active {
   background: #fde9ea;
-  color: #c63d4a;
+  color: #be3a47;
   border-color: #f2bcc2;
 }
 
@@ -1147,18 +1153,18 @@
   align-items: center;
   justify-content: center;
   min-width: 40px;
-  height: 32px;
+  height: var(--tag-height);
   border-radius: 999px;
-  padding: 0 12px;
-  font-size: 0.8rem;
-  font-weight: 800;
+  padding: 0 10px;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   line-height: 1;
   white-space: nowrap;
 }
 
 .fw-proposal-badge--advance {
   background: #fde9ea;
-  color: #c63d4a;
+  color: #be3a47;
 }
 
 .fw-proposal-badge--expenditure {
@@ -1173,8 +1179,8 @@
 
 .fw-stats-card.all {
   color: #5d6b8a;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: var(--weight-regular);
+  font-size: var(--font-size-secondary);
 }
 
 .fw-stats-card.all .fw-stats-icon {
@@ -1196,8 +1202,9 @@
 }
 
 .fw-payee-title {
-  font-size: 1.1rem;
-  font-weight: 700;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
   color: #1f2a44;
 }
 
@@ -1241,11 +1248,11 @@
 
 .fw-payee-stats-card {
   width: 100%;
-  min-height: 96px;
+  min-height: 80px;
   height: auto;
-  border-radius: 12px;
+  border-radius: 14px;
   text-align: left;
-  padding: 14px 16px;
+  padding: 14px 20px;
 }
 
 .fw-payee-stats-row {
@@ -1274,11 +1281,11 @@
 }
 
 .fw-payee-action-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
+  border-radius: var(--border-radius-sm);
   border: 1px solid transparent;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   opacity: 1;
   transition:
@@ -1359,7 +1366,9 @@
 
 .fw-payee-empty-title {
   margin: 0;
-  font-weight: 700;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
   color: #1e293b;
 }
 
@@ -1395,4 +1404,17 @@
     grid-template-columns: repeat(3, auto);
     justify-content: start;
   }
+}
+
+/* Log dialogs are 760px, like the other two log dialogs: a short vertical list reads best at a
+   moderate width. The shared .modal-lg rule (80% wide, !important) is overridden here. One
+   scrollbar — the dialog's — so the body has no height cap of its own. */
+.custom-modal.fw-log-modal .modal-dialog.modal-lg {
+  max-width: 760px !important;
+  width: calc(100% - 32px) !important;
+}
+
+.fw-log-modal .fw-log-body {
+  max-height: none;
+  overflow: visible;
 }

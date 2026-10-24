@@ -158,6 +158,7 @@ const ParticipantsPage: React.FC<ParticipantsPageProps> = ({
                         border: 'none',
                         cursor: 'pointer',
                         padding: 0,
+                        // ui-standard-allow: icon glyph, not text
                         fontSize: '16px',
                       }}
                     >

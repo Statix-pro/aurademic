@@ -42,8 +42,8 @@
   border-radius: 6px;
   background: #eef5fd;
   color: #0069ab;
-  font-weight: 600;
-  font-size: 0.75rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -51,9 +51,9 @@
   overflow: hidden;
   margin: 0;
   color: #1f2d3d;
-  font-weight: 600;
-  font-size: 1rem;
-  line-height: 1.4;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -80,18 +80,16 @@
 
 .pc-fact dt {
   margin-bottom: 2px;
-  color: #8a97ab;
-  font-weight: 500;
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  color: var(--text-soft);
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
 }
 
 .pc-fact dd {
   overflow: hidden;
   margin: 0;
   color: #3d4a5c;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -120,8 +118,9 @@
    button away from the others into the middle of the strip. */
 .pc-card__actions .action-btn {
   margin: 0;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: var(--icon-action-size);
+  min-height: var(--icon-action-size);
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 0.82rem;
 }
 
@@ -137,8 +136,8 @@
   border-radius: 999px;
   background: #eef2f7;
   color: #4f5d73;
-  font-weight: 600;
-  font-size: 0.75rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
   white-space: nowrap;
 }
 
@@ -233,7 +232,7 @@
   border-radius: 6px;
   background: #fdf3f4;
   color: #7a2530;
-  font-size: 0.85rem;
+  font-size: var(--font-size-body);
 }
 
 /* Requesting an edit is still an edit, so it looks like the Edit button with

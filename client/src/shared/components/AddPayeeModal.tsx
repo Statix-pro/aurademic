@@ -239,8 +239,8 @@ const createPayeeId = () =>
 const dropdownBaseStyles = {
   control: (base: any, state: any) => ({
     ...base,
-    minHeight: '42px',
-    height: '42px',
+    minHeight: 'var(--control-height)',
+    height: 'var(--control-height)',
     borderRadius: '12px',
     borderColor: state.isFocused ? '#2b9ed6' : '#d6dce5',
     backgroundColor: '#f8fafc',
@@ -251,9 +251,9 @@ const dropdownBaseStyles = {
   }),
   valueContainer: (base: any) => ({
     ...base,
-    minHeight: '40px',
-    height: '40px',
-    padding: '0 14px',
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+    padding: '0 var(--control-padding-x)',
     display: 'flex',
     alignItems: 'center',
   }),
@@ -283,7 +283,7 @@ const dropdownBaseStyles = {
   }),
   indicatorsContainer: (base: any) => ({
     ...base,
-    height: '40px',
+    height: 'calc(var(--control-height) - 2px)',
     alignItems: 'center',
   }),
   dropdownIndicator: (base: any) => ({

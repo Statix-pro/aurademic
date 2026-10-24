@@ -32,10 +32,10 @@
 
 .expenditure-title {
   padding-left: 8px;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   color: #0a2540;
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--font-size-page-title);
 }
 
 .expenditure-title-row {
@@ -50,14 +50,14 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  height: 38px;
+  height: var(--control-height);
   padding: 0 14px;
   border-radius: 10px;
   border: 1px solid #b9d8f5;
   background: #edf7ff;
   color: #0069ab;
-  font-weight: 700;
-  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-body);
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -95,17 +95,17 @@
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
+  color: var(--placeholder-color);
   pointer-events: none;
 }
 
 .expenditure-search-input {
   width: 100%;
-  height: 46px;
+  height: var(--control-height);
   border: 1px solid #d7dee8;
   border-radius: 12px;
-  padding: 10px 38px 10px 40px;
-  font-size: 0.95rem;
+  padding: 0 38px 0 40px;
+  font-size: var(--font-size-body);
   color: #334155;
   background: #ffffff;
   outline: none;
@@ -128,7 +128,7 @@
   right: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #94a3b8;
+  color: var(--placeholder-color);
   cursor: pointer;
 }
 
@@ -148,13 +148,13 @@
 
 .expenditure-proposal-filter-btn {
   min-width: 42px;
-  height: 46px;
+  height: var(--control-height);
   border-radius: 12px;
   border: 1px solid #d7dee8;
   background: #ffffff;
   color: #0069ab;
-  font-weight: 700;
-  font-size: 0.92rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
   cursor: pointer;
   transition: all 0.2s ease;
   padding: 0 14px;
@@ -172,7 +172,7 @@
 
 .expenditure-proposal-filter-btn--advance.active {
   background: #fde9ea;
-  color: #c63d4a;
+  color: #be3a47;
   border-color: #f2bcc2;
 }
 
@@ -190,11 +190,11 @@
 
 .expenditure-financial-year,
 .expenditure-beneficiary-filter {
-  height: 46px;
-  padding: 10px 38px 10px 14px;
+  height: var(--control-height);
+  padding: 0 38px 0 var(--control-padding-x);
   border: 1px solid #d7dee8;
   border-radius: 12px;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   color: #334155;
   background: #ffffff
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23707f95' d='M1 1l4 4 4-4'/%3E%3C/svg%3E")
@@ -242,7 +242,7 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px;
+  padding: 14px 20px;
   background: #ffffff;
   border: 1px solid #e2e8f0;
   border-radius: 14px;
@@ -258,6 +258,7 @@
     box-shadow 0.2s ease,
     background-color 0.2s ease,
     transform 0.2s ease;
+  min-height: 80px;
 }
 
 .expenditure-stats-card:hover {
@@ -276,8 +277,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 10px;
   transition: all 0.2s ease;
   flex-shrink: 0;
@@ -290,28 +291,31 @@
 }
 
 .expenditure-stats-label {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-regular);
   color: #64748b;
   margin-bottom: 2px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  line-height: var(--leading-secondary);
 }
 
 .expenditure-stats-number {
-  font-size: 20px;
-  font-weight: 800;
+  font-size: var(--font-size-kpi);
+  font-weight: var(--weight-bold);
   color: #0f172a;
-  line-height: 1.2;
+  line-height: var(--leading-kpi);
+  font-variant-numeric: tabular-nums;
 }
 
 .expenditure-stats-amount {
-  font-size: 11px;
-  font-weight: 700;
-  color: #94a3b8;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
+  color: #667085;
   margin-top: 2px;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Color Accents (Cards) */
@@ -347,7 +351,7 @@
 
 .expenditure-stats-card.approved .expenditure-stats-icon-wrap {
   background: #d1fae5;
-  color: #059669;
+  color: #047857;
 }
 
 .expenditure-stats-card.approved.active {
@@ -388,7 +392,7 @@
 .expenditure-demo-note {
   margin-bottom: 12px;
   color: #475569;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   font-weight: 500;
 }
 
@@ -418,17 +422,18 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 0 12px;
   border-radius: 6px;
   border: 1px solid #0b5fb1;
   background: #ffffff;
   color: #0b5fb1;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition:
     background 0.15s ease,
     color 0.15s ease;
+  height: var(--button-sm-height);
 }
 
 .expenditure-demo-card-footer__close-btn:hover:not(:disabled) {
@@ -446,14 +451,15 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 12px;
+  padding: 0 12px;
   border-radius: 6px;
   background: #f1f5f9;
   border: 1px solid #cbd5e1;
-  color: #94a3b8;
-  font-size: 12px;
-  font-weight: 600;
+  color: #667085;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: not-allowed;
+  height: var(--button-sm-height);
 }
 
 .expenditure-demo-trigger {
@@ -477,8 +483,8 @@
   border-radius: 12px;
   background: #ffffff;
   color: #111827;
-  font-size: 16px;
-  font-weight: 800;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   white-space: nowrap;
 }
 
@@ -493,13 +499,13 @@
 
 .expenditure-demo-trigger__id {
   flex: 0 0 auto;
-  min-height: 30px;
-  padding: 6px 12px;
+  min-height: var(--chip-height);
+  padding: 0 12px;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.16);
   color: #ffffff;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.01em;
   white-space: nowrap;
   display: inline-flex;
@@ -516,11 +522,11 @@
   min-width: 0 !important;
   max-width: none !important;
   height: auto !important;
-  min-height: 30px !important;
+  min-height: var(--chip-height) !important;
   max-height: none !important;
-  padding: 6px 12px !important;
+  padding: 0 12px !important;
   border-radius: 8px !important;
-  font-size: 13px !important;
+  font-size: var(--font-size-secondary) !important;
   line-height: 1 !important;
   flex: 0 0 auto !important;
   overflow: hidden !important;
@@ -529,10 +535,10 @@
 }
 
 .expenditure-demo-trigger__title {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
   color: #ffffff;
-  line-height: 1.2;
+  line-height: var(--leading-section-title);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -544,8 +550,8 @@
   align-items: center;
   gap: 8px;
   color: rgba(255, 255, 255, 0.82);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   flex-wrap: nowrap;
   white-space: nowrap;
   min-width: 0;
@@ -561,8 +567,8 @@
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
-  font-size: 16px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-medium);
   color: #f7df9b;
   padding-left: 2px;
 }
@@ -571,14 +577,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 22px;
-  padding: 4px 10px;
-  border-radius: 999px;
+  min-height: var(--tag-height);
+  padding: 0 10px;
+  border-radius: 6px;
   background: rgba(96, 165, 250, 0.52);
   border: 1px solid rgba(191, 219, 254, 0.28);
   color: #ffffff;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   line-height: 1;
   white-space: nowrap;
 }
@@ -608,16 +614,17 @@
 }
 
 .expenditure-demo-trigger__summary-label {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-regular);
   color: rgba(255, 255, 255, 0.82);
 }
 
 .expenditure-demo-trigger__summary-item strong {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   color: #ffffff;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .expenditure-demo-trigger__arrow {
@@ -659,8 +666,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   color: #475569;
   margin-bottom: 14px;
 }
@@ -716,8 +723,8 @@
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.14);
   color: #ffffff;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   letter-spacing: 0.03em;
   white-space: nowrap;
 }
@@ -794,25 +801,24 @@
 }
 
 .expenditure-demo-row__amount-label {
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .expenditure-demo-row__amount-subhead {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   color: #0a2540;
-  line-height: 1.15;
+  line-height: var(--leading-secondary);
   text-align: center;
 }
 
 .expenditure-demo-row__amount-chip strong {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #0a2540;
+  font-variant-numeric: tabular-nums;
 }
 
 .expenditure-demo-row__actions {
@@ -825,8 +831,8 @@
 }
 
 .expenditure-demo-row__icon-btn {
-  width: 36px;
-  height: 36px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 10px;
   border: 1px solid #d7e3ef;
   background: #f8fbff;
@@ -885,13 +891,13 @@
   width: auto;
   min-width: 130px;
   max-width: 220px;
-  min-height: 40px;
+  min-height: var(--control-height);
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
   white-space: normal;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
 }
 
 .expenditure-demo-option--detailed {
@@ -901,13 +907,13 @@
   width: 205px;
   min-width: 205px;
   max-width: 205px;
-  min-height: 40px;
+  min-height: var(--control-height);
   padding: 0;
 }
 
 .expenditure-demo-option__label {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   color: #0f172a;
   min-width: 0;
   width: 100%;
@@ -920,7 +926,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 40px;
+  min-height: var(--control-height);
   padding: 8px 16px;
   border-radius: 999px;
   background: #b8d2e8;
@@ -942,13 +948,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 38px;
+  height: var(--control-height);
   padding: 0 20px;
   border-radius: 999px;
   background: #e8f1f8;
   color: #2f6f9c;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   width: auto;
   border: 1px solid #e8f1f8;
 }
@@ -980,7 +986,7 @@
   justify-content: center;
   gap: 4px;
   width: 100%;
-  min-height: 40px;
+  min-height: var(--control-height);
   padding: 7px 6px;
   border-radius: 10px;
   border: 1px solid #bfd6f7;
@@ -992,7 +998,7 @@
 }
 
 .expenditure-demo-option__detail-box--ref {
-  min-height: 40px;
+  min-height: var(--control-height);
   padding: 7px 5px;
   background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   border-color: #c8daf6;
@@ -1014,8 +1020,8 @@
   color: #0b4f8a;
   display: block;
   font-family: inherit;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   line-height: 1.1;
   letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
@@ -1028,8 +1034,8 @@
 
 .expenditure-demo-option__detail-module {
   color: #5b6f88;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   line-height: 1.1;
   text-align: left;
   white-space: nowrap;
@@ -1042,14 +1048,15 @@
 
 .expenditure-demo-option__detail-amount-value {
   color: #0a3f78;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   line-height: 1.1;
   text-align: right;
   white-space: nowrap;
   flex: 0 0 auto;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
 }
 
 .expenditure-demo-option.chosen {
@@ -1167,7 +1174,7 @@
 .expenditure-demo-row__subhead {
   display: inline-flex;
   align-items: center;
-  min-height: 34px;
+  min-height: var(--chip-height);
   max-width: clamp(120px, 14vw, 220px);
   padding: 6px 11px;
   border-radius: 10px;
@@ -1185,21 +1192,21 @@
   border-radius: 999px;
   background: #e8f1f8;
   border-color: #e8f1f8;
-  min-height: 38px;
+  min-height: var(--control-height);
   padding: 0 20px;
 }
 
 .expenditure-demo-row__subhead--construction .expenditure-demo-row__subhead-value {
   color: #2f6f9c;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
 }
 
 .expenditure-demo-row__subhead-value {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   color: inherit;
-  line-height: 1.1;
+  line-height: var(--leading-secondary);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1215,14 +1222,14 @@
   align-items: center;
   justify-content: center;
   min-width: 82px;
-  min-height: 32px;
+  min-height: var(--chip-height);
   padding: 7px 13px;
   border-radius: 100px;
   background: #f3f4f6;
   color: #111827;
-  font-size: 13px;
+  font-size: var(--font-size-tertiary);
   line-height: 1;
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   border: 1px solid #e5e7eb;
   white-space: nowrap;
   cursor: pointer;
@@ -1328,14 +1335,14 @@
 }
 
 .expenditure-scheduled-toggle__title {
-  font-size: 14px;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   color: #0f172a;
 }
 
 .expenditure-scheduled-toggle__hint {
   margin-top: 3px;
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
   color: #64748b;
 }
 
@@ -1394,14 +1401,14 @@
   border-radius: 999px;
   background: #dbeafe;
   color: #075985;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   margin-bottom: 12px;
 }
 
 .expenditure-scheduled-card__proposal {
   margin-top: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #475569;
 }
 
@@ -1413,14 +1420,14 @@
 }
 
 .expenditure-scheduled-card__label {
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
   color: #64748b;
   margin-bottom: 4px;
 }
 
 .expenditure-scheduled-card__value {
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #0f172a;
 }
 
@@ -1429,8 +1436,8 @@
   padding-top: 12px;
   border-top: 1px solid #e2e8f0;
   color: #475569;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
 }
 
 .expenditure-scheduled-empty {
@@ -1454,7 +1461,7 @@
 .expenditure-state {
   text-align: center;
   padding: 60px 0;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
   color: #6b7280;
 }
 
@@ -1500,8 +1507,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-bold);
   flex: 0 0 auto;
 }
 
@@ -1510,10 +1517,10 @@
 }
 
 .expenditure-request-card__name {
-  font-size: 1.02rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #0f172a;
-  line-height: 1.2;
+  line-height: var(--leading-body);
 }
 
 .expenditure-request-card__meta {
@@ -1529,7 +1536,7 @@
 .expenditure-request-card__sub {
   margin-top: 6px;
   color: #64748b;
-  font-size: 13px;
+  font-size: var(--font-size-secondary);
 }
 
 .expenditure-request-card__right {
@@ -1541,10 +1548,11 @@
 }
 
 .expenditure-request-card__amount {
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #0a2540;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .expenditure-request-card__actions {
@@ -1580,8 +1588,8 @@
   color: #137a3a;
   padding: 14px 12px;
   text-align: left;
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-secondary);
   border-bottom: 2px solid #d7f1e3;
 }
 
@@ -1589,7 +1597,7 @@
   padding: 14px 12px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
-  font-size: 0.88rem;
+  font-size: var(--font-size-body);
   color: #1f2937;
 }
 
@@ -1607,7 +1615,7 @@
 }
 
 .expenditure-head-sub {
-  font-size: 0.75rem;
+  font-size: var(--font-size-secondary);
   color: #6b7280;
 }
 
@@ -1646,7 +1654,7 @@
 .expenditure-individual-cards__empty {
   text-align: center;
   padding: 60px 0;
-  font-size: 0.92rem;
+  font-size: var(--font-size-body);
   color: #6b7280;
 }
 
@@ -1689,11 +1697,11 @@
 }
 
 .expenditure-individual-card__name {
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #0f172a;
   margin: 0;
-  line-height: 1.3;
+  line-height: var(--leading-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1708,8 +1716,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   flex-shrink: 0;
   line-height: 1;
 }
@@ -1731,8 +1739,8 @@
 
 /* Solid Blue Full Reference Pill */
 .expenditure-individual-card__full-ref {
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   color: #ffffff;
   background: #0069ab;
   border-radius: 9999px;
@@ -1758,19 +1766,18 @@
 }
 
 .expenditure-individual-card__amount-label {
-  font-size: 10px;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
+  color: #667085;
   margin-bottom: 2px;
 }
 
 .expenditure-individual-card__amount-value {
-  font-size: 1.15rem;
-  font-weight: 800;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: #0f172a;
-  line-height: 1.2;
+  line-height: var(--leading-body);
+  font-variant-numeric: tabular-nums;
 }
 
 .expenditure-individual-card__actions-top {
@@ -1781,8 +1788,8 @@
 
 /* Circular Buttons */
 .expenditure-individual-card__action-circle-btn {
-  width: 34px;
-  height: 34px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 50%;
   border: none;
   background: #f1f5f9;
@@ -1827,9 +1834,9 @@
 }
 
 .expenditure-individual-card__meta-row {
-  font-size: 13px;
+  font-size: var(--font-size-secondary);
   color: #64748b;
-  line-height: 1.4;
+  line-height: var(--leading-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1896,8 +1903,8 @@
 }
 
 .expenditure-action-global {
-  width: 36px;
-  height: 36px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 10px;
   border: none;
   background: #f1f5f9;
@@ -1940,8 +1947,9 @@
   padding: 18px 22px;
   background: #0069ab;
   color: #ffffff;
-  font-size: 17px;
-  font-weight: 700;
+  font-size: var(--font-size-modal-title);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-modal-title);
 }
 
 .expenditure-log-body {
@@ -1998,8 +2006,8 @@
 }
 
 .expenditure-log-badge {
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   letter-spacing: 0.03em;
   border-radius: 999px;
   padding: 4px 8px;
@@ -2036,8 +2044,8 @@
   flex: 0 0 auto;
   border-radius: 999px;
   padding: 4px 8px;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   color: #0069ab;
   background: #eaf5ff;
 }
@@ -2048,7 +2056,7 @@
 .expenditure-log-empty {
   margin-top: 8px;
   color: #64748b;
-  font-size: 13px;
+  font-size: var(--font-size-secondary);
 }
 
 .expenditure-log-date {
@@ -2068,8 +2076,11 @@
   border-radius: 8px;
   background: #0069ab;
   color: #ffffff;
-  padding: 9px 18px;
-  font-weight: 700;
+  padding: 0 var(--button-padding-x);
+  font-weight: var(--weight-semibold);
+  min-width: var(--button-min-width);
+  height: var(--control-height);
+  font-size: var(--font-size-body);
 }
 
 .expenditure-dialog-modal .modal-dialog {
@@ -2090,16 +2101,17 @@
 
 .expenditure-dialog-modal .modal-title {
   color: #0a2540;
-  font-size: 18px;
-  font-weight: 800;
+  font-size: var(--font-size-modal-title);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-modal-title);
 }
 
 .expenditure-dialog-modal .modal-body {
   padding: 10px 20px 28px;
   color: #475569;
-  font-size: 15px;
+  font-size: var(--font-size-body);
   font-weight: 600;
-  line-height: 1.5;
+  line-height: var(--leading-body);
 }
 
 .expenditure-dialog-modal .modal-footer {
@@ -2109,11 +2121,11 @@
 }
 
 .expenditure-dialog-modal .btn {
-  min-width: 92px;
-  min-height: 38px;
+  min-width: var(--button-min-width);
+  min-height: var(--control-height);
   border-radius: 10px;
-  font-size: 14px;
-  font-weight: 800;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
 }
 
 .expenditure-dialog-modal--warning .btn-primary {
@@ -2179,7 +2191,6 @@
   }
 
   .expenditure-proposal-filter-btn {
-    flex: 1;
     min-width: 0;
     text-align: center;
   }
@@ -2238,17 +2249,9 @@
 }
 
 @media (max-width: 480px) {
-  .expenditure-title {
-    font-size: 1.2rem;
-  }
   .expenditure-table td,
   .expenditure-table th {
     padding: 8px 6px;
-    font-size: 0.8rem;
-  }
-
-  .expenditure-demo-trigger__title {
-    font-size: 16px;
   }
 
   .expenditure-demo-option {

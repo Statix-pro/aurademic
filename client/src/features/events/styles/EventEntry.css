@@ -1,0 +1,52 @@
+/* EventEntry.tsx has no other stylesheet, so its heading and controls otherwise take
+   whatever a previously opened page's global CSS left behind (20px heading, 24–28px
+   inputs). Pin them to the portal size and type standard. */
+.event-entry-container .section-title {
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: 600;
+}
+
+.event-entry-container input,
+.event-entry-container select {
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
+}
+
+/* Row add/delete icon buttons: the 32×32 table-row icon action. Their colours used to arrive from
+   the projects and publications stylesheets' global .add-btn/.delete-btn; they live here now. */
+.event-entry-container .icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
+  padding: 0;
+  border: none;
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+}
+
+.event-entry-container .icon-btn.add-btn {
+  background-color: var(--primary-color);
+  color: #fff;
+}
+
+.event-entry-container .icon-btn.add-btn:hover {
+  background-color: var(--primary-hover);
+}
+
+.event-entry-container .icon-btn.delete-btn {
+  background-color: #ffe1e1;
+  color: #dc3545;
+}
+
+.event-entry-container .icon-btn.delete-btn:hover {
+  background-color: #fecaca;
+}
+
+.event-entry-container .action-icons {
+  display: inline-flex;
+  gap: 8px;
+}

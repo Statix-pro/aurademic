@@ -52,12 +52,13 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   menuPosition = 'fixed',
   ...props
 }) => {
-  // Default styles (keep your existing ones)
+  // Sized on --control-height so a dropdown lines up with the inputs beside it.
   const defaultStyles = {
     control: (provided: any, state: any) => ({
       ...provided,
-      minHeight: '45px',
-      height: '45px',
+      minHeight: 'var(--control-height)',
+      height: 'var(--control-height)',
+      fontSize: 'var(--font-size-body)',
       backgroundColor: 'var(--bg-input)',
       borderColor: error
         ? 'var(--error-color)'
@@ -73,16 +74,16 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
     }),
     valueContainer: (provided: any) => ({
       ...provided,
-      minHeight: '43px',
-      height: '43px',
-      padding: '0 12px',
+      minHeight: 'calc(var(--control-height) - 2px)',
+      height: 'calc(var(--control-height) - 2px)',
+      padding: '0 8px',
       display: 'flex',
       alignItems: 'center',
     }),
     indicatorsContainer: (provided: any) => ({
       ...provided,
-      minHeight: '43px',
-      height: '43px',
+      minHeight: 'calc(var(--control-height) - 2px)',
+      height: 'calc(var(--control-height) - 2px)',
     }),
     indicatorSeparator: (provided: any) => ({
       ...provided,
@@ -91,6 +92,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
     }),
     menu: (provided: any) => ({
       ...provided,
+      fontSize: 'var(--font-size-body)',
       borderRadius: 'var(--border-radius-md)',
       overflow: 'hidden',
       zIndex: 4000,
@@ -117,7 +119,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
       color: 'var(--text-main)',
     }),
     // Light grey like every other hint, and hidden while the field is disabled
-    // (see the placeholder rules in shared/styles/index.css).
+    // (see the placeholder rules in shared/styles/base.css).
     placeholder: (provided: any, state: any) => ({
       ...provided,
       color: state.isDisabled ? 'transparent' : 'var(--placeholder-color)',

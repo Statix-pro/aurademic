@@ -730,8 +730,8 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
             style={{
               margin: 0,
               color: '#0069ab',
-              fontSize: '20px',
-              fontWeight: 'bold',
+              fontSize: 'var(--font-size-modal-title)',
+              fontWeight: 600,
             }}
           >
             Search Budget Heads & Subheads
@@ -740,6 +740,7 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
           <button
             onClick={onClose}
             style={{
+              // ui-standard-allow: icon glyph, not text
               fontSize: '24px',
               cursor: 'pointer',
               background: 'none',
@@ -792,7 +793,11 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
                     }}
                   >
                     <div
-                      style={{ cursor: 'pointer', fontWeight: 'bold', fontSize: '16px' }}
+                      style={{
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontSize: 'var(--font-size-body)',
+                      }}
                       title="Click to use this Head"
                       onClick={() => onSelectHead(head)}
                     >
@@ -800,7 +805,11 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
                     </div>
 
                     <div
-                      style={{ cursor: 'pointer', fontSize: '14px', color: '#666' }}
+                      style={{
+                        cursor: 'pointer',
+                        fontSize: 'var(--font-size-secondary)',
+                        color: '#666',
+                      }}
                       title="Expand / collapse subheads"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -812,7 +821,7 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
                     </div>
                   </div>
 
-                  <div style={{ fontSize: '14px', color: '#666' }}>
+                  <div style={{ fontSize: 'var(--font-size-secondary)', color: '#666' }}>
                     {subheads.slice(0, 3).join(', ')}
                     {subheads.length > 3 && !isExpanded && '...'}
                   </div>
@@ -836,7 +845,7 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
                             marginBottom: '6px',
                             backgroundColor: 'white',
                             borderRadius: '6px',
-                            fontSize: '13px',
+                            fontSize: 'var(--font-size-body)',
                             borderLeft: '3px solid #28a745',
                             cursor: 'pointer',
                           }}
@@ -1701,15 +1710,16 @@ const FinanceApproval: React.FC = () => {
   };
 
   const iconBtn: CSSProperties = {
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
+    width: 'var(--icon-action-size)',
+    height: 'var(--icon-action-size)',
+    borderRadius: 'var(--border-radius-sm)',
     border: 'none',
     background: '#f5f6f8',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    // ui-standard-allow: icon glyph, not text
     fontSize: '18px',
     transition: 'background-color 0.3s ease',
   };
@@ -1727,10 +1737,12 @@ const FinanceApproval: React.FC = () => {
     gap: '8px',
     border: '1px solid #cfd8e3',
     borderRadius: '12px',
-    padding: '12px 16px',
+    height: 'var(--control-height)',
+    padding: '0 var(--button-padding-x)',
     background: '#0069ab',
     color: 'white',
-    fontWeight: 300,
+    fontSize: 'var(--font-size-body)',
+    fontWeight: 600,
     cursor: 'pointer',
     boxShadow: '0 6px 14px rgba(15, 23, 42, 0.06)',
   };
@@ -1740,7 +1752,7 @@ const FinanceApproval: React.FC = () => {
     gap: '10px',
     flexWrap: 'wrap',
     color: '#1f2937',
-    fontSize: '0.92rem',
+    fontSize: 'var(--font-size-body)',
     fontWeight: 500,
   };
 
@@ -3374,7 +3386,14 @@ const FinanceApproval: React.FC = () => {
                 }}
                 onClick={() => setIsApplicantCardOpen((prev) => !prev)}
               >
-                <h5 style={{ margin: 0, fontSize: '16px', color: '#0069ab', fontWeight: 600 }}>
+                <h5
+                  style={{
+                    margin: 0,
+                    fontSize: 'var(--font-size-section-title)',
+                    color: '#0069ab',
+                    fontWeight: 600,
+                  }}
+                >
                   Applicant Details
                 </h5>
                 <svg
@@ -3404,7 +3423,7 @@ const FinanceApproval: React.FC = () => {
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label
                           style={{
-                            fontSize: '14px',
+                            fontSize: 'var(--font-size-secondary)',
                             color: '#495057',
                             marginBottom: '8px',
                             fontWeight: 600,
@@ -3421,8 +3440,9 @@ const FinanceApproval: React.FC = () => {
                           style={{
                             borderRadius: '12px',
                             border: '1px solid #e0e0e0',
-                            padding: '10px 15px',
-                            fontSize: '0.95rem',
+                            height: 'var(--control-height)',
+                            padding: '0 var(--control-padding-x)',
+                            fontSize: 'var(--font-size-body)',
                             width: '100%',
                             fontFamily: 'inherit',
                             backgroundColor: '#fcfdff',
@@ -3436,7 +3456,7 @@ const FinanceApproval: React.FC = () => {
                       <div className="form-group" style={{ marginBottom: 0 }}>
                         <label
                           style={{
-                            fontSize: '14px',
+                            fontSize: 'var(--font-size-secondary)',
                             color: '#495057',
                             marginBottom: '8px',
                             fontWeight: 600,
@@ -3453,8 +3473,9 @@ const FinanceApproval: React.FC = () => {
                           style={{
                             borderRadius: '12px',
                             border: '1px solid #e0e0e0',
-                            padding: '10px 15px',
-                            fontSize: '0.95rem',
+                            height: 'var(--control-height)',
+                            padding: '0 var(--control-padding-x)',
+                            fontSize: 'var(--font-size-body)',
                             width: '100%',
                             fontFamily: 'inherit',
                             backgroundColor: '#fcfdff',
@@ -3474,7 +3495,7 @@ const FinanceApproval: React.FC = () => {
                         <div className="form-group" style={{ position: 'relative' }}>
                           <label
                             style={{
-                              fontSize: '14px',
+                              fontSize: 'var(--font-size-secondary)',
                               color: '#495057',
                               marginBottom: '8px',
                               fontWeight: '600',
@@ -3484,7 +3505,11 @@ const FinanceApproval: React.FC = () => {
                             Applicant Name
                             {isExternalApplicant && (
                               <span
-                                style={{ fontSize: '12px', color: '#6c757d', marginLeft: '8px' }}
+                                style={{
+                                  fontSize: 'var(--font-size-secondary)',
+                                  color: '#6c757d',
+                                  marginLeft: '8px',
+                                }}
                               >
                                 (External)
                               </span>
@@ -3512,8 +3537,9 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
-                              padding: '10px 15px',
-                              fontSize: '0.95rem',
+                              height: 'var(--control-height)',
+                              padding: '0 var(--control-padding-x)',
+                              fontSize: 'var(--font-size-body)',
                               width: '100%',
                               fontFamily: 'inherit',
                               backgroundColor: '#fcfdff',
@@ -3602,7 +3628,12 @@ const FinanceApproval: React.FC = () => {
                                     <div style={{ fontWeight: '600', color: '#333' }}>
                                       {emp.name}
                                     </div>
-                                    <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                                    <div
+                                      style={{
+                                        fontSize: 'var(--font-size-secondary)',
+                                        color: '#6c757d',
+                                      }}
+                                    >
                                       {emp.designation} | {emp.department}
                                     </div>
                                   </div>
@@ -3660,7 +3691,7 @@ const FinanceApproval: React.FC = () => {
                         <div className="form-group">
                           <label
                             style={{
-                              fontSize: '14px',
+                              fontSize: 'var(--font-size-secondary)',
                               color: '#495057',
                               marginBottom: '8px',
                               fontWeight: '600',
@@ -3681,8 +3712,9 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
-                              padding: '10px 15px',
-                              fontSize: '0.95rem',
+                              height: 'var(--control-height)',
+                              padding: '0 var(--control-padding-x)',
+                              fontSize: 'var(--font-size-body)',
                               width: '100%',
                               fontFamily: 'inherit',
                               backgroundColor: '#fcfdff',
@@ -3708,7 +3740,7 @@ const FinanceApproval: React.FC = () => {
                         <div className="form-group">
                           <label
                             style={{
-                              fontSize: '14px',
+                              fontSize: 'var(--font-size-secondary)',
                               color: '#495057',
                               marginBottom: '8px',
                               fontWeight: '600',
@@ -3729,8 +3761,9 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
-                              padding: '10px 15px',
-                              fontSize: '0.95rem',
+                              height: 'var(--control-height)',
+                              padding: '0 var(--control-padding-x)',
+                              fontSize: 'var(--font-size-body)',
                               width: '100%',
                               fontFamily: 'inherit',
                               backgroundColor: '#fcfdff',
@@ -3753,7 +3786,7 @@ const FinanceApproval: React.FC = () => {
                         <div className="form-group">
                           <label
                             style={{
-                              fontSize: '14px',
+                              fontSize: 'var(--font-size-secondary)',
                               color: '#495057',
                               marginBottom: '8px',
                               fontWeight: '600',
@@ -3774,8 +3807,9 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
-                              padding: '10px 15px',
-                              fontSize: '0.95rem',
+                              height: 'var(--control-height)',
+                              padding: '0 var(--control-padding-x)',
+                              fontSize: 'var(--font-size-body)',
                               width: '100%',
                               fontFamily: 'inherit',
                               backgroundColor: '#fcfdff',
@@ -3801,7 +3835,7 @@ const FinanceApproval: React.FC = () => {
                         <div className="form-group">
                           <label
                             style={{
-                              fontSize: '14px',
+                              fontSize: 'var(--font-size-secondary)',
                               color: '#495057',
                               marginBottom: '8px',
                               fontWeight: '600',
@@ -3822,8 +3856,9 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
-                              padding: '10px 15px',
-                              fontSize: '0.95rem',
+                              height: 'var(--control-height)',
+                              padding: '0 var(--control-padding-x)',
+                              fontSize: 'var(--font-size-body)',
                               width: '100%',
                               fontFamily: 'inherit',
                               backgroundColor: '#fcfdff',
@@ -3846,7 +3881,7 @@ const FinanceApproval: React.FC = () => {
                         <div className="form-group">
                           <label
                             style={{
-                              fontSize: '14px',
+                              fontSize: 'var(--font-size-secondary)',
                               color: '#495057',
                               marginBottom: '6px',
                               fontWeight: '600',
@@ -3867,8 +3902,9 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               borderRadius: '12px',
                               border: '1px solid #e0e0e0',
-                              padding: '10px 15px',
-                              fontSize: '0.95rem',
+                              height: 'var(--control-height)',
+                              padding: '0 var(--control-padding-x)',
+                              fontSize: 'var(--font-size-body)',
                               width: '100%',
                               fontFamily: 'inherit',
                               backgroundColor: '#fcfdff',
@@ -3913,7 +3949,7 @@ const FinanceApproval: React.FC = () => {
                         <div className="form-group">
                           <label
                             style={{
-                              fontSize: 14,
+                              fontSize: 'var(--font-size-secondary)',
                               color: '#495057',
                               marginBottom: 8,
                               fontWeight: 600,
@@ -3965,7 +4001,7 @@ const FinanceApproval: React.FC = () => {
                           <div className="form-group" style={{ position: 'relative' }}>
                             <label
                               style={{
-                                fontSize: 14,
+                                fontSize: 'var(--font-size-secondary)',
                                 color: '#495057',
                                 marginBottom: '8px',
                                 fontWeight: 600,
@@ -4005,8 +4041,9 @@ const FinanceApproval: React.FC = () => {
                               style={{
                                 borderRadius: '12px',
                                 border: '1px solid #e0e0e0',
-                                padding: '8px 14px',
-                                fontSize: '0.95rem',
+                                height: 'var(--control-height)',
+                                padding: '0 var(--control-padding-x)',
+                                fontSize: 'var(--font-size-body)',
                                 width: '100%',
                                 backgroundColor: '#fcfdff',
                                 outline: 'none',
@@ -4050,7 +4087,12 @@ const FinanceApproval: React.FC = () => {
                                     }
                                   >
                                     <div style={{ fontWeight: 600, color: '#333' }}>{emp.name}</div>
-                                    <div style={{ fontSize: 12, color: '#6c757d' }}>
+                                    <div
+                                      style={{
+                                        fontSize: 'var(--font-size-secondary)',
+                                        color: '#6c757d',
+                                      }}
+                                    >
                                       {emp.designation} — {emp.department}
                                     </div>
                                   </div>
@@ -4065,7 +4107,7 @@ const FinanceApproval: React.FC = () => {
                           <div className="form-group">
                             <label
                               style={{
-                                fontSize: 14,
+                                fontSize: 'var(--font-size-secondary)',
                                 color: '#495057',
                                 marginBottom: '8px',
                                 fontWeight: 600,
@@ -4082,8 +4124,9 @@ const FinanceApproval: React.FC = () => {
                               style={{
                                 borderRadius: 12,
                                 border: '1px solid #e0e0e0',
-                                padding: '10px 15px',
-                                fontSize: '0.95rem',
+                                height: 'var(--control-height)',
+                                padding: '0 var(--control-padding-x)',
+                                fontSize: 'var(--font-size-body)',
                                 width: '100%',
                                 backgroundColor: '#e9ecef',
                                 color: '#495057',
@@ -4099,7 +4142,7 @@ const FinanceApproval: React.FC = () => {
                           <div className="form-group">
                             <label
                               style={{
-                                fontSize: 14,
+                                fontSize: 'var(--font-size-secondary)',
                                 color: '#495057',
                                 marginBottom: 8,
                                 fontWeight: 600,
@@ -4135,7 +4178,7 @@ const FinanceApproval: React.FC = () => {
                             <div className="form-group">
                               <label
                                 style={{
-                                  fontSize: 14,
+                                  fontSize: 'var(--font-size-secondary)',
                                   color: '#495057',
                                   marginBottom: 8,
                                   fontWeight: 600,
@@ -4185,7 +4228,7 @@ const FinanceApproval: React.FC = () => {
                           <div className="form-group">
                             <label
                               style={{
-                                fontSize: 14,
+                                fontSize: 'var(--font-size-secondary)',
                                 color: '#495057',
                                 marginBottom: 8,
                                 fontWeight: 600,
@@ -4219,7 +4262,7 @@ const FinanceApproval: React.FC = () => {
               <div className="form-group">
                 <label
                   style={{
-                    fontSize: '14px',
+                    fontSize: 'var(--font-size-secondary)',
                     color: '#495057',
                     marginBottom: '8px',
                     fontWeight: '600',
@@ -4240,7 +4283,7 @@ const FinanceApproval: React.FC = () => {
                     borderRadius: '12px',
                     border: '1px solid #e0e0e0',
                     padding: '10px 15px',
-                    fontSize: '0.95rem',
+                    fontSize: 'var(--font-size-body)',
                     width: '100%',
                     fontFamily: 'inherit',
                     backgroundColor: '#fcfdff',
@@ -4277,7 +4320,7 @@ const FinanceApproval: React.FC = () => {
                   <div className="form-group hoac-form-group">
                     <label
                       style={{
-                        fontSize: '14px',
+                        fontSize: 'var(--font-size-secondary)',
                         color: '#495057',
                         marginBottom: '4px',
                         fontWeight: 600,
@@ -4356,7 +4399,13 @@ const FinanceApproval: React.FC = () => {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>
+                          <span
+                            style={{
+                              fontSize: 'var(--font-size-secondary)',
+                              color: '#495057',
+                              fontWeight: 600,
+                            }}
+                          >
                             Unplanned Expenditure
                           </span>
                           <CustomToggle
@@ -4419,7 +4468,13 @@ const FinanceApproval: React.FC = () => {
                             whiteSpace: 'nowrap',
                           }}
                         >
-                          <span style={{ fontSize: '14px', color: '#495057', fontWeight: 600 }}>
+                          <span
+                            style={{
+                              fontSize: 'var(--font-size-secondary)',
+                              color: '#495057',
+                              fontWeight: 600,
+                            }}
+                          >
                             Unplanned Expenditure
                           </span>
                           <CustomToggle
@@ -4471,11 +4526,12 @@ const FinanceApproval: React.FC = () => {
                     <tr style={{ backgroundColor: '#f0f6ff' }}>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '6%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -4483,11 +4539,12 @@ const FinanceApproval: React.FC = () => {
                       </th>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '30%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -4495,11 +4552,12 @@ const FinanceApproval: React.FC = () => {
                       </th>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '30%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -4507,11 +4565,12 @@ const FinanceApproval: React.FC = () => {
                       </th>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '15%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -4519,11 +4578,12 @@ const FinanceApproval: React.FC = () => {
                       </th>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '10%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -4567,9 +4627,9 @@ const FinanceApproval: React.FC = () => {
                                 style={{
                                   display: 'inline-block',
                                   marginTop: '6px',
-                                  fontSize: '10px',
-                                  fontWeight: 600,
-                                  color: '#059669',
+                                  fontSize: 'var(--font-size-tertiary)',
+                                  fontWeight: 700,
+                                  color: '#047857',
                                   backgroundColor: '#d1fae5',
                                   border: '1px solid #10b981',
                                   borderRadius: '12px',
@@ -4682,8 +4742,9 @@ const FinanceApproval: React.FC = () => {
                               style={{
                                 border: '1px solid #e0e0e0',
                                 borderRadius: '8px',
-                                padding: '8px 12px',
-                                fontSize: '0.9rem',
+                                height: 'var(--control-height)',
+                                padding: '0 var(--control-padding-x)',
+                                fontSize: 'var(--font-size-body)',
                                 width: '120px',
                                 fontFamily: 'inherit',
                                 backgroundColor: primaryHead ? '#fcfdff' : '#f8f9fa',
@@ -4732,15 +4793,16 @@ const FinanceApproval: React.FC = () => {
                                       handleDeleteRow(index);
                                     }}
                                     style={{
-                                      width: '36px',
-                                      height: '36px',
-                                      borderRadius: '50%',
+                                      width: 'var(--icon-action-size)',
+                                      height: 'var(--icon-action-size)',
+                                      borderRadius: 'var(--border-radius-sm)',
                                       border: 'none',
                                       background: '#ffe6e6',
                                       cursor: 'pointer',
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
+                                      // ui-standard-allow: icon glyph, not text
                                       fontSize: '18px',
                                       transition: 'all 0.15s ease',
                                       color: '#dc3545',
@@ -4767,9 +4829,9 @@ const FinanceApproval: React.FC = () => {
                                   }}
                                   disabled={!canAddBudgetRowFromIndex(index)}
                                   style={{
-                                    width: '36px',
-                                    height: '36px',
-                                    borderRadius: '50%',
+                                    width: 'var(--icon-action-size)',
+                                    height: 'var(--icon-action-size)',
+                                    borderRadius: 'var(--border-radius-sm)',
                                     border: 'none',
                                     background: '#f5f6f8',
                                     cursor: canAddBudgetRowFromIndex(index)
@@ -4778,6 +4840,7 @@ const FinanceApproval: React.FC = () => {
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
+                                    // ui-standard-allow: icon glyph, not text
                                     fontSize: '18px',
                                     transition: 'all 0.15s ease',
                                     opacity: canAddBudgetRowFromIndex(index) ? 1 : 0.5,
@@ -4839,8 +4902,9 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               border: '1px solid #e0e0e0',
                               borderRadius: '8px',
-                              padding: '8px 12px',
-                              fontSize: '0.9rem',
+                              height: 'var(--control-height)',
+                              padding: '0 var(--control-padding-x)',
+                              fontSize: 'var(--font-size-body)',
                               width: '100%',
                               fontFamily: 'inherit',
                               backgroundColor: proposalFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
@@ -4877,8 +4941,9 @@ const FinanceApproval: React.FC = () => {
                             style={{
                               border: '1px solid #e0e0e0',
                               borderRadius: '8px',
-                              padding: '8px 12px',
-                              fontSize: '0.9rem',
+                              height: 'var(--control-height)',
+                              padding: '0 var(--control-padding-x)',
+                              fontSize: 'var(--font-size-body)',
                               width: '120px',
                               fontFamily: 'inherit',
                               backgroundColor: proposalFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
@@ -4945,7 +5010,7 @@ const FinanceApproval: React.FC = () => {
                     justifyContent: 'center',
                     alignItems: 'center',
                     gap: '8px',
-                    fontSize: '0.9rem',
+                    fontSize: 'var(--font-size-body)',
                     color: '#0b3d75',
                     textAlign: 'center',
                     width: '100%',
@@ -4979,7 +5044,15 @@ const FinanceApproval: React.FC = () => {
                   marginBottom: showIncomeSection ? '20px' : '0',
                 }}
               >
-                <span style={{ fontSize: '16px', color: '#495057', fontWeight: 600 }}>Income</span>
+                <span
+                  style={{
+                    fontSize: 'var(--font-size-section-title)',
+                    color: '#495057',
+                    fontWeight: 600,
+                  }}
+                >
+                  Income
+                </span>
                 <CustomToggle
                   name="incomeToggle"
                   className="finance-income-toggle"
@@ -5007,7 +5080,7 @@ const FinanceApproval: React.FC = () => {
                     style={{
                       width: '100%',
                       borderCollapse: 'collapse',
-                      fontSize: '14px',
+                      fontSize: 'var(--font-size-body)',
                       tableLayout: 'fixed',
                     }}
                   >
@@ -5023,11 +5096,12 @@ const FinanceApproval: React.FC = () => {
                       <tr style={{ backgroundColor: '#f0f6ff' }}>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '6%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5035,11 +5109,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '26%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5047,11 +5122,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '12%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5059,11 +5135,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '20%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5071,11 +5148,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '25%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5083,11 +5161,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '10%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5156,8 +5235,9 @@ const FinanceApproval: React.FC = () => {
                                   style={{
                                     border: '1px solid #e0e0e0',
                                     borderRadius: '8px',
-                                    padding: '6px 8px',
-                                    fontSize: '0.9rem',
+                                    height: 'var(--control-height)',
+                                    padding: '0 var(--control-padding-x)',
+                                    fontSize: 'var(--font-size-body)',
                                     width: '100%',
                                     fontFamily: 'inherit',
                                     backgroundColor: incomeFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
@@ -5210,8 +5290,9 @@ const FinanceApproval: React.FC = () => {
                                   style={{
                                     border: '1px solid #e0e0e0',
                                     borderRadius: '8px',
-                                    padding: '6px 8px',
-                                    fontSize: '0.9rem',
+                                    height: 'var(--control-height)',
+                                    padding: '0 var(--control-padding-x)',
+                                    fontSize: 'var(--font-size-body)',
                                     width: '100%',
                                     fontFamily: 'inherit',
                                     backgroundColor: incomeFieldsReadOnly ? '#f5f7fa' : '#fcfdff',
@@ -5275,9 +5356,9 @@ const FinanceApproval: React.FC = () => {
                                       }}
                                       disabled={!isIncomeRowReadyForAdd(row)}
                                       style={{
-                                        width: '36px',
-                                        height: '36px',
-                                        borderRadius: '50%',
+                                        width: 'var(--icon-action-size)',
+                                        height: 'var(--icon-action-size)',
+                                        borderRadius: 'var(--border-radius-sm)',
                                         border: 'none',
                                         background: '#f5f6f8',
                                         cursor: isIncomeRowReadyForAdd(row)
@@ -5286,6 +5367,7 @@ const FinanceApproval: React.FC = () => {
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
+                                        // ui-standard-allow: icon glyph, not text
                                         fontSize: '18px',
                                         transition: 'all 0.15s ease',
                                         color: '#0069ab',
@@ -5341,7 +5423,7 @@ const FinanceApproval: React.FC = () => {
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         gap: '6px',
-                                        fontSize: '0.9rem',
+                                        fontSize: 'var(--font-size-body)',
                                         color: '#495057',
                                         fontWeight: 500,
                                         cursor: 'pointer',
@@ -5487,7 +5569,7 @@ const FinanceApproval: React.FC = () => {
                         alignItems: 'center',
                         gap: '12px',
                         flexWrap: 'wrap',
-                        fontSize: '0.95rem',
+                        fontSize: 'var(--font-size-body)',
                         color: '#7a4b00',
                         textAlign: 'center',
                         width: '100%',
@@ -5535,7 +5617,13 @@ const FinanceApproval: React.FC = () => {
                         className="mb-0"
                       />
                       {accountOptionsError && (
-                        <div style={{ marginTop: '6px', fontSize: '0.8rem', color: '#d92d20' }}>
+                        <div
+                          style={{
+                            marginTop: '6px',
+                            fontSize: 'var(--font-size-secondary)',
+                            color: '#d92d20',
+                          }}
+                        >
                           {accountOptionsError}
                         </div>
                       )}
@@ -5578,7 +5666,13 @@ const FinanceApproval: React.FC = () => {
                       gap: '12px',
                     }}
                   >
-                    <span style={{ fontSize: '16px', color: '#495057', fontWeight: 600 }}>
+                    <span
+                      style={{
+                        fontSize: 'var(--font-size-section-title)',
+                        color: '#495057',
+                        fontWeight: 600,
+                      }}
+                    >
                       Annexure
                     </span>
                   </div>
@@ -5699,7 +5793,12 @@ const FinanceApproval: React.FC = () => {
                                     {fileRow.originalName || fileRow.storedName}
                                   </span>
                                   {fileRow.annexureType ? (
-                                    <span style={{ fontSize: '0.82rem', color: '#6b7280' }}>
+                                    <span
+                                      style={{
+                                        fontSize: 'var(--font-size-secondary)',
+                                        color: '#6b7280',
+                                      }}
+                                    >
                                       ({fileRow.annexureType})
                                     </span>
                                   ) : null}
@@ -5743,7 +5842,9 @@ const FinanceApproval: React.FC = () => {
                               ))}
                             </div>
                           ) : (
-                            <span style={{ fontSize: '0.9rem', color: '#6c757d' }}>
+                            <span
+                              style={{ fontSize: 'var(--font-size-secondary)', color: '#6c757d' }}
+                            >
                               No file selected
                             </span>
                           )}
@@ -5786,7 +5887,7 @@ const FinanceApproval: React.FC = () => {
                 <h5
                   style={{
                     margin: '0 0 16px',
-                    fontSize: '16px',
+                    fontSize: 'var(--font-size-section-title)',
                     color: '#0069ab',
                     fontWeight: 600,
                   }}
@@ -5798,7 +5899,7 @@ const FinanceApproval: React.FC = () => {
                     <div className="col-md-4" key={entry.label}>
                       <label
                         style={{
-                          fontSize: '13px',
+                          fontSize: 'var(--font-size-secondary)',
                           color: '#495057',
                           marginBottom: '8px',
                           fontWeight: 600,
@@ -5834,7 +5935,7 @@ const FinanceApproval: React.FC = () => {
                               borderRadius: '10px',
                               border: '1px solid #e0e0e0',
                               padding: '10px 12px',
-                              fontSize: '0.9rem',
+                              fontSize: 'var(--font-size-body)',
                               width: '100%',
                               fontFamily: 'inherit',
                               backgroundColor: '#fcfdff',
@@ -5858,13 +5959,14 @@ const FinanceApproval: React.FC = () => {
                   backgroundColor: '#0069ab',
                   color: '#fff',
                   border: 'none',
-                  padding: '12px 24px',
+                  height: 'var(--control-height)',
+                  padding: '0 var(--button-padding-x)',
                   borderRadius: '12px',
-                  fontSize: '0.95rem',
-                  fontWeight: '500',
+                  fontSize: 'var(--font-size-body)',
+                  fontWeight: '600',
                   cursor: isLoading ? 'not-allowed' : 'pointer',
                   transition: 'all 0.3s ease',
-                  minWidth: '140px',
+                  minWidth: 'var(--button-min-width)',
                   opacity: isLoading ? 0.7 : 1,
                   whiteSpace: 'nowrap',
                 }}
@@ -6083,6 +6185,7 @@ const FinanceApproval: React.FC = () => {
               return requiresChairmanApproval ? 'Recommended by' : 'Approved by';
             return 'Recommended by';
           };
+          // ui-standard-allow-start: the printed A4 form (react-to-print, 210mm) keeps print type sizes, not screen roles
           const previewTimelineRowStyle: CSSProperties = {
             padding: '8px 10px',
             fontSize: '14px',
@@ -6470,7 +6573,7 @@ const FinanceApproval: React.FC = () => {
                                   <span
                                     style={{
                                       display: 'block',
-                                      fontSize: '0.55rem',
+                                      fontSize: 'var(--font-size-tertiary)',
                                       fontWeight: 700,
                                       color: '#047857',
                                     }}
@@ -7008,6 +7111,7 @@ const FinanceApproval: React.FC = () => {
               </div>
             </div>
           );
+          // ui-standard-allow-end
         })()}
 
       <CustomModal
@@ -7045,7 +7149,9 @@ const FinanceApproval: React.FC = () => {
       >
         <div data-readonly-workflow-modal="true">
           {proposalRef && (
-            <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+            <div
+              style={{ fontSize: 'var(--font-size-secondary)', color: '#666', marginBottom: 10 }}
+            >
               Reference: <b>{proposalRef}</b>
             </div>
           )}
@@ -7091,7 +7197,7 @@ const FinanceApproval: React.FC = () => {
         }
       >
         {proposalRef && (
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--font-size-secondary)', color: '#666', marginBottom: 10 }}>
             Reference: <b>{proposalRef}</b>
           </div>
         )}
@@ -7146,7 +7252,7 @@ const FinanceApproval: React.FC = () => {
           </div>
         }
       >
-        <div style={{ fontSize: 14, marginBottom: 15 }}>
+        <div style={{ fontSize: 'var(--font-size-body)', marginBottom: 15 }}>
           Please upload the required annexure document before approving this request.
         </div>
         <div className="mb-3">

@@ -40,7 +40,7 @@ const FILTER_DROPDOWN_STYLES = {
     height: 'calc(var(--control-height) - 2px)',
   }),
   // Text per AGENTS.md typography: 14px, primary-text colour.
-  container: (provided: any) => ({ ...provided, fontSize: '14px' }),
+  container: (provided: any) => ({ ...provided, fontSize: 'var(--font-size-body)' }),
   singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
   // No bar before the chevron, like the plain selects on the other list pages.
   indicatorSeparator: () => ({ display: 'none' }),
@@ -51,8 +51,8 @@ const statusStyle = (s: string) =>
   s === 'Approved'
     ? { background: '#d9f8e5', color: '#087b43' }
     : s === 'Rejected'
-      ? { background: '#fde1e5', color: '#c52d43' }
-      : { background: '#fff0d2', color: '#a96800' };
+      ? { background: '#fde1e5', color: '#c12c41' }
+      : { background: '#fff0d2', color: '#9b5f00' };
 
 export default function ResourcePersonApprovalPage() {
   const [rows, setRows] = useState<Row[]>([]);
@@ -193,13 +193,21 @@ export default function ResourcePersonApprovalPage() {
           {icon}
         </span>
         <div>
-          <div style={{ fontSize: 13, lineHeight: '18px', color: 'var(--text-soft)' }}>{label}</div>
+          <div
+            style={{
+              fontSize: 'var(--font-size-secondary)',
+              lineHeight: 'var(--leading-secondary)',
+              color: 'var(--text-soft)',
+            }}
+          >
+            {label}
+          </div>
           <strong
             className="d-block"
             style={{
               color: 'var(--text-strong)',
-              fontSize: 24,
-              lineHeight: '28px',
+              fontSize: 'var(--font-size-kpi)',
+              lineHeight: 'var(--leading-kpi)',
               fontWeight: 700,
             }}
           >
@@ -234,7 +242,7 @@ export default function ResourcePersonApprovalPage() {
               padding: '7px 12px',
               borderRadius: 18,
               fontWeight: 600,
-              fontSize: 12,
+              fontSize: 'var(--font-size-tertiary)',
             }}
           >
             {status}
@@ -262,7 +270,7 @@ export default function ResourcePersonApprovalPage() {
       className="resource-person-approval-page p-4"
       style={{ minHeight: '100%', background: '#f1f6fb' }}
     >
-      <style>{`.resource-person-approval-page .request-summary-card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); } .resource-person-approval-page .request-summary-card .card-body { padding: 14px 20px; } .resource-person-approval-page .resource-person-view-button { width: 32px; height: 32px; border-radius: 8px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #006db4; border-color: #bfdbfe; background: #eff6ff; } .resource-person-approval-page .resource-person-view-button:hover { color: #fff; background: #0878bd; border-color: #0878bd; } .resource-person-approval-page .custom-table { color: #29436a; } .resource-person-approval-page .custom-table thead th { color: var(--primary-color); font-size: 13px; line-height: 18px; font-weight: 600; } .resource-person-approval-page .custom-table tbody td { vertical-align: middle; font-size: 14px; line-height: 20px; color: var(--text-body); } .resource-person-approval-page .custom-table tbody td strong { font-weight: 700; color: var(--text-strong); } .resource-person-details-modal .modal-title { font-size: 18px; line-height: 24px; font-weight: 600; } .resource-person-approval-header-controls .custom-input { height: var(--control-height); width: 260px; font-size: 14px; } .resource-person-approval-page .resource-person-admin-badge { background-color: #0069ab !important; } .resource-person-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); } .resource-person-details-modal .modal-content { max-height: calc(100vh - 3.5rem); } .resource-person-details-modal .modal-body { overflow-y: auto; }`}</style>
+      <style>{`.resource-person-approval-page .request-summary-card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); } .resource-person-approval-page .request-summary-card .card-body { padding: 14px 20px; } .resource-person-approval-page .resource-person-view-button { width: var(--icon-action-size); height: var(--icon-action-size); min-width: 0; min-height: 0; border-radius: 8px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #006db4; border-color: #bfdbfe; background: #eff6ff; } .resource-person-approval-page .resource-person-view-button:hover { color: #fff; background: #0878bd; border-color: #0878bd; } .resource-person-approval-page .custom-table { color: #29436a; } .resource-person-approval-page .custom-table thead th { color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); } .resource-person-approval-page .custom-table tbody td { vertical-align: middle; font-size: var(--font-size-body); line-height: var(--leading-body); color: var(--text-body); } .resource-person-approval-page .custom-table tbody td strong { font-weight: 700; color: var(--text-strong); } .resource-person-details-modal .modal-title { font-size: var(--font-size-modal-title); line-height: var(--leading-modal-title); font-weight: 600; } .resource-person-approval-header-controls .custom-input { height: var(--control-height); width: 260px; font-size: var(--font-size-body); } .resource-person-approval-page .resource-person-admin-badge { background-color: #0069ab !important; } .resource-person-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); } .resource-person-details-modal .modal-content { max-height: calc(100vh - 3.5rem); } .resource-person-details-modal .modal-body { overflow-y: auto; }`}</style>
       <CustomCard className="mx-auto" style={{ maxWidth: 1250 }}>
         <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
           <div className="d-flex align-items-center gap-3">
@@ -270,8 +278,8 @@ export default function ResourcePersonApprovalPage() {
               className="mb-0"
               style={{
                 color: 'var(--text-strong)',
-                fontSize: 24,
-                lineHeight: '32px',
+                fontSize: 'var(--font-size-page-title)',
+                lineHeight: 'var(--leading-page-title)',
                 fontWeight: 700,
               }}
             >
@@ -285,9 +293,9 @@ export default function ResourcePersonApprovalPage() {
                 borderRadius: 6,
                 color: '#fff',
                 display: 'inline-flex',
-                fontSize: 12,
+                fontSize: 'var(--font-size-tertiary)',
                 fontWeight: 700,
-                height: 24,
+                height: 'var(--tag-height)',
                 letterSpacing: '0.04em',
                 padding: '0 10px',
               }}
@@ -349,11 +357,13 @@ export default function ResourcePersonApprovalPage() {
                       <CustomButton
                         variant="success"
                         style={{
-                          height: 28,
+                          height: 'var(--inline-action-height)',
+                          minHeight: 0,
+                          minWidth: 0,
                           whiteSpace: 'nowrap',
                           flexShrink: 0,
                           padding: '0 10px',
-                          fontSize: 12,
+                          fontSize: 'var(--font-size-tertiary)',
                           fontWeight: 700,
                           borderRadius: 6,
                         }}
@@ -366,11 +376,13 @@ export default function ResourcePersonApprovalPage() {
                       <CustomButton
                         variant="danger"
                         style={{
-                          height: 28,
+                          height: 'var(--inline-action-height)',
+                          minHeight: 0,
+                          minWidth: 0,
                           whiteSpace: 'nowrap',
                           flexShrink: 0,
                           padding: '0 10px',
-                          fontSize: 12,
+                          fontSize: 'var(--font-size-tertiary)',
                           fontWeight: 700,
                           borderRadius: 6,
                         }}

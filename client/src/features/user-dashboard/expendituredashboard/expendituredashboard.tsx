@@ -3156,7 +3156,9 @@ const ExpenditureDashboard: React.FC = () => {
 
             {!loading && filteredProposalCards.length === 0 && isGroupedView && (
               <div className="expenditure-state expenditure-state--empty">
-                <div style={{ color: '#6b7280', fontSize: '15px', marginTop: '10px' }}>
+                <div
+                  style={{ color: '#6b7280', fontSize: 'var(--font-size-body)', marginTop: '10px' }}
+                >
                   {financeIdQuery.trim()
                     ? `No expenditure requests found for "${financeIdQuery.trim()}".`
                     : `No expenditure requests found for FY ${financialYear}.`}

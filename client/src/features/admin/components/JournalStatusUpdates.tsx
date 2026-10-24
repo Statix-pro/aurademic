@@ -236,7 +236,7 @@ const JournalStatusUpdates: React.FC = () => {
         <div className="ms-auto d-flex gap-2">
           <Form.Select
             className="status-filter"
-            // The empty option ("All …") is a real filter choice, not a hint; see shared/styles/index.css.
+            // The empty option ("All …") is a real filter choice, not a hint; see shared/styles/base.css.
             data-empty-is-value
             value={statusFilter}
             onChange={(e: ChangeEvent<HTMLSelectElement>) => {

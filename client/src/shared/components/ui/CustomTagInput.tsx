@@ -98,7 +98,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
       <div
         className={`form-control custom-input d-flex flex-wrap align-items-center gap-2 position-relative ${error ? 'is-invalid' : ''}`}
         style={{
-          minHeight: '38px',
+          minHeight: 'var(--control-height)',
           height: 'auto',
           paddingRight: value.length > 0 && !disabled ? '2.5rem' : '0.75rem',
         }}
@@ -117,6 +117,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
                   justifyContent: 'center',
                   color: '#495057',
                   borderRadius: '50%',
+                  // ui-standard-allow: icon glyph, not text
                   fontSize: '18px',
                   lineHeight: '1',
                   transition: 'color 0.2s ease',

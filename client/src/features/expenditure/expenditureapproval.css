@@ -5,7 +5,6 @@
   background-color: var(--bg-light, #f0f6ff);
   min-height: 100vh;
   padding: 20px;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
   color: var(--text-main, #4f4f6e);
 }
 
@@ -22,16 +21,16 @@
 }
 
 .expenditure-page-title {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--font-size-page-title);
+  font-weight: var(--weight-bold);
   color: var(--primary-color, #0069ab);
   margin: 0 0 8px 0;
   letter-spacing: -0.01em;
-  line-height: 1.2;
+  line-height: var(--leading-page-title);
 }
 
 .expenditure-page-subtitle {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: var(--text-muted, #6c757d);
   margin: 0;
   font-weight: 400;
@@ -50,9 +49,10 @@
 .btn-secondary-action {
   border: none;
   border-radius: 12px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
+  height: var(--control-height);
+  padding: 0 var(--button-padding-x);
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   display: inline-flex;
@@ -126,13 +126,13 @@
 
 /* Form Card Title */
 .expenditure-approval-body .form-card-title {
-  font-size: 18px;
-  font-weight: 550;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
   color: var(--primary-color, #0069ab);
   margin: 0 0 20px 0;
   padding-bottom: 12px;
   border-bottom: 2px solid rgba(0, 0, 0, 0.08);
-  line-height: 1.2;
+  line-height: var(--leading-section-title);
 }
 
 /* Form Grid Layout */
@@ -159,8 +159,8 @@
 /* Form Label - Scoped */
 .expenditure-approval-body .form-label {
   display: block;
-  font-size: 12px;
-  font-weight: 550;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   color: var(--text-main, #4f4f6e);
   margin-bottom: 8px;
 }
@@ -171,14 +171,14 @@
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 8px;
   padding: 10px 12px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: var(--text-main, #4f4f6e);
   background-color: var(--bg-input, #fcfdff);
   transition:
     border-color 0.15s cubic-bezier(0.16, 1, 0.3, 1),
     box-shadow 0.15s cubic-bezier(0.16, 1, 0.3, 1);
   font-family: inherit;
-  line-height: 1.5;
+  line-height: var(--leading-body);
 }
 
 .expenditure-approval-body .form-control:focus {
@@ -213,16 +213,16 @@
 }
 
 .expenditure-approval-body .category-btn {
-  flex: 1;
   border: none;
   background-color: transparent;
   color: var(--text-muted, #6c757d);
-  padding: 12px 20px;
+  height: var(--chip-height);
+  padding: 0 14px;
   border-radius: 9999px;
-  font-weight: 500;
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
 }
 
 .expenditure-approval-body .category-btn.active {
@@ -265,16 +265,16 @@
 .budget-table th {
   padding: 12px;
   text-align: left;
-  font-weight: 550;
+  font-weight: var(--weight-bold);
   color: var(--primary-color, #0069ab);
   border-bottom: 2px solid var(--border-color, #e0e0e0);
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
 }
 
 .budget-table td {
   padding: 12px;
   border-bottom: 1px solid var(--border-color, #e0e0e0);
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: var(--text-main, #4f4f6e);
 }
 
@@ -291,8 +291,9 @@
   width: 100%;
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 8px;
-  padding: 8px;
-  font-size: 12px;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
   color: var(--text-main, #4f4f6e);
   background-color: var(--bg-input, #fcfdff);
   font-family: inherit;
@@ -319,8 +320,8 @@
 .expenditure-approval-body .btn-add,
 .expenditure-approval-body .btn-delete {
   border: none;
-  width: 36px;
-  height: 36px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -365,8 +366,8 @@
   padding: 16px;
   background-color: rgba(0, 0, 0, 0.04);
   border-radius: 8px;
-  font-size: 16px;
-  font-weight: 550;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-bold);
   color: var(--primary-color, #0069ab);
 }
 
@@ -392,7 +393,9 @@
 
 .payee-details-title {
   margin: 0;
-  font-weight: 600;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
   color: #0a2540;
 }
 
@@ -405,10 +408,11 @@
 .payee-toolbar-btn {
   border: none;
   border-radius: 999px;
-  padding: 10px 18px;
+  height: var(--control-height);
+  padding: 0 18px;
   background: #0069ab;
   color: #ffffff;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -456,7 +460,9 @@
 
 .payee-details-table th {
   color: #0069ab;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-bold);
   text-align: center;
 }
 
@@ -507,14 +513,14 @@
 }
 
 .payee-transaction-mode-dropdown .react-select__control {
-  min-height: 45px;
-  height: 45px;
+  min-height: var(--control-height);
+  height: var(--control-height);
   border-radius: 12px;
 }
 
 .payee-transaction-mode-dropdown .react-select__value-container {
-  min-height: 43px;
-  height: 43px;
+  min-height: calc(var(--control-height) - 2px);
+  height: calc(var(--control-height) - 2px);
 }
 
 .payee-tds-row {
@@ -574,11 +580,11 @@
 
 .payee-field {
   width: 100%;
-  height: 45px;
+  height: var(--control-height);
   border: 1px solid #d7dee7;
   border-radius: 12px;
-  padding: 10px 12px;
-  font-size: 0.92rem;
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
   background: #fcfdff;
   color: #1f2a37;
   box-sizing: border-box;
@@ -663,14 +669,14 @@
 }
 
 .payee-search-item-sub {
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
   color: #6c757d;
 }
 
 .payee-search-empty {
   padding: 12px 15px;
   color: #6c757d;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
 }
 
 .payee-select {
@@ -687,13 +693,14 @@
 }
 
 .payee-row-btn {
-  width: 30px;
-  height: 30px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border: none;
   border-radius: 50%;
   padding: 0;
   background: #f5f6f8;
   color: #000000;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   line-height: 1;
   font-weight: 500;
@@ -760,12 +767,13 @@
 
 .payee-status-card-label {
   color: #0b3d75;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
 }
 
 .payee-status-card-fields {
-  --payee-status-control-height: 46px;
+  --payee-status-control-height: var(--control-height);
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 0.85fr) minmax(0, 0.75fr) minmax(0, 1.55fr);
   gap: 24px;
@@ -814,12 +822,13 @@
 .payee-status-submit-btn {
   border: none;
   border-radius: 12px;
-  min-width: 180px;
-  padding: 12px 28px;
+  min-width: var(--button-min-width);
+  height: var(--control-height);
+  padding: 0 var(--button-padding-x);
   background: #0069ab;
   color: #ffffff;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition:
     background-color 0.2s ease,
@@ -832,7 +841,7 @@
 }
 
 .payee-footer-grid {
-  --payee-footer-control-height: 45px;
+  --payee-footer-control-height: var(--control-height);
   display: grid;
   grid-template-columns: minmax(0, 1fr) 185px;
   gap: 16px;
@@ -939,14 +948,14 @@
 
 .payee-footer-debit-trigger {
   width: 100%;
-  height: 40px;
+  height: var(--control-height);
   border: 1px solid #d7dee7;
   border-radius: 12px;
   background: #ffffff;
   color: #1f2a37;
   text-align: left;
-  padding: 0 14px;
-  font-size: 0.92rem;
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -962,25 +971,25 @@
 }
 
 .payee-footer-dropdown .react-select__control {
-  min-height: 40px;
+  min-height: var(--control-height);
 }
 
 .payee-footer-dropdown .react-select__value-container {
-  min-height: 38px;
+  min-height: calc(var(--control-height) - 2px);
 }
 
 .payee-footer-input-label {
   position: static;
   color: #6b7280;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   line-height: 1;
   white-space: nowrap;
 }
 
 .payee-footer-toggle-btn {
   min-width: 78px;
-  height: 32px;
+  height: var(--button-sm-height);
   border: 1px solid #d7dee7;
   border-radius: 10px;
   background: #f8fbff;
@@ -998,7 +1007,7 @@
 }
 
 .payee-footer-toggle-text {
-  font-size: 0.75rem;
+  font-size: var(--font-size-secondary);
   font-weight: 600;
   line-height: 1;
 }
@@ -1020,10 +1029,10 @@
   margin: 0;
   border: 1px solid #d7dee7;
   border-radius: 12px;
-  height: 40px;
-  min-height: 40px;
-  padding: 0 14px;
-  font-size: 0.95rem;
+  height: var(--control-height);
+  min-height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
   line-height: normal;
   color: #1f2a37;
   background: #ffffff;
@@ -1045,8 +1054,8 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  height: 40px;
-  min-height: 40px;
+  height: var(--control-height);
+  min-height: var(--control-height);
   margin: 0;
   padding: 0 16px;
   border: 1px solid #d7dee7;
@@ -1080,7 +1089,7 @@
 
 .payee-upload-label-text {
   display: inline-block;
-  font-size: 0.98rem;
+  font-size: var(--font-size-body);
   letter-spacing: 0.01em;
 }
 
@@ -1100,20 +1109,20 @@
 }
 
 .payee-status-comment-input {
-  height: 46px !important;
-  min-height: 46px !important;
+  height: var(--control-height) !important;
+  min-height: var(--control-height) !important;
   border-radius: 18px;
-  padding: 0 14px !important;
+  padding: 0 var(--control-padding-x) !important;
   line-height: normal;
   flex: 1;
 }
 
 .payee-comment-tick-btn {
   position: static;
-  height: 46px;
-  min-height: 46px;
-  width: 46px;
-  min-width: 46px;
+  height: var(--control-height);
+  min-height: var(--control-height);
+  width: var(--control-height);
+  min-width: var(--control-height);
   border: none;
   border-radius: 14px;
   background: #0069ab;
@@ -1138,8 +1147,8 @@
   height: var(--payee-status-control-height);
   min-height: var(--payee-status-control-height);
   border-radius: 18px;
-  padding-left: 14px;
-  padding-right: 14px;
+  padding-left: var(--control-padding-x);
+  padding-right: var(--control-padding-x);
   padding-top: 0;
   padding-bottom: 0;
 }
@@ -1157,8 +1166,8 @@
 }
 
 .payee-status-col-pending .react-select__value-container {
-  min-height: 44px;
-  height: 44px;
+  min-height: calc(var(--payee-status-control-height) - 2px);
+  height: calc(var(--payee-status-control-height) - 2px);
   display: flex;
   align-items: center;
   padding-top: 0;
@@ -1283,10 +1292,11 @@
 .bulk-transaction-segment {
   border: none;
   border-radius: 9px;
-  padding: 8px 18px;
+  height: var(--chip-height);
+  padding: 0 14px;
   background: transparent;
   color: #4b5563;
-  font-size: 0.88rem;
+  font-size: var(--font-size-secondary);
   font-weight: 600;
   cursor: pointer;
   transition:
@@ -1313,7 +1323,7 @@
 
 .bulk-transaction-hint {
   color: #6b7280;
-  font-size: 0.82rem;
+  font-size: var(--font-size-secondary);
 }
 
 .bulk-neft-panel {
@@ -1342,7 +1352,7 @@
   border-radius: 12px;
   background: #ffffff;
   color: #6b7280;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   text-align: center;
   display: flex;
   align-items: center;
@@ -1381,8 +1391,8 @@
   border-radius: 999px;
   background: #0069ab;
   color: #ffffff;
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   letter-spacing: 0.02em;
   text-transform: uppercase;
 }
@@ -1398,10 +1408,11 @@
 .bulk-neft-btn {
   border: none;
   border-radius: 12px;
-  padding: 12px 18px;
+  height: var(--control-height);
+  padding: 0 18px;
   background: #0069ab;
   color: #ffffff;
-  font-size: 0.92rem;
+  font-size: var(--font-size-body);
   font-weight: 600;
   cursor: pointer;
   display: inline-flex;
@@ -1479,6 +1490,7 @@
   border: none;
   background: transparent;
   color: #111827;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 1.35rem;
   line-height: 1;
   cursor: pointer;
@@ -1486,8 +1498,9 @@
 
 .payee-modal-title {
   margin: 4px 0 16px;
-  font-size: 1.02rem;
-  font-weight: 700;
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+  font-weight: var(--weight-semibold);
   color: #40598f;
 }
 
@@ -1505,17 +1518,18 @@
 
 .payee-modal-label-text {
   color: #40598f;
-  font-size: 0.92rem;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
 }
 
 .payee-modal-input {
   width: 100%;
   border: 1px solid #d7dee7;
   border-radius: 12px;
-  padding: 11px 14px;
-  font-size: 0.95rem;
-  font-weight: 400;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-regular);
   color: #5b6472;
   background: #fbfdff;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
@@ -1541,10 +1555,11 @@
   border: none;
   border-radius: 12px;
   width: 100%;
-  padding: 12px 16px;
+  height: var(--control-height);
+  padding: 0 var(--button-padding-x);
   background-color: #0069ab;
   color: #ffffff;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
   font-weight: 600;
   cursor: pointer;
   box-shadow: none;
@@ -1614,16 +1629,16 @@
 
   .payee-status-upload-label,
   .payee-status-comment-input {
-    height: 48px !important;
-    min-height: 48px !important;
+    height: var(--control-height) !important;
+    min-height: var(--control-height) !important;
     border-radius: 12px;
   }
 
   .payee-comment-tick-btn {
-    height: 48px;
-    min-height: 48px;
-    width: 48px;
-    min-width: 48px;
+    height: var(--control-height);
+    min-height: var(--control-height);
+    width: var(--control-height);
+    min-width: var(--control-height);
     border-radius: 12px;
   }
 
@@ -1664,8 +1679,7 @@
   }
 
   .bulk-transaction-segment {
-    flex: 1;
-    padding: 8px 10px;
+    padding: 0 10px;
   }
 }
 
@@ -1683,13 +1697,13 @@
 }
 
 .approval-section-title {
-  font-size: 16px;
-  font-weight: 550;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
   color: var(--primary-color, #0069ab);
   margin: 0 0 16px 0;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border-color, #e0e0e0);
-  line-height: 1.2;
+  line-height: var(--leading-section-title);
 }
 
 /* Submit Buttons */
@@ -1718,13 +1732,13 @@
 }
 
 .expenditure-workflow-btn {
-  min-width: 150px;
-  height: 54px;
-  padding: 0 18px;
+  min-width: var(--button-min-width);
+  height: var(--control-height);
+  padding: 0 var(--button-padding-x);
   border: none;
   border-radius: 16px;
-  font-size: 0.98rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
@@ -1776,9 +1790,11 @@
 .expenditure-approval-body .btn-cancel {
   border: none;
   border-radius: 12px;
-  padding: 12px 28px;
-  font-size: 14px;
-  font-weight: 500;
+  min-width: var(--button-min-width);
+  height: var(--control-height);
+  padding: 0 var(--button-padding-x);
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   display: inline-flex;
@@ -1852,7 +1868,6 @@
   }
 
   .expenditure-approval-body .form-card-title {
-    font-size: 16px;
     margin-bottom: 16px;
   }
 
@@ -1870,21 +1885,7 @@
   .btn-secondary-action {
     width: 100%;
     justify-content: center;
-    padding: 10px 16px;
-    font-size: 12px;
-  }
-
-  .expenditure-page-title {
-    font-size: 18px;
-  }
-
-  .expenditure-page-subtitle {
-    font-size: 12px;
-  }
-
-  .expenditure-approval-body .category-btn {
-    padding: 10px 16px;
-    font-size: 12px;
+    padding: 0 16px;
   }
 
   .expenditure-approval-body .category-toggle-container {
@@ -1896,20 +1897,15 @@
     border-radius: 8px;
   }
 
-  .budget-table {
-    font-size: 11px;
-  }
-
   .budget-table th,
   .budget-table td {
     padding: 6px 4px;
-    font-size: 11px;
   }
 
   .expenditure-approval-body .btn-add,
   .expenditure-approval-body .btn-delete {
-    width: 32px;
-    height: 32px;
+    width: var(--icon-action-size);
+    height: var(--icon-action-size);
   }
 
   .approval-section {
@@ -1918,7 +1914,6 @@
   }
 
   .approval-section-title {
-    font-size: 14px;
     margin-bottom: 12px;
   }
 
@@ -1958,14 +1953,6 @@
   .btn-secondary-action {
     width: 100%;
     justify-content: center;
-  }
-
-  .expenditure-page-title {
-    font-size: 20px;
-  }
-
-  .budget-table {
-    font-size: 12px;
   }
 
   .budget-table th,
@@ -2101,8 +2088,9 @@
 }
 
 .pdf-preview-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+  font-weight: var(--weight-semibold);
   color: var(--primary-color, #0069ab);
   margin: 0;
 }
@@ -2157,10 +2145,6 @@
     padding: 16px;
   }
 
-  .pdf-preview-title {
-    font-size: 18px;
-  }
-
   .pdf-preview-footer {
     flex-direction: column;
     gap: 8px;
@@ -2173,10 +2157,6 @@
   }
 }
 /* ONLY Head of Accounts - Clean, No Outer Border */
-.hoac-form-group {
-  margin-bottom: 16px;
-}
-
 .hoac-primary-row {
   display: flex !important;
   gap: 8px !important;
@@ -2195,12 +2175,11 @@
 
 /* Bigger dropdown, NO BORDER */
 .hoac-primary-row .custom-input-group,
-.hoac-sub-row .custom-input-group,
-.hoac-form-group .custom-input-group {
-  min-height: 48px !important;
-  height: 48px !important;
-  padding: 0 20px !important;
-  font-size: 14px !important;
+.hoac-sub-row .custom-input-group {
+  min-height: var(--control-height) !important;
+  height: var(--control-height) !important;
+  padding: 0 var(--control-padding-x) !important;
+  font-size: var(--font-size-body) !important;
   border: none !important;
   background: #fafbfc !important;
   border-radius: 12px !important;
@@ -2232,8 +2211,8 @@
   color: #6c757d !important;
   transition: all 0.2s ease !important;
   flex-shrink: 0 !important;
-  min-height: 48px !important;
-  min-width: 48px !important;
+  min-height: var(--control-height) !important;
+  min-width: var(--control-height) !important;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
 }
 
@@ -2270,7 +2249,8 @@
 
 .ea-cardHeader h5 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   color: #0069ab;
   font-weight: 600;
 }
@@ -2284,7 +2264,7 @@
 }
 
 .ea-formGroup label {
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
   color: #495057;
   margin-bottom: 8px;
   font-weight: 600;
@@ -2295,8 +2275,9 @@
   width: 100%;
   border-radius: 12px;
   border: 1px solid #e0e0e0;
-  padding: 10px 15px;
-  font-size: 0.95rem;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
   background-color: #fcfdff;
   transition: all 0.3s ease;
   font-family: inherit;
@@ -2386,7 +2367,7 @@
 }
 
 .ea-search-item-sub {
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
   color: #6c757d;
 }
 
@@ -2414,7 +2395,7 @@
   background-color: #0069ab;
   color: white;
   border: none;
-  padding: 12px 60px;
+  padding: 0 var(--button-padding-x);
   border-radius: 12px;
   font-weight: 600;
   cursor: pointer;

@@ -35,13 +35,13 @@
 
 .view-mode-banner__text strong {
   color: #0b3d63;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 
 .view-mode-banner__text span {
   color: #5a6b80;
-  font-size: 0.85rem;
+  font-size: var(--font-size-secondary);
 }
 
 .view-mode-banner__action {
@@ -49,12 +49,13 @@
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
-  padding: 7px 16px;
+  height: var(--button-sm-height);
+  padding: 0 12px;
   border: none;
-  border-radius: 8px;
+  border-radius: var(--border-radius-sm);
   background-color: #0069ab;
   color: #fff;
-  font-size: 0.875rem;
+  font-size: var(--font-size-secondary);
   font-weight: 600;
 }
 

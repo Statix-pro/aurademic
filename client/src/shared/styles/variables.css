@@ -56,15 +56,36 @@
   --space-7: 32px;
   --space-8: 40px;
 
-  /* Type scale */
-  --font-2xs: 0.72rem;
-  --font-xs: 0.76rem;
-  --font-sm: 0.82rem;
-  --font-md: 0.88rem;
-  --font-lg: 0.95rem;
-  /* A dialog's title: bigger than its fields, smaller than a page heading. */
-  --font-lead: 1.1rem;
-  --font-xl: 1.45rem;
+  /* Type roles — one size and line height per role in the AGENTS.md §17 typography
+     table. In rem so a browser's larger default text size scales the whole UI; at the
+     16px root they render exactly 12 / 13 / 14 / 16 / 18 / 24px. Nothing reads below
+     --font-size-tertiary. */
+  --font-family-base:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-size-display: 2rem; /* login, 404 and under-construction headings only */
+  --leading-display: 2.5rem;
+  --font-size-page-title: 1.5rem;
+  --leading-page-title: 2rem;
+  --font-size-kpi: 1.5rem;
+  --leading-kpi: 1.75rem;
+  --font-size-modal-title: 1.125rem;
+  --leading-modal-title: 1.5rem;
+  --font-size-section-title: 1rem;
+  --leading-section-title: 1.5rem;
+  /* Body, values, table cells, buttons, sub-section and item titles. */
+  --font-size-body: 0.875rem;
+  --leading-body: 1.25rem;
+  /* Labels, help, secondary meta, errors, table headers, chips. */
+  --font-size-secondary: 0.8125rem;
+  --leading-secondary: 1.125rem;
+  /* Timestamps, counts, status pills, tags, inline table actions. */
+  --font-size-tertiary: 0.75rem;
+  --leading-tertiary: 1rem;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
 
   /* Neutral surfaces and borders, lighter than --bg-light / --border-color:
      table headers, hover rows, segmented controls. */
@@ -97,8 +118,21 @@
   --hover-primary-border: #cfe2f6;
   --hover-danger-border: #f7d4d8;
 
-  /* The height every single-line control lines up on. */
-  --control-height: 42px;
+  /* Control sizes — the AGENTS.md §17 size table. Every single-line control and form
+     action button lines up on --control-height. */
+  --control-height: 2.5rem;
+  --control-padding-x: 0.75rem;
+  --button-padding-x: 1.5rem;
+  --button-min-width: 7.5rem;
+  --button-sm-height: 2rem;
+  --chip-height: 2rem;
+  --icon-action-size: 2rem;
+  --inline-action-height: 1.75rem;
+  --tag-height: 1.5rem;
+  --table-cell-padding: 0.75rem 1rem;
+  /* The tap area every control reaches on a touch screen (Apple HIG 44pt; Carbon 44px),
+     added around the control rather than by growing it — see index.css. */
+  --touch-target: 2.75rem;
 
   /* Bootstrap Overrides */
   --bs-primary: var(--primary-color);
@@ -106,6 +140,18 @@
   --bs-success: var(--success-color);
   --bs-danger: var(--error-color);
   --bs-body-bg: var(--bg-surface);
-  --bs-body-color: var(--text-main);
+  --bs-body-color: var(--text-body);
+  --bs-body-font-family: var(--font-family-base);
+  --bs-body-font-size: var(--font-size-body);
+  /* Bootstrap's own text colours, pointed at the portal's: its #6c757d secondary text and
+     #0d6efd links fall under 4.5:1 on the tinted panels; these pass on every surface. */
+  --bs-secondary-color: var(--text-soft);
+  --bs-secondary-rgb: 81, 96, 122;
+  --bs-primary-rgb: 0, 105, 171;
+  --bs-link-color: var(--primary-color);
+  --bs-link-color-rgb: 0, 105, 171;
+  --bs-link-hover-color: var(--primary-hover);
+  --bs-link-hover-color-rgb: 0, 84, 146;
+  --bs-body-line-height: 1.4286; /* 20px on 14px */
   --bs-border-radius: var(--border-radius-md);
 }

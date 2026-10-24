@@ -17,8 +17,9 @@
 
 .journal-status-updates .status-filter {
   min-width: 190px;
-  padding: 0.35rem 2rem 0.35rem 0.75rem;
-  font-size: 0.85rem;
+  height: var(--control-height);
+  padding: 0 2rem 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
   border-radius: 0.5rem;
   background-position: right 0.6rem center;
 }
@@ -35,8 +36,8 @@
 .journal-status-updates .table th {
   background-color: #f1f5f9 !important;
   color: #0069ab;
-  font-weight: 700;
-  font-size: 0.8rem;
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-secondary);
   text-transform: none !important;
   letter-spacing: 0.01em;
   padding: 1rem 1.25rem;
@@ -65,19 +66,19 @@
   word-wrap: break-word;
   white-space: pre-wrap;
   color: #475569;
-  font-size: 0.875rem;
+  font-size: var(--font-size-body);
 }
 
 .journal-status-updates .user-info strong {
   display: block;
   color: #1e293b;
-  font-weight: 600;
-  font-size: 0.875rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-body);
 }
 
 .journal-status-updates .user-info small {
   color: #64748b;
-  font-size: 0.75rem;
+  font-size: var(--font-size-secondary);
 }
 
 /* Modal styles customization */
