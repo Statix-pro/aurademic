@@ -1,5 +1,6 @@
-export const getDirectoryApprovalStatus = (record, ownerId) => {
+// updated_by is set only by a reviewer's decision and cleared on every owner edit, so
+// it alone separates Rejected from Pending, matching the admin approval queries.
+export const getDirectoryApprovalStatus = (record) => {
   if (Number(record.is_active) === 1) return 'Approved';
-  if (!record.updated_by || Number(record.updated_by) === Number(ownerId)) return 'Pending';
-  return 'Rejected';
+  return record.updated_by ? 'Rejected' : 'Pending';
 };

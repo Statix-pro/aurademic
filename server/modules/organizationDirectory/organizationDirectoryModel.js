@@ -57,7 +57,7 @@ export default {
       const isOwner = Number(row.created_by) === Number(userId);
       return {
         ...serialize(row),
-        approvalStatus: getDirectoryApprovalStatus(row, userId),
+        approvalStatus: getDirectoryApprovalStatus(row),
         isOwner,
       };
     });
@@ -80,8 +80,13 @@ export default {
         recordId: result.insertId,
         tx: connection,
       });
+      const [rows] = await connection.execute(
+        'SELECT *, DATE(created_at) AS date FROM organizations WHERE id = ?',
+        [result.insertId],
+      );
       await connection.commit();
-      return { id: result.insertId, status: 'Pending', ...payload };
+      // Same shape as listApproved, so the dashboard row keeps its Edit button.
+      return { ...serialize(rows[0]), approvalStatus: 'Pending', isOwner: true };
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -117,7 +122,7 @@ export default {
       await workflowService.logWorkflowResubmission({
         moduleKey: 'organization_directory',
         recordId: id,
-        stage: workflow?.state?.currentStage || 'level1',
+        stage: workflow?.state?.currentStage || 'directory_admin',
         actor: { userId },
         tx: connection,
       });
@@ -126,7 +131,7 @@ export default {
         [id],
       );
       await connection.commit();
-      return serialize(rows[0]);
+      return { ...serialize(rows[0]), approvalStatus: 'Pending', isOwner: true };
     } catch (error) {
       await connection.rollback();
       throw error;

@@ -192,6 +192,96 @@ describe('directory owner-only edits', () => {
     );
   });
 
+  // Pins the PR #83 hole: photoPath/resumePath from the body were stored, then deleted
+  // on the next replacement, so any user could remove any file under uploads/.
+  it('ignores file paths and metadata submitted in the request body', async () => {
+    execute
+      .mockResolvedValueOnce([{ insertId: 21 }])
+      .mockResolvedValueOnce([[{ id: 21, created_at: null }]]);
+
+    await resourcePersonModel.submit(
+      {
+        firstName: 'A',
+        lastName: 'B',
+        professions: '[]',
+        photoName: 'victim.pdf',
+        photoPath: '/uploads/journal-article/victim-article.pdf',
+        photoMimeType: 'application/pdf',
+        photoFileSize: '999',
+        resumeName: 'victim.pdf',
+        resumePath: '/uploads/sanctionOrder/victim.pdf',
+        resumeMimeType: 'application/pdf',
+        resumeFileSize: '999',
+      },
+      {},
+      2,
+    );
+
+    const insertValues = execute.mock.calls[0][1];
+    expect(insertValues).not.toContain('/uploads/journal-article/victim-article.pdf');
+    expect(insertValues).not.toContain('/uploads/sanctionOrder/victim.pdf');
+    expect(insertValues).not.toContain('victim.pdf');
+    expect(insertValues).not.toContain(999);
+  });
+
+  it('never deletes a stored file outside uploads/resource-persons/', async () => {
+    execute
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 11,
+            created_at: null,
+            photo_path: '/uploads/journal-article/victim-article.pdf',
+            resume_path: '/uploads/resource-persons/../sanctionOrder/victim.pdf',
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}]);
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await resourcePersonModel.update(
+      11,
+      { firstName: 'A', lastName: 'B', professions: '[]' },
+      {
+        photoFile: [
+          { filename: 'new-photo.jpg', mimetype: 'image/jpeg', originalname: 'new.jpg', size: 10 },
+        ],
+        resumeFile: [
+          {
+            filename: 'new-resume.pdf',
+            mimetype: 'application/pdf',
+            originalname: 'new.pdf',
+            size: 20,
+          },
+        ],
+      },
+      2,
+    );
+
+    expect(deleteUploadedFile).not.toHaveBeenCalled();
+    expect(connection.commit).toHaveBeenCalledOnce();
+    consoleError.mockRestore();
+  });
+
+  it('logs a resource-person resubmission at the directory stage', async () => {
+    execute
+      .mockResolvedValueOnce([[{ id: 11, created_at: null }]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}]);
+
+    await resourcePersonModel.update(
+      11,
+      { firstName: 'A', lastName: 'B', professions: '[]' },
+      {},
+      2,
+    );
+
+    expect(workflowService.logWorkflowResubmission).toHaveBeenCalledWith(
+      expect.objectContaining({ stage: 'directory_admin' }),
+    );
+  });
+
   it.each(['submit', 'update'])(
     'rejects invalid professions in resource-person %s before opening a transaction',
     async (method) => {
@@ -267,16 +357,60 @@ describe('directory owner-only edits', () => {
   );
 
   it('allows different submitters to create organizations with the same name', async () => {
-    execute.mockResolvedValueOnce([{ insertId: 31 }]).mockResolvedValueOnce([{ insertId: 32 }]);
+    execute
+      .mockResolvedValueOnce([{ insertId: 31 }])
+      .mockResolvedValueOnce([[{ id: 31, created_by: 2 }]])
+      .mockResolvedValueOnce([{ insertId: 32 }])
+      .mockResolvedValueOnce([[{ id: 32, created_by: 3 }]]);
 
     await organizationModel.submit({ name: 'Shared name' }, 2);
     await organizationModel.submit({ name: 'Shared name' }, 3);
 
-    expect(execute).toHaveBeenCalledTimes(2);
-    expect(execute.mock.calls.map(([, values]) => values.at(-1))).toEqual([2, 3]);
-    expect(execute.mock.calls.every(([sql]) => sql.startsWith('INSERT INTO organizations'))).toBe(
-      true,
+    const inserts = execute.mock.calls.filter(([sql]) =>
+      sql.startsWith('INSERT INTO organizations'),
     );
+    expect(inserts).toHaveLength(2);
+    expect(inserts.map(([, values]) => values.at(-1))).toEqual([2, 3]);
+  });
+
+  // The dashboards swap the save response into their list and show Edit only when
+  // isOwner is set; a response without it hid the button until a reload.
+  it.each([
+    [
+      'organization submit',
+      () => organizationModel.submit({ name: 'Org', status: 'Active' }, 2),
+      [[{ insertId: 31 }], [[{ id: 31, created_by: 2, name: 'Org', status: 'Active' }]]],
+    ],
+    [
+      'organization update',
+      () => organizationModel.update(31, { name: 'Org' }, 2),
+      [[[{ id: 31 }]], [{}], [[{ id: 31, created_by: 2, name: 'Org' }]]],
+    ],
+    [
+      'resource-person submit',
+      () => resourcePersonModel.submit({ firstName: 'A', lastName: 'B', professions: '[]' }, {}, 2),
+      [[{ insertId: 21 }], [[{ id: 21, created_by: 2 }]]],
+    ],
+    [
+      'resource-person update',
+      () =>
+        resourcePersonModel.update(21, { firstName: 'A', lastName: 'B', professions: '[]' }, {}, 2),
+      [[[{ id: 21, created_by: 2 }]], [{}], [{}]],
+    ],
+  ])('returns an owned Pending record from %s', async (_label, save, results) => {
+    for (const result of results) execute.mockResolvedValueOnce(result);
+
+    await expect(save()).resolves.toMatchObject({ approvalStatus: 'Pending', isOwner: true });
+  });
+
+  it('shows a super-admin their own rejected submission as Rejected', async () => {
+    db.query
+      .mockResolvedValueOnce([[{ id: 5, created_by: 9, is_active: 0, updated_by: 9 }]])
+      .mockResolvedValueOnce([[]]);
+
+    const [record] = await resourcePersonModel.list(9);
+
+    expect(record.approvalStatus).toBe('Rejected');
   });
 
   it('enforces organization-name uniqueness per submitter', async () => {

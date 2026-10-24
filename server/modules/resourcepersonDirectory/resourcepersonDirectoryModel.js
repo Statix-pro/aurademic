@@ -96,6 +96,23 @@ const loadProfessionsByPerson = async (personIds) => {
   }
   return byPerson;
 };
+const RESOURCE_PERSON_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'resource-persons');
+// File columns come only from a file multer has just written. A path taken from the
+// request body would let a caller point a record at someone else's upload, which
+// update() then deletes when a replacement arrives.
+const uploadedFileFields = (file, prefix) => ({
+  [`${prefix}_name`]: file?.filename ? file.originalname || null : null,
+  [`${prefix}_path`]: file?.filename ? `/uploads/resource-persons/${file.filename}` : null,
+  [`${prefix}_mime_type`]: file?.filename ? file.mimetype || null : null,
+  [`${prefix}_file_size`]: file?.filename ? file.size || null : null,
+});
+const storedFileFields = (row, prefix) =>
+  Object.fromEntries(
+    ['name', 'path', 'mime_type', 'file_size'].map((suffix) => [
+      `${prefix}_${suffix}`,
+      row[`${prefix}_${suffix}`] ?? null,
+    ]),
+  );
 const normalize = (input = {}, files = {}) => ({
   title: text(input.title) || 'Dr.',
   first_name: text(input.first_name ?? input.firstName),
@@ -110,18 +127,8 @@ const normalize = (input = {}, files = {}) => ({
   personal_email: text(input.personal_email ?? input.personalEmail),
   official_email: text(input.official_email ?? input.officialEmail),
   linked_in: text(input.linked_in ?? input.linkedIn),
-  photo_name: files.photoFile?.[0]?.originalname || text(input.photoName),
-  photo_path: files.photoFile?.[0]?.filename
-    ? `/uploads/resource-persons/${files.photoFile[0].filename}`
-    : text(input.photoPath),
-  photo_mime_type: files.photoFile?.[0]?.mimetype || text(input.photoMimeType),
-  photo_file_size: files.photoFile?.[0]?.size || Number(input.photoFileSize) || null,
-  resume_name: files.resumeFile?.[0]?.originalname || text(input.resumeName),
-  resume_path: files.resumeFile?.[0]?.filename
-    ? `/uploads/resource-persons/${files.resumeFile[0].filename}`
-    : text(input.resumePath),
-  resume_mime_type: files.resumeFile?.[0]?.mimetype || text(input.resumeMimeType),
-  resume_file_size: files.resumeFile?.[0]?.size || Number(input.resumeFileSize) || null,
+  ...uploadedFileFields(files.photoFile?.[0], 'photo'),
+  ...uploadedFileFields(files.resumeFile?.[0], 'resume'),
 });
 const parseProfessions = (value) => {
   let professions = value || [];
@@ -146,8 +153,17 @@ const parseProfessions = (value) => {
   }
   return professions;
 };
-const storedUploadPath = (storedPath) =>
-  path.resolve(process.cwd(), String(storedPath).replace(/^[/\\]+/, ''));
+// Returns the on-disk path of a stored file only when it sits inside this module's own
+// upload folder, so a replaced-file cleanup can never reach another module's uploads.
+const storedUploadPath = (storedPath) => {
+  const resolved = path.resolve(process.cwd(), String(storedPath).replace(/^[/\\]+/, ''));
+  return resolved.startsWith(`${RESOURCE_PERSON_UPLOAD_DIR}${path.sep}`) ? resolved : null;
+};
+const deleteReplacedFile = (storedPath) => {
+  const resolved = storedUploadPath(storedPath);
+  if (resolved) deleteUploadedFile(resolved);
+  else console.error('Refused to delete a resource-person file outside its folder:', storedPath);
+};
 
 export default {
   async list(userId) {
@@ -162,7 +178,7 @@ export default {
       const isOwner = Number(person.created_by) === Number(userId);
       return {
         ...(isOwner ? serializePerson(person) : serializePublicPerson(person)),
-        approvalStatus: getDirectoryApprovalStatus(person, userId),
+        approvalStatus: getDirectoryApprovalStatus(person),
         isOwner,
       };
     });
@@ -206,7 +222,11 @@ export default {
         [result.insertId],
       );
       await connection.commit();
-      return { ...serializePerson(rows[0], professions), approvalStatus: 'Pending' };
+      return {
+        ...serializePerson(rows[0], professions),
+        approvalStatus: 'Pending',
+        isOwner: true,
+      };
     } catch (e) {
       await connection.rollback();
       throw e;
@@ -300,31 +320,34 @@ export default {
       await workflowService.logWorkflowResubmission({
         moduleKey: 'resource_person_directory',
         recordId: id,
-        stage: workflow?.state?.currentStage || 'level1',
+        stage: workflow?.state?.currentStage || 'directory_admin',
         actor: { userId },
         tx: connection,
       });
       await connection.commit();
       if (files.photoFile?.[0] && current.photo_path && current.photo_path !== person.photo_path) {
-        deleteUploadedFile(storedUploadPath(current.photo_path));
+        deleteReplacedFile(current.photo_path);
       }
       if (
         files.resumeFile?.[0] &&
         current.resume_path &&
         current.resume_path !== person.resume_path
       ) {
-        deleteUploadedFile(storedUploadPath(current.resume_path));
+        deleteReplacedFile(current.resume_path);
       }
       const savedPerson = {
         id: Number(id),
         ...person,
-        photo_name: files.photoFile?.[0] ? person.photo_name : current.photo_name,
-        photo_path: files.photoFile?.[0] ? person.photo_path : current.photo_path,
-        resume_name: files.resumeFile?.[0] ? person.resume_name : current.resume_name,
-        resume_path: files.resumeFile?.[0] ? person.resume_path : current.resume_path,
+        // Untouched files keep their stored metadata, as the UPDATE above did.
+        ...(files.photoFile?.[0] ? {} : storedFileFields(current, 'photo')),
+        ...(files.resumeFile?.[0] ? {} : storedFileFields(current, 'resume')),
         created_at: current.created_at,
       };
-      return { ...serializePerson(savedPerson, professions), approvalStatus: 'Pending' };
+      return {
+        ...serializePerson(savedPerson, professions),
+        approvalStatus: 'Pending',
+        isOwner: true,
+      };
     } catch (error) {
       await connection.rollback();
       throw error;
