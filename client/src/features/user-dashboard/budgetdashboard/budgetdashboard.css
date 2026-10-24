@@ -560,13 +560,15 @@
     z-index: 999;
   }
 
+  /* Centred in the space below the 56px top bar, never under it. */
   .budgetdashboard-log-popover {
     position: fixed;
-    top: 50%;
+    top: calc(50% + 28px);
     left: 50%;
     transform: translate(-50%, -50%);
     width: 90vw;
     max-width: 350px;
+    max-height: calc(100vh - 56px - 32px);
     margin-top: 0;
   }
 
@@ -883,6 +885,18 @@
   padding: 0;
   overflow: hidden;
   animation: popoverFadeIn 0.2s ease-out;
+  /* Header fixed at the top, log list scrolling under it when the popover's height is capped. */
+  display: flex;
+  flex-direction: column;
+}
+
+.budgetdashboard-log-popover .budgetdashboard-log-header {
+  flex-shrink: 0;
+}
+
+.budgetdashboard-log-popover .budgetdashboard-log-body {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 @keyframes popoverFadeIn {
