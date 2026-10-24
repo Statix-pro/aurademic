@@ -213,7 +213,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
           <CustomButton
             variant="outline-primary"
             size="sm"
-            className="px-2"
+            className="org-action-edit-btn"
             onClick={() => handleEdit(org)}
             title="Edit Organization"
             aria-label="Edit Organization"

@@ -151,12 +151,15 @@
   margin-left: 2px;
 }
 
-.orgd-field input,
-.orgd-field select {
+/* Scoped under the wrapper so these win over CustomInput's `.form-control.custom-input`
+   and the form keeps its own look, as the resource-person form does. */
+.orgd-form-wrapper .orgd-field input,
+.orgd-form-wrapper .orgd-field select {
   width: 100%;
   border-radius: 12px;
   border: 1px solid #e0e0e0;
-  padding: 10px 15px;
+  /* !important: a global `.form-control { padding: 0.4rem 1rem !important }` otherwise wins. */
+  padding: 10px 15px !important;
   font-size: 0.95rem;
   background-color: #ffffff;
   transition: all 0.3s ease;
@@ -165,8 +168,8 @@
   box-sizing: border-box;
 }
 
-.orgd-field input:focus,
-.orgd-field select:focus {
+.orgd-form-wrapper .orgd-field input:focus,
+.orgd-form-wrapper .orgd-field select:focus {
   border-color: #0069ab;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
 }
@@ -300,4 +303,66 @@
   .orgd-row-4 {
     grid-template-columns: 1fr;
   }
+}
+
+/* Website / LinkedIn: the icon sits inside the input, over its left padding. */
+.orgd-input-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.orgd-input-icon-wrapper .custom-input-group {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.orgd-input-icon-wrapper svg {
+  position: absolute;
+  left: 14px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.orgd-form-wrapper .orgd-input-icon-wrapper input {
+  padding-left: 44px !important;
+}
+
+/* Paired with .custom-btn so they beat both Bootstrap's variants and the global
+   `.btn { color: white }` that leaks from the events stylesheet, which made a light
+   Cancel button white on white. */
+.custom-btn.orgd-btn-save {
+  padding: 12px 40px;
+  font-size: 16px;
+  font-weight: 700;
+  background-color: #0069ab;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  min-width: 150px;
+  box-shadow: 0 6px 20px rgba(0, 105, 171, 0.3);
+}
+
+.custom-btn.orgd-btn-save:hover {
+  background-color: #0056b3;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 105, 171, 0.4);
+}
+
+.custom-btn.orgd-btn-cancel {
+  padding: 10px 30px;
+  font-size: 15px;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  min-width: 140px;
+}
+
+.custom-btn.orgd-btn-cancel:hover {
+  background-color: #e2e8f0;
+  color: #475569;
 }

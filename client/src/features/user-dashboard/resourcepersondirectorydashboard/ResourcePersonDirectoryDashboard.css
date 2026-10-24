@@ -310,11 +310,12 @@
   font-size: 0.95rem;
   color: #334155;
 }
+/* !important: a global `.form-control { padding: 0.4rem 1rem !important }` otherwise wins. */
 .rpd-dashboard-search .form-control.custom-input {
-  padding: 10px 38px 10px 40px;
+  padding: 10px 38px 10px 40px !important;
 }
 .rpd-dashboard-filter .form-control.custom-input {
-  padding: 10px 14px;
+  padding: 10px 14px !important;
   min-width: 160px;
 }
 .rpd-dashboard-search .form-control.custom-input:focus,

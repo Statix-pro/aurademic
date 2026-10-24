@@ -92,6 +92,25 @@
 }
 
 /* Keeps typed text clear of the search / clear icon drawn over the input's right edge. */
+/* !important: a global `.form-control { padding: 0.4rem 1rem !important }` otherwise wins. */
 .org-search-field .custom-input {
-  padding-right: 32px;
+  padding-right: 32px !important;
+}
+
+/* Paired with .custom-btn to beat the global `.btn { color: white }` leaking from the
+   events stylesheet, which otherwise draws this outline button white on white. */
+.custom-btn.org-action-edit-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #0069ab;
+  background: #ffffff;
+  color: #0069ab;
+  border-radius: 6px;
+}
+
+.custom-btn.org-action-edit-btn:hover {
+  background: #e0f0ff;
+  color: #0069ab;
+  transform: scale(1.05);
 }

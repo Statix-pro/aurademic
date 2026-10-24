@@ -216,7 +216,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
           {/* Right panel - Website and LinkedIn grouped in light blue box */}
           <div className="orgd-right-col-box">
             <div className="orgd-field">
-              <div className="d-flex align-items-center gap-2">
+              <div className="orgd-input-icon-wrapper">
                 <Globe size={16} color="#0069ab" aria-hidden="true" />
                 <CustomInput
                   name="orgd-website-input"
@@ -225,13 +225,13 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                   onChange={setWebsite}
                   placeholder="Website"
                   aria-label="Website"
-                  className="mb-0 flex-grow-1"
+                  className="mb-0"
                 />
               </div>
             </div>
 
             <div className="orgd-field">
-              <div className="d-flex align-items-center gap-2">
+              <div className="orgd-input-icon-wrapper">
                 <Linkedin size={16} color="#0069ab" aria-hidden="true" />
                 <CustomInput
                   name="orgd-linkedin-input"
@@ -240,7 +240,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                   onChange={setLinkedIn}
                   placeholder="LinkedIn Profile"
                   aria-label="LinkedIn Profile"
-                  className="mb-0 flex-grow-1"
+                  className="mb-0"
                 />
               </div>
             </div>
@@ -335,10 +335,10 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       )}
       {!readOnly && (
         <div className="orgd-actions-row">
-          <CustomButton onClick={handleSubmit}>
+          <CustomButton className="orgd-btn-save" onClick={handleSubmit}>
             {editingOrg !== null ? 'Update Record' : 'Save Record'}
           </CustomButton>
-          <CustomButton variant="light" onClick={onCancel}>
+          <CustomButton variant="light" className="orgd-btn-cancel" onClick={onCancel}>
             Cancel
           </CustomButton>
         </div>
