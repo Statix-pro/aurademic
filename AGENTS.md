@@ -313,7 +313,7 @@ Verified against the code on the date above. Getting these wrong breaks things q
 - 11 of the 25 `*Routes.js` files call `permissionMiddleware`; the others gate through
   `adminAuthMiddleware` / `superAdminMiddleware` or handler-level checks. **Verify which applies
   before assuming a given route is protected.**
-- There are only 2 `eslint-disable` comments in the whole codebase. Keep it that way.
+- There are only 3 `eslint-disable` comments in the whole codebase. Keep it that way.
 - There is **no `financeCard` and no `guesthouse` server module** — the commented-out imports and
   mounts were deleted from `server.js`. The client still ships `features/guesthouse/`
   (an `UnderConstruction` page) and `features/user-dashboard/guesthousedashboard/` (a calendar built
@@ -610,26 +610,31 @@ Changing a value here is the user's decision and changes this table first.
 
 Basis: dense desktop admin forms, checked against primary sources — Bootstrap 5 default input 38px
 (`scss/_variables.scss`), IBM Carbon text input 32 / 40 / 48px, MUI `Chip` 32px (small 24px), WCAG
-2.2 SC 2.5.8 minimum target 24×24px (AAA 2.5.5: 44×44px). The portal is used at desks, so the
-44px touch size is not the target.
+2.2 SC 2.5.8 minimum target 24×24px (AAA 2.5.5: 44×44px), Microsoft Fluent standard controls
+40px / compact 32px, Material density (a dense control keeps a 48px touch target).
 
-| Element                                         | Height | Font size              | Weight               | Horizontal padding       | Radius | Other                                                                        |
-| ----------------------------------------------- | ------ | ---------------------- | -------------------- | ------------------------ | ------ | ---------------------------------------------------------------------------- |
-| Text / date / search input, `CustomDropdown`    | 40px   | 14px                   | 400                  | 12px                     | 12px   | via `var(--control-height)`; see note below                                  |
-| Field label                                     | —      | 13px                   | 600                  | —                        | —      | 6px gap to its control                                                       |
-| Form action button (Save / Update / Cancel)     | 40px   | 14px                   | 600                  | 24px                     | 12px   | min-width 120px; primary and secondary match                                 |
-| Chip and segmented toggle (Category, Gender, …) | 32px   | 13px                   | 600                  | 14px                     | 8px    | 8px gap; width = its text, never `flex: 1`                                   |
-| Table row icon action (Edit / View)             | 32px   | icon 15px              | —                    | 0 (32×32 square)         | 8px    |                                                                              |
-| Table inline action (Approve / Reject)          | 28px   | 12px                   | 700                  | 10px                     | 6px    | one line: `white-space: nowrap`, `flex-shrink: 0` — never clipped or wrapped |
-| Header tag (`ADMIN`)                            | 24px   | 12px                   | 700                  | 10px                     | 6px    | a tag, not a button; uppercase                                               |
-| KPI / stat card                                 | 80px   | label 13px, value 24px | label 400, value 700 | 20px (padding 14px 20px) | 14px   | icon tile 40×40px, radius 10px                                               |
-| Spacing between fields                          | —      | —                      | —                    | —                        | —      | 12px column gap, 12px row gap                                                |
-| Modal that hosts a form                         | —      | —                      | —                    | —                        | —      | `.modal-dialog` max-width 1150px                                             |
+| Element                                         | Height | Font size              | Weight               | Horizontal padding       | Radius | Other                                                                                     |
+| ----------------------------------------------- | ------ | ---------------------- | -------------------- | ------------------------ | ------ | ----------------------------------------------------------------------------------------- |
+| Text / date / search input, `CustomDropdown`    | 40px   | 14px                   | 400                  | 12px                     | 12px   | `--control-height`, `--control-padding-x`                                                 |
+| Field label                                     | —      | 13px                   | 600                  | —                        | —      | 6px gap to its control                                                                    |
+| Form action button (Save / Update / Cancel)     | 40px   | 14px                   | 600                  | 24px                     | 12px   | min-width 120px; primary and secondary match; modal footer and confirm-dialog buttons too |
+| Toolbar / page button (any other `.btn`)        | 40px   | 14px                   | 600                  | 16px                     | 12px   | Bootstrap's `.btn` default, set in `index.css`                                            |
+| Small button (`.btn-sm`, `size="sm"`)           | 32px   | 13px                   | 600                  | 12px                     | 8px    | `--button-sm-height`                                                                      |
+| Chip and segmented toggle (Category, Gender, …) | 32px   | 13px                   | 600                  | 14px                     | 8px    | `--chip-height`; 8px gap; width = its text, never `flex: 1`                               |
+| Table row icon action (Edit / View)             | 32px   | icon 15px              | —                    | 0 (32×32 square)         | 8px    | `--icon-action-size`                                                                      |
+| Table inline action (Approve / Reject)          | 28px   | 12px                   | 700                  | 10px                     | 6px    | `--inline-action-height`; one line: `white-space: nowrap`, `flex-shrink: 0`               |
+| Header tag (`ADMIN`)                            | 24px   | 12px                   | 700                  | 10px                     | 6px    | `--tag-height`; a tag, not a button; uppercase                                            |
+| Table cell                                      | —      | 14px (header 13px)     | 400 (header 600)     | 16px (padding 12px 16px) | —      | `--table-cell-padding`                                                                    |
+| KPI / stat card                                 | 80px   | label 13px, value 24px | label 400, value 700 | 20px (padding 14px 20px) | 14px   | icon tile 40×40px, radius 10px                                                            |
+| Spacing between fields                          | —      | —                      | —                    | —                        | —      | 12px column gap, 12px row gap                                                             |
+| Modal that hosts a form                         | —      | —                      | —                    | —                        | —      | `.modal-dialog` max-width 1150px                                                          |
 
-- **Control height note:** single-line controls take their height from `--control-height` in
-  `shared/styles/variables.css`, never a hard-coded number. The standard is **40px**; the token is
-  still **42px** until the app-wide PR that changes it lands — that is the only accepted
-  deviation, and it is fixed in the token, not per page.
+- **Every size is a token** in `shared/styles/variables.css` (named in the table), written in rem so a
+  browser's larger default text size scales the whole UI. Never a hard-coded number in a page.
+- **Touch screens:** controls keep these desktop sizes. Under `@media (pointer: coarse)`,
+  `index.css` gives every button, close button and page link an invisible tap area of at least
+  `--touch-target` (44px, Apple HIG / Carbon), and enlarges checkboxes. A screen that draws its own
+  `::before` on a button must keep that working — don't add a second tap-area mechanism per page.
 - Controls on one row line up: same height, same top edge. A toggle group sits in a
   `--control-height` band with its chips centred, so neighbouring inputs align.
 - Measure in the browser (`getBoundingClientRect`), never eyeball. §6 "UI change" evidence includes
@@ -656,6 +661,7 @@ audience.
 
 | Role                     | Used for                                                             | Size                  | Line height     | Weight | Colour (contrast on white)                                                                    |
 | ------------------------ | -------------------------------------------------------------------- | --------------------- | --------------- | ------ | --------------------------------------------------------------------------------------------- |
+| Display                  | login, 404 and under-construction headings — nowhere else            | 32px                  | 40px            | 700    | per page                                                                                      |
 | Page title               | the page heading ("Organization Request")                            | 24px                  | 32px            | 700    | `--text-strong` (15.7:1)                                                                      |
 | Modal title              | `CustomModal` header                                                 | 18px                  | 24px            | 600    | `--primary-color` (5.8:1)                                                                     |
 | Section title            | card heading ("Category", "Personal Details")                        | 16px                  | 24px            | 600    | `--primary-color`                                                                             |
@@ -675,6 +681,16 @@ audience.
 | Status pill              | Pending / Approved / Rejected                                        | 12px                  | —               | 600    | status tint pair from `variables.css`                                                         |
 | Inline table action      | Approve / Reject                                                     | 12px                  | —               | 700    | white on the variant fill                                                                     |
 
+- **Use the role tokens, never a literal size:** `--font-size-display`, `--font-size-page-title`,
+  `--font-size-kpi`, `--font-size-modal-title`, `--font-size-section-title`, `--font-size-body`,
+  `--font-size-secondary`, `--font-size-tertiary`, each with a matching `--leading-*`; weights
+  `--weight-regular` … `--weight-bold`. Inline styles too: `fontSize: 'var(--font-size-body)'`. Icon
+  glyph sizes are not text and are exempt. (`--text-*` names are colours — `--text-body` is the
+  primary text colour — never sizes.)
+- **One font:** the system UI stack in `--font-family-base` (Segoe UI on the campus Windows
+  machines), set on `body`. No page names its own font family (monospace for codes/IDs aside), and no
+  web font is loaded for text.
+- Tables and inputs use `tabular-nums`, so amounts line up down a column.
 - **12px is the floor.** Nothing renders smaller, anywhere — not tags, not footnotes.
 - **Anything a user must read to complete a task is ≥14px** (values, table cells, body copy);
   13px is for labels, help, secondary and error text only.
@@ -692,13 +708,14 @@ audience.
 
 ### UI pitfalls
 
-**Global CSS traps — scope around them, don't edit them from a feature PR:**
-
-| Rule                                                              | Defined in                                     | Effect                                                                                          |
-| ----------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `.btn { color: white }`                                           | `features/events/styles/EventForm.css` (leaks) | Outline/light/link `CustomButton`s render white-on-white. Pair `.custom-btn.<your-class>`.      |
-| `.form-control, .form-select { padding: 0.4rem 1rem !important }` | `shared/styles/forms.css`                      | Page padding rules lose. Scoped overrides need `!important` on padding.                         |
-| `.modal-body .form-label { margin-bottom: 0 }`                    | `shared/styles/forms.css`                      | `CustomInput` labels lose their gap inside modals; scope the label rule under the form wrapper. |
+**Every stylesheet loads on every page** — routes are not lazy-loaded, so a feature's CSS is global
+in effect. A feature file therefore styles only its own classes, scoped under its screen's root
+class. It never targets a bare element (`body`, `*`, `h2`, `table`, `button[type='submit']`) or a
+Bootstrap class (`.btn`, `.btn-primary`, `.modal-*`, `.table`, `.badge`, `.form-control`,
+`.text-muted`) on its own. The portal's Bootstrap theme lives in one place,
+`shared/styles/forms.css` (colours, modals, tables, badges, alerts) and `shared/styles/index.css`
+(type roles, button sizes, touch and reduced-motion layers); change it there, for everyone.
+`shared/styles/*` loads after all feature CSS, so on equal specificity it wins.
 
 **`CustomDropdown` styles merge shallowly** (`{ ...defaultStyles, ...customStyles }`): a custom
 `control` replaces the whole default — 12px radius, border colours and focus ring are lost and
