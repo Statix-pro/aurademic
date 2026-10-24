@@ -6,21 +6,14 @@ import { describe, expect, it } from 'vitest';
 
 const migrationPath = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
-  '../schema/migrations/20260804_create_directory_module.sql',
+  '../schema/migrations/20261024_create_directory_module.sql',
 );
-const migration = fs.readFileSync(migrationPath, 'utf8');
-const nameIndexMigrationPath = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../schema/migrations/20261015_scope_organization_name_uniqueness_to_submitter.sql',
-);
-const nameIndexMigration = fs.readFileSync(nameIndexMigrationPath, 'utf8');
-const directoryAdminMigration = fs.readFileSync(
-  path.resolve(
-    path.dirname(fileURLToPath(import.meta.url)),
-    '../schema/migrations/20261024_create_directory_admin_role.sql',
-  ),
-  'utf8',
-);
+// Executable SQL only: comment lines (rollback notes, rationale) must not satisfy a match.
+const migration = fs
+  .readFileSync(migrationPath, 'utf8')
+  .split('\n')
+  .filter((line) => !line.trim().startsWith('--'))
+  .join('\n');
 const routePaths = [
   path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -63,6 +56,12 @@ describe('directory permission migration', () => {
   // makes the user an approver and a recipient of every directory submission.
   it('creates every review permission the routes use and grants it to directory_admin only', () => {
     const reviewPermissions = routePermissions.filter((key) => key.includes('.workflow.'));
+    const everyRoleGrant = migration.match(
+      /INSERT INTO `role_permissions`[\s\S]*?JOIN `permissions` p ON p\.module_key = 'directory'[\s\S]*?;/,
+    )[0];
+    const directoryAdminGrant = migration.match(
+      /INSERT INTO `role_permissions`[\s\S]*?WHERE r\.role_code = 'directory_admin'[\s\S]*?;/,
+    )[0];
 
     expect(new Set(reviewPermissions)).toEqual(
       new Set([
@@ -71,13 +70,13 @@ describe('directory permission migration', () => {
       ]),
     );
     for (const permissionKey of reviewPermissions) {
-      expect(directoryAdminMigration).toContain(`'${permissionKey}'`);
-      expect(migration).not.toContain(permissionKey);
+      expect(migration).toMatch(
+        new RegExp(`INSERT INTO \`permissions\`[\\s\\S]*'${permissionKey}'`),
+      );
+      expect(directoryAdminGrant).toContain(`'${permissionKey}'`);
+      expect(everyRoleGrant).not.toContain(permissionKey);
     }
-    expect(directoryAdminMigration).toMatch(/WHERE r\.role_code = 'directory_admin'/);
-    expect(directoryAdminMigration).toMatch(
-      /'directory_admin',\s*'Directory Admin',[\s\S]*?,\s*1,\s*0\s*\)/,
-    );
+    expect(migration).toMatch(/'directory_admin',\s*'Directory Admin',[\s\S]*?,\s*1,\s*0\s*\)/);
   });
 
   it('covers every role ID referenced by the developer seed', () => {
@@ -102,14 +101,20 @@ describe('directory permission migration', () => {
     expect(grant[1]).not.toMatch(/\bWHERE\b/);
   });
 
-  it('replaces the global organization-name key with an idempotent owner-scoped key', () => {
-    expect(nameIndexMigration).toMatch(/index_name = 'uq_organizations_name'/);
-    expect(nameIndexMigration).toMatch(/DROP INDEX `uq_organizations_name`/);
-    expect(nameIndexMigration).toMatch(/index_name = 'uq_organizations_created_by_name'/);
-    expect(nameIndexMigration).toMatch(
-      /ADD UNIQUE KEY `uq_organizations_created_by_name` \(`created_by`, `name`\)/,
+  // Names are unique per submitter (the approval endpoint keeps the shared directory to one
+  // copy). Databases built from the first draft had a global key; the guarded swap fixes them.
+  it('creates organizations with an owner-scoped name key and swaps a legacy global key', () => {
+    const createOrganizations = migration.match(
+      /CREATE TABLE IF NOT EXISTS `organizations`[\s\S]*?ENGINE=InnoDB/,
+    )[0];
+
+    expect(createOrganizations).toMatch(
+      /UNIQUE KEY `uq_organizations_created_by_name` \(`created_by`, `name`\)/,
     );
-    expect(nameIndexMigration).toContain('PREPARE drop_global_organization_name_index_stmt');
-    expect(nameIndexMigration).toContain('PREPARE add_submitter_organization_name_index_stmt');
+    expect(createOrganizations).not.toMatch(/uq_organizations_name/);
+    expect(migration).toMatch(/index_name = 'uq_organizations_name'/);
+    expect(migration).toMatch(/DROP INDEX `uq_organizations_name`/);
+    expect(migration).toContain('PREPARE legacy_drop_global_name_index_stmt');
+    expect(migration).toContain('PREPARE legacy_add_submitter_name_index_stmt');
   });
 });
