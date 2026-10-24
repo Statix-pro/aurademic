@@ -44,6 +44,9 @@ jobs:
       - name: Typecheck frontend
         run: npm run typecheck
 
+      - name: Check UI standard (AGENTS.md §17)
+        run: npm run check:ui
+
       - name: Check backend syntax
         run: npm run check:server
 

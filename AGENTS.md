@@ -167,14 +167,15 @@ Before claiming any task complete, run these and **show the output**:
 ```bash
 npm run lint -- --quiet     # zero errors
 npm run typecheck           # client tsc --noEmit, zero errors
+npm run check:ui            # UI standard guard (§17), zero violations
 npm run check:server        # node --check over every server .js/.cjs
 npm run test:server         # Vitest suite, all green
 npm run build               # client tsc + vite build must succeed
 ```
 
 That is exactly what `.github/workflows/pull-request.yml` runs on every push and PR to `main` /
-`develop`. Server-only changes may skip `typecheck`/`build`; client-only changes may skip
-`check:server`/`test:server`. Nothing else is skippable.
+`develop`. Server-only changes may skip `typecheck`/`check:ui`/`build`; client-only changes may
+skip `check:server`/`test:server`. Nothing else is skippable.
 
 **Evidence rules — per change type:**
 
@@ -416,6 +417,7 @@ npm run dev
 | `npm run typecheck`               | `tsc --noEmit` on the client                               |
 | `npm run check:server`            | `node --check` over every server `.js`/`.cjs`              |
 | `npm run test:server`             | Vitest backend suite                                       |
+| `npm run check:ui`                | UI standard guard over `client/src` CSS/TSX (§17)          |
 | `npm run build`                   | `tsc && vite build` → `client/dist/`                       |
 | `npm run format` / `format:check` | Prettier                                                   |
 | `npm run reconcile:budget-annual` | Budget annual rollup reconciliation                        |
@@ -444,6 +446,7 @@ aurademic/
 ├── .prettierrc.json / .prettierignore
 ├── web.config                           # IIS front door
 ├── client/
+│   ├── scripts/check-ui-standard.mjs    # UI standard guard (npm run check:ui, §17)
 │   ├── vite.config.ts                   # port 3000, outDir dist
 │   ├── tsconfig.json                    # strict: false (see §22)
 │   └── src/
@@ -631,6 +634,14 @@ Basis: dense desktop admin forms, checked against primary sources — Bootstrap 
 
 - **Every size is a token** in `shared/styles/variables.css` (named in the table), written in rem so a
   browser's larger default text size scales the whole UI. Never a hard-coded number in a page.
+- **The guard enforces it:** `client/scripts/check-ui-standard.mjs` (`npm run check:ui`, in CI and
+  the pre-commit hook) fails on a literal text size, a weight outside 400–700, a page-level font, a
+  deleted or colour `--text-*` token used as a size, uppercase outside table headers and tags, and
+  any feature selector that names no class of its own (bare elements, Bootstrap, react-select,
+  FullCalendar or `Custom*` classes alone). A genuine exception — an icon glyph, the printed A4
+  form — carries `ui-standard-allow: <reason>` on or above the line, or sits between
+  `ui-standard-allow-start: <reason>` and `ui-standard-allow-end`. Never add a marker just to go
+  green; it is reviewed like an `eslint-disable`.
 - **Touch screens:** controls keep these desktop sizes. Under `@media (pointer: coarse)`,
   `index.css` gives every button, close button and page link an invisible tap area of at least
   `--touch-target` (44px, Apple HIG / Carbon), and enlarges checkboxes. A screen that draws its own
