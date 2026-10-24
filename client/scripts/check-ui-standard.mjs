@@ -241,10 +241,11 @@ const BASELINE_FILE = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   'ui-standard-baseline.json',
 );
-const BASELINE = new Set(
-  fs.existsSync(BASELINE_FILE)
-    ? Object.keys(JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8')).entries)
-    : [],
+// key → the reason recorded for it
+const BASELINE = new Map(
+  Object.entries(
+    fs.existsSync(BASELINE_FILE) ? JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8')).entries : {},
+  ),
 );
 const baselineHit = new Set();
 const relSrc = (file) => path.relative(CLIENT_SRC, file).split(path.sep).join('/');
@@ -296,18 +297,23 @@ function buildScreenIndex() {
 }
 
 /** Screens other than this stylesheet's own that the selector's classes all appear in. */
-function otherScreensReached(file, selector) {
+/**
+ * Other screens whose markup uses every one of the selector's own classes — the screens the rule
+ * can actually match. A class used on screen B and another used on screen C reach neither, so the
+ * sets are intersected, not combined.
+ */
+function otherScreensReached(file, selector, index = null) {
   if (!file.startsWith(CLIENT_SRC) || file.startsWith(COMPONENT_DIR)) return [];
-  screenIndex ??= buildScreenIndex();
-  const mine = new Set([screenOf(file), ...(screenIndex.owners.get(file) || [])]);
+  const { usedIn, owners } = index ?? (screenIndex ??= buildScreenIndex());
+  const mine = new Set([screenOf(file), ...(owners.get(file) || [])]);
   const own = [...selector.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)]
     .map((m) => m[1])
     .filter((c) => !LIBRARY_CLASS.test(c) && !COMPONENT_CLASSES.has(c));
   if (!own.length) return [];
-  const elsewhere = own.map((c) =>
-    [...(screenIndex.usedIn.get(c) || [])].filter((s) => !mine.has(s)),
+  const [first, ...rest] = own.map(
+    (c) => new Set([...(usedIn.get(c) || [])].filter((s) => !mine.has(s))),
   );
-  return elsewhere.every((s) => s.length) ? [...new Set(elsewhere.flat())].sort() : [];
+  return [...first].filter((screen) => rest.every((set) => set.has(screen))).sort();
 }
 
 function checkTokens(file, text, exempt) {
@@ -511,8 +517,35 @@ if (process.argv.includes('--self-test')) {
     }
   }
   fs.rmSync(dir, { recursive: true, force: true });
+  // Collision logic on a synthetic index: a screen counts only when it uses every own class.
+  const sheet = path.join(CLIENT_SRC, 'features/alpha/alpha.css');
+  const index = {
+    owners: new Map(),
+    usedIn: new Map([
+      ['x', new Set(['beta'])],
+      ['y', new Set(['gamma'])],
+      ['z', new Set(['beta', 'gamma'])],
+    ]),
+  };
+  const collisionCases = [
+    ['.x.y', []], // x only on beta, y only on gamma: no screen matches both
+    ['.x .z', ['beta']], // beta uses both
+    ['.z', ['beta', 'gamma']],
+    ['.alpha-only', []], // used nowhere else
+  ];
+  for (const [selector, want] of collisionCases) {
+    const got = otherScreensReached(sheet, selector, index);
+    if (JSON.stringify(got) !== JSON.stringify(want)) {
+      failed += 1;
+      console.log(
+        `self-test collision ${selector}: want ${JSON.stringify(want)} got ${JSON.stringify(got)}`,
+      );
+    }
+  }
   if (failed) process.exit(1);
-  console.log(`UI standard self-test: ${Object.keys(SELF_TEST).length} fixtures pass.`);
+  console.log(
+    `UI standard self-test: ${Object.keys(SELF_TEST).length} fixtures and ${collisionCases.length} collision cases pass.`,
+  );
   process.exit(0);
 }
 
@@ -524,16 +557,22 @@ const files = args.length ? args.filter((f) => /\.(css|tsx)$/.test(f)) : walk(CL
 run(files);
 
 // --write-baseline records today's cross-screen collisions (review the diff: it should only shrink).
+// It needs the full scan: entries for files not scanned would otherwise be dropped. Entries still
+// colliding are matched by the baseline and never become violations, so they are carried over
+// with their recorded reason; only new collisions come from the violations.
 if (process.argv.includes('--write-baseline')) {
-  const entries = Object.fromEntries(
-    violations
-      .filter((v) => v.rule === 'cross-screen')
-      .map((v) => [
-        `${relSrc(path.resolve(REPO_ROOT, v.file))}|${v.detail.match(/^"([^"]+)"/)[1].replace(/\s+/g, ' ')}`,
-        v.detail.replace(/^"[^"]+" /, ''),
-      ])
-      .sort(([a], [b]) => a.localeCompare(b)),
-  );
+  if (args.length) {
+    console.log('--write-baseline needs a full scan — run it without file arguments.');
+    process.exit(1);
+  }
+  const fresh = violations
+    .filter((v) => v.rule === 'cross-screen')
+    .map((v) => [
+      `${relSrc(path.resolve(REPO_ROOT, v.file))}|${v.detail.match(/^"([^"]+)"/)[1].replace(/\s+/g, ' ')}`,
+      v.detail.replace(/^"[^"]+" /, ''),
+    ]);
+  const kept = [...baselineHit].map((key) => [key, BASELINE.get(key)]);
+  const entries = Object.fromEntries([...kept, ...fresh].sort(([a], [b]) => a.localeCompare(b)));
   const note =
     'Cross-screen collisions that predate the guard (duplicated stylesheets). Fix and delete entries; never add one by hand.';
   fs.writeFileSync(BASELINE_FILE, `${JSON.stringify({ note, entries }, null, 2)}\n`);
@@ -543,7 +582,7 @@ if (process.argv.includes('--write-baseline')) {
 
 // A full run also fails on baseline entries that no longer collide, so the baseline only shrinks.
 if (!args.length) {
-  for (const key of BASELINE) {
+  for (const key of BASELINE.keys()) {
     if (!baselineHit.has(key)) {
       violations.push({
         file: path.relative(REPO_ROOT, BASELINE_FILE),
