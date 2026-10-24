@@ -297,13 +297,13 @@
   min-height: 0;
 }
 
-.fc {
+.dashboard-container .fc {
   height: 100% !important;
   max-height: 100%;
   overflow: hidden;
 }
 
-.fc .fc-daygrid-day-frame {
+.dashboard-container .fc .fc-daygrid-day-frame {
   display: flex;
   align-items: flex-start;
   justify-content: center;

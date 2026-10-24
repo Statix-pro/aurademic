@@ -83,8 +83,6 @@
   color: var(--text-soft);
   font-weight: var(--weight-semibold);
   font-size: var(--font-size-secondary);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .pc-fact dd {
@@ -122,6 +120,7 @@
   margin: 0;
   min-width: var(--icon-action-size);
   min-height: var(--icon-action-size);
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 0.82rem;
 }
 

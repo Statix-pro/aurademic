@@ -78,7 +78,11 @@ const ProfileCard: React.FC = () => {
           ) : (
             <div
               className="avatar-placeholder rounded-circle mx-auto mb-2 d-flex align-items-center justify-content-center bg-secondary text-white"
-              style={{ width: '100px', height: '100px', fontSize: '2.5rem' }}
+              style={{
+                width: '100px',
+                height: '100px',
+                fontSize: '2.5rem' /* ui-standard-allow: avatar initial letter, not text */,
+              }}
             >
               {profile?.name?.charAt(0) || 'U'}
             </div>

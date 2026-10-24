@@ -804,8 +804,6 @@
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
   color: #64748b;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .expenditure-demo-row__amount-subhead {
@@ -1771,8 +1769,6 @@
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
   color: #667085;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin-bottom: 2px;
 }
 

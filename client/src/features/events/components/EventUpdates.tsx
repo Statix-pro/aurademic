@@ -258,6 +258,7 @@ const Modal: React.FC<ModalProps> = ({ open, onClose, children }) =>
             top: 11,
             border: 'none',
             background: 'none',
+            // ui-standard-allow: icon glyph, not text
             fontSize: 18,
             cursor: 'pointer',
           }}

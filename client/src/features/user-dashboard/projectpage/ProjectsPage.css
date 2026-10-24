@@ -113,6 +113,7 @@
   align-items: center;
   justify-content: center;
   color: white;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 20px;
 }
 
@@ -357,6 +358,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   transition: all 0.2s ease;
 }
@@ -583,6 +585,7 @@
 .pc-type-btn i {
   display: block;
   margin-bottom: 8px;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 24px;
 }
 

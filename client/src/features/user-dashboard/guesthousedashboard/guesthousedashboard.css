@@ -293,13 +293,13 @@
   min-height: 0;
 }
 
-.fc {
+.guesthouse-dashboard-wrapper .fc {
   height: 100% !important;
   max-height: 100%;
   overflow: hidden;
 }
 
-.fc .fc-daygrid-day-frame {
+.guesthouse-dashboard-wrapper .fc .fc-daygrid-day-frame {
   display: flex;
   align-items: flex-start;
   justify-content: center;
@@ -472,14 +472,14 @@
   box-shadow: 0 6px 12px rgba(7, 88, 135, 0.22);
 }
 /* Weekday headers (Sun, Mon, Tue...) */
-.fc .fc-col-header-cell-cushion {
+.guesthouse-dashboard-wrapper .fc .fc-col-header-cell-cushion {
   color: #0069ab !important;
   font-size: var(--font-size-secondary);
   font-weight: 600;
 }
 
 /* Weekday header background (optional) */
-.fc .fc-col-header-cell {
+.guesthouse-dashboard-wrapper .fc .fc-col-header-cell {
   background: #f8f9ff !important;
   border-color: #0069ab !important;
 }

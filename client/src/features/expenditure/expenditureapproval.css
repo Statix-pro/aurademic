@@ -698,6 +698,7 @@
   padding: 0;
   background: #f5f6f8;
   color: #000000;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   line-height: 1;
   font-weight: 500;
@@ -1487,6 +1488,7 @@
   border: none;
   background: transparent;
   color: #111827;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 1.35rem;
   line-height: 1;
   cursor: pointer;

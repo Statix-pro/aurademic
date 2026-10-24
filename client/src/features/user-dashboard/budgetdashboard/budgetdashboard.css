@@ -939,8 +939,6 @@
   font-size: var(--font-size-secondary);
   font-weight: 600;
   color: #667085;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   margin-bottom: 12px;
 }
 

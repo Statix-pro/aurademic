@@ -113,6 +113,7 @@
   align-items: center;
   justify-content: center;
   color: white;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 20px;
 }
 
@@ -415,6 +416,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   transition: all 0.2s ease;
 }
@@ -670,6 +672,7 @@
 .category-modal-close {
   background: transparent !important;
   border: none !important;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 28px !important;
   color: #666 !important;
   cursor: pointer !important;
@@ -743,6 +746,7 @@
 }
 
 .category-btn i {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 24px;
   margin-bottom: 8px;
   display: block;
@@ -763,8 +767,6 @@
   font-size: var(--font-size-body);
   font-weight: var(--weight-semibold);
   color: #334155;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   margin-bottom: 0.75rem;
   line-height: var(--leading-body);
 }

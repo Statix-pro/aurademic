@@ -3961,6 +3961,7 @@ const ExpenditureApproval: React.FC = () => {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    // ui-standard-allow: icon glyph, not text
     fontSize: '12px',
     transition: 'background-color 0.3s ease',
   };
@@ -8882,7 +8883,6 @@ const ExpenditureApproval: React.FC = () => {
           isSubmitting={isSavingPayee}
         />
       </div>
-      )
       <div
         style={{
           position: 'absolute',
@@ -8892,6 +8892,7 @@ const ExpenditureApproval: React.FC = () => {
           textAlign: 'right',
           fontSize: 'var(--font-size-secondary)',
           color: '#000000',
+          // ui-standard-allow: print footer of the printed form (Times New Roman)
           fontFamily: '"Times New Roman", serif',
           backgroundColor: '#fff',
           padding: '2px 8px',

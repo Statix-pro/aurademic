@@ -740,6 +740,7 @@ const SearchBudgetModal: React.FC<SearchBudgetModalProps> = ({
           <button
             onClick={onClose}
             style={{
+              // ui-standard-allow: icon glyph, not text
               fontSize: '24px',
               cursor: 'pointer',
               background: 'none',
@@ -1718,6 +1719,7 @@ const FinanceApproval: React.FC = () => {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    // ui-standard-allow: icon glyph, not text
     fontSize: '18px',
     transition: 'background-color 0.3s ease',
   };
@@ -4795,6 +4797,7 @@ const FinanceApproval: React.FC = () => {
                                       display: 'inline-flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
+                                      // ui-standard-allow: icon glyph, not text
                                       fontSize: '18px',
                                       transition: 'all 0.15s ease',
                                       color: '#dc3545',
@@ -4832,6 +4835,7 @@ const FinanceApproval: React.FC = () => {
                                     display: 'inline-flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
+                                    // ui-standard-allow: icon glyph, not text
                                     fontSize: '18px',
                                     transition: 'all 0.15s ease',
                                     opacity: canAddBudgetRowFromIndex(index) ? 1 : 0.5,
@@ -5352,6 +5356,7 @@ const FinanceApproval: React.FC = () => {
                                         display: 'inline-flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
+                                        // ui-standard-allow: icon glyph, not text
                                         fontSize: '18px',
                                         transition: 'all 0.15s ease',
                                         color: '#0069ab',
@@ -6169,6 +6174,7 @@ const FinanceApproval: React.FC = () => {
               return requiresChairmanApproval ? 'Recommended by' : 'Approved by';
             return 'Recommended by';
           };
+          // ui-standard-allow-start: the printed A4 form (react-to-print, 210mm) keeps print type sizes, not screen roles
           const previewTimelineRowStyle: CSSProperties = {
             padding: '8px 10px',
             fontSize: '14px',
@@ -7094,6 +7100,7 @@ const FinanceApproval: React.FC = () => {
               </div>
             </div>
           );
+          // ui-standard-allow-end
         })()}
 
       <CustomModal

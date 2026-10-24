@@ -182,8 +182,6 @@
   color: var(--text-soft);
   font-weight: var(--weight-bold);
   font-size: var(--font-size-secondary);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .master-data-modal .form-label {

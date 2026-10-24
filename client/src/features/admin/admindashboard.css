@@ -157,7 +157,7 @@
   color: white;
 }
 
-.pagination .page-link:hover:not(.active) {
+.publication-approval-dashboard .pagination .page-link:hover:not(.active) {
   background-color: var(--admin-hover-bg);
 }
 
@@ -471,8 +471,6 @@
 .workflow-action-title {
   font-size: var(--font-size-tertiary);
   line-height: 1;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: #6b778a;
   font-weight: 700;
   white-space: nowrap;
@@ -618,8 +616,6 @@
 .publication-approval-dashboard .column-group-title {
   font-size: var(--font-size-secondary);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--admin-text-secondary);
   border-bottom: 1px solid var(--admin-border);
   padding-bottom: 0.3rem;

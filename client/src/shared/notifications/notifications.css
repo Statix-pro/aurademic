@@ -506,8 +506,6 @@
   margin: 10px 8px 4px;
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: #667085;
 }
 
@@ -878,8 +876,6 @@
   width: 96px;
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: #667085;
   text-align: center;
 }

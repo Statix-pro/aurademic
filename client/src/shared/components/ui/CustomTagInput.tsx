@@ -117,6 +117,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
                   justifyContent: 'center',
                   color: '#495057',
                   borderRadius: '50%',
+                  // ui-standard-allow: icon glyph, not text
                   fontSize: '18px',
                   lineHeight: '1',
                   transition: 'color 0.2s ease',

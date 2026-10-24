@@ -53,15 +53,15 @@
   box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.2);
 }
 
-.react-select__multi-value {
+.event-form-container .react-select__multi-value {
   background-color: #6c63ff;
   color: white;
   border-radius: 5px;
   padding: 2px 6px;
 }
 
-.react-select__multi-value__label,
-.react-select__multi-value__remove {
+.event-form-container .react-select__multi-value__label,
+.event-form-container .react-select__multi-value__remove {
   color: white;
   cursor: pointer;
 }
@@ -87,6 +87,7 @@
 .event-cancel-btn {
   background: #f0f0f0;
   border: none;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
   width: var(--icon-action-size);
   height: var(--icon-action-size);
@@ -287,6 +288,7 @@
   background: #f5f5f5;
   border: 1px solid #ddd;
   border-radius: 6px;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 16px;
   cursor: pointer;
   transition: background 0.2s ease;
@@ -301,6 +303,7 @@
   background: #f5f5f5;
   border: 1px solid #ddd;
   border-radius: 6px;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 16px;
   cursor: pointer;
   transition: background 0.2s ease;
@@ -315,6 +318,7 @@
   background: #f5f5f5;
   border: 1px solid #ddd;
   border-radius: 6px;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 16px;
   cursor: pointer;
   transition: background 0.2s ease;
@@ -569,6 +573,7 @@
   right: 12px;
   background: none;
   border: none;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 20px;
   font-weight: bold;
   cursor: pointer;
@@ -840,15 +845,15 @@
   box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.2);
 }
 
-.react-select__multi-value {
+.event-form-container .react-select__multi-value {
   background-color: #6c63ff;
   color: white;
   border-radius: 5px;
   padding: 2px 6px;
 }
 
-.react-select__multi-value__label,
-.react-select__multi-value__remove {
+.event-form-container .react-select__multi-value__label,
+.event-form-container .react-select__multi-value__remove {
   color: white;
   cursor: pointer;
 }
@@ -874,6 +879,7 @@
 .event-cancel-btn {
   background: #f0f0f0;
   border: none;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
   width: var(--icon-action-size);
   height: var(--icon-action-size);
@@ -1566,6 +1572,7 @@
 }
 
 .delete-btn svg {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   color: #fff;
 }
@@ -1789,6 +1796,7 @@ input:checked + .event-slider:before {
 
 /* Eye Icon */
 .event-eye-icon {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
   color: #4a90e2;
   cursor: pointer;
@@ -1902,6 +1910,7 @@ input:checked + .event-slider:before {
 
 .event-delete-btn svg,
 .event-cancel-btn svg {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px; /* smaller icon size */
 }
 
@@ -1949,6 +1958,7 @@ input:checked + .event-slider:before {
 }
 
 .delete-btn svg {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   color: #fff;
 }
@@ -2099,6 +2109,7 @@ input:checked + .event-slider:before {
 }
 /* Upload Icon */
 .event-upload-icon {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 20px;
   color: grey;
   cursor: pointer;
@@ -2115,6 +2126,7 @@ input:checked + .event-slider:before {
 
 /* Eye Icon */
 .event-eye-icon {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 20px;
   color: grey;
   margin-left: 10px;
@@ -2228,6 +2240,7 @@ input:checked + .event-slider:before {
 
 .event-letters-upload,
 .event-letters-view {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
   color: #666;
   cursor: pointer;
@@ -2341,6 +2354,7 @@ input:checked + .event-slider:before {
 .eye-icon {
   cursor: pointer;
   color: #0069ab;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
 }
 
@@ -2554,6 +2568,7 @@ input:checked + .event-slider:before {
   border: none;
   cursor: pointer;
   color: black; /* changed to black */
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 16px;
 }
 .coordinator-title {
@@ -2835,6 +2850,7 @@ input:checked + .event-slider:before {
 }
 
 .event-delete-btn svg {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   color: #fff;
 }
@@ -3073,6 +3089,7 @@ input:checked + .slider:before {
 
 /* Eye Icon */
 .event-eye-icon {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
   color: #4a90e2;
   cursor: pointer;
@@ -3185,6 +3202,7 @@ input:checked + .slider:before {
 
 .delete-btn svg,
 .cancel-btn svg {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px; /* smaller icon size */
 }
 
@@ -3232,6 +3250,7 @@ input:checked + .slider:before {
 }
 
 .delete-btn svg {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   color: #fff;
 }
@@ -3477,6 +3496,7 @@ input:checked + .slider:before {
 
 .letters-upload,
 .letters-view {
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
   color: #666;
   cursor: pointer;
@@ -3584,6 +3604,7 @@ input:checked + .slider:before {
 .event-eye-icon {
   cursor: pointer;
   color: #0069ab;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
 }
 
@@ -3835,6 +3856,7 @@ input:checked + .slider:before {
   border: none;
   background: none;
   cursor: pointer;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 16px;
   color: #007bff;
 }
@@ -3907,6 +3929,7 @@ input:checked + .slider:before {
 
 .event-upload-icon {
   cursor: pointer;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
 }
 
@@ -3917,6 +3940,7 @@ input:checked + .slider:before {
 
 .event-eye-icon {
   cursor: pointer;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
   color: #333;
 }
@@ -4201,10 +4225,10 @@ input:checked + .slider:before {
 }
 
 /* Calendar custom */
-.fc .fc-day-sun {
+.dashboard-container .fc .fc-day-sun {
   color: var(--error-color);
 }
-.fc .fc-daygrid-day-frame {
+.dashboard-container .fc .fc-daygrid-day-frame {
   min-height: 70px;
 }
 
@@ -4555,10 +4579,10 @@ input:checked + .slider:before {
 }
 
 /* Calendar custom */
-.fc .fc-day-sun {
+.dashboard-container .fc .fc-day-sun {
   color: var(--error-color);
 }
-.fc .fc-daygrid-day-frame {
+.dashboard-container .fc .fc-daygrid-day-frame {
   min-height: 70px;
 }
 
@@ -4631,222 +4655,9 @@ input:checked + .slider:before {
 .sunday-red .fc-day-number {
   color: var(--error-color) !important;
 }
-.login-body {
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #f8f9fb;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='50' height='50'%3E%3Cpath d='M0 0 L0 50 L50 50 L50 0 Z M0 25 H50 M25 0 V50' stroke='%23b0b0b0' stroke-opacity='0.1' fill='none'/%3E%3C/svg%3E");
-  background-repeat: repeat;
-  background-size: 50px 50px;
-}
-
-.company-logo {
-  position: absolute;
-  top: 25px;
-  right: 40px;
-  width: 80px;
-  z-index: 100;
-}
-
-.login-wrapper {
-  display: flex;
-  width: 900px;
-  height: 480px;
-  background: rgba(255, 255, 255, 0.97);
-  border-radius: 18px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-}
-
-.left-panel {
-  width: 50%;
-  background: linear-gradient(135deg, #003b73, #0074b7);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  flex-direction: column;
-  color: #fff;
-  text-align: center;
-  padding: 25px;
-  position: relative;
-}
-
-.left-panel img {
-  width: 100px;
-  height: auto;
-  margin-bottom: 15px;
-  filter: drop-shadow(0 3px 5px rgba(0, 0, 0, 0.3));
-}
-
-.left-panel h2 {
-  font-size: var(--font-size-page-title);
-  font-weight: 600;
-  line-height: var(--leading-page-title);
-  margin-bottom: 5px;
-}
-
-.left-panel h4 {
-  font-size: var(--font-size-section-title);
-  color: #e0e0e0;
-  margin-bottom: 15px;
-  line-height: var(--leading-section-title);
-  letter-spacing: 0.5px;
-}
-
-.left-panel .college-website-left {
-  position: absolute;
-  bottom: 30px;
-  font-size: var(--font-size-section-title);
-  color: #cfd8dc;
-  text-align: center;
-  width: 100%;
-}
-
-.left-panel .college-website-left a {
-  text-decoration: none;
-  color: #cfd8dc;
-}
-
-.left-panel .college-website-left a:hover {
-  text-decoration: underline;
-}
-
-.right-panel {
-  width: 50%;
-  padding: 50px 55px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  position: relative;
-}
-
-.typing-text {
-  font-size: var(--font-size-modal-title);
-  color: #003b73;
-  font-weight: 600;
-  margin-bottom: 25px;
-  text-align: center;
-  min-height: 30px;
-}
-
-.input-group {
-  margin-bottom: 20px;
-}
-
-.input-group label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: var(--font-size-secondary);
-  color: #333;
-}
-
-.input-group input {
-  width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  font-size: var(--font-size-body);
-  outline: none;
-  transition: 0.2s;
-}
-
-.input-group input:focus {
-  border-color: #0074b7;
-  box-shadow: 0 0 4px rgba(0, 116, 183, 0.3);
-}
-
-.login-btn {
-  width: 100%;
-  padding: 10px;
-  border: none;
-  background: #003b73;
-  color: white;
-  font-size: var(--font-size-body);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: 0.3s;
-}
-
-.login-btn:hover {
-  background: #005fa3;
-}
-
-.forgot-password {
-  text-align: right;
-  margin-top: 10px;
-}
-
-.forgot-password a {
-  color: #0074b7;
-  font-size: var(--font-size-body);
-  text-decoration: none;
-}
-
-.forgot-password a:hover {
-  text-decoration: underline;
-}
-
-.or-divider {
-  text-align: center;
-  margin: 20px 0;
-  font-size: var(--font-size-tertiary);
-  color: #666;
-}
-
-.social-login {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-}
-
-.social-btn {
-  flex: 1;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background: white;
-  padding: 10px;
-  font-size: var(--font-size-body);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: 0.3s;
-}
-
-.social-btn:hover {
-  background: #f0f0f0;
-}
-
-.social-btn img {
-  width: 18px;
-  margin-right: 8px;
-}
-
-@media (max-width: 900px) {
-  .login-wrapper {
-    flex-direction: column;
-    width: 90%;
-    height: auto;
-  }
-  .left-panel,
-  .right-panel {
-    width: 100%;
-  }
-  .social-login {
-    flex-direction: column;
-  }
-}
-.add-coordinator-btn {
-  background-color: #0069ab;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 6px 16px;
-  cursor: pointer;
-  font-weight: 600;
-}
+/* A copy of the login page's styles (.login-*, .left-panel, .input-group …) used to
+   follow here. auth/login/login.css owns them; this unscoped copy also restyled every
+   Bootstrap .input-group in the portal. */
 
 /* A hand-rolled overlay used to live here under the names `.modal` and
    `.modal-backdrop`. Those are Bootstrap's, and no element in this feature ever

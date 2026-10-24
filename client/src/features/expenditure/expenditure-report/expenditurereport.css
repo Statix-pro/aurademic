@@ -183,8 +183,6 @@
   line-height: var(--leading-secondary);
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: #64748b;
 }
 
@@ -338,8 +336,6 @@
   margin-bottom: 6px;
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: #64748b;
 }
 

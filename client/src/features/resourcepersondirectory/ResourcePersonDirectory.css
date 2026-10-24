@@ -999,8 +999,6 @@
   font-weight: var(--weight-semibold);
   color: #0069ab;
   margin-bottom: 14px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   border-left: 3px solid #0069ab;
   padding-left: 8px;
 }

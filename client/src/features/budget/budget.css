@@ -169,6 +169,7 @@
   background: #f5f6f8;
   cursor: pointer;
   margin: 0 4px;
+  /* ui-standard-allow: icon glyph, not text */
   font-size: 18px;
   line-height: 1;
   color: #0069ab;
@@ -410,6 +411,7 @@
   .tableIconBtn {
     width: 28px;
     height: 28px;
+    /* ui-standard-allow: icon glyph, not text */
     font-size: 14px;
     margin: 0 2px;
   }

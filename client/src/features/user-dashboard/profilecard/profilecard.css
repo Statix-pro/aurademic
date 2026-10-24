@@ -150,8 +150,6 @@
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-regular);
   color: var(--text-soft);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
   margin-bottom: 8px;
 }
 
