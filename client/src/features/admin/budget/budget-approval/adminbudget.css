@@ -1086,15 +1086,6 @@ select.adminbudget-control {
 }
 
 /* Match user-dashboard submission log UI exactly */
-.budgetdashboard-log-header {
-  background: #f8fafc;
-  padding: 12px 16px;
-  font-weight: var(--weight-bold);
-  font-size: var(--font-size-body);
-  color: #0f172a;
-  border-bottom: 1px solid #e2e8f0;
-}
-
 .budgetdashboard-log-body {
   padding: 16px;
   max-height: 400px;
@@ -1102,7 +1093,8 @@ select.adminbudget-control {
 }
 
 .adminbudget-log-body {
-  max-height: min(58vh, 460px);
+  max-height: none;
+  overflow: visible;
 }
 
 .budgetdashboard-log-item {
@@ -1226,4 +1218,12 @@ select.adminbudget-control {
   font-size: var(--font-size-tertiary);
   color: #667085;
   margin-left: auto;
+}
+
+/* Log dialogs are 760px, like the other two log dialogs: a short vertical list reads best at a
+   moderate width. The shared .modal-lg rule (80% wide, !important) is overridden here. One
+   scrollbar — the dialog's — so the body has no height cap of its own. */
+.custom-modal.adminbudget-log-modal .modal-dialog.modal-lg {
+  max-width: 760px !important;
+  width: calc(100% - 32px) !important;
 }

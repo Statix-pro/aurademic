@@ -554,37 +554,6 @@
   box-shadow: none;
 }
 
-.financecard-log-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.18);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.financecard-log-modal {
-  width: min(760px, 100%);
-  max-height: min(88vh, 720px);
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  overflow: hidden;
-}
-
-.financecard-log-header {
-  padding: 12px 16px;
-  background: #f8fafc;
-  color: #0f172a;
-  font-size: var(--font-size-modal-title);
-  line-height: var(--leading-modal-title);
-  font-weight: 600;
-  border-bottom: 1px solid #e2e8f0;
-}
-
 .financecard-log-body {
   padding: 16px;
   max-height: 400px;
@@ -592,7 +561,8 @@
 }
 
 .financecard-log-body-modal {
-  max-height: calc(min(88vh, 720px) - 60px);
+  max-height: none;
+  overflow: visible;
 }
 
 .financecard-log-summary {
@@ -636,6 +606,13 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+/* In the log dialog the summary's bottom border already divides it from the steps — one line,
+   as in the workflow timeline dialog, not two. */
+.financecard-log-body-modal .financecard-log-timeline {
+  border-top: none;
+  padding-top: 0;
 }
 
 .financecard-log-entry {
@@ -721,12 +698,19 @@
   font-weight: 600;
 }
 
-.financecard-log-role,
 .financecard-log-meta,
 .financecard-log-date {
   color: #667085;
   font-size: var(--font-size-tertiary);
   font-weight: 600;
+}
+
+/* The step's description line reads like the workflow timeline's remarks: secondary text. */
+.financecard-log-role {
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-regular);
 }
 
 .financecard-log-role {
@@ -791,29 +775,6 @@
 .financecard-log-date-right {
   text-align: right;
   margin-left: auto;
-}
-
-.financecard-log-footer {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 16px;
-}
-
-.financecard-log-close-btn {
-  min-width: var(--button-min-width);
-  height: var(--control-height);
-  padding: 0 var(--button-padding-x);
-  border-radius: 10px;
-  border: 1px solid #dbe5f0;
-  background: #ffffff;
-  color: #0f172a;
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.financecard-log-close-btn:hover {
-  background: #f8fafc;
 }
 
 /* Middle Row */
@@ -1086,10 +1047,6 @@
     flex: 1 1 auto;
   }
 
-  .financecard-log-overlay {
-    padding: 12px;
-  }
-
   .financecard-log-summary-row,
   .financecard-log-entry-top {
     flex-direction: column;
@@ -1150,4 +1107,12 @@
   .financecard-pagination-right {
     justify-content: space-between;
   }
+}
+
+/* Log dialogs are 760px, like the other two log dialogs: a short vertical list reads best at a
+   moderate width. The shared .modal-lg rule (80% wide, !important) is overridden here. One
+   scrollbar — the dialog's — so the body has no height cap of its own. */
+.custom-modal.financecard-log-dialog .modal-dialog.modal-lg {
+  max-width: 760px !important;
+  width: calc(100% - 32px) !important;
 }

@@ -1405,3 +1405,16 @@
     justify-content: start;
   }
 }
+
+/* Log dialogs are 760px, like the other two log dialogs: a short vertical list reads best at a
+   moderate width. The shared .modal-lg rule (80% wide, !important) is overridden here. One
+   scrollbar — the dialog's — so the body has no height cap of its own. */
+.custom-modal.fw-log-modal .modal-dialog.modal-lg {
+  max-width: 760px !important;
+  width: calc(100% - 32px) !important;
+}
+
+.fw-log-modal .fw-log-body {
+  max-height: none;
+  overflow: visible;
+}

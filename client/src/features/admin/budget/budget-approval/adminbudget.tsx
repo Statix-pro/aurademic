@@ -24,6 +24,7 @@ import ExportOptionsModal, {
   type ExportRunResult,
 } from '../../../../shared/components/export/ExportOptionsModal';
 import AlertModal, { type AlertType } from '../../../../shared/components/ui/AlertModal';
+import CustomModal from '../../../../shared/components/ui/CustomModal';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
 import {
   buildCsvFilename,
@@ -2436,141 +2437,107 @@ const AdminBudget: React.FC = () => {
         </div>
       )}
 
-      {logPopupOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.35)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            zIndex: 999999,
-            padding: 16,
-          }}
-          onClick={closeLogPopup}
-        >
-          <div
-            style={{
-              width: 'min(760px, 96vw)',
-              maxHeight: '80vh',
-              overflow: 'auto',
-              background: '#fff',
-              borderRadius: 12,
-              padding: 0,
-              boxShadow: '0 10px 35px rgba(0,0,0,0.25)',
-            }}
-            onClick={(e) => e.stopPropagation()}
+      <CustomModal
+        show={logPopupOpen}
+        onHide={closeLogPopup}
+        title="Submission Logs"
+        size="lg"
+        centered
+        scrollable
+        className="adminbudget-log-modal"
+        footer={
+          <button
+            type="button"
+            className="btn btn-sm btn-outline-secondary"
+            onClick={closeLogPopup}
           >
-            <div className="budgetdashboard-log-header">Submission Logs</div>
-            <div className="budgetdashboard-log-body adminbudget-log-body">
-              <div className="budgetdashboard-log-item">
-                <span className="log-label">Proposal:</span>
-                <span className="log-value">{logRef || '--'}</span>
-              </div>
-
-              {(logProposal?.updated_at || logProposal?.updatedAt) &&
-                (logProposal?.created_at || logProposal?.createdAt) &&
-                parseDateMsForLog(logProposal.updated_at || logProposal.updatedAt) >
-                  parseDateMsForLog(logProposal.created_at || logProposal.createdAt) && (
-                  <div className="budgetdashboard-log-item">
-                    <span className="log-label">Last Edited:</span>
-                    <span className="log-value">
-                      {formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}
-                    </span>
-                  </div>
-                )}
-
-              {logLoading && (
-                <div className="adminbudget-state" style={{ padding: '24px 0' }}>
-                  Loading logs...
-                </div>
-              )}
-              {!logLoading && buildAdminLogEvents.length === 0 && (
-                <div className="adminbudget-state" style={{ padding: '24px 0' }}>
-                  No logs available.
-                </div>
-              )}
-
-              {!logLoading && buildAdminLogEvents.length > 0 && (
-                <div className="budgetdashboard-log-approvals">
-                  {buildAdminLogEvents.map((event) => (
-                    <div
-                      key={event.key}
-                      className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
-                    >
-                      {event.actorBadgeLabel && (
-                        <span className="log-admin-mark" title="Updated by Admin">
-                          {`\u2605 ${event.actorBadgeLabel}`}
-                        </span>
-                      )}
-                      <div className="log-approval-meta">
-                        <span
-                          className={`log-decision log-decision--${event.decision || 'approved'}`}
-                        >
-                          {event.title.toUpperCase()}
-                        </span>
-                        <span className="log-role">
-                          {expandedLogDetails[event.key] && event.fullSubtitle
-                            ? event.fullSubtitle
-                            : event.subtitle || 'Status update'}
-                        </span>
-                        {event.fullSubtitle && event.fullSubtitle !== event.subtitle && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setExpandedLogDetails((prev) => ({
-                                ...prev,
-                                [event.key]: !prev[event.key],
-                              }));
-                            }}
-                            style={{
-                              marginTop: '4px',
-                              alignSelf: 'flex-start',
-                              border: 'none',
-                              background: 'transparent',
-                              color: '#0d6efd',
-                              cursor: 'pointer',
-                              padding: 0,
-                              fontSize: 'var(--font-size-tertiary)',
-                              fontWeight: 600,
-                            }}
-                          >
-                            {expandedLogDetails[event.key] ? 'Show less' : 'Show full changes'}
-                          </button>
-                        )}
-                        {event.actorLine && (
-                          <span className="log-actor-line">{event.actorLine}</span>
-                        )}
-                        <span className="log-date">{event.dateLabel}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '0 16px 16px' }}>
-              <button
-                type="button"
-                onClick={closeLogPopup}
-                style={{
-                  border: '1px solid #ddd',
-                  background: '#fff',
-                  borderRadius: 8,
-                  height: 'var(--control-height)',
-                  minWidth: 'var(--button-min-width)',
-                  padding: '0 var(--button-padding-x)',
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                }}
-              >
-                Close
-              </button>
-            </div>
+            Close
+          </button>
+        }
+      >
+        <div className="budgetdashboard-log-body adminbudget-log-body">
+          <div className="budgetdashboard-log-item">
+            <span className="log-label">Proposal:</span>
+            <span className="log-value">{logRef || '--'}</span>
           </div>
+
+          {(logProposal?.updated_at || logProposal?.updatedAt) &&
+            (logProposal?.created_at || logProposal?.createdAt) &&
+            parseDateMsForLog(logProposal.updated_at || logProposal.updatedAt) >
+              parseDateMsForLog(logProposal.created_at || logProposal.createdAt) && (
+              <div className="budgetdashboard-log-item">
+                <span className="log-label">Last Edited:</span>
+                <span className="log-value">
+                  {formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}
+                </span>
+              </div>
+            )}
+
+          {logLoading && (
+            <div className="adminbudget-state" style={{ padding: '24px 0' }}>
+              Loading logs...
+            </div>
+          )}
+          {!logLoading && buildAdminLogEvents.length === 0 && (
+            <div className="adminbudget-state" style={{ padding: '24px 0' }}>
+              No logs available.
+            </div>
+          )}
+
+          {!logLoading && buildAdminLogEvents.length > 0 && (
+            <div className="budgetdashboard-log-approvals">
+              {buildAdminLogEvents.map((event) => (
+                <div
+                  key={event.key}
+                  className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
+                >
+                  {event.actorBadgeLabel && (
+                    <span className="log-admin-mark" title="Updated by Admin">
+                      {`\u2605 ${event.actorBadgeLabel}`}
+                    </span>
+                  )}
+                  <div className="log-approval-meta">
+                    <span className={`log-decision log-decision--${event.decision || 'approved'}`}>
+                      {event.title.toUpperCase()}
+                    </span>
+                    <span className="log-role">
+                      {expandedLogDetails[event.key] && event.fullSubtitle
+                        ? event.fullSubtitle
+                        : event.subtitle || 'Status update'}
+                    </span>
+                    {event.fullSubtitle && event.fullSubtitle !== event.subtitle && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedLogDetails((prev) => ({
+                            ...prev,
+                            [event.key]: !prev[event.key],
+                          }));
+                        }}
+                        style={{
+                          marginTop: '4px',
+                          alignSelf: 'flex-start',
+                          border: 'none',
+                          background: 'transparent',
+                          color: '#0d6efd',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: 'var(--font-size-tertiary)',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {expandedLogDetails[event.key] ? 'Show less' : 'Show full changes'}
+                      </button>
+                    )}
+                    {event.actorLine && <span className="log-actor-line">{event.actorLine}</span>}
+                    <span className="log-date">{event.dateLabel}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </CustomModal>
     </>
   );
 };

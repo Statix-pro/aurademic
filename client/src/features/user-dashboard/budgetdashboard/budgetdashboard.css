@@ -897,13 +897,16 @@
   }
 }
 
+/* Same header as the log dialogs (CustomModal): light-blue band, blue title. Section-title size
+   rather than the dialogs' 18px, because this is a small hover popover. */
 .budgetdashboard-log-header {
-  background: #f8fafc;
+  background: #f0f6ff;
   padding: 12px 16px;
-  font-weight: 600;
-  font-size: var(--font-size-body);
-  color: #0f172a;
-  border-bottom: 1px solid #e2e8f0;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  color: var(--primary-color);
+  border-bottom: 1px solid #b3d9ff;
 }
 
 .budgetdashboard-log-body {

@@ -1326,7 +1326,7 @@ const BudgetDashboard: React.FC = () => {
                                     </td>
                                     <td>{line.subHead}</td>
                                     <td>₹{formatINR(line.proposedAmount)}</td>
-                                    <td>₹{formatINR(line.approvedAmount)}</td>{' '}
+                                    <td>₹{formatINR(line.approvedAmount)}</td>
                                     {/* 0 until fully approved */}
                                   </tr>
                                 ))}

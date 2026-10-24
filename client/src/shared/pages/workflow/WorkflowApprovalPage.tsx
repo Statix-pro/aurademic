@@ -4438,6 +4438,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           title="Workflow Timeline"
           size="lg"
           centered
+          scrollable
           className="fw-log-modal"
           footer={
             <button
