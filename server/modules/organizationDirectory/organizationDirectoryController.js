@@ -1,27 +1,31 @@
 import model from './organizationDirectoryModel.js';
 
-const sendError = (res, error) => {
-  console.error('Organization directory request failed:', error);
-
+const errorResponse = (error) => {
   if (error?.code === 'ER_DUP_ENTRY' || Number(error?.errno) === 1062) {
-    return res
-      .status(409)
-      .json({ success: false, message: 'An organization with this name already exists.' });
+    return [409, { success: false, message: 'An organization with this name already exists.' }];
   }
   if (/^(organization|record) not found$/i.test(error?.message || '')) {
-    return res.status(404).json({ success: false, message: 'Organization not found.' });
+    return [404, { success: false, message: 'Organization not found.' }];
   }
   if (/^organization name is required$/i.test(error?.message || '')) {
-    return res.status(400).json({ success: false, message: error.message });
+    return [400, { success: false, message: error.message }];
   }
   const statusCode = Number(error?.statusCode ?? error?.status);
   if (Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600) {
-    return res.status(statusCode).json({
-      success: false,
-      message: statusCode < 500 ? error.message : 'Internal server error',
-    });
+    return [
+      statusCode,
+      { success: false, message: statusCode < 500 ? error.message : 'Internal server error' },
+    ];
   }
-  return res.status(500).json({ success: false, message: 'Internal server error' });
+  return [500, { success: false, message: 'Internal server error' }];
+};
+
+// Expected 4xx outcomes (not found, duplicate, validation) are not faults, so only 5xx
+// responses log the error and its stack.
+const sendError = (res, error) => {
+  const [status, body] = errorResponse(error);
+  if (status >= 500) console.error('Organization directory request failed:', error);
+  return res.status(status).json(body);
 };
 
 export const list = async (req, res) => {

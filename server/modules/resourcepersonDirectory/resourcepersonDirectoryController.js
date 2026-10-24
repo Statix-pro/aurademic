@@ -1,27 +1,30 @@
 import model from './resourcepersonDirectoryModel.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
-const fail = (res, e) => {
-  console.error('Resource person directory request failed:', e);
-
+const errorResponse = (e) => {
   if (e?.code === 'ER_DUP_ENTRY' || Number(e?.errno) === 1062) {
-    return res
-      .status(409)
-      .json({ success: false, message: 'This resource person already exists.' });
+    return [409, { success: false, message: 'This resource person already exists.' }];
   }
   if (/^(resource person|record) not found$/i.test(e?.message || '')) {
-    return res.status(404).json({ success: false, message: 'Resource person not found.' });
+    return [404, { success: false, message: 'Resource person not found.' }];
   }
   if (/^first name and last name are required$/i.test(e?.message || '')) {
-    return res.status(400).json({ success: false, message: e.message });
+    return [400, { success: false, message: e.message }];
   }
   const statusCode = Number(e?.statusCode ?? e?.status);
   if (Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600) {
-    return res.status(statusCode).json({
-      success: false,
-      message: statusCode < 500 ? e.message : 'Internal server error',
-    });
+    return [
+      statusCode,
+      { success: false, message: statusCode < 500 ? e.message : 'Internal server error' },
+    ];
   }
-  return res.status(500).json({ success: false, message: 'Internal server error' });
+  return [500, { success: false, message: 'Internal server error' }];
+};
+// Expected 4xx outcomes (not found, duplicate, validation) are not faults, so only 5xx
+// responses log the error and its stack.
+const fail = (res, e) => {
+  const [status, body] = errorResponse(e);
+  if (status >= 500) console.error('Resource person directory request failed:', e);
+  return res.status(status).json(body);
 };
 export const list = async (req, res) => {
   try {

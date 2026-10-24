@@ -243,4 +243,27 @@ describe('directory controller error envelopes', () => {
       tag: 'General',
     });
   });
+
+  // 404/409/400 are expected outcomes; logging their stacks buried real faults in the log.
+  it.each([
+    ['organization', 404, organizationController, organizationModel, false],
+    ['organization', 409, organizationController, organizationModel, false],
+    ['organization', 500, organizationController, organizationModel, true],
+    ['resource person', 404, resourcePersonController, resourcePersonModel, false],
+    ['resource person', 409, resourcePersonController, resourcePersonModel, false],
+    ['resource person', 500, resourcePersonController, resourcePersonModel, true],
+  ])(
+    'logs a %s %i only when it is a server fault',
+    async (_name, status, controller, model, logged) => {
+      const error = new Error(status === 500 ? 'database down' : 'expected outcome');
+      error.status = status;
+      model.update.mockRejectedValueOnce(error);
+      const res = response();
+
+      await controller.update(request({ body: { name: 'X', firstName: 'A', lastName: 'B' } }), res);
+
+      expect(res.status).toHaveBeenCalledWith(status);
+      expect(console.error).toHaveBeenCalledTimes(logged ? 1 : 0);
+    },
+  );
 });
