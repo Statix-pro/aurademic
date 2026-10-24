@@ -654,26 +654,26 @@ Basis (primary sources): IBM Carbon `body-01` 14/20px, `label-01`/`helper-text-0
 bold). Helper and secondary text are 13px here, one step above Carbon's 12px, because of the
 audience.
 
-| Role                     | Used for                                                             | Size                  | Line height     | Weight | Colour (contrast on white)                                  |
-| ------------------------ | -------------------------------------------------------------------- | --------------------- | --------------- | ------ | ----------------------------------------------------------- |
-| Page title               | the page heading ("Organization Request")                            | 24px                  | 32px            | 700    | `--text-strong` (15.7:1)                                    |
-| Modal title              | `CustomModal` header                                                 | 18px                  | 24px            | 600    | `--primary-color` (5.8:1)                                   |
-| Section title            | card heading ("Category", "Personal Details")                        | 16px                  | 24px            | 600    | `--primary-color`                                           |
-| Sub-section title        | group inside a card ("Contact Details", "Profession Details")        | 14px                  | 20px            | 600    | `--primary-color`                                           |
-| Item title               | the title of a box inside a section ("Photo", "Resume" upload boxes) | 14px                  | 20px            | 600    | `--text-strong`                                             |
-| **Primary text**         | table cells, input values, body copy                                 | 14px                  | 20px            | 400    | `--text-body` (12.2:1)                                      |
-| Primary text, emphasised | the record's name in a row, KPI value                                | 14px (KPI value 24px) | 20px (KPI 28px) | 700    | `--text-strong`                                             |
-| **Secondary text**       | the meta line under a name (city, designation), KPI label            | 13px                  | 18px            | 400    | `--text-soft` (6.4:1)                                       |
-| **Tertiary text**        | timestamps, counts, footnotes                                        | 12px                  | 16px            | 400    | `--text-muted` (4.7:1) — white surfaces only                |
-| Placeholder              | input placeholder                                                    | 14px                  | 20px            | 400    | `--text-muted` — never the lighter `#94a3b8` (2.6:1, fails) |
-| Field label              | above every control                                                  | 13px                  | 18px            | 600    | `--text-body`                                               |
-| **Help text**            | hint under a field or upload ("JPG, PNG (Maximum 2 MB)")             | 13px                  | 18px            | 400    | `--text-soft`                                               |
-| Error text               | validation message under a field                                     | 13px                  | 18px            | 500    | `--error-color` (4.5:1) — white surfaces only               |
-| Table header             | `<th>`                                                               | 13px                  | 18px            | 600    | `--primary-color`; uppercase allowed, 0.02em tracking       |
-| Button text              | form actions                                                         | 14px                  | 20px            | 600    | per variant                                                 |
-| Chip / toggle text       | category chips, segmented toggles                                    | 13px                  | —               | 600    | per state                                                   |
-| Status pill              | Pending / Approved / Rejected                                        | 12px                  | —               | 600    | status tint pair from `variables.css`                       |
-| Inline table action      | Approve / Reject                                                     | 12px                  | —               | 700    | white on the variant fill                                   |
+| Role                     | Used for                                                             | Size                  | Line height     | Weight | Colour (contrast on white)                                                                    |
+| ------------------------ | -------------------------------------------------------------------- | --------------------- | --------------- | ------ | --------------------------------------------------------------------------------------------- |
+| Page title               | the page heading ("Organization Request")                            | 24px                  | 32px            | 700    | `--text-strong` (15.7:1)                                                                      |
+| Modal title              | `CustomModal` header                                                 | 18px                  | 24px            | 600    | `--primary-color` (5.8:1)                                                                     |
+| Section title            | card heading ("Category", "Personal Details")                        | 16px                  | 24px            | 600    | `--primary-color`                                                                             |
+| Sub-section title        | group inside a card ("Contact Details", "Profession Details")        | 14px                  | 20px            | 600    | `--primary-color`                                                                             |
+| Item title               | the title of a box inside a section ("Photo", "Resume" upload boxes) | 14px                  | 20px            | 600    | `--text-strong`                                                                               |
+| **Primary text**         | table cells, input values, body copy                                 | 14px                  | 20px            | 400    | `--text-body` (12.2:1)                                                                        |
+| Primary text, emphasised | the record's name in a row, KPI value                                | 14px (KPI value 24px) | 20px (KPI 28px) | 700    | `--text-strong`                                                                               |
+| **Secondary text**       | the meta line under a name (city, designation), KPI label            | 13px                  | 18px            | 400    | `--text-soft` (6.4:1)                                                                         |
+| **Tertiary text**        | timestamps, counts, footnotes                                        | 12px                  | 16px            | 400    | `--text-muted` (4.7:1) — white surfaces only                                                  |
+| Placeholder              | input and dropdown placeholder, empty date                           | 14px                  | 20px            | 400    | `--placeholder-color` (#8a95a4, 3.0:1) — the owner's 2026-10-22 decision, see `variables.css` |
+| Field label              | above every control                                                  | 13px                  | 18px            | 600    | `--text-body`                                                                                 |
+| **Help text**            | hint under a field or upload ("JPG, PNG (Maximum 2 MB)")             | 13px                  | 18px            | 400    | `--text-soft`                                                                                 |
+| Error text               | validation message under a field                                     | 13px                  | 18px            | 500    | `--error-color` (4.5:1) — white surfaces only                                                 |
+| Table header             | `<th>`                                                               | 13px                  | 18px            | 600    | `--primary-color`; uppercase allowed, 0.02em tracking                                         |
+| Button text              | form actions                                                         | 14px                  | 20px            | 600    | per variant                                                                                   |
+| Chip / toggle text       | category chips, segmented toggles                                    | 13px                  | —               | 600    | per state                                                                                     |
+| Status pill              | Pending / Approved / Rejected                                        | 12px                  | —               | 600    | status tint pair from `variables.css`                                                         |
+| Inline table action      | Approve / Reject                                                     | 12px                  | —               | 700    | white on the variant fill                                                                     |
 
 - **12px is the floor.** Nothing renders smaller, anywhere — not tags, not footnotes.
 - **Anything a user must read to complete a task is ≥14px** (values, table cells, body copy);
@@ -681,7 +681,10 @@ audience.
 - Line heights apply to free-flowing text. Fixed-height controls (inputs, buttons, chips, pills)
   centre their text in the height from the size table; their line height is not checked.
 - Weights: 400, 500, 600, 700 only. Uppercase only for table headers and tags.
-- Every text colour meets WCAG AA 4.5:1 on its actual background. `--text-muted` and
+- Every text colour meets WCAG AA 4.5:1 on its actual background, with one deliberate exception:
+  placeholders use `--placeholder-color` (3.0:1) so a hint never reads as a typed value — the
+  owner's decision of 2026-10-22, recorded in `shared/styles/variables.css`. Don't darken it
+  per page. `--text-muted` and
   `--error-color` drop below 4.5:1 on the tinted panels (`#f3f7fb`, `#f0f6ff`), so on those use
   `--text-soft` / a darker red instead.
 - Code may write sizes as rem (14px = 0.875rem at the 16px root); the rendered px must match this
