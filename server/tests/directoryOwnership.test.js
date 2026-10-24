@@ -10,7 +10,7 @@ const connection = {
 };
 
 vi.mock('../config/connection.js', () => ({
-  default: { getConnection: vi.fn(async () => connection), query: vi.fn() },
+  default: { getConnection: vi.fn(async () => connection), query: vi.fn(), execute: vi.fn() },
 }));
 vi.mock('../modules/shared/workflow/workflowService.js', () => ({
   default: {
@@ -37,6 +37,8 @@ describe('directory owner-only edits', () => {
     connection.rollback.mockReset();
     connection.release.mockReset();
     db.query.mockReset();
+    db.execute.mockReset();
+    workflowService.actOnWorkflow.mockReset();
     db.getConnection.mockClear();
     workflowService.startWorkflow.mockReset();
     workflowService.logWorkflowResubmission.mockReset();
@@ -575,5 +577,37 @@ describe('directory owner-only edits', () => {
     ]) {
       expect(person).not.toHaveProperty(field);
     }
+  });
+
+  // Approved organizations are shared but names are unique only per submitter, so a second
+  // user's copy of an approved organization must not be approved into the directory.
+  it('refuses to approve an organization that duplicates an approved one', async () => {
+    db.execute.mockResolvedValueOnce([[{ id: 3 }]]);
+
+    await expect(organizationModel.review(9, 'approve', { userId: 1 })).rejects.toMatchObject({
+      status: 409,
+      message: expect.stringMatching(/already in the directory/),
+    });
+    expect(db.execute.mock.calls[0][0]).toMatch(/existing\.is_active = 1/);
+    expect(db.execute.mock.calls[0][0]).toMatch(/REGEXP_REPLACE\(TRIM\(existing\.name\)/);
+    expect(db.execute.mock.calls[0][1]).toEqual([9]);
+    expect(workflowService.actOnWorkflow).not.toHaveBeenCalled();
+  });
+
+  it('approves an organization whose name is not already approved', async () => {
+    db.execute.mockResolvedValueOnce([[]]);
+
+    await expect(organizationModel.review(9, 'approve', { userId: 1 })).resolves.toEqual({
+      id: 9,
+      status: 'Approved',
+    });
+    expect(workflowService.actOnWorkflow).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a duplicate without the duplicate check', async () => {
+    await organizationModel.review(9, 'reject', { userId: 1 });
+
+    expect(db.execute).not.toHaveBeenCalled();
+    expect(workflowService.actOnWorkflow).toHaveBeenCalledOnce();
   });
 });

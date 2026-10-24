@@ -160,6 +160,30 @@ export default {
   },
 
   async review(id, decision, actor, comment) {
+    // Approved organizations are shared, but names are unique only per submitter, so two
+    // users can submit the same organization. Refuse to approve a second copy; the reviewer
+    // rejects it instead. Names compare trimmed, space-collapsed and case-insensitive.
+    if (decision === 'approve') {
+      const [duplicates] = await db.execute(
+        `SELECT existing.id
+         FROM organizations target
+         JOIN organizations existing
+           ON existing.id <> target.id
+          AND existing.is_active = 1
+          AND LOWER(REGEXP_REPLACE(TRIM(existing.name), '[[:space:]]+', ' '))
+            = LOWER(REGEXP_REPLACE(TRIM(target.name), '[[:space:]]+', ' '))
+         WHERE target.id = ?
+         LIMIT 1`,
+        [id],
+      );
+      if (duplicates[0]) {
+        const error = new Error(
+          'An organization with this name is already in the directory. Reject this duplicate instead.',
+        );
+        error.status = 409;
+        throw error;
+      }
+    }
     await workflowService.actOnWorkflow({
       moduleKey: 'organization_directory',
       recordId: id,
