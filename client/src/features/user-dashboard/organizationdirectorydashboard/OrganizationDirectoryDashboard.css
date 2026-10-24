@@ -1,28 +1,5 @@
 @import '../budgetdashboard/budgetdashboard.css';
 
-.org-add-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  height: 38px;
-  padding: 0 18px;
-  border: 0;
-  border-radius: 6px;
-  background: #0069ab;
-  color: #fff;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background-color 0.2s ease,
-    transform 0.2s ease;
-}
-
-.org-add-btn:hover {
-  background: #0056b3;
-  transform: translateY(-1px);
-}
-
 /* Alignments and Colors matching Consolidated Budget Dashboard */
 
 .org-table {
@@ -114,28 +91,7 @@
   color: #9f1239;
 }
 
-.org-action-edit-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid #0069ab;
-  background: #ffffff;
-  color: #0069ab;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.org-action-edit-btn:hover {
-  background: #e0f0ff;
-  transform: scale(1.05);
-}
-
-.org-empty-state {
-  text-align: center;
-  padding: 40px;
-  color: #64748b;
-  font-style: italic;
+/* Keeps typed text clear of the search / clear icon drawn over the input's right edge. */
+.org-search-field .custom-input {
+  padding-right: 32px;
 }

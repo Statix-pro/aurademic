@@ -242,6 +242,7 @@
   background: #eff6ff;
   color: #0069ab;
   cursor: pointer;
+  padding: 0;
   transition: all 0.2s ease;
 }
 .rpd-icon-btn:hover {
@@ -284,6 +285,40 @@
   white-space: nowrap;
 }
 
-.rpd-status-active { color: #147448; background: #daf4e5; }
-.rpd-status-inactive { color: #a46600; background: #fff0d6; }
-.rpd-status-rejected { color: #c52d43; background: #fde1e5; }
+.rpd-status-active {
+  color: #147448;
+  background: #daf4e5;
+}
+.rpd-status-inactive {
+  color: #a46600;
+  background: #fff0d6;
+}
+.rpd-status-rejected {
+  color: #c52d43;
+  background: #fde1e5;
+}
+
+/* The header search/filter are CustomInput; match the financecard search box they
+   replaced (CustomInput's `.form-control.custom-input` would otherwise win). */
+.rpd-dashboard-search .form-control.custom-input,
+.rpd-dashboard-filter .form-control.custom-input {
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid #d7dee8;
+  background: #ffffff;
+  box-shadow: none;
+  font-size: 0.95rem;
+  color: #334155;
+}
+.rpd-dashboard-search .form-control.custom-input {
+  padding: 10px 38px 10px 40px;
+}
+.rpd-dashboard-filter .form-control.custom-input {
+  padding: 10px 14px;
+  min-width: 160px;
+}
+.rpd-dashboard-search .form-control.custom-input:focus,
+.rpd-dashboard-filter .form-control.custom-input:focus {
+  border-color: #0069ab;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
+}

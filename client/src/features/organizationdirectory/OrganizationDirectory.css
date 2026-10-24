@@ -171,25 +171,6 @@
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
 }
 
-/* Input with icon styled nicely */
-.orgd-input-icon-wrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.orgd-input-icon-wrapper svg {
-  position: absolute;
-  left: 14px;
-  color: #0069ab;
-  pointer-events: none;
-}
-
-.orgd-input-icon-wrapper input {
-  padding-left: 44px;
-}
-
 /* Toggle Group for Active/Inactive status */
 .orgd-toggle-group {
   display: flex;
@@ -294,43 +275,6 @@
   align-items: center;
   gap: 10px;
   padding: 12px 0;
-}
-
-.orgd-btn-save {
-  padding: 12px 40px;
-  font-size: 16px;
-  font-weight: 700;
-  background-color: #0069ab;
-  color: white;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  min-width: 150px;
-  box-shadow: 0 6px 20px rgba(0, 105, 171, 0.3);
-  transition: all 0.3s ease;
-}
-
-.orgd-btn-save:hover {
-  background-color: #0056b3;
-  transform: translateY(-2px);
-  box-shadow: 0 8px 25px rgba(0, 105, 171, 0.4);
-}
-
-.orgd-btn-cancel {
-  padding: 10px 30px;
-  font-size: 15px;
-  font-weight: 600;
-  background-color: #f1f5f9;
-  color: #475569;
-  border: 1.5px solid #e2e8f0;
-  border-radius: 12px;
-  cursor: pointer;
-  min-width: 140px;
-  transition: all 0.3s ease;
-}
-
-.orgd-btn-cancel:hover {
-  background-color: #e2e8f0;
 }
 
 /* Responsive adjustments */

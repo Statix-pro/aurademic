@@ -192,8 +192,8 @@ export default function OrganizationApprovalPage() {
       key: 'view',
       label: 'View',
       render: (row: Organization) => (
-        <button
-          type="button"
+        <CustomButton
+          variant="outline-primary"
           onClick={() => setViewing(row)}
           aria-label="View organization submission"
           title="View organization submission"
@@ -212,7 +212,7 @@ export default function OrganizationApprovalPage() {
           }}
         >
           <Eye size={17} />
-        </button>
+        </CustomButton>
       ),
     },
   ];
@@ -321,8 +321,8 @@ export default function OrganizationApprovalPage() {
                   whiteSpace: 'nowrap',
                 }}
               >
-                <button
-                  type="button"
+                <CustomButton
+                  variant="success"
                   onClick={() => void review(row.id, 'approve')}
                   disabled={reviewingId !== null}
                   style={{
@@ -338,9 +338,9 @@ export default function OrganizationApprovalPage() {
                   }}
                 >
                   ✓ Approve
-                </button>
-                <button
-                  type="button"
+                </CustomButton>
+                <CustomButton
+                  variant="danger"
                   onClick={() => void review(row.id, 'reject')}
                   disabled={reviewingId !== null}
                   style={{
@@ -356,7 +356,7 @@ export default function OrganizationApprovalPage() {
                   }}
                 >
                   × Reject
-                </button>
+                </CustomButton>
               </div>
             ) : null
           }

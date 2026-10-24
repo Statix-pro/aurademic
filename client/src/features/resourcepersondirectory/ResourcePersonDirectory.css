@@ -393,7 +393,9 @@
   color: #344054;
 }
 
-.rpd-field input,
+/* Prefixed with .rpd-form-wrapper so these outrank CustomInput's
+   `.form-control.custom-input` defaults and the form keeps its look. */
+.rpd-form-wrapper .rpd-field input,
 .rpd-field select {
   width: 100%;
   border: 1px solid #dbeafe;
@@ -408,12 +410,12 @@
 }
 
 /* Blue border + tint when input has a value */
-.rpd-field input:not([type='date']):not(:placeholder-shown) {
+.rpd-form-wrapper .rpd-field input:not([type='date']):not(:placeholder-shown) {
   border-color: #0069ab;
   background: #f0f7ff;
 }
 
-.rpd-field input:focus,
+.rpd-form-wrapper .rpd-field input:focus,
 .rpd-field select:focus {
   outline: none;
   border-color: #0069ab;
@@ -438,6 +440,25 @@
 .rpd-input-icon svg {
   flex-shrink: 0;
   color: #94a3b8;
+}
+
+/* CustomInput's wrapper fills the row beside the icon; its label is kept for
+   screen readers only, since the icon and placeholder name the field visually. */
+.rpd-input-icon .custom-input-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.rpd-input-icon .custom-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .rpd-input-icon input {

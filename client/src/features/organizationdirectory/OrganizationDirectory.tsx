@@ -2,6 +2,8 @@ import { Linkedin, Globe } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
 import './OrganizationDirectory.css';
+import CustomButton from '../../shared/components/ui/CustomButton';
+import CustomInput from '../../shared/components/ui/CustomInput';
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -145,37 +147,39 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
           <div className="orgd-left-col">
             <div style={{ display: 'flex', gap: '16px' }}>
               <div className="orgd-field" style={{ flex: '1.6' }}>
+                {/* CustomInput's label is plain text, so the label sits outside to keep the
+                    red required marker; CustomInput uses `name` as the input id. */}
                 <label htmlFor="orgd-name-input">
                   Organization Name <span className="req">*</span>
                 </label>
-                <input
-                  id="orgd-name-input"
-                  type="text"
+                <CustomInput
+                  name="orgd-name-input"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={setName}
                   placeholder="e.g. KSRCT Research Center"
+                  className="mb-0"
                 />
               </div>
               <div className="orgd-field" style={{ flex: '1' }}>
-                <label htmlFor="orgd-abbrev-input">Abbreviation / Short Name</label>
-                <input
-                  id="orgd-abbrev-input"
-                  type="text"
+                <CustomInput
+                  label="Abbreviation / Short Name"
+                  name="orgd-abbrev-input"
                   value={abbreviation}
-                  onChange={(e) => setAbbreviation(e.target.value)}
+                  onChange={setAbbreviation}
                   placeholder="e.g. KSRCT-RC"
+                  className="mb-0"
                 />
               </div>
             </div>
             <div style={{ display: 'flex', gap: '16px' }}>
               <div className="orgd-field" style={{ flex: '1.6' }}>
-                <label htmlFor="orgd-address-input">Address</label>
-                <input
-                  id="orgd-address-input"
-                  type="text"
+                <CustomInput
+                  label="Address"
+                  name="orgd-address-input"
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={setAddress}
                   placeholder="Address line"
+                  className="mb-0"
                 />
               </div>
               <fieldset
@@ -212,27 +216,31 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
           {/* Right panel - Website and LinkedIn grouped in light blue box */}
           <div className="orgd-right-col-box">
             <div className="orgd-field">
-              <div className="orgd-input-icon-wrapper">
-                <Globe size={16} />
-                <input
+              <div className="d-flex align-items-center gap-2">
+                <Globe size={16} color="#0069ab" aria-hidden="true" />
+                <CustomInput
+                  name="orgd-website-input"
                   type="url"
                   value={website}
-                  onChange={(e) => setWebsite(e.target.value)}
+                  onChange={setWebsite}
                   placeholder="Website"
                   aria-label="Website"
+                  className="mb-0 flex-grow-1"
                 />
               </div>
             </div>
 
             <div className="orgd-field">
-              <div className="orgd-input-icon-wrapper">
-                <Linkedin size={16} />
-                <input
+              <div className="d-flex align-items-center gap-2">
+                <Linkedin size={16} color="#0069ab" aria-hidden="true" />
+                <CustomInput
+                  name="orgd-linkedin-input"
                   type="url"
                   value={linkedIn}
-                  onChange={(e) => setLinkedIn(e.target.value)}
+                  onChange={setLinkedIn}
                   placeholder="LinkedIn Profile"
                   aria-label="LinkedIn Profile"
+                  className="mb-0 flex-grow-1"
                 />
               </div>
             </div>
@@ -242,43 +250,43 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
         {/* City, State, Country, PIN Row */}
         <div className="orgd-row-4" style={{ marginTop: '8px', marginBottom: '16px' }}>
           <div className="orgd-field">
-            <label htmlFor="orgd-city-input">City</label>
-            <input
-              id="orgd-city-input"
-              type="text"
+            <CustomInput
+              label="City"
+              name="orgd-city-input"
               value={city}
-              onChange={(e) => setCity(e.target.value)}
+              onChange={setCity}
               placeholder="City"
+              className="mb-0"
             />
           </div>
           <div className="orgd-field">
-            <label htmlFor="orgd-state-input">State</label>
-            <input
-              id="orgd-state-input"
-              type="text"
+            <CustomInput
+              label="State"
+              name="orgd-state-input"
               value={state}
-              onChange={(e) => setState(e.target.value)}
+              onChange={setState}
               placeholder="State"
+              className="mb-0"
             />
           </div>
           <div className="orgd-field">
-            <label htmlFor="orgd-country-input">Country</label>
-            <input
-              id="orgd-country-input"
-              type="text"
+            <CustomInput
+              label="Country"
+              name="orgd-country-input"
               value={country}
-              onChange={(e) => setCountry(e.target.value)}
+              onChange={setCountry}
               placeholder="Country"
+              className="mb-0"
             />
           </div>
           <div className="orgd-field">
-            <label htmlFor="orgd-pin-input">PIN</label>
-            <input
-              id="orgd-pin-input"
-              type="text"
+            <CustomInput
+              label="PIN"
+              name="orgd-pin-input"
               value={pinCode}
-              onChange={(e) => setPinCode(e.target.value)}
+              onChange={setPinCode}
               placeholder="PIN"
+              className="mb-0"
             />
           </div>
         </div>
@@ -286,23 +294,23 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
         {/* Tag and Specialization (Sector) Row */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '24px' }}>
           <div className="orgd-field" style={{ flex: '0 0 180px' }}>
-            <label htmlFor="orgd-tag-input">Tag</label>
-            <input
-              id="orgd-tag-input"
-              type="text"
+            <CustomInput
+              label="Tag"
+              name="orgd-tag-input"
               value={tag}
-              onChange={(e) => setTag(e.target.value)}
+              onChange={setTag}
               placeholder="Tag"
+              className="mb-0"
             />
           </div>
           <div className="orgd-field" style={{ flex: '1' }}>
-            <label htmlFor="orgd-sector-input">Specialization</label>
-            <input
-              id="orgd-sector-input"
-              type="text"
+            <CustomInput
+              label="Specialization"
+              name="orgd-sector-input"
               value={sector}
-              onChange={(e) => setSector(e.target.value)}
+              onChange={setSector}
               placeholder="Specialization"
+              className="mb-0"
             />
           </div>
         </div>
@@ -327,12 +335,12 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       )}
       {!readOnly && (
         <div className="orgd-actions-row">
-          <button type="button" className="orgd-btn-save" onClick={handleSubmit}>
+          <CustomButton onClick={handleSubmit}>
             {editingOrg !== null ? 'Update Record' : 'Save Record'}
-          </button>
-          <button type="button" className="orgd-btn-cancel" onClick={onCancel}>
+          </CustomButton>
+          <CustomButton variant="light" onClick={onCancel}>
             Cancel
-          </button>
+          </CustomButton>
         </div>
       )}
     </div>

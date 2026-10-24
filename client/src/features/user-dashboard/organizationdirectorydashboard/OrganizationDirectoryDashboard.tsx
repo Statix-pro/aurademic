@@ -3,6 +3,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import './OrganizationDirectoryDashboard.css';
+import CustomButton from '../../../shared/components/ui/CustomButton';
+import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
+import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import OrganizationDirectory, {
   Organization,
@@ -44,6 +48,12 @@ const CATEGORY_OPTIONS = [
   'Incubation',
   'Start-up',
   'Government',
+];
+
+// '' is the "no filter" choice, so picking "Search Category" again clears the filter.
+const CATEGORY_FILTER_OPTIONS: OptionType[] = [
+  { value: '', label: 'Search Category' },
+  ...CATEGORY_OPTIONS.map((cat) => ({ value: cat, label: cat })),
 ];
 
 /* ═══════════════════════════════════════════════════════════
@@ -142,6 +152,78 @@ const OrganizationDirectoryDashboard: React.FC = () => {
     }
   };
 
+  const columns = [
+    {
+      key: 'sno',
+      label: 'S.No.',
+      style: { width: '80px', textAlign: 'center' as const },
+      render: (_org: Organization, index: number) => index + 1,
+    },
+    {
+      key: 'name',
+      label: 'Organization',
+      render: (org: Organization) => (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontWeight: 600, color: '#1f2937' }}>{org.name}</span>
+          {org.city && (
+            <span
+              style={{
+                fontSize: '0.78rem',
+                color: '#64748b',
+                marginTop: '2px',
+              }}
+            >
+              {org.city}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    { key: 'category', label: 'Category' },
+    {
+      key: 'tag',
+      label: 'Tag',
+      render: (org: Organization) => org.tag && <span className="org-tag-pill">{org.tag}</span>,
+    },
+    {
+      key: 'approvalStatus',
+      label: 'Status',
+      render: (org: Organization) => (
+        <span
+          className={`org-status-pill ${
+            org.approvalStatus === 'Approved'
+              ? 'approved'
+              : org.approvalStatus === 'Rejected'
+                ? 'rejected'
+                : 'pending'
+          }`}
+        >
+          {org.approvalStatus ||
+            ((org as Organization & { is_active?: boolean }).is_active ? 'Approved' : 'Pending')}
+        </span>
+      ),
+    },
+    {
+      // A column rather than CustomTable's `actions` so the header keeps reading "Action".
+      key: 'action',
+      label: 'Action',
+      style: { width: '100px', textAlign: 'center' as const },
+      render: (org: Organization) =>
+        org.isOwner && (
+          <CustomButton
+            variant="outline-primary"
+            size="sm"
+            className="px-2"
+            onClick={() => handleEdit(org)}
+            title="Edit Organization"
+            aria-label="Edit Organization"
+          >
+            <Edit3 size={15} />
+          </CustomButton>
+        ),
+    },
+  ];
+
   /* ── Render ── */
 
   if (isLoading) {
@@ -190,40 +272,39 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                   className="budgetdashboard-header-search-group"
                   style={{ display: 'flex', alignItems: 'center' }}
                 >
-                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      className="budgetdashboard-search"
+                  <div
+                    className="org-search-field"
+                    style={{
+                      position: 'relative',
+                      display: 'flex',
+                      alignItems: 'center',
+                      marginRight: '10px',
+                    }}
+                  >
+                    <CustomInput
+                      name="organization-search"
                       placeholder="Search Organization"
                       value={searchName}
-                      onChange={(e) => setSearchName(e.target.value)}
-                      style={{ marginRight: '10px', paddingRight: '30px' }}
+                      onChange={setSearchName}
+                      aria-label="Search Organization"
+                      className="mb-0"
                     />
                     {searchName ? (
-                      <button
-                        type="button"
+                      <CustomButton
+                        variant="link"
                         aria-label="Clear organization search"
-                        style={{
-                          position: 'absolute',
-                          right: '20px',
-                          background: 'none',
-                          border: 'none',
-                          padding: 0,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
+                        className="p-0"
+                        style={{ position: 'absolute', right: '10px' }}
                         onClick={() => setSearchName('')}
                       >
                         <X size={16} style={{ color: '#64748b' }} aria-hidden="true" />
-                      </button>
+                      </CustomButton>
                     ) : (
                       <Search
                         size={16}
                         style={{
                           position: 'absolute',
-                          right: '20px',
+                          right: '10px',
                           color: '#94a3b8',
                           pointerEvents: 'none',
                         }}
@@ -231,24 +312,24 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                     )}
                   </div>
 
-                  <select
-                    className="budgetdashboard-financial-year"
-                    value={searchCategory}
-                    onChange={(e) => setSearchCategory(e.target.value)}
-                    style={{ marginRight: '10px', textTransform: 'capitalize' }}
-                  >
-                    <option value="">Search Category</option>
-                    {CATEGORY_OPTIONS.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ minWidth: 190, marginRight: '10px' }}>
+                    <CustomDropdown
+                      name="organization-category-filter"
+                      options={CATEGORY_FILTER_OPTIONS}
+                      value={CATEGORY_FILTER_OPTIONS.find(
+                        (option) => option.value === searchCategory,
+                      )}
+                      onChange={(option) => {
+                        if (option && !Array.isArray(option) && 'value' in option) {
+                          setSearchCategory(String(option.value));
+                        }
+                      }}
+                      className="mb-0"
+                    />
+                  </div>
                 </div>
 
-                <button type="button" className="org-add-btn" onClick={handleAdd}>
-                  Add +
-                </button>
+                <CustomButton onClick={handleAdd}>Add +</CustomButton>
               </div>
             </div>
 
@@ -261,19 +342,17 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                 >
                   <span>{loadError}</span>
                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
-                    <button
-                      type="button"
-                      className="btn btn-sm btn-outline-warning"
-                      onClick={fetchRecords}
-                    >
+                    <CustomButton variant="outline-warning" size="sm" onClick={fetchRecords}>
                       Retry
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-close"
+                    </CustomButton>
+                    <CustomButton
+                      variant="link"
+                      className="p-0"
                       aria-label="Dismiss"
                       onClick={() => setLoadError(null)}
-                    />
+                    >
+                      <X size={16} aria-hidden="true" />
+                    </CustomButton>
                   </div>
                 </div>
               </div>
@@ -281,85 +360,17 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
             <div className="budgetdashboard-body">
               <div className="budgetdashboard-table-wrapper">
-                <table className="budgetdashboard-table org-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '80px', textAlign: 'center' }}>S.No.</th>
-                      <th>Organization</th>
-                      <th>Category</th>
-                      <th>Tag</th>
-                      <th>Status</th>
-                      <th style={{ width: '100px', textAlign: 'center' }}>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.length > 0 ? (
-                      filtered.map((org, index) => {
-                        return (
-                          <tr key={org.id}>
-                            <td style={{ textAlign: 'center' }}>{index + 1}</td>
-                            <td>
-                              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                <span style={{ fontWeight: 600, color: '#1f2937' }}>
-                                  {org.name}
-                                </span>
-                                {org.city && (
-                                  <span
-                                    style={{
-                                      fontSize: '0.78rem',
-                                      color: '#64748b',
-                                      marginTop: '2px',
-                                    }}
-                                  >
-                                    {org.city}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            <td>{org.category}</td>
-                            <td>{org.tag && <span className="org-tag-pill">{org.tag}</span>}</td>
-                            <td>
-                              <span
-                                className={`org-status-pill ${
-                                  org.approvalStatus === 'Approved'
-                                    ? 'approved'
-                                    : org.approvalStatus === 'Rejected'
-                                      ? 'rejected'
-                                      : 'pending'
-                                }`}
-                              >
-                                {org.approvalStatus ||
-                                  ((org as Organization & { is_active?: boolean }).is_active
-                                    ? 'Approved'
-                                    : 'Pending')}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'center' }}>
-                              {org.isOwner && (
-                                <button
-                                  type="button"
-                                  className="org-action-edit-btn"
-                                  onClick={() => handleEdit(org)}
-                                  title="Edit Organization"
-                                >
-                                  <Edit3 size={15} />
-                                </button>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })
-                    ) : (
-                      <tr>
-                        <td colSpan={6} className="org-empty-state">
-                          {records.length === 0
-                            ? 'No records yet. Click "Add +" to add an organization.'
-                            : 'No records match the filter criteria.'}
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
+                <CustomTable
+                  columns={columns}
+                  data={filtered}
+                  keyField="id"
+                  className="budgetdashboard-table org-table"
+                  emptyMessage={
+                    records.length === 0
+                      ? 'No records yet. Click "Add +" to add an organization.'
+                      : 'No records match the filter criteria.'
+                  }
+                />
               </div>
             </div>
           </div>
