@@ -452,7 +452,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
           <button
             type="submit"
             style={{
-              background: '#2563eb',
+              background: 'var(--primary-color)',
               color: '#fff',
               border: 'none',
               borderRadius: 6,

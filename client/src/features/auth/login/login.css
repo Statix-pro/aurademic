@@ -191,7 +191,9 @@
   height: var(--control-height);
   padding: 0 var(--button-padding-x);
   border: none;
-  background: #003b73;
+  /* The portal's primary blue. Production showed it only because a journal rule painted every
+     submit button blue; that rule is now scoped, so the button names its colour itself. */
+  background: var(--primary-color);
   color: white;
   font-size: var(--font-size-body);
   font-weight: var(--weight-semibold);
@@ -202,7 +204,7 @@
 }
 
 .login-body .login-btn:hover:not(:disabled) {
-  background: #005fa3;
+  background: var(--primary-hover);
 }
 
 .login-body .login-btn:disabled {
