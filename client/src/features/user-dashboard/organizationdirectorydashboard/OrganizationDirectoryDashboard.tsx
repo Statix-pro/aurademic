@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import './OrganizationDirectoryDashboard.css';
+// The add/edit form reuses the resource-person directory's form styles (.rpd-form-wrapper).
+import '../../resourcepersondirectory/ResourcePersonDirectory.css';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
 import CustomInput from '../../../shared/components/ui/CustomInput';

@@ -639,7 +639,11 @@ Basis: dense desktop admin forms, checked against primary sources — Bootstrap 
   `<style>` blocks and inline styles, and fails on a literal text size, a weight outside 400–700, a page-level font, a
   deleted or colour `--text-*` token used as a size, uppercase that is not a bold, letter-spaced label (table header, tag, group label), and
   any feature selector that names no class of its own (bare elements, Bootstrap, react-select,
-  FullCalendar or `Custom*` classes alone). A genuine exception — an icon glyph, the printed A4
+  FullCalendar or `Custom*` classes alone) or whose own classes all appear in another screen's
+  markup (it reaches that screen too). Collisions that predate the guard — duplicated stylesheets
+  (projects/publications, events/guest-house, the two budget logs) — sit in
+  `client/scripts/ui-standard-baseline.json`, which may only shrink: a full run fails on a new
+  collision and on an entry that no longer collides. A genuine exception — an icon glyph, the printed A4
   form — carries `ui-standard-allow: <reason>` on or above the line, or sits between
   `ui-standard-allow-start: <reason>` and `ui-standard-allow-end`. Never add a marker just to go
   green; it is reviewed like an `eslint-disable`.
@@ -724,8 +728,9 @@ audience.
 ### UI pitfalls
 
 **Every stylesheet loads on every page** — routes are not lazy-loaded, so a feature's CSS is global
-in effect. A feature file therefore styles only its own classes, scoped under its screen's root
-class. It never targets a bare element (`body`, `*`, `h2`, `table`, `button[type='submit']`) or a
+in effect. A feature file therefore styles only its own classes; a class name another screen also
+uses (`.add-btn`, `.delete-btn`, `.formGroup`) is scoped under the screen's root class, and a screen
+that reuses another's stylesheet imports it explicitly. It never targets a bare element (`body`, `*`, `h2`, `table`, `button[type='submit']`) or a
 Bootstrap class (`.btn`, `.btn-primary`, `.modal-*`, `.table`, `.badge`, `.form-control`,
 `.text-muted`) on its own. The portal's Bootstrap theme lives in one place,
 `shared/styles/forms.css` (colours, modals, tables, badges, alerts) and `shared/styles/index.css`

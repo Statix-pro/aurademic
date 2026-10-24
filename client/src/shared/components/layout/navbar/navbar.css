@@ -46,22 +46,22 @@
 }
 
 /* ─── Navigation ─── */
-.sb-nav {
+.sidebar .sb-nav {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 8px;
 }
 
-.sb-nav::-webkit-scrollbar {
+.sidebar .sb-nav::-webkit-scrollbar {
   width: 4px;
 }
 
-.sb-nav::-webkit-scrollbar-track {
+.sidebar .sb-nav::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.sb-nav::-webkit-scrollbar-thumb {
+.sidebar .sb-nav::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.2);
   border-radius: 10px;
 }

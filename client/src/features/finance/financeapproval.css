@@ -983,3 +983,16 @@
   box-shadow: none !important;
   outline: none !important;
 }
+
+/* The Head of Accounts dropdown wrapper. This look used to reach the page from
+   expenditure/expenditureapproval.css, which never renders .hoac-form-group. */
+.hoac-form-group .custom-input-group {
+  min-height: var(--control-height) !important;
+  height: var(--control-height) !important;
+  padding: 0 var(--control-padding-x) !important;
+  font-size: var(--font-size-body) !important;
+  border: none !important;
+  background: #fafbfc !important;
+  border-radius: 12px !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+}

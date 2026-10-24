@@ -37,7 +37,7 @@
   line-height: var(--leading-section-title);
 }
 
-.filter-controls {
+.publications-page .filter-controls {
   display: flex;
   gap: 12px;
   align-items: center;
@@ -163,7 +163,7 @@
   line-height: var(--leading-section-title);
 }
 
-.add-btn {
+.publications-page .add-btn {
   background: #0069ab;
   /* Primary blue - matching journalform theme */
   color: white;
@@ -178,7 +178,7 @@
   height: var(--control-height);
 }
 
-.add-btn:hover {
+.publications-page .add-btn:hover {
   background: #005492;
   /* Darker blue on hover - matching journalform theme */
   transform: translateY(-1px);
@@ -272,13 +272,13 @@
   gap: 4px;
 }
 
-.detail-label {
+.publications-page .detail-label {
   color: #7c8ba1;
   font-weight: var(--weight-medium);
   font-size: var(--font-size-secondary);
 }
 
-.detail-value {
+.publications-page .detail-value {
   color: #4a5568;
   font-weight: var(--weight-regular);
 }
@@ -463,12 +463,12 @@
   box-shadow: 0 4px 8px rgba(0, 105, 171, 0.2);
 }
 
-.delete-btn {
+.publications-page .delete-btn {
   background: #ffe1e1;
   color: #dc3545;
 }
 
-.delete-btn:hover {
+.publications-page .delete-btn:hover {
   background: #ffb3b3;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(220, 53, 69, 0.2);
@@ -506,7 +506,11 @@
 }
 
 .pagination-controls button {
-  padding: 8px 16px;
+  /* A fixed chip height: the label is centred by flex, not by vertical padding. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
   border: 1px solid #e0e0e0;
   border-radius: 12px;
   background: #fcfdff;
@@ -551,7 +555,7 @@
     align-items: flex-start;
   }
 
-  .filter-controls {
+  .publications-page .filter-controls {
     width: 100%;
     justify-content: flex-start;
   }

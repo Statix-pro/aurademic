@@ -76,38 +76,6 @@
   box-shadow: 0 4px 12px rgba(0, 105, 171, 0.2);
 }
 
-/* Form inputs & controls styles */
-.formGroup {
-  margin-bottom: 0;
-}
-
-.formGroup label {
-  font-size: var(--font-size-secondary);
-  color: #495057;
-  margin-bottom: 6px;
-  font-weight: var(--weight-semibold);
-  display: block;
-}
-
-.formGroup input,
-.formGroup select {
-  width: 100%;
-  border-radius: 12px;
-  border: 1px solid #e0e0e0;
-  padding: 8px 12px;
-  font-size: var(--font-size-body);
-  background-color: #fcfdff;
-  transition: all 0.3s ease;
-  font-family: inherit;
-  outline: none;
-}
-
-.formGroup input:focus,
-.formGroup select:focus {
-  border-color: #0069ab;
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
-}
-
 /* Chip buttons for Gender & Service Status */
 .gender-chips-group,
 .status-chips-group {
@@ -869,24 +837,6 @@
   color: #005495;
 }
 
-.edit-btn {
-  color: #475569;
-}
-
-.edit-btn:hover {
-  color: #1e293b;
-}
-
-.delete-btn {
-  color: #ef4444;
-  background-color: #fef2f2;
-}
-
-.delete-btn:hover {
-  background-color: #fee2e2;
-  color: #dc2626;
-}
-
 /* Premium Profile Details Preview Modal styles */
 .profile-modal-backdrop {
   position: fixed;
@@ -929,18 +879,6 @@
   justify-content: space-between;
   align-items: center;
   background-color: #fcfdff;
-}
-
-.avatar-placeholder {
-  width: 56px;
-  height: 56px;
-  background: #e0eeff;
-  color: #0069ab;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cce2ff;
 }
 
 .profile-modal-title {

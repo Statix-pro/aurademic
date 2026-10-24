@@ -2157,10 +2157,6 @@
   }
 }
 /* ONLY Head of Accounts - Clean, No Outer Border */
-.hoac-form-group {
-  margin-bottom: 16px;
-}
-
 .hoac-primary-row {
   display: flex !important;
   gap: 8px !important;
@@ -2179,8 +2175,7 @@
 
 /* Bigger dropdown, NO BORDER */
 .hoac-primary-row .custom-input-group,
-.hoac-sub-row .custom-input-group,
-.hoac-form-group .custom-input-group {
+.hoac-sub-row .custom-input-group {
   min-height: var(--control-height) !important;
   height: var(--control-height) !important;
   padding: 0 var(--control-padding-x) !important;

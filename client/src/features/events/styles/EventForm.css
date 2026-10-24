@@ -1557,7 +1557,7 @@
   text-align: center; /* centers delete button horizontally */
 }
 
-.delete-btn {
+.event-page .delete-btn {
   background: #ee4a47;
   border: none;
   padding: 0.3rem;
@@ -1571,7 +1571,7 @@
   margin: auto;
 }
 
-.delete-btn svg {
+.event-page .delete-btn svg {
   /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   color: #fff;
@@ -1612,7 +1612,7 @@
   border-radius: 18px;
 }
 
-.slider:before {
+.event-page .slider:before {
   position: absolute;
   content: '';
   height: 14px;
@@ -1944,7 +1944,7 @@ input:checked + .event-slider:before {
   width: 80%; /* 🔹 ensures the Name column stays wide */
 }
 
-.delete-btn {
+.event-page .delete-btn {
   background: #45100e;
   border: none;
   padding: 0.3rem;
@@ -1957,7 +1957,7 @@ input:checked + .event-slider:before {
   justify-content: center;
 }
 
-.delete-btn svg {
+.event-page .delete-btn svg {
   /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   color: #fff;
@@ -2563,7 +2563,7 @@ input:checked + .event-slider:before {
 }
 
 /* ✅ Delete button styling */
-.delete-btn {
+.event-page .delete-btn {
   background: none;
   border: none;
   cursor: pointer;
@@ -3055,7 +3055,7 @@ input:checked + .event-slider:before {
   height: 0;
 }
 
-.slider {
+.event-page .slider {
   position: absolute;
   cursor: pointer;
   top: 0;
@@ -3067,7 +3067,7 @@ input:checked + .event-slider:before {
   border-radius: 22px;
 }
 
-.slider:before {
+.event-page .slider:before {
   position: absolute;
   content: '';
   height: 16px;
@@ -3079,11 +3079,11 @@ input:checked + .event-slider:before {
   border-radius: 50%;
 }
 
-input:checked + .slider {
+.event-page input:checked + .slider {
   background-color: #4a90e2;
 }
 
-input:checked + .slider:before {
+.event-page input:checked + .slider:before {
   transform: translateX(18px);
 }
 
@@ -3168,10 +3168,10 @@ input:checked + .slider:before {
   text-align: center;
 }
 
-.add-btn,
+.event-page .add-btn,
 .save-next-btn,
 .upload-btn,
-.view-btn {
+.event-page .view-btn {
   background: #4caf50;
   color: white;
   padding: 0.4rem 0.8rem;
@@ -3180,12 +3180,12 @@ input:checked + .slider:before {
   cursor: pointer;
 }
 
-.add-btn:hover,
+.event-page .add-btn:hover,
 .save-next-btn:hover {
   background: #43a047;
 }
 
-.delete-btn,
+.event-page .delete-btn,
 .cancel-btn {
   background: #ee4a47;
   color: white;
@@ -3200,13 +3200,13 @@ input:checked + .slider:before {
   height: var(--icon-action-size);
 }
 
-.delete-btn svg,
+.event-page .delete-btn svg,
 .cancel-btn svg {
   /* ui-standard-allow: icon glyph, not text */
   font-size: 14px; /* smaller icon size */
 }
 
-.delete-btn:disabled {
+.event-page .delete-btn:disabled {
   background: #ccc;
   cursor: not-allowed;
 }
@@ -3236,7 +3236,7 @@ input:checked + .slider:before {
   width: 80%; /* 🔹 ensures the Name column stays wide */
 }
 
-.delete-btn {
+.event-page .delete-btn {
   background: #45100e;
   border: none;
   padding: 0.3rem;
@@ -3249,7 +3249,7 @@ input:checked + .slider:before {
   justify-content: center;
 }
 
-.delete-btn svg {
+.event-page .delete-btn svg {
   /* ui-standard-allow: icon glyph, not text */
   font-size: 14px;
   color: #fff;
@@ -3272,10 +3272,10 @@ input:checked + .slider:before {
   border-left: 4px solid #0069ab;
 }
 
-.add-btn,
+.event-page .add-btn,
 .save-next-btn,
 .upload-btn,
-.view-btn {
+.event-page .view-btn {
   background: #0069ab;
   color: white;
   padding: 0.4rem 0.8rem;
@@ -3284,7 +3284,7 @@ input:checked + .slider:before {
   cursor: pointer;
 }
 
-.add-btn:hover,
+.event-page .add-btn:hover,
 .save-next-btn:hover {
   background: #005080;
 }
@@ -3371,7 +3371,7 @@ input:checked + .slider:before {
 .switch input {
   display: none;
 }
-.slider {
+.event-page .slider {
   position: absolute;
   cursor: pointer;
   background-color: #ccc;
@@ -3382,7 +3382,7 @@ input:checked + .slider:before {
   bottom: 0;
   transition: 0.4s;
 }
-.slider:before {
+.event-page .slider:before {
   position: absolute;
   content: '';
   height: 14px;
@@ -3393,10 +3393,10 @@ input:checked + .slider:before {
   transition: 0.4s;
   border-radius: 50%;
 }
-input:checked + .slider {
+.event-page input:checked + .slider {
   background-color: #0069ab;
 }
-input:checked + .slider:before {
+.event-page input:checked + .slider:before {
   transform: translateX(18px);
 }
 
@@ -3559,7 +3559,7 @@ input:checked + .slider:before {
   height: 0;
 }
 
-.slider {
+.event-page .slider {
   position: absolute;
   cursor: pointer;
   background-color: #ccc;
@@ -3571,7 +3571,7 @@ input:checked + .slider:before {
   transition: 0.4s;
 }
 
-.slider:before {
+.event-page .slider:before {
   position: absolute;
   content: '';
   height: 18px;
@@ -3583,11 +3583,11 @@ input:checked + .slider:before {
   transition: 0.4s;
 }
 
-input:checked + .slider {
+.event-page input:checked + .slider {
   background-color: #0069ab;
 }
 
-input:checked + .slider:before {
+.event-page input:checked + .slider:before {
   transform: translateX(18px);
 }
 
@@ -3683,7 +3683,7 @@ input:checked + .slider:before {
   height: 0;
 }
 
-.slider {
+.event-page .slider {
   position: absolute;
   cursor: pointer;
   top: 0;
@@ -3695,7 +3695,7 @@ input:checked + .slider:before {
   border-radius: 18px;
 }
 
-.slider:before {
+.event-page .slider:before {
   position: absolute;
   content: '';
   height: 14px;

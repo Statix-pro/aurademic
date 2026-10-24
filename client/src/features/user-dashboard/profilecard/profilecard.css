@@ -185,3 +185,9 @@
   opacity: 0.7;
   transition: filter 0.3s ease-out;
 }
+
+/* The avatar's light-blue ring. It used to arrive from the resource-person directory's stylesheet;
+   Bootstrap classes and inline styles set everything else on this element. */
+.profile-card .avatar-placeholder {
+  border: 1px solid #cce2ff;
+}

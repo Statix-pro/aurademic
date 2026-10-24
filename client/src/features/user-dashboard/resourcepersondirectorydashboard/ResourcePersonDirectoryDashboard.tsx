@@ -3,6 +3,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 
 import './ResourcePersonDirectoryDashboard.css';
 import '../financecard/financecard.css';
+// The add/edit form reuses the resource-person directory's form styles (.rpd-form-wrapper).
+import '../../resourcepersondirectory/ResourcePersonDirectory.css';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomInput from '../../../shared/components/ui/CustomInput';
 import CustomModal from '../../../shared/components/ui/CustomModal';

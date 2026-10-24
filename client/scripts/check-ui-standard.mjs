@@ -199,10 +199,11 @@ function isScoped(selector, ownsComponents) {
 function checkSelector(file, line, prelude) {
   const ownsComponents = file.startsWith(COMPONENT_DIR);
   for (const raw of prelude.split(',')) {
-    // Drop :not()/:has()/:is() arguments and attribute selectors: they narrow, they don't scope.
+    // Drop :not()/:has() arguments and attribute selectors: they narrow, they don't scope.
+    // :is()/:where() stay — `:is(.screen-a, .screen-b) .x` is scoped by its arguments.
     const selector = raw
       .trim()
-      .replace(/:(not|has|is|where)\((?:[^()]|\([^()]*\))*\)/g, '')
+      .replace(/:(not|has)\((?:[^()]|\([^()]*\))*\)/g, '')
       .replace(/\[[^\]]*\]/g, '');
     if (!selector || selector === ':root' || /^(from|to|\d+%)$/.test(selector)) continue;
     if (!isScoped(selector, ownsComponents)) {
@@ -212,8 +213,101 @@ function checkSelector(file, line, prelude) {
         'global-selector',
         `"${raw.trim()}" restyles every screen — scope it under this screen's class`,
       );
+      continue;
+    }
+    const others = otherScreensReached(file, selector);
+    if (others.length) {
+      const key = `${relSrc(file)}|${raw.trim().replace(/\s+/g, ' ')}`;
+      if (BASELINE.has(key)) {
+        baselineHit.add(key);
+      } else {
+        report(
+          file,
+          line,
+          'cross-screen',
+          `"${raw.trim()}" also styles ${others.join(', ')} — scope it under this screen's root class`,
+        );
+      }
     }
   }
+}
+
+// ---- Cross-screen collisions ------------------------------------------------------------------
+// Every stylesheet is loaded on every page, so a rule leaks when each class of its own is also used
+// in the markup of another screen. A screen is a folder under features/ (user-dashboard/<page>
+// counts as one) or shared/<dir>; a stylesheet also belongs to every screen that imports it.
+// Collisions that predate the guard sit in ui-standard-baseline.json, which may only shrink.
+const BASELINE_FILE = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  'ui-standard-baseline.json',
+);
+const BASELINE = new Set(
+  fs.existsSync(BASELINE_FILE)
+    ? Object.keys(JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8')).entries)
+    : [],
+);
+const baselineHit = new Set();
+const relSrc = (file) => path.relative(CLIENT_SRC, file).split(path.sep).join('/');
+
+function screenOf(file) {
+  const parts = relSrc(file).split('/');
+  if (parts[0] === 'features') {
+    return parts[1] === 'user-dashboard' && parts.length > 3
+      ? `user-dashboard/${parts[2]}`
+      : parts[1];
+  }
+  return parts[0] === 'shared' ? `shared/${parts[1]}` : parts[0];
+}
+
+let screenIndex = null;
+function buildScreenIndex() {
+  const usedIn = new Map(); // class name → screens whose markup uses it
+  const owners = new Map(); // stylesheet → screens that import it
+  const add = (map, key, value) => {
+    if (!map.has(key)) map.set(key, new Set());
+    map.get(key).add(value);
+  };
+  const all = walk(CLIENT_SRC);
+  for (const file of all.filter((f) => f.endsWith('.tsx'))) {
+    const text = fs.readFileSync(file, 'utf8');
+    const screen = screenOf(file);
+    for (const m of text.matchAll(/className=(?:"([^"]*)"|\{((?:[^{}]|\{[^{}]*\})*)\})/g)) {
+      const raw = m[1] ?? [...m[2].matchAll(/['"`]([^'"`]*)['"`]/g)].map((s) => s[1]).join(' ');
+      for (const c of raw.replace(/\$\{[^}]*\}/g, ' ').match(/[A-Za-z_][\w-]*/g) || []) {
+        add(usedIn, c, screen);
+      }
+    }
+    for (const m of text.matchAll(/import\s+['"]([^'"]+\.css)['"]/g)) {
+      add(owners, path.resolve(path.dirname(file), m[1]), screen);
+    }
+  }
+  // @import chains: an imported stylesheet belongs to its importer's screens as well.
+  const sheets = all.filter((f) => f.endsWith('.css'));
+  for (let pass = 0; pass < 3; pass += 1) {
+    for (const sheet of sheets) {
+      for (const m of fs.readFileSync(sheet, 'utf8').matchAll(/@import\s+['"]([^'"]+\.css)['"]/g)) {
+        const target = path.resolve(path.dirname(sheet), m[1]);
+        add(owners, target, screenOf(sheet));
+        for (const s of owners.get(sheet) || []) add(owners, target, s);
+      }
+    }
+  }
+  return { usedIn, owners };
+}
+
+/** Screens other than this stylesheet's own that the selector's classes all appear in. */
+function otherScreensReached(file, selector) {
+  if (!file.startsWith(CLIENT_SRC) || file.startsWith(COMPONENT_DIR)) return [];
+  screenIndex ??= buildScreenIndex();
+  const mine = new Set([screenOf(file), ...(screenIndex.owners.get(file) || [])]);
+  const own = [...selector.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)]
+    .map((m) => m[1])
+    .filter((c) => !LIBRARY_CLASS.test(c) && !COMPONENT_CLASSES.has(c));
+  if (!own.length) return [];
+  const elsewhere = own.map((c) =>
+    [...(screenIndex.usedIn.get(c) || [])].filter((s) => !mine.has(s)),
+  );
+  return elsewhere.every((s) => s.length) ? [...new Set(elsewhere.flat())].sort() : [];
 }
 
 function checkTokens(file, text, exempt) {
@@ -410,6 +504,38 @@ const args = process.argv
   .map((f) => path.resolve(f));
 const files = args.length ? args.filter((f) => /\.(css|tsx)$/.test(f)) : walk(CLIENT_SRC);
 run(files);
+
+// --write-baseline records today's cross-screen collisions (review the diff: it should only shrink).
+if (process.argv.includes('--write-baseline')) {
+  const entries = Object.fromEntries(
+    violations
+      .filter((v) => v.rule === 'cross-screen')
+      .map((v) => [
+        `${relSrc(path.resolve(REPO_ROOT, v.file))}|${v.detail.match(/^"([^"]+)"/)[1].replace(/\s+/g, ' ')}`,
+        v.detail.replace(/^"[^"]+" /, ''),
+      ])
+      .sort(([a], [b]) => a.localeCompare(b)),
+  );
+  const note =
+    'Cross-screen collisions that predate the guard (duplicated stylesheets). Fix and delete entries; never add one by hand.';
+  fs.writeFileSync(BASELINE_FILE, `${JSON.stringify({ note, entries }, null, 2)}\n`);
+  console.log(`Wrote ${Object.keys(entries).length} baseline entries.`);
+  process.exit(0);
+}
+
+// A full run also fails on baseline entries that no longer collide, so the baseline only shrinks.
+if (!args.length) {
+  for (const key of BASELINE) {
+    if (!baselineHit.has(key)) {
+      violations.push({
+        file: path.relative(REPO_ROOT, BASELINE_FILE),
+        line: 1,
+        rule: 'stale-baseline',
+        detail: `"${key}" no longer collides — delete it from the baseline`,
+      });
+    }
+  }
+}
 
 if (violations.length) {
   for (const v of violations) console.log(`${v.file}:${v.line}  [${v.rule}]  ${v.detail}`);

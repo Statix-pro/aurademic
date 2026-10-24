@@ -248,7 +248,7 @@ const selectStyles = {
   groupHeading: (base: any) => ({
     ...base,
     fontSize: 'var(--font-size-secondary)',
-    fontWeight: 600,
+    fontWeight: 'var(--weight-bold)',
     textTransform: 'uppercase',
     color: '#475569',
     backgroundColor: '#f1f5f9',

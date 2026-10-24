@@ -1,3 +1,36 @@
+/* Field groups. These rules used to live in resourcepersondirectory/ResourcePersonDirectory.css,
+   which never uses .formGroup — they only ever styled this page. */
+.formGroup {
+  margin-bottom: 0;
+}
+
+.formGroup label {
+  font-size: var(--font-size-secondary);
+  color: #495057;
+  margin-bottom: 6px;
+  font-weight: var(--weight-semibold);
+  display: block;
+}
+
+.formGroup input,
+.formGroup select {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  padding: 8px 12px;
+  font-size: var(--font-size-body);
+  background-color: #fcfdff;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  outline: none;
+}
+
+.formGroup input:focus,
+.formGroup select:focus {
+  border-color: #0069ab;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
 /* budget.css - Save as budget.css (not .module.css) */
 .budgetPage {
   padding: 0;
