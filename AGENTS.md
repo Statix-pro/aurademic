@@ -271,8 +271,9 @@ Verified against the code on the date above. Getting these wrong breaks things q
   `{ error, path, method }`; `middleware/errorMiddleware.js` is the last `app.use`.
 - `expenditureRoutes` is mounted at **two** prefixes — `/api/expenditure` and
   `/api/expenditure-requests`. A change there affects both surfaces.
-- `journalRoutes`, `projectRoutes` and `editRequestRoutes` mount on bare `/api` and declare their
-  own full paths; the rest mount under a prefix.
+- `journalRoutes`, `projectRoutes`, `editRequestRoutes`, `organizationDirectoryRoutes` and
+  `resourcepersonDirectoryRoutes` mount on bare `/api` and declare their own full paths; the rest
+  mount under a prefix.
 - Swagger mounts **only** when `NODE_ENV !== 'production'`.
 - The global rate limiter in `server.js` is **commented out on purpose**, and the same block in
   `accessControlRoutes.js` with it. The portal is reached only from inside the CKG campus network,
@@ -309,7 +310,7 @@ Verified against the code on the date above. Getting these wrong breaks things q
 - All 38 client files that talk to the API go through `authenticityUtility`. There is **no raw
   `fetch` and no bare `axios` left in `client/src`** — `features/admin/masterData/MasterDataPage.tsx`
   was the last exception and was migrated. Keep it that way; there is no precedent to copy.
-- 9 of the 23 `*Routes.js` files call `permissionMiddleware`; the others gate through
+- 11 of the 25 `*Routes.js` files call `permissionMiddleware`; the others gate through
   `adminAuthMiddleware` / `superAdminMiddleware` or handler-level checks. **Verify which applies
   before assuming a given route is protected.**
 - There are only 2 `eslint-disable` comments in the whole codebase. Keep it that way.
@@ -522,6 +523,8 @@ Modules: `accessControl`, `accountOptions`, `adminbudget`, `admindashboard`, `au
 **There is no `/api/journals`, `/api/projects` or `/api/edit-requests` prefix.** `journalRoutes`,
 `projectRoutes` and `editRequestRoutes` mount on bare `/api` and declare their own full paths (§9),
 so those paths exist but the prefixes do not — do not add a route to one expecting it to be scoped.
+The two directory routers mount there too: `/api/organizations`, `/api/resource-persons`,
+`/api/organization-submissions` and `/api/resource-person-submissions` are their own full paths.
 
 To check this list rather than trust it: `server.js` ends in `export default app` and skips
 `listen()` when `NODE_ENV=test`, so the app can be imported and `app._router.stack` walked for the
