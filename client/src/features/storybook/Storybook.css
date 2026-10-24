@@ -512,7 +512,7 @@
 .sb-props-table th {
   padding: 12px 16px;
   text-align: left;
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   color: #64748b;
   font-size: var(--font-size-secondary);
   text-transform: uppercase;

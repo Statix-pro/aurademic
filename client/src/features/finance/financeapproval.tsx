@@ -4526,11 +4526,12 @@ const FinanceApproval: React.FC = () => {
                     <tr style={{ backgroundColor: '#f0f6ff' }}>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '6%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -4538,11 +4539,12 @@ const FinanceApproval: React.FC = () => {
                       </th>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '30%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -4550,11 +4552,12 @@ const FinanceApproval: React.FC = () => {
                       </th>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '30%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -4562,11 +4565,12 @@ const FinanceApproval: React.FC = () => {
                       </th>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '15%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -4574,11 +4578,12 @@ const FinanceApproval: React.FC = () => {
                       </th>
                       <th
                         style={{
+                          fontSize: 'var(--font-size-secondary)',
                           width: '10%',
                           padding: '12px',
                           border: '1px solid #e0e0e0',
                           color: '#0069ab',
-                          fontWeight: '600',
+                          fontWeight: 'var(--weight-bold)',
                           textAlign: 'center',
                         }}
                       >
@@ -5091,11 +5096,12 @@ const FinanceApproval: React.FC = () => {
                       <tr style={{ backgroundColor: '#f0f6ff' }}>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '6%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5103,11 +5109,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '26%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5115,11 +5122,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '12%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5127,11 +5135,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '20%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5139,11 +5148,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '25%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >
@@ -5151,11 +5161,12 @@ const FinanceApproval: React.FC = () => {
                         </th>
                         <th
                           style={{
+                            fontSize: 'var(--font-size-secondary)',
                             width: '10%',
                             padding: '12px',
                             border: '1px solid #e0e0e0',
                             color: '#0069ab',
-                            fontWeight: '600',
+                            fontWeight: 'var(--weight-bold)',
                             textAlign: 'center',
                           }}
                         >

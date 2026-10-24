@@ -265,7 +265,7 @@
 .budget-table th {
   padding: 12px;
   text-align: left;
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   color: var(--primary-color, #0069ab);
   border-bottom: 2px solid var(--border-color, #e0e0e0);
   font-size: var(--font-size-secondary);
@@ -460,7 +460,9 @@
 
 .payee-details-table th {
   color: #0069ab;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-bold);
   text-align: center;
 }
 

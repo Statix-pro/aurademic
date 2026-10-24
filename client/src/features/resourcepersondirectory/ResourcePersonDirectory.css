@@ -796,7 +796,7 @@
   background: #f0f6ff;
   color: #0069ab;
   font-size: var(--font-size-secondary);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   border-bottom: 2px solid #d6e4f3;
 }
 

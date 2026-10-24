@@ -310,7 +310,7 @@
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-header);
   color: var(--text-body);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   font-size: var(--font-size-secondary);
   letter-spacing: 0.04em;
   text-transform: uppercase;

@@ -1588,7 +1588,7 @@
   color: #137a3a;
   padding: 14px 12px;
   text-align: left;
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   font-size: var(--font-size-secondary);
   border-bottom: 2px solid #d7f1e3;
 }

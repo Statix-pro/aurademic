@@ -249,7 +249,7 @@
 .custom-table th {
   font-size: var(--font-size-secondary);
   line-height: var(--leading-secondary);
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   letter-spacing: 0.02em;
   color: var(--primary-color);
   background-color: var(--bg-light);

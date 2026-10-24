@@ -1016,6 +1016,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                 <tr>
                   <th
                     style={{
+                      fontSize: 'var(--font-size-secondary)',
                       textAlign: 'center',
                       padding: '8px',
                       border: '1px solid #ccc',
@@ -1025,6 +1026,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                   </th>
                   <th
                     style={{
+                      fontSize: 'var(--font-size-secondary)',
                       textAlign: 'center',
                       padding: '8px',
                       border: '1px solid #ccc',
@@ -1034,6 +1036,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                   </th>
                   <th
                     style={{
+                      fontSize: 'var(--font-size-secondary)',
                       textAlign: 'center',
                       padding: '8px',
                       border: '1px solid #ccc',
@@ -1043,6 +1046,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                   </th>
                   <th
                     style={{
+                      fontSize: 'var(--font-size-secondary)',
                       textAlign: 'center',
                       padding: '8px',
                       border: '1px solid #ccc',

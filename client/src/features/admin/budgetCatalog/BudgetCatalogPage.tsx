@@ -725,7 +725,7 @@ function BudgetCatalogPage() {
                   <th>Name</th>
                   <th>Group</th>
                   <th>Active</th>
-                  <th style={{ width: 130 }}>Actions</th>
+                  <th style={{ fontSize: 'var(--font-size-secondary)', width: 130 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -802,7 +802,7 @@ function BudgetCatalogPage() {
                   <th>Scope</th>
                   <th>Parent head</th>
                   <th>Active</th>
-                  <th style={{ width: 130 }}>Actions</th>
+                  <th style={{ fontSize: 'var(--font-size-secondary)', width: 130 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -882,7 +882,7 @@ function BudgetCatalogPage() {
                 <tr>
                   <th>Name</th>
                   <th>Active</th>
-                  <th style={{ width: 130 }}>Actions</th>
+                  <th style={{ fontSize: 'var(--font-size-secondary)', width: 130 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -940,7 +940,7 @@ function BudgetCatalogPage() {
               <thead>
                 <tr>
                   <th>Account</th>
-                  <th style={{ width: 130 }}>Actions</th>
+                  <th style={{ fontSize: 'var(--font-size-secondary)', width: 130 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>

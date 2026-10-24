@@ -37,6 +37,8 @@
   white-space: nowrap;
   transition: all 0.3s ease;
   flex: 0 0 auto;
+  /* As wide as its label: the shared toggle track sizes to its content. */
+  width: auto;
   font-size: var(--font-size-secondary);
 }
 
@@ -187,7 +189,7 @@
   color: #137a3a;
   padding: 14px 12px;
   text-align: left;
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   font-size: var(--font-size-secondary);
   border-bottom: 2px solid #d7f1e3;
 }
@@ -337,7 +339,7 @@
   color: #a97900;
   padding: 14px 12px;
   text-align: left;
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   font-size: var(--font-size-secondary);
   border-bottom: 2px solid #f3e8a5;
 }

@@ -1269,11 +1269,46 @@ const BudgetDashboard: React.FC = () => {
                             >
                               <thead>
                                 <tr>
-                                  <th style={{ width: '50px' }}>S.No</th>
-                                  <th style={{ width: '300px' }}>Budget Head</th>
-                                  <th style={{ width: '300px' }}>Sub Head</th>
-                                  <th style={{ width: '150px' }}>Proposed</th>
-                                  <th style={{ width: '150px' }}>Approved</th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '50px',
+                                    }}
+                                  >
+                                    S.No
+                                  </th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '300px',
+                                    }}
+                                  >
+                                    Budget Head
+                                  </th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '300px',
+                                    }}
+                                  >
+                                    Sub Head
+                                  </th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '150px',
+                                    }}
+                                  >
+                                    Proposed
+                                  </th>
+                                  <th
+                                    style={{
+                                      fontSize: 'var(--font-size-secondary)',
+                                      width: '150px',
+                                    }}
+                                  >
+                                    Approved
+                                  </th>
                                 </tr>
                               </thead>
                               <tbody>

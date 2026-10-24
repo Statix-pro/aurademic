@@ -216,6 +216,14 @@ function checkTokens(file, text, exempt) {
     if (!exempt.has(line))
       report(file, line, 'deleted-token', `${m[0]} was removed — use --font-size-*`);
   }
+  // And the reverse: a size token in a colour property silently falls back to the inherited colour.
+  const colourWithSize =
+    /\b(color|background(?:-color)?|border(?:-[a-z]+)?-color|fill|stroke|backgroundColor|borderColor)\s*:\s*'?var\(--font-size-[\w-]+\)/g;
+  for (const m of text.matchAll(colourWithSize)) {
+    const line = lineAt(text, m.index);
+    if (!exempt.has(line))
+      report(file, line, 'size-as-colour', `${m[0].trim()} — --font-size-* is a size token`);
+  }
   // --text-* names are colours; one inside a size is invalid at computed-value time.
   const sizeWithColour = /(font-size|fontSize)\s*:[^;,}\n]*var\(--text-[\w-]+\)/g;
   for (const m of text.matchAll(sizeWithColour)) {

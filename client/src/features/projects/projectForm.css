@@ -1256,7 +1256,7 @@
 
 .pf-table th {
   color: var(--primary-color, #0069ab);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   font-size: var(--font-size-secondary);
   white-space: nowrap;
   text-align: center;

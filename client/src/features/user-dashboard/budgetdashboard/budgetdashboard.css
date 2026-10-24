@@ -172,7 +172,7 @@
 
   padding: 14px 12px;
   text-align: left;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   font-size: var(--font-size-secondary);
   border-bottom: 2px solid #d7f1e3;
 }
@@ -278,7 +278,7 @@
   background: #fff4d6;
   padding: 10px 12px;
   text-align: left;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   color: #8f6600;
   font-size: var(--font-size-secondary);
   border-bottom: 2px solid #f3e8a5;

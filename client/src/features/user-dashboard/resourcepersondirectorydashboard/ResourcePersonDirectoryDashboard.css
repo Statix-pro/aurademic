@@ -151,7 +151,7 @@
 .rpd-table th {
   background: #e0f0fc;
   color: #0069ab;
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   font-size: var(--font-size-secondary);
   padding: 12px 14px;
   border-bottom: 2px solid #bee3f8;
@@ -350,7 +350,7 @@
 .rpd-directory .custom-table thead th {
   font-size: var(--font-size-secondary);
   line-height: var(--leading-secondary);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
 }
 
 .rpd-directory .custom-table tbody td {

@@ -1473,6 +1473,7 @@ const Dashboard: React.FC = () => {
                             {...provided.draggableProps}
                             {...provided.dragHandleProps}
                             style={{
+                              fontSize: 'var(--font-size-secondary)',
                               ...provided.draggableProps.style,
                               opacity: snapshot.isDragging ? 0.8 : 1,
                               cursor: snapshot.isDragging ? 'grabbing' : 'grab',

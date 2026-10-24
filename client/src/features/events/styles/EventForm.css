@@ -126,7 +126,7 @@
 .event-sponsor-table th {
   text-align: left;
   font-size: var(--font-size-secondary);
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   color: #555;
   padding-bottom: 8px;
 }
@@ -918,7 +918,7 @@
 .event-sponsor-table th {
   text-align: left;
   font-size: var(--font-size-secondary);
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   color: #555;
   padding-bottom: 8px;
 }
@@ -2026,7 +2026,7 @@ input:checked + .event-slider:before {
 
 .event-finance-table th {
   background: #f5f5f5;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
 }
 
 .event-finance-upload-section {
@@ -2633,7 +2633,7 @@ input:checked + .event-slider:before {
 
 .coordinator-table th {
   background-color: #f5f5f5;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
 }
 
 .coordinator-table input {
@@ -2798,7 +2798,7 @@ input:checked + .event-slider:before {
 
 .participants-table th {
   background: #f5f7fa;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   color: #333;
 }
 
@@ -3318,7 +3318,7 @@ input:checked + .slider:before {
 
 .finance-table th {
   background: #f5f5f5;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
 }
 
 .finance-upload-section {
@@ -3790,7 +3790,7 @@ input:checked + .slider:before {
 }
 
 .event-card-section table th {
-  font-weight: 600;
+  font-weight: var(--weight-bold);
 }
 
 .event-input[type='date'],
@@ -3830,7 +3830,7 @@ input:checked + .slider:before {
 
 .event-resource-person-table th {
   background-color: #f9f9f9;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
 }
 
 .event-resource-person-table input {

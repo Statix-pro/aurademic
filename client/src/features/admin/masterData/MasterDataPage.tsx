@@ -892,7 +892,7 @@ export default function MasterDataPage() {
                 >
                   Status {renderSortIcon('is_active', deptSort)}
                 </th>
-                <th style={{ width: 150 }}>Actions</th>
+                <th style={{ fontSize: 'var(--font-size-secondary)', width: 150 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1227,7 +1227,7 @@ export default function MasterDataPage() {
                 >
                   Status {renderSortIcon('is_active', entitySort)}
                 </th>
-                <th style={{ width: 150 }}>Actions</th>
+                <th style={{ fontSize: 'var(--font-size-secondary)', width: 150 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1591,7 +1591,7 @@ export default function MasterDataPage() {
                   >
                     Status {renderSortIcon('status', empSort)}
                   </th>
-                  <th style={{ width: 150 }}>Actions</th>
+                  <th style={{ fontSize: 'var(--font-size-secondary)', width: 150 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>

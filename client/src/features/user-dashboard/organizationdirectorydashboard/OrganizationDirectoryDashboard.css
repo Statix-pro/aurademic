@@ -47,7 +47,7 @@
   padding: var(--table-cell-padding) !important;
   font-size: var(--font-size-secondary) !important;
   line-height: var(--leading-secondary);
-  font-weight: var(--weight-semibold) !important;
+  font-weight: var(--weight-bold) !important;
 }
 
 .org-table td {

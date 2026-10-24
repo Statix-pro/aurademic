@@ -2565,13 +2565,21 @@ const Budget: React.FC = () => {
               <table className="budgetEntryTable">
                 <thead>
                   <tr>
-                    <th style={{ width: '5%' }}>S.No</th>
-                    <th style={{ width: '25%' }}>Budget Head</th>
-                    <th style={{ width: '25%' }}>Sub Head</th>
-                    <th style={{ width: '12%' }}>Amount</th>
-                    <th style={{ width: '8%' }}>Qty</th>
-                    <th style={{ width: '15%' }}>Total (₹)</th>
-                    <th style={{ width: '13%' }}>Actions</th>
+                    <th style={{ fontSize: 'var(--font-size-secondary)', width: '5%' }}>S.No</th>
+                    <th style={{ fontSize: 'var(--font-size-secondary)', width: '25%' }}>
+                      Budget Head
+                    </th>
+                    <th style={{ fontSize: 'var(--font-size-secondary)', width: '25%' }}>
+                      Sub Head
+                    </th>
+                    <th style={{ fontSize: 'var(--font-size-secondary)', width: '12%' }}>Amount</th>
+                    <th style={{ fontSize: 'var(--font-size-secondary)', width: '8%' }}>Qty</th>
+                    <th style={{ fontSize: 'var(--font-size-secondary)', width: '15%' }}>
+                      Total (₹)
+                    </th>
+                    <th style={{ fontSize: 'var(--font-size-secondary)', width: '13%' }}>
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

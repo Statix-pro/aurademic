@@ -284,9 +284,9 @@ export default function OrganizationApprovalPage() {
         .organization-approval-header-controls > div[style*='min-width'] { height: var(--control-height); }
         .organization-approval-card .row.g-3 > [class*='col-'] > .card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); }
         .organization-approval-card .row.g-3 > [class*='col-'] > .card .card-body { padding: 14px 20px; }
-        .organization-approval-table.custom-table { min-width: 980px; margin-bottom: 0; table-layout: auto; color: var(--font-size-body); font-size: var(--font-size-body); }
-        .organization-approval-table.custom-table thead th { padding: 15px 10px; background: #eef5fd; border-bottom: 1px solid #cddceb; color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: 600; text-align: left; }
-        .organization-approval-table.custom-table tbody td { padding: 16px 10px; border-color: #e1e8f0; color: var(--font-size-body); font-size: var(--font-size-body); line-height: var(--leading-body); vertical-align: middle; }
+        .organization-approval-table.custom-table { min-width: 980px; margin-bottom: 0; table-layout: auto; color: var(--text-body); font-size: var(--font-size-body); }
+        .organization-approval-table.custom-table thead th { padding: 15px 10px; background: #eef5fd; border-bottom: 1px solid #cddceb; color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); text-align: left; }
+        .organization-approval-table.custom-table tbody td { padding: 16px 10px; border-color: #e1e8f0; color: var(--text-body); font-size: var(--font-size-body); line-height: var(--leading-body); vertical-align: middle; }
         .organization-approval-table.custom-table tbody td:first-child { color: var(--text-strong); font-weight: 700; }
         .organization-approval-table.custom-table tbody td:first-child strong { font-weight: 700; }
         .organization-details-modal .modal-title { font-size: var(--font-size-modal-title); line-height: var(--leading-modal-title); font-weight: 600; }
