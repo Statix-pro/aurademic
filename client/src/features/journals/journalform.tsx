@@ -11,7 +11,6 @@ import ViewModeBanner from '../../shared/components/ui/ViewModeBanner';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 import './journalform.css';
-import '../../shared/styles/forms.css';
 import '../../shared/components/ui/common.css';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import 'bootstrap/dist/js/bootstrap.bundle.min.js';

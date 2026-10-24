@@ -1,78 +1,7 @@
-/* Shared blue-themed form styles for Journal and Project forms */
-
-/* Body and container */
-.journal-form-body {
-  background-color: #f0f6ff;
-  color: #4f4f6e;
-}
-
-.journal-form-container {
-  padding-top: 2rem;
-  padding-bottom: 2rem;
-  max-width: 1200px;
-}
-
-/* Section titles */
-.journal-form-body .form-section-title,
-.form-card .form-section-title {
-  color: #0069ab !important;
-  font-size: var(--font-size-section-title);
-  line-height: var(--leading-section-title);
-  font-weight: 600;
-}
-
-/* Category Toggle Buttons */
-.category-toggle-container {
-  display: flex;
-  justify-content: center;
-  gap: 4px;
-  margin-bottom: 2rem;
-  background-color: #e1f0ff;
-  border-radius: 10px;
-  padding: 4px;
-  width: fit-content;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* A segmented toggle: chip-sized, as wide as its text. */
-.category-toggle-container button {
-  border: none;
-  background-color: transparent;
-  color: #5d6b8a;
-  height: var(--chip-height);
-  padding: 0 14px;
-  border-radius: var(--border-radius-sm);
-  font-size: var(--font-size-secondary);
-  font-weight: 600;
-  white-space: nowrap;
-  transition: all 0.3s ease;
-}
-
-.category-toggle-container button.active {
-  background-color: #0069ab;
-  color: #fff;
-  box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
-}
-
-/* Cards */
-.form-card,
-.form-card-dashed {
-  background-color: #fff;
-  border-radius: 20px;
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-}
-
-.form-card-dashed {
-  background-color: #fff;
-  border: 2px dashed #b3d9ff;
-}
-
-.form-card-dashed.container-gap {
-  margin-top: 20px;
-}
+/* The portal's one Bootstrap theme: colours, form controls, buttons, modals, tables, badges,
+   alerts and Bootstrap utilities, sized to AGENTS.md §17. Loaded after Bootstrap and after every
+   feature stylesheet (see index.css), so on equal specificity these win. Change Bootstrap's look
+   here, for every screen — never from a feature file. */
 
 /* Form elements */
 .form-label {
@@ -116,37 +45,6 @@ select.form-control,
 .form-control:disabled {
   background-color: #f5f5f5;
   color: #999;
-}
-
-/* Buttons */
-.btn-submit-approval {
-  background-color: #0069ab;
-  color: white;
-  border: none;
-  height: var(--control-height);
-  min-width: var(--button-min-width);
-  padding: 0 var(--button-padding-x);
-  font-size: var(--font-size-body);
-  border-radius: var(--border-radius-md);
-  cursor: pointer;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 15px rgba(0, 105, 171, 0.4);
-}
-
-.btn-submit-approval:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 105, 171, 0.5);
-  background-color: #005492;
-}
-
-/* Neutral grey reads as "not available"; a light blue looked like a faded primary. */
-.btn-submit-approval:disabled {
-  background-color: #e6ebf2;
-  color: #94a3b8;
-  cursor: not-allowed;
-  box-shadow: none;
-  transform: none;
 }
 
 .btn-primary {
@@ -200,28 +98,6 @@ select.form-control,
 .form-check-input:focus {
   border-color: #0069ab !important;
   box-shadow: 0 0 0 0.25rem rgba(0, 105, 171, 0.25) !important;
-}
-
-/* Custom radio/checkbox accents */
-.radio-item label::before {
-  background-color: #fff !important;
-}
-
-.radio-item input[type='radio']:checked + label::before {
-  border-color: #0069ab !important;
-}
-
-.radio-item label::after {
-  background-color: #0069ab !important;
-}
-
-.checkbox-item label::before {
-  background-color: #fff !important;
-}
-
-.checkbox-item input[type='checkbox']:checked + label::before {
-  background-color: #0069ab !important;
-  border-color: #0069ab !important;
 }
 
 /* Native accents */
@@ -550,4 +426,157 @@ input[type='checkbox'],
 .modal-body .form-control.is-valid {
   border-color: #28a745 !important;
   box-shadow: 0 0 0 0.15rem rgba(40, 167, 69, 0.25) !important;
+}
+
+/* Bootstrap overrides */
+.container-fluid {
+  padding-left: 20px;
+  padding-right: 20px;
+}
+
+.fs-1,
+.fs-2,
+.fs-3 {
+  font-size: var(--font-size-page-title) !important;
+}
+
+.fs-4 {
+  font-size: var(--font-size-modal-title) !important;
+}
+
+.fs-5 {
+  font-size: var(--font-size-section-title) !important;
+}
+
+.fs-6 {
+  font-size: var(--font-size-body) !important;
+}
+
+.fw-light,
+.fw-lighter {
+  font-weight: var(--weight-regular) !important;
+}
+
+.fw-bolder {
+  font-weight: var(--weight-bold) !important;
+}
+
+.invalid-feedback {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.table {
+  --bs-table-color: var(--text-body);
+}
+
+.dropdown-menu {
+  --bs-dropdown-font-size: var(--font-size-body);
+}
+
+.pagination {
+  --bs-pagination-font-size: var(--font-size-body);
+}
+
+.tooltip {
+  --bs-tooltip-font-size: var(--font-size-secondary);
+}
+
+.popover {
+  --bs-popover-font-size: var(--font-size-body);
+  --bs-popover-header-font-size: var(--font-size-body);
+}
+
+.accordion-button {
+  font-size: var(--font-size-body);
+}
+
+.nav-link {
+  font-size: var(--font-size-body);
+}
+
+.modal-title {
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+}
+
+/* Buttons: every .btn is a 40px control with 14px semibold text; .btn-sm is the 32px
+   secondary size. Heights come from padding around a fixed line height, so a button
+   keeps Bootstrap's inline-block layout and still lines up with the inputs beside it. */
+.btn {
+  --bs-btn-font-size: var(--font-size-body);
+  --bs-btn-line-height: var(--leading-body);
+  --bs-btn-font-weight: var(--weight-semibold);
+  --bs-btn-padding-x: 1rem;
+  --bs-btn-padding-y: calc((var(--control-height) - var(--leading-body) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-md);
+}
+
+.btn-sm,
+.btn-group-sm > .btn {
+  --bs-btn-font-size: var(--font-size-secondary);
+  --bs-btn-line-height: var(--leading-secondary);
+  --bs-btn-padding-x: 0.75rem;
+  --bs-btn-padding-y: calc((var(--button-sm-height) - var(--leading-secondary) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-sm);
+}
+
+.btn-lg,
+.btn-group-lg > .btn {
+  --bs-btn-font-size: var(--font-size-body);
+  --bs-btn-line-height: var(--leading-body);
+  --bs-btn-padding-x: var(--button-padding-x);
+  --bs-btn-padding-y: calc((var(--control-height) - var(--leading-body) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-md);
+}
+
+.card {
+  border: 1px solid rgba(0, 0, 0, 0.125);
+  border-radius: 0.375rem;
+  box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+}
+
+.card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+  font-weight: 600;
+}
+
+.spinner-border-sm {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Alert styles */
+.alert {
+  border: 1px solid transparent;
+  border-radius: 0.375rem;
+  margin-bottom: 1rem;
+  padding: 0.75rem 1.25rem;
+  position: relative;
+}
+
+.alert-success {
+  background-color: #d4edda;
+  border-color: #c3e6cb;
+  color: #155724;
+}
+
+.alert-danger {
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+.alert-warning {
+  background-color: #fff3cd;
+  border-color: #ffeaa7;
+  color: #856404;
+}
+
+.alert-info {
+  background-color: #d1ecf1;
+  border-color: #bee5eb;
+  color: #0c5460;
 }

@@ -328,7 +328,7 @@
 }
 
 /* Help text inside fields takes the input's own body size (AGENTS.md §17 placeholder
-   role); the grey comes from --placeholder-color (shared/styles/index.css). */
+   role); the grey comes from --placeholder-color (shared/styles/base.css). */
 .journal-form-body input::placeholder,
 .journal-form-body textarea::placeholder,
 .journal-form-body .react-select__placeholder {
@@ -336,7 +336,7 @@
 }
 
 /* The same size for the other two kinds of hint here: a select showing its empty first
-   option (greyed portal-wide in shared/styles/index.css), and a date input's dd-mm-yyyy,
+   option (greyed portal-wide in shared/styles/base.css), and a date input's dd-mm-yyyy,
    which the browser draws and CSS cannot tell from a date — the form marks empty ones
    with data-empty (see journalform.tsx). On a disabled date, as for other hints, none. */
 .journal-form-body select:has(option[value='']:checked) {
@@ -878,7 +878,7 @@
 }
 
 /* Bootstrap component theming (alerts, buttons, modals, tables, badges) lives in
-   shared/styles/forms.css. It sat here unscoped, so this file restyled every screen
+   shared/styles/bootstrap-theme.css. It sat here unscoped, so this file restyled every screen
    in the portal; only the journal's own controls remain below. */
 
 /* The journal form's submit buttons share one blue, whatever their variant. */
@@ -1276,8 +1276,93 @@
   background: #f5f8fd;
 }
 
-/* This file and forms.css cap every .modal-dialog at 500px for the compact alerts;
+/* The portal theme (shared/styles/bootstrap-theme.css) caps every .modal-dialog at 500px for the compact alerts;
    the updates form and history table need the width the old panel had. */
 .journal-updates-modal .modal-dialog {
   max-width: min(960px, calc(100% - 32px));
+}
+
+/* The journal form's page, cards, submit button and radio accents. They used to sit in the
+   shared stylesheet but only this form uses them. */
+.journal-form-body {
+  background-color: #f0f6ff;
+  color: #4f4f6e;
+}
+
+.journal-form-container {
+  padding-top: 2rem;
+  padding-bottom: 2rem;
+  max-width: 1200px;
+}
+
+/* Section titles */
+.journal-form-body .form-section-title,
+.form-card .form-section-title {
+  color: #0069ab !important;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: 600;
+}
+
+/* Cards */
+.form-card,
+.form-card-dashed {
+  background-color: #fff;
+  border-radius: 20px;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.form-card-dashed {
+  background-color: #fff;
+  border: 2px dashed #b3d9ff;
+}
+
+.form-card-dashed.container-gap {
+  margin-top: 20px;
+}
+
+/* Buttons */
+.btn-submit-approval {
+  background-color: #0069ab;
+  color: white;
+  border: none;
+  height: var(--control-height);
+  min-width: var(--button-min-width);
+  padding: 0 var(--button-padding-x);
+  font-size: var(--font-size-body);
+  border-radius: var(--border-radius-md);
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 105, 171, 0.4);
+}
+
+.btn-submit-approval:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 105, 171, 0.5);
+  background-color: #005492;
+}
+
+/* Neutral grey reads as "not available"; a light blue looked like a faded primary. */
+.btn-submit-approval:disabled {
+  background-color: #e6ebf2;
+  color: #94a3b8;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+/* Custom radio/checkbox accents */
+.radio-item label::before {
+  background-color: #fff !important;
+}
+
+.radio-item input[type='radio']:checked + label::before {
+  border-color: #0069ab !important;
+}
+
+.radio-item label::after {
+  background-color: #0069ab !important;
 }

@@ -354,6 +354,22 @@ function checkTsx(file) {
   checkTokens(file, text, exempt);
   checkRules(file, stripCssComments(embeddedCss(text)), exempt);
 
+  // The shared layer is imported once, by main.tsx through index.css, after every feature
+  // stylesheet. Imported from a feature it loads early and feature CSS outranks it.
+  if (!file.endsWith(`${path.sep}main.tsx`)) {
+    for (const m of text.matchAll(/import\s+['"][^'"]*shared\/styles\/[^'"]+\.css['"]/g)) {
+      const line = lineAt(text, m.index);
+      if (!exempt.has(line)) {
+        report(
+          file,
+          line,
+          'shared-style-import',
+          'shared/styles is imported once, from main.tsx — remove this import',
+        );
+      }
+    }
+  }
+
   // Inline uppercase follows the same rule as CSS: only as a bold, letter-spaced label.
   for (const m of text.matchAll(/textTransform\s*:\s*['"`]uppercase['"`]/g)) {
     const line = lineAt(text, m.index);
@@ -463,6 +479,7 @@ const SELF_TEST = {
       "    <span style={{ fontSize: 'var(--font-size-secondary)' }} />", // 11: ok
       '  </div>', // 12
       ');', // 13
+      "import '../../shared/styles/base.css';", // 14: shared-style-import
     ].join('\n'),
     expect: [
       'Fixture.tsx:4 global-selector',
@@ -471,6 +488,7 @@ const SELF_TEST = {
       'Fixture.tsx:8 type-size',
       'Fixture.tsx:8 type-weight',
       'Fixture.tsx:9 uppercase',
+      'Fixture.tsx:14 shared-style-import',
     ],
   },
 };

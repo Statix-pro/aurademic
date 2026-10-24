@@ -3364,7 +3364,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                   {enableSecondaryFilter && (
                     <select
                       className="fw-control"
-                      // The empty option ("All …") is a real filter choice, not a hint; see shared/styles/index.css.
+                      // The empty option ("All …") is a real filter choice, not a hint; see shared/styles/base.css.
                       data-empty-is-value
                       value={secondaryFilter}
                       onChange={(e) => setSecondaryFilter(e.target.value)}

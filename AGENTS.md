@@ -467,7 +467,8 @@ aurademic/
 │       │   │   └── ui/                  # Custom* design-system components
 │       │   ├── hooks/                   # budgetCatalogStore, useBudgetCatalog, usePayeeDirectory
 │       │   ├── pages/workflow/          # shared approval pages
-│       │   ├── styles/  types/
+│       │   ├── styles/                  # variables.css, bootstrap-theme.css, base.css (via index.css)
+│       │   ├── types/
 │       │   └── utils/                   # authenticityUtility, permissionUtils, csvExportUtils, …
 │       └── types/                       # top-level interfaces (User, Author, …)
 ├── server/
@@ -621,7 +622,7 @@ Basis: dense desktop admin forms, checked against primary sources — Bootstrap 
 | Text / date / search input, `CustomDropdown`    | 40px   | 14px                   | 400                  | 12px                     | 12px   | `--control-height`, `--control-padding-x`                                                 |
 | Field label                                     | —      | 13px                   | 600                  | —                        | —      | 6px gap to its control                                                                    |
 | Form action button (Save / Update / Cancel)     | 40px   | 14px                   | 600                  | 24px                     | 12px   | min-width 120px; primary and secondary match; modal footer and confirm-dialog buttons too |
-| Toolbar / page button (any other `.btn`)        | 40px   | 14px                   | 600                  | 16px                     | 12px   | Bootstrap's `.btn` default, set in `index.css`                                            |
+| Toolbar / page button (any other `.btn`)        | 40px   | 14px                   | 600                  | 16px                     | 12px   | Bootstrap's `.btn` default, set in `bootstrap-theme.css`                                  |
 | Small button (`.btn-sm`, `size="sm"`)           | 32px   | 13px                   | 600                  | 12px                     | 8px    | `--button-sm-height`                                                                      |
 | Chip and segmented toggle (Category, Gender, …) | 32px   | 13px                   | 600                  | 14px                     | 8px    | `--chip-height`; 8px gap; width = its text, never `flex: 1`                               |
 | Table row icon action (Edit / View)             | 32px   | icon 15px              | —                    | 0 (32×32 square)         | 8px    | `--icon-action-size`                                                                      |
@@ -643,12 +644,13 @@ Basis: dense desktop admin forms, checked against primary sources — Bootstrap 
   markup (it reaches that screen too). Collisions that predate the guard — duplicated stylesheets
   (projects/publications, events/guest-house, the two budget logs) — sit in
   `client/scripts/ui-standard-baseline.json`, which may only shrink: a full run fails on a new
-  collision and on an entry that no longer collides. A genuine exception — an icon glyph, the printed A4
+  collision and on an entry that no longer collides. It also fails on a feature that imports a
+  `shared/styles/` file. A genuine exception — an icon glyph, the printed A4
   form — carries `ui-standard-allow: <reason>` on or above the line, or sits between
   `ui-standard-allow-start: <reason>` and `ui-standard-allow-end`. Never add a marker just to go
   green; it is reviewed like an `eslint-disable`.
 - **Touch screens:** controls keep these desktop sizes. Under `@media (pointer: coarse)`,
-  `index.css` gives every button, close button and page link an invisible tap area of at least
+  `base.css` gives every button, close button and page link an invisible tap area of at least
   `--touch-target` (44px, Apple HIG / Carbon), and enlarges checkboxes. A screen that draws its own
   `::before` on a button must keep that working — don't add a second tap-area mechanism per page.
 - Controls on one row line up: same height, same top edge. A toggle group sits in a
@@ -732,10 +734,20 @@ in effect. A feature file therefore styles only its own classes; a class name an
 uses (`.add-btn`, `.delete-btn`, `.formGroup`) is scoped under the screen's root class, and a screen
 that reuses another's stylesheet imports it explicitly. It never targets a bare element (`body`, `*`, `h2`, `table`, `button[type='submit']`) or a
 Bootstrap class (`.btn`, `.btn-primary`, `.modal-*`, `.table`, `.badge`, `.form-control`,
-`.text-muted`) on its own. The portal's Bootstrap theme lives in one place,
-`shared/styles/forms.css` (colours, modals, tables, badges, alerts) and `shared/styles/index.css`
-(type roles, button sizes, touch and reduced-motion layers); change it there, for everyone.
-`shared/styles/*` loads after all feature CSS, so on equal specificity it wins.
+`.text-muted`) on its own.
+
+The shared layer is three files under `shared/styles/`, imported in this order by `index.css`
+(which `main.tsx` imports once, after every feature stylesheet, so on equal specificity they win):
+
+| File                  | Holds                                                                                                                          |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `variables.css`       | the design tokens — sizes, type roles, colours, spacing                                                                        |
+| `bootstrap-theme.css` | Bootstrap's look for every screen: colours, form controls, button sizes, modals, tables, badges, alerts, utilities             |
+| `base.css`            | element defaults: reset, the one font, heading type roles, tabular figures, touch and reduced-motion layers, placeholder hints |
+
+The shared `Custom*` components keep their own styles in `shared/components/ui/common.css`. A rule
+only one screen needs lives in that screen's stylesheet, never in `shared/styles/`. Never import a
+`shared/styles/` file from a feature: it would load early and lose to the feature CSS after it.
 
 **`CustomDropdown` styles merge shallowly** (`{ ...defaultStyles, ...customStyles }`): a custom
 `control` replaces the whole default — 12px radius, border colours and focus ring are lost and
