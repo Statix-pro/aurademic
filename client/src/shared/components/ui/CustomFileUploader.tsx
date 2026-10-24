@@ -51,6 +51,9 @@ const CustomFileUploader: React.FC<CustomFileUploaderProps> = ({
     if (selectedFile) {
       onChange(selectedFile);
     }
+    // A file input only fires change when its value changes, so without this, choosing
+    // the same file again (after a rejection or a removal) would do nothing.
+    e.target.value = '';
   };
 
   const handleButtonClick = () => {

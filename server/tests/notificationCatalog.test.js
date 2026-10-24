@@ -57,9 +57,27 @@ describe('notificationCatalog', () => {
       'events',
       'expenditure',
       'finance',
+      'master_data',
       'projects',
       'publications',
     ]);
+  });
+
+  it('declares directory notification recipient classes in the catalog', () => {
+    for (const moduleKey of ['organization_directory', 'resource_person_directory']) {
+      expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.submitted`);
+      expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.resubmitted`);
+      expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.approved`);
+      expect(NOTIFICATION_TYPES).toHaveProperty(`${moduleKey}.rejected`);
+      expect(NOTIFICATION_TYPES[`${moduleKey}.submitted`].recipients).toEqual([
+        `approver:${moduleKey}`,
+      ]);
+      expect(NOTIFICATION_TYPES[`${moduleKey}.resubmitted`].recipients).toEqual([
+        `approver:${moduleKey}`,
+      ]);
+      expect(NOTIFICATION_TYPES[`${moduleKey}.approved`].recipients).toEqual(['anyone']);
+      expect(NOTIFICATION_TYPES[`${moduleKey}.rejected`].recipients).toEqual(['anyone']);
+    }
   });
 
   it.each(entries)('%s declares the metadata the preferences screen needs', (_type, entry) => {
@@ -203,6 +221,23 @@ describe('notificationCatalog', () => {
       expect(returned.link).toBe('/finance/42/edit');
       expect(returned.severity).toBe('warning');
       expect(returned.body).toContain('quotation');
+    });
+
+    // The generic /workflow/:moduleKey queue lists nothing for directories, so an
+    // approver sent there would find no record to act on.
+    it.each([
+      ['organization_directory', '/admin/organization-approval', '/organizationdirectorydashboard'],
+      [
+        'resource_person_directory',
+        '/admin/resource-person-approval',
+        '/resourcepersondirectorydashboard',
+      ],
+    ])('routes %s notifications to the directory pages', (moduleKey, queue, record) => {
+      const data = { ...fullData, moduleKey };
+      expect(renderNotification(`${moduleKey}.submitted`, data, 'approver').link).toBe(queue);
+      expect(renderNotification(`${moduleKey}.resubmitted`, data, 'approver').link).toBe(queue);
+      expect(renderNotification(`${moduleKey}.approved`, data, 'applicant').link).toBe(record);
+      expect(renderNotification(`${moduleKey}.rejected`, data, 'applicant').link).toBe(record);
     });
 
     it('routes expenditure approvers to their own approval page', () => {

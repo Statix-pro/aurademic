@@ -1,0 +1,421 @@
+/* OrganizationDirectory.css - Custom layout matching budget form aesthetic and Canva mockup */
+
+.orgd-form-wrapper {
+  background: #f3f7fb;
+  padding: 8px 0;
+  min-height: calc(100vh - 80px);
+}
+
+.orgd-card {
+  background: #ffffff;
+  border-radius: 20px;
+  max-width: 1150px;
+  margin: 10px auto 24px auto;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+  padding: 32px;
+  box-sizing: border-box;
+}
+
+.orgd-section-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0069ab;
+  margin: 0 0 16px 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.orgd-section-title-line {
+  border: none;
+  border-top: 1.5px solid #dde4ed;
+  margin: 4px 0 20px 0;
+}
+
+/* Category Chips Group */
+.orgd-category-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.orgd-chip {
+  background-color: #ffffff;
+  color: #0069ab;
+  border: 1.5px solid #d6e4f3;
+  /* 32px: the standard chip height (Material/MUI). */
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+}
+
+.orgd-chip:focus-visible {
+  outline: 3px solid #0069ab;
+  outline-offset: 2px;
+}
+
+.orgd-chip:hover {
+  background-color: #f0f6ff;
+  border-color: #0069ab;
+}
+
+.orgd-chip.active {
+  background-color: #0069ab;
+  color: #ffffff;
+  border-color: #0069ab;
+  box-shadow: 0 4px 12px rgba(0, 105, 171, 0.2);
+}
+
+/* Grids and Columns Layout */
+.orgd-split-row {
+  display: flex;
+  gap: 28px;
+  margin-bottom: 8px;
+  align-items: stretch;
+}
+
+.orgd-left-col {
+  flex: 1.5;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.orgd-right-col-box {
+  flex: 1;
+  border: 1.5px solid #d6e4f3;
+  background-color: #f7faff;
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 16px;
+}
+
+.orgd-bottom-box {
+  border: 1.5px solid #d6e4f3;
+  background-color: #f7faff;
+  border-radius: 18px;
+  padding: 20px;
+  display: flex;
+  flex-direction: row;
+  gap: 20px;
+  margin-bottom: 24px;
+  align-items: flex-start;
+}
+
+.orgd-row-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.orgd-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.orgd-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+/* Fields Styling matching budget form */
+.orgd-field {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.orgd-field label {
+  font-size: 13px;
+  color: #495057;
+  margin-bottom: 6px;
+  font-weight: 600;
+  display: block;
+}
+
+.orgd-field label .req {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+/* Scoped under the wrapper so these win over CustomInput's `.form-control.custom-input`
+   and the form keeps its own look, as the resource-person form does. */
+.orgd-form-wrapper .orgd-field input,
+.orgd-form-wrapper .orgd-field select {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid #e0e0e0;
+  /* !important: a global `.form-control { padding: 0.4rem 1rem !important }` otherwise wins. */
+  padding: 0 12px !important;
+  height: var(--control-height);
+  font-size: 14px;
+  background-color: #ffffff;
+  transition: all 0.3s ease;
+  font-family: inherit;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.orgd-form-wrapper .orgd-field input:focus,
+.orgd-form-wrapper .orgd-field select:focus {
+  border-color: #0069ab;
+  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
+/* Toggle Group for Active/Inactive status */
+.orgd-toggle-group {
+  /* As tall as the inputs on its row; the chips inside are category-chip size. */
+  height: var(--control-height);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.orgd-toggle-btn {
+  flex: 0 0 auto;
+  background-color: #ffffff;
+  color: #0069ab;
+  border: 1.5px solid #d6e4f3;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  outline: none;
+  height: 32px;
+}
+
+.orgd-toggle-btn:focus-visible {
+  outline: 3px solid #0069ab;
+  outline-offset: 2px;
+}
+
+.orgd-toggle-btn:hover:not(.active) {
+  background-color: #f0f6ff;
+  border-color: #0069ab;
+}
+
+.orgd-toggle-btn.active {
+  background-color: #0069ab;
+  color: #ffffff;
+  border-color: #0069ab;
+  box-shadow: 0 4px 12px rgba(0, 105, 171, 0.2);
+}
+
+/* Contact Person block */
+.orgd-contact-block {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.orgd-contact-block-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.orgd-contact-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.orgd-add-contact-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid #d6e4f3;
+  background: #ffffff;
+  color: #0069ab;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.orgd-add-contact-btn:hover {
+  background-color: #f0f6ff;
+  border-color: #0069ab;
+}
+
+.orgd-remove-btn {
+  border: none;
+  background: transparent;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.orgd-remove-btn:hover {
+  background-color: #fee2e2;
+}
+
+/* Actions */
+.orgd-actions-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+/* Responsive adjustments */
+@media (max-width: 992px) {
+  .orgd-split-row {
+    flex-direction: column;
+    gap: 20px;
+  }
+  .orgd-row-4 {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .orgd-card {
+    padding: 20px;
+  }
+  .orgd-bottom-box,
+  .orgd-row-2,
+  .orgd-row-3 {
+    grid-template-columns: 1fr;
+  }
+  .orgd-row-4 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Website / LinkedIn: the icon sits inside the input, over its left padding. */
+.orgd-input-icon-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.orgd-input-icon-wrapper .custom-input-group {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.orgd-input-icon-wrapper svg {
+  position: absolute;
+  left: 12px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.orgd-form-wrapper .orgd-input-icon-wrapper input {
+  padding-left: 38px !important;
+}
+
+/* Paired with .custom-btn so they beat both Bootstrap's variants and the global
+   `.btn { color: white }` that leaks from the events stylesheet, which made a light
+   Cancel button white on white. */
+.custom-btn.orgd-btn-save {
+  height: 40px;
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 600;
+  background-color: #0069ab;
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  min-width: 120px;
+  box-shadow: 0 4px 12px rgba(0, 105, 171, 0.25);
+}
+
+.custom-btn.orgd-btn-save:hover {
+  background-color: #0056b3;
+  color: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 105, 171, 0.4);
+}
+
+.custom-btn.orgd-btn-cancel {
+  height: 40px;
+  padding: 0 24px;
+  font-size: 14px;
+  font-weight: 600;
+  background-color: #f1f5f9;
+  color: #475569;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  min-width: 120px;
+}
+
+.custom-btn.orgd-btn-cancel:hover {
+  background-color: #e2e8f0;
+  color: #475569;
+}
+
+/* CustomInput's label otherwise ends with no gap, so its input sat 8px above the inputs
+   whose label is written out (Organization Name keeps a native label for its marker). */
+/* Under the wrapper so it also beats `.modal-body .form-label { margin-bottom: 0 }`
+   when the form is shown in a modal. */
+.orgd-form-wrapper .orgd-field .custom-label {
+  margin-bottom: 6px;
+}
+
+/* In a modal (approval View, dashboard View, Add Organization) the page layout above
+   leaves a viewport-tall grey band around the card: drop it and let the card fill the
+   modal body. */
+.modal .orgd-form-wrapper {
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.modal .orgd-card {
+  margin: 0 auto;
+  box-shadow: none;
+  padding: 8px 4px;
+}
+
+/* ── Typography (AGENTS.md §17 "Typography — the font standard") ── */
+.orgd-section-title {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.orgd-form-wrapper .orgd-field label,
+.orgd-form-wrapper .orgd-field .custom-label,
+.orgd-form-wrapper .orgd-legend {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: var(--text-body);
+}
+
+.orgd-legend {
+  margin-bottom: 6px;
+}

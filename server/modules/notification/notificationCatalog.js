@@ -49,6 +49,10 @@ export const ALLOWED_LINK_PREFIXES = Object.freeze([
   '/event/',
   '/eventdashboard',
   '/access-control',
+  '/admin/organization-approval',
+  '/admin/resource-person-approval',
+  '/organizationdirectorydashboard',
+  '/resourcepersondirectorydashboard',
 ]);
 
 /**
@@ -98,6 +102,8 @@ const MODULE_LABELS = Object.freeze({
   finance: 'Finance request',
   expenditure: 'Expenditure request',
   budget: 'Budget proposal',
+  organization_directory: 'Organization directory submission',
+  resource_person_directory: 'Resource-person directory submission',
 });
 
 export const moduleLabel = (moduleKey) =>
@@ -112,6 +118,8 @@ const recordLink = (d) => {
   if (moduleKey === 'finance') return `/finance/${d.recordId}`;
   if (moduleKey === 'expenditure') return `/expenditure/${d.recordId}`;
   if (moduleKey === 'budget') return `/budget/${d.recordId}`;
+  if (moduleKey === 'organization_directory') return '/organizationdirectorydashboard';
+  if (moduleKey === 'resource_person_directory') return '/resourcepersondirectorydashboard';
   return '/dashboard';
 };
 
@@ -120,6 +128,10 @@ const queueLink = (d) => {
   const moduleKey = asText(d.moduleKey).toLowerCase();
   if (moduleKey === 'expenditure') return '/expenditure/approval';
   if (moduleKey === 'budget') return '/admin/budget';
+  // The generic /workflow/:moduleKey queue is empty for directories: their adapter has
+  // no queue listing, and reviewers work from the dedicated approval pages.
+  if (moduleKey === 'organization_directory') return '/admin/organization-approval';
+  if (moduleKey === 'resource_person_directory') return '/admin/resource-person-approval';
   return `/workflow/${moduleKey || 'finance'}`;
 };
 
@@ -264,6 +276,8 @@ export const NOTIFICATION_TYPES = Object.freeze({
   ...workflowEntries('finance', 'finance'),
   ...workflowEntries('expenditure', 'expenditure'),
   ...workflowEntries('budget', 'budget'),
+  ...workflowEntries('organization_directory', 'master_data'),
+  ...workflowEntries('resource_person_directory', 'master_data'),
 
   /* ---- budget-only transitions, which the generic engine has no analogue for ---- */
 

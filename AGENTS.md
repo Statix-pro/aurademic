@@ -1,6 +1,6 @@
 # AGENTS.md — aurademic (KSRCT Research Portal)
 
-Last updated: Wed Sep 02 2026
+Last updated: Sat Oct 24 2026
 
 **This file is the single source of governance for every AI coding agent working in this
 repository** — Claude Code, OpenAI Codex, Cursor, Gemini CLI, GitHub Copilot, Windsurf, Aider, Zed,
@@ -271,8 +271,9 @@ Verified against the code on the date above. Getting these wrong breaks things q
   `{ error, path, method }`; `middleware/errorMiddleware.js` is the last `app.use`.
 - `expenditureRoutes` is mounted at **two** prefixes — `/api/expenditure` and
   `/api/expenditure-requests`. A change there affects both surfaces.
-- `journalRoutes`, `projectRoutes` and `editRequestRoutes` mount on bare `/api` and declare their
-  own full paths; the rest mount under a prefix.
+- `journalRoutes`, `projectRoutes`, `editRequestRoutes`, `organizationDirectoryRoutes` and
+  `resourcepersonDirectoryRoutes` mount on bare `/api` and declare their own full paths; the rest
+  mount under a prefix.
 - Swagger mounts **only** when `NODE_ENV !== 'production'`.
 - The global rate limiter in `server.js` is **commented out on purpose**, and the same block in
   `accessControlRoutes.js` with it. The portal is reached only from inside the CKG campus network,
@@ -309,7 +310,7 @@ Verified against the code on the date above. Getting these wrong breaks things q
 - All 38 client files that talk to the API go through `authenticityUtility`. There is **no raw
   `fetch` and no bare `axios` left in `client/src`** — `features/admin/masterData/MasterDataPage.tsx`
   was the last exception and was migrated. Keep it that way; there is no precedent to copy.
-- 9 of the 23 `*Routes.js` files call `permissionMiddleware`; the others gate through
+- 11 of the 25 `*Routes.js` files call `permissionMiddleware`; the others gate through
   `adminAuthMiddleware` / `superAdminMiddleware` or handler-level checks. **Verify which applies
   before assuming a given route is protected.**
 - There are only 2 `eslint-disable` comments in the whole codebase. Keep it that way.
@@ -522,6 +523,8 @@ Modules: `accessControl`, `accountOptions`, `adminbudget`, `admindashboard`, `au
 **There is no `/api/journals`, `/api/projects` or `/api/edit-requests` prefix.** `journalRoutes`,
 `projectRoutes` and `editRequestRoutes` mount on bare `/api` and declare their own full paths (§9),
 so those paths exist but the prefixes do not — do not add a route to one expecting it to be scoped.
+The two directory routers mount there too: `/api/organizations`, `/api/resource-persons`,
+`/api/organization-submissions` and `/api/resource-person-submissions` are their own full paths.
 
 To check this list rather than trust it: `server.js` ends in `export default app` and skips
 `listen()` when `NODE_ENV=test`, so the app can be imported and `app._router.stack` walked for the
@@ -595,6 +598,115 @@ Multer stages into `uploads/temp/`; files land in `server/uploads/<category>/`; 
 - Styling is Bootstrap 5 utilities plus component CSS. No CSS-in-JS, no Tailwind.
 - Permission helpers: `shared/utils/permissionUtils.ts` (`isSuperAdmin`, `hasPermission`,
   `hasAnyPermission`, `canAccessAdminArea`, `canAccessBudgetApproval`, `canAccessModuleWorkflow`, …).
+- Uploaded files are served by the **API** origin, not the Vite origin. Build every file link with
+  `authenticityUtility.getBaseURL()` + the stored `/uploads/...` path; a bare `/uploads/...` href
+  opens the SPA in dev.
+
+### UI sizing & layout — the size standard
+
+**These values are fixed. Every new or changed UI follows them exactly; do not invent, round or
+"tune" a size.** A size not in this table is a question for the user (§3), not a judgement call.
+Changing a value here is the user's decision and changes this table first.
+
+Basis: dense desktop admin forms, checked against primary sources — Bootstrap 5 default input 38px
+(`scss/_variables.scss`), IBM Carbon text input 32 / 40 / 48px, MUI `Chip` 32px (small 24px), WCAG
+2.2 SC 2.5.8 minimum target 24×24px (AAA 2.5.5: 44×44px). The portal is used at desks, so the
+44px touch size is not the target.
+
+| Element                                         | Height | Font size              | Weight               | Horizontal padding       | Radius | Other                                                                        |
+| ----------------------------------------------- | ------ | ---------------------- | -------------------- | ------------------------ | ------ | ---------------------------------------------------------------------------- |
+| Text / date / search input, `CustomDropdown`    | 40px   | 14px                   | 400                  | 12px                     | 12px   | via `var(--control-height)`; see note below                                  |
+| Field label                                     | —      | 13px                   | 600                  | —                        | —      | 6px gap to its control                                                       |
+| Form action button (Save / Update / Cancel)     | 40px   | 14px                   | 600                  | 24px                     | 12px   | min-width 120px; primary and secondary match                                 |
+| Chip and segmented toggle (Category, Gender, …) | 32px   | 13px                   | 600                  | 14px                     | 8px    | 8px gap; width = its text, never `flex: 1`                                   |
+| Table row icon action (Edit / View)             | 32px   | icon 15px              | —                    | 0 (32×32 square)         | 8px    |                                                                              |
+| Table inline action (Approve / Reject)          | 28px   | 12px                   | 700                  | 10px                     | 6px    | one line: `white-space: nowrap`, `flex-shrink: 0` — never clipped or wrapped |
+| Header tag (`ADMIN`)                            | 24px   | 12px                   | 700                  | 10px                     | 6px    | a tag, not a button; uppercase                                               |
+| KPI / stat card                                 | 80px   | label 13px, value 24px | label 400, value 700 | 20px (padding 14px 20px) | 14px   | icon tile 40×40px, radius 10px                                               |
+| Spacing between fields                          | —      | —                      | —                    | —                        | —      | 12px column gap, 12px row gap                                                |
+| Modal that hosts a form                         | —      | —                      | —                    | —                        | —      | `.modal-dialog` max-width 1150px                                             |
+
+- **Control height note:** single-line controls take their height from `--control-height` in
+  `shared/styles/variables.css`, never a hard-coded number. The standard is **40px**; the token is
+  still **42px** until the app-wide PR that changes it lands — that is the only accepted
+  deviation, and it is fixed in the token, not per page.
+- Controls on one row line up: same height, same top edge. A toggle group sits in a
+  `--control-height` band with its chips centred, so neighbouring inputs align.
+- Measure in the browser (`getBoundingClientRect`), never eyeball. §6 "UI change" evidence includes
+  the measured heights whenever sizing is touched.
+- Rows that hold variable-width content (toggle groups) wrap (`flex-wrap`) rather than use fixed
+  grid columns — forms are reused in narrower modals, where fixed columns overflow.
+- Header search box and filter dropdown: same height, same corner radius, no react-select indicator
+  separator — they must look like the plain selects on the other list pages.
+- Don't render an empty column: a table's Actions column appears only when a visible row can be
+  acted on.
+
+### Typography — the font standard
+
+**Fixed like the size table: every text role below has one size, line height, weight and colour.
+No in-between sizes (0.92rem, 15.2px, `fs-*` utilities that resolve to something else), no new
+roles without asking (§3).** The users are college teaching and admin staff of every age, reading
+dense forms and tables at a desk, so the floor is set for legibility, not density.
+
+Basis (primary sources): IBM Carbon `body-01` 14/20px, `label-01`/`helper-text-01` 12/16px,
+`heading-02` 16/24px; Material 3 `body-medium` 14/20px, `title-medium` 16/24px, `headline-small`
+24/32px; WCAG 2.2 SC 1.4.3 contrast 4.5:1 for normal text, 3:1 for large text (≥24px, or ≥18.5px
+bold). Helper and secondary text are 13px here, one step above Carbon's 12px, because of the
+audience.
+
+| Role                     | Used for                                                             | Size                  | Line height     | Weight | Colour (contrast on white)                                                                    |
+| ------------------------ | -------------------------------------------------------------------- | --------------------- | --------------- | ------ | --------------------------------------------------------------------------------------------- |
+| Page title               | the page heading ("Organization Request")                            | 24px                  | 32px            | 700    | `--text-strong` (15.7:1)                                                                      |
+| Modal title              | `CustomModal` header                                                 | 18px                  | 24px            | 600    | `--primary-color` (5.8:1)                                                                     |
+| Section title            | card heading ("Category", "Personal Details")                        | 16px                  | 24px            | 600    | `--primary-color`                                                                             |
+| Sub-section title        | group inside a card ("Contact Details", "Profession Details")        | 14px                  | 20px            | 600    | `--primary-color`                                                                             |
+| Item title               | the title of a box inside a section ("Photo", "Resume" upload boxes) | 14px                  | 20px            | 600    | `--text-strong`                                                                               |
+| **Primary text**         | table cells, input values, body copy                                 | 14px                  | 20px            | 400    | `--text-body` (12.2:1)                                                                        |
+| Primary text, emphasised | the record's name in a row, KPI value                                | 14px (KPI value 24px) | 20px (KPI 28px) | 700    | `--text-strong`                                                                               |
+| **Secondary text**       | the meta line under a name (city, designation), KPI label            | 13px                  | 18px            | 400    | `--text-soft` (6.4:1)                                                                         |
+| **Tertiary text**        | timestamps, counts, footnotes                                        | 12px                  | 16px            | 400    | `--text-muted` (4.7:1) — white surfaces only                                                  |
+| Placeholder              | input and dropdown placeholder, empty date                           | 14px                  | 20px            | 400    | `--placeholder-color` (#8a95a4, 3.0:1) — the owner's 2026-10-22 decision, see `variables.css` |
+| Field label              | above every control                                                  | 13px                  | 18px            | 600    | `--text-body`                                                                                 |
+| **Help text**            | hint under a field or upload ("JPG, PNG (Maximum 2 MB)")             | 13px                  | 18px            | 400    | `--text-soft`                                                                                 |
+| Error text               | validation message under a field                                     | 13px                  | 18px            | 500    | `--error-color` (4.5:1) — white surfaces only                                                 |
+| Table header             | `<th>`                                                               | 13px                  | 18px            | 600    | `--primary-color`; uppercase allowed, 0.02em tracking                                         |
+| Button text              | form actions                                                         | 14px                  | 20px            | 600    | per variant                                                                                   |
+| Chip / toggle text       | category chips, segmented toggles                                    | 13px                  | —               | 600    | per state                                                                                     |
+| Status pill              | Pending / Approved / Rejected                                        | 12px                  | —               | 600    | status tint pair from `variables.css`                                                         |
+| Inline table action      | Approve / Reject                                                     | 12px                  | —               | 700    | white on the variant fill                                                                     |
+
+- **12px is the floor.** Nothing renders smaller, anywhere — not tags, not footnotes.
+- **Anything a user must read to complete a task is ≥14px** (values, table cells, body copy);
+  13px is for labels, help, secondary and error text only.
+- Line heights apply to free-flowing text. Fixed-height controls (inputs, buttons, chips, pills)
+  centre their text in the height from the size table; their line height is not checked.
+- Weights: 400, 500, 600, 700 only. Uppercase only for table headers and tags.
+- Every text colour meets WCAG AA 4.5:1 on its actual background, with one deliberate exception:
+  placeholders use `--placeholder-color` (3.0:1) so a hint never reads as a typed value — the
+  owner's decision of 2026-10-22, recorded in `shared/styles/variables.css`. Don't darken it
+  per page. `--text-muted` and
+  `--error-color` drop below 4.5:1 on the tinted panels (`#f3f7fb`, `#f0f6ff`), so on those use
+  `--text-soft` / a darker red instead.
+- Code may write sizes as rem (14px = 0.875rem at the 16px root); the rendered px must match this
+  table, and §6 evidence includes the measured `font-size` when text is touched.
+
+### UI pitfalls
+
+**Global CSS traps — scope around them, don't edit them from a feature PR:**
+
+| Rule                                                              | Defined in                                     | Effect                                                                                          |
+| ----------------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `.btn { color: white }`                                           | `features/events/styles/EventForm.css` (leaks) | Outline/light/link `CustomButton`s render white-on-white. Pair `.custom-btn.<your-class>`.      |
+| `.form-control, .form-select { padding: 0.4rem 1rem !important }` | `shared/styles/forms.css`                      | Page padding rules lose. Scoped overrides need `!important` on padding.                         |
+| `.modal-body .form-label { margin-bottom: 0 }`                    | `shared/styles/forms.css`                      | `CustomInput` labels lose their gap inside modals; scope the label rule under the form wrapper. |
+
+**`CustomDropdown` styles merge shallowly** (`{ ...defaultStyles, ...customStyles }`): a custom
+`control` replaces the whole default — 12px radius, border colours and focus ring are lost and
+react-select falls back to square 4px corners. Any `control` override restates them.
+
+**Forms shown in a modal** (View, Add from another form, approval pages) must not carry page layout:
+no viewport `min-height`, page background or outer card margins inside `.modal`, and the modal is
+widened (`.modal-dialog { max-width: 1150px }`) so the form's columns fit.
 
 ### Route guards (`shared/components/ProtectedRoute.tsx`)
 
@@ -607,6 +719,7 @@ Multer stages into `uploads/temp/`; files land in `server/uploads/<category>/`; 
 | `FinanceWorkflowRoute`     | Finance workflow permission        |
 | `ExpenditureApprovalRoute` | Expenditure approval permission    |
 | `ModuleWorkflowRoute`      | General module workflow permission |
+| `DirectoryApprovalRoute`   | That directory's review permission |
 
 ---
 
@@ -654,6 +767,7 @@ bottom; tested against a restored dump; dump refreshed after significant changes
 | Events       | `events`, `pre_events`, `participants`, `resource_persons`, `events_uploads` — **not created by `structure.sql` or any migration**; they exist only in `schema/legacy/04_events.sql`, so the events module has no schema on a fresh database                                                                                                                                                                                                                                                                                                      |
 | Workflow     | `workflow_actions`, `workflow_stage_policies`, `approval_flow_config`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Notification | `notification_events`, `notifications`, `notification_deliveries`, `notification_preferences`, `push_subscriptions` — created by `migrations/20260902_create_notification_system.sql`, not by `structure.sql`                                                                                                                                                                                                                                                                                                                                     |
+| Directory    | `organizations`, `directory_resource_persons`, `directory_resource_person_professions` — created by `migrations/20261024_create_directory_module.sql` (with the `directory.*` permissions and the `directory_admin` role), not by `structure.sql`                                                                                                                                                                                                                                                                                                 |
 
 ---
 

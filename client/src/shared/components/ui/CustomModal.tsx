@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { Modal } from 'react-bootstrap';
 import './common.css';
 
@@ -14,6 +14,7 @@ interface CustomModalProps {
   backdrop?: boolean | 'static';
   keyboard?: boolean;
   hideCloseButton?: boolean;
+  scrollable?: boolean;
 }
 
 const CustomModal: React.FC<CustomModalProps> = ({
@@ -26,8 +27,11 @@ const CustomModal: React.FC<CustomModalProps> = ({
   centered = true,
   className = '',
   hideCloseButton = false,
+  scrollable = false,
   ...props
 }) => {
+  const titleId = useId();
+
   return (
     <Modal
       show={show}
@@ -35,10 +39,12 @@ const CustomModal: React.FC<CustomModalProps> = ({
       size={size}
       centered={centered}
       className={`custom-modal ${className}`}
+      aria-labelledby={titleId}
+      scrollable={scrollable}
       {...props}
     >
       <Modal.Header closeButton={!hideCloseButton}>
-        <Modal.Title>{title}</Modal.Title>
+        <Modal.Title id={titleId}>{title}</Modal.Title>
       </Modal.Header>
       <Modal.Body>{children}</Modal.Body>
       {footer && <Modal.Footer>{footer}</Modal.Footer>}

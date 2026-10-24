@@ -665,6 +665,7 @@ export async function startWorkflow({ moduleKey, recordId, metadata = {}, tx = n
       await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, initialState, {
         tx: conn,
         metadata: normalizedMeta,
+        actor: null,
       });
 
       // Tell the first stage's approvers there is something waiting. The
@@ -798,6 +799,7 @@ export async function actOnWorkflow({
     await moduleConfig.adapter.updateRecordWorkflowSnapshot(recordId, nextState, {
       tx: conn,
       metadata: normalizedMeta,
+      actor: normalizedActor,
     });
 
     await emitWorkflowNotification({

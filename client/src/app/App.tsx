@@ -10,7 +10,9 @@ import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/admi
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
+import OrganizationApprovalPage from '../features/admin/organizationApproval/OrganizationApprovalPage';
 import PublicationReview from '../features/admin/PublicationReview';
+import ResourcePersonApprovalPage from '../features/admin/resourcePersonApproval/ResourcePersonApprovalPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
 import EventDashboard from '../features/events/components/EventDashboard';
@@ -28,8 +30,10 @@ import BudgetDashboard from '../features/user-dashboard/budgetdashboard/budgetda
 import ExpenditureDashboard from '../features/user-dashboard/expendituredashboard/expendituredashboard';
 import FinanceCard from '../features/user-dashboard/financecard/financecard';
 import GuestHouseDashboard from '../features/user-dashboard/guesthousedashboard/guesthousedashboard';
+import OrganizationDirectoryDashboard from '../features/user-dashboard/organizationdirectorydashboard/OrganizationDirectoryDashboard';
 import ProjectsPage from '../features/user-dashboard/projectpage/ProjectsPage';
 import PublicationsPage from '../features/user-dashboard/publicationspage/PublicationsPage';
+import ResourcePersonDirectoryDashboard from '../features/user-dashboard/resourcepersondirectorydashboard/ResourcePersonDirectoryDashboard';
 import UserDashboard from '../features/user-dashboard/userdashboard';
 import { AbilityProvider } from '../shared/casl/AbilityContext';
 import MainLayout from '../shared/components/layout/MainLayout';
@@ -38,6 +42,7 @@ import {
   ProtectedRoute,
   AdminRoute,
   BudgetApprovalRoute,
+  DirectoryApprovalRoute,
   FinanceWorkflowRoute,
   ModuleWorkflowRoute,
   SuperAdminRoute,
@@ -171,6 +176,22 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <ProjectsPage />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/resourcepersondirectorydashboard"
+                        element={
+                          <ProtectedRoute>
+                            <ResourcePersonDirectoryDashboard />
+                          </ProtectedRoute>
+                        }
+                      />
+                      <Route
+                        path="/organizationdirectorydashboard"
+                        element={
+                          <ProtectedRoute>
+                            <OrganizationDirectoryDashboard />
                           </ProtectedRoute>
                         }
                       />
@@ -343,6 +364,22 @@ function App() {
                           <AdminRoute>
                             <JournalManagement />
                           </AdminRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/organization-approval"
+                        element={
+                          <DirectoryApprovalRoute moduleKey="organization_directory">
+                            <OrganizationApprovalPage />
+                          </DirectoryApprovalRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/resource-person-approval"
+                        element={
+                          <DirectoryApprovalRoute moduleKey="resource_person_directory">
+                            <ResourcePersonApprovalPage />
+                          </DirectoryApprovalRoute>
                         }
                       />
                       {/* One publication under review, on its own page, so it can be linked

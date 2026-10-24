@@ -260,6 +260,50 @@ const SYSTEM_PERMISSION_SEED = [
     description: 'Create roles and assign access',
     is_system: true,
   },
+  {
+    module_key: 'directory',
+    action_key: 'read',
+    permission_key: 'directory.read',
+    description: 'View the organization and resource-person directories',
+    is_system: true,
+  },
+  {
+    module_key: 'directory',
+    action_key: 'create',
+    permission_key: 'directory.create',
+    description: 'Create organization and resource-person directory records',
+    is_system: true,
+  },
+  {
+    module_key: 'directory',
+    action_key: 'edit',
+    permission_key: 'directory.edit',
+    description: 'Edit owned organization and resource-person directory records',
+    is_system: true,
+  },
+  {
+    module_key: 'organization_directory_workflow',
+    action_key: 'directory_admin',
+    permission_key: 'organization_directory.workflow.directory_admin',
+    description: 'Approve or reject organization directory submissions',
+    is_system: true,
+  },
+  {
+    module_key: 'resource_person_directory_workflow',
+    action_key: 'directory_admin',
+    permission_key: 'resource_person_directory.workflow.directory_admin',
+    description: 'Approve or reject resource-person directory submissions',
+    is_system: true,
+  },
+];
+
+// Every signed-in user may use the directories. The directory migration grants these
+// to the roles that exist when it runs, but the base role is created lazily on first
+// sign-in, so a database built from scratch would otherwise leave everyone with a 403.
+const BASE_USER_DIRECTORY_PERMISSION_KEYS = [
+  'directory.read',
+  'directory.create',
+  'directory.edit',
 ];
 
 const SYSTEM_PERMISSION_KEYS = new Set(
@@ -359,7 +403,7 @@ const ensureSystemPermissionSeed = async (connection = db) => {
 };
 
 const ensureBaseUserRoleSeed = async (connection = db) => {
-  await connection.query(
+  const response = await connection.query(
     `
       INSERT INTO roles (
         role_code,
@@ -374,6 +418,17 @@ const ensureBaseUserRoleSeed = async (connection = db) => {
         description = VALUES(description)
     `,
     [BASE_USER_ROLE_CODE, BASE_USER_ROLE_NAME, BASE_USER_ROLE_DESCRIPTION],
+  );
+
+  // affectedRows is 1 only when this call created the role. Granting on that one
+  // insert, never on later sign-ins, keeps an administrator's revocation in force.
+  if (response?.[0]?.affectedRows !== 1) return;
+  await connection.query(
+    `
+      INSERT IGNORE INTO role_permissions (role_id, permission_id)
+      SELECT ?, id FROM permissions WHERE permission_key IN (?)
+    `,
+    [response[0].insertId, BASE_USER_DIRECTORY_PERMISSION_KEYS],
   );
 };
 

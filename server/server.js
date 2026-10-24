@@ -37,7 +37,9 @@ import journalRoutes from './modules/journal/journalRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
 import { startDispatcher, stopDispatcher } from './modules/notification/notificationDispatcher.js';
 import notificationRoutes from './modules/notification/notificationRoutes.js';
+import organizationDirectoryRoutes from './modules/organizationDirectory/organizationDirectoryRoutes.js';
 import projectRoutes from './modules/project/projectRoutes.js';
+import resourcepersonDirectoryRoutes from './modules/resourcepersonDirectory/resourcepersonDirectoryRoutes.js';
 import userDashboardRoutes from './modules/userdashboard/userDashboardRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -186,6 +188,11 @@ app.use('/api/updates', updatesRoutes);
 app.use('/api/documents', documentsRoutes);
 app.use('/api/access-control', accessControlRoutes);
 app.use('/api/master-data', masterDataRoutes);
+
+// Organization and resource person directories
+app.use('/api', organizationDirectoryRoutes);
+app.use('/api', resourcepersonDirectoryRoutes);
+
 app.use('/api/budget-catalog', budgetCatalogRoutes);
 app.use('/api/account-options', accountOptionsRoutes);
 app.use('/api/notifications', notificationRoutes);

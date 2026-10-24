@@ -12,6 +12,7 @@ export interface DownloadedFile {
 interface AuthenticityUtility extends AxiosInstance {
   postFile: (endpoint: string, formData: FormData) => Promise<unknown>;
   getFile: (endpoint: string, params?: Record<string, unknown>) => Promise<DownloadedFile>;
+  putFile: (endpoint: string, formData: FormData) => Promise<unknown>;
   getBaseURL: () => string;
 }
 
@@ -102,6 +103,10 @@ authenticityUtility.interceptors.response.use(
       });
     }
 
+    const serverMessage = (error.response?.data as { message?: string } | undefined)?.message;
+    if (serverMessage) {
+      return Promise.reject({ ...error, message: serverMessage });
+    }
     return Promise.reject(error);
   },
 );
@@ -109,9 +114,7 @@ authenticityUtility.interceptors.response.use(
 authenticityUtility.postFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
   try {
     const response = await authenticityUtility.post(endpoint, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
+      headers: { 'Content-Type': 'multipart/form-data' },
     });
     return response;
   } catch (error: unknown) {
@@ -154,6 +157,19 @@ authenticityUtility.getFile = async (
   }
 
   return { blob: response.data, filename };
+};
+
+authenticityUtility.putFile = async (endpoint: string, formData: FormData): Promise<unknown> => {
+  try {
+    const response = await authenticityUtility.put(endpoint, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response;
+  } catch (error: unknown) {
+    const axiosError = error as { response?: { data?: unknown }; message?: string };
+    console.error('Error in putFile request:', axiosError.response?.data || axiosError.message);
+    throw error;
+  }
 };
 
 authenticityUtility.getBaseURL = (): string => {
