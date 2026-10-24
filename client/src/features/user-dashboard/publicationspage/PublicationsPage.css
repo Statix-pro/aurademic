@@ -765,10 +765,12 @@
 
 .publication-section-title {
   font-size: var(--font-size-body);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   color: #334155;
   margin-bottom: 0.75rem;
   line-height: var(--leading-body);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 .approval-badge {

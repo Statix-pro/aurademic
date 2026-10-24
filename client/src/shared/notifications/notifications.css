@@ -504,9 +504,11 @@
 
 .notif-rail-heading {
   margin: 10px 8px 4px;
-  font-size: var(--font-size-secondary);
-  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   color: #667085;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .notif-rail-item {
@@ -878,6 +880,8 @@
   font-weight: var(--weight-semibold);
   color: #667085;
   text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .notif-prefs-list {

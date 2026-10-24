@@ -936,10 +936,12 @@
 }
 
 .log-sub-header {
-  font-size: var(--font-size-secondary);
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   color: #667085;
   margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .log-approval-item {

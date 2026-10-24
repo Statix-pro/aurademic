@@ -575,6 +575,8 @@
   color: var(--text-muted, #6c757d);
   font-weight: var(--weight-bold);
   font-size: var(--font-size-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 /* Hover is not the only way in: the keyboard walks the same highlight. */

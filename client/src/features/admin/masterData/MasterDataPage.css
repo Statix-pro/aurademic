@@ -181,7 +181,9 @@
 .form-section-header h6 {
   color: var(--text-soft);
   font-weight: var(--weight-bold);
-  font-size: var(--font-size-secondary);
+  font-size: var(--font-size-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .master-data-modal .form-label {

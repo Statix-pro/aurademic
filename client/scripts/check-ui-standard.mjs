@@ -27,6 +27,11 @@ const ALLOWED_WEIGHTS = new Set(['400', '500', '600', '700', 'normal', 'bold', '
 const WEIGHT_TOKEN = /^var\(--weight-(regular|medium|semibold|bold)\)$/;
 const DELETED_TOKEN = /var\(--font-(2xs|xs|sm|md|lg|lead|xl)\)/;
 const UPPERCASE_OK = /(\bth\b|badge|tag|pill|-sev\b|-state\b)/;
+// Uppercase reads as a label only when it is bold and letter-spaced — the table-header, tag and
+// group-label roles. Plain uppercase body or field-label text fails.
+const isTrackedLabel = (body) =>
+  /letter-spacing\s*:\s*0?\.\d+em/.test(body) &&
+  /font-weight\s*:\s*(600|700|var\(--weight-(semibold|bold)\))/.test(body);
 
 // A selector must name a class or id of its own. Bare elements (`body`, `table`, `*`) never do;
 // neither do these library classes — Bootstrap 5.3's (exact names, so a screen's own
@@ -150,14 +155,18 @@ function checkCss(file) {
         const line = lineAt(text, start + text.slice(start, i).search(/\S/));
         const body = text.slice(i + 1, text.indexOf('}', i));
         if (!isGlobalLayer && !exempt.has(line)) checkSelector(file, line, prelude);
-        if (/text-transform\s*:\s*uppercase/.test(body) && !UPPERCASE_OK.test(prelude)) {
+        if (
+          /text-transform\s*:\s*uppercase/.test(body) &&
+          !UPPERCASE_OK.test(prelude) &&
+          !isTrackedLabel(body)
+        ) {
           const bodyLine = lineAt(text, i + 1 + body.search(/text-transform/));
           if (!exempt.has(bodyLine) && !exempt.has(line)) {
             report(
               file,
               bodyLine,
               'uppercase',
-              `${prelude} — uppercase is for table headers and tags only`,
+              `${prelude} — uppercase is for table headers, tags and group labels (bold and letter-spaced)`,
             );
           }
         }

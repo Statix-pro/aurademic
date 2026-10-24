@@ -144,11 +144,13 @@
   background: transparent;
   border: none;
   color: #64748b;
-  font-size: var(--font-size-secondary);
-  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   cursor: pointer;
   transition: all 0.2s ease;
   gap: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 .sb-nav-group-header:hover {
