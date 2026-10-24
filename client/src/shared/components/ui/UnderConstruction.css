@@ -35,16 +35,17 @@
 }
 
 .construction-title {
-  font-size: 2rem;
+  font-size: var(--font-size-display);
+  line-height: var(--leading-display);
   font-weight: 700;
   color: var(--text-main, #4f4f6e);
   margin-bottom: 1rem;
 }
 
 .construction-message {
-  font-size: 1rem;
+  font-size: var(--font-size-body);
   color: var(--text-muted, #6c757d);
-  line-height: 1.6;
+  line-height: var(--leading-body);
   margin-bottom: 2rem;
 }
 
@@ -87,7 +88,7 @@
 }
 
 .progress-text {
-  font-size: 0.875rem;
+  font-size: var(--font-size-secondary);
   color: var(--text-muted, #6c757d);
   font-weight: 500;
 }
@@ -99,7 +100,8 @@
   }
 
   .construction-title {
-    font-size: 1.5rem;
+    font-size: var(--font-size-page-title);
+    line-height: var(--leading-page-title);
   }
 
   .construction-icon svg {

@@ -9,17 +9,41 @@
   padding: 0;
 }
 
+/* One font for the whole portal: the operating system's UI face (Segoe UI on the campus
+   Windows machines), hinted for 13–14px screen text and loaded from nowhere. Pages used
+   to name Poppins, Roboto, Lexend or Inter, none of which was loaded, so each fell back
+   to whatever the machine had. */
+html,
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell',
-    'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family: var(--font-family-base);
+}
+
+body {
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  color: var(--text-body);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: #f8f9fa;
 }
 
+/* Form fields don't inherit the page font in every browser. */
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
+}
+
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+}
+
+/* Digits line up down a column of amounts, and a total doesn't shift as it's typed. */
+table,
+input {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Bootstrap overrides */
@@ -28,23 +52,192 @@ code {
   padding-right: 20px;
 }
 
-.btn-primary {
-  background-color: #007bff;
-  border-color: #007bff;
+/* ---------------------------------------------------------------------------
+   Type roles on Bootstrap's own elements (AGENTS.md §17). Same specificity as
+   Bootstrap and loaded after it, so these win over Bootstrap and lose to any
+   screen's own class rule.
+   --------------------------------------------------------------------------- */
+h1,
+.h1,
+h2,
+.h2 {
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
+  font-weight: var(--weight-bold);
 }
 
-.btn-primary:hover {
-  background-color: #0056b3;
-  border-color: #0056b3;
+h3,
+.h3,
+h4,
+.h4 {
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+  font-weight: var(--weight-semibold);
 }
 
-/* Custom utility classes */
-.text-primary {
-  color: #007bff !important;
+h5,
+.h5 {
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
 }
 
-.bg-primary {
-  background-color: #007bff !important;
+h6,
+.h6 {
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-semibold);
+}
+
+/* Bootstrap makes <strong> "bolder" — 900 inside an already-bold row. */
+b,
+strong {
+  font-weight: var(--weight-bold);
+}
+
+small,
+.small,
+.form-text {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+}
+
+.fs-1,
+.fs-2,
+.fs-3 {
+  font-size: var(--font-size-page-title) !important;
+}
+
+.fs-4 {
+  font-size: var(--font-size-modal-title) !important;
+}
+
+.fs-5 {
+  font-size: var(--font-size-section-title) !important;
+}
+
+.fs-6 {
+  font-size: var(--font-size-body) !important;
+}
+
+.fw-light,
+.fw-lighter {
+  font-weight: var(--weight-regular) !important;
+}
+
+.fw-bolder {
+  font-weight: var(--weight-bold) !important;
+}
+
+.invalid-feedback {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-medium);
+}
+
+.table {
+  --bs-table-color: var(--text-body);
+}
+
+.dropdown-menu {
+  --bs-dropdown-font-size: var(--font-size-body);
+}
+
+.pagination {
+  --bs-pagination-font-size: var(--font-size-body);
+}
+
+.tooltip {
+  --bs-tooltip-font-size: var(--font-size-secondary);
+}
+
+.popover {
+  --bs-popover-font-size: var(--font-size-body);
+  --bs-popover-header-font-size: var(--font-size-body);
+}
+
+.accordion-button {
+  font-size: var(--font-size-body);
+}
+
+.nav-link {
+  font-size: var(--font-size-body);
+}
+
+.modal-title {
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+}
+
+/* Buttons: every .btn is a 40px control with 14px semibold text; .btn-sm is the 32px
+   secondary size. Heights come from padding around a fixed line height, so a button
+   keeps Bootstrap's inline-block layout and still lines up with the inputs beside it. */
+.btn {
+  --bs-btn-font-size: var(--font-size-body);
+  --bs-btn-line-height: var(--leading-body);
+  --bs-btn-font-weight: var(--weight-semibold);
+  --bs-btn-padding-x: 1rem;
+  --bs-btn-padding-y: calc((var(--control-height) - var(--leading-body) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-md);
+}
+
+.btn-sm,
+.btn-group-sm > .btn {
+  --bs-btn-font-size: var(--font-size-secondary);
+  --bs-btn-line-height: var(--leading-secondary);
+  --bs-btn-padding-x: 0.75rem;
+  --bs-btn-padding-y: calc((var(--button-sm-height) - var(--leading-secondary) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-sm);
+}
+
+.btn-lg,
+.btn-group-lg > .btn {
+  --bs-btn-font-size: var(--font-size-body);
+  --bs-btn-line-height: var(--leading-body);
+  --bs-btn-padding-x: var(--button-padding-x);
+  --bs-btn-padding-y: calc((var(--control-height) - var(--leading-body) - 2px) / 2);
+  --bs-btn-border-radius: var(--border-radius-md);
+}
+
+/* Touch screens: the control keeps its desktop size and gains an invisible tap area of at
+   least --touch-target around it, the way Material's dense components do. :where() keeps
+   these at zero specificity, so a screen that positions its own button absolutely, or
+   draws its own ::before, still wins. */
+@media (pointer: coarse) {
+  :where(.btn, .btn-close, .page-link, button, [role='button']) {
+    position: relative;
+  }
+
+  :where(.btn, .btn-close, .page-link, button, [role='button']):not(.category-btn)::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--touch-target));
+    height: max(100%, var(--touch-target));
+    transform: translate(-50%, -50%);
+  }
+
+  .form-check-input {
+    width: 1.25em;
+    height: 1.25em;
+  }
+
+  .form-check-label {
+    padding-block: 0.75rem;
+  }
+}
+
+/* People who ask their system for less motion get no hover lifts or sliding panels. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 .card {
@@ -68,17 +261,6 @@ code {
 .spinner-border-sm {
   width: 1rem;
   height: 1rem;
-}
-
-/* Form styles */
-.form-control:focus {
-  border-color: #80bdff;
-  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-
-.form-label {
-  font-weight: 500;
-  margin-bottom: 0.5rem;
 }
 
 /* Alert styles */

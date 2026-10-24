@@ -44,10 +44,10 @@ const DeleteConfirmationModal: React.FC<DeleteConfirmationModalProps> = ({
           <AlertTriangle size={32} />
         </div>
         <div className="flex-grow-1">
-          <p className="mb-0 fw-semibold" style={{ fontSize: '0.95rem' }}>
+          <p className="mb-0 fw-semibold" style={{ fontSize: 'var(--font-size-body)' }}>
             Delete {itemName ? itemName : 'this item'}?
           </p>
-          <small className="text-muted d-block" style={{ fontSize: '0.8rem' }}>
+          <small className="text-muted d-block" style={{ fontSize: 'var(--font-size-secondary)' }}>
             This action cannot be undone.
           </small>
         </div>

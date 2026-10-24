@@ -55,19 +55,19 @@
 }
 
 .app-toast-title {
-  font-size: 13.5px;
+  font-size: var(--font-size-body);
   font-weight: 600;
   color: #1f2937;
-  line-height: 1.35;
+  line-height: var(--leading-body);
   /* A long record title must wrap rather than stretch the app-toast off-screen. */
   overflow-wrap: anywhere;
 }
 
 .app-toast-body {
   margin-top: 3px;
-  font-size: 12.5px;
+  font-size: var(--font-size-secondary);
   color: #566072;
-  line-height: 1.4;
+  line-height: var(--leading-secondary);
   overflow-wrap: anywhere;
   /* Keep a long approver comment from turning the app-toast into a wall. */
   display: -webkit-box;
@@ -82,7 +82,7 @@
   border: none;
   background: none;
   color: #0069ab;
-  font-size: 12.5px;
+  font-size: var(--font-size-secondary);
   font-weight: 600;
   cursor: pointer;
 }
@@ -96,7 +96,7 @@
   padding: 2px;
   border: none;
   background: none;
-  color: #98a2b3;
+  color: var(--placeholder-color);
   cursor: pointer;
   line-height: 1;
   border-radius: 4px;
