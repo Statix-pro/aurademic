@@ -2,7 +2,11 @@ import React from 'react';
 
 import DocumentSlotField from '../components/DocumentSlotField';
 import SectionCard from '../components/SectionCard';
-import { PROJECT_DOCUMENT_LABELS, SANCTION_MODE_OPTIONS } from '../constants';
+import {
+  GRANT_CREDITED_TO_OPTIONS,
+  PROJECT_DOCUMENT_LABELS,
+  SANCTION_MODE_OPTIONS,
+} from '../constants';
 
 import type { ProjectDocumentType, ProjectFormState, SanctionMode } from '../types';
 
@@ -28,7 +32,7 @@ const SanctionDetailsSection: React.FC<SanctionDetailsSectionProps> = ({
       <div className="pf-sanction__fields">
         <div className="pf-inline-grid">
           <div className="pf-inline-field">
-            <label className="pf-inline-field__label" htmlFor="pf-sanction-date">
+            <label className="pf-inline-field__label pf-sanction__label" htmlFor="pf-sanction-date">
               Date
             </label>
             <input
@@ -59,7 +63,7 @@ const SanctionDetailsSection: React.FC<SanctionDetailsSectionProps> = ({
         {/* A div rather than a fieldset: a <legend> is laid out outside its
             fieldset's box, so it cannot sit on the same line as the radios. */}
         <div className="pf-inline-field" role="radiogroup" aria-labelledby="pf-sanction-mode">
-          <span className="pf-inline-field__label" id="pf-sanction-mode">
+          <span className="pf-inline-field__label pf-sanction__label" id="pf-sanction-mode">
             Mode
           </span>
           <div className="pf-radio-group">
@@ -77,6 +81,32 @@ const SanctionDetailsSection: React.FC<SanctionDetailsSectionProps> = ({
               </label>
             ))}
           </div>
+        </div>
+
+        {/* Where the agency credits the grant-in-aid: decided by the sanction,
+            so it sits with the sanction's mode rather than on the ledger. */}
+        <div className="pf-inline-field" role="radiogroup" aria-labelledby="pf-sanction-account">
+          <span className="pf-inline-field__label pf-sanction__label" id="pf-sanction-account">
+            Account
+          </span>
+          <div className="pf-radio-group">
+            {GRANT_CREDITED_TO_OPTIONS.map((option) => (
+              <label className="pf-radio" key={option.value}>
+                <input
+                  type="radio"
+                  name="grantCreditedTo"
+                  value={option.value}
+                  checked={form.grantCreditedTo === option.value}
+                  onChange={() => patch({ grantCreditedTo: option.value })}
+                  disabled={disabled}
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+          {errors.grant_credited_to && (
+            <span className="pf-field__error">{errors.grant_credited_to}</span>
+          )}
         </div>
       </div>
 

@@ -227,7 +227,7 @@
 .payee-modal-select-dropdown .react-select__placeholder,
 .organization-type-dropdown .react-select__placeholder,
 .tds-section-dropdown .react-select__placeholder {
-  color: #6f7682;
+  color: var(--placeholder-color);
 }
 
 .organization-type-dropdown .react-select__control,

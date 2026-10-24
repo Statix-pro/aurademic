@@ -1793,6 +1793,8 @@ const AdminBudget: React.FC = () => {
                       hasPermission(user, 'budget.workflow.principal')) && (
                       <select
                         className="adminbudget-control"
+                        // The empty option ("All …") is a real filter choice, not a hint; see shared/styles/index.css.
+                        data-empty-is-value
                         value={departmentFilter}
                         onChange={(e) => setDepartmentFilter(e.target.value)}
                         title={

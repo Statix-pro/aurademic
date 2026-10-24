@@ -1068,7 +1068,17 @@ async function getFinanceRequestBudgetUsageByBreakup(
   const lineFilterSql = normalizedBudgetLineIds.length
     ? `WHERE usage_rows.budget_line_id IN (${normalizedBudgetLineIds.map(() => '?').join(', ')})`
     : '';
-  const unplannedUsageUnionSql = `
+
+  // Unplanned spend draws on the finance request's own approved unplanned amount
+  // (getFinanceUnplannedBudgetState), not on the planned breakups, so it is left out here —
+  // counting it made every unplanned claim eat the planned line's balance as well. The one
+  // exception is legacyUnplannedUsageSql below.
+  // LEGACY: before the unplanned cap existed, a request could claim "unplanned" money on a
+  // finance request that approved none (prod: expenditure #70 on finance #94, ₹870). That money
+  // could only have come out of the Head of Accounts line, so it keeps counting against it, or
+  // the line would show the amount as available again. The cap now refuses such claims; remove
+  // this once those requests are closed out of the active statuses.
+  const legacyUnplannedUsageSql = `
        UNION ALL
 
        SELECT
@@ -1079,9 +1089,11 @@ async function getFinanceRequestBudgetUsageByBreakup(
          eur.amount AS amount_delta
        FROM expenditure_unplanned_rows eur
        JOIN expenditure_requests er ON er.id = eur.expenditure_id
+       JOIN finance_requests fr ON fr.id = er.finance_request_id
        WHERE er.finance_request_id = ?
          AND (? IS NULL OR er.id <> ?)
          AND eur.head_of_account_budget_line_id IS NOT NULL
+         AND COALESCE(fr.unplanned_budget_enabled, 0) = 0
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
 
        UNION ALL
@@ -1093,10 +1105,12 @@ async function getFinanceRequestBudgetUsageByBreakup(
          ${collateBudgetText('er.unplanned_budget_sub_head')} AS sub_head,
          er.unplanned_budget_amount AS amount_delta
        FROM expenditure_requests er
+       JOIN finance_requests fr ON fr.id = er.finance_request_id
        WHERE er.finance_request_id = ?
          AND (? IS NULL OR er.id <> ?)
          AND er.unplanned_budget_enabled = 1
          AND er.unplanned_head_of_account_budget_line_id IS NOT NULL
+         AND COALESCE(fr.unplanned_budget_enabled, 0) = 0
          AND NOT EXISTS (
            SELECT 1
              FROM expenditure_unplanned_rows eur_existing
@@ -1104,7 +1118,6 @@ async function getFinanceRequestBudgetUsageByBreakup(
          )
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
 `;
-
   const [rows] = await source.execute(
     `SELECT
        usage_rows.finance_budget_breakup_id,
@@ -1139,44 +1152,28 @@ async function getFinanceRequestBudgetUsageByBreakup(
          AND (? IS NULL OR er.id <> ?)
          AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
 
-       ${unplannedUsageUnionSql}
-
+       ${legacyUnplannedUsageSql}
     ) AS usage_rows
      ${lineFilterSql}
      GROUP BY usage_rows.finance_budget_breakup_id,
               usage_rows.budget_line_id,
               usage_rows.budget_head,
               usage_rows.sub_head`,
-    normalizedBudgetLineIds.length
-      ? [
-          financeId,
-          excludedRequestId,
-          excludedRequestId,
-          financeId,
-          excludedRequestId,
-          excludedRequestId,
-          financeId,
-          excludedRequestId,
-          excludedRequestId,
-          financeId,
-          excludedRequestId,
-          excludedRequestId,
-          ...normalizedBudgetLineIds,
-        ]
-      : [
-          financeId,
-          excludedRequestId,
-          excludedRequestId,
-          financeId,
-          excludedRequestId,
-          excludedRequestId,
-          financeId,
-          excludedRequestId,
-          excludedRequestId,
-          financeId,
-          excludedRequestId,
-          excludedRequestId,
-        ],
+    [
+      financeId,
+      excludedRequestId,
+      excludedRequestId,
+      financeId,
+      excludedRequestId,
+      excludedRequestId,
+      financeId,
+      excludedRequestId,
+      excludedRequestId,
+      financeId,
+      excludedRequestId,
+      excludedRequestId,
+      ...normalizedBudgetLineIds,
+    ],
   );
 
   const usageByBreakupId = new Map();
@@ -1270,6 +1267,135 @@ async function getFinanceRequestBudgetUsageByLine(
     usageByLineId.set(lineId, toMoney((usageByLineId.get(lineId) || 0) + toMoney(amount)));
   }
   return usageByLineId;
+}
+
+/**
+ * The unplanned allowance of a finance request: what finance approved as Unplanned Expenditure,
+ * what active expenditure requests against it have already claimed, and what is left.
+ *
+ * Unplanned money is approved as a lump sum on the finance request, on top of the planned
+ * breakups, so it is capped by that sum — never by a planned line's balance.
+ */
+export async function getFinanceUnplannedBudgetState(
+  connOrDb,
+  { financeRequestId, excludeExpenditureId = null, forUpdate = false } = {},
+) {
+  const financeId = toPositiveInt(financeRequestId);
+  const emptyState = { enabled: false, approvedAmount: 0, usedAmount: 0, remainingAmount: 0 };
+  if (!financeId) return emptyState;
+
+  const source = connOrDb || db;
+  const hasEnabledColumn = await hasFinanceRequestColumn('unplanned_budget_enabled', {
+    tx: source,
+  });
+  const hasAmountColumn = await hasFinanceRequestColumn('unplanned_budget_amount', {
+    tx: source,
+  });
+  if (!hasEnabledColumn || !hasAmountColumn) return emptyState;
+
+  // Locking the finance row serialises concurrent claims on the same unplanned allowance.
+  const [financeRows] = await source.execute(
+    `SELECT unplanned_budget_enabled, unplanned_budget_amount
+       FROM finance_requests
+      WHERE id = ?
+      LIMIT 1${forUpdate ? ' FOR UPDATE' : ''}`,
+    [financeId],
+  );
+  const financeRow = financeRows?.[0];
+  const enabled = Boolean(Number(financeRow?.unplanned_budget_enabled));
+  const approvedAmount = enabled ? toMoney(financeRow?.unplanned_budget_amount) : 0;
+
+  // A plain read, so it never locks another request's rows. It is current because callers
+  // that check a claim take the finance row lock (lockFinanceRequestForClaim) before any
+  // plain read in their transaction: REPEATABLE READ fixes the snapshot at the first plain
+  // read, so it then already holds every claim committed by earlier lock holders.
+  const excludedRequestId = toPositiveInt(excludeExpenditureId);
+  const [usageRows] = await source.execute(
+    `SELECT COALESCE(SUM(usage_rows.amount), 0) AS used_amount
+       FROM (
+         SELECT eur.amount
+           FROM expenditure_unplanned_rows eur
+           JOIN expenditure_requests er ON er.id = eur.expenditure_id
+          WHERE er.finance_request_id = ?
+            AND (? IS NULL OR er.id <> ?)
+            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+
+         UNION ALL
+
+         -- LEGACY: requests saved before expenditure_unplanned_rows existed keep their single
+         -- unplanned amount on expenditure_requests. Remove once those rows are migrated.
+         SELECT er.unplanned_budget_amount AS amount
+           FROM expenditure_requests er
+          WHERE er.finance_request_id = ?
+            AND (? IS NULL OR er.id <> ?)
+            AND er.unplanned_budget_enabled = 1
+            AND NOT EXISTS (
+              SELECT 1
+                FROM expenditure_unplanned_rows eur_existing
+               WHERE eur_existing.expenditure_id = er.id
+            )
+            AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
+       ) AS usage_rows`,
+    [
+      financeId,
+      excludedRequestId,
+      excludedRequestId,
+      financeId,
+      excludedRequestId,
+      excludedRequestId,
+    ],
+  );
+  const usedAmount = toMoney(usageRows?.[0]?.used_amount);
+
+  return {
+    enabled,
+    approvedAmount,
+    usedAmount,
+    remainingAmount: toMoney(Math.max(0, approvedAmount - usedAmount)),
+  };
+}
+
+/**
+ * Serialises every claim against one finance request. Must be the first lock a create or
+ * update takes and must come before any plain read in its transaction:
+ *
+ * - The plain usage reads above see claims committed by earlier holders only if the
+ *   REPEATABLE READ snapshot is fixed after this lock is held. Taken later, a request that
+ *   waited here kept an older snapshot, and two ₹600 claims both passed a ₹1,000 cap.
+ * - Finance edits take this row before `finance_budget_breakup`, and expenditure saves
+ *   lock the breakup rows in the planned-head check; taking this row first keeps every
+ *   writer in the same order (finance row → breakup rows), so none can deadlock.
+ *
+ * An update locks its own expenditure row first (a locking read, which fixes no snapshot)
+ * to learn its finance request. No transaction holding this lock then waits on another
+ * request's row, so that order cannot cycle.
+ */
+async function lockFinanceRequestForClaim(conn, financeRequestId) {
+  const financeId = toPositiveInt(financeRequestId);
+  if (!financeId) return;
+  await conn.execute('SELECT id FROM finance_requests WHERE id = ? FOR UPDATE', [financeId]);
+}
+
+export async function assertUnplannedWithinFinanceUnplannedBudget(
+  conn,
+  { financeRequestId, normalizedUnplanned = {}, excludeExpenditureId = null } = {},
+) {
+  const requestedAmount = toMoney(normalizedUnplanned?.amount);
+  if (!normalizedUnplanned?.enabled || requestedAmount <= 0) return;
+
+  const state = await getFinanceUnplannedBudgetState(conn, {
+    financeRequestId,
+    excludeExpenditureId,
+    forUpdate: true,
+  });
+  if (!state.enabled || state.approvedAmount <= 0) {
+    throw new Error('Unplanned Expenditure was not approved on this finance request.');
+  }
+  if (requestedAmount > state.remainingAmount) {
+    throw new Error(
+      `Unplanned Expenditure ₹ ${formatMoney(requestedAmount)} exceeds the unplanned balance ₹ ${formatMoney(state.remainingAmount)} approved on this finance request.`,
+    );
+  }
 }
 
 // ─── Transaction helper (same signature as budgetModel.withTransaction) ────────
@@ -1619,12 +1745,17 @@ async function getGlobalBudgetUsageByLine(
 
          UNION ALL
 
+         -- LEGACY: unplanned spend is capped by its finance request's approved unplanned amount
+         -- and no longer draws on the line; only claims on a finance request that approved none
+         -- still do (see legacyUnplannedUsageSql in getFinanceRequestBudgetUsageByBreakup).
          SELECT eur.head_of_account_budget_line_id AS budget_line_id, eur.amount AS amount_delta
            FROM expenditure_unplanned_rows eur
            JOIN expenditure_requests er ON er.id = eur.expenditure_id
+           JOIN finance_requests fr_unplanned ON fr_unplanned.id = er.finance_request_id
           WHERE eur.head_of_account_budget_line_id IN (${placeholders})
             AND (? IS NULL OR er.id <> ?)
             AND eur.head_of_account_budget_line_id IS NOT NULL
+            AND COALESCE(fr_unplanned.unplanned_budget_enabled, 0) = 0
             AND ${ACTIVE_EXPENDITURE_REQUEST_STATUS_SQL}
        ) usage_rows
       GROUP BY usage_rows.budget_line_id`,
@@ -2755,7 +2886,10 @@ export async function getExpenditureDashboard({ userId, fiscalYear } = {}) {
   };
 }
 
-export async function getFinanceRequestContext(financeRequestId) {
+export async function getFinanceRequestContext(
+  financeRequestId,
+  { excludeExpenditureId = null } = {},
+) {
   const financeId = toPositiveInt(financeRequestId);
   if (!financeId) return null;
 
@@ -2831,6 +2965,10 @@ export async function getFinanceRequestContext(financeRequestId) {
   if (!row) return null;
 
   const financeAnnexures = await getFinanceAnnexuresForExpenditure(financeId);
+  const unplannedState = await getFinanceUnplannedBudgetState(db, {
+    financeRequestId: financeId,
+    excludeExpenditureId,
+  });
 
   return {
     finance_request_id: toPositiveInt(row.finance_request_id),
@@ -2857,6 +2995,8 @@ export async function getFinanceRequestContext(financeRequestId) {
     unplanned_budget_enabled: Boolean(row.unplanned_budget_enabled),
     unplanned_budget_amount: toMoney(row.unplanned_budget_amount),
     unplanned_budget_description: normalizeText(row.unplanned_budget_description) || null,
+    unplanned_budget_used_amount: unplannedState.usedAmount,
+    unplanned_budget_remaining_amount: unplannedState.remainingAmount,
     finance_annexures: financeAnnexures.map((annexure) => ({
       id: annexure.id,
       annexure_type: annexure.annexure_type,
@@ -4451,10 +4591,11 @@ function assertUsageRowsWithinRemainingBudget(
     if (!lineId || !remainingByLineId.has(lineId)) {
       throw new Error(`Budget line ${lineId || 'unknown'} is not linked to this finance request`);
     }
-    // Settlement rows don't draw down the remaining budget, except the unplanned
-    // head-of-account deduction, which always does.
-    const countsAgainstRemaining =
-      requestType !== 'Settlement' || usageRow.isUnplanned || usageRow.countsAgainstRemaining;
+    // Unplanned rows are only booked to the Head of Accounts line; their cap is the finance
+    // request's approved unplanned amount (assertUnplannedWithinFinanceUnplannedBudget).
+    if (usageRow.isUnplanned) continue;
+    // Settlement rows don't draw down the remaining budget.
+    const countsAgainstRemaining = requestType !== 'Settlement' || usageRow.countsAgainstRemaining;
     if (!countsAgainstRemaining) continue;
     requestedByLine.set(
       lineId,
@@ -4860,6 +5001,8 @@ function buildBudgetSnapshotsByLine(requestType, usageRows = [], remainingByLine
   const deltasByLine = new Map();
 
   for (const usageRow of usageRows) {
+    // The planned line's balance is not drawn by unplanned spend, so its snapshot ignores it.
+    if (usageRow.isUnplanned) continue;
     const budgetLineId = toPositiveInt(usageRow.budgetLineId);
     const amount = toMoney(usageRow.amount);
     const direction = Number.isFinite(Number(usageRow.direction))
@@ -4900,6 +5043,9 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
     if (!requestType) {
       throw new Error('Invalid request type. Expected Advance, Settlement, or Expenditure.');
     }
+
+    // Before any read: see lockFinanceRequestForClaim.
+    await lockFinanceRequestForClaim(conn, data.finance_request_id);
 
     const employeeId = toPositiveInt(data.employee_id);
     let departmentId = null;
@@ -5070,6 +5216,10 @@ export async function createExpenditureRequest(data, userId, uploads = {}) {
 
       assertUsageRowsWithinRemainingBudget(requestType, usageRows, remainingByLineId);
     }
+    await assertUnplannedWithinFinanceUnplannedBudget(conn, {
+      financeRequestId,
+      normalizedUnplanned,
+    });
 
     const budgetSnapshotsByLine = buildBudgetSnapshotsByLine(
       requestType,
@@ -5311,6 +5461,13 @@ export async function updateExpenditureRequest(
       throw new Error('Expenditure request not found');
     }
 
+    // Before any plain read: see lockFinanceRequestForClaim. Moving a request to another
+    // finance request only lowers the old one's usage, so the target is the one to lock.
+    await lockFinanceRequestForClaim(
+      conn,
+      toPositiveInt(data.finance_request_id) || toPositiveInt(existingRecord.finance_request_id),
+    );
+
     const requestType = inferRequestType(data) || normalizeRequestType(existingRecord.request_type);
     if (!requestType) {
       throw new Error('Invalid request type. Expected Advance, Settlement, or Expenditure.');
@@ -5521,6 +5678,11 @@ export async function updateExpenditureRequest(
 
       assertUsageRowsWithinRemainingBudget(requestType, usageRows, remainingByLineId);
     }
+    await assertUnplannedWithinFinanceUnplannedBudget(conn, {
+      financeRequestId,
+      normalizedUnplanned,
+      excludeExpenditureId: normalizedExpenditureId,
+    });
 
     const budgetSnapshotsByLine = buildBudgetSnapshotsByLine(
       requestType,

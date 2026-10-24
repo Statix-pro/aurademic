@@ -617,7 +617,7 @@
 }
 
 .payee-field::placeholder {
-  color: #7c8ba1;
+  color: var(--placeholder-color);
 }
 
 .payee-lookup-wrap {
@@ -1529,7 +1529,7 @@
 }
 
 .payee-modal-input::placeholder {
-  color: #5b6472;
+  color: var(--placeholder-color);
 }
 
 .payee-modal-actions {

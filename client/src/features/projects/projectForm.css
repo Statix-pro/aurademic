@@ -278,7 +278,7 @@
 }
 
 .pf-input::placeholder {
-  color: #a9b3c4;
+  color: var(--placeholder-color);
 }
 
 .pf-input:focus {
@@ -558,7 +558,7 @@
 }
 
 .pf-combo__input::placeholder {
-  color: #a9b3c4;
+  color: var(--placeholder-color);
 }
 
 /* Sticky so a heading stays legible while its own options scroll under it, the
@@ -1046,12 +1046,19 @@
   font-family: inherit;
 }
 
+/* Chips picked and nothing typed: only the caret needs room, so the input
+   does not push itself onto a line of its own below a full row of chips. */
+.pf-tags__input--idle {
+  flex-basis: 0;
+  min-width: 2px;
+}
+
 .pf-tags__input:focus {
   outline: none;
 }
 
 .pf-tags__input::placeholder {
-  color: #a9b3c4;
+  color: var(--placeholder-color);
 }
 
 /* Centred on the control's own height, not on `.pf-tags`: the wrapper also
@@ -1135,21 +1142,29 @@
   grid-column: 4 / span 9;
 }
 
+/* Organization, City and the MoU switch, across the whole row including the
+   button track. A flex line rather than grid columns: City is a fixed width
+   and the switch only as wide as its label and pill, so every pixel they
+   leave goes to Organization — on grid columns the switch sat at the end of
+   a three-column cell and left a gap after City. The switch's right edge
+   stays level with the row buttons above. */
+.pf-collaborator__line {
+  display: flex;
+  grid-column: 1 / -1;
+  gap: 12px 18px;
+  align-items: center;
+}
+
 .pf-collaborator__org {
-  grid-column: 1 / span 7;
+  flex: 1 1 auto;
 }
 
 .pf-collaborator__city {
-  grid-column: 8 / span 3;
+  flex: 0 0 240px;
 }
 
-/* The last two field columns plus the button track, which is empty on this
-   line: the field shrinks to its label and pill and sits against the right
-   edge, level with the row buttons above, so the slack goes to Organization
-   instead of trailing the pill as whitespace. */
 .pf-collaborator__mou {
-  grid-column: 11 / -1;
-  justify-self: end;
+  flex: 0 0 auto;
 }
 
 /* Pinned to the first row, in the last track — the fixed 96px button column
@@ -1178,13 +1193,15 @@
   min-width: 150px;
 }
 
-.pf-collaborator__main > .pf-inline-field {
+.pf-collaborator__main > .pf-inline-field,
+.pf-collaborator__line > .pf-inline-field {
   min-width: 0;
 }
 
 /* The label still takes what it needs; the control gives way first, since the
    row carries five of them and a label that wrapped would break the line. */
-.pf-collaborator__main > .pf-inline-field {
+.pf-collaborator__main > .pf-inline-field,
+.pf-collaborator__line > .pf-inline-field {
   grid-template-columns: auto minmax(0, 1fr);
 }
 
@@ -1333,6 +1350,122 @@
 
 .pf-panel[hidden] {
   display: none;
+}
+
+/* --------------------------------------------------------------------------
+   Finance sub-tabs
+   -------------------------------------------------------------------------- */
+
+/* Budget, Transaction and Summary as three equal segments of one white card,
+   each with the figure that says where it stands. Every segment carries a line
+   along its foot — grey, and the selected one's solid blue, with its label in
+   bold blue — so the selection is read off the line, not off a fill: a pale
+   tint read as the page showing through, and a solid fill as a second copy of
+   the pill tabs above. */
+.pf-finance-nav {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 4px 12px 8px;
+  border-radius: var(--pf-radius);
+  background: var(--bg-surface, #fff);
+  box-shadow: 0 6px 22px rgb(0 62 105 / 6%);
+}
+
+.pf-finance-nav__item {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  /* Room below for the line. */
+  padding: 5px 6px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pf-finance-nav__item::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 4px;
+  border-radius: 4px;
+  background: #e6ebf2;
+  content: '';
+  transition: background-color 0.2s ease;
+}
+
+.pf-finance-nav__item:hover::after {
+  background: #cdd7e4;
+}
+
+.pf-finance-nav__item.is-active::after {
+  background: var(--primary-color, #0069ab);
+}
+
+.pf-finance-nav__item:focus-visible {
+  outline: 2px solid var(--primary-color, #0069ab);
+  outline-offset: 2px;
+}
+
+.pf-finance-nav__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #eef3f9;
+  color: #5d6b8a;
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__icon {
+  background: #e1f0ff;
+  color: var(--primary-color, #0069ab);
+}
+
+.pf-finance-nav__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.pf-finance-nav__label {
+  color: #5d6b8a;
+  font-weight: 500;
+  font-size: 0.9rem;
+  line-height: 1.3;
+}
+
+.pf-finance-nav__item.is-active .pf-finance-nav__label {
+  color: var(--primary-color, #0069ab);
+  font-weight: 700;
+}
+
+/* One line, however long the figure: the segment keeps its height. */
+.pf-finance-nav__caption {
+  overflow: hidden;
+  color: #6b7a90;
+  font-size: 0.75rem;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (width <= 720px) {
+  .pf-finance-nav {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
 }
 
 /* --------------------------------------------------------------------------
@@ -1526,16 +1659,19 @@
    own, takes the rest of the line. Left to the auto layout, the date picker and
    the year select each claimed a share of their own, and the organization name —
    the longest value on the row — was the one truncated. The year matches the
-   ledger's; the date clears a native `dd-mm-yyyy` picker and its calendar
-   button. */
+   ledger's; the date is held to what a native `dd-mm-yyyy` picker and its
+   calendar button need — with a narrower cell padding, since the input's own
+   padding already spaces it from the borders — and gives the rest to
+   Organization. */
 .pf-disbursement__year {
   width: 150px;
   min-width: 134px;
 }
 
-.pf-disbursement__date {
-  width: 170px;
-  min-width: 160px;
+.pf-table .pf-disbursement__date {
+  width: 152px;
+  min-width: 150px;
+  padding-inline: 8px;
 }
 
 .pf-ledger__head {
@@ -1728,12 +1864,46 @@
   min-width: 0;
 }
 
-/* Supplier Details is a line of its own under the strip, split from it by the
-   same rule the design draws between the two. */
+/* Supplier Details and Contact Details are two lines under the strip, each
+   split from the one above by the rule the design draws between them. They
+   share one grid so both lines' fields start at the same edge: the first
+   column is as wide as the longer label, and each line takes its columns
+   from the grid through `subgrid`. Supplier Organization takes the first
+   field track and Address the other three, so Address starts under
+   Designation; the contact's Mobile is
+   ten digits and gets the narrowest track. */
+.pf-facility__supplier {
+  display: grid;
+  grid-template-columns:
+    max-content minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.75fr)
+    minmax(0, 1.45fr);
+  column-gap: 12px;
+}
+
 .pf-facility__supplier-line {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #e2e8f2;
+}
+
+.pf-facility__supplier-line .pf-ledger__detail-label {
+  margin-right: 10px;
+}
+
+.pf-facility__supplier-line .pf-input {
+  min-width: 0;
+}
+
+.pf-facility__supplier-name {
+  grid-column: 2;
+}
+
+.pf-facility__supplier-address {
+  grid-column: 3 / -1;
 }
 
 /* Manpower tab. Same strip as the Facility tab; Email and Remarks are the two
@@ -1885,6 +2055,13 @@
   grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
   gap: 18px;
   align-items: start;
+}
+
+/* Date, Mode and Account are one column of labels, so the date box and both
+   radio rows start at the same edge. Each label sits in its own row's grid,
+   so they share the width of the longest ("Account") rather than a column. */
+.pf-sanction__label {
+  min-width: 4.25rem;
 }
 
 .pf-presentation__fields,
@@ -2162,30 +2339,32 @@
   /* Grid columns cannot wrap, so the row is re-cut rather than squeezed: two
      field columns and the button track. Every field is placed in a field
      column explicitly — left to auto-flow, the third field of each line landed
-     in the 96px button track, which crushed Organization to 96px. The grouping
-     of the wide layout holds: Category and Role, then Organization across both
-     columns (it is the longest value), then City and the MoU switch. The
-     buttons keep their pin from the wide layout: first row, last track. */
+     in the 96px button track. The grouping of the wide layout holds: Category
+     and Role, then the Organization line, which wraps so Organization takes a
+     line of its own (it is the longest value) above City and the MoU switch.
+     The buttons keep their pin from the wide layout: first row, last track. */
   .pf-collaborator__main {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 96px;
   }
 
-  .pf-collaborator__category,
-  .pf-collaborator__city {
+  .pf-collaborator__category {
     grid-column: 1;
   }
 
-  .pf-collaborator__role,
-  .pf-collaborator__mou {
+  .pf-collaborator__role {
     grid-column: 2;
   }
 
-  .pf-collaborator__mou {
-    justify-self: start;
+  .pf-collaborator__line {
+    flex-wrap: wrap;
   }
 
   .pf-collaborator__org {
-    grid-column: 1 / span 2;
+    flex-basis: 100%;
+  }
+
+  .pf-collaborator__city {
+    flex: 1 1 200px;
   }
 }
 

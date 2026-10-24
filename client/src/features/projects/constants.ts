@@ -205,6 +205,57 @@ export const DOCUMENT_TRANSACTION_KIND_OPTIONS = [
   },
 ];
 
+/**
+ * The kinds of grant a project can be, valued to match
+ * `research_projects.project_type`. The icon is the Font Awesome class the
+ * Select Project Type dialog shows on each tile.
+ */
+export const PROJECT_TYPE_OPTIONS = [
+  { value: 'research_project', label: 'Research Project', icon: 'fa-flask' },
+  { value: 'event', label: 'Event', icon: 'fa-calendar-days' },
+  { value: 'travel_grant', label: 'Travel Grant', icon: 'fa-plane-departure' },
+  { value: 'fellowship', label: 'Fellowship', icon: 'fa-user-graduate' },
+];
+
+export const DEFAULT_PROJECT_TYPE = 'research_project';
+
+/**
+ * The type a new project starts as, from the `?type=` the dialog navigates
+ * with. Anything not on the list — a hand-edited URL, an old bookmark —
+ * starts as a research project rather than as a value the save would refuse.
+ */
+export function projectTypeFromParam(value: string | null): string {
+  return PROJECT_TYPE_OPTIONS.some((option) => option.value === value)
+    ? (value as string)
+    : DEFAULT_PROJECT_TYPE;
+}
+
+/** Proposal Details' research type, valued to match `research_projects.research_type`. */
+export const RESEARCH_TYPE_OPTIONS = [
+  { value: 'basic', label: 'Basic Research' },
+  { value: 'applied', label: 'Applied Research' },
+  { value: 'experimental', label: 'Experimental Research' },
+  { value: 'statistical', label: 'Statistical Research' },
+  { value: 'not_applicable', label: 'Not Applicable' },
+];
+
+/** Call for Details' funding source, valued to match `research_projects.funding_source`. */
+export const FUNDING_SOURCE_OPTIONS = [
+  { value: 'central_government', label: 'Central Government' },
+  { value: 'state_government', label: 'State Government' },
+  { value: 'public_sector_industry', label: 'Public Sector Industry' },
+  { value: 'private_sector_industry', label: 'Private Sector Industry' },
+  { value: 'startup', label: 'Start-up' },
+  { value: 'higher_education', label: 'Higher Education Institution' },
+  { value: 'other', label: 'Other' },
+];
+
+/** An Event or Fellowship's level, valued to match `research_projects.level`. */
+export const LEVEL_OPTIONS = [
+  { value: 'international', label: 'International' },
+  { value: 'national', label: 'National' },
+];
+
 export const SUBMISSION_MODE_OPTIONS = [
   { value: 'online', label: 'Online' },
   { value: 'offline', label: 'Offline' },
@@ -265,32 +316,25 @@ export const SANCTION_MODE_OPTIONS = [
   { value: 'advance_reimbursement', label: 'Advance + Reimbursement' },
 ];
 
+/** Where the grant-in-aid lands, valued to match `research_projects.grant_credited_to`. */
+export const GRANT_CREDITED_TO_OPTIONS = [
+  { value: 'pfms', label: 'PFMS' },
+  { value: 'institution_account', label: 'Institution Account' },
+  { value: 'individual_account', label: 'Individual Account' },
+];
+
 export const PROJECT_STATUS_OPTIONS = [
   { value: 'ongoing', label: 'Ongoing' },
   { value: 'completed', label: 'Completed' },
   { value: 'closed', label: 'Closed' },
 ];
 
-/** Government of India programmes projects are commonly aligned with. */
-export const NATIONAL_INITIATIVES = [
-  'Atmanirbhar Bharat',
-  'Atal Innovation Mission',
-  'Digital India',
-  'Green Hydrogen Mission',
-  'Jal Jeevan Mission',
-  'Make in India',
-  'National Education Policy 2020',
-  'National Mission on Quantum Technologies',
-  'National Quantum Mission',
-  'National Solar Mission',
-  'Skill India',
-  'Smart Cities Mission',
-  'Startup India',
-  'Svamitva',
-  'Swachh Bharat Mission',
-  'Unnat Bharat Abhiyan',
-  'Vocal for Local',
-];
+/**
+ * Only a completed or closed project has a closing date; the field is hidden
+ * otherwise. The server applies the same rule (`projectPayload.js`).
+ */
+export const statusHasClosingDate = (status: string): boolean =>
+  status === 'completed' || status === 'closed';
 
 /** The 17 UN Sustainable Development Goals, worded as in the journal form. */
 export const SUSTAINABLE_DEVELOPMENT_GOALS = [
@@ -412,18 +456,76 @@ export function financialYearForDate(isoDate: string): string {
 /** The tabs across the top of the project form, in order. */
 export const PROJECT_FORM_TABS = [
   { id: 'details', label: 'Project Details' },
-  { id: 'budget', label: 'Budget' },
-  { id: 'transaction', label: 'Transaction' },
+  // Budget, Transaction and Summary, as sub-tabs: a "Summary" of its own up
+  // here read as a summary of the whole project rather than of its money.
+  { id: 'finance', label: 'Finance' },
   { id: 'facility', label: 'Facility' },
   { id: 'manpower', label: 'Manpower' },
   { id: 'outcomes', label: 'Outcomes' },
   { id: 'documents', label: 'Documents' },
-  // Last, and read-only: every figure on it is derived from the Budget and
-  // Transaction tabs, so it is where you go once the budget and the ledger are in.
-  { id: 'summary', label: 'Summary' },
 ] as const;
 
 export type ProjectFormTab = (typeof PROJECT_FORM_TABS)[number]['id'];
+
+/**
+ * The Finance tab's sub-tabs, in the order the money is entered: the budget is
+ * allotted, the ledger records what moved against it, and the summary — read
+ * only, every figure derived from the other two — sets one against the other.
+ */
+export const FINANCE_SECTIONS = [
+  { id: 'budget', label: 'Budget' },
+  { id: 'transaction', label: 'Transaction' },
+  { id: 'summary', label: 'Summary' },
+] as const;
+
+export type FinanceSection = (typeof FINANCE_SECTIONS)[number]['id'];
+
+interface ProjectTypeRules {
+  /** Proposal Details asks the research type. */
+  asksResearchType: boolean;
+  /** Proposal Details asks the level, in the research type's place. */
+  asksLevel: boolean;
+  /** A project (and a scheme) of this type has a domain, picked in Call for Details. */
+  schemeHasDomain: boolean;
+  /** Tabs this type does not need — hidden while they hold nothing. */
+  tabsNotRequired: ProjectFormTab[];
+}
+
+/**
+ * What each project type asks for. The server applies the same research type
+ * and level rule (`projectPayload.js`) and the same domain rule
+ * (`schemeVocabulary.js`).
+ */
+export const PROJECT_TYPE_RULES: Record<string, ProjectTypeRules> = {
+  research_project: {
+    asksResearchType: true,
+    asksLevel: false,
+    schemeHasDomain: true,
+    tabsNotRequired: [],
+  },
+  event: {
+    asksResearchType: false,
+    asksLevel: true,
+    schemeHasDomain: true,
+    tabsNotRequired: ['facility', 'manpower', 'outcomes'],
+  },
+  travel_grant: {
+    asksResearchType: false,
+    asksLevel: false,
+    schemeHasDomain: false,
+    tabsNotRequired: ['facility', 'manpower'],
+  },
+  fellowship: {
+    asksResearchType: false,
+    asksLevel: true,
+    schemeHasDomain: true,
+    tabsNotRequired: ['manpower'],
+  },
+};
+
+/** The rules for a stored type, falling back to a research project's. */
+export const projectTypeRules = (projectType: string): ProjectTypeRules =>
+  PROJECT_TYPE_RULES[projectType] ?? PROJECT_TYPE_RULES[DEFAULT_PROJECT_TYPE];
 
 /**
  * A stored website is only ever opened as a link, so anything that is not an

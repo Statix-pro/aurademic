@@ -275,7 +275,13 @@ export interface FacilityRow {
   /** Listed on the I-STEM portal; the ID is only asked for, and kept, while it is. */
   istemListed: boolean;
   istemId: string;
-  supplierDetails: string;
+  supplierName: string;
+  supplierAddress: string;
+  /** The supplier's contact, on the strip's Contact Details line. */
+  contactPerson: string;
+  contactDesignation: string;
+  contactMobile: string;
+  contactEmail: string;
 }
 
 /** A bank account the project's money moves through, with its own ledger. */
@@ -301,16 +307,26 @@ export interface ProjectFormState {
   investigators: InvestigatorRow[];
 
   // Proposal details
+  /** A `PROJECT_TYPE_OPTIONS` value; never blank — a new project starts with one. */
+  projectType: string;
   title: string;
   projectCost: string;
   durationYears: string;
   durationMonths: string;
   durationDays: string;
+  /** A `RESEARCH_TYPE_OPTIONS` value; '' when unstated. Asked of a research project. */
+  researchType: string;
+  /** A `LEVEL_OPTIONS` value; '' when unstated. Asked of an Event or Fellowship. */
+  level: string;
   nationalInitiatives: string[];
   sdgs: string[];
 
   // Call for details
   fundingOrganizationId: number | null;
+  /** A `FUNDING_SOURCE_OPTIONS` value; '' when unstated. */
+  fundingSource: string;
+  /** A curated Domains entry; '' when unstated. The project's own, not the scheme's. */
+  domain: string;
   schemeId: number | null;
   /**
    * Names of the stored agency and scheme, kept so a selection that has since
@@ -352,6 +368,8 @@ export interface ProjectFormState {
   sanctionDate: string;
   sanctionReferenceNo: string;
   sanctionMode: SanctionMode;
+  /** A `GRANT_CREDITED_TO_OPTIONS` value; '' when unstated. */
+  grantCreditedTo: string;
 
   // Grant disbursement
   disbursements: DisbursementRow[];
@@ -422,6 +440,8 @@ export interface ProjectOrganization {
 export interface ProjectScheme {
   id: number;
   organization_id: number;
+  /** The kind of grant it funds; the form offers only the project's own type. */
+  project_type: string;
   name: string;
   domain: string | null;
   category: string | null;
@@ -448,12 +468,25 @@ export interface BudgetHeadOption {
   head_group: string;
 }
 
+/**
+ * An entry on one of the admin-curated lists (`project_vocabulary_options`):
+ * National Initiatives, Domains, or a project type's Categories. Stored on
+ * projects and schemes by name, so value and label are one.
+ */
+export interface VocabularyEntry {
+  list_key: 'national_initiative' | 'domain' | 'category';
+  /** The project type a category is for; '' on the other two lists. */
+  project_type: string;
+  name: string;
+}
+
 export interface ProjectLookups {
   organizations: ProjectOrganization[];
   schemes: ProjectScheme[];
   departments: DepartmentOption[];
   accounts: AccountOption[];
   budgetHeads: BudgetHeadOption[];
+  vocabulary: VocabularyEntry[];
 }
 
 export interface EmployeeSearchResult {

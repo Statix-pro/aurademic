@@ -498,10 +498,14 @@ const adminModel = {
         }
 
         const [result] = await connection.query(
-          `INSERT INTO project_schemes (organization_id, name, domain, category, website)
-           VALUES (?, ?, ?, ?, ?)`,
+          `INSERT INTO project_schemes (organization_id, project_type, name, domain, category, website)
+           VALUES (?, ?, ?, ?, ?, ?)`,
           [
             organizationId,
+            // LEGACY: a scheme request filed before requests carried a type was
+            // made from the research-project form, the only kind there was.
+            // Remove once no pending request has a NULL project_type.
+            request.project_type ?? 'research_project',
             request.name,
             request.domain,
             request.category,

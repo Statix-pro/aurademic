@@ -18,16 +18,16 @@ interface FacilitiesSectionProps {
 }
 
 /** The fields a facility row keeps in its expanded detail strip. */
-const DETAIL_ERROR_KEYS = ['istem_id'];
+const DETAIL_ERROR_KEYS = ['istem_id', 'contact_mobile', 'contact_email'];
 
 /**
  * The Facility tab: the equipment and software the project set up.
  *
  * Each row is laid out like a ledger row: what a reader scans down the list —
  * the name, type, date and cost — stays in the table, and the make, model,
- * stock-register entry, I-STEM listing and supplier drop into a strip beneath
- * it. The strip reuses the ledger's `pf-ledger__detail*` styles so the two tabs
- * read as one form.
+ * stock-register entry, I-STEM listing, supplier and the supplier's contact
+ * drop into a strip beneath it. The strip reuses the ledger's
+ * `pf-ledger__detail*` styles so the two tabs read as one form.
  */
 const FacilitiesSection: React.FC<FacilitiesSectionProps> = ({ rows, patch, errors, disabled }) => {
   const { openRow, openOnly, toggleRow } = useSingleExpandedRow(rows.map((row) => row.key));
@@ -141,7 +141,9 @@ const FacilitiesSection: React.FC<FacilitiesSectionProps> = ({ rows, patch, erro
                             controls={detailId}
                             detailLabel="facility details"
                             lockedLabel={
-                              hasDetailError ? 'Fix the I-STEM ID to collapse this row' : undefined
+                              hasDetailError
+                                ? 'Fix the highlighted details to collapse this row'
+                                : undefined
                             }
                           />
                         }
@@ -241,20 +243,103 @@ const FacilitiesSection: React.FC<FacilitiesSectionProps> = ({ rows, patch, erro
                         </div>
                       </div>
 
-                      <div className="pf-ledger__detail pf-facility__supplier-line">
-                        <label className="pf-ledger__detail-field pf-ledger__detail-field--wide">
-                          <span className="pf-ledger__detail-label">Supplier Details</span>
+                      {/* Supplier and contact share one grid so both lines'
+                          fields start at the same edge whichever label is
+                          longer. Each line is a group named by its label;
+                          the inputs carry their own names, since a
+                          placeholder is gone once something is typed. */}
+                      <div className="pf-facility__supplier">
+                        <div
+                          className="pf-facility__supplier-line"
+                          role="group"
+                          aria-labelledby={`${row.key}-supplier`}
+                        >
+                          <span id={`${row.key}-supplier`} className="pf-ledger__detail-label">
+                            Supplier Details
+                          </span>
+                          <input
+                            type="text"
+                            className="pf-input pf-facility__supplier-name"
+                            value={row.supplierName}
+                            onChange={(event) =>
+                              updateRow(index, { supplierName: event.target.value })
+                            }
+                            placeholder="Supplier Organization"
+                            disabled={disabled}
+                            maxLength={255}
+                            aria-label="Supplier organization"
+                          />
+                          <input
+                            type="text"
+                            className="pf-input pf-facility__supplier-address"
+                            value={row.supplierAddress}
+                            onChange={(event) =>
+                              updateRow(index, { supplierAddress: event.target.value })
+                            }
+                            placeholder="Address"
+                            disabled={disabled}
+                            maxLength={500}
+                            aria-label="Supplier address"
+                          />
+                        </div>
+
+                        <div
+                          className="pf-facility__supplier-line"
+                          role="group"
+                          aria-labelledby={`${row.key}-contact`}
+                        >
+                          <span id={`${row.key}-contact`} className="pf-ledger__detail-label">
+                            Contact Details
+                          </span>
                           <input
                             type="text"
                             className="pf-input"
-                            value={row.supplierDetails}
+                            value={row.contactPerson}
                             onChange={(event) =>
-                              updateRow(index, { supplierDetails: event.target.value })
+                              updateRow(index, { contactPerson: event.target.value })
                             }
-                            placeholder="Supplier Name, Address, Email & Mobile"
+                            placeholder="Contact Person"
                             disabled={disabled}
+                            maxLength={150}
+                            aria-label="Contact person"
                           />
-                        </label>
+                          <input
+                            type="text"
+                            className="pf-input"
+                            value={row.contactDesignation}
+                            onChange={(event) =>
+                              updateRow(index, { contactDesignation: event.target.value })
+                            }
+                            placeholder="Designation"
+                            disabled={disabled}
+                            maxLength={150}
+                            aria-label="Contact designation"
+                          />
+                          <input
+                            type="tel"
+                            className={`pf-input ${errors[`${field}.contact_mobile`] ? 'is-invalid' : ''}`.trim()}
+                            value={row.contactMobile}
+                            onChange={(event) =>
+                              updateRow(index, { contactMobile: event.target.value })
+                            }
+                            placeholder="Mobile"
+                            disabled={disabled}
+                            maxLength={20}
+                            aria-label="Contact mobile"
+                          />
+                          <input
+                            type="email"
+                            className={`pf-input ${errors[`${field}.contact_email`] ? 'is-invalid' : ''}`.trim()}
+                            value={row.contactEmail}
+                            onChange={(event) =>
+                              updateRow(index, { contactEmail: event.target.value })
+                            }
+                            placeholder="Email"
+                            disabled={disabled}
+                            maxLength={255}
+                            aria-label="Contact email"
+                          />
+                        </div>
                       </div>
                     </td>
                   </tr>

@@ -31,12 +31,17 @@ const STORED_DOI_PREFIX_PATTERN = '^((https?://)?(dx\\.|www\\.)?doi\\.org/|doi:\
 
 const PROJECT_COLUMNS = [
   'driven_by',
+  'project_type',
   'title',
   'project_cost',
   'duration_years',
   'duration_months',
   'duration_days',
+  'research_type',
+  'level',
   'funding_organization_id',
+  'funding_source',
+  'domain',
   'scheme_id',
   'collaborators_enabled',
   'financial_contribution_enabled',
@@ -57,6 +62,7 @@ const PROJECT_COLUMNS = [
   'sanction_date',
   'sanction_reference_no',
   'sanction_mode',
+  'grant_credited_to',
   'project_start_date',
   'project_closing_date',
   'project_status',
@@ -204,12 +210,16 @@ async function resolveInvestigatorAuthorId(connection, investigator, index) {
   return inserted.insertId;
 }
 
-/** Rejects a scheme that does not belong to the selected funding agency. */
+/**
+ * Rejects a scheme that does not belong to the selected funding agency, or
+ * that funds a different kind of grant than the project is — its category
+ * would come from the wrong list.
+ */
 async function assertSchemeBelongsToOrganization(connection, project) {
   if (!project.scheme_id) return;
 
   const [[scheme]] = await connection.query(
-    'SELECT organization_id FROM project_schemes WHERE id = ? LIMIT 1',
+    'SELECT organization_id, project_type FROM project_schemes WHERE id = ? LIMIT 1',
     [project.scheme_id],
   );
 
@@ -223,6 +233,14 @@ async function assertSchemeBelongsToOrganization(connection, project) {
       {
         field: 'scheme_id',
         message: 'The selected scheme belongs to a different funding agency.',
+      },
+    ]);
+  }
+  if (scheme.project_type !== project.project_type) {
+    throw new ProjectValidationError([
+      {
+        field: 'scheme_id',
+        message: 'The selected scheme is for a different project type.',
       },
     ]);
   }
@@ -467,7 +485,8 @@ async function replaceFacilities(connection, projectId, facilities) {
   await connection.query(
     `INSERT INTO project_facilities
       (project_id, facility_name, facility_type, installation_date, cost, make, model,
-       serial_no, stock_register_ref, istem_listed, istem_id, supplier_details, display_order)
+       serial_no, stock_register_ref, istem_listed, istem_id, supplier_name, supplier_address,
+       contact_person, contact_designation, contact_mobile, contact_email, display_order)
      VALUES ?`,
     [
       facilities.map((row) => [
@@ -482,7 +501,12 @@ async function replaceFacilities(connection, projectId, facilities) {
         row.stock_register_ref,
         row.istem_listed,
         row.istem_id,
-        row.supplier_details,
+        row.supplier_name,
+        row.supplier_address,
+        row.contact_person,
+        row.contact_designation,
+        row.contact_mobile,
+        row.contact_email,
         row.display_order,
       ]),
     ],
@@ -961,12 +985,17 @@ const projectModel = {
       `SELECT
           rp.id,
           rp.driven_by,
+          rp.project_type,
           rp.title,
           rp.project_cost,
           rp.duration_years,
           rp.duration_months,
           rp.duration_days,
+          rp.research_type,
+          rp.level,
           rp.funding_organization_id,
+          rp.funding_source,
+          rp.domain,
           rp.scheme_id,
           rp.collaborators_enabled,
           rp.financial_contribution_enabled,
@@ -987,6 +1016,7 @@ const projectModel = {
           DATE_FORMAT(rp.sanction_date, '%Y-%m-%d') AS sanction_date,
           rp.sanction_reference_no,
           rp.sanction_mode,
+          rp.grant_credited_to,
           DATE_FORMAT(rp.project_start_date, '%Y-%m-%d') AS project_start_date,
           DATE_FORMAT(rp.project_closing_date, '%Y-%m-%d') AS project_closing_date,
           rp.project_status,
@@ -1005,7 +1035,6 @@ const projectModel = {
           org.short_name AS funding_organization_short_name,
           org.website AS funding_organization_website,
           sch.name AS scheme_name,
-          sch.domain AS scheme_domain,
           sch.category AS scheme_category,
           sch.website AS scheme_website
         FROM research_projects rp
@@ -1163,7 +1192,8 @@ const projectModel = {
       ),
       db.query(
         `SELECT id, facility_name, facility_type, cost, make, model, serial_no,
-                  stock_register_ref, istem_listed, istem_id, supplier_details, display_order,
+                  stock_register_ref, istem_listed, istem_id, supplier_name, supplier_address,
+                  contact_person, contact_designation, contact_mobile, contact_email, display_order,
                   DATE_FORMAT(installation_date, '%Y-%m-%d') AS installation_date
              FROM project_facilities
             WHERE project_id = ?
@@ -1415,41 +1445,51 @@ const projectModel = {
    * latency to the form's first paint.
    */
   async getFormLookups() {
-    const [organizations, schemes, departments, accounts, budgetHeads] = await Promise.all([
-      db.query(
-        `SELECT id, name, short_name, category, city, state, country, website,
+    const [organizations, schemes, departments, accounts, budgetHeads, vocabulary] =
+      await Promise.all([
+        db.query(
+          `SELECT id, name, short_name, category, city, state, country, website,
                 is_funding_agency, is_internal
            FROM project_organizations
           WHERE is_active = 1
           ORDER BY is_internal DESC, sort_order, name`,
-      ),
-      db.query(
-        `SELECT id, organization_id, name, domain, category, website
+        ),
+        db.query(
+          `SELECT id, organization_id, project_type, name, domain, category, website
            FROM project_schemes
           WHERE is_active = 1
           ORDER BY sort_order, name`,
-      ),
-      db.query(
-        `SELECT id, name, code FROM master_departments WHERE is_active = 1 ORDER BY sort_order, name`,
-      ),
-      // The Transaction tab's account dropdown, from the same list the finance
-      // and expenditure screens use.
-      db.query(
-        `SELECT id, account_name AS name
+        ),
+        db.query(
+          `SELECT id, name, code FROM master_departments WHERE is_active = 1 ORDER BY sort_order, name`,
+        ),
+        // The Transaction tab's account dropdown, from the same list the finance
+        // and expenditure screens use.
+        db.query(
+          `SELECT id, account_name AS name
            FROM account_options
           WHERE is_active = 1 AND is_deleted = 0
           ORDER BY sort_order, account_name`,
-      ),
-      // The budget-head vocabulary the form offers, curated in the admin. A
-      // head retired there stays on the projects that already budget under it,
-      // which store the name rather than a reference to this row.
-      db.query(
-        `SELECT id, name, head_group
+        ),
+        // The budget-head vocabulary the form offers, curated in the admin. A
+        // head retired there stays on the projects that already budget under it,
+        // which store the name rather than a reference to this row.
+        db.query(
+          `SELECT id, name, head_group
            FROM project_budget_head_options
           WHERE is_active = 1
           ORDER BY head_group, sort_order, name`,
-      ),
-    ]);
+        ),
+        // National Initiatives, Domains and each type's Categories, curated in
+        // the admin. Only what is offered; a stored value that has since been
+        // retired is kept on the record and shown by the form as it is.
+        db.query(
+          `SELECT list_key, project_type, name
+           FROM project_vocabulary_options
+          WHERE is_active = 1
+          ORDER BY list_key, project_type, name`,
+        ),
+      ]);
 
     return {
       organizations: organizations[0],
@@ -1457,6 +1497,7 @@ const projectModel = {
       departments: departments[0],
       accounts: accounts[0],
       budgetHeads: budgetHeads[0],
+      vocabulary: vocabulary[0],
     };
   },
 
@@ -1508,7 +1549,7 @@ const projectModel = {
     }
 
     const [rows] = await db.query(
-      `SELECT id, organization_id, name, domain, category, website
+      `SELECT id, organization_id, project_type, name, domain, category, website
          FROM project_schemes
         WHERE ${filters.join(' AND ')}
         ORDER BY sort_order, name
@@ -1525,15 +1566,16 @@ const projectModel = {
   async createRequest(userId, request) {
     const [result] = await db.query(
       `INSERT INTO project_requests
-        (user_id, request_type, name, organization_id, organization_name, domain, category,
-         website, description)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        (user_id, request_type, name, organization_id, organization_name, project_type, domain,
+         category, website, description)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         userId,
         request.request_type,
         request.name,
         request.organization_id,
         request.organization_name,
+        request.project_type,
         request.domain,
         request.category,
         request.website,

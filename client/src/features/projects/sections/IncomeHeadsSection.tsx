@@ -46,7 +46,7 @@ const IncomeHeadsSection: React.FC<IncomeHeadsSectionProps> = ({ value, onChange
   return (
     <SectionCard
       title="Income Heads"
-      info="Tick the heads this project receives under. Only these are offered on the Transaction tab."
+      info="Tick the heads this project receives under. Only these are offered under Finance → Transaction."
     >
       <div className="pf-income-heads">
         {PROJECT_INCOME_HEADS.map((name) => (

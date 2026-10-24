@@ -13,6 +13,11 @@
   /* Text Colors */
   --text-main: #4f4f6e;
   --text-muted: #6c757d;
+  /* Placeholder hints, portal-wide: a light grey so a hint never reads as a typed value
+     (3.7:1 lighter than typed #2f3b4c), 3:1 on a white field (2.9:1 on #f8f9fa).
+     The owner chose this over #667383 (4.75:1, flagged as too dark to read as a hint)
+     on 2026-10-22, trading full WCAG text contrast for a clearly secondary hint. */
+  --placeholder-color: #8a95a4;
   --text-light: #ffffff;
 
   /* Border Colors */

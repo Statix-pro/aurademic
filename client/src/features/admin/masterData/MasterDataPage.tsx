@@ -832,6 +832,8 @@ export default function MasterDataPage() {
             />
           </div>
           <Form.Select
+            // "All …" / "None" is a real choice here, not a hint; see shared/styles/index.css.
+            data-empty-is-value
             value={deptTypeFilter}
             onChange={(e) => setDeptTypeFilter(e.target.value)}
             style={{ maxWidth: 180 }}
@@ -1057,6 +1059,8 @@ export default function MasterDataPage() {
                 <Form.Group>
                   <Form.Label>Parent Department</Form.Label>
                   <Form.Select
+                    // "All …" / "None" is a real choice here, not a hint; see shared/styles/index.css.
+                    data-empty-is-value
                     value={deptForm.parent_id}
                     onChange={(e) => setDeptForm({ ...deptForm, parent_id: e.target.value })}
                   >
@@ -1168,6 +1172,8 @@ export default function MasterDataPage() {
             />
           </div>
           <Form.Select
+            // "All …" / "None" is a real choice here, not a hint; see shared/styles/index.css.
+            data-empty-is-value
             value={entityTypeFilter}
             onChange={(e) => setEntityTypeFilter(e.target.value)}
             style={{ maxWidth: 200 }}
@@ -1480,6 +1486,8 @@ export default function MasterDataPage() {
             />
           </div>
           <Form.Select
+            // "All …" / "None" is a real choice here, not a hint; see shared/styles/index.css.
+            data-empty-is-value
             value={empDeptFilter}
             onChange={(e) => {
               setEmpDeptFilter(e.target.value);
@@ -1495,6 +1503,8 @@ export default function MasterDataPage() {
             ))}
           </Form.Select>
           <Form.Select
+            // "All …" / "None" is a real choice here, not a hint; see shared/styles/index.css.
+            data-empty-is-value
             value={empTypeFilter}
             onChange={(e) => {
               setEmpTypeFilter(e.target.value);
@@ -1510,6 +1520,8 @@ export default function MasterDataPage() {
             <option value="Guest Faculty">Guest Faculty</option>
           </Form.Select>
           <Form.Select
+            // "All …" / "None" is a real choice here, not a hint; see shared/styles/index.css.
+            data-empty-is-value
             value={empStatusFilter}
             onChange={(e) => {
               setEmpStatusFilter(e.target.value);

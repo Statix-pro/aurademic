@@ -7,7 +7,12 @@
  * `disbursement__<key>__<slot>` part names the server parses.
  */
 
-import { DISBURSEMENT_SLOTS, MANPOWER_SLOTS, OUTCOME_DOCUMENT_SLOTS } from './constants';
+import {
+  DISBURSEMENT_SLOTS,
+  MANPOWER_SLOTS,
+  OUTCOME_DOCUMENT_SLOTS,
+  statusHasClosingDate,
+} from './constants';
 import { PROJECT_DOCUMENT_TYPES, allotmentKey } from './projectFormState';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
@@ -73,16 +78,21 @@ const clearedSlots = <T extends string>(
 export function buildProjectPayload(form: ProjectFormState) {
   return {
     driven_by: form.drivenBy,
+    project_type: form.projectType || null,
 
     title: form.title.trim(),
     project_cost: nullableNumber(form.projectCost),
     duration_years: count(form.durationYears),
     duration_months: count(form.durationMonths),
     duration_days: count(form.durationDays),
+    research_type: form.researchType || null,
+    level: form.level || null,
     national_initiatives: form.nationalInitiatives,
     sdgs: form.sdgs,
 
     funding_organization_id: form.fundingOrganizationId,
+    funding_source: form.fundingSource || null,
+    domain: form.domain || null,
     scheme_id: form.schemeId,
 
     collaborators_enabled: form.collaboratorsEnabled,
@@ -136,6 +146,7 @@ export function buildProjectPayload(form: ProjectFormState) {
     sanction_date: form.sanctionDate || null,
     sanction_reference_no: form.sanctionReferenceNo || null,
     sanction_mode: form.sanctionMode || null,
+    grant_credited_to: form.grantCreditedTo || null,
 
     disbursements: form.disbursements.map((row) => ({
       id: row.id,
@@ -149,7 +160,9 @@ export function buildProjectPayload(form: ProjectFormState) {
     })),
 
     project_start_date: form.projectStartDate || null,
-    project_closing_date: form.projectClosingDate || null,
+    project_closing_date: statusHasClosingDate(form.projectStatus)
+      ? form.projectClosingDate || null
+      : null,
     project_status: form.projectStatus || null,
 
     // The six typed outcome counts are not sent: the Outcomes tab's rows
@@ -217,7 +230,12 @@ export function buildProjectPayload(form: ProjectFormState) {
       stock_register_ref: row.stockRegisterRef || null,
       istem_listed: row.istemListed,
       istem_id: row.istemListed ? row.istemId || null : null,
-      supplier_details: row.supplierDetails || null,
+      supplier_name: row.supplierName || null,
+      supplier_address: row.supplierAddress || null,
+      contact_person: row.contactPerson || null,
+      contact_designation: row.contactDesignation || null,
+      contact_mobile: row.contactMobile || null,
+      contact_email: row.contactEmail || null,
     })),
 
     // Sent with their ids and keys like the disbursements: the id keeps a row's
@@ -363,6 +381,7 @@ const projectsApi = {
       departments: response.data?.departments ?? [],
       accounts: response.data?.accounts ?? [],
       budgetHeads: response.data?.budgetHeads ?? [],
+      vocabulary: response.data?.vocabulary ?? [],
     };
   },
 
@@ -450,7 +469,7 @@ const projectsApi = {
     name: string;
     organization_id?: number | null;
     organization_name?: string;
-    domain?: string;
+    project_type?: string | null;
     category?: string;
     website?: string;
   }): Promise<void> {

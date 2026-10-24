@@ -5,17 +5,20 @@ import { Alert, Form } from 'react-bootstrap';
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomCheckbox from '../../../shared/components/ui/CustomCheckbox';
+import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
 import CustomInput from '../../../shared/components/ui/CustomInput';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { PROJECT_TYPE_OPTIONS, projectTypeRules } from '../../projects/constants';
 import { AdminIconButton, AdminScreenHeader, AdminTabs } from '../components/AdminScreen';
 
 /**
  * Master data behind the project form: the organizations that fund or
- * collaborate on projects, the schemes each of them offers, and the budget head
- * vocabulary the form's Budget Head(s) pickers are built from. A scheme carries
- * the domain, category and website the form shows read-only next to it.
+ * collaborate on projects, the schemes each of them offers, the budget head
+ * vocabulary the form's Budget Head(s) pickers are built from, and the
+ * National Initiatives, Domains and Categories lists. A scheme carries the
+ * category and website the form shows read-only next to it.
  */
 
 interface OrganizationRow {
@@ -33,9 +36,27 @@ interface OrganizationRow {
   sort_order?: number;
 }
 
+/**
+ * A scheme's domain or category as `<option>`s: the curated list, plus the
+ * scheme's stored value when it is not on it.
+ *
+ * A scheme can hold a value the list no longer offers — renamed or retired on
+ * the Domains or Categories tab, or free text saved before the lists existed.
+ * Offering it keeps the select from rendering blank, and the server lets that
+ * unchanged value through, so editing the scheme's other fields is not blocked.
+ */
+function schemeSelectOptions(options: { value: string; label: string }[], stored?: string | null) {
+  const legacyValue = stored && !options.some((option) => option.value === stored) ? stored : null;
+  return legacyValue
+    ? [{ value: legacyValue, label: `${legacyValue} (not on the list)` }, ...options]
+    : options;
+}
+
 interface SchemeRow {
   id: number;
   organization_id: number;
+  /** The kind of grant it funds; picks its category list. */
+  project_type?: string;
   organization_name?: string;
   name: string;
   domain?: string | null;
@@ -58,22 +79,58 @@ interface BudgetHeadRow {
   sort_order?: number;
 }
 
+/**
+ * An entry on one of the curated lists — National Initiatives, Domains or
+ * Categories. Like budget heads, projects and schemes store the name, so a
+ * rename or deactivation here changes only what the form offers next.
+ */
+interface VocabularyRow {
+  id: number;
+  list_key: string;
+  /** The project type a category is for; '' on the other two lists. */
+  project_type: string;
+  name: string;
+  is_active?: number;
+}
+
+type VocabularyTab = 'national-initiatives' | 'domains' | 'categories';
+
 // The tab is also the path segment its CRUD calls use, so these match the
 // routes in server/modules/formOptions/formOptionsRoutes.js.
-type TabType = 'organizations' | 'schemes' | 'budget-heads';
-type EditableRow = Partial<OrganizationRow> & Partial<SchemeRow> & Partial<BudgetHeadRow>;
+type TabType = 'organizations' | 'schemes' | 'budget-heads' | VocabularyTab;
+type EditableRow = Partial<OrganizationRow> &
+  Partial<SchemeRow> &
+  Partial<BudgetHeadRow> &
+  Partial<VocabularyRow>;
+
+const VOCABULARY_TABS: VocabularyTab[] = ['national-initiatives', 'domains', 'categories'];
+const isVocabularyTab = (tab: TabType): tab is VocabularyTab =>
+  (VOCABULARY_TABS as TabType[]).includes(tab);
 
 const TAB_LABELS: Record<TabType, string> = {
   organizations: 'Organization',
   schemes: 'Scheme',
   'budget-heads': 'Budget Head',
+  'national-initiatives': 'National Initiative',
+  domains: 'Domain',
+  categories: 'Category',
 };
 
 const TAB_TITLES: Record<TabType, string> = {
   organizations: 'Organizations',
   schemes: 'Schemes',
   'budget-heads': 'Budget Heads',
+  'national-initiatives': 'National Initiatives',
+  domains: 'Domains',
+  categories: 'Categories',
 };
+
+const projectTypeLabel = (projectType?: string | null) =>
+  PROJECT_TYPE_OPTIONS.find((option) => option.value === projectType)?.label ?? projectType;
+
+/** Active entries as `<option>`s, alphabetical as the server lists them. */
+const activeOptions = (rows: VocabularyRow[]) =>
+  rows.filter((row) => row.is_active !== 0).map((row) => ({ value: row.name, label: row.name }));
 
 // The dialog's form fills its body and Save sits in its footer, outside the
 // form, so the button reaches the form by id.
@@ -95,6 +152,11 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
   const [organizations, setOrganizations] = useState<OrganizationRow[]>([]);
   const [schemes, setSchemes] = useState<SchemeRow[]>([]);
   const [budgetHeads, setBudgetHeads] = useState<BudgetHeadRow[]>([]);
+  const [vocabulary, setVocabulary] = useState<Record<VocabularyTab, VocabularyRow[]>>({
+    'national-initiatives': [],
+    domains: [],
+    categories: [],
+  });
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -127,23 +189,38 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       setLoading(true);
       setError('');
 
-      // Schemes reference organizations, so both lists are always loaded: the
-      // scheme editor needs the organization dropdown either way.
-      const [organizationResponse, schemeResponse, budgetHeadResponse] = await Promise.all([
-        authenticityUtility.get('/form-options/project-options/organizations') as Promise<{
-          data: OrganizationRow[];
-        }>,
-        authenticityUtility.get('/form-options/project-options/schemes') as Promise<{
-          data: SchemeRow[];
-        }>,
-        authenticityUtility.get('/form-options/project-options/budget-heads') as Promise<{
-          data: BudgetHeadRow[];
-        }>,
-      ]);
+      // Schemes reference organizations, domains and categories, so every list
+      // is always loaded: the scheme editor needs their dropdowns either way.
+      const [organizationResponse, schemeResponse, budgetHeadResponse, ...vocabularyResponses] =
+        await Promise.all([
+          authenticityUtility.get('/form-options/project-options/organizations') as Promise<{
+            data: OrganizationRow[];
+          }>,
+          authenticityUtility.get('/form-options/project-options/schemes') as Promise<{
+            data: SchemeRow[];
+          }>,
+          authenticityUtility.get('/form-options/project-options/budget-heads') as Promise<{
+            data: BudgetHeadRow[];
+          }>,
+          ...VOCABULARY_TABS.map(
+            (tab) =>
+              authenticityUtility.get(`/form-options/project-options/${tab}`) as Promise<{
+                data: VocabularyRow[];
+              }>,
+          ),
+        ]);
 
       setOrganizations(Array.isArray(organizationResponse.data) ? organizationResponse.data : []);
       setSchemes(Array.isArray(schemeResponse.data) ? schemeResponse.data : []);
       setBudgetHeads(Array.isArray(budgetHeadResponse.data) ? budgetHeadResponse.data : []);
+      setVocabulary(
+        Object.fromEntries(
+          VOCABULARY_TABS.map((tab, index) => [
+            tab,
+            Array.isArray(vocabularyResponses[index].data) ? vocabularyResponses[index].data : [],
+          ]),
+        ) as Record<VocabularyTab, VocabularyRow[]>,
+      );
     } catch (err: unknown) {
       console.error('Error fetching project options:', err);
       setError('Failed to load project options. Please try again later.');
@@ -168,6 +245,12 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
     [budgetHeads],
   );
 
+  // What the scheme editor offers: the active entries only. A scheme's stored
+  // value that is no longer among them is added back by `schemeSelectOptions`.
+  const domainOptions = useMemo(() => activeOptions(vocabulary.domains), [vocabulary.domains]);
+  const categoryOptionsFor = (projectType: string) =>
+    activeOptions(vocabulary.categories.filter((row) => row.project_type === projectType));
+
   /**
    * Where a new head sits in the group it is being added to — after the ones
    * already there. Counted within the group, not across the whole table: the
@@ -179,8 +262,22 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       .filter((head) => head.head_group === group)
       .reduce((highest, head) => Math.max(highest, head.sort_order ?? 0), 0) + 1;
 
+  // A save error belongs to the dialog; it is not left on the page behind it
+  // once the dialog is closed.
+  const closeModal = () => {
+    setShowModal(false);
+    setError('');
+  };
+
   const openCreate = () => {
     const defaultHeadGroup = headGroups[0] ?? 'Research Projects';
+    // The lists are alphabetical, so a new entry needs only its name — and a
+    // category its project type.
+    const vocabularyDefault = (projectType = ''): EditableRow => ({
+      name: '',
+      project_type: projectType,
+      is_active: 1,
+    });
 
     const defaults: Record<TabType, EditableRow> = {
       organizations: {
@@ -193,6 +290,7 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       schemes: {
         name: '',
         organization_id: organizationOptions[0]?.id,
+        project_type: 'research_project',
         is_active: 1,
         sort_order: 0,
       },
@@ -204,6 +302,9 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
         is_active: 1,
         sort_order: nextSortOrderIn(defaultHeadGroup),
       },
+      'national-initiatives': vocabularyDefault(),
+      domains: vocabularyDefault(),
+      categories: vocabularyDefault('research_project'),
     };
 
     setCurrent(defaults[activeTab]);
@@ -356,15 +457,21 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       render: (row: SchemeRow) => row.organization_name || <span className="admin-muted">—</span>,
     },
     {
+      key: 'project_type',
+      label: 'Type',
+      style: { width: '12%' },
+      render: (row: SchemeRow) => projectTypeLabel(row.project_type),
+    },
+    {
       key: 'domain',
       label: 'Domain',
-      style: { width: '18%' },
+      style: { width: '14%' },
       render: (row: SchemeRow) => row.domain || <span className="admin-muted">—</span>,
     },
     {
       key: 'category',
       label: 'Category',
-      style: { width: '16%' },
+      style: { width: '14%' },
       render: (row: SchemeRow) => row.category || <span className="admin-muted">—</span>,
     },
   ];
@@ -395,6 +502,29 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
     },
   ];
 
+  const vocabularyNameColumn = {
+    key: 'name',
+    label: 'Name',
+    style: { width: '72%' },
+    render: (row: VocabularyRow) => (
+      <>
+        <span className="admin-name">{row.name}</span>
+        {statusBadge(row.is_active)}
+      </>
+    ),
+  };
+  const vocabularyColumns = [vocabularyNameColumn];
+  // A category is offered only for its project type, so the type is shown.
+  const categoryColumns = [
+    { ...vocabularyNameColumn, style: { width: '50%' } },
+    {
+      key: 'project_type',
+      label: 'Project type',
+      style: { width: '30%' },
+      render: (row: VocabularyRow) => projectTypeLabel(row.project_type),
+    },
+  ];
+
   const tables: Record<
     TabType,
     { columns: typeof organizationColumns; data: any[]; empty: string }
@@ -410,12 +540,30 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       data: budgetHeads,
       empty: 'No budget heads yet.',
     },
+    'national-initiatives': {
+      columns: vocabularyColumns as any,
+      data: vocabulary['national-initiatives'],
+      empty: 'No national initiatives yet.',
+    },
+    domains: {
+      columns: vocabularyColumns as any,
+      data: vocabulary.domains,
+      empty: 'No domains yet.',
+    },
+    categories: {
+      columns: categoryColumns as any,
+      data: vocabulary.categories,
+      empty: 'No categories yet.',
+    },
   };
 
   const counts: Record<TabType, number> = {
     organizations: organizations.length,
     schemes: schemes.length,
     'budget-heads': budgetHeads.length,
+    'national-initiatives': vocabulary['national-initiatives'].length,
+    domains: vocabulary.domains.length,
+    categories: vocabulary.categories.length,
   };
 
   const active = tables[activeTab];
@@ -432,7 +580,7 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
       {!embedded && (
         <AdminScreenHeader
           title="Project Options"
-          description="The master lists the project form is built from — who funds and collaborates on projects, the schemes they offer, and the heads a project budgets against."
+          description="The master lists the project form is built from — who funds and collaborates on projects, the schemes they offer, the heads a project budgets against, and the national initiatives, domains and categories it is classed under."
           actions={addButton}
         />
       )}
@@ -454,7 +602,10 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
         <div className="admin-screen__header-actions admin-screen__tab-actions">{addButton}</div>
       )}
 
-      {error && <Alert variant="danger">{error}</Alert>}
+      {/* One error state serves the page and the dialog; while the dialog is
+          open its own copy is the one being read, so the page's would only
+          repeat it behind the backdrop. */}
+      {error && !showModal && <Alert variant="danger">{error}</Alert>}
 
       <div className="admin-card">
         <CustomTable
@@ -468,7 +619,7 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
 
       <CustomModal
         show={showModal}
-        onHide={() => setShowModal(false)}
+        onHide={closeModal}
         className="admin-modal"
         title={`${isEditing ? 'Edit' : 'Add'} ${TAB_LABELS[activeTab]}`}
         footer={
@@ -476,7 +627,7 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
             <CustomButton
               variant="light"
               className="admin-btn-secondary"
-              onClick={() => setShowModal(false)}
+              onClick={closeModal}
               disabled={loading}
             >
               Cancel
@@ -601,24 +752,118 @@ const ProjectFormOptions: React.FC<ProjectFormOptionsProps> = ({ embedded = fals
               </>
             )}
 
+            {isVocabularyTab(activeTab) && (
+              <>
+                {activeTab === 'categories' && (
+                  <CustomDropdown
+                    label="Project type"
+                    name="pfo-vocabulary-project-type"
+                    options={PROJECT_TYPE_OPTIONS}
+                    value={
+                      PROJECT_TYPE_OPTIONS.find(
+                        (option) => option.value === (current.project_type || 'research_project'),
+                      ) ?? null
+                    }
+                    onChange={(selected) => {
+                      const projectType = String((selected as OptionType | null)?.value ?? '');
+                      if (!projectType || projectType === current.project_type) return;
+                      setCurrent({ ...current, project_type: projectType });
+                    }}
+                  />
+                )}
+
+                <p className="admin-hint admin-field--full">
+                  {activeTab === 'categories'
+                    ? 'A category is offered only for schemes of its project type. '
+                    : ''}
+                  The project form lists entries alphabetically. Projects and schemes keep the name
+                  they were saved with, so renaming or deactivating an entry changes only what the
+                  form offers from now on.
+                </p>
+              </>
+            )}
+
+            {/* A scheme's domain and category come from the curated lists,
+                checked again on the server; an organization's category is its
+                type and stays free text. The type decides the category list,
+                so a change of type clears the category — and the domain, for a
+                type that has none. */}
             {activeTab === 'schemes' && (
-              <CustomInput
-                label="Domain"
-                name="pfo-domain"
-                value={current.domain || ''}
-                onChange={(value) => setCurrent({ ...current, domain: value })}
+              <CustomDropdown
+                label="Project type"
+                name="pfo-project-type"
+                options={PROJECT_TYPE_OPTIONS}
+                value={
+                  PROJECT_TYPE_OPTIONS.find(
+                    (option) => option.value === (current.project_type || 'research_project'),
+                  ) ?? null
+                }
+                onChange={(selected) => {
+                  const projectType = String((selected as OptionType | null)?.value ?? '');
+                  if (!projectType || projectType === current.project_type) return;
+                  // The server lets an unlisted domain through only while the
+                  // type is unchanged, so under a new type it would refuse
+                  // one; it is cleared here rather than on a failed save.
+                  const unlistedDomain =
+                    Boolean(current.domain) &&
+                    !domainOptions.some((option) => option.value === current.domain);
+                  setCurrent({
+                    ...current,
+                    project_type: projectType,
+                    category: null,
+                    ...(projectTypeRules(projectType).schemeHasDomain && !unlistedDomain
+                      ? {}
+                      : { domain: null }),
+                  });
+                }}
               />
             )}
 
-            {activeTab !== 'budget-heads' && (
+            {activeTab === 'schemes' &&
+              [
+                ...(projectTypeRules(current.project_type || 'research_project').schemeHasDomain
+                  ? [{ key: 'domain' as const, label: 'Domain', options: domainOptions }]
+                  : []),
+                {
+                  key: 'category' as const,
+                  label: 'Category',
+                  options: categoryOptionsFor(current.project_type || 'research_project'),
+                },
+              ].map((field) => {
+                const options = [
+                  { value: '', label: 'Not stated' },
+                  ...schemeSelectOptions(field.options, current[field.key]),
+                ];
+                return (
+                  <CustomDropdown
+                    key={field.key}
+                    label={field.label}
+                    name={`pfo-${field.key}`}
+                    options={options}
+                    value={
+                      options.find((option) => option.value === (current[field.key] || '')) ?? null
+                    }
+                    onChange={(selected) =>
+                      setCurrent({
+                        ...current,
+                        [field.key]: String((selected as OptionType | null)?.value ?? '') || null,
+                      })
+                    }
+                  />
+                );
+              })}
+
+            {(activeTab === 'organizations' || activeTab === 'schemes') && (
               <>
-                <CustomInput
-                  label="Category"
-                  name="pfo-category"
-                  placeholder={activeTab === 'organizations' ? 'Government' : 'Research Project'}
-                  value={current.category || ''}
-                  onChange={(value) => setCurrent({ ...current, category: value })}
-                />
+                {activeTab === 'organizations' && (
+                  <CustomInput
+                    label="Category"
+                    name="pfo-category"
+                    placeholder="Government"
+                    value={current.category || ''}
+                    onChange={(value) => setCurrent({ ...current, category: value })}
+                  />
+                )}
 
                 <CustomInput
                   label="Website"

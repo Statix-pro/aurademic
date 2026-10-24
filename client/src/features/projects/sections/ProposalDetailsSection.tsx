@@ -1,15 +1,23 @@
 import React, { useMemo } from 'react';
 
-import { AmountInput, Field } from '../components/FormFields';
+import { AmountInput, Field, SelectField } from '../components/FormFields';
 import SectionCard from '../components/SectionCard';
 import TagSelectField from '../components/TagSelectField';
-import { NATIONAL_INITIATIVES, SUSTAINABLE_DEVELOPMENT_GOALS } from '../constants';
+import {
+  LEVEL_OPTIONS,
+  RESEARCH_TYPE_OPTIONS,
+  SUSTAINABLE_DEVELOPMENT_GOALS,
+  projectTypeRules,
+} from '../constants';
+import { vocabularyOptions } from '../selectOptions';
 
-import type { ProjectFormState } from '../types';
+import type { ProjectFormState, VocabularyEntry } from '../types';
 
 interface ProposalDetailsSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
+  /** The admin-curated lists; National Initiatives is read from them. */
+  vocabulary: VocabularyEntry[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -19,11 +27,20 @@ const toOptions = (values: string[]) => values.map((value) => ({ value, label: v
 const ProposalDetailsSection: React.FC<ProposalDetailsSectionProps> = ({
   form,
   patch,
+  vocabulary,
   errors,
   disabled,
 }) => {
-  const initiativeOptions = useMemo(() => toOptions(NATIONAL_INITIATIVES), []);
+  // An initiative the admin has since retired stays on the project as a chip:
+  // TagSelectField shows a value that is no longer offered.
+  const initiativeOptions = useMemo(
+    () => vocabularyOptions(vocabulary, 'national_initiative'),
+    [vocabulary],
+  );
   const sdgOptions = useMemo(() => toOptions(SUSTAINABLE_DEVELOPMENT_GOALS), []);
+  // The type itself is not asked here: it is picked in the dialog the Projects
+  // page's Add opens, and decides which of these fields the form shows.
+  const rules = projectTypeRules(form.projectType);
 
   return (
     <SectionCard title="Proposal Details" className="pf-card--proposal">
@@ -39,6 +56,36 @@ const ProposalDetailsSection: React.FC<ProposalDetailsSectionProps> = ({
           maxLength={500}
         />
       </Field>
+
+      {/* An Event or Fellowship is classed by level in the research type's
+          place; a Travel Grant asks neither. */}
+      {rules.asksResearchType && (
+        <Field label="Research Type" htmlFor="pf-research-type" error={errors.research_type}>
+          <SelectField
+            id="pf-research-type"
+            value={form.researchType}
+            onChange={(researchType) => patch({ researchType })}
+            options={RESEARCH_TYPE_OPTIONS}
+            placeholder="Select Research Type"
+            disabled={disabled}
+            invalid={Boolean(errors.research_type)}
+          />
+        </Field>
+      )}
+
+      {rules.asksLevel && (
+        <Field label="Level" htmlFor="pf-level" error={errors.level}>
+          <SelectField
+            id="pf-level"
+            value={form.level}
+            onChange={(level) => patch({ level })}
+            options={LEVEL_OPTIONS}
+            placeholder="Select Level"
+            disabled={disabled}
+            invalid={Boolean(errors.level)}
+          />
+        </Field>
+      )}
 
       <div className="pf-grid pf-grid--budget">
         <Field label="Budget" htmlFor="pf-project-cost" error={errors.project_cost}>

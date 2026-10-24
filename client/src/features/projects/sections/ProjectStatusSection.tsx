@@ -2,7 +2,7 @@ import React from 'react';
 
 import { SelectField } from '../components/FormFields';
 import SectionCard from '../components/SectionCard';
-import { PROJECT_STATUS_OPTIONS } from '../constants';
+import { PROJECT_STATUS_OPTIONS, statusHasClosingDate } from '../constants';
 
 import type { ProjectFormState, ProjectStatus } from '../types';
 
@@ -35,20 +35,23 @@ const ProjectStatusSection: React.FC<ProjectStatusSectionProps> = ({
         />
       </div>
 
-      <div className="pf-inline-field">
-        <label className="pf-inline-field__label" htmlFor="pf-closing-date">
-          Closing Date
-        </label>
-        <input
-          id="pf-closing-date"
-          type="date"
-          className={`pf-input ${errors.project_closing_date ? 'is-invalid' : ''}`.trim()}
-          value={form.projectClosingDate}
-          min={form.projectStartDate || undefined}
-          onChange={(event) => patch({ projectClosingDate: event.target.value })}
-          disabled={disabled}
-        />
-      </div>
+      {/* An ongoing project has not closed yet. */}
+      {statusHasClosingDate(form.projectStatus) && (
+        <div className="pf-inline-field">
+          <label className="pf-inline-field__label" htmlFor="pf-closing-date">
+            Closing Date
+          </label>
+          <input
+            id="pf-closing-date"
+            type="date"
+            className={`pf-input ${errors.project_closing_date ? 'is-invalid' : ''}`.trim()}
+            value={form.projectClosingDate}
+            min={form.projectStartDate || undefined}
+            onChange={(event) => patch({ projectClosingDate: event.target.value })}
+            disabled={disabled}
+          />
+        </div>
+      )}
 
       <div className="pf-inline-field pf-inline-field--grow">
         <label className="pf-inline-field__label" htmlFor="pf-project-status">
