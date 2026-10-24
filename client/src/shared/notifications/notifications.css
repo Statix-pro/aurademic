@@ -35,8 +35,8 @@
   background: #dc3545;
   border: 1.5px solid #0069ab;
   color: #fff;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   line-height: 14px;
   text-align: center;
   pointer-events: none;
@@ -71,8 +71,9 @@
 }
 
 .notif-panel-title {
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
   color: #1f2937;
 }
 
@@ -87,8 +88,8 @@
   background: none;
   padding: 0;
   color: #0069ab;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -241,23 +242,23 @@
 }
 
 .notif-item-title {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   color: #1f2937;
-  line-height: 1.35;
+  line-height: var(--leading-body);
   overflow-wrap: anywhere;
 }
 
 .notif-item.is-read .notif-item-title {
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: #475467;
 }
 
 .notif-item-text {
   margin-top: 2px;
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
   color: #667085;
-  line-height: 1.4;
+  line-height: var(--leading-secondary);
   overflow-wrap: anywhere;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -270,16 +271,16 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
-  color: #98a2b3;
+  font-size: var(--font-size-tertiary);
+  color: #667085;
 }
 
 .notif-item-time {
   flex-shrink: 0;
   align-self: flex-start;
   margin-top: 1px;
-  font-size: 11px;
-  color: #98a2b3;
+  font-size: var(--font-size-tertiary);
+  color: #667085;
   white-space: nowrap;
 }
 
@@ -299,8 +300,8 @@
   display: inline-block;
   padding: 1px 6px;
   border-radius: 10px;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
@@ -343,8 +344,8 @@
 .notif-empty {
   padding: 34px 18px;
   text-align: center;
-  color: #98a2b3;
-  font-size: 12.5px;
+  color: #667085;
+  font-size: var(--font-size-secondary);
 }
 
 .notif-empty-icon {
@@ -358,7 +359,8 @@
   border-radius: 6px;
   background: #fdeaec;
   color: #a4161f;
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-medium);
 }
 
 .notif-panel-foot {
@@ -377,13 +379,14 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 7px 13px;
+  height: var(--button-sm-height);
+  padding: 0 13px;
   border-radius: 7px;
   border: 1px solid #dce2ec;
   background: #fff;
   color: #344054;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   line-height: 1.2;
   text-decoration: none;
   cursor: pointer;
@@ -459,14 +462,15 @@
 
 .notif-page-head h1 {
   margin: 0;
-  font-size: 21px;
-  font-weight: 700;
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
+  font-weight: var(--weight-bold);
   color: #1f2937;
 }
 
 .notif-page-sub {
   margin: 3px 0 0;
-  font-size: 12.5px;
+  font-size: var(--font-size-secondary);
   color: #667085;
 }
 
@@ -500,11 +504,11 @@
 
 .notif-rail-heading {
   margin: 10px 8px 4px;
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #98a2b3;
+  color: #667085;
 }
 
 .notif-rail-item {
@@ -512,13 +516,14 @@
   align-items: center;
   gap: 9px;
   width: 100%;
-  padding: 7px 9px;
+  min-height: var(--control-height);
+  padding: 0 9px;
   border: none;
   border-radius: 7px;
   background: none;
   color: #475467;
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-medium);
   text-align: left;
   cursor: pointer;
 }
@@ -531,7 +536,7 @@
 .notif-rail-item.is-active {
   background: #eaf4fc;
   color: #0b5ea8;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
 }
 
 .notif-rail-item svg {
@@ -563,8 +568,8 @@
   border-radius: 9px;
   background: #eef1f6;
   color: #667085;
-  font-size: 10.5px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   line-height: 17px;
   text-align: center;
 }
@@ -616,22 +621,23 @@
 
 .notif-page-empty h2 {
   margin: 0;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
   color: #344054;
 }
 
 .notif-page-empty p {
   margin: 0 0 12px;
   max-width: 380px;
-  font-size: 12.5px;
-  line-height: 1.5;
-  color: #98a2b3;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  color: #667085;
 }
 
 .notif-page-empty-text {
-  font-size: 12.5px;
-  color: #98a2b3;
+  font-size: var(--font-size-secondary);
+  color: #667085;
 }
 
 @media (max-width: 820px) {
@@ -741,12 +747,13 @@
   padding-bottom: 76px;
 }
 
-/* Settings read at a slightly larger size than the bell panel does: a panel
-   glanced at for two seconds and a page you sit and configure are not the same
-   reading task. Scoped here so the compact bell and inbox buttons stay put. */
+/* Settings buttons are form actions (Enable, Discard, Save) and take the full
+   control size; the compact bell and inbox buttons stay at the small size. */
 .notif-prefs .notif-btn {
-  padding: 8px 15px;
-  font-size: 13.5px;
+  justify-content: center;
+  height: var(--control-height);
+  min-width: var(--button-min-width);
+  padding: 0 var(--button-padding-x);
 }
 
 .notif-push-card {
@@ -802,8 +809,9 @@
   align-items: center;
   gap: 8px;
   margin: 0 0 3px;
-  font-size: 15px;
-  font-weight: 700;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
   color: #1f2937;
 }
 
@@ -812,8 +820,8 @@
   border-radius: 10px;
   background: #eef1f6;
   color: #667085;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
@@ -830,7 +838,8 @@
 
 .notif-push-copy p {
   margin: 0;
-  font-size: 13.5px;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
   color: #667085;
 }
 
@@ -844,16 +853,17 @@
 
 .notif-prefs-head h3 {
   margin: 0 0 4px;
-  font-size: 15.5px;
-  font-weight: 700;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
   color: #1f2937;
 }
 
 .notif-prefs-head p {
   margin: 0;
   max-width: 560px;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
   color: #667085;
 }
 
@@ -866,11 +876,11 @@
 
 .notif-prefs-legend span {
   width: 96px;
-  font-size: 11.5px;
-  font-weight: 700;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: #98a2b3;
+  color: #667085;
   text-align: center;
 }
 
@@ -914,7 +924,7 @@
 
 .notif-acc-chevron {
   flex-shrink: 0;
-  color: #98a2b3;
+  color: var(--placeholder-color);
   transition: transform 0.15s ease;
 }
 
@@ -935,8 +945,8 @@
 }
 
 .notif-acc-title {
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   color: #1f2937;
   white-space: nowrap;
 }
@@ -944,8 +954,8 @@
 .notif-acc-meta {
   flex: 1;
   min-width: 0;
-  font-size: 12.5px;
-  color: #98a2b3;
+  font-size: var(--font-size-secondary);
+  color: #667085;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -986,15 +996,15 @@
 }
 
 .notif-pref-label {
-  font-size: 13.5px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   color: #344054;
 }
 
 .notif-pref-desc {
   margin-top: 2px;
-  font-size: 12.5px;
-  line-height: 1.4;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
   color: #8894a7;
 }
 
@@ -1025,8 +1035,8 @@
 .notif-savebar-text {
   flex-shrink: 0;
   margin-right: 4px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
   color: var(--text-main, #4f4f6e);
 }
 

@@ -1,0 +1,15 @@
+/* EventEntry.tsx has no other stylesheet, so its heading and controls otherwise take
+   whatever a previously opened page's global CSS left behind (20px heading, 24–28px
+   inputs). Pin them to the portal size and type standard. */
+.event-entry-container .section-title {
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: 600;
+}
+
+.event-entry-container input,
+.event-entry-container select {
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
+}

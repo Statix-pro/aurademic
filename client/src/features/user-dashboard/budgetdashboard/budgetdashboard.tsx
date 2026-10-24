@@ -1336,7 +1336,7 @@ const BudgetDashboard: React.FC = () => {
                   }}
                 >
                   <div className="budgetdashboard-pagination-left">
-                    <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                    <span style={{ fontSize: 'var(--font-size-secondary)', color: '#6b7280' }}>
                       Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
                       {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
                       {pagination.total} proposals
@@ -1351,7 +1351,10 @@ const BudgetDashboard: React.FC = () => {
                       disabled={pagination.page <= 1}
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       style={{
-                        padding: '8px 16px',
+                        height: 'var(--chip-height)',
+                        padding: '0 14px',
+                        fontSize: 'var(--font-size-secondary)',
+                        fontWeight: 600,
                         borderRadius: '6px',
                         border: '1px solid #d1d5db',
                         background: pagination.page <= 1 ? '#f3f4f6' : 'white',
@@ -1361,7 +1364,7 @@ const BudgetDashboard: React.FC = () => {
                     >
                       Previous
                     </button>
-                    <span style={{ fontSize: '14px', fontWeight: 500 }}>
+                    <span style={{ fontSize: 'var(--font-size-secondary)', fontWeight: 500 }}>
                       Page {pagination.page} of {pagination.pages}
                     </span>
                     <button
@@ -1369,7 +1372,10 @@ const BudgetDashboard: React.FC = () => {
                       disabled={pagination.page >= pagination.pages}
                       onClick={() => setCurrentPage((p) => Math.min(pagination.pages, p + 1))}
                       style={{
-                        padding: '8px 16px',
+                        height: 'var(--chip-height)',
+                        padding: '0 14px',
+                        fontSize: 'var(--font-size-secondary)',
+                        fontWeight: 600,
                         borderRadius: '6px',
                         border: '1px solid #d1d5db',
                         background: pagination.page >= pagination.pages ? '#f3f4f6' : 'white',

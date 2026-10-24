@@ -91,15 +91,17 @@
 .admin-screen__title {
   margin: 0;
   color: var(--primary-color);
-  font-weight: 700;
-  font-size: var(--font-xl);
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
 }
 
 .admin-screen__subtitle {
   max-width: 78ch;
   margin: var(--space-1) 0 0;
-  color: var(--text-muted);
-  font-size: var(--font-md);
+  color: var(--text-soft);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
 }
 
 .admin-screen__header-actions {
@@ -111,14 +113,15 @@
 
 /* Header buttons at the screen's scale, not bootstrap's. `.btn` ships a 1rem
    label and `.custom-btn` a 24px gutter either side, which on a page set in
-   --font-md made Refresh and New Head the largest things on it — louder than
+   body text made Refresh and New Head the largest things on it — louder than
    the title. Sized like the tab strip they sit above, they read as actions. */
 .admin-screen__header-actions .custom-btn {
   gap: var(--space-2);
-  padding: var(--space-2) var(--space-4);
+  height: var(--control-height);
+  padding: 0 var(--space-4);
   border-radius: var(--border-radius-sm);
-  font-size: var(--font-md);
-  line-height: 1.5;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
 }
 
 /* -------------------------------------------------------------------- tabs */
@@ -143,13 +146,14 @@
   display: inline-flex;
   gap: var(--space-2);
   align-items: center;
-  padding: var(--space-2) var(--space-4);
+  height: var(--chip-height);
+  padding: 0 var(--space-4);
   border: 0;
   border-radius: var(--border-radius-sm);
   background: transparent;
   color: var(--text-soft);
-  font-weight: 600;
-  font-size: var(--font-md);
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-body);
   transition:
     background 0.15s ease,
     color 0.15s ease;
@@ -194,7 +198,8 @@
   border-radius: 0;
   /* Sits on the rule above, so the active underline replaces it. */
   margin-bottom: -1px;
-  font-size: var(--font-sm);
+  height: auto;
+  font-size: var(--font-size-body);
 }
 
 .admin-screen--embedded .admin-tab:hover:not(.is-active) {
@@ -222,8 +227,8 @@
   border-radius: 999px;
   background: var(--tint-neutral-bg);
   color: var(--text-soft);
-  font-weight: 700;
-  font-size: var(--font-2xs);
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-tertiary);
 }
 
 .admin-tab.is-active .admin-tab__count {
@@ -260,9 +265,8 @@
 .admin-toolbar__filters .form-select {
   max-width: 220px;
   /* The same lucide `chevron-down` the dialogs use, so a dropdown reads as one
-     everywhere. `!important` on the padding because `forms.css` sets
-     `.form-select { padding: 0.4rem 1rem !important }` globally. */
-  padding: 0 var(--space-8) 0 var(--space-3) !important;
+     everywhere. */
+  padding: 0 var(--space-8) 0 var(--space-3);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2351607a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right var(--space-3) center;
@@ -278,7 +282,7 @@
      `background-image` too, and a select's dropdown chevron IS its background
      image. Without it the control looks like a text box. */
   background-color: var(--bg-surface);
-  font-size: var(--font-lg);
+  font-size: var(--font-size-body);
 }
 
 .admin-toolbar__filters .form-control:focus,
@@ -306,8 +310,8 @@
   border-bottom: 1px solid var(--border-subtle);
   background: var(--surface-header);
   color: var(--text-body);
-  font-weight: 600;
-  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -318,7 +322,7 @@
   border-top: 1px solid var(--border-subtle);
   border-bottom: 0;
   color: var(--text-body);
-  font-size: var(--font-lg);
+  font-size: var(--font-size-body);
   vertical-align: middle;
 }
 
@@ -380,8 +384,8 @@
 .admin-card .table > tbody tr.admin-group-row:hover td {
   background: var(--tint-primary-bg);
   color: var(--primary-color);
-  font-weight: 700;
-  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-body);
   letter-spacing: 0.02em;
 }
 
@@ -401,8 +405,8 @@
   align-items: center;
   padding: 0 var(--space-2);
   border-radius: 999px;
-  font-weight: 600;
-  font-size: var(--font-2xs);
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
   line-height: var(--space-5);
   white-space: nowrap;
 }
@@ -445,8 +449,8 @@
   justify-content: center;
   /* 32px around a 16px icon. At 40px these were the tallest thing in a row, so
      they, not the text, decided how far apart the records sat. */
-  width: var(--space-7);
-  height: var(--space-7);
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   padding: 0;
   border: 1px solid transparent;
   border-radius: var(--border-radius-sm);
@@ -484,7 +488,7 @@
 .admin-empty {
   padding: var(--space-8) var(--space-4);
   color: var(--text-muted);
-  font-size: var(--font-lg);
+  font-size: var(--font-size-body);
   text-align: center;
 }
 
@@ -521,14 +525,14 @@
 
 .admin-modal .modal-content .modal-title {
   color: var(--text-strong);
-  font-weight: 700;
+  font-weight: var(--weight-semibold);
   /* Bigger than the fields under it, smaller than the page heading behind it. */
-  font-size: var(--font-lead);
+  font-size: var(--font-size-modal-title);
   /* The title's line box is what the header's height actually comes out of, so
      it is pinned here too: `CustomModal` tightens it to 1.2 and pulls it up 2px,
      which left the same bar 44px tall on a dialog built that way and 51px on a
      plain one. */
-  line-height: 1.5;
+  line-height: var(--leading-modal-title);
   margin-top: 0;
 }
 
@@ -597,8 +601,8 @@
 .admin-hint {
   margin: calc(var(--space-2) * -1) 0 var(--space-3);
   color: var(--text-muted);
-  font-size: var(--font-sm);
-  line-height: 1.45;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
 }
 
 .admin-switches {

@@ -64,7 +64,7 @@ const AdminBudgetDashboard: React.FC = () => {
   const selectStyles = {
     control: (base: any, state: any) => ({
       ...base,
-      minHeight: '42px',
+      minHeight: 'var(--control-height)',
       borderRadius: '12px',
       borderColor: state.isFocused ? '#0069ab' : 'rgba(15, 23, 42, 0.18)',
       background: 'rgba(255, 255, 255, 0.92)',
@@ -73,7 +73,7 @@ const AdminBudgetDashboard: React.FC = () => {
         : '0 6px 18px rgba(2, 6, 23, 0.06)',
       borderWidth: '1px',
       fontFamily: 'inherit',
-      fontSize: '0.95rem',
+      fontSize: 'var(--font-size-body)',
       fontWeight: 500,
       transition: 'all 0.2s ease',
       cursor: 'pointer',
@@ -104,7 +104,7 @@ const AdminBudgetDashboard: React.FC = () => {
       backgroundColor: state.isSelected ? '#0069ab' : state.isFocused ? '#f1f5f9' : 'transparent',
       color: state.isSelected ? '#ffffff' : '#1e293b',
       padding: '10px 15px',
-      fontSize: '0.9rem',
+      fontSize: 'var(--font-size-body)',
       cursor: 'pointer',
       '&:active': {
         backgroundColor: '#0069ab',
@@ -112,8 +112,8 @@ const AdminBudgetDashboard: React.FC = () => {
     }),
     groupHeading: (base: any) => ({
       ...base,
-      fontSize: '0.72rem',
-      fontWeight: 800,
+      fontSize: 'var(--font-size-tertiary)',
+      fontWeight: 700,
       textTransform: 'uppercase',
       color: '#475569',
       backgroundColor: '#f1f5f9',

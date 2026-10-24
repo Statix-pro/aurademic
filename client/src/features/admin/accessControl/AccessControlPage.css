@@ -48,7 +48,7 @@
 
 .permission-module-block h6 {
   margin-bottom: 10px;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   text-transform: capitalize;
 }
 
@@ -128,7 +128,7 @@
   display: inline-flex;
   align-items: center;
   font-weight: 600;
-  font-size: 0.75rem;
+  font-size: var(--font-size-tertiary);
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
   border: 1px solid transparent;
@@ -223,7 +223,7 @@
 }
 
 .fontSize-sm {
-  font-size: 0.85rem;
+  font-size: var(--font-size-secondary);
   letter-spacing: 0.5px;
 }
 
@@ -247,7 +247,8 @@
 /* Pagination Styling */
 .pagination-nav-btn {
   transition: all 0.2s ease;
-  padding: 0.25rem 0.75rem !important;
+  height: var(--chip-height);
+  padding: 0 0.75rem !important;
 }
 
 .pagination-nav-btn:hover:not(:disabled) {
@@ -278,14 +279,15 @@
 
 .user-accordion-header .accordion-button {
   border-radius: 0 !important;
+  font-size: var(--font-size-body);
 }
 
 .user-accordion-header .accordion-button strong {
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
 }
 
 .user-accordion-header .accordion-button .badge {
-  font-size: 0.75rem;
+  font-size: var(--font-size-tertiary);
   padding: 0.4em 1em !important;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }

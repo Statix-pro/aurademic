@@ -31,6 +31,9 @@
 
 .left-frame h3 {
   color: #0069ab;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: 600;
   margin-bottom: 15px;
 }
 
@@ -53,7 +56,7 @@
   grid-template-columns: 120px 1fr auto;
   align-items: center;
   gap: 50px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #444;
   background-color: #f5f4f4;
   padding: 10px 15px;
@@ -71,7 +74,7 @@
   grid-template-columns: auto 1fr;
   align-items: start;
   gap: 5px;
-  line-height: 1.5;
+  line-height: var(--leading-body);
 }
 
 .event-department .icon {
@@ -82,7 +85,7 @@
 }
 
 .event-department span {
-  line-height: 1.4;
+  line-height: var(--leading-body);
 }
 
 .event-top .icon {
@@ -106,12 +109,12 @@
 }
 
 .event-name {
-  font-size: 16px;
+  font-size: var(--font-size-body);
   font-weight: 600;
   color: #003b73;
   word-wrap: break-word;
   overflow-wrap: break-word;
-  line-height: 1.5;
+  line-height: var(--leading-body);
   max-width: 100%;
 }
 
@@ -120,7 +123,7 @@
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 10px;
-  font-size: 16px;
+  font-size: var(--font-size-body);
   font-weight: 600;
   color: #003b73;
   background-color: #e0ebf7;
@@ -156,6 +159,9 @@
 
 .right-frame h3 {
   color: #0069ab;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: 600;
   margin-bottom: 15px;
 }
 
@@ -171,12 +177,14 @@
 
 .calendar-left .today-btn {
   min-width: 80px;
+  height: var(--control-height);
+  font-size: var(--font-size-body);
   background-color: #0069ab;
   color: white;
   border: none;
   padding: 6px 14px;
   border-radius: 6px;
-  font-weight: 400;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -204,8 +212,8 @@
 }
 
 .month-year-text {
-  font-weight: 550;
-  font-size: 16px;
+  font-weight: 600;
+  font-size: var(--font-size-section-title);
   color: #0069ab;
   text-align: center;
   width: 100%;
@@ -217,8 +225,9 @@
 .year-select {
   padding: 6px 10px;
   border: 1px solid #c0c0c0;
+  height: var(--control-height);
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #0069ab;
   background-color: #fff;
   cursor: pointer;
@@ -300,7 +309,7 @@
 }
 
 .inline-day-number {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   font-weight: 500;
   color: #0069ab;
   line-height: 1;
@@ -309,7 +318,7 @@
 .event-badge {
   position: absolute;
   top: 25px;
-  font-size: 11px;
+  font-size: var(--font-size-tertiary);
   min-width: 18px;
   height: 18px;
   display: flex;
@@ -342,7 +351,7 @@
 }
 
 .sunday-red .inline-day-number {
-  color: red !important;
+  color: var(--error-color) !important;
 }
 
 /* =========================
@@ -381,13 +390,13 @@
   }
 
   .month-year-text {
-    font-size: 14px;
+    font-size: var(--font-size-body);
   }
 
   .month-select,
   .year-select {
     flex: 1 1 45%;
-    font-size: 13px;
+    font-size: var(--font-size-body);
     padding: 5px 8px;
   }
 
@@ -399,14 +408,14 @@
   }
 
   .today-btn {
-    font-size: 13px;
+    font-size: var(--font-size-body);
     padding: 5px 10px;
   }
 }
 
 @media (max-width: 480px) {
   .event-card {
-    font-size: 14px;
+    font-size: var(--font-size-body);
   }
 
   .event-top,
@@ -416,18 +425,18 @@
   }
 
   .event-name {
-    font-size: 14px;
+    font-size: var(--font-size-body);
   }
   .event-venue {
-    font-size: 13px;
+    font-size: var(--font-size-body);
     justify-content: flex-start;
   }
 
   .inline-day-number {
-    font-size: 12px;
+    font-size: var(--font-size-body);
   }
   .event-badge {
-    font-size: 10px;
+    font-size: var(--font-size-tertiary);
     min-width: 14px;
     height: 14px;
     top: 18px;
@@ -444,9 +453,11 @@
   background: #0069ab; /* Your brand color */
   color: white;
   border: none;
-  padding: 8px 16px;
+  height: var(--control-height);
+  padding: 0 16px;
   border-radius: 6px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: 600;
   box-shadow: 0 2px 8px rgba(0, 105, 171, 0.3);
   transition: all 0.2s;
 }
@@ -463,6 +474,7 @@
 /* Weekday headers (Sun, Mon, Tue...) */
 .fc .fc-col-header-cell-cushion {
   color: #0069ab !important;
+  font-size: var(--font-size-secondary);
   font-weight: 600;
 }
 

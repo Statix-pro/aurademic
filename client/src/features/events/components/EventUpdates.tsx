@@ -354,7 +354,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
           marginBottom: 16,
         }}
       >
-        <h3 style={{ margin: 0 }}>Resource Person</h3>
+        <h3 style={{ margin: 0, fontSize: 'var(--font-size-section-title)' }}>Resource Person</h3>
         <button
           type="button"
           style={{
@@ -363,7 +363,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
             border: 'none',
             borderRadius: 6,
             padding: '7px 18px 7px 18px',
-            fontSize: 16,
+            fontSize: 'var(--font-size-body)',
             cursor: 'pointer',
             fontWeight: 500,
           }}
@@ -385,7 +385,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
             padding: '15px 24px',
             borderRadius: '8px',
             fontWeight: 600,
-            fontSize: 16,
+            fontSize: 'var(--font-size-body)',
             boxShadow: '0 2px 12px rgba(0,0,0,0.11)',
           }}
         >
@@ -396,7 +396,9 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
       {/* Optional: Your existing table/fields here */}
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)}>
-        <h3 style={{ marginTop: 0, marginBottom: 14 }}>Add Resource Person</h3>
+        <h3 style={{ marginTop: 0, marginBottom: 14, fontSize: 'var(--font-size-modal-title)' }}>
+          Add Resource Person
+        </h3>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
           <input
             type="text"
@@ -455,7 +457,7 @@ const ResourcePerson: React.FC<ResourcePersonProps> = ({ rows, setRows }) => {
               borderRadius: 6,
               padding: '9px 0',
               marginTop: 6,
-              fontSize: 16,
+              fontSize: 'var(--font-size-body)',
             }}
           >
             Submit
@@ -949,7 +951,7 @@ const EventUpdates: React.FC<EventUpdatesProps> = ({ goToTab }) => {
                 className="event-big-social-input"
                 placeholder={`${platform.charAt(0).toUpperCase() + platform.slice(1)} link`}
                 value={links[platform]}
-                style={{ width: '350px', fontSize: '14px', padding: '12px' }}
+                style={{ width: '350px', fontSize: 'var(--font-size-body)', padding: '12px' }}
                 onChange={(e) => setLinks({ ...links, [platform]: e.target.value })}
               />
               <span

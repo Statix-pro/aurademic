@@ -31,10 +31,11 @@
 
 .budgetdashboard-title {
   padding-left: 8px;
-  font-weight: 600;
+  font-weight: 700;
   color: #0a2540;
   margin: 0;
-  font-size: 1.4rem;
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
 }
 
 .budgetdashboard-header-right-content {
@@ -64,9 +65,11 @@
   background-color: #0069ab;
   color: #fff;
   border: none;
-  padding: 8px 14px;
+  height: var(--control-height);
+  padding: 0 14px;
   border-radius: 10px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -78,7 +81,7 @@
 
 /* Status summary */
 .budgetdashboard-status-summary {
-  font-size: 0.8rem;
+  font-size: var(--font-size-tertiary);
   color: #137a3a;
   font-weight: 600;
 }
@@ -100,14 +103,14 @@
   display: inline-block;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 0.7rem;
+  font-size: var(--font-size-tertiary);
   font-weight: 600;
   text-transform: capitalize;
 }
 
 .budgetdashboard-status--pending {
   background: #fff4d6;
-  color: #a97900;
+  color: #8f6600;
 }
 
 .budgetdashboard-status--approved {
@@ -127,9 +130,9 @@
 }
 
 .budgetdashboard-action-global {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
+  border-radius: var(--border-radius-sm);
   border: none;
   background: #f1f5f9;
   color: #475569;
@@ -169,8 +172,8 @@
 
   padding: 14px 12px;
   text-align: left;
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: 600;
+  font-size: var(--font-size-secondary);
   border-bottom: 2px solid #d7f1e3;
 }
 
@@ -178,7 +181,7 @@
   padding: 14px 12px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
-  font-size: 0.88rem;
+  font-size: var(--font-size-body);
   color: #1f2937;
 }
 
@@ -233,14 +236,14 @@
 }
 
 .budgetdashboard-head-sub {
-  font-size: 0.75rem;
+  font-size: var(--font-size-secondary);
   color: #6b7280;
 }
 
 /* Totals row */
 .budgetdashboard-total-row td {
   background: #f8fafc !important;
-  font-weight: 800 !important;
+  font-weight: 700 !important;
   border-top: 2px solid #dee2e6 !important;
   vertical-align: middle !important;
 }
@@ -267,7 +270,7 @@
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-  font-size: 14px;
+  font-size: var(--font-size-body);
   table-layout: fixed;
 }
 
@@ -276,8 +279,8 @@
   padding: 10px 12px;
   text-align: left;
   font-weight: 600;
-  color: #a97900;
-  font-size: 0.9rem;
+  color: #8f6600;
+  font-size: var(--font-size-secondary);
   border-bottom: 2px solid #f3e8a5;
 }
 
@@ -310,7 +313,8 @@
 }
 
 .budgetdashboard-proposal-left {
-  font-size: 1.4rem;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
   color: #0a2540;
   flex-shrink: 0;
@@ -325,7 +329,7 @@
 }
 
 .budgetdashboard-proposal-applicant {
-  font-size: 1rem;
+  font-size: var(--font-size-body);
   font-weight: 600;
   color: #0f2542;
   white-space: nowrap;
@@ -338,11 +342,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 7px 14px;
+  height: var(--tag-height);
+  padding: 0 10px;
   border-radius: 999px;
   background: #dbeaf5;
   color: #3b6d91;
-  font-size: 0.82rem;
+  font-size: var(--font-size-tertiary);
   font-weight: 700;
   line-height: 1;
   white-space: nowrap;
@@ -353,7 +358,7 @@
   /* Take remaining space, center naturally */
   text-align: center;
   color: black;
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 .budgetdashboard-proposal-right {
@@ -370,8 +375,8 @@
   padding: 6px 12px;
   border-radius: 16px;
   border: 1px solid #ffea a7;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--font-size-tertiary);
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -393,19 +398,19 @@
 }
 
 .budgetdashboard-proposal-single-line {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   font-weight: 600;
   color: #495057;
   display: flex;
 
   gap: 20px;
-  line-height: 1.3;
+  line-height: var(--leading-body);
 }
 
 .budgetdashboard-proposal-spacer {
   color: #6c757d;
-  font-weight: normal;
-  font-size: 16px;
+  font-weight: 400;
+  font-size: var(--font-size-body);
 }
 
 .budgetdashboard-proposal-status-badge {
@@ -414,8 +419,8 @@
   padding: 6px 12px;
   border-radius: 16px;
   border: 1px solid #ffeaa7;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--font-size-tertiary);
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -430,8 +435,8 @@
 }
 
 .budgetdashboard-actions-row button {
-  width: 30px;
-  height: 30px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 8px;
   border: none;
   background: #f3772a;
@@ -452,7 +457,7 @@
 .budgetdashboard-state {
   text-align: center;
   padding: 60px 0;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
   color: #6b7280;
 }
 
@@ -466,7 +471,7 @@
 }
 
 .budgetdashboard-table-title {
-  font-size: 1.1rem;
+  font-size: var(--font-size-section-title);
   font-weight: 600;
   color: #0a2540;
   margin: 0 0 16px 0;
@@ -587,27 +592,12 @@
 }
 
 @media (max-width: 480px) {
-  .budgetdashboard-title {
-    font-size: 1.2rem;
-  }
-
-  .budgetdashboard-proposal-left {
-    font-size: 1.4rem;
-  }
-
   .budgetdashboard-proposal-applicant {
-    font-size: 1.4rem;
     max-width: 200px;
-  }
-
-  .budgetdashboard-proposal-tag-pill {
-    font-size: 0.82rem;
-    padding: 6px 12px;
   }
 
   .budgetdashboard-status-pill {
     padding: 8px 10px;
-    font-size: 12px;
   }
 
   .budgetdashboard-pending-table {
@@ -617,7 +607,6 @@
   .budgetdashboard-table td,
   .budgetdashboard-table th {
     padding: 8px 6px;
-    font-size: 0.8rem;
   }
 
   .budgetdashboard-actions-row button {
@@ -641,12 +630,12 @@
 
 /* Search input (header) */
 .budgetdashboard-search {
-  height: 38px;
+  height: var(--control-height);
   width: 260px;
-  padding: 8px 12px;
+  padding: 0 var(--control-padding-x);
   border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  font-size: 14px;
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-body);
   outline: none;
   background: #fcfdff;
   transition: all 0.2s ease;
@@ -670,7 +659,7 @@
   border-radius: 999px;
   /* perfect pill */
   font-weight: 600;
-  font-size: 13px;
+  font-size: var(--font-size-tertiary);
   letter-spacing: 0.5px;
   cursor: pointer;
   user-select: none;
@@ -678,12 +667,12 @@
 
 .budgetdashboard-status-pill--pending {
   background: #fff4d6 !important;
-  color: #a97900 !important;
+  color: #8f6600 !important;
   padding: 6px 12px !important;
   border-radius: 20px !important;
   font-weight: 600 !important;
   white-space: nowrap !important;
-  font-size: 0.8rem !important;
+  font-size: var(--font-size-tertiary) !important;
 }
 
 /* No hover effect for pending */
@@ -695,26 +684,26 @@
   border-radius: 20px !important;
   font-weight: 600 !important;
   white-space: nowrap !important;
-  font-size: 0.8rem !important;
+  font-size: var(--font-size-tertiary) !important;
 }
 
 .budgetdashboard-status-pill--returned {
   background: #fff4d6 !important;
-  color: #a97900 !important;
+  color: #8f6600 !important;
   padding: 6px 12px !important;
   border-radius: 20px !important;
   font-weight: 600 !important;
   white-space: nowrap !important;
-  font-size: 0.8rem !important;
+  font-size: var(--font-size-tertiary) !important;
 }
 .budgetdashboard-status-pill--submitted {
   background: #fff4d6 !important;
-  color: #a97900 !important;
+  color: #8f6600 !important;
   padding: 6px 12px !important;
   border-radius: 20px !important;
   font-weight: 600 !important;
   white-space: nowrap !important;
-  font-size: 0.8rem !important;
+  font-size: var(--font-size-tertiary) !important;
 }
 
 /* Header badge for returned */
@@ -724,18 +713,18 @@
   border: 1px solid #ffeaa7 !important;
   padding: 6px 12px !important;
   border-radius: 16px !important;
-  font-size: 13px !important;
-  font-weight: 500 !important;
+  font-size: var(--font-size-tertiary) !important;
+  font-weight: 600 !important;
 }
 
 .budgetdashboard-status-pill--resubmitted {
   background: #fff4d6 !important;
-  color: #a97900 !important;
+  color: #8f6600 !important;
   padding: 6px 12px !important;
   border-radius: 20px !important;
   font-weight: 600 !important;
   white-space: nowrap !important;
-  font-size: 0.8rem !important;
+  font-size: var(--font-size-tertiary) !important;
 }
 .budgetdashboard-status-pill--rejected {
   background: #fdeaea !important;
@@ -744,7 +733,7 @@
   border-radius: 20px !important;
   font-weight: 600 !important;
   white-space: nowrap !important;
-  font-size: 0.8rem !important;
+  font-size: var(--font-size-tertiary) !important;
 }
 
 /* SPECIFIC HOVER - exclude pending */
@@ -837,14 +826,14 @@
 }
 
 .budgetdashboard-financial-year {
-  height: 38px;
-  padding: 8px 12px;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
   border: 1px solid #d1d5db;
   /* Matches typical input borders */
-  border-radius: 6px;
+  border-radius: var(--border-radius-md);
   background: white;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: 400;
   color: #374151;
   min-width: 120px;
   /* Fixed width for consistency */
@@ -911,8 +900,8 @@
 .budgetdashboard-log-header {
   background: #f8fafc;
   padding: 12px 16px;
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: 600;
+  font-size: var(--font-size-body);
   color: #0f172a;
   border-bottom: 1px solid #e2e8f0;
 }
@@ -927,7 +916,7 @@
   display: flex;
   justify-content: space-between;
   margin-bottom: 8px;
-  font-size: 0.85rem;
+  font-size: var(--font-size-body);
 }
 
 .log-label {
@@ -947,9 +936,9 @@
 }
 
 .log-sub-header {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #94a3b8;
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
+  color: #667085;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 12px;
@@ -978,8 +967,8 @@
 }
 
 .log-decision {
-  font-size: 0.65rem;
-  font-weight: 800;
+  font-size: var(--font-size-tertiary);
+  font-weight: 700;
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -1010,7 +999,7 @@
 }
 
 .log-role {
-  font-size: 0.75rem;
+  font-size: var(--font-size-secondary);
   font-weight: 600;
   color: #475569;
 }
@@ -1019,7 +1008,7 @@
   display: block;
   width: 100%;
   margin-top: 4px;
-  font-size: 0.75rem;
+  font-size: var(--font-size-secondary);
   font-weight: 700;
   color: #334155;
 }
@@ -1034,34 +1023,34 @@
   border-radius: 999px;
   background: #fb923c;
   color: #ffffff;
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: var(--font-size-tertiary);
+  font-weight: 700;
   letter-spacing: 0.2px;
 }
 
 .log-date {
-  font-size: 0.7rem;
-  color: #94a3b8;
+  font-size: var(--font-size-tertiary);
+  color: #667085;
   margin-left: auto;
 }
 
 .log-feedback {
-  font-size: 0.8rem;
+  font-size: var(--font-size-body);
   color: #334155;
   font-style: italic;
   padding-top: 4px;
-  line-height: 1.4;
+  line-height: var(--leading-body);
 }
 
 .budgetdashboard-beneficiary-filter {
-  height: 38px;
-  padding: 8px 12px;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
   border: 1px solid #d1d5db;
   /* Matches typical input borders */
-  border-radius: 6px;
+  border-radius: var(--border-radius-md);
   background: white;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: 400;
   color: #374151;
   width: 320px;
   min-width: 320px;

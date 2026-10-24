@@ -4,7 +4,6 @@
   /* Light blue background - matching journalform theme */
   min-height: 100vh;
   padding: 20px;
-  font-family: 'Roboto', sans-serif;
   color: #4f4f6e;
 }
 
@@ -30,11 +29,12 @@
 }
 
 .score-card-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
   color: #0069ab;
   /* Primary blue - matching journalform theme */
   margin: 0;
+  line-height: var(--leading-section-title);
 }
 
 .filter-controls {
@@ -49,9 +49,10 @@
   border-radius: 12px;
   background: #fcfdff;
   /* Very light blue tint - matching journalform theme */
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
+  height: var(--control-height);
 }
 
 .sort-btn {
@@ -61,10 +62,12 @@
   border: none;
   padding: 8px 16px;
   border-radius: 12px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+  height: var(--control-height);
+  font-weight: var(--weight-semibold);
 }
 
 .sort-btn:hover {
@@ -84,14 +87,15 @@
 .kpi-card {
   background: white;
   border: 1px solid #e0e0e0;
-  border-radius: 8px;
-  padding: 20px;
+  border-radius: 14px;
+  padding: 14px 20px;
   display: flex;
   align-items: center;
   gap: 16px;
   transition:
     transform 0.2s,
     box-shadow 0.2s;
+  min-height: 80px;
 }
 
 .kpi-card:hover {
@@ -100,11 +104,11 @@
 }
 
 .kpi-icon {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
   background: #0069ab;
   /* Primary blue - matching journalform theme */
-  border-radius: 8px;
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -119,17 +123,19 @@
 }
 
 .kpi-label {
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
-  font-weight: 500;
+  font-weight: var(--weight-regular);
 }
 
 .kpi-value {
-  font-size: 24px;
-  font-weight: 700;
+  font-size: var(--font-size-kpi);
+  font-weight: var(--weight-bold);
   color: #4f4f6e;
   /* Darker blue-gray - matching journalform theme */
+  line-height: var(--leading-kpi);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Research Details Section */
@@ -148,11 +154,12 @@
 }
 
 .research-details-title {
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
   color: #0069ab;
   /* Primary blue - matching journalform theme */
   margin: 0;
+  line-height: var(--leading-section-title);
 }
 
 .add-btn {
@@ -162,11 +169,12 @@
   border: none;
   padding: 10px 20px;
   border-radius: 12px;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 10px rgba(0, 105, 171, 0.3);
+  height: var(--control-height);
 }
 
 .add-btn:hover {
@@ -212,8 +220,8 @@
   color: white;
   padding: 3px 10px;
   border-radius: 4px;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   font-family: 'Roboto Mono', 'Courier New', monospace;
   letter-spacing: 0.5px;
 }
@@ -234,11 +242,11 @@
 }
 
 .research-title {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--font-size-section-title);
+  font-weight: var(--weight-semibold);
   color: #2c3e50;
   margin: 0;
-  line-height: 1.4;
+  line-height: var(--leading-section-title);
   flex: 1;
   transition: color 0.2s ease;
 }
@@ -252,8 +260,8 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
   padding-top: 4px;
 }
 
@@ -265,18 +273,18 @@
 
 .detail-label {
   color: #7c8ba1;
-  font-weight: 500;
-  font-size: 13px;
+  font-weight: var(--weight-medium);
+  font-size: var(--font-size-secondary);
 }
 
 .detail-value {
   color: #4a5568;
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 
 .detail-separator {
   color: #cbd5e0;
-  font-weight: 400;
+  font-weight: var(--weight-regular);
   user-select: none;
 }
 
@@ -284,8 +292,8 @@
 .status-badge {
   padding: 4px 12px;
   border-radius: 16px;
-  font-weight: 600;
-  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-tertiary);
   text-transform: capitalize;
   display: inline-block;
   transition: all 0.2s ease;
@@ -341,8 +349,8 @@
 }
 
 .action-btn {
-  min-width: 40px;
-  min-height: 40px;
+  min-width: var(--icon-action-size);
+  min-height: var(--icon-action-size);
   border: none;
   border-radius: 8px;
   cursor: pointer;
@@ -412,7 +420,7 @@
   padding: 40px;
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
-  font-size: 16px;
+  font-size: var(--font-size-body);
 }
 
 /* Pagination Controls */
@@ -431,9 +439,10 @@
   border-radius: 12px;
   background: #fcfdff;
   /* Very light blue tint - matching journalform theme */
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
+  height: var(--control-height);
 }
 
 .pagination-controls button {
@@ -445,8 +454,9 @@
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
   cursor: pointer;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   transition: all 0.3s ease;
+  height: var(--chip-height);
 }
 
 .pagination-controls button:hover:not(:disabled) {
@@ -466,7 +476,7 @@
 .pagination-controls span {
   color: #5d6b8a;
   /* Blue-gray text - matching journalform theme */
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 /* Responsive Design */
@@ -523,7 +533,7 @@
   }
 
   .kpi-card {
-    padding: 16px;
+    padding: 14px 20px;
   }
 
   .research-card {
@@ -535,7 +545,7 @@
   }
 
   .compact-details {
-    font-size: 11px;
+    font-size: var(--font-size-body);
   }
 }
 
@@ -561,7 +571,7 @@
   border-radius: 8px;
   background: #fff;
   color: #0069ab;
-  font-weight: 500;
+  font-weight: var(--weight-semibold);
   text-align: center;
   cursor: pointer;
   transition:

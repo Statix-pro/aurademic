@@ -45,13 +45,14 @@
 
 .master-data-pagination .pagination-info {
   color: #64748b;
-  font-size: 0.85rem;
+  font-size: var(--font-size-secondary);
 }
 
 .master-data-pagination .btn-page {
-  padding: 6px 12px;
+  height: var(--chip-height);
+  padding: 0 12px;
   border-radius: 6px;
-  font-size: 0.85rem;
+  font-size: var(--font-size-secondary);
   font-weight: 500;
   border: 1px solid #cbd5e1;
   background: #fff;
@@ -100,18 +101,18 @@
   min-width: 180px;
   font-weight: 600;
   color: #475569;
-  font-size: 0.875rem;
+  font-size: var(--font-size-secondary);
 }
 
 .detail-value {
   flex: 1;
   color: #1e293b;
-  font-size: 0.875rem;
+  font-size: var(--font-size-body);
 }
 
 .detail-section-title {
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-body);
   color: #334155;
   padding: 14px 0 6px;
   margin-top: 8px;
@@ -179,8 +180,8 @@
 
 .form-section-header h6 {
   color: var(--text-soft);
-  font-weight: 700;
-  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-secondary);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -188,8 +189,8 @@
 .master-data-modal .form-label {
   margin-bottom: var(--space-1);
   color: var(--text-soft);
-  font-weight: 600;
-  font-size: var(--font-sm);
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
 }
 
 /* One height for every control, so a row of four lines up whether it holds a
@@ -206,7 +207,7 @@
   border-radius: var(--border-radius-sm);
   background-color: var(--bg-surface);
   color: var(--text-body);
-  font-size: var(--font-md);
+  font-size: var(--font-size-body);
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
@@ -218,17 +219,10 @@
 
 /* The chevron, and the room for it.
 
-   `!important` is not decoration here: `forms.css` sets
-   `.modal-body .form-select { padding: 0.4rem 0.75rem !important }` globally,
-   and nothing but `!important` outranks it — which is also why the arrow had
-   nowhere to sit and overlapped the text.
-
    The mark itself is lucide's `chevron-down`, the same icon set the buttons and
    row actions use, rather than bootstrap's heavier filled arrow. */
 .master-data-modal .modal-body .form-select {
-  /* Three classes, not two: `forms.css` loads after this file, so at equal
-     specificity its !important wins the tie on source order. */
-  padding: 0 var(--space-8) 0 var(--space-3) !important;
+  padding: 0 var(--space-8) 0 var(--space-3);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2351607a' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right var(--space-3) center;
@@ -260,8 +254,8 @@
 .master-data-modal .react-select__control {
   border: 1px solid #cbd5e1;
   border-radius: 6px;
-  min-height: 38px;
-  font-size: 0.95rem;
+  min-height: var(--control-height);
+  font-size: var(--font-size-body);
   box-shadow: none;
   transition: all 0.2s ease;
 }
@@ -291,7 +285,7 @@
 
 .master-data-modal .react-select__placeholder {
   color: var(--placeholder-color);
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
 }
 
 /* ===== Responsive ===== */

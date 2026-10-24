@@ -23,7 +23,7 @@
 /* Avatar Section */
 .avatar-placeholder {
   background: linear-gradient(135deg, var(--primary-color, #0069ab) 0%, #00a8e8 100%) !important;
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   letter-spacing: 1px;
   box-shadow: 0 8px 25px rgba(0, 105, 171, 0.3);
   transition:
@@ -47,16 +47,17 @@
 
 /* Name & Role */
 .name {
-  font-weight: 700;
-  font-size: 1.25rem;
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   color: var(--primary-color, #0069ab);
   margin-bottom: 4px;
 }
 
 .role {
-  font-size: 0.9rem;
-  color: var(--text-muted, #6c757d);
-  font-weight: 500;
+  font-size: var(--font-size-secondary);
+  color: var(--text-soft);
+  font-weight: var(--weight-regular);
 }
 
 /* Info Section */
@@ -65,9 +66,9 @@
 }
 
 .employee-id {
-  font-weight: 600;
+  font-weight: var(--weight-semibold);
   color: var(--primary-color, #0069ab);
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -75,14 +76,14 @@
 
 .department {
   color: var(--text-main, #4f4f6e);
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
   margin-top: 4px;
 }
 
 .research-area {
   color: var(--text-main, #4f4f6e);
-  font-size: 0.9rem;
-  line-height: 1.5;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
 }
 
 /* Alert Info Box */
@@ -91,7 +92,7 @@
   border: none;
   border-radius: var(--border-radius-sm, 8px);
   color: var(--primary-color, #0069ab);
-  font-size: 0.85rem;
+  font-size: var(--font-size-secondary);
 }
 
 /* Action Buttons */
@@ -108,8 +109,8 @@
   border: none;
   padding: 10px 20px;
   border-radius: var(--border-radius-sm, 8px);
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(0, 105, 171, 0.25);
   text-decoration: none;
@@ -131,8 +132,8 @@
 
 .stat-title {
   color: var(--primary-color, #0069ab);
-  font-weight: 600;
-  font-size: 1rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-section-title);
 }
 
 .stats .col {
@@ -146,8 +147,9 @@
 }
 
 .stats .col h6 {
-  font-size: 0.8rem;
-  color: var(--text-muted, #6c757d);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-regular);
+  color: var(--text-soft);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 8px;
@@ -155,8 +157,10 @@
 
 .stats .col p {
   margin: 0;
-  font-size: 1.75rem;
-  font-weight: 700;
+  font-size: var(--font-size-kpi);
+  line-height: var(--leading-kpi);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
   color: var(--primary-color, #0069ab);
 }
 
@@ -173,7 +177,7 @@
   }
 
   .stats .col p {
-    font-size: 1.5rem;
+    font-size: var(--font-size-kpi);
   }
 }
 

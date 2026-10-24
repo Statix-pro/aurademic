@@ -94,7 +94,7 @@ const emptyProfession = (): ProfessionDetail => ({
   status: 'Working',
 });
 
-// Every single-line control sits on --control-height (42px), as on the project form;
+// Every single-line control sits on --control-height, as on the project form;
 // CustomDropdown's own default is 45px.
 const customDropdownStyles = {
   control: (provided: any, state: any) => ({
@@ -104,7 +104,7 @@ const customDropdownStyles = {
     backgroundColor: '#ffffff',
     borderColor: state.isFocused ? '#0069ab' : '#dbeafe',
     borderRadius: '12px',
-    fontSize: '14px',
+    fontSize: 'var(--font-size-body)',
     padding: '0 4px',
     boxShadow: state.isFocused ? '0 0 0 4px rgba(0, 105, 171, 0.12)' : 'none',
     '&:hover': {
@@ -113,17 +113,17 @@ const customDropdownStyles = {
   }),
   valueContainer: (provided: any) => ({
     ...provided,
-    minHeight: '40px',
-    height: '40px',
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
     padding: '0 10px',
   }),
   // Text per AGENTS.md typography: 14px, primary-text colour.
-  container: (provided: any) => ({ ...provided, fontSize: '14px' }),
+  container: (provided: any) => ({ ...provided, fontSize: 'var(--font-size-body)' }),
   singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
   indicatorsContainer: (provided: any) => ({
     ...provided,
-    minHeight: '40px',
-    height: '40px',
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
   }),
   indicatorSeparator: () => ({
     display: 'none',
@@ -139,7 +139,7 @@ const titleDropdownStyles = {
     backgroundColor: '#ffffff',
     borderColor: state.isFocused ? '#0069ab' : '#dbeafe',
     borderRadius: '12px',
-    fontSize: '14px',
+    fontSize: 'var(--font-size-body)',
     padding: '0 2px',
     boxShadow: state.isFocused ? '0 0 0 4px rgba(0, 105, 171, 0.12)' : 'none',
     '&:hover': {
@@ -148,8 +148,8 @@ const titleDropdownStyles = {
   }),
   valueContainer: (provided: any) => ({
     ...provided,
-    minHeight: '40px',
-    height: '40px',
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
     padding: '0 4px',
   }),
   dropdownIndicator: (provided: any) => ({
@@ -745,7 +745,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        height: '43px',
+                        height: 'var(--control-height)',
                         width: '38px',
                         paddingBottom: '2px',
                       }}
@@ -900,7 +900,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                 borderRadius: '8px',
                 padding: '8px 14px',
                 marginTop: '8px',
-                fontSize: '0.875rem',
+                fontSize: 'var(--font-size-body)',
               }}
             >
               {fileError}
@@ -924,16 +924,16 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
             className="rpd-btn-save"
             onClick={handleSubmit}
             style={{
-              height: '40px',
-              padding: '0 24px',
-              fontSize: '14px',
-              fontWeight: '600',
+              height: 'var(--control-height)',
+              padding: '0 var(--button-padding-x)',
+              fontSize: 'var(--font-size-body)',
+              fontWeight: 'var(--weight-semibold)',
               backgroundColor: '#0069ab',
               color: 'white',
               border: 'none',
               borderRadius: '12px',
               cursor: 'pointer',
-              minWidth: '120px',
+              minWidth: 'var(--button-min-width)',
               boxShadow: '0 4px 12px rgba(0, 105, 171, 0.25)',
               transition: 'all 0.3s ease',
             }}
@@ -946,16 +946,16 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
           className="rpd-btn-cancel"
           onClick={onCancel}
           style={{
-            height: '40px',
-            padding: '0 24px',
-            fontSize: '14px',
-            fontWeight: '600',
+            height: 'var(--control-height)',
+            padding: '0 var(--button-padding-x)',
+            fontSize: 'var(--font-size-body)',
+            fontWeight: 'var(--weight-semibold)',
             backgroundColor: '#f1f5f9',
             color: '#475569',
             border: '1.5px solid #e2e8f0',
             borderRadius: '12px',
             cursor: 'pointer',
-            minWidth: '120px',
+            minWidth: 'var(--button-min-width)',
             transition: 'all 0.3s ease',
           }}
         >

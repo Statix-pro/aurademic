@@ -66,18 +66,18 @@
 }
 
 .journal-review-title {
-  font-size: 0.92rem;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   color: #1b2a41;
-  line-height: 1.25;
+  line-height: var(--leading-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .journal-review-subtitle {
-  font-size: 0.74rem;
-  line-height: 1.25;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
   color: #7c8798;
   white-space: nowrap;
   overflow: hidden;
@@ -88,8 +88,8 @@
    and the two decision buttons stay the loudest thing in the bar. */
 .journal-review-status {
   flex-shrink: 0;
-  font-size: 0.68rem;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.01em;
   padding: 0.32em 0.7em;
   border-radius: 999px;
@@ -125,8 +125,9 @@
 
 .journal-review-comment.form-control {
   width: 260px;
-  font-size: 0.8rem;
-  padding: 0.3rem 0.6rem;
+  height: var(--control-height);
+  font-size: var(--font-size-body);
+  padding: 0 var(--control-padding-x);
   color: #1b2a41;
   background-color: #fbfcfe;
   border: 1px solid #dce4f0;
@@ -150,10 +151,13 @@
 .journal-review-actions .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.3rem;
-  padding: 0.34rem 0.75rem !important;
-  font-size: 0.8rem;
-  font-weight: 500;
+  height: var(--control-height);
+  min-width: var(--button-min-width);
+  padding: 0 var(--button-padding-x) !important;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   border: none;
   border-radius: 8px;
   white-space: nowrap;
@@ -193,7 +197,7 @@
 /* The recorded outcome, shown once a decision exists in place of the buttons. */
 .journal-review-decision {
   max-width: 460px;
-  font-size: 0.78rem;
+  font-size: var(--font-size-secondary);
   color: #6b7686;
   font-style: italic;
   overflow: hidden;
@@ -220,8 +224,9 @@
 }
 
 .journal-review .category-toggle-container button {
-  padding: 0.3rem 1.4rem;
-  font-size: 0.82rem;
+  height: var(--chip-height);
+  padding: 0 1.4rem;
+  font-size: var(--font-size-secondary);
 }
 
 /* Lets a flex child with long text actually shrink and ellipsize. */

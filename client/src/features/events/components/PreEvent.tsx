@@ -127,7 +127,7 @@ const sdgOptions = [
 ];
 
 const MultiValueLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  return <div style={{ fontSize: '12px' }}>{children}</div>;
+  return <div style={{ fontSize: 'var(--font-size-secondary)' }}>{children}</div>;
 };
 
 // Helper function to get today's date in YYYY-MM-DD format
@@ -492,7 +492,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <select
               value={mode}
               onChange={handleModeChange}
-              style={{ width: '100%', height: '40px', padding: '8px' }}
+              style={{ width: '100%', height: 'var(--control-height)', padding: '8px' }}
             >
               <option value="Physical">Physical</option>
               <option value="Virtual">Virtual</option>
@@ -506,7 +506,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
               <label style={{ marginBottom: '4px' }}>Venue</label>
               {modeVenueDropdown !== 'Others' ? (
                 <select
-                  style={{ width: '100%', height: '40px', padding: '8px' }}
+                  style={{ width: '100%', height: 'var(--control-height)', padding: '8px' }}
                   value={modeVenueDropdown}
                   onChange={(e) => {
                     const value = e.target.value;
@@ -530,7 +530,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                   type="text"
                   value={modeVenueOther}
                   placeholder="Enter venue"
-                  style={{ width: '100%', height: '40px', padding: '8px' }}
+                  style={{ width: '100%', height: 'var(--control-height)', padding: '8px' }}
                   onChange={(e) => {
                     setModeVenueOther(e.target.value);
                     if (e.target.value === '') {
@@ -699,7 +699,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                     style={{
                       flex: 1,
                       minWidth: 0,
-                      height: '40px',
+                      height: 'var(--control-height)',
                       padding: '8px',
                     }}
                     onChange={(e) => setInauguralVenue(e.target.value)}
@@ -854,7 +854,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                     style={{
                       flex: 1,
                       minWidth: 0,
-                      height: '40px',
+                      height: 'var(--control-height)',
                       padding: '8px',
                     }}
                     onChange={(e) => setValedictoryVenue(e.target.value)}
@@ -882,7 +882,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
             <select
               value={registrationFeeEnabled ? 'yes' : 'no'}
               onChange={(e) => setRegistrationFeeEnabled(e.target.value === 'yes')}
-              style={{ width: '100%', height: '40px', padding: '8px' }}
+              style={{ width: '100%', height: 'var(--control-height)', padding: '8px' }}
             >
               <option value="no">No</option>
               <option value="yes">Yes</option>
@@ -899,7 +899,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                   value={registrationFeeAmount}
                   onChange={(e) => setRegistrationFeeAmount(e.target.value)}
                   placeholder="Enter fee amount"
-                  style={{ width: '100%', height: '40px', padding: '8px' }}
+                  style={{ width: '100%', height: 'var(--control-height)', padding: '8px' }}
                 />
               </div>
 
@@ -910,7 +910,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                   value={registrationLink}
                   onChange={(e) => setRegistrationLink(e.target.value)}
                   placeholder="Enter registration URL"
-                  style={{ width: '100%', height: '40px', padding: '8px' }}
+                  style={{ width: '100%', height: 'var(--control-height)', padding: '8px' }}
                 />
               </div>
 
@@ -919,7 +919,7 @@ const PreEvent: React.FC<PreEventProps> = ({ goToTab }) => {
                 <select
                   value={selectedBankAccount}
                   onChange={(e) => setSelectedBankAccount(e.target.value)}
-                  style={{ width: '100%', height: '40px', padding: '8px' }}
+                  style={{ width: '100%', height: 'var(--control-height)', padding: '8px' }}
                 >
                   <option value="">Select account</option>
                   <option value="account1">Account 1 - 1234567890</option>

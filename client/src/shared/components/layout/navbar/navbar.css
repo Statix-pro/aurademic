@@ -6,10 +6,13 @@
   --sb-width-expanded: 250px;
   --sb-width-collapsed: 68px;
   --sb-bg: #2b6da7;
-  --sb-bg-hover: rgba(255, 255, 255, 0.12);
-  --sb-bg-active: rgba(255, 255, 255, 0.18);
-  --sb-text: rgba(255, 255, 255, 0.85);
-  --sb-text-muted: rgba(255, 255, 255, 0.5);
+  /* Hover and active darken the bar rather than lighten it, and text is solid white, so
+     every sidebar label stays above WCAG AA 4.5:1 (white on the bar is 5.5:1, on hover
+     6.6:1, on active 7.3:1). Lighter tints dropped hovered and active labels to 3.6–4.3:1. */
+  --sb-bg-hover: rgba(0, 0, 0, 0.12);
+  --sb-bg-active: rgba(0, 0, 0, 0.18);
+  --sb-text: #ffffff;
+  --sb-text-muted: rgba(255, 255, 255, 0.85);
   --sb-text-active: #ffffff;
   --sb-border: rgba(255, 255, 255, 0.15);
   --sb-transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
@@ -74,8 +77,8 @@
   border: none;
   background: none;
   color: var(--sb-text);
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   border-radius: 10px;
   cursor: pointer;
   text-decoration: none;
@@ -160,8 +163,8 @@
   gap: 8px;
   padding: 8px 12px 8px 52px;
   /* aligns exactly with sb-text */
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-medium);
   color: var(--sb-text);
   text-decoration: none;
   border-radius: 8px;
@@ -177,8 +180,8 @@
 
 .sb-sublink.active {
   color: #ffffff;
-  background: rgba(255, 255, 255, 0.2);
-  font-weight: 600;
+  background: var(--sb-bg-active);
+  font-weight: var(--weight-semibold);
 }
 
 .sb-sublink .sb-icon {
@@ -211,14 +214,14 @@
   padding: 0 8px 8px;
 }
 
-/* Logout link — red tint */
+/* Logout link: white text (pink was 2.9:1 on the bar); the red tint on hover marks it. */
 .sb-logout-link {
-  color: #fca5a5;
+  color: #ffffff;
 }
 
 .sb-logout-link:hover {
   background: rgba(239, 68, 68, 0.18);
-  color: #fca5a5;
+  color: #ffffff;
 }
 
 /* ─── Logout Confirm Modal ─── */
@@ -262,14 +265,15 @@
 }
 
 .sb-modal-title {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+  font-weight: var(--weight-semibold);
   color: #111827;
   margin: 0;
 }
 
 .sb-modal-msg {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #6b7280;
   margin: 0 0 8px;
   text-align: center;
@@ -286,8 +290,8 @@
   flex: 1;
   padding: 10px 0;
   border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   border: none;
   transition: all 0.15s;

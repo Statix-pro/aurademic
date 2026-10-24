@@ -1615,7 +1615,7 @@ export default function MasterDataPage() {
                       <td>
                         {emp.title} {emp.first_name} {emp.last_name}
                       </td>
-                      <td style={{ fontSize: '0.8rem' }}>{emp.email}</td>
+                      <td style={{ fontSize: 'var(--font-size-body)' }}>{emp.email}</td>
                       <td>{emp.designation || '—'}</td>
                       <td>{emp.department_name || emp.entity_name || '—'}</td>
                       <td>

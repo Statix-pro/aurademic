@@ -5,7 +5,6 @@
   background-color: var(--bg-light, #f0f6ff);
   min-height: 100vh;
   padding: 20px;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
   color: var(--text-main, #4f4f6e);
 }
 
@@ -26,16 +25,16 @@
 }
 
 .finance-page-title {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--font-size-page-title);
+  font-weight: 700;
   color: var(--primary-color, #0069ab);
   margin: 0 0 8px 0;
   letter-spacing: -0.01em;
-  line-height: 1.2;
+  line-height: var(--leading-page-title);
 }
 
 .finance-page-subtitle {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: var(--text-muted, #6c757d);
   margin: 0;
   font-weight: 400;
@@ -54,9 +53,10 @@
 .btn-secondary-action {
   border: none;
   border-radius: 12px;
-  padding: 10px 20px;
-  font-size: 14px;
-  font-weight: 500;
+  height: var(--control-height);
+  padding: 0 var(--button-padding-x);
+  font-size: var(--font-size-body);
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   display: inline-flex;
@@ -132,13 +132,13 @@
 }
 
 .finance-workflow-btn {
-  min-width: 150px;
-  height: 54px;
-  padding: 0 18px;
+  min-width: var(--button-min-width);
+  height: var(--control-height);
+  padding: 0 var(--button-padding-x);
   border: none;
   border-radius: 16px;
-  font-size: 0.98rem;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  font-weight: 600;
   line-height: 1;
   cursor: pointer;
   display: inline-flex;
@@ -216,9 +216,9 @@
 
 .finance-debit-label {
   color: #495057;
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
   font-weight: 600;
-  line-height: 1.2;
+  line-height: var(--leading-secondary);
   white-space: nowrap;
 }
 
@@ -269,10 +269,7 @@
   }
 
   .finance-workflow-btn {
-    min-width: 136px;
-    height: 50px;
     padding: 0 14px;
-    font-size: 0.94rem;
   }
 }
 
@@ -293,13 +290,13 @@
 
 /* Form Card Title */
 .finance-approval-body .form-card-title {
-  font-size: 18px;
-  font-weight: 550;
+  font-size: var(--font-size-section-title);
+  font-weight: 600;
   color: var(--primary-color, #0069ab);
   margin: 0 0 20px 0;
   padding-bottom: 12px;
   border-bottom: 2px solid rgba(0, 0, 0, 0.08);
-  line-height: 1.2;
+  line-height: var(--leading-section-title);
 }
 
 /* Form Grid Layout */
@@ -326,8 +323,8 @@
 /* Form Label - Scoped */
 .finance-approval-body .form-label {
   display: block;
-  font-size: 12px;
-  font-weight: 550;
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
   color: var(--text-main, #4f4f6e);
   margin-bottom: 8px;
 }
@@ -337,8 +334,9 @@
   width: 100%;
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 14px;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
   color: var(--text-main, #4f4f6e);
   background-color: var(--bg-input, #fcfdff);
   transition:
@@ -364,6 +362,8 @@
 
 .finance-approval-body textarea.form-control {
   resize: vertical;
+  height: auto;
+  padding: 10px var(--control-padding-x);
   min-height: 100px;
   font-family: inherit;
 }
@@ -380,16 +380,16 @@
 }
 
 .finance-approval-body .category-btn {
-  flex: 1;
   border: none;
   background-color: transparent;
   color: var(--text-muted, #6c757d);
-  padding: 12px 20px;
+  height: var(--chip-height);
+  padding: 0 14px;
   border-radius: 9999px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
 }
 
 .finance-approval-body .category-btn.active {
@@ -432,16 +432,16 @@
 .budget-table th {
   padding: 12px;
   text-align: left;
-  font-weight: 550;
+  font-weight: 600;
   color: var(--primary-color, #0069ab);
   border-bottom: 2px solid var(--border-color, #e0e0e0);
-  font-size: 12px;
+  font-size: var(--font-size-secondary);
 }
 
 .budget-table td {
   padding: 12px;
   border-bottom: 1px solid var(--border-color, #e0e0e0);
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: var(--text-main, #4f4f6e);
 }
 
@@ -458,8 +458,9 @@
   width: 100%;
   border: 1px solid var(--border-color, #e0e0e0);
   border-radius: 8px;
-  padding: 8px;
-  font-size: 12px;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
+  font-size: var(--font-size-body);
   color: var(--text-main, #4f4f6e);
   background-color: var(--bg-input, #fcfdff);
   font-family: inherit;
@@ -486,8 +487,8 @@
 .finance-approval-body .btn-add,
 .finance-approval-body .btn-delete {
   border: none;
-  width: 36px;
-  height: 36px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -532,8 +533,8 @@
   padding: 16px;
   background-color: rgba(0, 0, 0, 0.04);
   border-radius: 8px;
-  font-size: 16px;
-  font-weight: 550;
+  font-size: var(--font-size-body);
+  font-weight: 700;
   color: var(--primary-color, #0069ab);
 }
 
@@ -551,13 +552,13 @@
 }
 
 .approval-section-title {
-  font-size: 16px;
-  font-weight: 550;
+  font-size: var(--font-size-section-title);
+  font-weight: 600;
   color: var(--primary-color, #0069ab);
   margin: 0 0 16px 0;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border-color, #e0e0e0);
-  line-height: 1.2;
+  line-height: var(--leading-section-title);
 }
 
 /* Submit Buttons */
@@ -574,9 +575,11 @@
 .finance-approval-body .btn-cancel {
   border: none;
   border-radius: 12px;
-  padding: 12px 28px;
-  font-size: 14px;
-  font-weight: 500;
+  height: var(--control-height);
+  min-width: var(--button-min-width);
+  padding: 0 var(--button-padding-x);
+  font-size: var(--font-size-body);
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   display: inline-flex;
@@ -650,7 +653,6 @@
   }
 
   .finance-approval-body .form-card-title {
-    font-size: 16px;
     margin-bottom: 16px;
   }
 
@@ -668,21 +670,6 @@
   .btn-secondary-action {
     width: 100%;
     justify-content: center;
-    padding: 10px 16px;
-    font-size: 12px;
-  }
-
-  .finance-page-title {
-    font-size: 18px;
-  }
-
-  .finance-page-subtitle {
-    font-size: 12px;
-  }
-
-  .finance-approval-body .category-btn {
-    padding: 10px 16px;
-    font-size: 12px;
   }
 
   .finance-approval-body .category-toggle-container {
@@ -694,14 +681,9 @@
     border-radius: 8px;
   }
 
-  .budget-table {
-    font-size: 11px;
-  }
-
   .budget-table th,
   .budget-table td {
     padding: 6px 4px;
-    font-size: 11px;
   }
 
   .finance-approval-body .btn-add,
@@ -716,7 +698,6 @@
   }
 
   .approval-section-title {
-    font-size: 14px;
     margin-bottom: 12px;
   }
 
@@ -756,14 +737,6 @@
   .btn-secondary-action {
     width: 100%;
     justify-content: center;
-  }
-
-  .finance-page-title {
-    font-size: 20px;
-  }
-
-  .budget-table {
-    font-size: 12px;
   }
 
   .budget-table th,
@@ -899,7 +872,7 @@
 }
 
 .pdf-preview-title {
-  font-size: 20px;
+  font-size: var(--font-size-modal-title);
   font-weight: 600;
   color: var(--primary-color, #0069ab);
   margin: 0;
@@ -955,10 +928,6 @@
     padding: 16px;
   }
 
-  .pdf-preview-title {
-    font-size: 18px;
-  }
-
   .pdf-preview-footer {
     flex-direction: column;
     gap: 8px;
@@ -993,10 +962,10 @@
 
 /* Bigger dropdown, NO BORDER */
 .hoac-form-group .react-select__control {
-  min-height: 48px !important;
-  height: 48px !important;
+  min-height: var(--control-height) !important;
+  height: var(--control-height) !important;
   padding: 0 20px !important; /* More horizontal padding */
-  font-size: 14px !important;
+  font-size: var(--font-size-body) !important;
   border: none !important; /* NO BORDER */
   background: transparent !important;
   border-radius: 12px !important; /* Rounded corners */

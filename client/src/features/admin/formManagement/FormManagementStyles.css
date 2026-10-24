@@ -22,8 +22,8 @@
 .journal-management .table thead th {
   background-color: #f1f5f9 !important;
   color: #0069ab; /* Synced with dashboard */
-  font-weight: 700;
-  font-size: 0.8rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
   text-transform: none !important;
   letter-spacing: 0.01em;
   padding: 12px 16px;
@@ -100,7 +100,7 @@
   vertical-align: middle;
   border-bottom: 1px solid #e2e8f0;
   color: #1e293b;
-  font-size: 0.875rem; /* Synced with dashboard */
+  font-size: var(--font-size-body); /* Synced with dashboard */
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -128,7 +128,7 @@
 
 /* ===== Category Badge Styling ===== */
 .journal-management .table .badge {
-  font-size: 0.75rem;
+  font-size: var(--font-size-tertiary);
   font-weight: 600;
   padding: 6px 12px;
   border-radius: 50px;
@@ -174,7 +174,7 @@
 }
 .journal-management .table .btn {
   padding: 6px 14px;
-  font-size: 0.8rem;
+  font-size: var(--font-size-body);
   font-weight: 500;
   border-radius: 6px;
   transition: all 0.2s ease;
@@ -183,14 +183,24 @@
 .journal-management .table .btn-primary {
   background-color: #eff6ff !important;
   color: #1d4ed8 !important;
-  padding: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
+  padding: 0;
   border-radius: 0.5rem;
   border: none;
 }
 .journal-management .table .btn-danger {
   background-color: #fef2f2 !important;
   color: #b91c1c !important;
-  padding: 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
+  padding: 0;
   border-radius: 0.5rem;
   border: none;
 }
@@ -215,10 +225,11 @@
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.55rem 1.1rem;
+  height: var(--control-height);
+  padding: 0 1.1rem;
   font-weight: 600;
-  font-size: 0.875rem;
-  line-height: 1.25;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
   border-radius: 10px;
   background: #0069ab;
   border: none;
@@ -233,45 +244,46 @@
 /* ===== Tab Button Styling for Project Management ===== */
 
 /* ===== Modal Styling ===== */
-.modal-content {
+/* Scoped to this screen's modal: unscoped, these restyled every modal in the portal. */
+.journal-modal .modal-content {
   border-radius: 12px;
   border: none;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
 }
 
-.modal-header {
+.journal-modal .modal-header {
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   border-bottom: 1px solid #e2e8f0;
   padding: 16px 24px;
   border-radius: 12px 12px 0 0;
 }
 
-.modal-header .modal-title {
+.journal-modal .modal-header .modal-title {
   font-weight: 600;
   color: #1e293b;
 }
 
-.modal-body {
+.journal-modal .modal-body {
   padding: 24px;
 }
 
-.modal-body .form-label {
-  font-weight: 500;
+.journal-modal .modal-body .form-label {
+  font-weight: var(--weight-semibold);
   color: #475569;
   margin-bottom: 6px;
 }
 
-.modal-body .form-control,
-.modal-body .form-select {
+.journal-modal .modal-body .form-control,
+.journal-modal .modal-body .form-select {
   border-radius: 8px;
   border: 1px solid #cbd5e1;
   padding: 10px 14px;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
   transition: all 0.2s ease;
 }
 
-.modal-body .form-control:focus,
-.modal-body .form-select:focus {
+.journal-modal .modal-body .form-control:focus,
+.journal-modal .modal-body .form-select:focus {
   border-color: #0069ab;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
 }
@@ -282,14 +294,14 @@
 }
 
 .journal-modal .form-label {
-  font-size: 0.82rem;
+  font-size: var(--font-size-secondary);
   margin-bottom: 4px;
 }
 
 .journal-modal .form-control,
 .journal-modal .form-select {
-  padding: 7px 12px;
-  font-size: 0.875rem;
+  padding: 7px var(--control-padding-x);
+  font-size: var(--font-size-body);
 }
 
 .journal-modal .modal-footer {
@@ -301,7 +313,7 @@
   text-align: center;
   padding: 40px 16px;
   color: #64748b;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   background-color: #fafbfc;
 }
 
@@ -309,7 +321,7 @@
 .journal-management .alert {
   border-radius: 8px;
   border: none;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
 }
 
 /* ===== Loading Spinner ===== */
@@ -327,7 +339,6 @@
   .journal-management .table td {
     width: auto !important;
     padding: 12px;
-    font-size: 0.85rem;
   }
 
   .journal-management .table td:nth-child(8) {

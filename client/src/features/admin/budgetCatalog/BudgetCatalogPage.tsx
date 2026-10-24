@@ -1111,13 +1111,13 @@ function BudgetCatalogPage() {
                 styles={{
                   control: (base: any, state: any) => ({
                     ...base,
-                    minHeight: '45px',
-                    height: '45px',
+                    minHeight: 'var(--control-height)',
+                    height: 'var(--control-height)',
                     borderRadius: 12,
                     border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
                     boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.15)' : 'none',
                     backgroundColor: '#fcfdff',
-                    fontSize: '0.95rem',
+                    fontSize: 'var(--font-size-body)',
                     fontFamily: 'inherit',
                   }),
                   dropdownIndicator: (base: any, state: any) => ({

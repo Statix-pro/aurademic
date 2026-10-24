@@ -1988,7 +1988,7 @@ const AdminBudget: React.FC = () => {
                                           className="adminbudget-amount-label"
                                           style={{
                                             margin: 0,
-                                            fontSize: '0.78rem',
+                                            fontSize: 'var(--font-size-secondary)',
                                             fontWeight: 600,
                                             opacity: 0.75,
                                           }}
@@ -1997,7 +1997,7 @@ const AdminBudget: React.FC = () => {
                                         </p>
                                         <p
                                           className="adminbudget-amount"
-                                          style={{ margin: 0, fontSize: '1.1rem' }}
+                                          style={{ margin: 0, fontSize: 'var(--font-size-body)' }}
                                         >
                                           ₹ {displayAmountValue.toLocaleString('en-IN')}
                                         </p>
@@ -2265,7 +2265,9 @@ const AdminBudget: React.FC = () => {
               {actionType === 'return' ? 'Return Budget' : 'Reject Budget'} - Comments
             </h5>
 
-            <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+            <div
+              style={{ fontSize: 'var(--font-size-secondary)', color: '#666', marginBottom: 10 }}
+            >
               Budget ID: <b>{actionRef}</b>
             </div>
 
@@ -2293,7 +2295,9 @@ const AdminBudget: React.FC = () => {
                   border: '1px solid #ddd',
                   background: '#fff',
                   borderRadius: 10,
-                  padding: '8px 14px',
+                  height: 'var(--control-height)',
+                  minWidth: 'var(--button-min-width)',
+                  padding: '0 var(--button-padding-x)',
                   cursor: 'pointer',
                 }}
               >
@@ -2308,7 +2312,9 @@ const AdminBudget: React.FC = () => {
                   background: actionType === 'reject' ? '#dc3545' : '#f0ad4e',
                   color: '#fff',
                   borderRadius: 10,
-                  padding: '8px 14px',
+                  height: 'var(--control-height)',
+                  minWidth: 'var(--button-min-width)',
+                  padding: '0 var(--button-padding-x)',
                   cursor: 'pointer',
                 }}
               >
@@ -2383,7 +2389,7 @@ const AdminBudget: React.FC = () => {
               <Trash2 size={48} />
             </div>
             <h4 style={{ margin: '0 0 8px 0', color: '#333' }}>Confirm Deletion</h4>
-            <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: '14px' }}>
+            <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: 'var(--font-size-body)' }}>
               Are you sure you want to permanently delete budget request{' '}
               <strong>{deleteRef}</strong>? This action cannot be undone.
             </p>
@@ -2396,9 +2402,11 @@ const AdminBudget: React.FC = () => {
                   border: '1px solid #ddd',
                   background: '#fff',
                   borderRadius: 8,
-                  padding: '8px 24px',
+                  height: 'var(--control-height)',
+                  minWidth: 'var(--button-min-width)',
+                  padding: '0 var(--button-padding-x)',
                   cursor: 'pointer',
-                  fontWeight: 500,
+                  fontWeight: 600,
                 }}
               >
                 Cancel
@@ -2413,10 +2421,11 @@ const AdminBudget: React.FC = () => {
                   background: deleteCountdown > 0 ? '#e9ecef' : '#dc3545',
                   color: deleteCountdown > 0 ? '#6c757d' : '#fff',
                   borderRadius: 8,
-                  padding: '8px 24px',
+                  height: 'var(--control-height)',
+                  padding: '0 var(--button-padding-x)',
                   cursor: deleteCountdown > 0 ? 'not-allowed' : 'pointer',
-                  fontWeight: 500,
-                  minWidth: '120px',
+                  fontWeight: 600,
+                  minWidth: 'var(--button-min-width)',
                   transition: 'all 0.2s',
                 }}
               >
@@ -2523,7 +2532,7 @@ const AdminBudget: React.FC = () => {
                               color: '#0d6efd',
                               cursor: 'pointer',
                               padding: 0,
-                              fontSize: '12px',
+                              fontSize: 'var(--font-size-tertiary)',
                               fontWeight: 600,
                             }}
                           >
@@ -2549,7 +2558,9 @@ const AdminBudget: React.FC = () => {
                   border: '1px solid #ddd',
                   background: '#fff',
                   borderRadius: 8,
-                  padding: '8px 20px',
+                  height: 'var(--control-height)',
+                  minWidth: 'var(--button-min-width)',
+                  padding: '0 var(--button-padding-x)',
                   cursor: 'pointer',
                   fontWeight: 600,
                 }}

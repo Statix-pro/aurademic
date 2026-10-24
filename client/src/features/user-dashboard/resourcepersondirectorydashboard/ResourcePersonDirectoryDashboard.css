@@ -25,8 +25,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 40px;
-  padding: 10px 16px;
+  height: var(--control-height);
+  padding: 0 16px;
   border: 1px solid #e0e0e0;
   border-radius: 14px;
   background: #ffffff;
@@ -44,14 +44,14 @@
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
 }
 .rpd-search-icon {
-  color: #94a3b8;
+  color: var(--placeholder-color);
   flex-shrink: 0;
 }
 .rpd-search-box input {
   border: none;
   outline: none;
   background: transparent;
-  font-size: 0.9rem;
+  font-size: var(--font-size-body);
   color: #0f172a;
   width: 100%;
 }
@@ -62,15 +62,15 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 38px;
-  padding: 8px 14px;
+  height: var(--control-height);
+  padding: 0 14px;
   border: 1px solid #d1d5db;
   border-radius: 6px;
   background: #fff;
   min-width: 170px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-medium);
   color: #374151;
   user-select: none;
   transition:
@@ -97,7 +97,7 @@
 }
 .rpd-category-option {
   padding: 10px 16px;
-  font-size: 0.88rem;
+  font-size: var(--font-size-body);
   color: #374151;
   cursor: pointer;
   transition: background 0.15s;
@@ -109,7 +109,7 @@
 .rpd-category-option.selected {
   background: #e0eefa;
   color: #0069ab;
-  font-weight: 700;
+  font-weight: var(--weight-bold);
 }
 
 /* Add button (matches budgetdashboard-add-btn) */
@@ -120,10 +120,11 @@
   background-color: #0069ab;
   color: #fff;
   border: none;
-  padding: 8px 14px;
+  height: var(--control-height);
+  padding: 0 14px;
   border-radius: 10px;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
   transition: all 0.3s ease;
   white-space: nowrap;
@@ -150,8 +151,8 @@
 .rpd-table th {
   background: #e0f0fc;
   color: #0069ab;
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
   padding: 12px 14px;
   border-bottom: 2px solid #bee3f8;
   border-right: 1px solid #bee3f8;
@@ -164,7 +165,7 @@
   padding: 12px 14px;
   border-bottom: 1px solid #f1f5f9;
   border-right: 1px solid #f1f5f9;
-  font-size: 0.88rem;
+  font-size: var(--font-size-body);
   color: #1f2937;
   vertical-align: middle;
 }
@@ -190,12 +191,12 @@
 }
 .rpd-name-cell strong,
 .rpd-org-cell strong {
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-body);
 }
 .rpd-name-cell span,
 .rpd-org-cell span {
-  font-size: 0.78rem;
+  font-size: var(--font-size-secondary);
   color: #64748b;
 }
 
@@ -209,8 +210,8 @@
   background: transparent;
   color: #0069ab;
   border: 1px solid #c0d9f0;
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   line-height: 1;
   white-space: nowrap;
 }
@@ -235,8 +236,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 8px;
   border: 1px solid #bfdbfe;
   background: #eff6ff;
@@ -256,8 +257,8 @@
 .rpd-empty {
   padding: 40px 20px !important;
   text-align: center !important;
-  color: #94a3b8 !important;
-  font-size: 0.9rem !important;
+  color: #667085 !important;
+  font-size: var(--font-size-body) !important;
 }
 
 /* Responsiveness */
@@ -280,8 +281,8 @@
   display: inline-block;
   padding: 5px 10px;
   border-radius: 14px;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   white-space: nowrap;
 }
 
@@ -290,11 +291,11 @@
   background: #daf4e5;
 }
 .rpd-status-inactive {
-  color: #a46600;
+  color: #9a5f00;
   background: #fff0d6;
 }
 .rpd-status-rejected {
-  color: #c52d43;
+  color: #c12c41;
   background: #fde1e5;
 }
 
@@ -307,15 +308,14 @@
   border: 1px solid #d7dee8;
   background: #ffffff;
   box-shadow: none;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #334155;
 }
-/* !important: a global `.form-control { padding: 0.4rem 1rem !important }` otherwise wins. */
 .rpd-dashboard-search .form-control.custom-input {
-  padding: 10px 38px 10px 40px !important;
+  padding: 0 38px 0 40px;
 }
 .rpd-dashboard-filter .form-control.custom-input {
-  padding: 10px 14px !important;
+  padding: 0 var(--control-padding-x);
   min-width: 160px;
 }
 .rpd-dashboard-search .form-control.custom-input:focus,
@@ -341,47 +341,47 @@
 
 /* ── Typography (AGENTS.md §17 "Typography — the font standard") ── */
 .rpd-directory .financecard-title {
-  font-size: 24px;
-  line-height: 32px;
-  font-weight: 700;
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
+  font-weight: var(--weight-bold);
   color: var(--text-strong);
 }
 
 .rpd-directory .custom-table thead th {
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 600;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-semibold);
 }
 
 .rpd-directory .custom-table tbody td {
-  font-size: 14px;
-  line-height: 20px;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
   color: var(--text-body);
 }
 
 .rpd-directory .rpd-name-cell strong,
 .rpd-directory .rpd-org-cell strong {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-bold);
   color: var(--text-strong);
 }
 
 .rpd-directory .rpd-name-cell span,
 .rpd-directory .rpd-org-cell span {
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
   color: var(--text-soft);
 }
 
 .rpd-directory .rpd-tag,
 .rpd-directory .rpd-status-pill {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
 }
 
 .rpd-form-modal .modal-title {
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 600;
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+  font-weight: var(--weight-semibold);
 }

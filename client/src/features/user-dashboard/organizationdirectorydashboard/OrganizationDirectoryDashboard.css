@@ -44,16 +44,16 @@
 }
 
 .org-table th {
-  padding: 12px 16px !important;
-  font-size: 13px !important;
-  line-height: 18px;
-  font-weight: 600 !important;
+  padding: var(--table-cell-padding) !important;
+  font-size: var(--font-size-secondary) !important;
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-semibold) !important;
 }
 
 .org-table td {
   padding: 14px 16px !important;
-  font-size: 14px !important;
-  line-height: 20px;
+  font-size: var(--font-size-body) !important;
+  line-height: var(--leading-body);
   color: var(--text-body) !important;
 }
 
@@ -63,8 +63,8 @@
   color: #0069ab;
   padding: 4px 12px;
   border-radius: 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
   text-transform: capitalize;
 }
 
@@ -76,8 +76,8 @@
   display: inline-block;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
 }
 
 .org-status-pill.approved {
@@ -94,18 +94,17 @@
 }
 
 /* Keeps typed text clear of the search / clear icon drawn over the input's right edge. */
-/* !important: a global `.form-control { padding: 0.4rem 1rem !important }` otherwise wins. */
 .org-search-field .custom-input {
   height: var(--control-height);
-  font-size: 14px;
-  padding-right: 32px !important;
+  font-size: var(--font-size-body);
+  padding-right: 32px;
 }
 
 /* Paired with .custom-btn to beat the global `.btn { color: white }` leaking from the
    events stylesheet, which otherwise draws this outline button white on white. */
 .custom-btn.org-action-edit-btn {
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   padding: 0;
   border: 1px solid #0069ab;
   background: #ffffff;
@@ -136,38 +135,38 @@
 
 /* ── Typography (AGENTS.md §17 "Typography — the font standard") ── */
 .org-directory .budgetdashboard-title {
-  font-size: 24px;
-  line-height: 32px;
-  font-weight: 700;
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
+  font-weight: var(--weight-bold);
   color: var(--text-strong);
 }
 
 .org-directory .org-name {
-  font-size: 14px;
-  line-height: 20px;
-  font-weight: 700;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-bold);
   color: var(--text-strong);
 }
 
 .org-directory .org-meta {
   margin-top: 2px;
-  font-size: 13px;
-  line-height: 18px;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
   color: var(--text-soft);
 }
 
 .org-directory .org-tag-pill,
 .org-directory .org-status-pill {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
 }
 
 .org-directory .custom-btn {
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 .org-form-modal .modal-title {
-  font-size: 18px;
-  line-height: 24px;
-  font-weight: 600;
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
+  font-weight: var(--weight-semibold);
 }

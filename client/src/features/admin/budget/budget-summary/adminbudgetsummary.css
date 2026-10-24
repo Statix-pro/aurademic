@@ -1,5 +1,4 @@
 .adminbudgetsummary-page {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   width: 100%;
 }
 
@@ -36,10 +35,10 @@
 .adminbudgetsummary-title {
   margin: 0;
   padding-left: 8px;
-  font-weight: 600;
+  font-weight: var(--weight-bold);
   color: #0a2540;
-  font-size: 1.4rem;
-  line-height: 1;
+  font-size: var(--font-size-page-title);
+  line-height: var(--leading-page-title);
   white-space: nowrap;
 }
 
@@ -47,12 +46,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 14px;
+  height: var(--tag-height);
+  padding: 0 14px;
   border-radius: 999px;
   background: #0069ab;
   color: #fff;
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-bold);
   line-height: 1;
   white-space: nowrap;
 }
@@ -88,11 +88,11 @@
 
 .adminbudgetsummary-search {
   width: 100%;
-  height: 42px;
-  padding: 10px;
+  height: var(--control-height);
+  padding: 0 var(--control-padding-x);
   border: 1px solid rgba(15, 23, 42, 0.18);
   border-radius: 12px;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   font-weight: 500;
   color: #0f172a;
   outline: none;
@@ -118,10 +118,10 @@
 
 .adminbudgetsummary-toggle-btn {
   width: 100%;
-  height: 42px;
+  height: var(--control-height);
   border: 1px solid rgba(15, 23, 42, 0.18);
   border-radius: 12px;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   font-weight: 600;
   color: #0f172a;
   background: rgba(255, 255, 255, 0.92);
@@ -143,10 +143,10 @@
 
 .adminbudgetsummary-select {
   width: 100%;
-  height: 42px;
+  height: var(--control-height);
   border: 1px solid rgba(15, 23, 42, 0.18);
   border-radius: 12px;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   font-weight: 500;
   color: #0f172a;
   background: rgba(255, 255, 255, 0.92);
@@ -186,9 +186,12 @@
   outline: none;
   background-color: transparent;
   color: #5d6b8a;
-  padding: 8px 24px;
+  height: var(--chip-height);
+  padding: 0 24px;
   border-radius: 50px;
-  font-weight: 500;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
+  line-height: var(--chip-height);
   white-space: nowrap;
   text-decoration: none;
   transition: all 0.3s ease;
@@ -225,7 +228,7 @@
 .adminbudgetsummary-state {
   text-align: center;
   padding: 60px 0;
-  font-size: 0.95rem;
+  font-size: var(--font-size-body);
   color: #6b7280;
 }
 
@@ -256,8 +259,8 @@
   color: #137a3a;
   padding: 14px 12px;
   text-align: left;
-  font-weight: 700;
-  font-size: 0.9rem;
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
   border-bottom: 2px solid #d7f1e3;
 }
 
@@ -265,7 +268,7 @@
   padding: 15px 12px;
   border-bottom: 1px solid #f1f5f9;
   vertical-align: middle;
-  font-size: 0.88rem;
+  font-size: var(--font-size-body);
   color: #1f2937;
 }
 
@@ -300,7 +303,7 @@
 
 .adminbudgetsummary-total-row td {
   background: #f3f6f9 !important;
-  font-weight: 800 !important;
+  font-weight: var(--weight-bold) !important;
   border-top: 2px solid #d8dee5 !important;
   border-bottom: none !important;
 }
@@ -351,10 +354,7 @@
   }
 
   .adminbudget-tab {
-    flex: 1;
-    min-width: 0;
-    padding: 12px 10px;
-    font-size: 0.95rem;
+    padding: 0 10px;
     border: 0 !important;
     box-shadow: none;
   }
@@ -401,7 +401,8 @@
 .adminbudgetsummary-type-header h3 {
   margin: 0;
   color: #1e293b;
-  font-size: 1.1rem;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
 }
 
@@ -410,10 +411,10 @@
   background: #f8fbff;
   color: #0b5f95;
   border-radius: 10px;
-  height: 34px;
+  height: var(--button-sm-height);
   min-width: 90px;
   padding: 0 12px;
-  font-size: 0.86rem;
+  font-size: var(--font-size-secondary);
   font-weight: 600;
 }
 
@@ -429,7 +430,7 @@
   padding: 1.5rem;
   background: #fef7e8;
   border-radius: 8px;
-  font-size: 1.2rem;
+  font-size: var(--font-size-body);
   color: #92400e;
   margin-top: 1rem;
 }
@@ -456,7 +457,7 @@
 
 .adminbudgetsummary-grand-table td {
   padding: 1rem 0.5rem;
-  font-size: 1.1rem;
+  font-size: var(--font-size-body);
   border: none !important;
 }
 

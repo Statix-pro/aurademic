@@ -221,7 +221,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
           <span
             className="rpd-status-dot"
             style={{
-              backgroundColor: person.status === 'In Service' ? '#137a3a' : '#a97900',
+              backgroundColor: person.status === 'In Service' ? '#137a3a' : '#8f6600',
             }}
             title={person.status}
           />
@@ -428,7 +428,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                 <div
                   className="alert alert-warning d-flex align-items-center justify-content-between mb-0"
                   role="alert"
-                  style={{ borderRadius: '8px', fontSize: '0.875rem' }}
+                  style={{ borderRadius: '8px', fontSize: 'var(--font-size-body)' }}
                 >
                   <span>{loadError}</span>
                   <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>

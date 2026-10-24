@@ -1206,7 +1206,7 @@ const FinanceCard: React.FC = () => {
               {!loading && filteredData.length === 0 && (
                 <div
                   className="financecard-state"
-                  style={{ padding: '60px 20px', fontSize: '15px' }}
+                  style={{ padding: '60px 20px', fontSize: 'var(--font-size-body)' }}
                 >
                   No finance requests found
                 </div>
@@ -1238,9 +1238,9 @@ const FinanceCard: React.FC = () => {
                             {Boolean(item.workflow_state?.topupAt) && (
                               <span
                                 style={{
-                                  fontSize: '11px',
-                                  fontWeight: 600,
-                                  color: '#059669',
+                                  fontSize: 'var(--font-size-tertiary)',
+                                  fontWeight: 700,
+                                  color: '#047857',
                                   backgroundColor: '#d1fae5',
                                   border: '1px solid #10b981',
                                   borderRadius: '12px',

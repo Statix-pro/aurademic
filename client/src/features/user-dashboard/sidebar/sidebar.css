@@ -5,7 +5,7 @@
 }
 
 .sidebar .nav-link {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   padding: 10px 0;
   color: #333;
 }
@@ -27,7 +27,7 @@
   }
 
   .sidebar .nav-link {
-    font-size: 16px;
+    font-size: var(--font-size-body);
     padding: 10px 15px;
   }
 }

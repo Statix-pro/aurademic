@@ -144,7 +144,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
       {/* Income Section */}
       <div className="event-finance-card">
         <div className="event-card-header">
-          <h3 style={{ fontSize: '20px' }}>Income</h3>
+          <h3 style={{ fontSize: 'var(--font-size-section-title)' }}>Income</h3>
         </div>
         <table className="event-finance-table">
           <thead>
@@ -301,7 +301,7 @@ const FinanceSection: React.FC<FinanceSectionProps> = ({
       {/* Expenditure Section */}
       <div className="event-finance-card">
         <div className="event-card-header">
-          <h3 style={{ fontSize: '20px' }}>Expenditure</h3>
+          <h3 style={{ fontSize: 'var(--font-size-section-title)' }}>Expenditure</h3>
         </div>
         <table className="event-finance-table">
           <thead>
@@ -841,7 +841,9 @@ const SponsoringAgencySection: React.FC<SponsoringAgencySectionProps> = ({ goToT
                 {/* Sanction Order Details */}
                 <div className="event-sanction-card enabled">
                   <div className="event-sanction-header">
-                    <h4 style={{ fontSize: '20px' }}>Sanction Order Details</h4>
+                    <h4 style={{ fontSize: 'var(--font-size-section-title)' }}>
+                      Sanction Order Details
+                    </h4>
                   </div>
 
                   <div className="event-form-row event-inline-fields">

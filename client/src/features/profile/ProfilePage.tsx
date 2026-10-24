@@ -51,10 +51,13 @@ const ProfilePage: React.FC = () => {
             )}
           </div>
           <div>
-            <h2 className="mb-0" style={{ color: 'var(--text-main, #4f4f6e)', fontWeight: 600 }}>
+            <h2
+              className="mb-0"
+              style={{ color: 'var(--text-main, #4f4f6e)', fontWeight: 'var(--weight-bold)' }}
+            >
               {tab === 'notifications' ? 'Notification settings' : 'My Profile'}
             </h2>
-            <small style={{ color: 'var(--text-muted, #6c757d)' }}>
+            <small style={{ color: 'var(--text-soft)' }}>
               {tab === 'notifications'
                 ? 'Choose what you are told about, and where'
                 : 'View and manage your profile information'}

@@ -668,12 +668,12 @@ const Budget: React.FC = () => {
   const selectStyles = {
     control: (base: any, state: any) => ({
       ...base,
-      minHeight: '40px',
+      minHeight: 'var(--control-height)',
       borderColor: '#e0e0e0',
       borderRadius: '12px',
       boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.15)' : 'none',
       backgroundColor: '#fcfdff',
-      fontSize: '0.95rem',
+      fontSize: 'var(--font-size-body)',
       padding: '0 12px',
       borderWidth: '1px',
     }),
@@ -1712,7 +1712,14 @@ const Budget: React.FC = () => {
             }}
             onClick={() => setIsApplicantCardOpen(!isApplicantCardOpen)}
           >
-            <h5 style={{ margin: 0, fontSize: '16px', color: '#0069ab', fontWeight: '600' }}>
+            <h5
+              style={{
+                margin: 0,
+                fontSize: 'var(--font-size-section-title)',
+                color: '#0069ab',
+                fontWeight: '600',
+              }}
+            >
               Applicant Details
             </h5>
 
@@ -1744,7 +1751,7 @@ const Budget: React.FC = () => {
                   <div className="formGroup" style={{ marginBottom: 0 }}>
                     <label
                       style={{
-                        fontSize: '14px',
+                        fontSize: 'var(--font-size-secondary)',
                         color: '#495057',
                         marginBottom: '8px',
                         fontWeight: '600',
@@ -1773,7 +1780,7 @@ const Budget: React.FC = () => {
                   <div className="formGroup" style={{ marginBottom: 0 }}>
                     <label
                       style={{
-                        fontSize: '14px',
+                        fontSize: 'var(--font-size-secondary)',
                         color: '#495057',
                         marginBottom: '8px',
                         fontWeight: '600',
@@ -1807,7 +1814,7 @@ const Budget: React.FC = () => {
                     <div className="formGroup" style={{ position: 'relative' }}>
                       <label
                         style={{
-                          fontSize: '14px',
+                          fontSize: 'var(--font-size-secondary)',
                           color: '#495057',
                           marginBottom: '8px',
                           fontWeight: '600',
@@ -1883,7 +1890,9 @@ const Budget: React.FC = () => {
                               }}
                             >
                               <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
-                              <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                              <div
+                                style={{ fontSize: 'var(--font-size-secondary)', color: '#6c757d' }}
+                              >
                                 {emp.designation} | {emp.department}
                               </div>
                             </div>
@@ -1919,7 +1928,7 @@ const Budget: React.FC = () => {
                     <div className="formGroup">
                       <label
                         style={{
-                          fontSize: '14px',
+                          fontSize: 'var(--font-size-secondary)',
                           color: '#495057',
                           marginBottom: '8px',
                           fontWeight: '600',
@@ -1953,7 +1962,7 @@ const Budget: React.FC = () => {
                     <div className="formGroup">
                       <label
                         style={{
-                          fontSize: '14px',
+                          fontSize: 'var(--font-size-secondary)',
                           color: '#495057',
                           marginBottom: '8px',
                           fontWeight: '600',
@@ -1985,7 +1994,7 @@ const Budget: React.FC = () => {
                     <div className="formGroup">
                       <label
                         style={{
-                          fontSize: '14px',
+                          fontSize: 'var(--font-size-secondary)',
                           color: '#495057',
                           marginBottom: '8px',
                           fontWeight: '600',
@@ -2020,7 +2029,7 @@ const Budget: React.FC = () => {
                     <div className="formGroup">
                       <label
                         style={{
-                          fontSize: '14px',
+                          fontSize: 'var(--font-size-secondary)',
                           color: '#495057',
                           marginBottom: '8px',
                           fontWeight: '600',
@@ -2052,7 +2061,7 @@ const Budget: React.FC = () => {
                     <div className="formGroup">
                       <label
                         style={{
-                          fontSize: '14px',
+                          fontSize: 'var(--font-size-secondary)',
                           color: '#495057',
                           marginBottom: '8px',
                           fontWeight: '600',
@@ -2094,7 +2103,7 @@ const Budget: React.FC = () => {
                 <div className="form-group">
                   <label
                     style={{
-                      fontSize: '14px',
+                      fontSize: 'var(--font-size-secondary)',
                       color: '#495057',
                       marginBottom: '8px',
                       fontWeight: '600',
@@ -2146,8 +2155,8 @@ const Budget: React.FC = () => {
                       styles={{
                         control: (base: any, state: any) => ({
                           ...base,
-                          minHeight: '45px',
-                          height: 45,
+                          minHeight: 'var(--control-height)',
+                          height: 'var(--control-height)',
                           borderRadius: 12,
                           border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
                           backgroundColor: '#fcfdff',
@@ -2170,7 +2179,7 @@ const Budget: React.FC = () => {
                         singleValue: (base: any) => ({
                           ...base,
                           color: '#333',
-                          fontSize: '0.95rem',
+                          fontSize: 'var(--font-size-body)',
                         }),
                         input: (base: any) => ({
                           ...base,
@@ -2208,7 +2217,7 @@ const Budget: React.FC = () => {
                   >
                     <label
                       style={{
-                        fontSize: '14px',
+                        fontSize: 'var(--font-size-secondary)',
                         color: '#495057',
                         marginBottom: '8px',
                         fontWeight: '600',
@@ -2256,8 +2265,9 @@ const Budget: React.FC = () => {
                         style={{
                           borderRadius: '12px',
                           border: '1px solid #e0e0e0',
-                          padding: '10px 15px',
-                          fontSize: '0.95rem',
+                          height: 'var(--control-height)',
+                          padding: '0 var(--control-padding-x)',
+                          fontSize: 'var(--font-size-body)',
                           width: '100%',
                           flex: 1,
                           backgroundColor: '#fcfdff',
@@ -2306,7 +2316,12 @@ const Budget: React.FC = () => {
                                 }}
                               >
                                 <div style={{ fontWeight: '600', color: '#333' }}>{emp.name}</div>
-                                <div style={{ fontSize: '12px', color: '#6c757d' }}>
+                                <div
+                                  style={{
+                                    fontSize: 'var(--font-size-secondary)',
+                                    color: '#6c757d',
+                                  }}
+                                >
                                   {emp.designation} | {emp.department}
                                 </div>
                               </div>
@@ -2345,7 +2360,7 @@ const Budget: React.FC = () => {
                   >
                     <label
                       style={{
-                        fontSize: '14px',
+                        fontSize: 'var(--font-size-secondary)',
                         color: '#495057',
                         marginBottom: '8px',
                         fontWeight: '600',
@@ -2364,10 +2379,10 @@ const Budget: React.FC = () => {
                       style={{
                         borderRadius: '12px',
                         border: '1px solid #e0e0e0',
-                        padding: '10px 15px',
-                        fontSize: '0.95rem',
+                        height: 'var(--control-height)',
+                        padding: '0 var(--control-padding-x)',
+                        fontSize: 'var(--font-size-body)',
                         width: '100%',
-                        flex: 1,
                         backgroundColor: '#e9ecef',
                         color: '#495057',
                         cursor: 'not-allowed',
@@ -2384,7 +2399,7 @@ const Budget: React.FC = () => {
                   >
                     <label
                       style={{
-                        fontSize: '14px',
+                        fontSize: 'var(--font-size-secondary)',
                         color: '#495057',
                         marginBottom: '8px',
                         fontWeight: '600',
@@ -2416,15 +2431,15 @@ const Budget: React.FC = () => {
                         styles={{
                           control: (base: any, state: any) => ({
                             ...base,
-                            minHeight: ' 45px',
-                            height: '45',
+                            minHeight: 'var(--control-height)',
+                            height: 'var(--control-height)',
                             borderRadius: 12,
                             border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
                             boxShadow: state.isFocused
                               ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
                               : 'none',
                             backgroundColor: '#fcfdff',
-                            fontSize: '0.95rem',
+                            fontSize: 'var(--font-size-body)',
                             fontFamily: 'inherit',
                           }),
                           dropdownIndicator: (base: any, state: any) => ({
@@ -2464,7 +2479,7 @@ const Budget: React.FC = () => {
                   >
                     <label
                       style={{
-                        fontSize: '14px',
+                        fontSize: 'var(--font-size-secondary)',
                         color: '#495057',
                         marginBottom: '8px',
                         fontWeight: '600',
@@ -2488,15 +2503,15 @@ const Budget: React.FC = () => {
                         styles={{
                           control: (base: any, state: any) => ({
                             ...base,
-                            minHeight: '45px',
-                            height: '45px',
+                            minHeight: 'var(--control-height)',
+                            height: 'var(--control-height)',
                             borderRadius: 12,
                             border: state.isFocused ? '1px solid #0069ab' : '1px solid #e0e0e0',
                             boxShadow: state.isFocused
                               ? '0 0 0 3px rgba(0, 105, 171, 0.15)'
                               : 'none',
                             backgroundColor: isEditable ? '#fcfdff' : '#e9ecef',
-                            fontSize: '0.95rem',
+                            fontSize: 'var(--font-size-body)',
                             fontFamily: 'inherit',
                           }),
                           dropdownIndicator: (base: any, state: any) => ({
@@ -2538,8 +2553,8 @@ const Budget: React.FC = () => {
                 marginBottom: '20px',
                 paddingBottom: '10px',
                 borderBottom: '2px solid #dee2e6',
-                fontSize: '18px',
-                fontWeight: '700',
+                fontSize: 'var(--font-size-section-title)',
+                fontWeight: '600',
                 color: '#2c3e50',
               }}
             >
@@ -2607,7 +2622,7 @@ const Budget: React.FC = () => {
                                 <div
                                   style={{
                                     fontWeight: 'bold',
-                                    fontSize: '13px',
+                                    fontSize: 'var(--font-size-secondary)',
                                     color: '#495057',
                                     padding: '10px 12px 6px',
                                     background: '#e9ecef',
@@ -2621,8 +2636,8 @@ const Budget: React.FC = () => {
                               styles={{
                                 control: (base: any, state: any) => ({
                                   ...base,
-                                  minHeight: '38px !important',
-                                  height: '38px !important',
+                                  minHeight: 'var(--control-height) !important',
+                                  height: 'var(--control-height) !important',
                                   borderRadius: '4px',
                                   // Removed border to eliminate double-border effect
                                   border: 'none',
@@ -2658,7 +2673,7 @@ const Budget: React.FC = () => {
                                 groupHeading: (base: any) => ({
                                   ...base,
                                   fontWeight: 'bold',
-                                  fontSize: '13px',
+                                  fontSize: 'var(--font-size-secondary)',
                                 }),
                                 option: (base: any, state: any) => ({
                                   ...base,
@@ -2707,8 +2722,8 @@ const Budget: React.FC = () => {
                               styles={{
                                 control: (base: any, state: any) => ({
                                   ...base,
-                                  minHeight: '38px !important',
-                                  height: '38px !important',
+                                  minHeight: 'var(--control-height) !important',
+                                  height: 'var(--control-height) !important',
                                   borderRadius: '4px',
                                   // Removed border to eliminate double-border effect
                                   border: 'none',
@@ -2797,8 +2812,8 @@ const Budget: React.FC = () => {
                               onClick={() => toggleRowSchedule(idx)}
                               title="Month schedule"
                               style={{
-                                width: '24px',
-                                height: '24px',
+                                width: 'var(--icon-action-size)',
+                                height: 'var(--icon-action-size)',
                                 padding: 0,
                                 border: 'none',
                                 background: 'transparent',
@@ -2886,7 +2901,7 @@ const Budget: React.FC = () => {
                                   <label
                                     className="form-label"
                                     style={{
-                                      fontSize: '14px',
+                                      fontSize: 'var(--font-size-secondary)',
                                       color: '#495057',
                                       marginBottom: '6px',
                                       fontWeight: '600',
@@ -2904,7 +2919,7 @@ const Budget: React.FC = () => {
                                       borderRadius: '12px',
                                       border: '1px solid #e0e0e0',
                                       padding: '10px 15px',
-                                      fontSize: '0.95rem',
+                                      fontSize: 'var(--font-size-body)',
                                       width: '100%',
                                       fontFamily: 'inherit',
                                       backgroundColor: '#fcfdff',
@@ -2973,14 +2988,14 @@ const Budget: React.FC = () => {
                                       border: '1px solid #dee2e6',
                                       borderRadius: '8px',
                                       backgroundColor: '#f8f9fa',
-                                      fontSize: '13px',
+                                      fontSize: 'var(--font-size-body)',
                                     }}
                                   >
                                     <div
                                       style={{
                                         marginBottom: '12px',
                                         fontWeight: '600',
-                                        fontSize: '14px',
+                                        fontSize: 'var(--font-size-body)',
                                       }}
                                     >
                                       Budget Summary
@@ -3024,7 +3039,7 @@ const Budget: React.FC = () => {
                                         borderRadius: '4px',
                                         border: '1px solid',
                                         fontWeight: '600',
-                                        fontSize: '14px',
+                                        fontSize: 'var(--font-size-body)',
                                         marginBottom: '8px',
                                         backgroundColor:
                                           remaining === 0
@@ -3064,7 +3079,7 @@ const Budget: React.FC = () => {
                                     <div
                                       style={{
                                         marginTop: '8px',
-                                        fontSize: '12px',
+                                        fontSize: 'var(--font-size-secondary)',
                                         fontStyle: 'italic',
                                       }}
                                     >
@@ -3121,12 +3136,14 @@ const Budget: React.FC = () => {
               !canProcessStage(proposalStage)
             }
             style={{
-              padding: '12px 24px',
+              height: 'var(--control-height)',
+              padding: '0 var(--button-padding-x)',
+              minWidth: 'var(--button-min-width)',
               background: '#e7f8ef',
               color: '#137a3a',
               border: 'none',
               borderRadius: '12px',
-              fontSize: '16px',
+              fontSize: 'var(--font-size-body)',
               fontWeight: '600',
               cursor: 'pointer',
               display: 'flex',
@@ -3147,12 +3164,14 @@ const Budget: React.FC = () => {
               ) || !canProcessStage(proposalStage)
             }
             style={{
-              padding: '12px 24px',
+              height: 'var(--control-height)',
+              padding: '0 var(--button-padding-x)',
+              minWidth: 'var(--button-min-width)',
               background: '#fff4d6 ',
               color: '#a97900 ',
               border: 'none',
               borderRadius: '12px',
-              fontSize: '16px',
+              fontSize: 'var(--font-size-body)',
               fontWeight: '600',
               cursor: 'pointer',
               display: 'flex',
@@ -3174,12 +3193,14 @@ const Budget: React.FC = () => {
               !canProcessStage(proposalStage)
             }
             style={{
-              padding: '12px 24px',
+              height: 'var(--control-height)',
+              padding: '0 var(--button-padding-x)',
+              minWidth: 'var(--button-min-width)',
               background: '#fdeaea ',
               color: '#b42318',
               border: 'none',
               borderRadius: '12px',
-              fontSize: '16px',
+              fontSize: 'var(--font-size-body)',
               fontWeight: '600',
               cursor: 'pointer',
               display: 'flex',
@@ -3198,12 +3219,14 @@ const Budget: React.FC = () => {
               proposalStatus.toLowerCase().includes('archive')
             }
             style={{
-              padding: '12px 24px',
+              height: 'var(--control-height)',
+              padding: '0 var(--button-padding-x)',
+              minWidth: 'var(--button-min-width)',
               background: '#eef2ff',
               color: '#334155',
               border: 'none',
               borderRadius: '12px',
-              fontSize: '16px',
+              fontSize: 'var(--font-size-body)',
               fontWeight: '600',
               cursor: 'pointer',
               display: 'flex',
@@ -3233,16 +3256,17 @@ const Budget: React.FC = () => {
             onClick={() => handleSubmitBudget()}
             disabled={isSubmitting}
             style={{
-              padding: '12px 40px',
-              fontSize: '16px',
-              fontWeight: '700',
+              height: 'var(--control-height)',
+              padding: '0 var(--button-padding-x)',
+              fontSize: 'var(--font-size-body)',
+              fontWeight: '600',
               backgroundColor: '#0069ab',
               color: 'white',
               border: 'none',
               borderRadius: '12px',
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
               opacity: isSubmitting ? 0.7 : 1,
-              minWidth: '150px',
+              minWidth: 'var(--button-min-width)',
               boxShadow: '0 6px 20px rgba(0, 105, 171, 0.3)',
               transition: 'all 0.3s ease',
             }}
@@ -3314,7 +3338,14 @@ const Budget: React.FC = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h5 style={{ margin: 0, marginBottom: 10 }}>
+            <h5
+              style={{
+                margin: 0,
+                marginBottom: 10,
+                fontSize: 'var(--font-size-modal-title)',
+                fontWeight: 600,
+              }}
+            >
               {actionType === 'return' ? 'Return Budget' : 'Reject Budget'} - Comments
             </h5>
 
@@ -3342,7 +3373,11 @@ const Budget: React.FC = () => {
                   border: '1px solid #ddd',
                   background: '#fff',
                   borderRadius: 10,
-                  padding: '8px 14px',
+                  height: 'var(--control-height)',
+                  padding: '0 var(--button-padding-x)',
+                  minWidth: 'var(--button-min-width)',
+                  fontSize: 'var(--font-size-body)',
+                  fontWeight: 600,
                   cursor: 'pointer',
                 }}
               >
@@ -3357,7 +3392,11 @@ const Budget: React.FC = () => {
                   background: actionType === 'reject' ? '#dc3545' : '#f0ad4e',
                   color: '#fff',
                   borderRadius: 10,
-                  padding: '8px 14px',
+                  height: 'var(--control-height)',
+                  padding: '0 var(--button-padding-x)',
+                  minWidth: 'var(--button-min-width)',
+                  fontSize: 'var(--font-size-body)',
+                  fontWeight: 600,
                   cursor: 'pointer',
                 }}
               >
@@ -3393,7 +3432,16 @@ const Budget: React.FC = () => {
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h5 style={{ margin: 0, marginBottom: 10 }}>Resubmit Budget - Remarks</h5>
+            <h5
+              style={{
+                margin: 0,
+                marginBottom: 10,
+                fontSize: 'var(--font-size-modal-title)',
+                fontWeight: 600,
+              }}
+            >
+              Resubmit Budget - Remarks
+            </h5>
 
             <textarea
               value={resubmitRemarks}
@@ -3420,7 +3468,11 @@ const Budget: React.FC = () => {
                   border: '1px solid #ddd',
                   background: '#fff',
                   borderRadius: 10,
-                  padding: '8px 14px',
+                  height: 'var(--control-height)',
+                  padding: '0 var(--button-padding-x)',
+                  minWidth: 'var(--button-min-width)',
+                  fontSize: 'var(--font-size-body)',
+                  fontWeight: 600,
                   cursor: isSubmitting ? 'not-allowed' : 'pointer',
                 }}
               >
@@ -3436,7 +3488,11 @@ const Budget: React.FC = () => {
                   background: '#f59e0b',
                   color: '#fff',
                   borderRadius: 10,
-                  padding: '8px 14px',
+                  height: 'var(--control-height)',
+                  padding: '0 var(--button-padding-x)',
+                  minWidth: 'var(--button-min-width)',
+                  fontSize: 'var(--font-size-body)',
+                  fontWeight: 600,
                   cursor: isSubmitting ? 'not-allowed' : 'pointer',
                 }}
               >

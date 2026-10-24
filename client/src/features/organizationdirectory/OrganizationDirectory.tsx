@@ -318,7 +318,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
             borderRadius: '8px',
             padding: '10px 16px',
             marginBottom: '12px',
-            fontSize: '0.9rem',
+            fontSize: 'var(--font-size-body)',
           }}
         >
           {formError}

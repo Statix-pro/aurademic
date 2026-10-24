@@ -3616,9 +3616,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                       ) && (
                                         <span
                                           style={{
-                                            fontSize: '11px',
-                                            fontWeight: 600,
-                                            color: '#059669',
+                                            fontSize: 'var(--font-size-tertiary)',
+                                            fontWeight: 'var(--weight-semibold)',
+                                            color: '#047857',
                                             backgroundColor: '#d1fae5',
                                             border: '1px solid #10b981',
                                             borderRadius: '12px',
@@ -3649,9 +3649,9 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                       ) && (
                                         <span
                                           style={{
-                                            fontSize: '11px',
-                                            fontWeight: 600,
-                                            color: '#059669',
+                                            fontSize: 'var(--font-size-tertiary)',
+                                            fontWeight: 'var(--weight-semibold)',
+                                            color: '#047857',
                                             backgroundColor: '#d1fae5',
                                             border: '1px solid #10b981',
                                             borderRadius: '12px',
@@ -3683,8 +3683,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                           className="fw-amount-label"
                                           style={{
                                             margin: 0,
-                                            fontSize: '0.78rem',
-                                            fontWeight: 600,
+                                            fontSize: 'var(--font-size-secondary)',
+                                            fontWeight: 'var(--weight-semibold)',
                                             opacity: 0.75,
                                           }}
                                         >
@@ -3694,7 +3694,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                           className="fw-amount"
                                           style={{
                                             margin: 0,
-                                            fontSize: '1.1rem',
+                                            fontSize: 'var(--font-size-body)',
                                             ...(box.key === 'proposed' ? {} : { color: '#137a3a' }),
                                           }}
                                         >
@@ -4160,7 +4160,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                 <Trash2 size={48} />
               </div>
               <h4 style={{ margin: '0 0 8px 0', color: '#333' }}>Confirm Deletion</h4>
-              <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: '14px' }}>
+              <p style={{ margin: '0 0 16px 0', color: '#666', fontSize: 'var(--font-size-body)' }}>
                 Are you sure you want to permanently delete{' '}
                 {config.deleteEntityLabel || 'this request'} <strong>{deleteRef}</strong>? This
                 action cannot be undone.
@@ -4176,7 +4176,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     borderRadius: 8,
                     padding: '8px 24px',
                     cursor: 'pointer',
-                    fontWeight: 500,
+                    fontWeight: 'var(--weight-semibold)',
                   }}
                 >
                   Cancel
@@ -4193,8 +4193,8 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                     borderRadius: 8,
                     padding: '8px 24px',
                     cursor: deleteCountdown > 0 ? 'not-allowed' : 'pointer',
-                    fontWeight: 500,
-                    minWidth: '120px',
+                    fontWeight: 'var(--weight-semibold)',
+                    minWidth: 'var(--button-min-width)',
                     transition: 'all 0.2s',
                   }}
                 >
@@ -4234,10 +4234,12 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             </div>
           }
         >
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--font-size-secondary)', color: '#666', marginBottom: 10 }}>
             Reference: <b>{carryForwardRef}</b>
           </div>
-          <div style={{ fontSize: 13, color: '#475569', marginBottom: 12 }}>
+          <div
+            style={{ fontSize: 'var(--font-size-secondary)', color: '#475569', marginBottom: 12 }}
+          >
             This only displays the same card in the target FY for settlement. No amount is moved
             from the source FY.
           </div>
@@ -4245,7 +4247,14 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}
           >
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Source FY</span>
+              <span
+                style={{
+                  fontSize: 'var(--font-size-secondary)',
+                  fontWeight: 'var(--weight-semibold)',
+                }}
+              >
+                Source FY
+              </span>
               <input
                 className="form-control"
                 value={`FY ${carryForwardSourceYear}-${String(carryForwardSourceYear + 1).slice(2)}`}
@@ -4253,7 +4262,14 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
               />
             </label>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>Target FY</span>
+              <span
+                style={{
+                  fontSize: 'var(--font-size-secondary)',
+                  fontWeight: 'var(--weight-semibold)',
+                }}
+              >
+                Target FY
+              </span>
               <select
                 className="form-control"
                 value={carryForwardTargetYear}
@@ -4270,11 +4286,20 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
               </select>
             </label>
           </div>
-          <div style={{ marginBottom: 12, color: '#475569', fontSize: 13 }}>
+          <div
+            style={{ marginBottom: 12, color: '#475569', fontSize: 'var(--font-size-secondary)' }}
+          >
             Unsettled advance in source FY: <b>{formatAmount(carryForwardAvailableAmount)}</b>
           </div>
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 600 }}>Remarks</span>
+            <span
+              style={{
+                fontSize: 'var(--font-size-secondary)',
+                fontWeight: 'var(--weight-semibold)',
+              }}
+            >
+              Remarks
+            </span>
             <textarea
               className="form-control"
               rows={4}
@@ -4335,7 +4360,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             </div>
           }
         >
-          <div style={{ fontSize: 13, color: '#666', marginBottom: 10 }}>
+          <div style={{ fontSize: 'var(--font-size-secondary)', color: '#666', marginBottom: 10 }}>
             Reference: <b>{actionRef}</b>
           </div>
 
@@ -4378,7 +4403,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             </div>
           }
         >
-          <div style={{ fontSize: 14, marginBottom: 15 }}>
+          <div style={{ fontSize: 'var(--font-size-body)', marginBottom: 15 }}>
             Please upload the required annexure document before approving this request.
           </div>
           <div className="mb-3">

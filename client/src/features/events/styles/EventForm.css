@@ -5,21 +5,13 @@
   padding: 30px;
   background: #f8f9fc;
   border-radius: 12px;
-  font-family: sans-serif;
 }
 
 .event-form-title {
-  font-size: 24px;
+  font-size: var(--font-size-page-title);
   color: #1f1f1f;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 20px;
-}
-
-/* Form structure */
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
 }
 
 .event-form-row {
@@ -39,7 +31,7 @@ form {
 .event-form-group label {
   margin-bottom: 6px;
   color: #555;
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
 }
 
 /* Inputs & selects */
@@ -49,7 +41,7 @@ form {
   padding: 10px;
   border-radius: 8px;
   border: 1px solid #ddd;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   background-color: #fafafa;
 }
 
@@ -82,8 +74,8 @@ form {
   padding: 8px 15px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: 600;
   margin-bottom: 20px;
   transition: background 0.3s ease;
 }
@@ -96,8 +88,8 @@ form {
   background: #f0f0f0;
   border: none;
   font-size: 18px;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 50%;
   cursor: pointer;
 }
@@ -116,8 +108,9 @@ form {
 }
 
 .event-section-title {
-  font-size: 20px;
-  font-weight: bold;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: 600;
   margin-bottom: 15px;
   color: #333;
 }
@@ -131,8 +124,8 @@ form {
 
 .event-sponsor-table th {
   text-align: left;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
   color: #555;
   padding-bottom: 8px;
 }
@@ -148,7 +141,8 @@ form {
   border-radius: 8px;
   border: 1px solid #d1d1d1;
   width: 100%;
-  font-size: 14px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
   background-color: #fafafa;
   outline: none;
   transition: border 0.2s ease;
@@ -260,7 +254,7 @@ form {
   padding: 6px 14px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   transition: background 0.3s ease;
 }
 /* Make sure the row height is respected */
@@ -288,8 +282,8 @@ form {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   background: #f5f5f5;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -302,8 +296,8 @@ form {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   background: #f5f5f5;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -316,8 +310,8 @@ form {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   background: #f5f5f5;
   border: 1px solid #ddd;
   border-radius: 6px;
@@ -346,7 +340,7 @@ form {
 }
 
 .event-file-name {
-  font-size: 12px;
+  font-size: var(--font-size-body);
   color: #555;
   max-width: 120px;
   white-space: nowrap;
@@ -361,7 +355,7 @@ form {
   padding: 6px 10px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   transition: background 0.3s ease;
 }
 
@@ -383,8 +377,8 @@ form {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border: none;
   border-radius: 8px;
   background-color: #f3f3f3;
@@ -421,8 +415,8 @@ form {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border: none;
   border-radius: 8px;
   background-color: #f3f3f3;
@@ -477,12 +471,11 @@ form {
   padding: 30px;
   background: #f8f9fc;
   border-radius: 12px;
-  font-family: sans-serif;
 }
 
 .event-form-title {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--font-size-page-title);
+  font-weight: 700;
   color: #1f1f1f;
   margin-bottom: 20px;
 }
@@ -583,10 +576,12 @@ form {
 }
 
 .event-close-btn:hover {
-  color: red;
+  color: var(--error-color);
 }
 
 .event-message-box h3 {
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
   margin: 0 0 10px;
 }
 
@@ -625,7 +620,7 @@ form {
   color: #222;
   border: none;
   padding: 10px 16px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   cursor: pointer;
   transition:
     background-color 0.3s,
@@ -669,7 +664,8 @@ form {
   padding: 10px 20px;
   border: none;
   border-radius: 6px;
-  font-size: 15px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -725,9 +721,9 @@ form {
 .time-input {
   padding: 4px 8px;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   border: 1px solid #ccc;
-  height: 32px;
+  height: var(--control-height);
 }
 /* Each row */
 .event-form-row {
@@ -745,9 +741,9 @@ form {
 
 /* Label styling */
 .event-form-group label {
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
 }
 
 /* Inputs, native selects, and react-select */
@@ -755,11 +751,11 @@ form {
 .event-form-group select,
 .event-form-group .react-select__control,
 .event-form-group .react-datepicker-wrapper input {
-  height: 36px; /* consistent compact height */
+  height: var(--control-height);
   padding: 4px 10px; /* slim padding */
   border-radius: 6px;
   border: 1px solid #ccc;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   box-shadow: none;
 }
 
@@ -774,14 +770,15 @@ form {
 }
 /* Section Titles (like Event Details, Institution, Departments) */
 .event-section-title {
-  font-size: 20px; /* ≈ 22px */
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600; /* Semi-bold */
   color: #222;
   margin-bottom: 12px;
 }
 /* Table Headings */
 .event-table-heading {
-  font-size: 1rem; /* ≈ 16px */
+  font-size: var(--font-size-secondary);
   font-weight: 600;
   text-align: left;
   padding: 8px 12px;
@@ -795,21 +792,13 @@ form {
   padding: 30px;
   background: #f8f9fc;
   border-radius: 12px;
-  font-family: sans-serif;
 }
 
 .event-form-title {
-  font-size: 24px;
+  font-size: var(--font-size-page-title);
   color: #1f1f1f;
-  font-weight: 600;
+  font-weight: 700;
   margin-bottom: 20px;
-}
-
-/* Form structure */
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
 }
 
 .event-form-row {
@@ -829,7 +818,7 @@ form {
 .event-form-group label {
   margin-bottom: 6px;
   color: #555;
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
 }
 
 /* Inputs & selects */
@@ -839,7 +828,7 @@ form {
   padding: 10px;
   border-radius: 8px;
   border: 1px solid #ddd;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   background-color: #fafafa;
 }
 
@@ -872,8 +861,8 @@ form {
   padding: 8px 15px;
   border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: 600;
   margin-bottom: 20px;
   transition: background 0.3s ease;
 }
@@ -886,8 +875,8 @@ form {
   background: #f0f0f0;
   border: none;
   font-size: 18px;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 50%;
   cursor: pointer;
 }
@@ -906,8 +895,9 @@ form {
 }
 
 .event-section-title {
-  font-size: 20px;
-  font-weight: bold;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: 600;
   margin-bottom: 15px;
   color: #333;
 }
@@ -921,8 +911,8 @@ form {
 
 .event-sponsor-table th {
   text-align: left;
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
   color: #555;
   padding-bottom: 8px;
 }
@@ -938,7 +928,8 @@ form {
   border-radius: 8px;
   border: 1px solid #d1d1d1;
   width: 100%;
-  font-size: 14px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
   background-color: #fafafa;
   outline: none;
   transition: border 0.2s ease;
@@ -1070,7 +1061,7 @@ form {
   padding: 6px 14px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   transition: background 0.3s ease;
 }
 
@@ -1085,7 +1076,7 @@ form {
 
 /* File name preview */
 .event-file-name {
-  font-size: 12px;
+  font-size: var(--font-size-body);
   color: #555;
   max-width: 120px;
   white-space: nowrap;
@@ -1101,7 +1092,7 @@ form {
   padding: 6px 10px;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   transition: background 0.3s ease;
 }
 
@@ -1126,7 +1117,8 @@ form {
 
 .event-card-header h4 {
   margin: 0;
-  font-size: 16px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
 }
 
@@ -1136,7 +1128,7 @@ form {
   border: none;
   padding: 6px 10px;
   border-radius: 4px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1175,7 +1167,7 @@ form {
   padding: 6px 10px;
   border-radius: 4px;
   cursor: pointer;
-  height: 36px;
+  height: var(--control-height);
   align-self: center;
 }
 
@@ -1215,12 +1207,11 @@ form {
   padding: 30px;
   background: #f8f9fc;
   border-radius: 12px;
-  font-family: sans-serif;
 }
 
 .event-form-title {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--font-size-page-title);
+  font-weight: 700;
   color: #1f1f1f;
   margin-bottom: 20px;
 }
@@ -1237,8 +1228,8 @@ form {
   padding: 10px;
   border-radius: 8px;
   border: 1px solid #ddd;
-  font-size: 14px;
-  height: 36px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
   width: 100%;
   box-sizing: border-box;
 }
@@ -1290,6 +1281,8 @@ form {
 }
 
 .event-message-box h3 {
+  font-size: var(--font-size-modal-title);
+  line-height: var(--leading-modal-title);
   margin: 0 0 10px;
 }
 
@@ -1328,7 +1321,7 @@ form {
   color: #222;
   border: none;
   padding: 10px 16px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   cursor: pointer;
   transition:
     background-color 0.3s,
@@ -1372,7 +1365,8 @@ form {
   padding: 10px 20px;
   border: none;
   border-radius: 6px;
-  font-size: 15px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
   cursor: pointer;
   transition: background 0.2s;
 }
@@ -1444,9 +1438,9 @@ form {
 .event-time-input {
   padding: 4px 8px;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   border: 1px solid #ccc;
-  height: 32px;
+  height: var(--control-height);
 }
 /* Each row */
 .event-form-row {
@@ -1464,9 +1458,9 @@ form {
 
 /* Label styling */
 .event-form-group label {
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
 }
 
 /* Inputs, native selects, and react-select */
@@ -1474,11 +1468,11 @@ form {
 .event-form-group select,
 .event-form-group .react-select__control,
 .event-form-group .react-datepicker-wrapper input {
-  height: 36px; /* consistent compact height */
+  height: var(--control-height);
   padding: 4px 10px; /* slim padding */
   border-radius: 6px;
   border: 1px solid #ccc;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   box-shadow: none;
 }
 
@@ -1502,7 +1496,7 @@ form {
 
 .event-add-btn,
 .event-delete-btn {
-  height: 36px; /* align with inputs */
+  height: var(--control-height);
 }
 .collab-section {
   padding: 1px 0;
@@ -1525,7 +1519,7 @@ form {
 
 .collab-header h4 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--font-size-body);
 }
 
 /* Row layout */
@@ -1545,7 +1539,7 @@ form {
 .collab-input {
   flex: 1;
   padding: 4px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 /* Delete button */
@@ -1561,8 +1555,8 @@ form {
   background: #ee4a47;
   border: none;
   padding: 0.3rem;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -1582,7 +1576,7 @@ form {
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 /* Toggle switch */
@@ -1654,7 +1648,7 @@ form {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--font-size-body);
 }
 
 .event-submit-btn {
@@ -1706,7 +1700,8 @@ form {
 }
 
 .event-section-title {
-  font-size: 20px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
   margin-bottom: 15px;
   color: #333;
@@ -1721,8 +1716,8 @@ form {
 }
 
 .event-section-label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
   color: #444;
 }
 
@@ -1730,7 +1725,8 @@ form {
   padding: 6px 10px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
   background-color: #fff;
   transition: border 0.2s ease;
 }
@@ -1816,7 +1812,8 @@ input:checked + .event-slider:before {
   padding: 6px 10px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
 }
 
 .event-social-grid input:focus {
@@ -1850,7 +1847,8 @@ input:checked + .event-slider:before {
 
 .event-section-title {
   margin-bottom: 1rem;
-  font-size: 20px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   color: #333;
 }
 
@@ -1898,8 +1896,8 @@ input:checked + .event-slider:before {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px; /* fixed smaller width */
-  height: 32px; /* fixed smaller height */
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
 }
 
 .event-delete-btn svg,
@@ -1941,8 +1939,8 @@ input:checked + .event-slider:before {
   background: #45100e;
   border: none;
   padding: 0.3rem;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -2018,7 +2016,7 @@ input:checked + .event-slider:before {
 
 .event-finance-table th {
   background: #f5f5f5;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .event-finance-upload-section {
@@ -2139,11 +2137,11 @@ input:checked + .event-slider:before {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   max-width: 100%;
   margin: 20px auto;
-  font-family: Arial, sans-serif;
 }
 
 .event-letters-heading {
-  font-size: 22px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
   color: #333;
   margin-bottom: 18px;
@@ -2161,7 +2159,7 @@ input:checked + .event-slider:before {
 
 .event-letters-label {
   flex: 1;
-  font-size: 15px;
+  font-size: var(--font-size-body);
   color: #444;
 }
 
@@ -2215,7 +2213,8 @@ input:checked + .event-slider:before {
   border: 1px solid #ccc;
   border-radius: 6px;
   background: white;
-  font-size: 14px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
   color: #333;
 }
 
@@ -2223,7 +2222,8 @@ input:checked + .event-slider:before {
   padding: 5px 8px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
 }
 
 .event-letters-upload,
@@ -2247,11 +2247,11 @@ input:checked + .event-slider:before {
 /* Container */
 .documents-container {
   padding: 20px;
-  font-family: Arial, sans-serif;
 }
 
 .section-title {
-  font-size: 20px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   color: #0069ab; /* Updated color */
   margin-bottom: 20px;
 }
@@ -2350,7 +2350,7 @@ input:checked + .event-slider:before {
 }
 
 .file-name {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #333;
   margin-left: 5px;
 }
@@ -2383,12 +2383,12 @@ input:checked + .event-slider:before {
   padding: 30px;
   background: #f8f9fc;
   border-radius: 12px;
-  font-family: sans-serif;
 }
 
 /* Section title */
 .event-section-title {
-  font-size: 20px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
   color: #1f1f1f;
   margin-bottom: 25px;
@@ -2423,7 +2423,7 @@ input:checked + .event-slider:before {
 /* Document label */
 .event-doc-label {
   flex: 2;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   font-weight: 500;
   color: #333;
 }
@@ -2499,8 +2499,9 @@ input:checked + .event-slider:before {
   border-radius: 8px;
   border: none;
   cursor: pointer;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
   transition: background 0.3s ease;
 }
 
@@ -2556,8 +2557,9 @@ input:checked + .event-slider:before {
   font-size: 16px;
 }
 .coordinator-title {
-  font-size: 20px;
-  font-weight: bold;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: 600;
   margin-bottom: 12px;
 }
 
@@ -2616,7 +2618,7 @@ input:checked + .event-slider:before {
 
 .coordinator-table th {
   background-color: #f5f5f5;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .coordinator-table input {
@@ -2632,7 +2634,7 @@ input:checked + .event-slider:before {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--font-size-body);
 }
 
 .submit-wrapper {
@@ -2643,7 +2645,7 @@ input:checked + .event-slider:before {
   background: green;
   color: #fff;
   padding: 6px 14px; /* smaller size */
-  font-size: 14px; /* reduced font */
+  font-size: var(--font-size-body);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -2659,7 +2661,7 @@ input:checked + .event-slider:before {
 
 .event-add-btn,
 .event-delete-btn {
-  height: 36px; /* align with inputs */
+  height: var(--control-height);
 }
 .event-collab-section {
   padding: 1px 0;
@@ -2682,7 +2684,7 @@ input:checked + .event-slider:before {
 
 .event-collab-header h4 {
   margin: 0;
-  font-size: 15px;
+  font-size: var(--font-size-body);
 }
 
 /* Row layout */
@@ -2753,7 +2755,7 @@ input:checked + .event-slider:before {
 .event-participants-total {
   text-align: right;
   margin: 15px 0;
-  font-size: 16px;
+  font-size: var(--font-size-body);
 }
 
 /* Table container */
@@ -2769,7 +2771,7 @@ input:checked + .event-slider:before {
 .event-participants-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: var(--font-size-body);
 }
 
 .participants-table th,
@@ -2806,7 +2808,7 @@ input:checked + .event-slider:before {
 .event-collab-input {
   flex: 1;
   padding: 4px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 /* Delete button */
@@ -2822,8 +2824,8 @@ input:checked + .event-slider:before {
   background: #ee4a47;
   border: none;
   padding: 0.3rem;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -2843,7 +2845,7 @@ input:checked + .event-slider:before {
   align-items: center;
   gap: 5px;
   padding: 4px 8px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 /* Toggle switch */
@@ -2916,7 +2918,7 @@ input:checked + .event-slider:before {
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--font-size-body);
 }
 
 .event-submit-btn {
@@ -2968,7 +2970,8 @@ input:checked + .event-slider:before {
 }
 
 .section-title {
-  font-size: 20px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
   margin-bottom: 15px;
   color: #333;
@@ -2983,8 +2986,8 @@ input:checked + .event-slider:before {
 }
 
 .event-section-label {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--font-size-secondary);
+  font-weight: 600;
   color: #444;
 }
 
@@ -2992,7 +2995,8 @@ input:checked + .event-slider:before {
   padding: 6px 10px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
+  height: var(--control-height);
   background-color: #fff;
   transition: border 0.2s ease;
 }
@@ -3092,7 +3096,7 @@ input:checked + .slider:before {
   padding: 6px 10px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 .social-grid input:focus {
@@ -3126,7 +3130,8 @@ input:checked + .slider:before {
 
 .section-title {
   margin-bottom: 1rem;
-  font-size: 1.3rem;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   color: #333;
 }
 
@@ -3174,8 +3179,8 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px; /* fixed smaller width */
-  height: 32px; /* fixed smaller height */
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
 }
 
 .delete-btn svg,
@@ -3217,8 +3222,8 @@ input:checked + .slider:before {
   background: #45100e;
   border: none;
   padding: 0.3rem;
-  width: 32px;
-  height: 32px;
+  width: var(--icon-action-size);
+  height: var(--icon-action-size);
   border-radius: 4px;
   cursor: pointer;
   display: flex;
@@ -3294,7 +3299,7 @@ input:checked + .slider:before {
 
 .finance-table th {
   background: #f5f5f5;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .finance-upload-section {
@@ -3383,11 +3388,11 @@ input:checked + .slider:before {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   max-width: 100%;
   margin: 20px auto;
-  font-family: Arial, sans-serif;
 }
 
 .letters-heading {
-  font-size: 22px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
   color: #333;
   margin-bottom: 18px;
@@ -3405,7 +3410,7 @@ input:checked + .slider:before {
 
 .letters-label {
   flex: 1;
-  font-size: 15px;
+  font-size: var(--font-size-body);
   color: #444;
 }
 
@@ -3459,7 +3464,7 @@ input:checked + .slider:before {
   border: 1px solid #ccc;
   border-radius: 6px;
   background: white;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #333;
 }
 
@@ -3467,7 +3472,7 @@ input:checked + .slider:before {
   padding: 5px 8px;
   border: 1px solid #ccc;
   border-radius: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 .letters-upload,
@@ -3491,11 +3496,11 @@ input:checked + .slider:before {
 /* Container */
 .event-documents-container {
   padding: 20px;
-  font-family: Arial, sans-serif;
 }
 
 .event-section-title {
-  font-size: 20px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   color: #0069ab; /* Updated color */
   margin-bottom: 20px;
 }
@@ -3588,31 +3593,9 @@ input:checked + .slider:before {
 }
 
 .event-file-name {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #333;
   margin-left: 5px;
-}
-
-.doc-buttons {
-  margin-top: 20px;
-  display: flex;
-  gap: 10px;
-}
-
-.btn {
-  padding: 8px 15px;
-  border: none;
-  border-radius: 5px;
-  color: white;
-  cursor: pointer;
-}
-
-.btn.edit {
-  background-color: #0069ab;
-}
-
-.btn.submit {
-  background-color: #0069ab;
 }
 
 .documents-container {
@@ -3621,12 +3604,12 @@ input:checked + .slider:before {
   padding: 30px;
   background: #f8f9fc;
   border-radius: 12px;
-  font-family: sans-serif;
 }
 
 /* Section title */
 .section-title {
-  font-size: 20px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
   color: #1f1f1f;
   margin-bottom: 25px;
@@ -3660,7 +3643,7 @@ input:checked + .slider:before {
 /* Document label */
 .doc-label {
   flex: 2;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   font-weight: 500;
   color: #333;
 }
@@ -3736,8 +3719,8 @@ input:checked + .slider:before {
   border-radius: 8px;
   border: none;
   cursor: pointer;
-  font-weight: 500;
-  font-size: 14px;
+  font-weight: 600;
+  font-size: var(--font-size-body);
   transition: background 0.3s ease;
 }
 
@@ -3770,7 +3753,8 @@ input:checked + .slider:before {
 .event-card-section h2 {
   margin-top: 0;
   margin-bottom: 15px;
-  font-size: 18px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
 }
 
@@ -3785,14 +3769,14 @@ input:checked + .slider:before {
 }
 
 .event-card-section table th {
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .event-input[type='date'],
 .event-input[type='time'],
 .event-select {
   font-family: inherit; /* Use the same font as other inputs */
-  font-size: 14px; /* Match your text input size */
+  font-size: var(--font-size-body);
   padding: 6px 10px; /* Similar spacing */
   border: 1px solid #ccc; /* Same border as text inputs */
   border-radius: 6px; /* Rounded like others */
@@ -3825,7 +3809,7 @@ input:checked + .slider:before {
 
 .event-resource-person-table th {
   background-color: #f9f9f9;
-  font-weight: bold;
+  font-weight: 600;
 }
 
 .event-resource-person-table input {
@@ -3913,7 +3897,7 @@ input:checked + .slider:before {
   justify-content: center;
   gap: 6px;
   min-width: 70px; /* smaller width */
-  height: 40px; /* smaller height */
+  height: var(--control-height);
   border: 1px solid #ddd;
   border-radius: 6px;
   background: #fff; /* match other rows */
@@ -3953,7 +3937,6 @@ input:checked + .slider:before {
   transform: translateY(2px); /* adjust until perfect */
 }
 .event-dashboard-container {
-  font-family: 'Poppins', sans-serif;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -3985,8 +3968,7 @@ input:checked + .slider:before {
 }
 
 .event-college-name {
-  font-family: 'Roboto', sans-serif;
-  font-size: 18px;
+  font-size: var(--font-size-modal-title);
   font-weight: 500;
   color: white;
   letter-spacing: 1px;
@@ -4112,7 +4094,7 @@ input:checked + .slider:before {
 .event-top {
   display: flex;
   justify-content: space-between;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #444;
   background-color: #f5f4f4;
   padding: 10px 15px;
@@ -4142,7 +4124,7 @@ input:checked + .slider:before {
 .event-bottom {
   display: flex;
   justify-content: space-between;
-  font-size: 16px;
+  font-size: var(--font-size-body);
   font-weight: 600;
   color: #003b73;
   background-color: #e0ebf7;
@@ -4182,7 +4164,8 @@ input:checked + .slider:before {
 }
 
 .event-calendar-title {
-  font-size: 20px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
   color: #003b73;
   text-align: center;
@@ -4214,12 +4197,12 @@ input:checked + .slider:before {
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid #ccc;
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 /* Calendar custom */
 .fc .fc-day-sun {
-  color: red;
+  color: var(--error-color);
 }
 .fc .fc-daygrid-day-frame {
   min-height: 70px;
@@ -4243,7 +4226,7 @@ input:checked + .slider:before {
 
 /* Day number styling */
 .event-fc-day-number {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   font-weight: 500;
   margin-bottom: 4px;
   color: #003b73;
@@ -4262,7 +4245,7 @@ input:checked + .slider:before {
 /* Event badge in the middle, bigger circle */
 .event-badge {
   color: #fff;
-  font-size: 14px;
+  font-size: var(--font-size-tertiary);
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -4292,7 +4275,7 @@ input:checked + .slider:before {
 
 /* Make Sundays text red */
 .event-sunday-red .event-fc-day-number {
-  color: red !important;
+  color: var(--error-color) !important;
 }
 .event-form-row {
   align-items: flex-end !important;
@@ -4300,7 +4283,7 @@ input:checked + .slider:before {
 
 .event-form-group label {
   margin-bottom: 3px;
-  font-size: 15px;
+  font-size: var(--font-size-secondary);
 }
 
 .event-input[type='text'][readonly] {
@@ -4308,7 +4291,6 @@ input:checked + .slider:before {
   border-radius: 6px;
 }
 .event-dashboard-container {
-  font-family: 'Poppins', sans-serif;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -4340,8 +4322,7 @@ input:checked + .slider:before {
 }
 
 .event-college-name {
-  font-family: 'Roboto', sans-serif;
-  font-size: 18px;
+  font-size: var(--font-size-modal-title);
   font-weight: 500;
   color: white;
   letter-spacing: 1px;
@@ -4467,7 +4448,7 @@ input:checked + .slider:before {
 .event-top {
   display: flex;
   justify-content: space-between;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   color: #444;
   background-color: #f5f4f4;
   padding: 10px 15px;
@@ -4497,7 +4478,7 @@ input:checked + .slider:before {
 .event-bottom {
   display: flex;
   justify-content: space-between;
-  font-size: 16px;
+  font-size: var(--font-size-body);
   font-weight: 600;
   color: #003b73;
   background-color: #e0ebf7;
@@ -4537,7 +4518,8 @@ input:checked + .slider:before {
 }
 
 .event-calendar-title {
-  font-size: 20px;
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
   font-weight: 600;
   color: #003b73;
   text-align: center;
@@ -4569,12 +4551,12 @@ input:checked + .slider:before {
   padding: 6px 10px;
   border-radius: 6px;
   border: 1px solid #ccc;
-  font-size: 14px;
+  font-size: var(--font-size-body);
 }
 
 /* Calendar custom */
 .fc .fc-day-sun {
-  color: red;
+  color: var(--error-color);
 }
 .fc .fc-daygrid-day-frame {
   min-height: 70px;
@@ -4598,7 +4580,7 @@ input:checked + .slider:before {
 
 /* Day number styling */
 .event-fc-day-number {
-  font-size: 14px;
+  font-size: var(--font-size-body);
   font-weight: 500;
   margin-bottom: 4px;
   color: #003b73;
@@ -4617,7 +4599,7 @@ input:checked + .slider:before {
 /* Event badge in the middle, bigger circle */
 .event-badge {
   color: #fff;
-  font-size: 14px;
+  font-size: var(--font-size-tertiary);
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -4647,15 +4629,8 @@ input:checked + .slider:before {
 
 /* Make Sundays text red */
 .sunday-red .fc-day-number {
-  color: red !important;
+  color: var(--error-color) !important;
 }
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: 'Poppins', sans-serif;
-}
-
 .login-body {
   height: 100vh;
   display: flex;
@@ -4706,24 +4681,24 @@ input:checked + .slider:before {
 }
 
 .left-panel h2 {
-  font-size: 22px;
+  font-size: var(--font-size-page-title);
   font-weight: 600;
-  line-height: 1.8;
+  line-height: var(--leading-page-title);
   margin-bottom: 5px;
 }
 
 .left-panel h4 {
-  font-size: 15px;
+  font-size: var(--font-size-section-title);
   color: #e0e0e0;
   margin-bottom: 15px;
-  line-height: 1.8;
+  line-height: var(--leading-section-title);
   letter-spacing: 0.5px;
 }
 
 .left-panel .college-website-left {
   position: absolute;
   bottom: 30px;
-  font-size: 15px;
+  font-size: var(--font-size-section-title);
   color: #cfd8dc;
   text-align: center;
   width: 100%;
@@ -4748,7 +4723,7 @@ input:checked + .slider:before {
 }
 
 .typing-text {
-  font-size: 20px;
+  font-size: var(--font-size-modal-title);
   color: #003b73;
   font-weight: 600;
   margin-bottom: 25px;
@@ -4763,7 +4738,7 @@ input:checked + .slider:before {
 .input-group label {
   display: block;
   margin-bottom: 6px;
-  font-size: 14px;
+  font-size: var(--font-size-secondary);
   color: #333;
 }
 
@@ -4772,7 +4747,7 @@ input:checked + .slider:before {
   padding: 10px 12px;
   border: 1px solid #ccc;
   border-radius: 8px;
-  font-size: 15px;
+  font-size: var(--font-size-body);
   outline: none;
   transition: 0.2s;
 }
@@ -4788,7 +4763,7 @@ input:checked + .slider:before {
   border: none;
   background: #003b73;
   color: white;
-  font-size: 16px;
+  font-size: var(--font-size-body);
   border-radius: 8px;
   cursor: pointer;
   transition: 0.3s;
@@ -4805,7 +4780,7 @@ input:checked + .slider:before {
 
 .forgot-password a {
   color: #0074b7;
-  font-size: 13px;
+  font-size: var(--font-size-body);
   text-decoration: none;
 }
 
@@ -4816,7 +4791,7 @@ input:checked + .slider:before {
 .or-divider {
   text-align: center;
   margin: 20px 0;
-  font-size: 13px;
+  font-size: var(--font-size-tertiary);
   color: #666;
 }
 
@@ -4832,7 +4807,7 @@ input:checked + .slider:before {
   border-radius: 8px;
   background: white;
   padding: 10px;
-  font-size: 14px;
+  font-size: var(--font-size-body);
   display: flex;
   align-items: center;
   justify-content: center;
