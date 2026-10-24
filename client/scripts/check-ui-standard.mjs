@@ -12,6 +12,7 @@
 
 import console from 'node:console';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -98,7 +99,8 @@ function exemptLines(text) {
     if (/ui-standard-allow-end/.test(line)) inBlock = false;
     if (/ui-standard-allow:\s*\S/.test(line)) {
       exempt.add(n);
-      exempt.add(n + 1);
+      // A marker on a line of its own covers the next line; one trailing code covers only that line.
+      if (/^\s*(\/\*|\/\/|\{\/\*)/.test(line)) exempt.add(n + 1);
     }
   });
   return exempt;
@@ -140,7 +142,11 @@ function checkCss(file) {
   const text = stripCssComments(original);
   checkDeclarations(file, text, exempt);
   checkTokens(file, text, exempt);
+  checkRules(file, text, exempt);
+}
 
+/** Selector scope and uppercase, rule by rule. `text` is CSS whose lines match the file's. */
+function checkRules(file, text, exempt) {
   // Walk rule preludes, ignoring @keyframes bodies.
   const isGlobalLayer = file.startsWith(GLOBAL_STYLE_DIR);
   const stack = [];
@@ -233,12 +239,46 @@ function checkTokens(file, text, exempt) {
   }
 }
 
+/**
+ * The CSS inside a component's <style>{`…`}</style> blocks, with everything else blanked to
+ * spaces so line numbers still match the .tsx file.
+ */
+function embeddedCss(text) {
+  const keep = new Array(text.length).fill(false);
+  for (const m of text.matchAll(/<style[^>]*>\s*\{\s*`([\s\S]*?)`\s*\}\s*<\/style>/g)) {
+    const start = m.index + m[0].indexOf(m[1]);
+    for (let i = start; i < start + m[1].length; i += 1) keep[i] = true;
+  }
+  return [...text].map((ch, i) => (keep[i] || ch === '\n' ? ch : ' ')).join('');
+}
+
 function checkTsx(file) {
   const text = fs.readFileSync(file, 'utf8');
   const exempt = exemptLines(text);
-  // CSS written inside <style> template strings.
+  // CSS written inside <style> template strings: declarations, tokens, selectors, uppercase.
   checkDeclarations(file, text, exempt);
   checkTokens(file, text, exempt);
+  checkRules(file, stripCssComments(embeddedCss(text)), exempt);
+
+  // Inline uppercase follows the same rule as CSS: only as a bold, letter-spaced label.
+  for (const m of text.matchAll(/textTransform\s*:\s*['"`]uppercase['"`]/g)) {
+    const line = lineAt(text, m.index);
+    if (exempt.has(line)) continue;
+    const open = text.lastIndexOf('{', m.index);
+    const close = text.indexOf('}', m.index);
+    const style = text.slice(open, close);
+    const tracked =
+      /letterSpacing\s*:/.test(style) &&
+      /fontWeight\s*:\s*['"`]?(600|700|var\(--weight-(semibold|bold)\))/.test(style);
+    if (!tracked) {
+      report(
+        file,
+        line,
+        'uppercase',
+        "textTransform: 'uppercase' — only for a bold, letter-spaced label (table header, tag, group label)",
+      );
+    }
+  }
 
   const prop = /\b(fontSize|fontWeight|fontFamily)\s*:\s*((?:'[^']*'|"[^"]*"|`[^`]*`|[^,}\n])+)/g;
   for (const m of text.matchAll(prop)) {
@@ -280,12 +320,96 @@ function walk(dir, out = []) {
   return out;
 }
 
-const args = process.argv.slice(2).map((f) => path.resolve(f));
-const files = args.length ? args.filter((f) => /\.(css|tsx)$/.test(f)) : walk(CLIENT_SRC);
-for (const file of files) {
-  if (file.endsWith('.css')) checkCss(file);
-  else checkTsx(file);
+function run(files) {
+  violations.length = 0;
+  for (const file of files) {
+    if (file.endsWith('.css')) checkCss(file);
+    else checkTsx(file);
+  }
+  return violations.map((v) => `${path.basename(v.file)}:${v.line} ${v.rule}`);
 }
+
+// Fixtures for both paths — a stylesheet and a component's <style> block and inline styles.
+// Each entry is the exact set of findings expected; `--self-test` fails on any difference.
+const SELF_TEST = {
+  'fixture.css': {
+    source: [
+      '.p .a { font-size: 15px; font-weight: 800; }', // 1: type-size, type-weight
+      '.p .b { font-size: var(--text-body); }', // 2: type-size, colour-as-size
+      '.p .c { color: var(--font-size-body); }', // 3: size-as-colour
+      '.btn { padding: 0; }', // 4: global-selector
+      '.p .d { text-transform: uppercase; }', // 5: uppercase
+      '.p .e { font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; }', // 6: ok
+      '.p .f { font-size: 18px; } /* ui-standard-allow: icon glyph */', // 7: exempt
+      '.p .g { font-size: var(--font-size-body); font-family: Poppins; }', // 8: type-family
+    ].join('\n'),
+    expect: [
+      'fixture.css:1 type-size',
+      'fixture.css:1 type-weight',
+      'fixture.css:2 type-size',
+      'fixture.css:2 colour-as-size',
+      'fixture.css:3 size-as-colour',
+      'fixture.css:4 global-selector',
+      'fixture.css:5 uppercase',
+      'fixture.css:8 type-family',
+    ],
+  },
+  'Fixture.tsx': {
+    source: [
+      'export const A = () => (', // 1
+      '  <div>', // 2
+      '    <style>{`', // 3
+      '      body { margin: 0; }', // 4: global-selector
+      '      .p .h { text-transform: uppercase; }', // 5: uppercase
+      '      .p .i { font-size: 13px; }', // 6: type-size
+      '    `}</style>', // 7
+      "    <span style={{ fontSize: '0.9rem', fontWeight: 900 }} />", // 8: type-size, type-weight
+      "    <span style={{ textTransform: 'uppercase' }} />", // 9: uppercase
+      "    <span style={{ textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }} />", // 10: ok
+      "    <span style={{ fontSize: 'var(--font-size-secondary)' }} />", // 11: ok
+      '  </div>', // 12
+      ');', // 13
+    ].join('\n'),
+    expect: [
+      'Fixture.tsx:4 global-selector',
+      'Fixture.tsx:5 uppercase',
+      'Fixture.tsx:6 type-size',
+      'Fixture.tsx:8 type-size',
+      'Fixture.tsx:8 type-weight',
+      'Fixture.tsx:9 uppercase',
+    ],
+  },
+};
+
+if (process.argv.includes('--self-test')) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ui-standard-'));
+  let failed = 0;
+  for (const [name, { source, expect }] of Object.entries(SELF_TEST)) {
+    const file = path.join(dir, name);
+    fs.writeFileSync(file, source);
+    const got = run([file]).sort();
+    const want = [...expect].sort();
+    const missing = want.filter((w) => !got.includes(w));
+    const extra = got.filter((g) => !want.includes(g));
+    if (missing.length || extra.length) {
+      failed += 1;
+      console.log(
+        `self-test ${name}: missing ${JSON.stringify(missing)} extra ${JSON.stringify(extra)}`,
+      );
+    }
+  }
+  fs.rmSync(dir, { recursive: true, force: true });
+  if (failed) process.exit(1);
+  console.log(`UI standard self-test: ${Object.keys(SELF_TEST).length} fixtures pass.`);
+  process.exit(0);
+}
+
+const args = process.argv
+  .slice(2)
+  .filter((a) => !a.startsWith('--'))
+  .map((f) => path.resolve(f));
+const files = args.length ? args.filter((f) => /\.(css|tsx)$/.test(f)) : walk(CLIENT_SRC);
+run(files);
 
 if (violations.length) {
   for (const v of violations) console.log(`${v.file}:${v.line}  [${v.rule}]  ${v.detail}`);

@@ -1154,6 +1154,7 @@ const AccessControlPage: React.FC = () => {
                                             style={{
                                               textTransform: 'uppercase',
                                               letterSpacing: '0.5px',
+                                              fontWeight: 'var(--weight-bold)',
                                               fontSize: 'var(--font-size-tertiary)',
                                             }}
                                           >

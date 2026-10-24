@@ -53,6 +53,14 @@
   transform: translateY(-1px);
 }
 
+/* An icon-only CustomButton (CustomButton.tsx sets the class) is the table-row icon action:
+   32×32 at least, no side padding — never stretched to the form-action minimums. */
+.custom-btn.custom-btn--icon:not(.btn-link) {
+  min-width: var(--icon-action-size);
+  min-height: var(--icon-action-size);
+  padding: 0;
+}
+
 /* A link-styled CustomButton is an inline icon or text action, not a form action. */
 .custom-btn.btn-link {
   min-width: 0;

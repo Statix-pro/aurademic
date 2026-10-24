@@ -635,7 +635,8 @@ Basis: dense desktop admin forms, checked against primary sources — Bootstrap 
 - **Every size is a token** in `shared/styles/variables.css` (named in the table), written in rem so a
   browser's larger default text size scales the whole UI. Never a hard-coded number in a page.
 - **The guard enforces it:** `client/scripts/check-ui-standard.mjs` (`npm run check:ui`, in CI and
-  the pre-commit hook) fails on a literal text size, a weight outside 400–700, a page-level font, a
+  the pre-commit hook; it runs its own `--self-test` fixtures first) checks CSS files, components'
+  `<style>` blocks and inline styles, and fails on a literal text size, a weight outside 400–700, a page-level font, a
   deleted or colour `--text-*` token used as a size, uppercase that is not a bold, letter-spaced label (table header, tag, group label), and
   any feature selector that names no class of its own (bare elements, Bootstrap, react-select,
   FullCalendar or `Custom*` classes alone). A genuine exception — an icon glyph, the printed A4

@@ -22,11 +22,18 @@ const CustomButton: React.FC<CustomButtonProps> = ({
   type = 'button',
   ...props
 }) => {
+  // Icon-only content (icon components, no text) is a 32×32 icon action, not a 120px-wide form
+  // action; the class lets common.css drop the form-action minimums for it.
+  const content = React.Children.toArray(children);
+  const iconOnly =
+    content.length > 0 &&
+    content.every((child) => React.isValidElement(child) && typeof child.type !== 'string');
+
   return (
     <Button
       variant={variant}
       type={type}
-      className={`custom-btn ${className}`}
+      className={`custom-btn ${iconOnly ? 'custom-btn--icon ' : ''}${className}`}
       disabled={disabled || loading}
       onClick={onClick}
       {...props}
