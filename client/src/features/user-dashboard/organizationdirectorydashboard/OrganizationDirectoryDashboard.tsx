@@ -12,7 +12,6 @@ import OrganizationDirectory, {
  * GET    /organizations          → { success: true, data: Organization[] }
  * POST   /organizations          → { success: true, data: Organization }   (body: Omit<Organization, 'id'|'date'>)
  * PUT    /organizations/:id      → { success: true, data: Organization }   (body: Omit<Organization, 'id'|'date'>)
- * DELETE /organizations/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
 
 const apiGetAll = async (): Promise<Organization[]> => {

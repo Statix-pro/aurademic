@@ -12,6 +12,7 @@ import React, { useState, useEffect } from 'react';
 
 import './ResourcePersonDirectory.css';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
 
 import type { Organization } from '../organizationdirectory/OrganizationDirectory';
 
@@ -171,7 +172,12 @@ const UploadBox: React.FC<UploadBoxProps> = ({
               style={{ marginTop: '4px', fontSize: '0.8rem', color: '#0069ab', fontWeight: '600' }}
             >
               {filePath ? (
-                <a href={filePath} target="_blank" rel="noreferrer">
+                // Uploads are served by the API server, not the Vite origin.
+                <a
+                  href={`${authenticityUtility.getBaseURL().replace(/\/$/, '')}/${filePath.replace(/^\/+/, '')}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   {filename}
                 </a>
               ) : (
@@ -291,8 +297,9 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
     if (f) {
       const extension = f.name.slice(f.name.lastIndexOf('.')).toLowerCase();
       const validExtensions = ['.jpg', '.jpeg', '.png'];
-      const validMime = f.type.startsWith('image/');
-      if (!validMime && !validExtensions.includes(extension)) {
+      // The server requires both a matching extension and MIME type, so check both here.
+      const validMime = ['image/jpeg', 'image/png'].includes(f.type);
+      if (!validMime || !validExtensions.includes(extension)) {
         setFileError('Invalid photo file type. Please select a JPG, JPEG, or PNG image.');
         setPhotoName('');
         setPhotoFile(undefined);
@@ -320,7 +327,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
         f.type === 'application/msword' ||
         f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       const isPdf = f.type === 'application/pdf';
-      if (!isPdf && !isDoc && !validExtensions.includes(extension)) {
+      if ((!isPdf && !isDoc) || !validExtensions.includes(extension)) {
         setFileError('Invalid resume file type. Please select a PDF, DOC, or DOCX document.');
         setResumeName('');
         setResumeFile(undefined);
@@ -371,9 +378,9 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       personalEmail: personalEmail.trim(),
       officialEmail: officialEmail.trim(),
       linkedIn: linkedIn.trim(),
-      professions: filteredProfessions.length
-        ? filteredProfessions.map((p) => ({ ...p }))
-        : [emptyProfession()],
+      // An empty list, not a blank row: the server stores every entry it receives,
+      // and the form already shows one blank row when it loads an empty list.
+      professions: filteredProfessions.map((p) => ({ ...p })),
       photoName,
       resumeName,
       photoFile,
@@ -785,7 +792,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               icon={<Image size={36} strokeWidth={1.5} />}
               title="Photo"
               hint="JPG, JPEG, PNG (Maximum 2 MB)"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png"
               filename={photoName}
               filePath={photoFile ? undefined : editingPerson?.photoPath}
               onChange={handlePhoto}

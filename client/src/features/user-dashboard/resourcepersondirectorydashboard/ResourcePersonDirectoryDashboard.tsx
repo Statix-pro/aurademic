@@ -15,7 +15,6 @@ import type { Organization } from '../../organizationdirectory/OrganizationDirec
  * GET    /resource-persons          → { success: true, data: ResourcePerson[] }
  * POST   /resource-persons          → { success: true, data: ResourcePerson }   (body: Omit<ResourcePerson, 'id'|'date'>)
  * PUT    /resource-persons/:id      → { success: true, data: ResourcePerson }   (body: Omit<ResourcePerson, 'id'|'date'>)
- * DELETE /resource-persons/:id      → { success: true }
  * ──────────────────────────────────────────────────────────────────────────── */
 
 const apiGetAll = async (): Promise<ResourcePerson[]> => {
