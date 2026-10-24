@@ -224,6 +224,79 @@ describe('directory owner-only edits', () => {
     expect(insertValues).not.toContain(999);
   });
 
+  // The owner can remove a stored photo or resume without uploading a replacement.
+  it('clears a removed file’s columns and deletes the file after commit', async () => {
+    execute
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 11,
+            created_at: null,
+            photo_name: 'old.jpg',
+            photo_path: '/uploads/resource-persons/old-photo.jpg',
+            resume_path: '/uploads/resource-persons/old-resume.pdf',
+          },
+        ],
+      ])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}]);
+
+    const saved = await resourcePersonModel.update(
+      11,
+      {
+        firstName: 'A',
+        lastName: 'B',
+        professions: '[]',
+        removePhoto: 'true',
+        removeResume: 'false',
+      },
+      {},
+      2,
+    );
+
+    const [sql, values] = execute.mock.calls[1];
+    expect(sql).toMatch(
+      /photo_name = \?, photo_path = \?, photo_mime_type = \?, photo_file_size = \?/,
+    );
+    expect(sql).not.toMatch(/resume_path/);
+    const photoPathIndex = sql
+      .slice(sql.indexOf('SET') + 3, sql.indexOf('WHERE'))
+      .split(',')
+      .findIndex((assignment) => assignment.trim().startsWith('photo_path'));
+    expect(values[photoPathIndex]).toBeNull();
+    expect(deleteUploadedFile).toHaveBeenCalledTimes(1);
+    expect(deleteUploadedFile).toHaveBeenCalledWith(expect.stringContaining('old-photo.jpg'));
+    expect(connection.commit.mock.invocationCallOrder[0]).toBeLessThan(
+      deleteUploadedFile.mock.invocationCallOrder[0],
+    );
+    expect(saved.photoPath).toBeNull();
+    expect(saved.resumePath).toBe('/uploads/resource-persons/old-resume.pdf');
+  });
+
+  it('stores a new file when one arrives alongside a remove flag', async () => {
+    execute
+      .mockResolvedValueOnce([
+        [{ id: 11, created_at: null, photo_path: '/uploads/resource-persons/old-photo.jpg' }],
+      ])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}]);
+
+    const saved = await resourcePersonModel.update(
+      11,
+      { firstName: 'A', lastName: 'B', professions: '[]', removePhoto: 'true' },
+      {
+        photoFile: [
+          { filename: 'new-photo.jpg', mimetype: 'image/jpeg', originalname: 'new.jpg', size: 10 },
+        ],
+      },
+      2,
+    );
+
+    expect(execute.mock.calls[1][1]).toContain('/uploads/resource-persons/new-photo.jpg');
+    expect(saved.photoPath).toBe('/uploads/resource-persons/new-photo.jpg');
+    expect(deleteUploadedFile).toHaveBeenCalledWith(expect.stringContaining('old-photo.jpg'));
+  });
+
   it('never deletes a stored file outside uploads/resource-persons/', async () => {
     execute
       .mockResolvedValueOnce([
@@ -302,28 +375,52 @@ describe('directory owner-only edits', () => {
     },
   );
 
+  // The directory is shared once a record is approved: another user's Approved record
+  // is listed, their Pending and Rejected ones are not, and what is listed carries no
+  // contact details or reviewer feedback.
   it.each([
     ['organizations', organizationModel.listApproved],
     ['resource persons', resourcePersonModel.list],
-  ])('does not return another user’s %s in any approval state', async (_label, list) => {
-    const rows = [
-      { id: 1, created_by: 1, is_active: 1, updated_by: 8 },
+  ])('lists only another user’s Approved %s, redacted', async (_label, list) => {
+    const otherUsersRows = [
+      {
+        id: 1,
+        created_by: 1,
+        is_active: 1,
+        updated_by: 8,
+        mobile: '9876543210',
+        personal_email: 'a@example.org',
+        photo_path: '/uploads/resource-persons/a.jpg',
+        workflow_state: '{"feedback":"internal note"}',
+      },
       { id: 2, created_by: 1, is_active: 0, updated_by: null },
       { id: 3, created_by: 1, is_active: 0, updated_by: 8 },
     ];
-    db.query.mockImplementationOnce(async (sql, params) => {
-      expect(sql).toMatch(/WHERE created_by = \?/);
-      expect(sql).not.toMatch(/is_active\s*=\s*1\s+OR/i);
-      return [rows.filter((row) => Number(row.created_by) === Number(params[0]))];
-    });
+    db.query
+      .mockImplementationOnce(async (sql, params) => {
+        expect(sql).toMatch(/WHERE created_by = \? OR is_active = 1/);
+        return [
+          otherUsersRows.filter(
+            (row) => Number(row.created_by) === Number(params[0]) || row.is_active === 1,
+          ),
+        ];
+      })
+      .mockResolvedValueOnce([[]]);
 
-    await expect(
-      list.call(
-        list === organizationModel.listApproved ? organizationModel : resourcePersonModel,
-        2,
-      ),
-    ).resolves.toEqual([]);
-    expect(db.query.mock.calls[0][1]).toEqual([2]);
+    const records = await list.call(
+      list === organizationModel.listApproved ? organizationModel : resourcePersonModel,
+      2,
+    );
+
+    expect(records.map(({ id, approvalStatus, isOwner }) => [id, approvalStatus, isOwner])).toEqual(
+      [[1, 'Approved', false]],
+    );
+    expect(records[0]).not.toHaveProperty('workflow_state');
+    if (list === resourcePersonModel.list) {
+      for (const field of ['mobile', 'personal_email', 'photo_path', 'photoPath']) {
+        expect(records[0]).not.toHaveProperty(field);
+      }
+    }
   });
 
   it.each([

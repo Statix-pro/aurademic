@@ -7,6 +7,8 @@ import '../shared/workflow/directoryWorkflowAdapter.js';
 import workflowService from '../shared/workflow/workflowService.js';
 
 const text = (v) => (v === '' || v === undefined ? null : v);
+// Multipart fields arrive as strings, so `false` is "false".
+const isTrue = (v) => v === true || v === 'true';
 const fields = [
   'title',
   'first_name',
@@ -72,6 +74,8 @@ const PRIVATE_PERSON_FIELDS = [
   'resumePath',
   'resume_mime_type',
   'resume_file_size',
+  // Holds the reviewer's feedback, which is between the submitter and the reviewer.
+  'workflow_state',
 ];
 const serializePublicPerson = (person, professions) => {
   const publicPerson = serializePerson(person, professions);
@@ -168,7 +172,9 @@ const deleteReplacedFile = (storedPath) => {
 export default {
   async list(userId) {
     const [people] = await db.query(
-      'SELECT *, DATE(created_at) AS date FROM directory_resource_persons WHERE created_by = ? ORDER BY id DESC',
+      // Approved records form the shared directory; Pending and Rejected ones stay with
+      // their submitter. Other users' records are redacted below (serializePublicPerson).
+      'SELECT *, DATE(created_at) AS date FROM directory_resource_persons WHERE created_by = ? OR is_active = 1 ORDER BY id DESC',
       [userId || 0],
     );
     const professionsByPerson = await loadProfessionsByPerson(people.map((person) => person.id));
@@ -264,23 +270,18 @@ export default {
       ];
       const updateFields = fields.filter((field) => !fileFields.includes(field));
       const values = updateFields.map((field) => person[field]);
-      // A filename may be sent back by the edit form even when no replacement
-      // was uploaded. Only update stored file metadata when a new file exists.
-      if (files.photoFile?.[0]) {
-        for (const field of ['photo_name', 'photo_path', 'photo_mime_type', 'photo_file_size']) {
-          updateFields.push(field);
-          values.push(person[field]);
-        }
-      }
-      if (files.resumeFile?.[0]) {
-        for (const field of [
-          'resume_name',
-          'resume_path',
-          'resume_mime_type',
-          'resume_file_size',
-        ]) {
-          updateFields.push(field);
-          values.push(person[field]);
+      // A file's columns change only when a new file arrives or the owner removed the
+      // stored one; otherwise they keep what is stored. A new file wins over removal.
+      // `person` already holds the new file's metadata, or nulls when there is none.
+      const fileChanges = {
+        photo: Boolean(files.photoFile?.[0]) || isTrue(input.removePhoto),
+        resume: Boolean(files.resumeFile?.[0]) || isTrue(input.removeResume),
+      };
+      for (const prefix of ['photo', 'resume']) {
+        if (!fileChanges[prefix]) continue;
+        for (const suffix of ['name', 'path', 'mime_type', 'file_size']) {
+          updateFields.push(`${prefix}_${suffix}`);
+          values.push(person[`${prefix}_${suffix}`]);
         }
       }
       // A user edit is a new submission for approval. Do not set updated_by:
@@ -325,22 +326,19 @@ export default {
         tx: connection,
       });
       await connection.commit();
-      if (files.photoFile?.[0] && current.photo_path && current.photo_path !== person.photo_path) {
-        deleteReplacedFile(current.photo_path);
-      }
-      if (
-        files.resumeFile?.[0] &&
-        current.resume_path &&
-        current.resume_path !== person.resume_path
-      ) {
-        deleteReplacedFile(current.resume_path);
+      // Only after commit, so a rolled-back edit never loses the stored file.
+      for (const prefix of ['photo', 'resume']) {
+        const storedPath = current[`${prefix}_path`];
+        if (fileChanges[prefix] && storedPath && storedPath !== person[`${prefix}_path`]) {
+          deleteReplacedFile(storedPath);
+        }
       }
       const savedPerson = {
         id: Number(id),
         ...person,
         // Untouched files keep their stored metadata, as the UPDATE above did.
-        ...(files.photoFile?.[0] ? {} : storedFileFields(current, 'photo')),
-        ...(files.resumeFile?.[0] ? {} : storedFileFields(current, 'resume')),
+        ...(fileChanges.photo ? {} : storedFileFields(current, 'photo')),
+        ...(fileChanges.resume ? {} : storedFileFields(current, 'resume')),
         created_at: current.created_at,
       };
       return {

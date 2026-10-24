@@ -48,15 +48,19 @@ const serialize = (row) => ({
 export default {
   async listApproved(userId) {
     const [rows] = await db.query(
+      // Approved organizations form the shared directory; Pending and Rejected ones stay
+      // with their submitter. Organization fields are public, so nothing is redacted.
       `SELECT *, DATE(created_at) AS date FROM organizations
-       WHERE created_by = ?
+       WHERE created_by = ? OR is_active = 1
        ORDER BY id DESC`,
       [userId || 0],
     );
     return rows.map((row) => {
       const isOwner = Number(row.created_by) === Number(userId);
+      // workflow_state holds the reviewer's feedback, which is only the submitter's.
+      const { workflow_state: workflowState, ...publicRow } = row;
       return {
-        ...serialize(row),
+        ...serialize(isOwner ? { ...publicRow, workflow_state: workflowState } : publicRow),
         approvalStatus: getDirectoryApprovalStatus(row),
         isOwner,
       };
