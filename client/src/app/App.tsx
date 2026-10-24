@@ -42,6 +42,7 @@ import {
   ProtectedRoute,
   AdminRoute,
   BudgetApprovalRoute,
+  DirectoryApprovalRoute,
   FinanceWorkflowRoute,
   ModuleWorkflowRoute,
   SuperAdminRoute,
@@ -368,17 +369,17 @@ function App() {
                       <Route
                         path="/admin/organization-approval"
                         element={
-                          <SuperAdminRoute>
+                          <DirectoryApprovalRoute moduleKey="organization_directory">
                             <OrganizationApprovalPage />
-                          </SuperAdminRoute>
+                          </DirectoryApprovalRoute>
                         }
                       />
                       <Route
                         path="/admin/resource-person-approval"
                         element={
-                          <SuperAdminRoute>
+                          <DirectoryApprovalRoute moduleKey="resource_person_directory">
                             <ResourcePersonApprovalPage />
-                          </SuperAdminRoute>
+                          </DirectoryApprovalRoute>
                         }
                       />
                       {/* One publication under review, on its own page, so it can be linked

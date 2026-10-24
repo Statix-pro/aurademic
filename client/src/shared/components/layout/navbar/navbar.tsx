@@ -9,6 +9,7 @@ import {
   canAccessBudgetApproval,
   canAccessExpenditureWorkflow,
   canAccessFinanceWorkflow,
+  canAccessModuleWorkflow,
   canManageAccessControl,
   isSuperAdmin,
 } from '../../../utils/permissionUtils';
@@ -256,8 +257,15 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
   const showExpenditureWorkflow = canAccessExpenditureWorkflow(user);
   const showAccessControl = canManageAccessControl(user);
   const showMasterData = isSuperAdmin(user);
+  const showOrganizationApproval = canAccessModuleWorkflow(user, 'organization_directory');
+  const showResourcePersonApproval = canAccessModuleWorkflow(user, 'resource_person_directory');
   const showAdminMenu =
-    showAdminDashboard || showBudgetApproval || showFinanceWorkflow || showExpenditureWorkflow;
+    showAdminDashboard ||
+    showBudgetApproval ||
+    showFinanceWorkflow ||
+    showExpenditureWorkflow ||
+    showOrganizationApproval ||
+    showResourcePersonApproval;
   const showSuperAdminMenu = isSuperAdmin(user);
 
   const toggleDropdown = (menuName: string) => {
@@ -510,7 +518,10 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
         <div className="sb-group">
           <button
             className={`sb-link ${
-              isGroupActive(['/organizationdirectorydashboard', '/resourcepersondirectorydashboard'])
+              isGroupActive([
+                '/organizationdirectorydashboard',
+                '/resourcepersondirectorydashboard',
+              ])
                 ? 'active'
                 : ''
             } ${activeMenu === 'Directory' ? 'open' : ''}`}
@@ -624,23 +635,23 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     Expenditure Approval
                   </Link>
                 )}
-                {showSuperAdminMenu && (
-                  <>
-                    <Link
-                      to="/admin/organization-approval"
-                      className={`sb-sublink ${isActive('/admin/organization-approval') ? 'active' : ''}`}
-                      onClick={handleLinkClick}
-                    >
-                      Organization Approval
-                    </Link>
-                    <Link
-                      to="/admin/resource-person-approval"
-                      className={`sb-sublink ${isActive('/admin/resource-person-approval') ? 'active' : ''}`}
-                      onClick={handleLinkClick}
-                    >
-                      Resource Person Approval
-                    </Link>
-                  </>
+                {showOrganizationApproval && (
+                  <Link
+                    to="/admin/organization-approval"
+                    className={`sb-sublink ${isActive('/admin/organization-approval') ? 'active' : ''}`}
+                    onClick={handleLinkClick}
+                  >
+                    Organization Approval
+                  </Link>
+                )}
+                {showResourcePersonApproval && (
+                  <Link
+                    to="/admin/resource-person-approval"
+                    className={`sb-sublink ${isActive('/admin/resource-person-approval') ? 'active' : ''}`}
+                    onClick={handleLinkClick}
+                  >
+                    Resource Person Approval
+                  </Link>
                 )}
               </div>
             )}

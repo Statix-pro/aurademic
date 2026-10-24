@@ -11,9 +11,11 @@ vi.mock('../middleware/authMiddleware.js', () => {
       authorizationResolved: true,
       isSuperAdmin: req.headers.authorization === 'Bearer super-admin',
       permissions:
-        req.headers.authorization === 'Bearer directory-user'
-          ? ['directory.read', 'directory.create', 'directory.edit']
-          : [],
+        {
+          'Bearer directory-user': ['directory.read', 'directory.create', 'directory.edit'],
+          'Bearer org-reviewer': ['organization_directory.workflow.directory_admin'],
+          'Bearer rp-reviewer': ['resource_person_directory.workflow.directory_admin'],
+        }[req.headers.authorization] || [],
     };
     return next();
   };
@@ -23,8 +25,14 @@ vi.mock('../middleware/authMiddleware.js', () => {
     }
     return next();
   };
+  // Like the real one, refuses non-admins. adminRoutes runs it on all of /api/admin, so
+  // a review route under that prefix would never reach a Directory Admin.
+  const adminAuthMiddleware = (req, res, next) =>
+    authMiddleware(req, res, () =>
+      req.user.isSuperAdmin ? next() : res.status(403).json({ message: 'Admin access required' }),
+    );
   return {
-    adminAuthMiddleware: authMiddleware,
+    adminAuthMiddleware,
     authMiddleware,
     authorizationSnapshotMiddleware: authMiddleware,
     permissionMiddleware: (requiredPermissions) => (req, res, next) => {
@@ -69,42 +77,73 @@ describe('directory route authentication', () => {
     },
   );
 
+  it.each(['/api/organization-submissions/1/review', '/api/resource-person-submissions/1/review'])(
+    'rejects unauthenticated review on %s',
+    async (path) => {
+      const response = await request(app).patch(path).send({ decision: 'approve' });
+      expect(response.status).toBe(401);
+      expect(response.body.message || response.body.error).toBeTruthy();
+    },
+  );
+
+  it.each(['/api/organization-submissions/1/review', '/api/resource-person-submissions/1/review'])(
+    'rejects a plain authenticated user from %s',
+    async (path) => {
+      const response = await request(app)
+        .patch(path)
+        .set('Authorization', 'Bearer ordinary-user')
+        .send({ decision: 'approve' });
+
+      expect(response.status).toBe(403);
+      expect(response.body).toEqual({ message: 'Permission denied' });
+    },
+  );
+
+  // Directory Admin is a non-admin role: it must reach the review routes through its
+  // stage permission alone, and only for the directory that permission names.
   it.each([
-    '/api/admin/organization-submissions/1/review',
-    '/api/admin/resource-person-submissions/1/review',
-  ])('rejects unauthenticated review on %s', async (path) => {
-    const response = await request(app).patch(path).send({ decision: 'approve' });
-    expect(response.status).toBe(401);
-    expect(response.body.message || response.body.error).toBeTruthy();
+    ['org-reviewer', '/api/organization-submissions/1/review'],
+    ['rp-reviewer', '/api/resource-person-submissions/1/review'],
+  ])('lets a %s holder review at %s', async (token, path) => {
+    workflowService.actOnWorkflow.mockResolvedValueOnce({});
+
+    const response = await request(app)
+      .patch(path)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ decision: 'approve' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.success).toBe(true);
+    expect(workflowService.actOnWorkflow).toHaveBeenCalledOnce();
   });
 
   it.each([
-    '/api/admin/organization-submissions/1/review',
-    '/api/admin/resource-person-submissions/1/review',
-  ])('rejects a plain authenticated user from %s', async (path) => {
+    ['rp-reviewer', '/api/organization-submissions/1/review'],
+    ['org-reviewer', '/api/resource-person-submissions/1/review'],
+  ])('refuses a %s holder at the other directory %s', async (token, path) => {
     const response = await request(app)
       .patch(path)
-      .set('Authorization', 'Bearer ordinary-user')
+      .set('Authorization', `Bearer ${token}`)
       .send({ decision: 'approve' });
 
     expect(response.status).toBe(403);
-    expect(response.body).toEqual({ message: 'Super Admin access required' });
+    expect(workflowService.actOnWorkflow).not.toHaveBeenCalled();
   });
 
-  it.each([
-    '/api/admin/organization-submissions/1/review',
-    '/api/admin/resource-person-submissions/1/review',
-  ])('returns 404 when review targets a missing record at %s', async (path) => {
-    const error = new Error('Record not found');
-    error.status = 404;
-    workflowService.actOnWorkflow.mockRejectedValueOnce(error);
+  it.each(['/api/organization-submissions/1/review', '/api/resource-person-submissions/1/review'])(
+    'returns 404 when review targets a missing record at %s',
+    async (path) => {
+      const error = new Error('Record not found');
+      error.status = 404;
+      workflowService.actOnWorkflow.mockRejectedValueOnce(error);
 
-    const response = await request(app)
-      .patch(path)
-      .set('Authorization', 'Bearer super-admin')
-      .send({ decision: 'approve' });
+      const response = await request(app)
+        .patch(path)
+        .set('Authorization', 'Bearer super-admin')
+        .send({ decision: 'approve' });
 
-    expect(response.status).toBe(404);
-    expect(response.body.success).toBe(false);
-  });
+      expect(response.status).toBe(404);
+      expect(response.body.success).toBe(false);
+    },
+  );
 });

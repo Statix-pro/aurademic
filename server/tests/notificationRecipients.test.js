@@ -70,6 +70,33 @@ describe('resolveStageRecipients', () => {
     expect(recipients.sort()).toEqual([11, 12, 13]);
   });
 
+  // Directory submissions notify whoever holds the stage permission (the Directory
+  // Admin role); there is no stage role code and no policy row for this stage.
+  it.each(['organization_directory', 'resource_person_directory'])(
+    'returns %s directory_admin permission holders',
+    async (moduleKey) => {
+      const conn = makeConn([
+        [STAGE_POLICY_SQL, []],
+        [
+          BY_PERMISSION_SQL,
+          (params) =>
+            params.flat().includes(`${moduleKey}.workflow.directory_admin`)
+              ? [{ user_id: 31 }]
+              : [],
+        ],
+      ]);
+
+      const recipients = await resolveStageRecipients({
+        conn,
+        moduleKey,
+        stageKey: 'directory_admin',
+        recordContext: { applicantUserId: 4, beneficiaryType: 'directory' },
+      });
+
+      expect(recipients).toEqual([31]);
+    },
+  );
+
   it('defaults to global scope when the stage has no policy row', async () => {
     const conn = makeConn([
       [STAGE_POLICY_SQL, []],

@@ -5,11 +5,7 @@ import express from 'express';
 import multer from 'multer';
 
 import controller from './resourcepersonDirectoryController.js';
-import {
-  authMiddleware,
-  permissionMiddleware,
-  superAdminMiddleware,
-} from '../../middleware/authMiddleware.js';
+import { authMiddleware, permissionMiddleware } from '../../middleware/authMiddleware.js';
 import { sanitizeUploadFilename, deleteUploadedFile } from '../shared/uploadPaths.js';
 const router = express.Router();
 const uploadDir = path.join(process.cwd(), 'uploads', 'resource-persons');
@@ -91,10 +87,14 @@ router.put(
   ),
   controller.update,
 );
-router.get('/admin/resource-person-submissions', superAdminMiddleware, controller.pending);
+// Not under /api/admin: see organizationDirectoryRoutes.js.
+const canReviewResourcePersons = permissionMiddleware([
+  'resource_person_directory.workflow.directory_admin',
+]);
+router.get('/resource-person-submissions', canReviewResourcePersons, controller.pending);
 router.patch(
-  '/admin/resource-person-submissions/:id/review',
-  superAdminMiddleware,
+  '/resource-person-submissions/:id/review',
+  canReviewResourcePersons,
   controller.review,
 );
 export default router;

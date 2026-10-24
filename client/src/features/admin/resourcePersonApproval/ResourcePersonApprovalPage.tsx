@@ -32,7 +32,7 @@ export default function ResourcePersonApprovalPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const response = (await authenticityUtility.get('/admin/resource-person-submissions')) as any;
+      const response = (await authenticityUtility.get('/resource-person-submissions')) as any;
       setRows(response.data || []);
     } catch (err: any) {
       setError(err?.message || 'Failed to load submissions.');
@@ -47,7 +47,7 @@ export default function ResourcePersonApprovalPage() {
     setReviewingId(id);
     setError('');
     try {
-      await authenticityUtility.patch(`/admin/resource-person-submissions/${id}/review`, {
+      await authenticityUtility.patch(`/resource-person-submissions/${id}/review`, {
         decision,
       });
       setRows((current) =>

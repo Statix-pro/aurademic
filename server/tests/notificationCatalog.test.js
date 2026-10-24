@@ -223,6 +223,23 @@ describe('notificationCatalog', () => {
       expect(returned.body).toContain('quotation');
     });
 
+    // The generic /workflow/:moduleKey queue lists nothing for directories, so an
+    // approver sent there would find no record to act on.
+    it.each([
+      ['organization_directory', '/admin/organization-approval', '/organizationdirectorydashboard'],
+      [
+        'resource_person_directory',
+        '/admin/resource-person-approval',
+        '/resourcepersondirectorydashboard',
+      ],
+    ])('routes %s notifications to the directory pages', (moduleKey, queue, record) => {
+      const data = { ...fullData, moduleKey };
+      expect(renderNotification(`${moduleKey}.submitted`, data, 'approver').link).toBe(queue);
+      expect(renderNotification(`${moduleKey}.resubmitted`, data, 'approver').link).toBe(queue);
+      expect(renderNotification(`${moduleKey}.approved`, data, 'applicant').link).toBe(record);
+      expect(renderNotification(`${moduleKey}.rejected`, data, 'applicant').link).toBe(record);
+    });
+
     it('routes expenditure approvers to their own approval page', () => {
       const rendered = renderNotification(
         'expenditure.stage_advanced',

@@ -110,6 +110,23 @@ export const ModuleWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
   return <>{children}</>;
 };
 
+/** A directory approval page: super admins, or holders of that directory's review key. */
+export const DirectoryApprovalRoute: React.FC<
+  RouteProps & { moduleKey: 'organization_directory' | 'resource_person_directory' }
+> = ({ children, moduleKey }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  if (!user || !canAccessModuleWorkflow(user, moduleKey)) {
+    return <Navigate to="/dashboard" />;
+  }
+
+  return <>{children}</>;
+};
+
 export const ExpenditureApprovalRoute: React.FC<RouteProps> = ({ children }) => {
   const { user, loading } = useAuth();
 

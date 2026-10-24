@@ -14,6 +14,13 @@ const nameIndexMigrationPath = path.resolve(
   '../schema/migrations/20261015_scope_organization_name_uniqueness_to_submitter.sql',
 );
 const nameIndexMigration = fs.readFileSync(nameIndexMigrationPath, 'utf8');
+const directoryAdminMigration = fs.readFileSync(
+  path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '../schema/migrations/20261024_create_directory_admin_role.sql',
+  ),
+  'utf8',
+);
 const routePaths = [
   path.resolve(
     path.dirname(fileURLToPath(import.meta.url)),
@@ -43,11 +50,34 @@ describe('directory permission migration', () => {
     expect(routePermissions).toContain('directory.read');
     expect(routePermissions).toContain('directory.create');
     expect(routePermissions).toContain('directory.edit');
-    expect(new Set(routePermissions)).toEqual(new Set(permissionValues));
+    expect(
+      new Set(routePermissions.filter((permissionKey) => permissionKey.startsWith('directory.'))),
+    ).toEqual(new Set(permissionValues));
     expect(roleGrant).toBeTruthy();
     expect(roleGrant[1]).not.toMatch(/WHERE\s+r\.role_code/i);
     expect(migration).toContain('ON DUPLICATE KEY UPDATE `description` = VALUES(`description`)');
     expect(migration).toContain('ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`');
+  });
+
+  // Review keys go to the Directory Admin role only, never to every role: holding one
+  // makes the user an approver and a recipient of every directory submission.
+  it('creates every review permission the routes use and grants it to directory_admin only', () => {
+    const reviewPermissions = routePermissions.filter((key) => key.includes('.workflow.'));
+
+    expect(new Set(reviewPermissions)).toEqual(
+      new Set([
+        'organization_directory.workflow.directory_admin',
+        'resource_person_directory.workflow.directory_admin',
+      ]),
+    );
+    for (const permissionKey of reviewPermissions) {
+      expect(directoryAdminMigration).toContain(`'${permissionKey}'`);
+      expect(migration).not.toContain(permissionKey);
+    }
+    expect(directoryAdminMigration).toMatch(/WHERE r\.role_code = 'directory_admin'/);
+    expect(directoryAdminMigration).toMatch(
+      /'directory_admin',\s*'Directory Admin',[\s\S]*?,\s*1,\s*0\s*\)/,
+    );
   });
 
   it('covers every role ID referenced by the developer seed', () => {

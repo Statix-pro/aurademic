@@ -382,7 +382,7 @@ export default {
       actor,
       metadata: {
         origin: 'api',
-        moduleMeta: { route: 'PATCH /api/admin/resource-person-submissions/:id/review' },
+        moduleMeta: { route: 'PATCH /api/resource-person-submissions/:id/review' },
       },
     });
     return { id: Number(id), status: decision === 'approve' ? 'Approved' : 'Rejected' };

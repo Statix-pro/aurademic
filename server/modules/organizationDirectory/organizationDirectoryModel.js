@@ -164,7 +164,7 @@ export default {
       actor,
       metadata: {
         origin: 'api',
-        moduleMeta: { route: 'PATCH /api/admin/organization-submissions/:id/review' },
+        moduleMeta: { route: 'PATCH /api/organization-submissions/:id/review' },
       },
     });
     return { id: Number(id), status: decision === 'approve' ? 'Approved' : 'Rejected' };

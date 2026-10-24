@@ -39,7 +39,7 @@ export default function OrganizationApprovalPage() {
 
   const load = async () => {
     try {
-      const response = (await authenticityUtility.get('/admin/organization-submissions')) as any;
+      const response = (await authenticityUtility.get('/organization-submissions')) as any;
       setRows(response.data || []);
       setError('');
     } catch (err: any) {
@@ -55,7 +55,7 @@ export default function OrganizationApprovalPage() {
     setReviewingId(id);
     setError('');
     try {
-      await authenticityUtility.patch(`/admin/organization-submissions/${id}/review`, { decision });
+      await authenticityUtility.patch(`/organization-submissions/${id}/review`, { decision });
       const approvalStatus = decision === 'approve' ? 'Approved' : 'Rejected';
       setRows((current) =>
         current.map((row) => (row.id === id ? { ...row, approvalStatus } : row)),
