@@ -237,7 +237,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid #bfdbfe;
   background: #eff6ff;
   color: #0069ab;
@@ -302,12 +302,12 @@
    replaced (CustomInput's `.form-control.custom-input` would otherwise win). */
 .rpd-dashboard-search .form-control.custom-input,
 .rpd-dashboard-filter .form-control.custom-input {
-  height: 46px;
+  height: var(--control-height);
   border-radius: 12px;
   border: 1px solid #d7dee8;
   background: #ffffff;
   box-shadow: none;
-  font-size: 0.95rem;
+  font-size: 14px;
   color: #334155;
 }
 /* !important: a global `.form-control { padding: 0.4rem 1rem !important }` otherwise wins. */
@@ -322,4 +322,66 @@
 .rpd-dashboard-filter .form-control.custom-input:focus {
   border-color: #0069ab;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
+}
+
+/* The form is laid out for page width; CustomModal's dialog is narrower, which made the
+   fields overlap. Same sizing as the approval page's details modal. */
+.rpd-form-modal .modal-dialog {
+  max-width: 1150px;
+  width: calc(100% - 32px);
+}
+
+.rpd-form-modal .modal-content {
+  max-height: calc(100vh - 3.5rem);
+}
+
+.rpd-form-modal .modal-body {
+  overflow-y: auto;
+}
+
+/* ── Typography (AGENTS.md §17 "Typography — the font standard") ── */
+.rpd-directory .financecard-title {
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.rpd-directory .custom-table thead th {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.rpd-directory .custom-table tbody td {
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-body);
+}
+
+.rpd-directory .rpd-name-cell strong,
+.rpd-directory .rpd-org-cell strong {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.rpd-directory .rpd-name-cell span,
+.rpd-directory .rpd-org-cell span {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-soft);
+}
+
+.rpd-directory .rpd-tag,
+.rpd-directory .rpd-status-pill {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rpd-form-modal .modal-title {
+  font-size: 18px;
+  line-height: 24px;
+  font-weight: 600;
 }

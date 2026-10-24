@@ -1,4 +1,4 @@
-import { Search, Plus, X, Edit3 } from 'lucide-react';
+import { Search, Plus, X, Edit3, Eye } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 import './ResourcePersonDirectoryDashboard.css';
@@ -97,6 +97,8 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
 
   const [showForm, setShowForm] = useState(false);
   const [editingPerson, setEditingPerson] = useState<ResourcePerson | null>(null);
+  // Another user's approved record, opened read-only. It arrives without contact details.
+  const [viewingPerson, setViewingPerson] = useState<ResourcePerson | null>(null);
   const [searchName, setSearchName] = useState('');
   const [searchCategory, setSearchCategory] = useState('');
   // Set while the "add organization" modal is open; receives the saved organization so
@@ -283,7 +285,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
       style: { textAlign: 'center' as const },
       render: (person: ResourcePerson) => (
         <div className="rpd-center">
-          {person.isOwner && (
+          {person.isOwner ? (
             <CustomButton
               variant="outline-primary"
               className="rpd-icon-btn"
@@ -292,6 +294,16 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
               aria-label="Edit Resource Person"
             >
               <Edit3 size={15} />
+            </CustomButton>
+          ) : (
+            <CustomButton
+              variant="outline-primary"
+              className="rpd-icon-btn"
+              onClick={() => setViewingPerson(person)}
+              title="View Resource Person"
+              aria-label="View Resource Person"
+            >
+              <Eye size={15} />
             </CustomButton>
           )}
         </div>
@@ -317,7 +329,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
   }
 
   return (
-    <div className="financecard-page">
+    <div className="financecard-page rpd-directory">
       <div className="financecard-container">
         {showForm ? (
           <div className="rpd-form-wrapper">
@@ -352,6 +364,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
               title="Add Organization"
               size="xl"
               scrollable
+              className="rpd-form-modal"
               // In the footer so a save failure stays visible however far the form is scrolled.
               footer={
                 organizationSaveError ? (
@@ -453,6 +466,24 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
           </div>
         )}
       </div>
+      <CustomModal
+        show={viewingPerson !== null}
+        onHide={() => setViewingPerson(null)}
+        title="Resource Person Details"
+        size="xl"
+        scrollable
+        className="rpd-form-modal"
+      >
+        {viewingPerson && (
+          <ResourcePersonDirectory
+            editingPerson={viewingPerson}
+            organizations={organizations}
+            readOnly
+            onSave={() => undefined}
+            onCancel={() => setViewingPerson(null)}
+          />
+        )}
+      </CustomModal>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { Search, X, Edit3 } from 'lucide-react';
+import { Search, X, Edit3, Eye } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -6,6 +6,7 @@ import './OrganizationDirectoryDashboard.css';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
 import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomModal from '../../../shared/components/ui/CustomModal';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import OrganizationDirectory, {
@@ -56,6 +57,38 @@ const CATEGORY_FILTER_OPTIONS: OptionType[] = [
   ...CATEGORY_OPTIONS.map((cat) => ({ value: cat, label: cat })),
 ];
 
+// Matches the search box beside it on --control-height; CustomDropdown defaults to 45px.
+const CATEGORY_FILTER_STYLES = {
+  // CustomDropdown merges styles shallowly, so this replaces its whole control style:
+  // keep its corners, colours and focus ring, and change only the height.
+  control: (provided: any, state: any) => ({
+    ...provided,
+    minHeight: 'var(--control-height)',
+    height: 'var(--control-height)',
+    backgroundColor: 'var(--bg-input)',
+    borderColor: state.isFocused ? 'var(--border-focus)' : 'var(--border-color)',
+    borderRadius: 'var(--border-radius-md)',
+    boxShadow: state.isFocused ? 'var(--shadow-focus)' : 'none',
+    '&:hover': { borderColor: 'var(--border-focus)' },
+  }),
+  // Text per AGENTS.md typography: 14px, primary-text colour.
+  container: (provided: any) => ({ ...provided, fontSize: '14px' }),
+  singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
+  valueContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+    padding: '0 12px',
+  }),
+  indicatorsContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+  }),
+  // No bar before the chevron, like the plain selects on the other list pages.
+  indicatorSeparator: () => ({ display: 'none' }),
+};
+
 /* ═══════════════════════════════════════════════════════════
    Dashboard Component
    ═══════════════════════════════════════════════════════════ */
@@ -70,6 +103,8 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
   const [showForm, setShowForm] = useState(false);
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null);
+  // Another user's approved organization, opened read-only.
+  const [viewingOrg, setViewingOrg] = useState<Organization | null>(null);
   const [searchName, setSearchName] = useState('');
   const [searchCategory, setSearchCategory] = useState('');
 
@@ -164,18 +199,8 @@ const OrganizationDirectoryDashboard: React.FC = () => {
       label: 'Organization',
       render: (org: Organization) => (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ fontWeight: 600, color: '#1f2937' }}>{org.name}</span>
-          {org.city && (
-            <span
-              style={{
-                fontSize: '0.78rem',
-                color: '#64748b',
-                marginTop: '2px',
-              }}
-            >
-              {org.city}
-            </span>
-          )}
+          <span className="org-name">{org.name}</span>
+          {org.city && <span className="org-meta">{org.city}</span>}
         </div>
       ),
     },
@@ -209,7 +234,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
       label: 'Action',
       style: { width: '100px', textAlign: 'center' as const },
       render: (org: Organization) =>
-        org.isOwner && (
+        org.isOwner ? (
           <CustomButton
             variant="outline-primary"
             size="sm"
@@ -219,6 +244,17 @@ const OrganizationDirectoryDashboard: React.FC = () => {
             aria-label="Edit Organization"
           >
             <Edit3 size={15} />
+          </CustomButton>
+        ) : (
+          <CustomButton
+            variant="outline-primary"
+            size="sm"
+            className="org-action-edit-btn"
+            onClick={() => setViewingOrg(org)}
+            title="View Organization"
+            aria-label="View Organization"
+          >
+            <Eye size={15} />
           </CustomButton>
         ),
     },
@@ -242,7 +278,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
   }
 
   return (
-    <section className="budgetdashboard-page">
+    <section className="budgetdashboard-page org-directory">
       <div className="budgetdashboard-container">
         {showForm ? (
           <div className="rpd-form-wrapper">
@@ -325,6 +361,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                         }
                       }}
                       className="mb-0"
+                      styles={CATEGORY_FILTER_STYLES}
                     />
                   </div>
                 </div>
@@ -376,6 +413,23 @@ const OrganizationDirectoryDashboard: React.FC = () => {
           </div>
         )}
       </div>
+      <CustomModal
+        show={viewingOrg !== null}
+        onHide={() => setViewingOrg(null)}
+        title="Organization Details"
+        size="xl"
+        scrollable
+        className="org-form-modal"
+      >
+        {viewingOrg && (
+          <OrganizationDirectory
+            editingOrg={viewingOrg}
+            readOnly
+            onSave={() => undefined}
+            onCancel={() => setViewingOrg(null)}
+          />
+        )}
+      </CustomModal>
     </section>
   );
 };

@@ -22,6 +22,39 @@ import OrganizationDirectory, {
   Organization as OrganizationForm,
 } from '../../organizationdirectory/OrganizationDirectory';
 
+// The header filter matches the search box beside it on --control-height; CustomDropdown
+// defaults to 45px.
+const FILTER_DROPDOWN_STYLES = {
+  // CustomDropdown merges styles shallowly, so this replaces its whole control style:
+  // keep its corners, colours and focus ring, and change only the height.
+  control: (provided: any, state: any) => ({
+    ...provided,
+    minHeight: 'var(--control-height)',
+    height: 'var(--control-height)',
+    backgroundColor: 'var(--bg-input)',
+    borderColor: state.isFocused ? 'var(--border-focus)' : 'var(--border-color)',
+    borderRadius: 'var(--border-radius-md)',
+    boxShadow: state.isFocused ? 'var(--shadow-focus)' : 'none',
+    '&:hover': { borderColor: 'var(--border-focus)' },
+  }),
+  valueContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+    padding: '0 12px',
+  }),
+  indicatorsContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+  }),
+  // Text per AGENTS.md typography: 14px, primary-text colour.
+  container: (provided: any) => ({ ...provided, fontSize: '14px' }),
+  singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
+  // No bar before the chevron, like the plain selects on the other list pages.
+  indicatorSeparator: () => ({ display: 'none' }),
+};
+
 type ApprovalStatus = 'Pending' | 'Approved' | 'Rejected';
 type Tab = ApprovalStatus | 'All';
 type Organization = Record<string, any> & { id: number; approvalStatus?: ApprovalStatus };
@@ -133,8 +166,15 @@ export default function OrganizationApprovalPage() {
           {icon}
         </span>
         <div>
-          <div className="text-muted">{label}</div>
-          <div className="fs-4 fw-bold" style={{ color: '#29436a', lineHeight: 1.1 }}>
+          <div style={{ fontSize: 13, lineHeight: '18px', color: 'var(--text-soft)' }}>{label}</div>
+          <div
+            style={{
+              color: 'var(--text-strong)',
+              fontSize: 24,
+              lineHeight: '28px',
+              fontWeight: 700,
+            }}
+          >
             {value}
           </div>
         </div>
@@ -179,8 +219,8 @@ export default function OrganizationApprovalPage() {
               display: 'inline-block',
               padding: '7px 12px',
               borderRadius: 18,
-              fontWeight: 700,
-              fontSize: 13,
+              fontWeight: 600,
+              fontSize: 12,
             }}
           >
             {status}
@@ -201,17 +241,17 @@ export default function OrganizationApprovalPage() {
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            width: 36,
-            height: 36,
+            width: 32,
+            height: 32,
             padding: 0,
             border: '1px solid #bfdbfe',
-            borderRadius: 6,
+            borderRadius: 8,
             background: '#eff6ff',
             color: '#006db4',
             cursor: 'pointer',
           }}
         >
-          <Eye size={17} />
+          <Eye size={15} />
         </CustomButton>
       ),
     },
@@ -221,19 +261,25 @@ export default function OrganizationApprovalPage() {
     <div className="organization-approval-page p-4">
       <style>{`
         .organization-approval-page { min-height: 100%; background: #f1f6fb; color: #29436a; }
+        .organization-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); }
+        .organization-details-modal .modal-content { max-height: calc(100vh - 3.5rem); }
+        .organization-details-modal .modal-body { overflow-y: auto; }
         .organization-approval-card { max-width: 1250px; border: 0; border-radius: 18px; background: #fff; box-shadow: 0 8px 24px rgba(15,42,70,.08); }
-        .organization-approval-title { color: #082b50 !important; font-size: 24px; font-weight: 700; }
-        .organization-admin-badge { background: #0878bd !important; border-radius: 12px !important; color: #fff !important; display: inline-flex; align-items: center; justify-content: center; width: 82px; height: 38px; font-size: .9rem; font-weight: 700; padding: 0 !important; }
+        .organization-approval-title { color: var(--text-strong) !important; font-size: 24px; line-height: 32px; font-weight: 700; }
+        .organization-admin-badge { background: #0878bd !important; border-radius: 6px !important; color: #fff !important; display: inline-flex; align-items: center; justify-content: center; height: 24px; font-size: 12px; font-weight: 700; letter-spacing: .04em; padding: 0 10px !important; }
         .organization-approval-header-controls { align-items: center !important; }
-        .organization-approval-header-controls > .position-relative { width: 285px; height: 40px; }
+        .organization-approval-header-controls > .position-relative { width: 285px; height: var(--control-height); }
         .organization-approval-header-controls > .position-relative > svg { left: 14px; z-index: 2; color: #006db4 !important; }
-        .organization-approval-header-controls .custom-input { height: 40px; margin: 0 !important; padding-left: 50px !important; }
-        .organization-approval-header-controls > div[style*='min-width'] { height: 40px; }
-        .organization-approval-card .row.g-3 > [class*='col-'] > .card { height: 108px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); }
-        .organization-approval-table.custom-table { min-width: 980px; margin-bottom: 0; table-layout: auto; color: #092f59; font-size: .9rem; }
-        .organization-approval-table.custom-table thead th { padding: 15px 10px; background: #eef5fd; border-bottom: 1px solid #cddceb; color: #006db4; font-size: 14px; font-weight: 700; text-align: left; }
-        .organization-approval-table.custom-table tbody td { padding: 16px 10px; border-color: #e1e8f0; color: #29436a; vertical-align: middle; }
-        .organization-approval-table.custom-table tbody td:first-child { color: #092f59; font-weight: 700; }
+        .organization-approval-header-controls .custom-input { height: var(--control-height); font-size: 14px; margin: 0 !important; padding-left: 50px !important; }
+        .organization-approval-header-controls > div[style*='min-width'] { height: var(--control-height); }
+        .organization-approval-card .row.g-3 > [class*='col-'] > .card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); }
+        .organization-approval-card .row.g-3 > [class*='col-'] > .card .card-body { padding: 14px 20px; }
+        .organization-approval-table.custom-table { min-width: 980px; margin-bottom: 0; table-layout: auto; color: var(--text-body); font-size: 14px; }
+        .organization-approval-table.custom-table thead th { padding: 15px 10px; background: #eef5fd; border-bottom: 1px solid #cddceb; color: var(--primary-color); font-size: 13px; line-height: 18px; font-weight: 600; text-align: left; }
+        .organization-approval-table.custom-table tbody td { padding: 16px 10px; border-color: #e1e8f0; color: var(--text-body); font-size: 14px; line-height: 20px; vertical-align: middle; }
+        .organization-approval-table.custom-table tbody td:first-child { color: var(--text-strong); font-weight: 700; }
+        .organization-approval-table.custom-table tbody td:first-child strong { font-weight: 700; }
+        .organization-details-modal .modal-title { font-size: 18px; line-height: 24px; font-weight: 600; }
         .organization-approval-table.custom-table th:nth-child(1), .organization-approval-table.custom-table td:nth-child(1) { width: 18%; }
         .organization-approval-table.custom-table th:nth-child(2), .organization-approval-table.custom-table td:nth-child(2) { width: 14%; }
         .organization-approval-table.custom-table th:nth-child(3), .organization-approval-table.custom-table td:nth-child(3) { width: 11%; }
@@ -248,7 +294,7 @@ export default function OrganizationApprovalPage() {
             <h2 className="organization-approval-title h4 mb-0">Organization Request</h2>
             <Badge
               className="organization-admin-badge"
-              style={{ backgroundColor: '#0878bd', borderRadius: 12, color: '#fff' }}
+              style={{ backgroundColor: '#0878bd', borderRadius: 6, color: '#fff' }}
             >
               ADMIN
             </Badge>
@@ -278,6 +324,8 @@ export default function OrganizationApprovalPage() {
                     setCategory(String(option.value));
                   }
                 }}
+                className="mb-0"
+                styles={FILTER_DROPDOWN_STYLES}
               />
             </div>
           </div>
@@ -310,55 +358,64 @@ export default function OrganizationApprovalPage() {
           keyField="id"
           className="organization-approval-table"
           emptyMessage="No organizations found."
-          actions={(row: Organization) =>
-            row.approvalStatus === 'Pending' || !row.approvalStatus ? (
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 4,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                <CustomButton
-                  variant="success"
-                  onClick={() => void review(row.id, 'approve')}
-                  disabled={reviewingId !== null}
-                  style={{
-                    minWidth: 80,
-                    padding: '8px 7px',
-                    border: 0,
-                    borderRadius: 6,
-                    background: '#178b58',
-                    color: '#fff',
-                    fontWeight: 700,
-                    fontSize: 12,
-                    cursor: 'pointer',
-                  }}
-                >
-                  ✓ Approve
-                </CustomButton>
-                <CustomButton
-                  variant="danger"
-                  onClick={() => void review(row.id, 'reject')}
-                  disabled={reviewingId !== null}
-                  style={{
-                    minWidth: 68,
-                    padding: '8px 7px',
-                    border: 0,
-                    borderRadius: 6,
-                    background: '#df3349',
-                    color: '#fff',
-                    fontWeight: 700,
-                    fontSize: 12,
-                    cursor: 'pointer',
-                  }}
-                >
-                  × Reject
-                </CustomButton>
-              </div>
-            ) : null
+          // Approve/Reject only apply to Pending rows; with none in view the column is noise.
+          actions={
+            filtered.some((row) => row.approvalStatus === 'Pending' || !row.approvalStatus)
+              ? (row: Organization) =>
+                  row.approvalStatus === 'Pending' || !row.approvalStatus ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: 4,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      <CustomButton
+                        variant="success"
+                        onClick={() => void review(row.id, 'approve')}
+                        disabled={reviewingId !== null}
+                        style={{
+                          height: 28,
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          padding: '0 10px',
+                          border: 0,
+                          borderRadius: 6,
+                          background: '#178b58',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: 12,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        ✓ Approve
+                      </CustomButton>
+                      <CustomButton
+                        variant="danger"
+                        onClick={() => void review(row.id, 'reject')}
+                        disabled={reviewingId !== null}
+                        style={{
+                          minWidth: 68,
+                          height: 28,
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          padding: '0 10px',
+                          border: 0,
+                          borderRadius: 6,
+                          background: '#df3349',
+                          color: '#fff',
+                          fontWeight: 700,
+                          fontSize: 12,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        × Reject
+                      </CustomButton>
+                    </div>
+                  ) : null
+              : undefined
           }
         />
         <CustomModal
@@ -367,6 +424,7 @@ export default function OrganizationApprovalPage() {
           title="Organization Details"
           size="xl"
           scrollable
+          className="organization-details-modal"
           footer={
             viewing && (viewing.approvalStatus === 'Pending' || !viewing.approvalStatus) ? (
               <>

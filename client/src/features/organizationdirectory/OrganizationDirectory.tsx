@@ -186,16 +186,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                 className="orgd-field"
                 style={{ flex: '1', border: 'none', padding: 0, margin: 0 }}
               >
-                <legend
-                  style={{
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                    color: '#344054',
-                    marginBottom: '8px',
-                  }}
-                >
-                  Status
-                </legend>
+                <legend className="orgd-legend">Status</legend>
                 <div className="orgd-toggle-group">
                   {['Active', 'Inactive'].map((s) => (
                     <button

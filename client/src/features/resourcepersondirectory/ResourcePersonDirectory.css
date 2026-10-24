@@ -56,9 +56,11 @@
   background-color: #f0f6ff;
   color: #0069ab;
   border: 1px solid #d6e4f3;
-  padding: 8px 16px;
-  border-radius: 10px;
-  font-size: 0.92rem;
+  /* 32px: the standard chip height (Material/MUI). */
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.25s ease;
@@ -244,6 +246,9 @@
 }
 
 .rpd-toggle-group {
+  /* As tall as the inputs on its row, so Date of Birth lines up; the chips inside are
+     the category-chip size and sit centred in it. */
+  height: var(--control-height);
   display: flex;
   gap: 8px;
   flex-wrap: nowrap;
@@ -255,18 +260,19 @@
 }
 
 .rpd-toggle-btn {
-  flex: 1;
-  padding: 12px 6px;
+  flex: 0 0 auto;
+  padding: 0 14px;
   white-space: nowrap !important;
   min-width: 0;
-  font-size: 0.95rem;
-  border-radius: 12px;
+  font-size: 13px;
+  border-radius: 8px;
   border: 1.5px solid #dde3ec;
   background: #fff;
   font-weight: 600;
   color: #475569;
   cursor: pointer;
   transition: all 0.18s;
+  height: 32px;
 }
 
 .rpd-toggle-btn.active {
@@ -327,12 +333,14 @@
 
 .rpd-upload-info {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
 }
 
 .rpd-upload-icon {
   color: #0069ab;
+  flex-shrink: 0;
 }
 
 .rpd-upload-label {
@@ -342,15 +350,38 @@
 }
 
 .rpd-upload-hint {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: #64748b;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 
 .rpd-upload-filename {
-  margin-top: 8px;
-  font-size: 0.9rem;
-  color: #334155;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #0069ab;
+  overflow-wrap: anywhere;
+}
+
+/* CustomFileUploader is used for its button only. Its "No file selected" text is hidden
+   because the name shows under the hint, and the button gets the box's original look
+   (!important: the uploader sets these inline). */
+.rpd-upload-button {
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.rpd-upload-button .text-muted.small {
+  display: none;
+}
+
+.rpd-upload-button .btn {
+  padding: 0 24px !important;
+  border-radius: 12px !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  gap: 6px !important;
+  height: 40px !important;
 }
 
 .rpd-choose-btn {
@@ -387,8 +418,8 @@
 
 .rpd-field label {
   display: block;
-  margin-bottom: 8px;
-  font-size: 0.95rem;
+  margin-bottom: 6px;
+  font-size: 13px;
   font-weight: 600;
   color: #344054;
 }
@@ -401,8 +432,9 @@
   border: 1px solid #dbeafe;
   border-radius: 12px;
   /* !important: a global `.form-control { padding: 0.4rem 1rem !important }` otherwise wins. */
-  padding: 12px 14px !important;
-  font-size: 0.95rem;
+  padding: 0 12px !important;
+  height: var(--control-height);
+  font-size: 14px;
   background: #ffffff;
   transition:
     border-color 0.2s ease,
@@ -430,12 +462,13 @@
   gap: 8px;
   border: 1px solid #dbeafe;
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 0 12px;
   background: #ffffff;
   transition:
     border-color 0.2s ease,
     background 0.2s ease;
-  font-size: 0.95rem;
+  font-size: 14px;
+  height: var(--control-height);
 }
 
 .rpd-input-icon svg {
@@ -1110,14 +1143,75 @@
   color: #ef4444;
 }
 
-/* Keeps the resource-person approval header aligned with the portal's primary theme. */
-.resource-person-approval-page .badge {
-  align-items: center;
-  background-color: #0069ab !important;
-  display: inline-flex;
-  height: 38px;
-  justify-content: center;
-  margin-top: 0;
-  padding: 0;
-  width: 82px;
+/* The uploader always renders its error line; empty, it still pushes the button up. */
+.rpd-upload-button .custom-error-text:empty {
+  display: none !important;
+}
+
+/* Gender, Date of Birth and Status: each takes the width its content needs and the row
+   wraps when that does not fit (the View/approval modals are narrower than the page),
+   instead of fixed grid columns the chips overflow into the next field. */
+.rpd-grid-3.rpd-choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 12px;
+  row-gap: 12px;
+}
+
+.rpd-choice-row > .rpd-field {
+  flex: 0 0 auto;
+}
+
+.rpd-choice-row > .rpd-field:has(input[type='date']) {
+  flex-basis: 160px;
+}
+
+.rpd-choice-row .rpd-toggle-group {
+  width: auto;
+}
+
+/* CustomInput's label: under the wrapper so it also beats `.modal-body .form-label
+   { margin-bottom: 0 }`, which lifted Date of Birth above its neighbours in modals. */
+.rpd-form-wrapper .rpd-field .custom-label {
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+/* ── Typography (AGENTS.md §17 "Typography — the font standard") ── */
+.budget-card-header h5 {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.rpd-subsection-title {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--primary-color);
+}
+
+.rpd-form-wrapper .rpd-field label,
+.rpd-form-wrapper .rpd-field .custom-label {
+  line-height: 18px;
+  color: var(--text-body);
+}
+
+.rpd-form-wrapper .rpd-upload-label {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.rpd-form-wrapper .rpd-upload-hint {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--text-soft);
+}
+
+.rpd-form-wrapper .rpd-upload-filename {
+  font-size: 13px;
+  line-height: 18px;
 }

@@ -48,6 +48,9 @@ export interface ResourcePerson {
   resumePath?: string;
   photoFile?: File;
   resumeFile?: File;
+  /** Set on save when the owner removed the stored file without choosing a new one. */
+  removePhoto?: boolean;
+  removeResume?: boolean;
   date: string;
   approvalStatus?: 'Pending' | 'Approved' | 'Rejected';
   isOwner?: boolean;
@@ -91,19 +94,36 @@ const emptyProfession = (): ProfessionDetail => ({
   status: 'Working',
 });
 
+// Every single-line control sits on --control-height (42px), as on the project form;
+// CustomDropdown's own default is 45px.
 const customDropdownStyles = {
   control: (provided: any, state: any) => ({
     ...provided,
-    minHeight: '45px',
-    height: '45px',
+    minHeight: 'var(--control-height)',
+    height: 'var(--control-height)',
     backgroundColor: '#ffffff',
     borderColor: state.isFocused ? '#0069ab' : '#dbeafe',
     borderRadius: '12px',
+    fontSize: '14px',
     padding: '0 4px',
     boxShadow: state.isFocused ? '0 0 0 4px rgba(0, 105, 171, 0.12)' : 'none',
     '&:hover': {
       borderColor: state.isFocused ? '#0069ab' : '#0069ab',
     },
+  }),
+  valueContainer: (provided: any) => ({
+    ...provided,
+    minHeight: '40px',
+    height: '40px',
+    padding: '0 10px',
+  }),
+  // Text per AGENTS.md typography: 14px, primary-text colour.
+  container: (provided: any) => ({ ...provided, fontSize: '14px' }),
+  singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
+  indicatorsContainer: (provided: any) => ({
+    ...provided,
+    minHeight: '40px',
+    height: '40px',
   }),
   indicatorSeparator: () => ({
     display: 'none',
@@ -114,11 +134,12 @@ const titleDropdownStyles = {
   ...customDropdownStyles,
   control: (provided: any, state: any) => ({
     ...provided,
-    minHeight: '45px',
-    height: '45px',
+    minHeight: 'var(--control-height)',
+    height: 'var(--control-height)',
     backgroundColor: '#ffffff',
     borderColor: state.isFocused ? '#0069ab' : '#dbeafe',
     borderRadius: '12px',
+    fontSize: '14px',
     padding: '0 2px',
     boxShadow: state.isFocused ? '0 0 0 4px rgba(0, 105, 171, 0.12)' : 'none',
     '&:hover': {
@@ -127,6 +148,8 @@ const titleDropdownStyles = {
   }),
   valueContainer: (provided: any) => ({
     ...provided,
+    minHeight: '40px',
+    height: '40px',
     padding: '0 4px',
   }),
   dropdownIndicator: (provided: any) => ({
@@ -174,6 +197,8 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   const [resumeName, setResumeName] = useState('');
   const [photoFile, setPhotoFile] = useState<File | undefined>(undefined);
   const [resumeFile, setResumeFile] = useState<File | undefined>(undefined);
+  const [removePhoto, setRemovePhoto] = useState(false);
+  const [removeResume, setRemoveResume] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const [showNameAlert, setShowNameAlert] = useState(false);
 
@@ -204,6 +229,8 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       setPhotoName(editingPerson.photoName || '');
       setResumeName(editingPerson.resumeName || '');
     }
+    setRemovePhoto(false);
+    setRemoveResume(false);
   }, [editingPerson]);
 
   /* ── Profession helpers ── */
@@ -233,15 +260,13 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       // The server requires both a matching extension and MIME type, so check both here.
       const validMime = ['image/jpeg', 'image/png'].includes(f.type);
       if (!validMime || !validExtensions.includes(extension)) {
+        // A rejected pick leaves the current file as it was, so the form never shows
+        // "no file" while the stored one is kept.
         setFileError('Invalid photo file type. Please select a JPG, JPEG, or PNG image.');
-        setPhotoName('');
-        setPhotoFile(undefined);
         return;
       }
       if (f.size > 2 * 1024 * 1024) {
         setFileError('Photo must be less than 2 MB');
-        setPhotoName('');
-        setPhotoFile(undefined);
         return;
       }
       setFileError(null);
@@ -259,20 +284,39 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       const isPdf = f.type === 'application/pdf';
       if ((!isPdf && !isDoc) || !validExtensions.includes(extension)) {
         setFileError('Invalid resume file type. Please select a PDF, DOC, or DOCX document.');
-        setResumeName('');
-        setResumeFile(undefined);
         return;
       }
       if (f.size > 5 * 1024 * 1024) {
         setFileError('Resume must be less than 5 MB');
-        setResumeName('');
-        setResumeFile(undefined);
         return;
       }
       setFileError(null);
       setResumeName(f.name);
       setResumeFile(f);
     }
+  };
+
+  // Removing a newly chosen file goes back to the stored one; removing the stored one
+  // marks it for deletion on save. Nothing is deleted until the record is saved.
+  const handleRemovePhoto = () => {
+    setFileError(null);
+    if (photoFile) {
+      setPhotoFile(undefined);
+      setPhotoName(removePhoto ? '' : editingPerson?.photoName || '');
+      return;
+    }
+    setPhotoName('');
+    setRemovePhoto(Boolean(editingPerson?.photoPath));
+  };
+  const handleRemoveResume = () => {
+    setFileError(null);
+    if (resumeFile) {
+      setResumeFile(undefined);
+      setResumeName(removeResume ? '' : editingPerson?.resumeName || '');
+      return;
+    }
+    setResumeName('');
+    setRemoveResume(Boolean(editingPerson?.resumePath));
   };
 
   const handleSubmit = () => {
@@ -313,6 +357,9 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       resumeName,
       photoFile,
       resumeFile,
+      // Left out when false: a new file already replaces the stored one.
+      removePhoto: removePhoto && !photoFile ? true : undefined,
+      removeResume: removeResume && !resumeFile ? true : undefined,
     });
   };
 
@@ -358,6 +405,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                   <label>Title</label>
                   <CustomDropdown
                     name="title"
+                    className="mb-0"
                     value={title ? { value: title, label: title } : null}
                     onChange={(val: any) => setTitle(val ? String(val.value) : '')}
                     options={['Dr.', 'Mr.', 'Ms.', 'Mrs.', 'Prof.'].map((t) => ({
@@ -398,7 +446,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                   />
                 </div>
               </div>
-              <div className="rpd-grid-3">
+              <div className="rpd-grid-3 rpd-choice-row">
                 <div className="rpd-field">
                   <label>Gender</label>
                   <div className="rpd-toggle-group">
@@ -473,14 +521,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
 
             {/* Contact Details */}
             <div className="rpd-split-side" style={{ paddingLeft: '8px' }}>
-              <h5
-                style={{
-                  fontSize: '15px',
-                  fontWeight: '700',
-                  color: '#0069ab',
-                  marginBottom: '4px',
-                }}
-              >
+              <h5 className="rpd-subsection-title" style={{ marginBottom: '4px' }}>
                 Contact Details
               </h5>
 
@@ -563,7 +604,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                 marginBottom: '16px',
               }}
             >
-              <h5 style={{ fontSize: '15px', fontWeight: '700', color: '#0069ab', margin: 0 }}>
+              <h5 className="rpd-subsection-title" style={{ margin: 0 }}>
                 Profession Details
               </h5>
               {!isReadOnly && (
@@ -619,6 +660,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       <label>Organization</label>
                       <CustomDropdown
                         name={`organization-${idx}`}
+                        className="mb-0"
                         value={
                           prof.organization
                             ? (organizationOptions.find(
@@ -684,6 +726,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       <label>Status</label>
                       <CustomDropdown
                         name={`status-${idx}`}
+                        className="mb-0"
                         value={prof.status ? { value: prof.status, label: prof.status } : null}
                         onChange={(val: any) =>
                           changeProfession(idx, 'status', val ? String(val.value) : '')
@@ -748,17 +791,49 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                 <div>
                   <div className="rpd-upload-label">Photo</div>
                   <div className="rpd-upload-hint">JPG, JPEG, PNG (Maximum 2 MB)</div>
+                  {photoName && (
+                    <div className="rpd-upload-filename">
+                      {!photoFile && !removePhoto && editingPerson?.photoPath ? (
+                        <a
+                          href={uploadUrl(editingPerson.photoPath)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {photoName}
+                        </a>
+                      ) : (
+                        photoName
+                      )}
+                      {!isReadOnly && (
+                        <CustomButton
+                          variant="link"
+                          onClick={handleRemovePhoto}
+                          title="Remove photo"
+                          aria-label="Remove photo"
+                          style={{
+                            color: '#b91c1c',
+                            padding: '0 4px',
+                            marginLeft: '6px',
+                            verticalAlign: 'middle',
+                            lineHeight: 1,
+                          }}
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                        </CustomButton>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
+              {/* Only the button is used: the chosen file shows under the hint, as before, so
+                  the uploader's own filename chip would squeeze the text column. */}
               <CustomFileUploader
                 name="rp-photo"
                 accept=".jpg,.jpeg,.png"
                 buttonText="Choose File"
-                fileName={photoName}
-                fileUrl={photoFile ? undefined : uploadUrl(editingPerson?.photoPath)}
                 onChange={handlePhoto}
                 disabled={isReadOnly}
-                className="mb-0"
+                className="mb-0 rpd-upload-button"
               />
             </div>
             <div className="rpd-upload-box" style={isReadOnly ? { opacity: 0.6 } : undefined}>
@@ -769,17 +844,49 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                 <div>
                   <div className="rpd-upload-label">Resume</div>
                   <div className="rpd-upload-hint">PDF, DOC, DOCX (Maximum 5 MB)</div>
+                  {resumeName && (
+                    <div className="rpd-upload-filename">
+                      {!resumeFile && !removeResume && editingPerson?.resumePath ? (
+                        <a
+                          href={uploadUrl(editingPerson.resumePath)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {resumeName}
+                        </a>
+                      ) : (
+                        resumeName
+                      )}
+                      {!isReadOnly && (
+                        <CustomButton
+                          variant="link"
+                          onClick={handleRemoveResume}
+                          title="Remove resume"
+                          aria-label="Remove resume"
+                          style={{
+                            color: '#b91c1c',
+                            padding: '0 4px',
+                            marginLeft: '6px',
+                            verticalAlign: 'middle',
+                            lineHeight: 1,
+                          }}
+                        >
+                          <Trash2 size={14} aria-hidden="true" />
+                        </CustomButton>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
+              {/* Only the button is used: the chosen file shows under the hint, as before, so
+                  the uploader's own filename chip would squeeze the text column. */}
               <CustomFileUploader
                 name="rp-resume"
                 accept=".pdf,.doc,.docx"
                 buttonText="Choose File"
-                fileName={resumeName}
-                fileUrl={resumeFile ? undefined : uploadUrl(editingPerson?.resumePath)}
                 onChange={handleResume}
                 disabled={isReadOnly}
-                className="mb-0"
+                className="mb-0 rpd-upload-button"
               />
             </div>
           </div>
@@ -817,16 +924,17 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
             className="rpd-btn-save"
             onClick={handleSubmit}
             style={{
-              padding: '12px 40px',
-              fontSize: '16px',
-              fontWeight: '700',
+              height: '40px',
+              padding: '0 24px',
+              fontSize: '14px',
+              fontWeight: '600',
               backgroundColor: '#0069ab',
               color: 'white',
               border: 'none',
               borderRadius: '12px',
               cursor: 'pointer',
-              minWidth: '150px',
-              boxShadow: '0 6px 20px rgba(0, 105, 171, 0.3)',
+              minWidth: '120px',
+              boxShadow: '0 4px 12px rgba(0, 105, 171, 0.25)',
               transition: 'all 0.3s ease',
             }}
           >
@@ -838,15 +946,16 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
           className="rpd-btn-cancel"
           onClick={onCancel}
           style={{
-            padding: '10px 30px',
-            fontSize: '15px',
+            height: '40px',
+            padding: '0 24px',
+            fontSize: '14px',
             fontWeight: '600',
             backgroundColor: '#f1f5f9',
             color: '#475569',
             border: '1.5px solid #e2e8f0',
             borderRadius: '12px',
             cursor: 'pointer',
-            minWidth: '140px',
+            minWidth: '120px',
             transition: 'all 0.3s ease',
           }}
         >

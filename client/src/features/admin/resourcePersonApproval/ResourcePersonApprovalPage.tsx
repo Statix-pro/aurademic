@@ -12,6 +12,40 @@ import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import ResourcePersonDirectory from '../../resourcepersondirectory/ResourcePersonDirectory';
 
 type Filter = 'All' | 'Pending' | 'Approved' | 'Rejected';
+
+// The header filter matches the search box beside it on --control-height; CustomDropdown
+// defaults to 45px.
+const FILTER_DROPDOWN_STYLES = {
+  // CustomDropdown merges styles shallowly, so this replaces its whole control style:
+  // keep its corners, colours and focus ring, and change only the height.
+  control: (provided: any, state: any) => ({
+    ...provided,
+    minHeight: 'var(--control-height)',
+    height: 'var(--control-height)',
+    backgroundColor: 'var(--bg-input)',
+    borderColor: state.isFocused ? 'var(--border-focus)' : 'var(--border-color)',
+    borderRadius: 'var(--border-radius-md)',
+    boxShadow: state.isFocused ? 'var(--shadow-focus)' : 'none',
+    '&:hover': { borderColor: 'var(--border-focus)' },
+  }),
+  valueContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+    padding: '0 12px',
+  }),
+  indicatorsContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+  }),
+  // Text per AGENTS.md typography: 14px, primary-text colour.
+  container: (provided: any) => ({ ...provided, fontSize: '14px' }),
+  singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
+  // No bar before the chevron, like the plain selects on the other list pages.
+  indicatorSeparator: () => ({ display: 'none' }),
+};
+
 type Row = Record<string, any> & { id: number; approvalStatus?: Filter };
 const statusStyle = (s: string) =>
   s === 'Approved'
@@ -159,8 +193,16 @@ export default function ResourcePersonApprovalPage() {
           {icon}
         </span>
         <div>
-          <div className="text-muted">{label}</div>
-          <strong className="fs-4" style={{ color: '#29436a' }}>
+          <div style={{ fontSize: 13, lineHeight: '18px', color: 'var(--text-soft)' }}>{label}</div>
+          <strong
+            className="d-block"
+            style={{
+              color: 'var(--text-strong)',
+              fontSize: 24,
+              lineHeight: '28px',
+              fontWeight: 700,
+            }}
+          >
             {value}
           </strong>
         </div>
@@ -191,8 +233,8 @@ export default function ResourcePersonApprovalPage() {
               display: 'inline-block',
               padding: '7px 12px',
               borderRadius: 18,
-              fontWeight: 700,
-              fontSize: 13,
+              fontWeight: 600,
+              fontSize: 12,
             }}
           >
             {status}
@@ -210,7 +252,7 @@ export default function ResourcePersonApprovalPage() {
           aria-label="View resource person submission"
           onClick={() => setViewing(row)}
         >
-          <Eye size={17} />
+          <Eye size={15} />
         </CustomButton>
       ),
     },
@@ -220,31 +262,40 @@ export default function ResourcePersonApprovalPage() {
       className="resource-person-approval-page p-4"
       style={{ minHeight: '100%', background: '#f1f6fb' }}
     >
-      <style>{`.resource-person-approval-page .request-summary-card .card-body { padding: 1.25rem 2rem; } .resource-person-approval-page .resource-person-view-button { width: 38px; height: 38px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #006db4; border-color: #bfdbfe; background: #eff6ff; } .resource-person-approval-page .resource-person-view-button:hover { color: #fff; background: #0878bd; border-color: #0878bd; } .resource-person-approval-page .custom-table { color: #29436a; } .resource-person-approval-page .custom-table thead th { color: #006db4; font-weight: 700; } .resource-person-approval-page .custom-table tbody td { vertical-align: middle; } .resource-person-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); } .resource-person-details-modal .modal-content { max-height: calc(100vh - 3.5rem); } .resource-person-details-modal .modal-body { overflow-y: auto; }`}</style>
+      <style>{`.resource-person-approval-page .request-summary-card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); } .resource-person-approval-page .request-summary-card .card-body { padding: 14px 20px; } .resource-person-approval-page .resource-person-view-button { width: 32px; height: 32px; border-radius: 8px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #006db4; border-color: #bfdbfe; background: #eff6ff; } .resource-person-approval-page .resource-person-view-button:hover { color: #fff; background: #0878bd; border-color: #0878bd; } .resource-person-approval-page .custom-table { color: #29436a; } .resource-person-approval-page .custom-table thead th { color: var(--primary-color); font-size: 13px; line-height: 18px; font-weight: 600; } .resource-person-approval-page .custom-table tbody td { vertical-align: middle; font-size: 14px; line-height: 20px; color: var(--text-body); } .resource-person-approval-page .custom-table tbody td strong { font-weight: 700; color: var(--text-strong); } .resource-person-details-modal .modal-title { font-size: 18px; line-height: 24px; font-weight: 600; } .resource-person-approval-header-controls .custom-input { height: var(--control-height); width: 260px; font-size: 14px; } .resource-person-approval-page .resource-person-admin-badge { background-color: #0069ab !important; } .resource-person-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); } .resource-person-details-modal .modal-content { max-height: calc(100vh - 3.5rem); } .resource-person-details-modal .modal-body { overflow-y: auto; }`}</style>
       <CustomCard className="mx-auto" style={{ maxWidth: 1250 }}>
         <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
           <div className="d-flex align-items-center gap-3">
-            <h2 className="h4 mb-0" style={{ color: '#082b50', fontWeight: 700 }}>
+            <h2
+              className="mb-0"
+              style={{
+                color: 'var(--text-strong)',
+                fontSize: 24,
+                lineHeight: '32px',
+                fontWeight: 700,
+              }}
+            >
               Resource Person Request
             </h2>
             <Badge
+              className="resource-person-admin-badge"
               style={{
                 alignItems: 'center',
                 background: '#0069ab',
-                borderRadius: 14,
+                borderRadius: 6,
                 color: '#fff',
                 display: 'inline-flex',
+                fontSize: 12,
                 fontWeight: 700,
-                height: 38,
-                justifyContent: 'center',
-                padding: 0,
-                width: 82,
+                height: 24,
+                letterSpacing: '0.04em',
+                padding: '0 10px',
               }}
             >
               ADMIN
             </Badge>
           </div>
-          <div className="d-flex align-items-center gap-3">
+          <div className="resource-person-approval-header-controls d-flex align-items-center gap-3">
             <CustomInput
               name="resource-person-search"
               value={search}
@@ -259,6 +310,8 @@ export default function ResourcePersonApprovalPage() {
               onChange={(option) => {
                 if (option && 'value' in option) setCategory(String(option.value));
               }}
+              className="mb-0"
+              styles={FILTER_DROPDOWN_STYLES}
             />
           </div>
         </div>
@@ -287,31 +340,49 @@ export default function ResourcePersonApprovalPage() {
           keyField="id"
           loading={loading}
           emptyMessage="No resource persons found."
-          actions={(row: Row) =>
-            (row.approvalStatus || 'Pending') === 'Pending' ? (
-              <div className="d-flex gap-1">
-                <CustomButton
-                  variant="success"
-                  className="px-2 py-1"
-                  style={{ fontSize: 12, minWidth: 78 }}
-                  loading={reviewingId === row.id}
-                  disabled={reviewingId !== null}
-                  onClick={() => void review(row.id, 'approve')}
-                >
-                  ✓ Approve
-                </CustomButton>
-                <CustomButton
-                  variant="danger"
-                  className="px-2 py-1"
-                  style={{ fontSize: 12, minWidth: 68 }}
-                  loading={reviewingId === row.id}
-                  disabled={reviewingId !== null}
-                  onClick={() => void review(row.id, 'reject')}
-                >
-                  × Reject
-                </CustomButton>
-              </div>
-            ) : null
+          // Approve/Reject only apply to Pending rows; with none in view the column is noise.
+          actions={
+            filteredRows.some((row) => (row.approvalStatus || 'Pending') === 'Pending')
+              ? (row: Row) =>
+                  (row.approvalStatus || 'Pending') === 'Pending' ? (
+                    <div className="d-flex flex-nowrap gap-1">
+                      <CustomButton
+                        variant="success"
+                        style={{
+                          height: 28,
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          padding: '0 10px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          borderRadius: 6,
+                        }}
+                        loading={reviewingId === row.id}
+                        disabled={reviewingId !== null}
+                        onClick={() => void review(row.id, 'approve')}
+                      >
+                        ✓ Approve
+                      </CustomButton>
+                      <CustomButton
+                        variant="danger"
+                        style={{
+                          height: 28,
+                          whiteSpace: 'nowrap',
+                          flexShrink: 0,
+                          padding: '0 10px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          borderRadius: 6,
+                        }}
+                        loading={reviewingId === row.id}
+                        disabled={reviewingId !== null}
+                        onClick={() => void review(row.id, 'reject')}
+                      >
+                        × Reject
+                      </CustomButton>
+                    </div>
+                  ) : null
+              : undefined
           }
         />
         <CustomModal
