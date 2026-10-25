@@ -1,13 +1,28 @@
-import { Bell, User } from 'lucide-react';
+import { Bell, BookOpen, User } from 'lucide-react';
 import React from 'react';
 import { Nav } from 'react-bootstrap';
 import { useSearchParams } from 'react-router-dom';
 
+import ScopusProfiles from './ScopusProfiles';
 import NotificationPreferencesPanel from '../../shared/notifications/NotificationPreferences';
 import { PROFILE_NOTIFICATIONS_TAB, PROFILE_TAB_PARAM } from '../../shared/notifications/routes';
 import ProfileCard from '../user-dashboard/profilecard/profilecard';
 
-type ProfileTab = 'profile' | 'notifications';
+type ProfileTab = 'profile' | 'notifications' | 'scopus';
+
+const SCOPUS_TAB = 'scopus';
+
+const TAB_HEADINGS: Record<ProfileTab, { title: string; subtitle: string }> = {
+  profile: { title: 'My Profile', subtitle: 'View and manage your profile information' },
+  notifications: {
+    title: 'Notification settings',
+    subtitle: 'Choose what you are told about, and where',
+  },
+  scopus: {
+    title: 'Scopus profiles',
+    subtitle: 'The Scopus Author IDs your papers are credited through',
+  },
+};
 
 const ProfilePage: React.FC = () => {
   /**
@@ -18,12 +33,18 @@ const ProfilePage: React.FC = () => {
    * other tab.
    */
   const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get(PROFILE_TAB_PARAM);
   const tab: ProfileTab =
-    searchParams.get(PROFILE_TAB_PARAM) === PROFILE_NOTIFICATIONS_TAB ? 'notifications' : 'profile';
+    tabParam === PROFILE_NOTIFICATIONS_TAB
+      ? 'notifications'
+      : tabParam === SCOPUS_TAB
+        ? 'scopus'
+        : 'profile';
 
   const setTab = (next: ProfileTab) => {
     const params = new URLSearchParams(searchParams);
     if (next === 'notifications') params.set(PROFILE_TAB_PARAM, PROFILE_NOTIFICATIONS_TAB);
+    else if (next === 'scopus') params.set(PROFILE_TAB_PARAM, SCOPUS_TAB);
     else params.delete(PROFILE_TAB_PARAM);
     setSearchParams(params, { replace: true });
   };
@@ -46,6 +67,8 @@ const ProfilePage: React.FC = () => {
           >
             {tab === 'notifications' ? (
               <Bell size={24} color="white" />
+            ) : tab === 'scopus' ? (
+              <BookOpen size={24} color="white" />
             ) : (
               <User size={24} color="white" />
             )}
@@ -55,13 +78,9 @@ const ProfilePage: React.FC = () => {
               className="mb-0"
               style={{ color: 'var(--text-main, #4f4f6e)', fontWeight: 'var(--weight-bold)' }}
             >
-              {tab === 'notifications' ? 'Notification settings' : 'My Profile'}
+              {TAB_HEADINGS[tab].title}
             </h2>
-            <small style={{ color: 'var(--text-soft)' }}>
-              {tab === 'notifications'
-                ? 'Choose what you are told about, and where'
-                : 'View and manage your profile information'}
-            </small>
+            <small style={{ color: 'var(--text-soft)' }}>{TAB_HEADINGS[tab].subtitle}</small>
           </div>
         </div>
 
@@ -76,9 +95,16 @@ const ProfilePage: React.FC = () => {
               Notifications
             </Nav.Link>
           </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="scopus" onClick={() => setTab('scopus')}>
+              Scopus profiles
+            </Nav.Link>
+          </Nav.Item>
         </Nav>
 
-        {tab === 'profile' ? <ProfileCard /> : <NotificationPreferencesPanel />}
+        {tab === 'profile' && <ProfileCard />}
+        {tab === 'notifications' && <NotificationPreferencesPanel />}
+        {tab === 'scopus' && <ScopusProfiles />}
       </div>
     </div>
   );
