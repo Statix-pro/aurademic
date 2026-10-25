@@ -95,6 +95,12 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
   const [correction, setCorrection] = useState<Correction | null>(null);
 
   const source = sources.find((item) => item.key === batch?.source_key);
+  // Paper and staff-ID imports list papers or staff, not journals, and their exceptions are
+  // accepted as planned — the correction dialog edits journal fields.
+  const isPapers = source?.kind === 'papers';
+  const isStaff = source?.kind === 'staff';
+  const correctable = !isPapers && !isStaff;
+  const noun = isPapers ? 'papers' : isStaff ? 'staff rows' : 'journals';
 
   const countFor = useCallback(
     (key: Outcome) =>
@@ -154,11 +160,11 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
     } catch (err) {
       setRows([]);
       setTotal(0);
-      setError(errorMessage(err, 'Failed to load the journals in this import.'));
+      setError(errorMessage(err, `Failed to load the ${noun} in this import.`));
     } finally {
       setLoading(false);
     }
-  }, [batchId, outcome, search, page]);
+  }, [batchId, outcome, search, page, noun]);
 
   useEffect(() => {
     loadRows();
@@ -266,9 +272,9 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
       { value: 'add', label: `Add (${countFor('add')})` },
       { value: 'update', label: `Update (${countFor('update')})` },
       { value: 'unchanged', label: `No change (${countFor('unchanged')})` },
-      { value: 'all', label: 'All journals' },
+      { value: 'all', label: `All ${noun}` },
     ],
-    [countFor],
+    [countFor, noun],
   );
 
   const columns = [
@@ -299,7 +305,7 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
     },
     {
       key: 'journal_name',
-      label: 'Journal',
+      label: isPapers ? 'Paper' : isStaff ? 'Staff member' : 'Journal',
       style: { width: '30%' },
       render: (row: ImportRow) => (
         <>
@@ -362,12 +368,14 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
               onClick={() => resolve('accept', [row.id])}
               disabled={working}
             />
-            <AdminIconButton
-              icon={<Pencil size={16} aria-hidden="true" />}
-              label="Correct and accept"
-              onClick={() => openCorrection(row)}
-              disabled={working}
-            />
+            {correctable && (
+              <AdminIconButton
+                icon={<Pencil size={16} aria-hidden="true" />}
+                label="Correct and accept"
+                onClick={() => openCorrection(row)}
+                disabled={working}
+              />
+            )}
             <AdminIconButton
               icon={<X size={16} aria-hidden="true" />}
               label="Exclude"
@@ -469,8 +477,12 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
       {summary.previouslyApplied && batch.status === 'previewed' && (
         <Alert variant="info" className="journal-import__notice">
           This file was already applied as import #{summary.previouslyApplied.id} on{' '}
-          {formatDateTime(summary.previouslyApplied.appliedAt)}. Applying it again only fills in
-          journals added to the list since then; everything else shows as no change.
+          {formatDateTime(summary.previouslyApplied.appliedAt)}.{' '}
+          {isPapers
+            ? 'Applying it again only adds papers that are new, and credits staff whose Scopus ID was added since; everything else shows as no change.'
+            : isStaff
+              ? 'IDs already on file show as no change.'
+              : 'Applying it again only fills in journals added to the list since then; everything else shows as no change.'}
         </Alert>
       )}
 
@@ -491,6 +503,22 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
           {summary.journalsNotInFile
             ? ` ${summary.journalsNotInFile} journals in the KSRCT list are not in this file.`
             : ''}
+        </p>
+      )}
+
+      {isPapers && summary.papers && countFor('add') > 0 && (
+        <p className="journal-import__meta">
+          Of the papers to add, {summary.papers.credited.toLocaleString('en-IN')} are credited to at
+          least one staff member by their Scopus Author ID.{' '}
+          {summary.papers.unassigned.toLocaleString('en-IN')} have no KSRCT author with a Scopus ID
+          on file yet; they are kept unassigned and credited once that ID is added.
+        </p>
+      )}
+
+      {isStaff && summary.staff && (
+        <p className="journal-import__meta">
+          The new Scopus IDs credit {summary.staff.papersToCredit.toLocaleString('en-IN')} imported
+          papers to their staff members, as soon as the sheet is applied.
         </p>
       )}
 
@@ -538,7 +566,13 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
           <CustomInput
             name="rowSearch"
             className="journal-import__search"
-            placeholder="Search journal name"
+            placeholder={
+              isPapers
+                ? 'Search paper title'
+                : isStaff
+                  ? 'Search staff name'
+                  : 'Search journal name'
+            }
             value={searchInput}
             onChange={setSearchInput}
           />
@@ -584,9 +618,7 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
           data={rows}
           loading={loading}
           className={showActions ? '' : 'journal-import__table--no-actions'}
-          emptyMessage={
-            search ? 'No journal in this import matches the search' : 'No journals here'
-          }
+          emptyMessage={search ? `No ${noun} in this import match the search` : `No ${noun} here`}
           actions={showActions ? rowActions : undefined}
         />
       </div>
@@ -607,7 +639,11 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
         message={
           confirm === 'discard'
             ? 'Nothing from this file will be applied. The file is not kept, so it would have to be uploaded again.'
-            : `${countFor('add')} journals will be added and ${countFor('update')} updated, in one step. ${countFor('exception')} that need review stay here for you to accept, correct or exclude.`
+            : isStaff
+              ? `${countFor('add')} staff members get their Scopus IDs, and the imported papers those IDs appear on are credited to them. ${countFor('exception')} that need review stay here for you to accept or exclude.`
+              : isPapers
+                ? `${countFor('add')} papers will be added as approved publications and ${countFor('update')} publications already in the portal filled in, in one step. ${countFor('exception')} that need review stay here for you to accept or exclude.`
+                : `${countFor('add')} journals will be added and ${countFor('update')} updated, in one step. ${countFor('exception')} that need review stay here for you to accept, correct or exclude.`
         }
         showCancel
         confirmText={confirm === 'discard' ? 'Discard' : 'Apply'}

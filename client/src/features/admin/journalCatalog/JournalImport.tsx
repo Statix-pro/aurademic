@@ -7,6 +7,7 @@ import ImportHistory from './ImportHistory';
 import { errorMessage } from './importLabels';
 import JournalList from './JournalList';
 import { prepareUpload } from './prepareUpload';
+import ScopusIdList from './ScopusIdList';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
 import CustomFileUploader from '../../../shared/components/ui/CustomFileUploader';
@@ -17,13 +18,13 @@ import { AdminScreenHeader, AdminTabs } from '../components/AdminScreen';
 import type { ApiEnvelope, ImportBatch, ImportSource, SourcesResponse } from './types';
 import './journalImport.css';
 
-type TabKey = 'import' | 'history' | 'journals';
+type TabKey = 'import' | 'history' | 'journals' | 'scopus';
 
 type Stage = 'idle' | 'preparing' | 'uploading';
 
 const STAGE_TEXT: Record<Exclude<Stage, 'idle'>, string> = {
   preparing: 'Reading the file on this computer…',
-  uploading: 'Checking every journal against the list…',
+  uploading: 'Checking every row against the portal…',
 };
 
 /**
@@ -107,13 +108,14 @@ const JournalImport: React.FC = () => {
     { key: 'import', label: 'Import a file' },
     { key: 'history', label: 'Import history' },
     { key: 'journals', label: 'Journal list' },
+    { key: 'scopus', label: 'Staff Scopus IDs' },
   ];
 
   return (
     <div className="admin-screen journal-import">
       <AdminScreenHeader
         title="Journal Import"
-        description="Developer tool: loads the KSRCT journal list from the faculty journal sheet, KSRCT's Scopus and Web of Science exports, and the yearly Scopus Source List and SCImago ranking."
+        description="Developer tool: loads the KSRCT journal list from the faculty journal sheet, KSRCT's Scopus and Web of Science exports, and the yearly Scopus Source List and SCImago ranking, KSRCT's papers from the Scopus export, and staff Scopus Author IDs."
       />
 
       <AdminTabs<TabKey>
@@ -144,8 +146,9 @@ const JournalImport: React.FC = () => {
             <h2 className="journal-import__section-title">Import a file</h2>
             <p className="journal-import__meta">
               Upload the KSRCT Scopus and Web of Science exports before the Scopus Source List and
-              SCImago file, so journals the exports add also get their Scopus status and quartile. A
-              file can be imported again at any time; anything already right stays as it is.
+              SCImago file, so journals the exports add also get their Scopus status and quartile.
+              Import the papers last, once their journals are in the list. A file can be imported
+              again at any time; anything already right stays as it is.
             </p>
 
             <div className="journal-import__form">
@@ -221,6 +224,7 @@ const JournalImport: React.FC = () => {
         ))}
 
       {tab === 'journals' && <JournalList />}
+      {tab === 'scopus' && <ScopusIdList />}
     </div>
   );
 };
