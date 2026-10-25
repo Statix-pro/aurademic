@@ -331,8 +331,10 @@ const adminModel = {
         if (request.cite_score != null && request.cite_score !== '') {
           registryUpdate.cite_score = request.cite_score;
         }
-        // The level is a decision the approval itself carries, so it is always written.
+        // The level is a decision the approval itself carries, so it is always written — and
+        // marked an admin's, which no journal-list import overrides.
         registryUpdate.category = request.category || 'National';
+        registryUpdate.level_source = 'admin';
 
         await db.query('UPDATE journal_options SET ? WHERE id = ?', [
           registryUpdate,
@@ -342,8 +344,8 @@ const adminModel = {
         // `category` must be carried over: leaving it out meant every approved request
         // landed on the column default and an International journal came back as National.
         const [result] = await db.query(
-          `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category, level_source)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'admin')`,
           [
             request.journal_name,
             request.publisher,
