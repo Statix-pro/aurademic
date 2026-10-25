@@ -194,15 +194,19 @@ const addIndexes = async (connection, publicationId, payload) => {
   ]);
 };
 
-const addPaper = async (connection, live, payload, batchId, userId) => {
+const addPaper = async (connection, live, payload, batchId, userId, { reviewed = false } = {}) => {
   const { publication } = payload;
   // Someone may have filed the paper on the form since the preview, often with a DOI and no
   // Scopus EID, sometimes with neither — so all three keys the preview matches on are checked.
+  // An admin accepting a reviewed exception has already decided it is a separate paper (a
+  // journal version of a conference paper shares its title and year), so for them only the
+  // EID and DOI, which identify a paper, still stop it.
   const doi = normalizeDoi(publication.doi);
   const existingId =
     (publication.scopus_id && live.publicationsByScopusId.get(publication.scopus_id)) ||
     (doi && live.publicationsByDoi.get(doi)) ||
-    live.publicationsByTitleYear.get(titleYearKey(publication.title, publication.year));
+    (!reviewed &&
+      live.publicationsByTitleYear.get(titleYearKey(publication.title, publication.year)));
   if (existingId) {
     return { skipped: `It is now in the portal as publication #${existingId}` };
   }
@@ -313,9 +317,9 @@ const updatePaper = async (connection, live, payload) => {
   };
 };
 
-const applyPaperPayload = (connection, live, payload, batchId, userId) =>
+const applyPaperPayload = (connection, live, payload, batchId, userId, options) =>
   payload.action === 'add'
-    ? addPaper(connection, live, payload, batchId, userId)
+    ? addPaper(connection, live, payload, batchId, userId, options)
     : updatePaper(connection, live, payload);
 
 const markApplied = (connection, rowId, applied, userId) =>
@@ -477,7 +481,9 @@ const paperImportModel = {
       const live = await loadLiveState(connection);
       const failures = [];
       for (const row of rows) {
-        const applied = await applyPaperPayload(connection, live, row.payload, batchId, userId);
+        const applied = await applyPaperPayload(connection, live, row.payload, batchId, userId, {
+          reviewed: true,
+        });
         if (applied.skipped) {
           failures.push({ rowId: row.id, journalName: row.journal_name, reason: applied.skipped });
           continue;

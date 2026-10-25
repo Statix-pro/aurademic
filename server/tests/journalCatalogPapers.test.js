@@ -485,6 +485,54 @@ describe('applying papers', () => {
     expect(writes.some((write) => write.sql.startsWith('INSERT INTO journals'))).toBe(false);
   });
 
+  it('lets an admin accept a separate paper that only shares its title and year', async () => {
+    // A journal version of a conference paper already in the portal: the preview holds it for
+    // review, and accepting it is the admin's decision that it is a different paper.
+    const conferenceVersion = {
+      id: 612,
+      scopus_id: '85999999999',
+      doi: '10.1109/conf.2025.1',
+      title: 'Tribology of sesbania fibre composites',
+      year: '2025',
+    };
+    const { rows } = await plan([paperRow()], { publications: [conferenceVersion] });
+    expect(rows[0].outcome).toBe('exception');
+
+    const writes = [];
+    const connection = makeConnection((sql) => {
+      if (sql.startsWith('SELECT id, status FROM journal_import_batches')) {
+        return [[{ id: 1, status: 'applied' }]];
+      }
+      if (sql.startsWith('SELECT id, journal_name, payload FROM journal_import_rows')) {
+        return [[{ id: 11, journal_name: rows[0].journal_name, payload: rows[0].payload }]];
+      }
+      if (sql.startsWith('SELECT id, journal_name')) return [[JOURNAL]];
+      if (sql.startsWith('SELECT journal_option_id, metric')) return [[]];
+      if (sql.startsWith('SELECT e.id, TRIM(e.scopus_id)')) return [[STAFF]];
+      if (sql.startsWith('SELECT e.id, x.scopus_author_id')) return [[]];
+      if (sql.startsWith('SELECT id, TRIM(scopus_id)')) return [[conferenceVersion]];
+      if (sql.startsWith('SELECT id FROM authors WHERE employee_id')) return [[]];
+      if (sql.startsWith('SELECT 1 FROM author_journal')) return [[]];
+      if (sql.startsWith('SELECT value_text FROM journal_metrics_yearly')) return [[]];
+      if (sql.startsWith('SELECT index_name')) return [[]];
+      writes.push(sql);
+      if (sql.startsWith('INSERT INTO journals')) return [{ insertId: 501 }];
+      if (sql.startsWith('INSERT INTO authors')) return [{ insertId: 70 }];
+      return [{ affectedRows: 1 }];
+    });
+    db.getConnection.mockResolvedValue(connection);
+
+    const result = await paperImportModel.resolveExceptions(
+      1,
+      { rowIds: [11], action: 'accept' },
+      9,
+    );
+
+    expect(result).toEqual({ accepted: 1 });
+    expect(writes.some((sql) => sql.startsWith('INSERT INTO journals'))).toBe(true);
+    expect(connection.commit).toHaveBeenCalled();
+  });
+
   it('takes a newly credited author off the external list of a paper imported before', async () => {
     const imported = {
       id: 400,
