@@ -48,8 +48,9 @@ const formOptionsModel = {
     try {
       const journalName = await formOptionsModel.assertJournalNameIsFree(journal.journal_name);
       const [result] = await db.query(
-        `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        // `level_source = 'admin'`: a level chosen here is never overridden by an import.
+        `INSERT INTO journal_options (journal_name, publisher, website, print_issn, online_issn, impact_factor, cite_score, category, level_source)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'admin')`,
         [
           journalName,
           journal.publisher || '',
@@ -87,11 +88,17 @@ const formOptionsModel = {
         updatedData.journal_name,
         id,
       );
+      const category = updatedData.category || 'National';
+      // The level counts as an admin's decision — one no journal-list import overrides —
+      // only when this edit changes it. Fixing a website must not freeze a level nobody
+      // chose. `level_source` is assigned first, so it compares against the old category:
+      // MySQL applies an UPDATE's assignments left to right.
       const [result] = await db.query(
-        `UPDATE journal_options 
-                 SET journal_name = ?, publisher = ?, website = ?, print_issn = ?, online_issn = ?, impact_factor = ?, cite_score = ?, category = ? 
+        `UPDATE journal_options
+                 SET level_source = IF(category <=> ?, level_source, 'admin'), journal_name = ?, publisher = ?, website = ?, print_issn = ?, online_issn = ?, impact_factor = ?, cite_score = ?, category = ?
                  WHERE id = ?`,
         [
+          category,
           journalName,
           updatedData.publisher || '',
           updatedData.website || '',
@@ -99,7 +106,7 @@ const formOptionsModel = {
           updatedData.online_issn || '',
           updatedData.impact_factor || null,
           updatedData.cite_score || null,
-          updatedData.category || 'National',
+          category,
           id,
         ],
       );

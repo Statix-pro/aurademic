@@ -1,0 +1,107 @@
+/**
+ * My Profile → Scopus profiles. Scoped under `.scopus-profiles`; sizes and type come from the
+ * tokens in `shared/styles/variables.css`.
+ */
+
+.scopus-profiles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.scopus-profiles .scopus-profiles__section-title {
+  margin: 0 0 var(--space-1);
+  color: var(--primary-color);
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+  font-weight: var(--weight-semibold);
+}
+
+.scopus-profiles .scopus-profiles__help {
+  margin: 0 0 var(--space-4);
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+}
+
+.scopus-profiles .scopus-profiles__meta {
+  display: block;
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+}
+
+.scopus-profiles .scopus-profiles__ids {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scopus-profiles .scopus-profiles__id {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background: var(--surface-subtle);
+}
+
+.scopus-profiles .scopus-profiles__id-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.scopus-profiles .scopus-profiles__suggestions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.scopus-profiles .scopus-profiles__suggestion {
+  padding: var(--space-4);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+}
+
+.scopus-profiles .scopus-profiles__suggestion-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.scopus-profiles .scopus-profiles__name {
+  display: block;
+  color: var(--text-strong);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-bold);
+}
+
+.scopus-profiles .scopus-profiles__papers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.scopus-profiles .scopus-profiles__paper-title {
+  display: block;
+  color: var(--text-body);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+}
+
+.scopus-profiles .scopus-profiles__empty {
+  color: var(--text-soft);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+}

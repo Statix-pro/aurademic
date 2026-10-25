@@ -52,11 +52,21 @@ vi.mock('../modules/shared/workflow/workflowService.js', () => ({
   default: { actOnWorkflow: vi.fn(), startWorkflow: vi.fn() },
 }));
 
+// Approving an organization first runs a duplicate-name query on the pool. Unmocked, it
+// reached a real MySQL: green on a dev machine, 500 in CI where there is no database.
+vi.mock('../config/connection.js', () => ({
+  default: { getConnection: vi.fn(), query: vi.fn(), execute: vi.fn() },
+}));
+
+import db from '../config/connection.js';
 import workflowService from '../modules/shared/workflow/workflowService.js';
 import app from '../server.js';
 
 describe('directory route authentication', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    db.execute.mockResolvedValue([[]]);
+  });
 
   it.each(['/api/organizations', '/api/resource-persons'])(
     'rejects unauthenticated create on %s',

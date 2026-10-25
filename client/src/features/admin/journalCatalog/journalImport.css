@@ -1,0 +1,225 @@
+/**
+ * Journal Import — the admin dashboard tab that fills the KSRCT journal list from files.
+ *
+ * Built on the admin screen shell (`admin-screen`, `admin-tabs`, `admin-toolbar`, `admin-card`,
+ * `admin-badge`); everything here is scoped under `.journal-import` and only adds what the
+ * shell has no class for. Sizes and type come from the tokens in `shared/styles/variables.css`.
+ */
+
+/* ------------------------------------------------------------ section text */
+
+.journal-import .journal-import__section-title {
+  margin: 0;
+  color: var(--primary-color);
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-section-title);
+  line-height: var(--leading-section-title);
+}
+
+.journal-import .journal-import__meta,
+.journal-import .journal-import__help {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+}
+
+.journal-import .journal-import__secondary {
+  display: block;
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+}
+
+.journal-import .journal-import__reason {
+  color: var(--text-body);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+}
+
+.journal-import .journal-import__credit {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-tertiary);
+  line-height: var(--leading-tertiary);
+}
+
+.journal-import .journal-import__issn {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* A row needing review is the one thing on the page that asks for attention. */
+.journal-import .journal-import__badge--warn {
+  background: var(--tint-danger-bg);
+  color: var(--tint-danger-fg);
+}
+
+/* ------------------------------------------------------------ upload panel */
+
+.journal-import .journal-import__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-md);
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.journal-import .journal-import__form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.journal-import .journal-import__form > * {
+  flex: 0 1 320px;
+  min-width: 220px;
+}
+
+.journal-import .journal-import__panel-actions,
+.journal-import .journal-import__again {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* ---------------------------------------------------------------- an import */
+
+.journal-import .journal-import__batch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.journal-import .journal-import__batch-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.journal-import .journal-import__batch-title {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.journal-import .journal-import__batch-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.journal-import .journal-import__notice {
+  margin: 0;
+}
+
+.journal-import .journal-import__failures {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+
+/* KPI / stat card: 80px, label 13px over a 24px value (AGENTS.md §17). */
+.journal-import .journal-import__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+}
+
+.journal-import .journal-import__stat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 80px;
+  padding: 14px var(--space-5);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: var(--bg-surface);
+  box-shadow: var(--shadow-card);
+}
+
+.journal-import .journal-import__stat-label {
+  color: var(--text-soft);
+  font-weight: var(--weight-regular);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+}
+
+.journal-import .journal-import__stat-value {
+  color: var(--text-strong);
+  font-weight: var(--weight-bold);
+  font-size: var(--font-size-kpi);
+  line-height: var(--leading-kpi);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------ list controls */
+
+.journal-import .journal-import__filter {
+  flex: 0 1 260px;
+  min-width: 220px;
+  margin-bottom: 0;
+}
+
+.journal-import .journal-import__search {
+  flex: 0 1 260px;
+  min-width: 200px;
+  margin-bottom: 0;
+}
+
+.journal-import .journal-import__bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+/* The shell right-aligns a table's last heading for its Actions column; a table without one
+   keeps that heading over its own, left-aligned cells. */
+.journal-import .admin-card .journal-import__table--no-actions > thead th:last-child {
+  text-align: left;
+}
+
+.journal-import .journal-import__changes {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.journal-import .journal-import__change-field {
+  color: var(--text-strong);
+  font-weight: var(--weight-semibold);
+}
+
+.journal-import .journal-import__correction {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ---------------------------------------------------------------- pager */
+
+.journal-import .journal-import__pager {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.journal-import .journal-import__pager-count {
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A date and its time read as one value, so they stay on one line. */
+.journal-import .journal-import__nowrap {
+  white-space: nowrap;
+}
