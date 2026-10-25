@@ -24,6 +24,10 @@ router.use(authMiddleware); // Add authentication middleware for all routes belo
 // The publication and project forms' pickers. They were public, which handed staff names and
 // the journal list's metrics to anyone off the network; both forms only ever call them signed
 // in, through authenticityUtility.
+// Sign-in only, like the publisher routes below: faculty hold no `publications.*` permission
+// yet they are the ones filling these forms, so a permission gate would take the pickers away
+// from them. The repo owner approved this exception to AGENTS.md hard rule 1 on 2026-10-25.
+// Both are read-only searches: journal names with their list metrics, and staff names.
 router.get('/journals/search', journalController.searchJournals);
 router.get('/authors/search', journalController.searchAuthor);
 
