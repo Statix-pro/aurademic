@@ -1238,4 +1238,7 @@ j.*,
   },
 };
 
+// The Journal Import files Scopus papers the same way the form does.
+export { resolveOfficialQuartile, resolvePlaceholderOptionId };
+
 export default journalModel;

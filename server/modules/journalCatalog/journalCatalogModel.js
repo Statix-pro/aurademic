@@ -22,7 +22,7 @@ const httpError = (statusCode, message, details) =>
  * `metric|year|source`. Decimals come back from the driver as strings ("2.900"), so they are
  * read as numbers here; otherwise every re-import would report an unchanged value as changed.
  */
-const loadJournalSnapshot = async (executor = db, { lock = false } = {}) => {
+export const loadJournalSnapshot = async (executor = db, { lock = false } = {}) => {
   const [journals] = await executor.query(
     `SELECT ${JOURNAL_COLUMNS} FROM journal_options${lock ? ' FOR UPDATE' : ''}`,
   );
@@ -45,7 +45,7 @@ const loadJournalSnapshot = async (executor = db, { lock = false } = {}) => {
  * The list as it stands inside the apply transaction, kept current as rows are written, so
  * every add re-checks that its ISSNs and name are still free.
  */
-const createLiveIndex = (journals) => {
+export const createLiveIndex = (journals) => {
   const byId = new Map();
   const byIssn = new Map();
   const bySourceId = new Map();
@@ -415,7 +415,8 @@ const journalCatalogModel = {
         const chunk = rows.slice(start, start + ROW_INSERT_CHUNK);
         await connection.query(
           `INSERT INTO journal_import_rows
-             (batch_id, source_row, outcome, journal_option_id, journal_name, reason, payload, changes)
+             (batch_id, source_row, outcome, journal_option_id, publication_id, journal_name,
+              reason, payload, changes)
            VALUES ?`,
           [
             chunk.map((row) => [
@@ -423,6 +424,7 @@ const journalCatalogModel = {
               row.source_row,
               row.outcome,
               row.journal_option_id,
+              row.publication_id ?? null,
               truncate(row.journal_name, 255),
               truncate(row.reason, 500),
               JSON.stringify(row.payload),
@@ -449,6 +451,13 @@ const journalCatalogModel = {
       (page - 1) * perPage,
     ]);
     return { rows, total };
+  },
+
+  async getBatchSourceKey(batchId) {
+    const [rows] = await db.query('SELECT source_key FROM journal_import_batches WHERE id = ?', [
+      batchId,
+    ]);
+    return rows[0]?.source_key ?? null;
   },
 
   async getBatch(batchId) {
@@ -487,8 +496,8 @@ const journalCatalogModel = {
       params,
     );
     const [rows] = await db.query(
-      `SELECT id, source_row, outcome, resolution, journal_option_id, journal_name, reason,
-              payload, changes, resolved_at
+      `SELECT id, source_row, outcome, resolution, journal_option_id, publication_id,
+              journal_name, reason, payload, changes, resolved_at
          FROM journal_import_rows
         WHERE ${clause}
         ORDER BY source_row, id

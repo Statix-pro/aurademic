@@ -35,6 +35,7 @@ import financePageRoutes from './modules/finance/financeRoutes.js';
 import formOptionsRoutes from './modules/formOptions/formOptionsRoutes.js';
 import journalRoutes from './modules/journal/journalRoutes.js';
 import journalCatalogRoutes from './modules/journalCatalog/journalCatalogRoutes.js';
+import scopusProfileRoutes from './modules/journalCatalog/scopusProfileRoutes.js';
 import masterDataRoutes from './modules/masterData/masterDataRoutes.js';
 import { startDispatcher, stopDispatcher } from './modules/notification/notificationDispatcher.js';
 import notificationRoutes from './modules/notification/notificationRoutes.js';
@@ -164,6 +165,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/dashboard', userDashboardRoutes);
 app.use('/api/form-options', formOptionsRoutes);
 app.use('/api/journal-catalog', journalCatalogRoutes);
+app.use('/api/scopus-profile', scopusProfileRoutes);
 
 app.use('/api', journalRoutes);
 app.use('/api', projectRoutes);

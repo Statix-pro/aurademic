@@ -60,4 +60,7 @@ router.post('/imports/:id/apply', journalCatalogController.applyImport);
 router.post('/imports/:id/discard', journalCatalogController.discardImport);
 router.post('/imports/:id/exceptions/resolve', journalCatalogController.resolveExceptions);
 
+router.get('/scopus-ids', journalCatalogController.listScopusIds);
+router.delete('/scopus-ids/:id', journalCatalogController.removeScopusId);
+
 export default router;

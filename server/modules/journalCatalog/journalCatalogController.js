@@ -3,8 +3,13 @@ import journalCatalogModel, {
   JOURNAL_FILTER_KEYS,
   validateOverrides,
 } from './journalCatalogModel.js';
+import paperImportModel from './paperImportModel.js';
+import { planPapers } from './paperPlanner.js';
 import { indexJournals, planImport } from './planner.js';
+import scopusClaimModel from './scopusClaimModel.js';
 import { describeSources, EXCLUSION_REASONS, getSource } from './sources.js';
+import staffIdImportModel from './staffIdImportModel.js';
+import { planStaffIds } from './staffIdPlanner.js';
 
 const MAX_PER_PAGE = 100;
 
@@ -35,6 +40,29 @@ const respondWithError = (res, error, fallbackMessage) => {
   }
   console.error(fallbackMessage, error);
   return res.status(500).json({ success: false, message: fallbackMessage });
+};
+
+/** Paper and staff-ID imports write publications and staff records, through their own models. */
+const MODEL_BY_KIND = { papers: paperImportModel, staff: staffIdImportModel };
+
+const modelForBatch = async (batchId) => {
+  const sourceKey = await journalCatalogModel.getBatchSourceKey(batchId);
+  return MODEL_BY_KIND[getSource(sourceKey)?.kind] ?? journalCatalogModel;
+};
+
+const planFile = async ({ source, records, journals, excluded }) => {
+  if (source.kind === 'papers') {
+    return planPapers({
+      records,
+      journals,
+      excluded,
+      ...(await paperImportModel.loadPaperContext()),
+    });
+  }
+  if (source.kind === 'staff') {
+    return planStaffIds({ records, excluded, ...(await staffIdImportModel.loadStaffContext()) });
+  }
+  return planImport({ source, records, journals, excluded });
 };
 
 /** Reference files only keep rows for journals already in the list; the rest is never held. */
@@ -82,7 +110,7 @@ const journalCatalogController = {
       // journals added since (from a later Scopus or Web of Science export) get their Scopus
       // status and quartile. So the earlier import is reported, not refused.
       const previouslyApplied = await journalCatalogModel.findAppliedBatch(source.key, sha256);
-      const { rows, summary } = planImport({ source, records, journals, excluded });
+      const { rows, summary } = await planFile({ source, records, journals, excluded });
 
       const batchId = await journalCatalogModel.createPreviewBatch({
         sourceKey: source.key,
@@ -163,7 +191,8 @@ const journalCatalogController = {
     try {
       const batchId = positiveId(req.params.id);
       if (!batchId) return res.status(404).json({ success: false, message: 'Import not found.' });
-      const result = await journalCatalogModel.applyBatch(batchId, req.user.id);
+      const model = await modelForBatch(batchId);
+      const result = await model.applyBatch(batchId, req.user.id);
       return res.json({
         success: true,
         message: 'Import applied.',
@@ -207,8 +236,10 @@ const journalCatalogController = {
         return res.status(400).json({ success: false, message: 'Select between 1 and 500 rows.' });
       }
 
+      const model = await modelForBatch(batchId);
       const overrides = {};
-      if (action === 'accept') {
+      // A paper is accepted as planned; corrections apply to journal-list rows only.
+      if (action === 'accept' && model === journalCatalogModel) {
         for (const [rowId, raw] of Object.entries(req.body.overrides ?? {})) {
           const id = positiveId(rowId);
           if (!id || !rowIds.includes(id)) continue;
@@ -216,7 +247,7 @@ const journalCatalogController = {
         }
       }
 
-      const result = await journalCatalogModel.resolveExceptions(
+      const result = await model.resolveExceptions(
         batchId,
         { rowIds, action, overrides },
         req.user.id,
@@ -224,6 +255,32 @@ const journalCatalogController = {
       return res.json({ success: true, data: result });
     } catch (error) {
       return respondWithError(res, error, 'Failed to resolve the exceptions');
+    }
+  },
+
+  /** Scopus IDs added beyond each staff record's own — from sheets and staff claims. */
+  async listScopusIds(req, res) {
+    try {
+      const search = String(req.query.search ?? '')
+        .trim()
+        .slice(0, 100);
+      const { page, perPage } = pagination(req.query, 25);
+      const result = await scopusClaimModel.listClaims({ search, page, perPage });
+      return res.json({ success: true, data: { ...result, page, perPage } });
+    } catch (error) {
+      return respondWithError(res, error, 'Failed to load the Scopus IDs');
+    }
+  },
+
+  async removeScopusId(req, res) {
+    try {
+      const claimId = positiveId(req.params.id);
+      if (!claimId)
+        return res.status(404).json({ success: false, message: 'Scopus ID not found.' });
+      const result = await scopusClaimModel.removeClaim(claimId);
+      return res.json({ success: true, message: 'Scopus ID removed.', data: result });
+    } catch (error) {
+      return respondWithError(res, error, 'Failed to remove the Scopus ID');
     }
   },
 

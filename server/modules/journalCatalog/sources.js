@@ -1,5 +1,11 @@
 import { parseIssn, parseIssnList } from './issn.js';
-import { cleanText, isKsrctAffiliation, parseDecimal, parseTypedMetric } from './values.js';
+import {
+  cleanText,
+  isBlank,
+  isKsrctAffiliation,
+  parseDecimal,
+  parseTypedMetric,
+} from './values.js';
 
 /**
  * One profile per file the college supplies. A profile names the columns it needs (by
@@ -28,6 +34,10 @@ export const EXCLUSION_REASONS = {
   not_ksrct: 'No KSRCT author affiliation',
   not_in_list: 'Not a KSRCT journal — skipped, not stored',
   not_journal_source: 'Not a journal (book series, conference proceedings, trade journal)',
+  retracted: 'Retracted paper',
+  erratum: 'Erratum (a correction notice, not a paper)',
+  type_not_on_form: 'A document type the publication form has no option for (Letter, Data paper)',
+  no_scopus_id: 'No Scopus Author ID given',
 };
 
 const readIssns = (cells) => {
@@ -352,11 +362,208 @@ const scimago = {
   },
 };
 
+/**
+ * Scopus document types as the publication form names them. Retracted papers and errata are
+ * left out by the college's decision; Letter and Data paper have no type on the form, so
+ * importing them would need a type the paper is not.
+ */
+const SCOPUS_PAPER_TYPES = {
+  article: 'Article',
+  review: 'Review',
+  editorial: 'Editorial',
+  note: 'Note',
+  'conference paper': 'Conference paper',
+  'book chapter': 'Book Chapter',
+  book: 'Book',
+};
+const SCOPUS_SKIPPED_TYPES = { retracted: 'retracted', erratum: 'erratum' };
+
+const splitList = (value) =>
+  String(value ?? '')
+    .split(';')
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+/**
+ * Scopus gives three parallel lists per paper — full names with author ids, ids alone, and
+ * name-plus-affiliation — joined by "; ". They line up by position; when the counts differ the
+ * positions cannot be trusted, so no author is taken as KSRCT's and the paper is reviewed.
+ */
+const readScopusAuthors = (values) => {
+  const fullNames = splitList(values.fullNames);
+  const ids = splitList(values.authorIds);
+  const withAffiliations = splitList(values.withAffiliations);
+  const aligned = fullNames.length === ids.length && ids.length === withAffiliations.length;
+
+  const authors = ids.map((id, index) => {
+    const name = (fullNames[index] ?? '').replace(/\s*\(\d+\)\s*$/, '').trim();
+    return {
+      position: index + 1,
+      scopusAuthorId: /^\d{5,15}$/.test(id) ? id : null,
+      name: name || id,
+      ksrct: aligned && isKsrctAffiliation(withAffiliations[index]),
+      affiliation: aligned ? (withAffiliations[index] ?? '') : '',
+    };
+  });
+
+  return {
+    authors,
+    issue: aligned
+      ? null
+      : `Scopus lists ${ids.length} author ids but ${withAffiliations.length} affiliations, so KSRCT's authors cannot be told apart`,
+  };
+};
+
+const pageNumber = (value) => {
+  const text = cleanText(value);
+  return /^\d{1,9}$/.test(text) ? Number(text) : null;
+};
+
+const scopusPapers = {
+  key: 'scopus_papers',
+  label: 'KSRCT Scopus export — papers',
+  description:
+    'The same Scopus CSV export, read for KSRCT\'s papers. Each paper is added as an approved publication and credited to the staff whose Scopus Author ID is on file; papers with none are kept unassigned until an ID is added. Import the file as "KSRCT Scopus export" on the journal list first, so every journal is there.',
+  kind: 'papers',
+  fileTypes: ['.csv'],
+  delimiter: ',',
+  metricYear: null,
+  columns: {
+    fullNames: column('Author full names', { required: true }),
+    authorIds: column('Author(s) ID', { required: true }),
+    withAffiliations: column('Authors with affiliations', { required: true }),
+    title: column('Title', { required: true }),
+    year: column('Year', { required: true }),
+    sourceTitle: column('Source title', { required: true }),
+    volume: column('Volume'),
+    issue: column('Issue'),
+    articleNumber: column('Art. No.'),
+    pageStart: column('Page start'),
+    pageEnd: column('Page end'),
+    doi: column('DOI'),
+    abstract: column('Abstract'),
+    keywords: column('Author Keywords'),
+    publisher: column('Publisher'),
+    conferenceName: column('Conference name'),
+    conferenceDate: column('Conference date'),
+    conferenceLocation: column('Conference location'),
+    issn: column('ISSN', { required: true }),
+    isbn: column('ISBN'),
+    pubmedId: column('PubMed ID'),
+    documentType: column('Document Type', { required: true }),
+    openAccess: column('Open Access'),
+    eid: column('EID', { required: true }),
+  },
+  toRecord(values) {
+    const title = cleanText(values.title);
+    if (!title) return excluded('blank');
+
+    const scopusType = cleanText(values.documentType).toLowerCase();
+    if (SCOPUS_SKIPPED_TYPES[scopusType]) return excluded(SCOPUS_SKIPPED_TYPES[scopusType]);
+    const type = SCOPUS_PAPER_TYPES[scopusType];
+    if (!type) return excluded('type_not_on_form');
+
+    const { authors, issue: authorIssue } = readScopusAuthors(values);
+    // Rows whose author lists do not line up are kept for review rather than read as non-KSRCT.
+    if (!authorIssue && !authors.some((author) => author.ksrct)) return excluded('not_ksrct');
+
+    const issues = authorIssue ? [authorIssue] : [];
+    const notes = [];
+    // The publication form stores the EID without Scopus's "2-s2.0-" prefix.
+    const eid = cleanText(values.eid).match(/^2-s2\.0-(\d+)$/);
+    if (!eid) issues.push(`"${cleanText(values.eid)}" is not a Scopus EID`);
+
+    const pageStart = cleanText(values.pageStart);
+    const pageEnd = cleanText(values.pageEnd);
+    const pagesFrom = pageNumber(pageStart);
+    const pagesTo = pageNumber(pageEnd);
+    if ((pageStart && pagesFrom === null) || (pageEnd && pagesTo === null)) {
+      notes.push(`Pages "${[pageStart, pageEnd].filter(Boolean).join('–')}" are not plain numbers`);
+    }
+
+    const year = Number.parseInt(cleanText(values.year), 10);
+    const isbn = cleanText(values.isbn).split(';')[0]?.trim() ?? '';
+
+    return {
+      scopusId: eid ? eid[1] : null,
+      type,
+      title,
+      year: Number.isInteger(year) ? year : null,
+      sourceTitle: cleanText(values.sourceTitle),
+      publisher: cleanText(values.publisher),
+      ...readIssns([[values.issn, 'unknown']]),
+      isbn,
+      conference: {
+        name: cleanText(values.conferenceName),
+        dates: cleanText(values.conferenceDate),
+        city: cleanText(values.conferenceLocation),
+      },
+      volume: cleanText(values.volume),
+      issue: cleanText(values.issue),
+      articleNumber: cleanText(values.articleNumber),
+      pagesFrom,
+      pagesTo,
+      doi: cleanText(values.doi),
+      abstract: cleanText(values.abstract),
+      keywords: splitList(values.keywords).join('; '),
+      openAccess: cleanText(values.openAccess) ? 'Yes' : 'No',
+      pubmedId: cleanText(values.pubmedId),
+      authors,
+      issues,
+      notes,
+    };
+  },
+};
+
+/** A Scopus Author ID as people paste it: the number, or a Scopus profile link that carries it. */
+const readScopusAuthorIds = (value) => {
+  const ids = [];
+  const invalid = [];
+  for (const part of String(value ?? '').split(/[;,\s]+/)) {
+    const text = part.trim();
+    if (!text || isBlank(text)) continue;
+    const id = text.match(/authorId=(\d+)/i)?.[1] ?? text;
+    if (/^\d{5,15}$/.test(id)) {
+      if (!ids.includes(id)) ids.push(id);
+    } else {
+      invalid.push(text);
+    }
+  }
+  return { ids, invalid };
+};
+
+const staffScopusIds = {
+  key: 'staff_scopus_ids',
+  label: 'Staff Scopus Author IDs',
+  description:
+    'A sheet with an "ERP ID" and a "Scopus Author ID" column, one staff member per row. Several IDs can go in one cell, separated by ";" — Scopus often splits one person over two profiles. Each ID is added to the staff member, and the imported papers it appears on as a KSRCT author are credited to them straight away.',
+  kind: 'staff',
+  fileTypes: ['.csv', '.xlsx'],
+  delimiter: ',',
+  metricYear: null,
+  columns: {
+    erpId: column('ERP ID', { required: true }),
+    scopusIds: column('Scopus Author ID', { required: true }),
+  },
+  toRecord(values) {
+    const erpId = cleanText(values.erpId);
+    const { ids, invalid } = readScopusAuthorIds(values.scopusIds);
+    if (!erpId && ids.length === 0 && invalid.length === 0) return excluded('blank');
+    if (ids.length === 0 && invalid.length === 0) return excluded('no_scopus_id');
+    return { erpId, scopusIds: ids, invalidIds: invalid };
+  },
+};
+
 export const SOURCES = Object.fromEntries(
-  [ksrctMaster, scopusExport, wosExport, scopusSourceList, scimago].map((source) => [
-    source.key,
-    source,
-  ]),
+  [
+    ksrctMaster,
+    scopusExport,
+    wosExport,
+    scopusSourceList,
+    scimago,
+    scopusPapers,
+    staffScopusIds,
+  ].map((source) => [source.key, source]),
 );
 
 export const getSource = (key) => SOURCES[key] ?? null;

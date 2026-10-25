@@ -165,3 +165,38 @@ const KSRCT_AFFILIATIONS = [
 
 export const isKsrctAffiliation = (text) =>
   KSRCT_AFFILIATIONS.some((pattern) => pattern.test(String(text ?? '')));
+
+const NAME_TITLES = new Set(['dr', 'mr', 'mrs', 'ms', 'miss', 'prof', 'er']);
+
+const nameTokens = (text) =>
+  String(text ?? '')
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z\s.,'-]/g, ' ')
+    .split(/[\s.,'-]+/)
+    .filter((token) => token && !NAME_TITLES.has(token));
+
+/**
+ * Whether a Scopus author name ("Senthilkumar, M.") could be a staff member's ("Muthusamy
+ * Senthilkumar"), allowing for either side writing a given name as an initial. Every part of
+ * each name has to be accounted for by the other, and at least one full word has to agree, so
+ * "Raja, K." suggests "K Raja" and "Raja Kumar" but not "K Rajan". It only proposes: the staff
+ * member confirms.
+ */
+export const scopusNameMatches = (staffName, scopusName) => {
+  const staff = nameTokens(staffName);
+  const scopus = nameTokens(scopusName);
+  if (staff.length === 0 || scopus.length === 0) return false;
+
+  const accountedFor = (token, others) =>
+    token.length > 1
+      ? others.includes(token) || others.includes(token[0])
+      : others.some((other) => other[0] === token);
+
+  const sharedWord = staff.some((token) => token.length > 1 && scopus.includes(token));
+  return (
+    sharedWord &&
+    staff.every((token) => accountedFor(token, scopus)) &&
+    scopus.every((token) => accountedFor(token, staff))
+  );
+};
