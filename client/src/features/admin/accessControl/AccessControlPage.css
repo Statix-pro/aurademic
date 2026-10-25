@@ -68,6 +68,13 @@
   color: #b06000;
 }
 
+/* The role filter is as wide as its longest option, not the toolbar's 220px select width —
+   the options are short ("HOD (25)"), and the spare width only pushed the search box over. */
+.ac-screen .admin-toolbar__filters .ac-role-filter {
+  flex: 0 0 auto;
+  width: auto;
+}
+
 /* ----------------------------------------------------------------- pager */
 
 .ac-pager {
@@ -359,18 +366,15 @@
 /* On a phone the description goes under the name, and may wrap, rather than being cut to a
    sliver beside it. */
 @media (width <= 768px) {
-  /* Search box and its button on one line, the box taking the room. */
-  .ac-screen .admin-toolbar__filters {
-    flex-wrap: nowrap;
-  }
-
-  .ac-screen .admin-toolbar__filters .form-control {
-    flex: 1 1 auto;
+  /* The role filter and the search box each take a full line. */
+  .ac-screen .admin-toolbar__filters .ac-role-filter {
+    flex: 1 1 100%;
     max-width: none;
   }
 
-  .ac-screen .admin-toolbar__filters .custom-btn {
-    min-width: 0;
+  .ac-screen .admin-toolbar__filters .form-control {
+    flex: 1 1 100%;
+    max-width: none;
   }
 
   /* Each row becomes a small card, so the row's action stays on screen instead of sitting at

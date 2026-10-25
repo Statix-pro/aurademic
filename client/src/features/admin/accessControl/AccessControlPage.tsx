@@ -1,5 +1,5 @@
 import { Check, ChevronLeft, ChevronRight, Eye, Plus, RefreshCw, Trash2, X } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Form, Spinner, Table } from 'react-bootstrap';
 
 import { useAuth } from '../../../contexts/AuthContext';
@@ -90,6 +90,13 @@ type TabKey = 'users' | 'roles';
 const NON_GLOBAL_ROLE_CODES = ['user', 'hod', 'coordinator'];
 
 const ROWS_PER_PAGE_OPTIONS = [10, 20, 50];
+
+// How long typing must pause before the users list is searched.
+const SEARCH_DEBOUNCE_MS = 300;
+
+// Role filter value for people who hold nothing beyond the base role. Not a role_code, so it
+// cannot collide with one.
+const NO_ROLES_FILTER = '__none__';
 
 const getPermissionGroupKey = (permission: { permission_key: string; module_key: string }) => {
   if (permission.permission_key?.startsWith('budget.')) {
@@ -212,6 +219,7 @@ const AccessControlPage: React.FC = () => {
   const [syncRolesLoading, setSyncRolesLoading] = useState(false);
 
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
@@ -306,6 +314,22 @@ const AccessControlPage: React.FC = () => {
     [roles],
   );
 
+  const applyUsers = (fetchedUsers: AccessUser[]) => {
+    const initialUserRoleDrafts: Record<number, string[]> = {};
+    const initialUserEntityRoleDrafts: Record<number, EntityRole[]> = {};
+
+    fetchedUsers.forEach((accessUser) => {
+      initialUserRoleDrafts[accessUser.id] = accessUser.roles.map(
+        (assignedRole) => assignedRole.role_code,
+      );
+      initialUserEntityRoleDrafts[accessUser.id] = accessUser.entity_roles || [];
+    });
+
+    setUsers(fetchedUsers);
+    setUserRoleDrafts(initialUserRoleDrafts);
+    setUserEntityRoleDrafts(initialUserEntityRoleDrafts);
+  };
+
   const fetchAccessControlData = async (
     searchValue = '',
     options: { showPageLoader?: boolean } = {},
@@ -340,7 +364,7 @@ const AccessControlPage: React.FC = () => {
 
       setPermissions(fetchedPermissions);
       setRoles(fetchedRoles);
-      setUsers(fetchedUsers);
+      applyUsers(fetchedUsers);
 
       const rawOrgUnits =
         (orgUnitsResponse as any)?.data?.data?.all || (orgUnitsResponse as any)?.data?.all || [];
@@ -351,18 +375,6 @@ const AccessControlPage: React.FC = () => {
         entity_type: e.type_code,
       }));
       setMasterEntities(combinedEntities);
-
-      const initialUserRoleDrafts: Record<number, string[]> = {};
-      const initialUserEntityRoleDrafts: Record<number, EntityRole[]> = {};
-
-      fetchedUsers.forEach((accessUser) => {
-        initialUserRoleDrafts[accessUser.id] = accessUser.roles.map(
-          (assignedRole) => assignedRole.role_code,
-        );
-        initialUserEntityRoleDrafts[accessUser.id] = accessUser.entity_roles || [];
-      });
-      setUserRoleDrafts(initialUserRoleDrafts);
-      setUserEntityRoleDrafts(initialUserEntityRoleDrafts);
 
       const initialRolePermissionDrafts: Record<number, string[]> = {};
       const initialRoleMetaDrafts: Record<number, RoleMetaDraft> = {};
@@ -392,6 +404,40 @@ const AccessControlPage: React.FC = () => {
   useEffect(() => {
     void fetchAccessControlData('', { showPageLoader: true });
   }, []);
+
+  // Search as you type. Only the users list is refetched — roles, permissions and org units do
+  // not change with the query — and only once typing pauses. Each request is numbered so a slow
+  // answer to an older query cannot replace the list for a newer one.
+  const searchRequestRef = useRef(0);
+  const lastSearchRef = useRef('');
+
+  useEffect(() => {
+    const query = search.trim();
+    if (query === lastSearchRef.current) return undefined;
+
+    const timer = window.setTimeout(async () => {
+      lastSearchRef.current = query;
+      const requestId = ++searchRequestRef.current;
+      // A failed search's message would otherwise stay up over the next search's results.
+      setError('');
+
+      try {
+        const response = (await authenticityUtility.get('/access-control/users', {
+          params: { search: query },
+        })) as ApiCollectionResponse<AccessUser>;
+
+        if (requestId !== searchRequestRef.current) return;
+        applyUsers(Array.isArray(response.data) ? response.data : []);
+        setCurrentPage(1);
+      } catch (err: unknown) {
+        if (requestId !== searchRequestRef.current) return;
+        console.error('Failed to search users', err);
+        setError(getErrorMessage(err, 'Failed to search users'));
+      }
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   // A confirmation has done its job once read; left up, it pushed the tabs down indefinitely.
   useEffect(() => {
@@ -741,13 +787,54 @@ const AccessControlPage: React.FC = () => {
     }
   };
 
-  const runUserSearch = async (searchValue = search) => {
-    setCurrentPage(1);
-    await fetchAccessControlData(searchValue);
-  };
+  // Every role a user holds, globally or for a department/club. The base `user` role is everyone's,
+  // so it says nothing and is left out.
+  const heldRoleCodes = (accessUser: AccessUser): string[] =>
+    [
+      ...accessUser.roles.map((r) => r.role_code),
+      ...(accessUser.entity_roles || []).map((r) => r.role_code),
+    ].filter((code) => String(code || '').toLowerCase() !== 'user');
 
-  const totalPages = Math.max(1, Math.ceil(users.length / rowsPerPage));
-  const pageUsers = users.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+  const roleFilterOptions = useMemo(() => {
+    const holders: Record<string, number> = {};
+    let withoutRoles = 0;
+
+    users.forEach((accessUser) => {
+      const codes = new Set(heldRoleCodes(accessUser));
+      if (codes.size === 0) withoutRoles += 1;
+      codes.forEach((code) => {
+        holders[code] = (holders[code] || 0) + 1;
+      });
+    });
+
+    return {
+      roles: roles
+        .filter((role) => role.role_code !== 'user')
+        .map((role) => ({
+          value: role.role_code,
+          label: role.role_code === 'hod' ? 'HOD' : role.role_name,
+          count: holders[role.role_code] || 0,
+        })),
+      withoutRoles,
+    };
+  }, [users, roles]);
+
+  const filteredUsers = !roleFilter
+    ? users
+    : users.filter((accessUser) => {
+        const codes = heldRoleCodes(accessUser);
+        return roleFilter === NO_ROLES_FILTER ? codes.length === 0 : codes.includes(roleFilter);
+      });
+
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / rowsPerPage));
+
+  // Saving a user can take them out of the role filter, leaving fewer pages than the one shown —
+  // an empty page, and with 10 or fewer left no pager to leave it by.
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
+
+  const pageUsers = filteredUsers.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
 
   // A failure while a dialog is open is shown inside it, where the person is looking.
   const dialogOpen = editingUserId !== null || viewingRoleId !== null || showCreateRole;
@@ -793,32 +880,30 @@ const AccessControlPage: React.FC = () => {
     <>
       <div className="admin-toolbar">
         <div className="admin-toolbar__filters">
+          <Form.Select
+            className="ac-role-filter"
+            aria-label="Show users with a role"
+            value={roleFilter}
+            onChange={(event) => {
+              setRoleFilter(event.target.value);
+              setCurrentPage(1);
+            }}
+          >
+            <option value="">All roles</option>
+            {roleFilterOptions.roles.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label} ({option.count})
+              </option>
+            ))}
+            <option value={NO_ROLES_FILTER}>No roles ({roleFilterOptions.withoutRoles})</option>
+          </Form.Select>
           <Form.Control
             type="search"
             placeholder="Search by name or email"
             aria-label="Search users by name or email"
             value={search}
-            onChange={(event) => {
-              const nextValue = event.target.value;
-              setSearch(nextValue);
-              // Emptying the box (or its clear button) goes back to everyone, without a second
-              // press of Search.
-              if (!nextValue && search) void runUserSearch('');
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault();
-                void runUserSearch();
-              }
-            }}
+            onChange={(event) => setSearch(event.target.value)}
           />
-          <CustomButton
-            variant="light"
-            className="admin-btn-secondary"
-            onClick={() => void runUserSearch()}
-          >
-            Search
-          </CustomButton>
         </div>
       </div>
 
@@ -861,10 +946,12 @@ const AccessControlPage: React.FC = () => {
                 </td>
               </tr>
             ))}
-            {users.length === 0 && (
+            {filteredUsers.length === 0 && (
               <tr>
                 <td colSpan={3} className="admin-empty">
-                  No users found for this search.
+                  {users.length > 0 && roleFilter
+                    ? 'Nobody here holds this role.'
+                    : 'No users found for this search.'}
                 </td>
               </tr>
             )}
@@ -872,7 +959,7 @@ const AccessControlPage: React.FC = () => {
         </Table>
       </div>
 
-      {users.length > ROWS_PER_PAGE_OPTIONS[0] && (
+      {filteredUsers.length > ROWS_PER_PAGE_OPTIONS[0] && (
         <div className="ac-pager">
           <label className="ac-pager__rows">
             Rows per page
@@ -893,7 +980,7 @@ const AccessControlPage: React.FC = () => {
           </label>
           <span className="ac-secondary">
             {(currentPage - 1) * rowsPerPage + 1}–
-            {Math.min(currentPage * rowsPerPage, users.length)} of {users.length}
+            {Math.min(currentPage * rowsPerPage, filteredUsers.length)} of {filteredUsers.length}
           </span>
           <div className="ac-pager__nav">
             <AdminIconButton
