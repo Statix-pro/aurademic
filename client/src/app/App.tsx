@@ -9,6 +9,7 @@ import AdminBudget from '../features/admin/budget/budget-approval/adminbudget';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
+import JournalImport from '../features/admin/journalCatalog/JournalImport';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
 import OrganizationApprovalPage from '../features/admin/organizationApproval/OrganizationApprovalPage';
 import PublicationReview from '../features/admin/PublicationReview';
@@ -413,6 +414,14 @@ function App() {
                         element={
                           <SuperAdminRoute>
                             <BudgetCatalogPage />
+                          </SuperAdminRoute>
+                        }
+                      />
+                      <Route
+                        path="/admin/journal-import"
+                        element={
+                          <SuperAdminRoute>
+                            <JournalImport />
                           </SuperAdminRoute>
                         }
                       />
