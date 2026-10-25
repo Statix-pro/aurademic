@@ -415,6 +415,23 @@ describe('journalCatalogModel.resolveExceptions', () => {
   });
 });
 
+describe('resolving exceptions over the API', () => {
+  it('answers a malformed request with 400, not a server error', async () => {
+    accessControlModel.getUserAuthorizationSnapshot.mockResolvedValue(superAdmin());
+    db.query.mockResolvedValue([[{ source_key: 'ksrct_master' }]]);
+    const send = (body) =>
+      auth(request(app).post('/api/journal-catalog/imports/5/exceptions/resolve')).send(body);
+
+    const notAList = await send({ action: 'accept', rowIds: '12' });
+    const notFields = await send({ action: 'accept', rowIds: [12], overrides: { 12: null } });
+
+    expect(notAList.status).toBe(400);
+    expect(notFields.status).toBe(400);
+    expect(notFields.body).toMatchObject({ success: false });
+    expect(db.getConnection).not.toHaveBeenCalled();
+  });
+});
+
 describe('publication form pickers', () => {
   // These searches were public: anyone who could reach the API read the journal list's
   // metrics and the staff directory. Both forms call them signed in.

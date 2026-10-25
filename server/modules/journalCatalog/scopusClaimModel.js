@@ -213,11 +213,19 @@ const scopusClaimModel = {
         );
       }
 
-      await connection.query(
-        `INSERT INTO employee_scopus_ids (employee_id, scopus_author_id, source, created_by)
-         VALUES (?, ?, 'self_claim', ?)`,
-        [staff.id, scopusAuthorId, userId],
-      );
+      try {
+        await connection.query(
+          `INSERT INTO employee_scopus_ids (employee_id, scopus_author_id, source, created_by)
+           VALUES (?, ?, 'self_claim', ?)`,
+          [staff.id, scopusAuthorId, userId],
+        );
+      } catch (error) {
+        // Two staff confirming the same profile at once: the unique key settles it.
+        if (error.code === 'ER_DUP_ENTRY') {
+          throw httpError(409, 'Someone has just claimed this Scopus profile.');
+        }
+        throw error;
+      }
       if (!String(staff.scopus_id ?? '').trim()) {
         await connection.query('UPDATE master_employees SET scopus_id = ? WHERE id = ?', [
           String(scopusAuthorId),

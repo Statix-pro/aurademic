@@ -11,8 +11,9 @@
 --
 -- This migration only adds. No existing row is changed or deleted:
 --
---   * `journals.import_batch_id` records which import created or filled a
---     publication.
+--   * `journals.import_batch_id` records which import created a publication.
+--     A publication the import only filled in keeps NULL: removing a Scopus ID
+--     changes the author list only of papers an import created.
 --   * `journal_scopus_authors` keeps Scopus's author list for every imported
 --     paper: position, Scopus Author ID, name and whether the author gave a
 --     KSRCT affiliation. A paper whose KSRCT author has no Scopus ID on file
@@ -46,14 +47,14 @@
 SET @db_name = DATABASE();
 
 -- ------------------------------------------------------------------
--- 1. Which import created or filled a publication
+-- 1. Which import created a publication
 -- ------------------------------------------------------------------
 
 SET @has_col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
                  WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'journals'
                    AND COLUMN_NAME = 'import_batch_id');
 SET @sql = IF(@has_col = 0,
-  'ALTER TABLE journals ADD COLUMN import_batch_id INT NULL COMMENT ''Journal Import batch that created or filled this publication; NULL = entered on the form'' AFTER created_by',
+  'ALTER TABLE journals ADD COLUMN import_batch_id INT NULL COMMENT ''Journal Import batch that created this publication; NULL = entered on the form'' AFTER created_by',
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
@@ -94,6 +95,7 @@ CREATE TABLE IF NOT EXISTS `journal_scopus_authors` (
   `author_name` varchar(255) NOT NULL COMMENT 'As Scopus gives it: Surname, Given names',
   `is_ksrct` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'The author gave a KSRCT affiliation on this paper',
   `employee_id` int DEFAULT NULL COMMENT 'Staff member credited, matched by Scopus Author ID',
+  `linked_by_import` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 = the import or a Scopus ID claim added the staff member to the paper; 0 = they were already on it, so removing the ID leaves them',
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_journal_scopus_authors_position` (`journal_id`, `author_position`),
@@ -104,6 +106,16 @@ CREATE TABLE IF NOT EXISTS `journal_scopus_authors` (
   CONSTRAINT `fk_journal_scopus_authors_employee` FOREIGN KEY (`employee_id`) REFERENCES `master_employees` (`id`)
     ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- A dev database that ran an earlier draft of this file has the table without
+-- `linked_by_import`.
+SET @has_col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = @db_name AND TABLE_NAME = 'journal_scopus_authors'
+                   AND COLUMN_NAME = 'linked_by_import');
+SET @sql = IF(@has_col = 0,
+  'ALTER TABLE journal_scopus_authors ADD COLUMN linked_by_import TINYINT(1) NOT NULL DEFAULT 0 AFTER employee_id',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
 -- ------------------------------------------------------------------
 -- 3. Further Scopus Author IDs per staff member

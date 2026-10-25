@@ -372,7 +372,7 @@ describe('applying papers', () => {
     db.getConnection.mockReset();
   });
 
-  const applyOne = async (payload, { employees = [STAFF] } = {}) => {
+  const applyOne = async (payload, { employees = [STAFF], publications = [] } = {}) => {
     const writes = [];
     const connection = makeConnection((sql, params) => {
       if (sql.startsWith('SELECT id, status FROM journal_import_batches')) {
@@ -381,7 +381,8 @@ describe('applying papers', () => {
       if (sql.startsWith('SELECT id, journal_name')) return [[JOURNAL]];
       if (sql.startsWith('SELECT journal_option_id, metric')) return [[]];
       if (sql.startsWith('SELECT e.id, TRIM(e.scopus_id)')) return [employees];
-      if (sql.startsWith('SELECT id, TRIM(scopus_id)')) return [[]];
+      if (sql.startsWith('SELECT id, TRIM(scopus_id)')) return [publications];
+      if (sql.startsWith('SELECT 1 FROM author_journal')) return [[]];
       if (sql.startsWith('SELECT e.id, x.scopus_author_id')) return [[]];
       if (sql.startsWith('SELECT id FROM authors WHERE employee_id')) return [[]];
       if (sql.startsWith('SELECT id, outcome, payload FROM journal_import_rows')) {
@@ -448,7 +449,29 @@ describe('applying papers', () => {
     const scopusAuthors = writes.find((write) =>
       write.sql.startsWith('INSERT INTO journal_scopus_authors'),
     );
-    expect(scopusAuthors.params[0][0]).toEqual([500, 1, '57225844882', 'Raja, K.', 1, null]);
+    expect(scopusAuthors.params[0][0]).toEqual([500, 1, '57225844882', 'Raja, K.', 1, null, 0]);
+  });
+
+  it('records that the import made the staff link, so removing the ID can take it back', async () => {
+    const { rows } = await plan([paperRow()]);
+    const { writes } = await applyOne(rows[0].payload);
+    const scopusAuthors = writes.find((write) =>
+      write.sql.startsWith('INSERT INTO journal_scopus_authors'),
+    );
+    expect(scopusAuthors.params[0][0]).toEqual([500, 1, '57225844882', 'Raja, K.', 1, 7, 1]);
+  });
+
+  it('does not add a paper filed on the form with the same DOI since the preview', async () => {
+    const { rows } = await plan([paperRow()]);
+    const { result, writes } = await applyOne(rows[0].payload, {
+      publications: [{ id: 610, scopus_id: null, doi: 'https://doi.org/10.1080/15440478.2025.1' }],
+    });
+    expect(result).toMatchObject({ added: 0, notApplied: 1 });
+    expect(writes.some((write) => write.sql.startsWith('INSERT INTO journals'))).toBe(false);
+    const flagged = writes.find((write) =>
+      write.sql.startsWith('UPDATE journal_import_rows SET outcome'),
+    );
+    expect(flagged.params[0]).toMatch(/now in the portal as publication #610/);
   });
 
   it('credits a Scopus ID filled in between preview and apply', async () => {

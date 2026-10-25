@@ -1,6 +1,6 @@
 import { storedIssn } from './issn.js';
 import { createLiveIndex, loadJournalSnapshot } from './journalCatalogModel.js';
-import { FIELD_LIMITS } from './paperPlanner.js';
+import { FIELD_LIMITS, normalizeDoi } from './paperPlanner.js';
 import {
   ensureStaffAuthor,
   KSRCT_ORGANIZATION,
@@ -31,6 +31,16 @@ const FILL_COLUMNS = [
   'open_access',
   'pubmed_pmid',
 ];
+
+/**
+ * The fill columns as a preview reads them: the planner only asks whether abstract and keywords
+ * are empty, so those come back as a flag instead of every publication's full text.
+ */
+const PREVIEW_FILL_COLUMNS = FILL_COLUMNS.map((column) =>
+  ['abstract', 'keywords'].includes(column)
+    ? `IF(COALESCE(${column}, '') = '', NULL, 1) AS ${column}`
+    : column,
+).join(', ');
 
 const isEmpty = (value) => value === null || value === undefined || String(value).trim() === '';
 
@@ -63,13 +73,21 @@ const loadLiveState = async (connection) => {
   const journals = createLiveIndex(await loadJournalSnapshot(connection, { lock: true }));
   const { byScopusId: employees } = await loadStaffScopusIds(connection);
   const [publications] = await connection.query(
-    `SELECT id, TRIM(scopus_id) AS scopus_id FROM journals
-      WHERE scopus_id IS NOT NULL AND TRIM(scopus_id) <> ''`,
+    `SELECT id, TRIM(scopus_id) AS scopus_id, doi FROM journals
+      WHERE (scopus_id IS NOT NULL AND TRIM(scopus_id) <> '') OR (doi IS NOT NULL AND doi <> '')`,
   );
+  const publicationsByScopusId = new Map();
+  const publicationsByDoi = new Map();
+  for (const row of publications) {
+    if (row.scopus_id) publicationsByScopusId.set(row.scopus_id, row.id);
+    const doi = normalizeDoi(row.doi);
+    if (doi && !publicationsByDoi.has(doi)) publicationsByDoi.set(doi, row.id);
+  }
   return {
     journals,
     employees,
-    publicationsByScopusId: new Map(publications.map((row) => [row.scopus_id, row.id])),
+    publicationsByScopusId,
+    publicationsByDoi,
     authorIdByEmployee: new Map(),
   };
 };
@@ -97,40 +115,61 @@ const resolveJournalOption = async (connection, live, journal) => {
   return { id: option.id, category: option.category };
 };
 
-/** Credits the staff a paper's Scopus Author IDs point at, once each. */
+/**
+ * Credits the staff a paper's Scopus Author IDs point at, once each. Returns, per staff member,
+ * whether this import made the link (rather than finding one the form already had), which is
+ * what removing their Scopus ID later may take back.
+ */
 const creditStaff = async (connection, live, publicationId, authors) => {
-  const credited = new Map();
+  const linked = new Map();
   for (const author of authors) {
     if (!author.ksrct || !author.scopusAuthorId) continue;
     const employee = live.employees.get(author.scopusAuthorId);
-    if (!employee || credited.has(employee.id)) continue;
+    if (!employee || linked.has(employee.id)) continue;
 
     const authorId = await ensureStaffAuthor(connection, employee.id, live.authorIdByEmployee);
-    await linkStaffAuthor(connection, authorId, publicationId, author.position);
-    credited.set(employee.id, author.position);
+    linked.set(
+      employee.id,
+      await linkStaffAuthor(connection, {
+        authorId,
+        employeeId: employee.id,
+        journalId: publicationId,
+        firstAuthor: author.position === 1,
+      }),
+    );
   }
-  return credited;
+  return linked;
 };
 
-const saveScopusAuthors = async (connection, publicationId, authors, live) => {
+const saveScopusAuthors = async (connection, publicationId, authors, live, linked) => {
   if (authors.length === 0) return;
+  // `linked_by_import` is assigned before `employee_id`: MySQL applies these left to right, so
+  // the condition still sees whether the position was credited before this import.
   await connection.query(
     `INSERT INTO journal_scopus_authors
-       (journal_id, author_position, scopus_author_id, author_name, is_ksrct, employee_id)
+       (journal_id, author_position, scopus_author_id, author_name, is_ksrct, employee_id,
+        linked_by_import)
      VALUES ?
      ON DUPLICATE KEY UPDATE
+       linked_by_import = IF(journal_scopus_authors.employee_id IS NULL,
+                             VALUES(linked_by_import), journal_scopus_authors.linked_by_import),
        employee_id = COALESCE(journal_scopus_authors.employee_id, VALUES(employee_id))`,
     [
-      authors.map((author) => [
-        publicationId,
-        author.position,
-        author.scopusAuthorId,
-        truncate(author.name, 255),
-        author.ksrct ? 1 : 0,
-        author.ksrct && author.scopusAuthorId
-          ? (live.employees.get(author.scopusAuthorId)?.id ?? null)
-          : null,
-      ]),
+      authors.map((author) => {
+        const employeeId =
+          author.ksrct && author.scopusAuthorId
+            ? (live.employees.get(author.scopusAuthorId)?.id ?? null)
+            : null;
+        return [
+          publicationId,
+          author.position,
+          author.scopusAuthorId,
+          truncate(author.name, 255),
+          author.ksrct ? 1 : 0,
+          employeeId,
+          employeeId && linked.get(employeeId) ? 1 : 0,
+        ];
+      }),
     ],
   );
 };
@@ -151,10 +190,14 @@ const addIndexes = async (connection, publicationId, payload) => {
 
 const addPaper = async (connection, live, payload, batchId, userId) => {
   const { publication } = payload;
-  if (publication.scopus_id && live.publicationsByScopusId.has(publication.scopus_id)) {
-    return {
-      skipped: `It is now in the portal as publication #${live.publicationsByScopusId.get(publication.scopus_id)}`,
-    };
+  // Someone may have filed the paper on the form since the preview, usually with its DOI and no
+  // Scopus EID, so both are checked again.
+  const doi = normalizeDoi(publication.doi);
+  const existingId =
+    (publication.scopus_id && live.publicationsByScopusId.get(publication.scopus_id)) ||
+    (doi && live.publicationsByDoi.get(doi));
+  if (existingId) {
+    return { skipped: `It is now in the portal as publication #${existingId}` };
   }
 
   // Accepting an exception does not make a long value fit; it is entered by hand instead.
@@ -209,10 +252,11 @@ const addPaper = async (connection, live, payload, batchId, userId) => {
   ]);
   const publicationId = inserted.insertId;
   if (publication.scopus_id) live.publicationsByScopusId.set(publication.scopus_id, publicationId);
+  if (doi) live.publicationsByDoi.set(doi, publicationId);
 
   await addIndexes(connection, publicationId, payload);
-  await creditStaff(connection, live, publicationId, payload.authors);
-  await saveScopusAuthors(connection, publicationId, payload.authors, live);
+  const linked = await creditStaff(connection, live, publicationId, payload.authors);
+  await saveScopusAuthors(connection, publicationId, payload.authors, live, linked);
   return { publicationId, journalOptionId: option.id, action: 'added' };
 };
 
@@ -220,9 +264,9 @@ const addPaper = async (connection, live, payload, batchId, userId) => {
  * Fills a publication the portal already has. Blank fields only, and the author list a person
  * entered is left as it is — staff are added to it, nobody is taken off.
  */
-const updatePaper = async (connection, live, payload, batchId) => {
+const updatePaper = async (connection, live, payload) => {
   const [[current]] = await connection.query(
-    `SELECT id, journal_options_id, import_batch_id, ${FILL_COLUMNS.join(', ')}
+    `SELECT id, journal_options_id, ${FILL_COLUMNS.join(', ')}
        FROM journals WHERE id = ? FOR UPDATE`,
     [payload.publicationId],
   );
@@ -238,14 +282,15 @@ const updatePaper = async (connection, live, payload, batchId) => {
     }
     updates[column] = value;
   }
+  // `import_batch_id` stays as it is: it marks a publication an import created, which is how
+  // removing a Scopus ID knows whose author list it may change.
   if (Object.keys(updates).length > 0) {
-    if (current.import_batch_id === null) updates.import_batch_id = batchId;
     await connection.query('UPDATE journals SET ? WHERE id = ?', [updates, current.id]);
   }
 
   await addIndexes(connection, current.id, payload);
-  await creditStaff(connection, live, current.id, payload.authors);
-  await saveScopusAuthors(connection, current.id, payload.authors, live);
+  const linked = await creditStaff(connection, live, current.id, payload.authors);
+  await saveScopusAuthors(connection, current.id, payload.authors, live, linked);
   return {
     publicationId: current.id,
     journalOptionId: current.journal_options_id,
@@ -256,7 +301,7 @@ const updatePaper = async (connection, live, payload, batchId) => {
 const applyPaperPayload = (connection, live, payload, batchId, userId) =>
   payload.action === 'add'
     ? addPaper(connection, live, payload, batchId, userId)
-    : updatePaper(connection, live, payload, batchId);
+    : updatePaper(connection, live, payload);
 
 const markApplied = (connection, rowId, applied, userId) =>
   connection.query(
@@ -280,7 +325,7 @@ const paperImportModel = {
   /** What a paper preview is planned against: the portal's publications and staff Scopus IDs. */
   async loadPaperContext() {
     const [[publications], [links], [scopusAuthors], employees] = await Promise.all([
-      db.query(`SELECT id, title, journal_options_id, ${FILL_COLUMNS.join(', ')} FROM journals`),
+      db.query(`SELECT id, title, journal_options_id, ${PREVIEW_FILL_COLUMNS} FROM journals`),
       db.query(
         `SELECT aj.journal_id, a.employee_id
            FROM author_journal aj JOIN authors a ON a.id = aj.author_id

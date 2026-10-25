@@ -194,18 +194,11 @@ describe('crediting and undoing', () => {
     ]);
   });
 
-  it('keeps the author list of a paper someone filed on the form when an ID is undone', async () => {
+  const undo = async (positions, { remaining = [] } = {}) => {
     const writes = [];
     const connection = makeConnection((sql, params) => {
-      if (sql.startsWith('SELECT s.id, s.journal_id')) {
-        return [
-          [
-            { id: 1, journal_id: 500, author_position: 2, author_name: 'Raja, K.', imported: 1 },
-            { id: 2, journal_id: 501, author_position: 1, author_name: 'Raja, K.', imported: 0 },
-          ],
-        ];
-      }
-      if (sql.startsWith('SELECT DISTINCT journal_id')) return [[]];
+      if (sql.startsWith('SELECT s.id, s.journal_id')) return [positions];
+      if (sql.startsWith('SELECT id, journal_id FROM journal_scopus_authors')) return [remaining];
       if (sql.startsWith('SELECT id FROM authors')) return [[{ id: 70 }]];
       if (sql.startsWith('SELECT external_details FROM journals')) {
         return [[{ external_details: null }]];
@@ -213,9 +206,21 @@ describe('crediting and undoing', () => {
       writes.push({ sql, params });
       return [{ affectedRows: 1 }];
     });
-
     await uncreditScopusId(connection, 7, '5722');
+    return writes;
+  };
+  const position = (overrides) => ({
+    id: 1,
+    journal_id: 500,
+    author_position: 2,
+    author_name: 'Raja, K.',
+    linked_by_import: 1,
+    imported: 1,
+    ...overrides,
+  });
 
+  it('takes the staff member off a paper the import created and lists them as external again', async () => {
+    const writes = await undo([position()]);
     const deletes = writes.filter((write) => write.sql.startsWith('DELETE FROM author_journal'));
     expect(deletes.map((write) => write.params[0])).toEqual([500]);
     const restored = writes.find((write) => write.sql.startsWith('UPDATE journals SET external'));
@@ -226,6 +231,49 @@ describe('crediting and undoing', () => {
         is_first_author: false,
       }),
     ]);
+  });
+
+  it('keeps a credit someone gave on the form, even on a paper the import filled in', async () => {
+    const writes = await undo([position({ linked_by_import: 0, imported: 0 })]);
+    expect(writes.some((write) => write.sql.startsWith('DELETE FROM author_journal'))).toBe(false);
+    expect(writes.some((write) => write.sql.startsWith('UPDATE journals SET external'))).toBe(
+      false,
+    );
+  });
+
+  it('takes back a credit the import added to a form-filed paper, without touching its author list', async () => {
+    const writes = await undo([position({ linked_by_import: 1, imported: 0 })]);
+    expect(
+      writes.filter((write) => write.sql.startsWith('DELETE FROM author_journal')),
+    ).toHaveLength(1);
+    expect(writes.some((write) => write.sql.startsWith('UPDATE journals SET external'))).toBe(
+      false,
+    );
+  });
+
+  it('leaves the link to another of their Scopus IDs on the same paper, and hands it the flag', async () => {
+    const writes = await undo([position()], { remaining: [{ id: 9, journal_id: 500 }] });
+    expect(writes.some((write) => write.sql.startsWith('DELETE FROM author_journal'))).toBe(false);
+    const handed = writes.find((write) => write.sql.includes('SET linked_by_import = 1'));
+    expect(handed.params).toEqual([[9]]);
+  });
+
+  it('does not link a staff member twice when the form credited them through another author row', async () => {
+    const writes = [];
+    const connection = makeConnection((sql, params) => {
+      if (sql.startsWith('SELECT id, journal_id, author_position')) {
+        return [[{ id: 1, journal_id: 500, author_position: 1, scopus_author_id: '5722' }]];
+      }
+      if (sql.startsWith('SELECT id FROM authors')) return [[{ id: 12 }]];
+      if (sql.startsWith('SELECT 1 FROM author_journal')) return [[{ 1: 1 }]];
+      if (sql.startsWith('SELECT id, external_details FROM journals')) return [[]];
+      writes.push({ sql, params });
+      return [{ affectedRows: 1 }];
+    });
+    await creditScopusIds(connection, 7, ['5722']);
+    expect(writes.some((write) => write.sql.startsWith('INSERT INTO author_journal'))).toBe(false);
+    const mark = writes.find((write) => write.sql.startsWith('UPDATE journal_scopus_authors'));
+    expect(mark.params).toEqual([7, 0, [1]]);
   });
 });
 
@@ -290,6 +338,25 @@ describe('staff claiming their own profile', () => {
     expect(connection.commit).toHaveBeenCalled();
     const insert = writes.find((write) => write.sql.startsWith('INSERT INTO employee_scopus_ids'));
     expect(insert.params).toEqual([7, '57225844882', 42]);
+  });
+
+  it('answers a claim lost to someone confirming the same profile at once with 409, not 500', async () => {
+    const { connection } = claimConnection({
+      candidates: [{ scopus_author_id: '57225844882', author_name: 'Raja, K.', papers: 4 }],
+    });
+    const respond = connection.query.getMockImplementation();
+    connection.query.mockImplementation(async (sql, params) => {
+      if (collapse(sql).startsWith('INSERT INTO employee_scopus_ids')) {
+        throw Object.assign(new Error('Duplicate entry'), { code: 'ER_DUP_ENTRY' });
+      }
+      return respond(sql, params);
+    });
+    const response = await request(app)
+      .post('/api/scopus-profile/claims')
+      .set('Authorization', `Bearer ${token(42)}`)
+      .send({ scopusAuthorId: '57225844882' });
+    expect(response.status).toBe(409);
+    expect(connection.rollback).toHaveBeenCalled();
   });
 
   it('refuses a profile held by someone else or not suggested by name', async () => {

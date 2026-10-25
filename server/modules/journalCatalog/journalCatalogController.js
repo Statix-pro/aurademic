@@ -231,7 +231,10 @@ const journalCatalogController = {
           .status(400)
           .json({ success: false, message: 'Action must be accept or exclude.' });
       }
-      const rowIds = [...new Set((req.body.rowIds ?? []).map(positiveId))];
+      if (!Array.isArray(req.body.rowIds)) {
+        return res.status(400).json({ success: false, message: 'Select between 1 and 500 rows.' });
+      }
+      const rowIds = [...new Set(req.body.rowIds.map(positiveId))];
       if (rowIds.length === 0 || rowIds.includes(null) || rowIds.length > 500) {
         return res.status(400).json({ success: false, message: 'Select between 1 and 500 rows.' });
       }
@@ -243,6 +246,11 @@ const journalCatalogController = {
         for (const [rowId, raw] of Object.entries(req.body.overrides ?? {})) {
           const id = positiveId(rowId);
           if (!id || !rowIds.includes(id)) continue;
+          if (!raw || typeof raw !== 'object') {
+            return res
+              .status(400)
+              .json({ success: false, message: 'Each correction must be a set of fields.' });
+          }
           overrides[id] = validateOverrides(raw);
         }
       }

@@ -85,13 +85,37 @@ export const ensureStaffAuthor = async (connection, employeeId, cache) => {
   return authorId;
 };
 
-export const linkStaffAuthor = (connection, authorId, journalId, position) =>
-  connection.query(
-    `INSERT INTO author_journal (author_id, journal_id, is_first_author, is_primary)
-     VALUES (?, ?, ?, 0)
-     ON DUPLICATE KEY UPDATE is_first_author = GREATEST(is_first_author, VALUES(is_first_author))`,
-    [authorId, journalId, position === 1 ? 1 : 0],
+/**
+ * Links a staff member to a paper unless any of their `authors` rows already is — the form can
+ * have credited them through another row. Returns whether this call made the link, which is
+ * what an undo may take back.
+ */
+export const linkStaffAuthor = async (
+  connection,
+  { authorId, employeeId, journalId, firstAuthor },
+) => {
+  const [existing] = await connection.query(
+    `SELECT 1 FROM author_journal aj JOIN authors a ON a.id = aj.author_id
+      WHERE aj.journal_id = ? AND a.employee_id = ? LIMIT 1`,
+    [journalId, employeeId],
   );
+  if (existing.length > 0) return false;
+  await connection.query(
+    `INSERT INTO author_journal (author_id, journal_id, is_first_author, is_primary)
+     VALUES (?, ?, ?, 0)`,
+    [authorId, journalId, firstAuthor ? 1 : 0],
+  );
+  return true;
+};
+
+const groupByJournal = (positions) => {
+  const byJournal = new Map();
+  for (const position of positions) {
+    if (!byJournal.has(position.journal_id)) byJournal.set(position.journal_id, []);
+    byJournal.get(position.journal_id).push(position);
+  }
+  return byJournal;
+};
 
 /**
  * Credits a staff member with every imported paper on which one of `scopusIds` is a KSRCT
@@ -111,19 +135,24 @@ export const creditScopusIds = async (connection, employeeId, scopusIds) => {
   if (positions.length === 0) return 0;
 
   const authorId = await ensureStaffAuthor(connection, employeeId);
-  const journalIds = [...new Set(positions.map((position) => position.journal_id))];
-  for (const position of positions) {
-    await linkStaffAuthor(connection, authorId, position.journal_id, position.author_position);
+  const byJournal = groupByJournal(positions);
+  for (const [journalId, onPaper] of byJournal) {
+    const linked = await linkStaffAuthor(connection, {
+      authorId,
+      employeeId,
+      journalId,
+      firstAuthor: onPaper.some((position) => position.author_position === 1),
+    });
+    await connection.query(
+      'UPDATE journal_scopus_authors SET employee_id = ?, linked_by_import = ? WHERE id IN (?)',
+      [employeeId, linked ? 1 : 0, onPaper.map((position) => position.id)],
+    );
   }
-  await connection.query('UPDATE journal_scopus_authors SET employee_id = ? WHERE id IN (?)', [
-    employeeId,
-    positions.map((position) => position.id),
-  ]);
 
   const ids = new Set(scopusIds.map(String));
   const [journals] = await connection.query(
     'SELECT id, external_details FROM journals WHERE id IN (?) FOR UPDATE',
-    [journalIds],
+    [[...byJournal.keys()]],
   );
   for (const journal of journals) {
     const external = parseJsonArray(journal.external_details);
@@ -135,19 +164,19 @@ export const creditScopusIds = async (connection, employeeId, scopusIds) => {
       journal.id,
     ]);
   }
-  return journalIds.length;
+  return byJournal.size;
 };
 
 /**
- * Undoes `creditScopusIds` for one ID: the positions go back to unassigned and the author back
- * to the external list. The staff member is taken off a paper only when the import created it
- * and no other of their IDs credits them on it; a paper someone filed on the form keeps the
- * author list they gave it.
+ * Undoes `creditScopusIds` for one ID: its positions go back to unassigned. The staff member
+ * comes off a paper only where the import or a claim made that link and no other of their IDs
+ * still credits them there; a credit someone gave on the form stays. On a paper the import
+ * created, the author goes back on its external list.
  */
 export const uncreditScopusId = async (connection, employeeId, scopusId) => {
   const [positions] = await connection.query(
-    `SELECT s.id, s.journal_id, s.author_position, s.author_name,
-            (j.created_by IS NULL AND j.import_batch_id IS NOT NULL) AS imported
+    `SELECT s.id, s.journal_id, s.author_position, s.author_name, s.linked_by_import,
+            j.import_batch_id IS NOT NULL AS imported
        FROM journal_scopus_authors s
        JOIN journals j ON j.id = s.journal_id
       WHERE s.scopus_author_id = ? AND s.employee_id = ?
@@ -156,50 +185,65 @@ export const uncreditScopusId = async (connection, employeeId, scopusId) => {
   );
   if (positions.length === 0) return 0;
 
-  await connection.query('UPDATE journal_scopus_authors SET employee_id = NULL WHERE id IN (?)', [
-    positions.map((position) => position.id),
-  ]);
-
-  const journalIds = [...new Set(positions.map((position) => position.journal_id))];
-  const [stillCredited] = await connection.query(
-    `SELECT DISTINCT journal_id FROM journal_scopus_authors
-      WHERE journal_id IN (?) AND employee_id = ?`,
-    [journalIds, employeeId],
+  await connection.query(
+    'UPDATE journal_scopus_authors SET employee_id = NULL, linked_by_import = 0 WHERE id IN (?)',
+    [positions.map((position) => position.id)],
   );
-  const keep = new Set(stillCredited.map((row) => row.journal_id));
+
+  const byJournal = groupByJournal(positions);
+  const [remaining] = await connection.query(
+    `SELECT id, journal_id FROM journal_scopus_authors
+      WHERE journal_id IN (?) AND employee_id = ?`,
+    [[...byJournal.keys()], employeeId],
+  );
   const [authorRows] = await connection.query('SELECT id FROM authors WHERE employee_id = ?', [
     employeeId,
   ]);
   const authorIds = authorRows.map((row) => row.id);
 
-  for (const position of positions) {
-    if (!position.imported || keep.has(position.journal_id)) continue;
-    if (authorIds.length > 0) {
+  for (const [journalId, removed] of byJournal) {
+    const madeLink = removed.some((position) => Number(position.linked_by_import) === 1);
+    const stillThere = remaining.filter((row) => row.journal_id === journalId);
+    if (stillThere.length > 0) {
+      // Another of their IDs still credits them here; that ID now owns the link.
+      if (madeLink) {
+        await connection.query(
+          'UPDATE journal_scopus_authors SET linked_by_import = 1 WHERE id IN (?)',
+          [stillThere.map((row) => row.id)],
+        );
+      }
+      continue;
+    }
+    if (madeLink && authorIds.length > 0) {
       await connection.query(
         'DELETE FROM author_journal WHERE journal_id = ? AND author_id IN (?)',
-        [position.journal_id, authorIds],
+        [journalId, authorIds],
       );
     }
+    if (!Number(removed[0].imported)) continue;
+
     const [[journal]] = await connection.query(
       'SELECT external_details FROM journals WHERE id = ? FOR UPDATE',
-      [position.journal_id],
+      [journalId],
     );
     const external = parseJsonArray(journal?.external_details);
     if (!external) continue;
-    external.push({
-      name: position.author_name,
-      department: '',
-      organization: KSRCT_ORGANIZATION,
-      country: 'India',
-      state: '',
-      is_first_author: position.author_position === 1,
-      is_primary: false,
-      scopus_author_id: scopusId,
-    });
+    for (const position of removed) {
+      external.push({
+        name: position.author_name,
+        department: '',
+        organization: KSRCT_ORGANIZATION,
+        country: 'India',
+        state: '',
+        is_first_author: position.author_position === 1,
+        is_primary: false,
+        scopus_author_id: scopusId,
+      });
+    }
     await connection.query('UPDATE journals SET external_details = ? WHERE id = ?', [
       JSON.stringify(external),
-      position.journal_id,
+      journalId,
     ]);
   }
-  return journalIds.length;
+  return byJournal.size;
 };
