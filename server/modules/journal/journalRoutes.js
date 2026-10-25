@@ -18,12 +18,14 @@ const canReplyAsReviewer = permissionMiddleware([
   'admin_dashboard.manage',
 ]);
 
-// Public routes
-router.get('/journals/search', journalController.searchJournals);
-router.get('/authors/search', journalController.searchAuthor);
-
 // Protected routes - require authentication
 router.use(authMiddleware); // Add authentication middleware for all routes below
+
+// The publication and project forms' pickers. They were public, which handed staff names and
+// the journal list's metrics to anyone off the network; both forms only ever call them signed
+// in, through authenticityUtility.
+router.get('/journals/search', journalController.searchJournals);
+router.get('/authors/search', journalController.searchAuthor);
 
 // Journal CRUD operations
 router.post('/journals', journalController.createJournal);

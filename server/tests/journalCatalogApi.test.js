@@ -414,3 +414,21 @@ describe('journalCatalogModel.resolveExceptions', () => {
     expect(connection.rollback).toHaveBeenCalled();
   });
 });
+
+describe('publication form pickers', () => {
+  // These searches were public: anyone who could reach the API read the journal list's
+  // metrics and the staff directory. Both forms call them signed in.
+  it.each(['/api/journals/search?query=biotech', '/api/authors/search?query=ravi'])(
+    'refuses %s without a sign-in',
+    async (url) => {
+      const response = await request(app).get(url);
+      expect(response.status).toBe(401);
+    },
+  );
+
+  it('answers a signed-in user', async () => {
+    db.query.mockResolvedValue([[]]);
+    const response = await auth(request(app).get('/api/journals/search?query=biotech'));
+    expect(response.status).toBe(200);
+  });
+});
