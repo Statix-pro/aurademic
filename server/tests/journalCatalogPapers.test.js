@@ -372,7 +372,10 @@ describe('applying papers', () => {
     db.getConnection.mockReset();
   });
 
-  const applyOne = async (payload, { employees = [STAFF], publications = [] } = {}) => {
+  const applyOne = async (
+    payload,
+    { employees = [STAFF], publications = [], current = null, external = null } = {},
+  ) => {
     const writes = [];
     const connection = makeConnection((sql, params) => {
       if (sql.startsWith('SELECT id, status FROM journal_import_batches')) {
@@ -383,6 +386,10 @@ describe('applying papers', () => {
       if (sql.startsWith('SELECT e.id, TRIM(e.scopus_id)')) return [employees];
       if (sql.startsWith('SELECT id, TRIM(scopus_id)')) return [publications];
       if (sql.startsWith('SELECT 1 FROM author_journal')) return [[]];
+      if (sql.startsWith('SELECT id, journal_options_id')) return [[current]];
+      if (sql.startsWith('SELECT id, external_details FROM journals')) {
+        return [[{ id: current?.id ?? 500, external_details: external }]];
+      }
       if (sql.startsWith('SELECT e.id, x.scopus_author_id')) return [[]];
       if (sql.startsWith('SELECT id FROM authors WHERE employee_id')) return [[]];
       if (sql.startsWith('SELECT id, outcome, payload FROM journal_import_rows')) {
@@ -459,6 +466,45 @@ describe('applying papers', () => {
       write.sql.startsWith('INSERT INTO journal_scopus_authors'),
     );
     expect(scopusAuthors.params[0][0]).toEqual([500, 1, '57225844882', 'Raja, K.', 1, 7, 1]);
+  });
+
+  it('does not add a paper filed on the form since the preview with neither DOI nor EID', async () => {
+    const { rows } = await plan([paperRow()]);
+    const { result, writes } = await applyOne(rows[0].payload, {
+      publications: [
+        {
+          id: 611,
+          scopus_id: null,
+          doi: null,
+          title: 'TRIBOLOGY OF SESBANIA FIBRE COMPOSITES',
+          year: '2025',
+        },
+      ],
+    });
+    expect(result).toMatchObject({ added: 0, notApplied: 1 });
+    expect(writes.some((write) => write.sql.startsWith('INSERT INTO journals'))).toBe(false);
+  });
+
+  it('takes a newly credited author off the external list of a paper imported before', async () => {
+    const imported = {
+      id: 400,
+      scopus_id: '85000000001',
+      title: 'x',
+      year: '2025',
+      hasScopusAuthors: true,
+    };
+    const { rows } = await plan([paperRow()], { publications: [imported] });
+    const { writes } = await applyOne(rows[0].payload, {
+      current: { id: 400, journal_options_id: 40 },
+      external: JSON.stringify([
+        { name: 'Raja, K.', scopus_author_id: '57225844882' },
+        { name: 'Smith, John', scopus_author_id: '11111111111' },
+      ]),
+    });
+    const updated = writes.find((write) => write.sql.startsWith('UPDATE journals SET external'));
+    expect(JSON.parse(updated.params[0])).toEqual([
+      { name: 'Smith, John', scopus_author_id: '11111111111' },
+    ]);
   });
 
   it('does not add a paper filed on the form with the same DOI since the preview', async () => {

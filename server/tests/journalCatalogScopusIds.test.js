@@ -123,6 +123,17 @@ describe('planning a staff Scopus ID sheet', () => {
     expect(rows[0].outcome).toBe('unchanged');
   });
 
+  it('credits the unassigned papers of an ID already on file, such as one typed into Master Data', () => {
+    const { rows, summary } = plan([{ erpId: 'KSR101', scopusIds: ['57225844882'] }], {
+      held: new Map([['57225844882', { id: 1, name: 'K Raja', erp_id: 'KSR101' }]]),
+      unassigned: new Map([['57225844882', 5]]),
+    });
+    expect(rows[0]).toMatchObject({ outcome: 'update' });
+    expect(rows[0].payload.scopusIds).toEqual(['57225844882']);
+    expect(rows[0].changes).toEqual([{ field: 'Papers credited', from: null, to: 5 }]);
+    expect(summary.staff.papersToCredit).toBe(5);
+  });
+
   it('flags an unknown ERP ID and one ID given for two people in the same sheet', () => {
     const { rows } = plan([
       { erpId: 'NOPE', scopusIds: ['57225844882'] },
@@ -256,6 +267,11 @@ describe('crediting and undoing', () => {
     expect(writes.some((write) => write.sql.startsWith('DELETE FROM author_journal'))).toBe(false);
     const handed = writes.find((write) => write.sql.includes('SET linked_by_import = 1'));
     expect(handed.params).toEqual([[9]]);
+    // The removed position is still an author of the paper, so it goes back on the list.
+    const restored = writes.find((write) => write.sql.startsWith('UPDATE journals SET external'));
+    expect(JSON.parse(restored.params[0])).toEqual([
+      expect.objectContaining({ name: 'Raja, K.', scopus_author_id: '5722' }),
+    ]);
   });
 
   it('does not link a staff member twice when the form credited them through another author row', async () => {

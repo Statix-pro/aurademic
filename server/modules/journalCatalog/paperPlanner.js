@@ -56,7 +56,7 @@ export const normalizeDoi = (value) =>
     .toLowerCase()
     .replace(/^(https?:\/\/(dx\.)?doi\.org\/|doi:\s*)/, '');
 
-const titleYearKey = (title, year) => `${normalizeTitle(title)}|${year ?? ''}`;
+export const titleYearKey = (title, year) => `${normalizeTitle(title)}|${year ?? ''}`;
 
 const preview = (value) => {
   const text = String(value);

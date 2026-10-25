@@ -640,7 +640,7 @@ const ImportBatchView: React.FC<ImportBatchViewProps> = ({
           confirm === 'discard'
             ? 'Nothing from this file will be applied. The file is not kept, so it would have to be uploaded again.'
             : isStaff
-              ? `${countFor('add')} staff members get their Scopus IDs, and the imported papers those IDs appear on are credited to them. ${countFor('exception')} that need review stay here for you to accept or exclude.`
+              ? `${countFor('add')} staff members get new Scopus IDs and ${countFor('update')} have papers credited through an ID already on file; the imported papers those IDs appear on are credited to them. ${countFor('exception')} that need review stay here for you to accept or exclude.`
               : isPapers
                 ? `${countFor('add')} papers will be added as approved publications and ${countFor('update')} publications already in the portal filled in, in one step. ${countFor('exception')} that need review stay here for you to accept or exclude.`
                 : `${countFor('add')} journals will be added and ${countFor('update')} updated, in one step. ${countFor('exception')} that need review stay here for you to accept, correct or exclude.`

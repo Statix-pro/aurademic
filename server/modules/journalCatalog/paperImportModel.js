@@ -1,7 +1,8 @@
 import { storedIssn } from './issn.js';
 import { createLiveIndex, loadJournalSnapshot } from './journalCatalogModel.js';
-import { FIELD_LIMITS, normalizeDoi } from './paperPlanner.js';
+import { FIELD_LIMITS, normalizeDoi, titleYearKey } from './paperPlanner.js';
 import {
+  dropExternalAuthors,
   ensureStaffAuthor,
   KSRCT_ORGANIZATION,
   linkStaffAuthor,
@@ -73,21 +74,26 @@ const loadLiveState = async (connection) => {
   const journals = createLiveIndex(await loadJournalSnapshot(connection, { lock: true }));
   const { byScopusId: employees } = await loadStaffScopusIds(connection);
   const [publications] = await connection.query(
-    `SELECT id, TRIM(scopus_id) AS scopus_id, doi FROM journals
-      WHERE (scopus_id IS NOT NULL AND TRIM(scopus_id) <> '') OR (doi IS NOT NULL AND doi <> '')`,
+    'SELECT id, TRIM(scopus_id) AS scopus_id, doi, title, year FROM journals',
   );
   const publicationsByScopusId = new Map();
   const publicationsByDoi = new Map();
+  // Only publications that were in the portal before this apply: two papers of the same file
+  // can share a title and year (a conference paper and its journal version).
+  const publicationsByTitleYear = new Map();
   for (const row of publications) {
     if (row.scopus_id) publicationsByScopusId.set(row.scopus_id, row.id);
     const doi = normalizeDoi(row.doi);
     if (doi && !publicationsByDoi.has(doi)) publicationsByDoi.set(doi, row.id);
+    const key = titleYearKey(row.title, row.year);
+    if (!publicationsByTitleYear.has(key)) publicationsByTitleYear.set(key, row.id);
   }
   return {
     journals,
     employees,
     publicationsByScopusId,
     publicationsByDoi,
+    publicationsByTitleYear,
     authorIdByEmployee: new Map(),
   };
 };
@@ -190,12 +196,13 @@ const addIndexes = async (connection, publicationId, payload) => {
 
 const addPaper = async (connection, live, payload, batchId, userId) => {
   const { publication } = payload;
-  // Someone may have filed the paper on the form since the preview, usually with its DOI and no
-  // Scopus EID, so both are checked again.
+  // Someone may have filed the paper on the form since the preview, often with a DOI and no
+  // Scopus EID, sometimes with neither — so all three keys the preview matches on are checked.
   const doi = normalizeDoi(publication.doi);
   const existingId =
     (publication.scopus_id && live.publicationsByScopusId.get(publication.scopus_id)) ||
-    (doi && live.publicationsByDoi.get(doi));
+    (doi && live.publicationsByDoi.get(doi)) ||
+    live.publicationsByTitleYear.get(titleYearKey(publication.title, publication.year));
   if (existingId) {
     return { skipped: `It is now in the portal as publication #${existingId}` };
   }
@@ -291,6 +298,14 @@ const updatePaper = async (connection, live, payload) => {
   await addIndexes(connection, current.id, payload);
   const linked = await creditStaff(connection, live, current.id, payload.authors);
   await saveScopusAuthors(connection, current.id, payload.authors, live, linked);
+  // A paper imported before its author's Scopus ID was on file lists them as external.
+  await dropExternalAuthors(
+    connection,
+    [current.id],
+    payload.authors
+      .filter((author) => author.ksrct && live.employees.has(author.scopusAuthorId ?? ''))
+      .map((author) => author.scopusAuthorId),
+  );
   return {
     publicationId: current.id,
     journalOptionId: current.journal_options_id,

@@ -108,6 +108,30 @@ export const linkStaffAuthor = async (
   return true;
 };
 
+/**
+ * Takes the entries an import listed for these Scopus IDs off the papers' external authors, once
+ * they are credited as staff — otherwise the form shows the person twice. Only the import's own
+ * entries carry a `scopus_author_id`, so names typed on the form are never touched.
+ */
+export const dropExternalAuthors = async (connection, journalIds, scopusIds) => {
+  if (journalIds.length === 0 || scopusIds.length === 0) return;
+  const ids = new Set(scopusIds.map(String));
+  const [journals] = await connection.query(
+    'SELECT id, external_details FROM journals WHERE id IN (?) FOR UPDATE',
+    [journalIds],
+  );
+  for (const journal of journals) {
+    const external = parseJsonArray(journal.external_details);
+    if (!external) continue;
+    const kept = external.filter((author) => !ids.has(String(author?.scopus_author_id ?? '')));
+    if (kept.length === external.length) continue;
+    await connection.query('UPDATE journals SET external_details = ? WHERE id = ?', [
+      kept.length > 0 ? JSON.stringify(kept) : null,
+      journal.id,
+    ]);
+  }
+};
+
 const groupByJournal = (positions) => {
   const byJournal = new Map();
   for (const position of positions) {
@@ -149,21 +173,7 @@ export const creditScopusIds = async (connection, employeeId, scopusIds) => {
     );
   }
 
-  const ids = new Set(scopusIds.map(String));
-  const [journals] = await connection.query(
-    'SELECT id, external_details FROM journals WHERE id IN (?) FOR UPDATE',
-    [[...byJournal.keys()]],
-  );
-  for (const journal of journals) {
-    const external = parseJsonArray(journal.external_details);
-    if (!external) continue;
-    const kept = external.filter((author) => !ids.has(String(author?.scopus_author_id ?? '')));
-    if (kept.length === external.length) continue;
-    await connection.query('UPDATE journals SET external_details = ? WHERE id = ?', [
-      kept.length > 0 ? JSON.stringify(kept) : null,
-      journal.id,
-    ]);
-  }
+  await dropExternalAuthors(connection, [...byJournal.keys()], scopusIds);
   return byJournal.size;
 };
 
@@ -212,14 +222,14 @@ export const uncreditScopusId = async (connection, employeeId, scopusId) => {
           [stillThere.map((row) => row.id)],
         );
       }
-      continue;
-    }
-    if (madeLink && authorIds.length > 0) {
+    } else if (madeLink && authorIds.length > 0) {
       await connection.query(
         'DELETE FROM author_journal WHERE journal_id = ? AND author_id IN (?)',
         [journalId, authorIds],
       );
     }
+    // Each removed position goes back on the paper's list on its own; skipping it while another
+    // ID kept the staff link lost that author from the paper for good.
     if (!Number(removed[0].imported)) continue;
 
     const [[journal]] = await connection.query(

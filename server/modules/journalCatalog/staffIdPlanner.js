@@ -42,29 +42,43 @@ const planStaffRow = (record, context, seen) => {
       : [],
   );
   const newIds = record.scopusIds.filter((id) => !theirs.has(id));
-  const papers = newIds.reduce((sum, id) => sum + (context.unassigned.get(id) ?? 0), 0);
+  // An ID already on file — typed into Master Data after the papers were imported — still has
+  // its unassigned papers credited, so the sheet is how those catch up.
+  const creditOnly = record.scopusIds.filter(
+    (id) => theirs.has(id) && (context.unassigned.get(id) ?? 0) > 0,
+  );
+  const scopusIds = [...newIds, ...creditOnly];
+  const papers = scopusIds.reduce((sum, id) => sum + (context.unassigned.get(id) ?? 0), 0);
   const label = employee
     ? `${employee.name} (ERP ${employee.erp_id})`
     : `ERP ID ${record.erpId || '—'}`;
 
   return {
-    outcome: issues.length > 0 ? 'exception' : newIds.length > 0 ? 'add' : 'unchanged',
+    outcome:
+      issues.length > 0
+        ? 'exception'
+        : newIds.length > 0
+          ? 'add'
+          : creditOnly.length > 0
+            ? 'update'
+            : 'unchanged',
     journal_option_id: null,
     publication_id: null,
     journal_name: label,
     reason: issues.join('; ') || null,
-    payload: { action: 'add', erpId: record.erpId, scopusIds: newIds },
-    changes:
-      newIds.length > 0
+    payload: { action: 'add', erpId: record.erpId, scopusIds },
+    changes: [
+      ...(newIds.length > 0
         ? [
             {
               field: 'Scopus Author ID',
               from: theirs.size > 0 ? [...theirs].join(', ') : null,
               to: newIds.join(', '),
             },
-            { field: 'Papers credited', from: null, to: papers },
           ]
-        : [],
+        : []),
+      ...(scopusIds.length > 0 ? [{ field: 'Papers credited', from: null, to: papers }] : []),
+    ],
     papers,
   };
 };
@@ -98,7 +112,7 @@ export const planStaffIds = ({
   let papersToCredit = 0;
   for (const row of rows) {
     outcomes[row.outcome] += 1;
-    if (row.outcome === 'add') papersToCredit += row.papers;
+    if (row.outcome === 'add' || row.outcome === 'update') papersToCredit += row.papers;
   }
   return {
     rows: rows.map(({ papers: _papers, ...row }) => row),

@@ -127,7 +127,7 @@ const staffIdImportModel = {
           continue;
         }
         done.push(row.id);
-        result.added += 1;
+        result[row.outcome === 'update' ? 'updated' : 'added'] += 1;
         result.papersCredited += applied.papers;
       }
       if (done.length > 0) await markApplied(connection, done, userId);
