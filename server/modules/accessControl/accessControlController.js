@@ -200,6 +200,7 @@ const accessControlController = {
         role_codes,
         Array.isArray(entity_roles) ? entity_roles : [],
         req.user?.id || null,
+        { actorIsSuperAdmin: Boolean(req.user?.isSuperAdmin) },
       );
 
       // Worth telling someone about: their roles decide which approval queues

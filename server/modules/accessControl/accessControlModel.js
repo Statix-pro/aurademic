@@ -1359,7 +1359,13 @@ const accessControlModel = {
     }
   },
 
-  async updateUserRoles(userId, roleCodes = [], entityRolesPayload = [], assignedBy = null) {
+  async updateUserRoles(
+    userId,
+    roleCodes = [],
+    entityRolesPayload = [],
+    assignedBy = null,
+    { actorIsSuperAdmin = false } = {},
+  ) {
     const parsedUserId = Number(userId);
 
     if (!Number.isInteger(parsedUserId) || parsedUserId <= 0) {
@@ -1381,6 +1387,49 @@ const accessControlModel = {
 
       if (!userRows.length) {
         throw makeRbacError('User not found', 404);
+      }
+
+      // `access_control.manage` lets its holder assign roles, and this endpoint takes any role
+      // code — so without these checks a holder below Super Admin could hand themselves
+      // `super_admin`, or any approver role, and outrank the person who gave them access. Super
+      // Admin is granted and removed by a Super Admin only, and nobody below Super Admin edits
+      // their own roles. (Admin held the permission until 20261025_admin_role_to_approvals_admin;
+      // the rule stays for any role given it later.)
+      if (!actorIsSuperAdmin) {
+        if (Number(assignedBy) === parsedUserId) {
+          throw makeRbacError('You cannot change your own roles. Ask a Super Admin.', 403);
+        }
+
+        // Both tables: getUserAuthorizationSnapshot unions user_entity_roles into a user's roles,
+        // so `super_admin` held against a department is as much Super Admin as a global one.
+        const [currentRoleRows] = await connection.query(
+          `
+            SELECT r.role_code, 'global' AS scope
+            FROM user_roles ur
+            JOIN roles r ON r.id = ur.role_id
+            WHERE ur.user_id = ?
+            UNION ALL
+            SELECT r.role_code, 'entity' AS scope
+            FROM user_entity_roles uer
+            JOIN roles r ON r.id = uer.role_id
+            WHERE uer.user_id = ?
+          `,
+          [parsedUserId, parsedUserId],
+        );
+        const isSuperAdminCode = (roleCode) => roleCode === SUPER_ADMIN_ROLE_CODE;
+        const hadSuperAdmin = currentRoleRows.some((role) => isSuperAdminCode(role.role_code));
+        // A non-array payload leaves user_entity_roles as it is (below), so what is held there stays.
+        const keepsEntitySuperAdmin = Array.isArray(entityRolesPayload)
+          ? entityRolesPayload.some((entityRole) => isSuperAdminCode(entityRole?.role_code))
+          : currentRoleRows.some(
+              (role) => role.scope === 'entity' && isSuperAdminCode(role.role_code),
+            );
+        const wantsSuperAdmin =
+          uniqueRoleCodes.includes(SUPER_ADMIN_ROLE_CODE) || keepsEntitySuperAdmin;
+
+        if (hadSuperAdmin !== wantsSuperAdmin) {
+          throw makeRbacError('Only a Super Admin can grant or remove Super Admin.', 403);
+        }
       }
 
       await ensureBaseUserRoleSeed(connection);

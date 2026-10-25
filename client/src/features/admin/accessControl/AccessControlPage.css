@@ -1,301 +1,436 @@
-.access-control-wrapper {
-  padding: 24px;
-  max-width: 1400px;
-  margin: 0 auto;
-}
+/**
+ * Access Control — the admin shell (`admin-screen`, `admin-tabs`, `admin-card`, `admin-modal`
+ * from features/admin/components/adminScreen.css) plus what only this screen needs: role tags,
+ * the role picker in the user dialog and the grouped permission list in the role dialog.
+ */
 
-.access-control-header h2 {
-  margin-bottom: 8px;
-}
-
-.access-control-header p {
-  margin-bottom: 20px;
-  color: #666;
-}
-
-.loading-state {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 200px;
-}
-
-.access-card {
-  background: #fff;
-  border: 1px solid #e8e8e8;
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.role-form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
-}
-
-.permissions-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 14px;
-}
-
-.permission-module-block {
-  border: 1px solid #e9ecef;
-  border-radius: 10px;
-  padding: 12px;
-  background: #f9fafb;
-}
-
-.permission-module-block h6 {
-  margin-bottom: 10px;
-  font-size: var(--font-size-body);
-  text-transform: capitalize;
-}
-
-.permission-checkbox-group {
-  display: grid;
-  gap: 8px;
-}
-
-.role-overview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.role-badges {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.role-chip {
-  border: 1px solid #dbe4ee;
-  border-radius: 10px;
-  background: #f7fafc;
-  padding: 12px;
-  display: grid;
-  gap: 8px;
-}
-
-.role-chip-detailed .role-permission-grid {
-  max-height: 220px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.role-chip-title {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-}
-
-.users-header-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.search-form {
-  display: flex;
-  gap: 8px;
-  width: min(420px, 100%);
-}
-
-.user-cell {
-  display: grid;
-  gap: 2px;
-}
-
-.user-cell span,
-.user-cell small {
-  color: #6c757d;
-}
-
-.role-checkboxes {
-  display: grid;
-  gap: 4px;
-  max-height: 220px;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.assigned-role-tag {
-  display: inline-flex;
-  align-items: center;
-  font-weight: 600;
-  font-size: var(--font-size-tertiary);
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  transition: all 0.2s ease;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.assigned-role-tag-default {
-  background-color: #f8f9fa !important;
-  color: #495057 !important;
-  border-color: #dee2e6 !important;
-}
-
-.assigned-role-tag-admin {
-  background-color: #e6f4ea !important;
-  color: #0d652d !important;
-  border-color: #ceead6 !important;
-}
-
-.assigned-role-tag-super-admin {
-  background-color: #fce8e6 !important;
-  color: #a50e0e !important;
-  border-color: #fad2cf !important;
-}
-
-.assigned-role-tag-hod {
-  background-color: #e8f0fe !important;
-  color: #174ea6 !important;
-  border-color: #d2e3fc !important;
-}
-
-.assigned-role-tag-coordinator {
-  background-color: #fef7e0 !important;
-  color: #b06000 !important;
-  border-color: #feefc3 !important;
-}
-
-.assigned-role-tag-empty {
-  background-color: #f1f3f4 !important;
-  color: #5f6368 !important;
-  border-color: #dadce0 !important;
-  font-style: italic;
-}
-
-@media (max-width: 768px) {
-  .access-control-wrapper {
-    padding: 16px;
-  }
-
-  .search-form {
-    width: 100%;
-  }
-}
-
-/* Ensure role actions are always visible and clickable */
-.role-action-buttons-wrapper {
-  opacity: 1 !important;
-  visibility: visible !important;
-  display: flex !important;
-  height: auto !important;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-
-.role-action-buttons-wrapper .btn {
-  opacity: 1 !important;
-  visibility: visible !important;
-  display: inline-flex !important;
-}
-
-/* Accordion Specific Styling */
-.user-accordion-header .accordion-button {
-  background-color: white !important;
-  box-shadow: none !important;
-  padding: 1rem 1.5rem;
-}
-
-.user-accordion-header .accordion-button:not(.collapsed) {
-  background-color: #f8f9fa !important;
-  color: inherit;
-  border-bottom: 1px solid #dee2e6;
-}
-
-.user-accordion-header .accordion-button::after {
-  display: none !important;
-}
-
-.accordion-wrapper .badge {
-  font-weight: 500;
-  letter-spacing: 0.3px;
-}
-
-.fontSize-sm {
+.ac-secondary {
+  color: var(--text-soft);
   font-size: var(--font-size-secondary);
-  letter-spacing: 0.5px;
+  line-height: var(--leading-secondary);
 }
 
-.custom-checkbox {
-  min-width: 140px;
+.ac-number {
+  font-variant-numeric: tabular-nums;
 }
 
-.custom-checkbox .form-check-input {
-  cursor: pointer;
-  width: 1.1em;
-  height: 1.1em;
-  margin-top: 0.2em;
+/* ---------------------------------------------------------------- tables */
+
+.ac-users-table th:first-child {
+  width: 38%;
 }
 
-.custom-checkbox .form-check-label {
-  cursor: pointer;
-  user-select: none;
-  padding-left: 0.25rem;
+.ac-roles-table th:first-child {
+  width: 50%;
 }
 
-/* Pagination Styling */
-.pagination-nav-btn {
-  transition: all 0.2s ease;
-  height: var(--chip-height);
-  padding: 0 0.75rem !important;
+/* "Edit roles" is a row action, so it is sized like one rather than like a form's Save. */
+.ac-users-table .ac-row-btn {
+  min-width: 0;
+  white-space: nowrap;
 }
 
-.pagination-nav-btn:hover:not(:disabled) {
-  background-color: #f0f2f5 !important;
-  color: #0d6efd !important;
+.ac-role-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
 }
 
-.pagination-nav-btn:disabled {
-  opacity: 0.5;
+/* Department and club names run long ("HOD: CSE (Artificial Intelligence and Machine
+   Learning)"), so a tag may wrap rather than push past its cell. */
+.ac-role-tags .ac-role-tag {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.ac-role-tag--default {
+  background: var(--tint-neutral-bg);
+  color: var(--text-soft);
+}
+
+.ac-role-tag--admin {
+  background: var(--tint-success-bg);
+  color: var(--tint-success-fg);
+}
+
+.ac-role-tag--super-admin {
+  background: var(--tint-danger-bg);
+  color: var(--tint-danger-fg);
+}
+
+.ac-role-tag--hod {
+  background: var(--tint-primary-bg);
+  color: var(--tint-primary-fg);
+}
+
+.ac-role-tag--coordinator {
+  background: #fef7e0;
+  color: #b06000;
+}
+
+/* ----------------------------------------------------------------- pager */
+
+.ac-pager {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.ac-pager__rows {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+}
+
+.ac-pager .ac-pager__select {
+  width: auto;
+  padding: 0 var(--space-7) 0 var(--space-3);
+  border-color: var(--border-input);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-body);
+}
+
+.ac-pager__nav {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* --------------------------------------------------------------- dialogs */
+
+/* The role dialog lays permissions out in columns, so it takes the form-modal width. */
+.ac-role-modal.admin-modal .modal-dialog,
+.ac-role-modal.admin-modal.custom-modal .modal-dialog.modal-lg {
+  max-width: 1150px !important;
+}
+
+.ac-modal-lead {
+  margin: 0 0 var(--space-4);
+  color: var(--text-soft);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+}
+
+.ac-section-label {
+  margin: var(--space-5) 0 var(--space-3);
+  color: var(--primary-color);
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+}
+
+.ac-user-modal .modal-body > .ac-section-label:first-of-type {
+  margin-top: 0;
+}
+
+.ac-section-label--split {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.ac-section-label--split .ac-secondary {
+  font-weight: var(--weight-regular);
+}
+
+/* Role picker: one row per role — name, then its description cut to one line (full text on
+   hover). Rows rather than cards so the list stays short as roles are added; past about a dozen
+   it scrolls inside its own box instead of pushing the department pickers off the dialog. */
+.ac-role-list {
+  max-height: calc(var(--control-height) * 12);
+  overflow-y: auto;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-sm);
+}
+
+.ac-role-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, max-content) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+  min-height: var(--control-height);
+  padding: 0 var(--space-3);
+  background: var(--bg-surface);
+}
+
+.ac-role-row + .ac-role-row {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.ac-role-row:hover {
+  background: var(--surface-hover);
+}
+
+.ac-role-row.is-selected {
+  background: var(--hover-primary-bg);
+}
+
+.ac-role-row.is-locked,
+.ac-role-row.is-locked:hover {
+  background: var(--surface-subtle);
+}
+
+.ac-role-row.is-locked .ac-role-row__desc {
   cursor: not-allowed;
 }
 
-.accordion-wrapper .btn-primary {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
+.ac-role-row .custom-check-container {
+  margin-bottom: 0;
+  color: var(--text-strong);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
 }
 
-.accordion-wrapper .btn-primary:hover {
-  background-color: #0b5ed7;
-  border-color: #0a58ca;
+.ac-role-row__desc {
+  overflow: hidden;
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
 }
 
-.user-accordion-header .accordion-button:focus {
-  z-index: 3;
-  outline: 0;
-  box-shadow: none !important;
+.ac-scope-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
-.user-accordion-header .accordion-button {
-  border-radius: 0 !important;
+.ac-scope-chip {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+  height: var(--chip-height);
+  padding: 0 var(--space-1) 0 var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-sm);
+  background: var(--surface-subtle);
+  color: var(--text-body);
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
+}
+
+.ac-scope-chip__role {
+  color: var(--primary-color);
+}
+
+.ac-scope-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--tag-height);
+  height: var(--tag-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--border-radius-sm);
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+}
+
+.ac-scope-chip__remove:hover,
+.ac-scope-chip__remove:focus-visible {
+  background: var(--tint-danger-bg);
+  color: var(--tint-danger-fg);
+  outline: none;
+}
+
+/* Role dialog header line and the custom-role details block. */
+.ac-role-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-bottom: var(--space-3);
+}
+
+.ac-role-details {
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-md);
+  background: var(--surface-subtle);
+}
+
+.ac-role-details__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Permissions, grouped by module. Columns fill the dialog and each group keeps its own height. */
+.ac-permission-groups {
+  columns: 3 280px;
+  column-gap: var(--space-3);
+}
+
+.ac-permission-group {
+  break-inside: avoid;
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-sm);
+  background: var(--bg-surface);
+}
+
+.ac-permission-group__header {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--space-2);
+}
+
+.ac-permission-group__title {
+  color: var(--text-strong);
+  font-weight: var(--weight-semibold);
   font-size: var(--font-size-body);
+  line-height: var(--leading-body);
 }
 
-.user-accordion-header .accordion-button strong {
-  font-size: var(--font-size-body);
+.ac-link-btn {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--primary-color);
+  font-weight: var(--weight-semibold);
+  font-size: var(--font-size-secondary);
+  cursor: pointer;
 }
 
-.user-accordion-header .accordion-button .badge {
+.ac-link-btn:hover,
+.ac-link-btn:focus-visible {
+  text-decoration: underline;
+}
+
+.ac-permission-option + .ac-permission-option,
+.ac-permission-granted + .ac-permission-granted {
+  margin-top: var(--space-2);
+}
+
+.ac-permission-option .custom-check-container {
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+
+.ac-permission-option .custom-check-container .form-check-input {
+  flex-shrink: 0;
+  margin-top: 0.15em;
+}
+
+/* The key is the technical name: shown small under the readable description, and allowed to
+   break anywhere, since `organization_directory.workflow.directory_admin` is one long word. */
+.ac-permission-key {
+  display: block;
+  padding-left: calc(1.1em + var(--space-2));
+  color: var(--text-soft);
   font-size: var(--font-size-tertiary);
-  padding: 0.4em 1em !important;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  line-height: var(--leading-tertiary);
+  overflow-wrap: anywhere;
 }
 
-.accordion-wrapper .bg-primary {
-  background-color: #0d6efd !important;
+.ac-permission-granted {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  color: var(--text-body);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
 }
 
-.accordion-wrapper .bg-opacity-10 {
-  --bs-bg-opacity: 0.1;
+.ac-permission-granted__icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: var(--tint-success-fg);
+}
+
+.ac-permission-granted .ac-permission-key {
+  padding-left: 0;
+}
+
+/* On a phone the description goes under the name, and may wrap, rather than being cut to a
+   sliver beside it. */
+@media (width <= 768px) {
+  /* Search box and its button on one line, the box taking the room. */
+  .ac-screen .admin-toolbar__filters {
+    flex-wrap: nowrap;
+  }
+
+  .ac-screen .admin-toolbar__filters .form-control {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+
+  .ac-screen .admin-toolbar__filters .custom-btn {
+    min-width: 0;
+  }
+
+  /* Each row becomes a small card, so the row's action stays on screen instead of sitting at
+     the end of a table scrolled sideways. */
+  .ac-stack-table thead {
+    display: none;
+  }
+
+  .ac-stack-table,
+  .ac-stack-table tbody,
+  .ac-stack-table tr,
+  .ac-stack-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .admin-card .ac-stack-table > tbody td {
+    padding: var(--space-1) var(--space-4);
+    border-top: 0;
+  }
+
+  .admin-card .ac-stack-table > tbody tr {
+    padding: var(--space-2) 0;
+  }
+
+  .admin-card .ac-stack-table > tbody tr + tr {
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  .ac-stack-table .admin-actions {
+    justify-content: flex-start;
+  }
+
+  /* Role counts read as "3 users · 17 permissions" once the column headers are gone. */
+  .admin-card .ac-stack-table > tbody td[data-label] {
+    display: inline-block;
+    width: auto;
+    padding-right: 0;
+    color: var(--text-soft);
+    font-size: var(--font-size-secondary);
+  }
+
+  .ac-stack-table td[data-label]::after {
+    content: ' ' attr(data-label);
+  }
+
+  /* Rows grow taller here, and the dialog itself scrolls, so a second scroll box inside it
+     would only trap the thumb. */
+  .ac-role-list {
+    max-height: none;
+  }
+
+  .ac-role-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .ac-role-row__desc {
+    padding-left: calc(1.1em + var(--space-2));
+    white-space: normal;
+  }
 }

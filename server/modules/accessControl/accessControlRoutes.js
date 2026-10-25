@@ -14,6 +14,10 @@ router.use(authMiddleware);
 
 const canReadAccessControl = permissionMiddleware(['access_control.read', 'access_control.manage']);
 const canManageAccessControl = permissionMiddleware(['access_control.manage']);
+// What a role and a permission ARE is system configuration: anyone below Super Admin who could
+// edit them could grant their own role any approval stage. `access_control.manage` assigns
+// existing roles to people; only a Super Admin defines them.
+const canDefineAccessControl = superAdminMiddleware;
 
 // Rate limiter: 100 requests per 15 minutes
 // const limiter = rateLimit({
@@ -25,25 +29,25 @@ const canManageAccessControl = permissionMiddleware(['access_control.manage']);
 // router.use(limiter);
 
 router.get('/permissions', canReadAccessControl, accessControlController.getPermissions);
-router.post('/permissions', canManageAccessControl, accessControlController.createPermission);
+router.post('/permissions', canDefineAccessControl, accessControlController.createPermission);
 router.put(
   '/permissions/:permissionId',
-  canManageAccessControl,
+  canDefineAccessControl,
   accessControlController.updatePermission,
 );
 router.delete(
   '/permissions/:permissionId',
-  canManageAccessControl,
+  canDefineAccessControl,
   accessControlController.deletePermission,
 );
 
 router.get('/roles', canReadAccessControl, accessControlController.getRoles);
-router.post('/roles', canManageAccessControl, accessControlController.createRole);
-router.put('/roles/:roleId', canManageAccessControl, accessControlController.updateRole);
-router.delete('/roles/:roleId', canManageAccessControl, accessControlController.deleteRole);
+router.post('/roles', canDefineAccessControl, accessControlController.createRole);
+router.put('/roles/:roleId', canDefineAccessControl, accessControlController.updateRole);
+router.delete('/roles/:roleId', canDefineAccessControl, accessControlController.deleteRole);
 router.put(
   '/roles/:roleId/permissions',
-  canManageAccessControl,
+  canDefineAccessControl,
   accessControlController.updateRolePermissions,
 );
 

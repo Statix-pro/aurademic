@@ -1,33 +1,21 @@
-import {
-  ChevronDown,
-  ChevronRight,
-  ChevronLeft,
-  Edit2,
-  CheckCircle,
-  Shield,
-  ShieldCheck,
-  UserCog,
-  Plus,
-  Trash2,
-  Save,
-  RefreshCw,
-  Search,
-  X,
-} from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Eye, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Badge, Button, Form, Spinner, Accordion, Card } from 'react-bootstrap';
-import Select, { GroupProps, GroupHeadingProps, components } from 'react-select';
+import { Alert, Form, Spinner, Table } from 'react-bootstrap';
 
+import { useAuth } from '../../../contexts/AuthContext';
+import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomButton from '../../../shared/components/ui/CustomButton';
+import CustomCheckbox from '../../../shared/components/ui/CustomCheckbox';
+import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
+import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomToggle from '../../../shared/components/ui/CustomToggle';
+import DeleteConfirmationModal from '../../../shared/components/ui/DeleteConfirmationModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import {
-  canAccessAdminArea,
-  canAccessBudgetApproval,
-  canManageAccessControl,
-} from '../../../shared/utils/permissionUtils';
+import { isSuperAdmin } from '../../../shared/utils/permissionUtils';
+import { AdminIconButton, AdminScreenHeader, AdminTabs } from '../components/AdminScreen';
 
 import './AccessControlPage.css';
-import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
-import DeleteConfirmationModal from '../../../shared/components/ui/DeleteConfirmationModal';
 
 interface Permission {
   id: number;
@@ -91,7 +79,19 @@ interface RoleMetaDraft {
   is_admin_role: boolean;
 }
 
-const getPermissionGroupKey = (permission: Permission): string => {
+interface EntityOption extends OptionType {
+  type: string;
+}
+
+type TabKey = 'users' | 'roles';
+
+// Roles held per department or club are assigned through the two pickers, and every signed-in
+// user holds `user` implicitly — none of them is a checkbox.
+const NON_GLOBAL_ROLE_CODES = ['user', 'hod', 'coordinator'];
+
+const ROWS_PER_PAGE_OPTIONS = [10, 20, 50];
+
+const getPermissionGroupKey = (permission: { permission_key: string; module_key: string }) => {
   if (permission.permission_key?.startsWith('budget.')) {
     return 'budget';
   }
@@ -99,28 +99,88 @@ const getPermissionGroupKey = (permission: Permission): string => {
   return permission.module_key;
 };
 
-const getRoleBadgeClassName = (roleCode: string): string => {
-  const code = roleCode?.toLowerCase();
-  if (code === 'super_admin') {
-    return 'assigned-role-tag assigned-role-tag-super-admin';
-  }
-
-  if (code === 'admin') {
-    return 'assigned-role-tag assigned-role-tag-admin';
-  }
-
-  if (code === 'hod') {
-    return 'assigned-role-tag assigned-role-tag-hod';
-  }
-
-  if (code === 'coordinator') {
-    return 'assigned-role-tag assigned-role-tag-coordinator';
-  }
-
-  return 'assigned-role-tag assigned-role-tag-default';
+const formatModuleLabel = (moduleKey: string): string => {
+  const words = moduleKey.replace(/_/g, ' ').trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
+const getRoleTagClassName = (roleCode: string): string => {
+  const code = roleCode?.toLowerCase();
+  const variant = ['super_admin', 'admin', 'hod', 'coordinator'].includes(code)
+    ? code.replace('_', '-')
+    : 'default';
+
+  return `admin-badge ac-role-tag ac-role-tag--${variant}`;
+};
+
+// Order-insensitive, so ticking a box and unticking it again counts as no change.
+const sameKeys = (a: string[], b: string[]): boolean =>
+  a.length === b.length && a.every((key) => b.includes(key));
+
+const getErrorMessage = (err: unknown, fallback: string): string => {
+  const errorObj = err as { response?: { data?: { message?: string } }; message?: string };
+  return errorObj.response?.data?.message || errorObj.message || fallback;
+};
+
+interface PermissionPickerProps {
+  groups: [string, Permission[]][];
+  selectedKeys: string[];
+  idPrefix: string;
+  onToggle: (permissionKey: string) => void;
+  onToggleGroup: (permissionKeys: string[], select: boolean) => void;
+}
+
+/** Every permission as a checkbox, grouped by module, with select-all per module. */
+const PermissionPicker: React.FC<PermissionPickerProps> = ({
+  groups,
+  selectedKeys,
+  idPrefix,
+  onToggle,
+  onToggleGroup,
+}) => (
+  <div className="ac-permission-groups">
+    {groups.map(([moduleKey, modulePermissions]) => {
+      const keys = modulePermissions.map((permission) => permission.permission_key);
+      const selectedCount = keys.filter((key) => selectedKeys.includes(key)).length;
+      const allSelected = selectedCount === keys.length;
+
+      return (
+        <div key={moduleKey} className="ac-permission-group">
+          <div className="ac-permission-group__header">
+            <span className="ac-permission-group__title">{formatModuleLabel(moduleKey)}</span>
+            <button
+              type="button"
+              className="ac-link-btn"
+              onClick={() => onToggleGroup(keys, !allSelected)}
+            >
+              {allSelected ? 'Clear' : 'Select all'}
+            </button>
+          </div>
+          {modulePermissions.map((permission) => (
+            <div key={permission.permission_key} className="ac-permission-option">
+              <CustomCheckbox
+                id={`${idPrefix}-${permission.permission_key}`}
+                name={`${idPrefix}-${permission.permission_key}`}
+                label={permission.description || permission.action_key}
+                checked={selectedKeys.includes(permission.permission_key)}
+                onChange={() => onToggle(permission.permission_key)}
+              />
+              <span className="ac-permission-key">{permission.permission_key}</span>
+            </div>
+          ))}
+        </div>
+      );
+    })}
+  </div>
+);
+
 const AccessControlPage: React.FC = () => {
+  const { user: currentUser } = useAuth();
+  // Mirrors the server (accessControlRoutes / updateUserRoles): below Super Admin you assign
+  // existing roles to other people, but you do not define roles, grant Super Admin, or edit your
+  // own access. The server enforces it; this only keeps the screen from offering what will 403.
+  const viewerIsSuperAdmin = isSuperAdmin(currentUser);
+  const isCurrentUser = (userId: number) => Number(currentUser?.id) === userId;
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [users, setUsers] = useState<AccessUser[]>([]);
@@ -138,7 +198,12 @@ const AccessControlPage: React.FC = () => {
   const [savingRoleMetaId, setSavingRoleMetaId] = useState<number | null>(null);
   const [deletingRoleId, setDeletingRoleId] = useState<number | null>(null);
 
-  const [expandedUser, setExpandedUser] = useState<number | null>(null); // New state for accordion
+  const [activeTab, setActiveTab] = useState<TabKey>('users');
+  const [editingUserId, setEditingUserId] = useState<number | null>(null);
+  const [viewingRoleId, setViewingRoleId] = useState<number | null>(null);
+  // Role permissions open read-only; changing them is a deliberate second step.
+  const [editingRolePermissions, setEditingRolePermissions] = useState(false);
+  const [showCreateRole, setShowCreateRole] = useState(false);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(20);
@@ -185,82 +250,6 @@ const AccessControlPage: React.FC = () => {
     role: null,
   });
 
-  const handleSyncRolesClick = () => {
-    showAlert(
-      'This will update the assigned HODs and Coordinators based on the department and club database. Do you want to continue?',
-      'warning',
-      'Update Roles',
-      true,
-      'Update Now',
-      () => {
-        closeAlert();
-        executeSyncRoles();
-      },
-    );
-  };
-
-  const executeSyncRoles = async () => {
-    setSyncRolesLoading(true);
-    setError('');
-    setSuccessMessage('');
-
-    try {
-      const response = await authenticityUtility.post('/access-control/sync-roles');
-      setSuccessMessage((response as any)?.data?.message || 'Roles synchronized successfully.');
-      await fetchAccessControlData(search);
-    } catch (err: unknown) {
-      console.error('Failed to sync roles', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(errorObj.response?.data?.message || errorObj.message || 'Failed to sync roles');
-    } finally {
-      setSyncRolesLoading(false);
-    }
-  };
-
-  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
-
-  const toggleGroup = (groupLabel: string) => {
-    setExpandedGroups((prev) =>
-      prev.includes(groupLabel) ? prev.filter((g) => g !== groupLabel) : [...prev, groupLabel],
-    );
-  };
-
-  const CollapsibleGroupHeading = (props: GroupHeadingProps<any>) => {
-    const isExpanded = expandedGroups.includes(props.data.label);
-    return (
-      <components.GroupHeading {...props}>
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleGroup(props.data.label);
-          }}
-          style={{
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            color: 'var(--bs-primary)',
-            fontWeight: 700,
-            fontSize: 'var(--font-size-tertiary)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px',
-          }}
-        >
-          {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-          {props.children}
-        </div>
-      </components.GroupHeading>
-    );
-  };
-
-  const CollapsibleGroup = (props: GroupProps<any>) => {
-    const isExpanded = expandedGroups.includes(props.data.label);
-    return <components.Group {...props}>{isExpanded && props.children}</components.Group>;
-  };
-
   const [roleName, setRoleName] = useState('');
   const [roleCode, setRoleCode] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
@@ -269,7 +258,7 @@ const AccessControlPage: React.FC = () => {
   // System Entity references for manual binding
   const [masterEntities, setMasterEntities] = useState<any[]>([]);
 
-  const hodOptions = useMemo(() => {
+  const hodOptions = useMemo<EntityOption[]>(() => {
     return masterEntities
       .filter((e) => e.entity_type === 'DEPARTMENT')
       .map((e) => ({ label: e.entity_name, value: e.entity_id, type: 'DEPARTMENT' }))
@@ -278,7 +267,7 @@ const AccessControlPage: React.FC = () => {
 
   const coordinatorOptions = useMemo(() => {
     const nonDepts = masterEntities.filter((e) => e.entity_type !== 'DEPARTMENT');
-    const groups: Record<string, { label: string; value: number; type: string }[]> = {};
+    const groups: Record<string, EntityOption[]> = {};
 
     nonDepts.forEach((e) => {
       const type = e.entity_type || 'OTHER';
@@ -294,7 +283,7 @@ const AccessControlPage: React.FC = () => {
       }));
   }, [masterEntities]);
 
-  const permissionsByModule = useMemo(() => {
+  const permissionGroups = useMemo(() => {
     const grouped: Record<string, Permission[]> = {};
 
     permissions.forEach((permission) => {
@@ -307,8 +296,15 @@ const AccessControlPage: React.FC = () => {
       grouped[groupKey].push(permission);
     });
 
-    return grouped;
+    return Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b));
   }, [permissions]);
+
+  // Every role a person holds institution-wide. Not filtered on is_admin_role: Directory Admin is
+  // deliberately not an admin role (it would open all of /api/admin) yet is still assigned here.
+  const globalRoles = useMemo(
+    () => roles.filter((role) => !NON_GLOBAL_ROLE_CODES.includes(role.role_code)),
+    [roles],
+  );
 
   const fetchAccessControlData = async (
     searchValue = '',
@@ -346,8 +342,6 @@ const AccessControlPage: React.FC = () => {
       setRoles(fetchedRoles);
       setUsers(fetchedUsers);
 
-      // Aggregating available entities
-      console.log('ORG_UNITS_API_RESPONSE_LOG', orgUnitsResponse);
       const rawOrgUnits =
         (orgUnitsResponse as any)?.data?.data?.all || (orgUnitsResponse as any)?.data?.all || [];
 
@@ -387,15 +381,7 @@ const AccessControlPage: React.FC = () => {
       setRoleMetaDrafts(initialRoleMetaDrafts);
     } catch (err: unknown) {
       console.error('Failed to load access control data', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(
-        errorObj.response?.data?.message ||
-          errorObj.message ||
-          'Failed to load access control data',
-      );
+      setError(getErrorMessage(err, 'Failed to load access control data'));
     } finally {
       if (showPageLoader) {
         setLoading(false);
@@ -407,14 +393,63 @@ const AccessControlPage: React.FC = () => {
     void fetchAccessControlData('', { showPageLoader: true });
   }, []);
 
-  const toggleCreateRolePermissionSelection = (permissionKey: string) => {
-    setSelectedPermissionKeys((previousKeys) => {
-      if (previousKeys.includes(permissionKey)) {
-        return previousKeys.filter((key) => key !== permissionKey);
-      }
+  // A confirmation has done its job once read; left up, it pushed the tabs down indefinitely.
+  useEffect(() => {
+    if (!successMessage) return undefined;
+    const timer = window.setTimeout(() => setSuccessMessage(''), 4000);
+    return () => window.clearTimeout(timer);
+  }, [successMessage]);
 
-      return [...previousKeys, permissionKey];
-    });
+  const handleSyncRolesClick = () => {
+    showAlert(
+      'This will update the assigned HODs and Coordinators based on the department and club database. Do you want to continue?',
+      'warning',
+      'Update Roles',
+      true,
+      'Update Now',
+      () => {
+        closeAlert();
+        executeSyncRoles();
+      },
+    );
+  };
+
+  const executeSyncRoles = async () => {
+    setSyncRolesLoading(true);
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const response = await authenticityUtility.post('/access-control/sync-roles');
+      setSuccessMessage((response as any)?.data?.message || 'Roles synchronized successfully.');
+      await fetchAccessControlData(search);
+    } catch (err: unknown) {
+      console.error('Failed to sync roles', err);
+      setError(getErrorMessage(err, 'Failed to sync roles'));
+    } finally {
+      setSyncRolesLoading(false);
+    }
+  };
+
+  const toggleKey = (keys: string[], key: string) =>
+    keys.includes(key) ? keys.filter((existing) => existing !== key) : [...keys, key];
+
+  const toggleKeyGroup = (keys: string[], groupKeys: string[], select: boolean) =>
+    select
+      ? Array.from(new Set([...keys, ...groupKeys]))
+      : keys.filter((key) => !groupKeys.includes(key));
+
+  const resetCreateRoleForm = () => {
+    setRoleName('');
+    setRoleCode('');
+    setRoleDescription('');
+    setSelectedPermissionKeys([]);
+  };
+
+  const closeCreateRole = () => {
+    setShowCreateRole(false);
+    setError('');
+    resetCreateRoleForm();
   };
 
   const handleCreateRole = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -437,41 +472,58 @@ const AccessControlPage: React.FC = () => {
         permission_keys: selectedPermissionKeys,
       });
 
-      setRoleName('');
-      setRoleCode('');
-      setRoleDescription('');
-      setSelectedPermissionKeys([]);
-
+      resetCreateRoleForm();
+      setShowCreateRole(false);
       setSuccessMessage('Role created successfully.');
       await fetchAccessControlData(search);
     } catch (err: unknown) {
       console.error('Failed to create role', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(errorObj.response?.data?.message || errorObj.message || 'Failed to create role');
+      setError(getErrorMessage(err, 'Failed to create role'));
     } finally {
       setRoleCreationLoading(false);
     }
   };
 
-  const toggleRolePermissionDraft = (roleId: number, permissionKey: string) => {
-    setRolePermissionDrafts((previousDrafts) => {
-      const currentRolePermissions = previousDrafts[roleId] || [];
+  const viewingRole = roles.find((role) => role.id === viewingRoleId) || null;
 
-      if (currentRolePermissions.includes(permissionKey)) {
-        return {
-          ...previousDrafts,
-          [roleId]: currentRolePermissions.filter((key) => key !== permissionKey),
-        };
-      }
+  const resetRoleDrafts = (role: Role) => {
+    setRolePermissionDrafts((prev) => ({
+      ...prev,
+      [role.id]: role.permissions.map((permission) => permission.permission_key),
+    }));
+    setRoleMetaDrafts((prev) => ({
+      ...prev,
+      [role.id]: {
+        role_name: role.role_name,
+        description: role.description || '',
+        is_admin_role: role.is_admin_role,
+      },
+    }));
+  };
 
-      return {
-        ...previousDrafts,
-        [roleId]: [...currentRolePermissions, permissionKey],
-      };
-    });
+  const openRole = (role: Role) => {
+    setError('');
+    resetRoleDrafts(role);
+    setEditingRolePermissions(false);
+    setViewingRoleId(role.id);
+  };
+
+  const closeRole = () => {
+    if (viewingRole) resetRoleDrafts(viewingRole);
+    setError('');
+    setEditingRolePermissions(false);
+    setViewingRoleId(null);
+  };
+
+  const cancelRolePermissionEdit = () => {
+    if (viewingRole) {
+      setRolePermissionDrafts((prev) => ({
+        ...prev,
+        [viewingRole.id]: viewingRole.permissions.map((permission) => permission.permission_key),
+      }));
+    }
+    setError('');
+    setEditingRolePermissions(false);
   };
 
   const handleSaveRolePermissions = async (roleId: number) => {
@@ -485,19 +537,35 @@ const AccessControlPage: React.FC = () => {
       });
 
       setSuccessMessage('Role permissions updated successfully.');
+      setEditingRolePermissions(false);
       await fetchAccessControlData(search);
     } catch (err: unknown) {
       console.error('Failed to update role permissions', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(
-        errorObj.response?.data?.message || errorObj.message || 'Failed to update role permissions',
-      );
+      setError(getErrorMessage(err, 'Failed to update role permissions'));
     } finally {
       setSavingRoleId(null);
     }
+  };
+
+  const confirmSaveRolePermissions = (role: Role) => {
+    const draftCount = (rolePermissionDrafts[role.id] || []).length;
+    const holders = role.assigned_user_count;
+    const impact =
+      holders === 0
+        ? 'No one holds this role yet.'
+        : `This changes access for the ${holders} user${holders === 1 ? '' : 's'} who hold it.`;
+
+    showAlert(
+      `Save ${draftCount} permission${draftCount === 1 ? '' : 's'} for ${role.role_name}? ${impact}`,
+      'warning',
+      'Change role permissions',
+      true,
+      'Save',
+      () => {
+        closeAlert();
+        void handleSaveRolePermissions(role.id);
+      },
+    );
   };
 
   const updateRoleMetaDraft = <K extends keyof RoleMetaDraft>(
@@ -537,11 +605,7 @@ const AccessControlPage: React.FC = () => {
       await fetchAccessControlData(search);
     } catch (err: unknown) {
       console.error('Failed to update role', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(errorObj.response?.data?.message || errorObj.message || 'Failed to update role');
+      setError(getErrorMessage(err, 'Failed to update role'));
     } finally {
       setSavingRoleMetaId(null);
     }
@@ -563,36 +627,48 @@ const AccessControlPage: React.FC = () => {
 
     try {
       await authenticityUtility.delete(`/access-control/roles/${role.id}`);
+      if (viewingRoleId === role.id) setViewingRoleId(null);
       setSuccessMessage('Role deleted successfully.');
       await fetchAccessControlData(search);
     } catch (err: unknown) {
       console.error('Failed to delete role', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(errorObj.response?.data?.message || errorObj.message || 'Failed to delete role');
+      setError(getErrorMessage(err, 'Failed to delete role'));
     } finally {
       setDeletingRoleId(null);
     }
   };
 
+  const editingUser = users.find((accessUser) => accessUser.id === editingUserId) || null;
+
+  const resetUserDrafts = (accessUser: AccessUser) => {
+    setUserRoleDrafts((prev) => ({
+      ...prev,
+      [accessUser.id]: accessUser.roles.map((assignedRole) => assignedRole.role_code),
+    }));
+    setUserEntityRoleDrafts((prev) => ({
+      ...prev,
+      [accessUser.id]: accessUser.entity_roles || [],
+    }));
+  };
+
+  const openUser = (accessUser: AccessUser) => {
+    setError('');
+    resetUserDrafts(accessUser);
+    setEditingUserId(accessUser.id);
+  };
+
+  // Cancelling drops the unsaved ticks, so reopening the user shows what is actually stored.
+  const closeUser = () => {
+    if (editingUser) resetUserDrafts(editingUser);
+    setError('');
+    setEditingUserId(null);
+  };
+
   const toggleUserRoleDraft = (userId: number, roleCodeValue: string) => {
-    setUserRoleDrafts((previousDrafts) => {
-      const existingDraft = previousDrafts[userId] || [];
-
-      if (existingDraft.includes(roleCodeValue)) {
-        return {
-          ...previousDrafts,
-          [userId]: existingDraft.filter((roleCode) => roleCode !== roleCodeValue),
-        };
-      }
-
-      return {
-        ...previousDrafts,
-        [userId]: [...existingDraft, roleCodeValue],
-      };
-    });
+    setUserRoleDrafts((previousDrafts) => ({
+      ...previousDrafts,
+      [userId]: toggleKey(previousDrafts[userId] || [], roleCodeValue),
+    }));
   };
 
   const addUserEntityRoleDraft = (
@@ -623,8 +699,8 @@ const AccessControlPage: React.FC = () => {
             entity_id: selectedEntity.entity_id,
             entity_type: selectedEntity.entity_type,
             entity_name: selectedEntity.entity_name,
-            role_code: selectedRole!.role_code,
-            role_name: selectedRole!.role_name,
+            role_code: selectedRole.role_code,
+            role_name: selectedRole.role_name,
           },
         ],
       };
@@ -654,679 +730,728 @@ const AccessControlPage: React.FC = () => {
         entity_roles: userEntityRoleDrafts[userId] || [],
       });
 
+      setEditingUserId(null);
       setSuccessMessage('User roles updated successfully.');
       await fetchAccessControlData(search);
     } catch (err: unknown) {
       console.error('Failed to update user roles', err);
-      const errorObj = err as {
-        response?: { data?: { message?: string } };
-        message?: string;
-      };
-      setError(
-        errorObj.response?.data?.message || errorObj.message || 'Failed to update user roles',
-      );
+      setError(getErrorMessage(err, 'Failed to update user roles'));
     } finally {
       setSavingUserId(null);
     }
   };
 
-  const runUserSearch = async () => {
+  const runUserSearch = async (searchValue = search) => {
     setCurrentPage(1);
-    await fetchAccessControlData(search);
+    await fetchAccessControlData(searchValue);
   };
+
+  const totalPages = Math.max(1, Math.ceil(users.length / rowsPerPage));
+  const pageUsers = users.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+
+  // A failure while a dialog is open is shown inside it, where the person is looking.
+  const dialogOpen = editingUserId !== null || viewingRoleId !== null || showCreateRole;
+  const dialogError = dialogOpen && error ? <Alert variant="danger">{error}</Alert> : null;
+
+  const renderUserRoleTags = (accessUser: AccessUser) => {
+    const allRoles = [
+      ...accessUser.roles.map((r) => ({ ...r, entity_name: '' })),
+      ...(accessUser.entity_roles || []),
+    ].filter((r) => String(r.role_code || '').toLowerCase() !== 'user');
+
+    if (allRoles.length === 0) {
+      return <span className="admin-muted">No roles</span>;
+    }
+
+    const visibleRoles = allRoles.slice(0, 3);
+    const remainingCount = allRoles.length - visibleRoles.length;
+
+    return (
+      <div className="ac-role-tags">
+        {visibleRoles.map((r, i) => (
+          <span key={`${r.role_code}-${i}`} className={getRoleTagClassName(r.role_code)}>
+            {r.role_code === 'hod' ? 'HOD' : r.role_name}
+            {r.entity_name ? `: ${r.entity_name}` : ''}
+          </span>
+        ))}
+        {remainingCount > 0 && (
+          <span
+            className="admin-badge ac-role-tag ac-role-tag--default"
+            title={allRoles
+              .slice(3)
+              .map((r) => (r.entity_name ? `${r.role_name}: ${r.entity_name}` : r.role_name))
+              .join(', ')}
+          >
+            +{remainingCount} more
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  const renderUsersTab = () => (
+    <>
+      <div className="admin-toolbar">
+        <div className="admin-toolbar__filters">
+          <Form.Control
+            type="search"
+            placeholder="Search by name or email"
+            aria-label="Search users by name or email"
+            value={search}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setSearch(nextValue);
+              // Emptying the box (or its clear button) goes back to everyone, without a second
+              // press of Search.
+              if (!nextValue && search) void runUserSearch('');
+            }}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void runUserSearch();
+              }
+            }}
+          />
+          <CustomButton
+            variant="light"
+            className="admin-btn-secondary"
+            onClick={() => void runUserSearch()}
+          >
+            Search
+          </CustomButton>
+        </div>
+      </div>
+
+      <div className="admin-card table-responsive">
+        <Table hover className="ac-users-table ac-stack-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Roles</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {pageUsers.map((accessUser) => (
+              <tr key={accessUser.id}>
+                <td>
+                  <div className="admin-name">{accessUser.name || 'Unnamed User'}</div>
+                  <div className="ac-secondary">
+                    {accessUser.email} · ID {accessUser.id}
+                  </div>
+                </td>
+                <td>{renderUserRoleTags(accessUser)}</td>
+                <td>
+                  <div className="admin-actions">
+                    <CustomButton
+                      size="sm"
+                      variant="light"
+                      className="admin-btn-secondary ac-row-btn"
+                      onClick={() => openUser(accessUser)}
+                      disabled={!viewerIsSuperAdmin && isCurrentUser(accessUser.id)}
+                      title={
+                        !viewerIsSuperAdmin && isCurrentUser(accessUser.id)
+                          ? 'Ask a Super Admin to change your own roles'
+                          : undefined
+                      }
+                    >
+                      Edit roles
+                    </CustomButton>
+                  </div>
+                </td>
+              </tr>
+            ))}
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={3} className="admin-empty">
+                  No users found for this search.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </Table>
+      </div>
+
+      {users.length > ROWS_PER_PAGE_OPTIONS[0] && (
+        <div className="ac-pager">
+          <label className="ac-pager__rows">
+            Rows per page
+            <Form.Select
+              className="ac-pager__select"
+              value={rowsPerPage}
+              onChange={(event) => {
+                setRowsPerPage(Number(event.target.value));
+                setCurrentPage(1);
+              }}
+            >
+              {ROWS_PER_PAGE_OPTIONS.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </Form.Select>
+          </label>
+          <span className="ac-secondary">
+            {(currentPage - 1) * rowsPerPage + 1}–
+            {Math.min(currentPage * rowsPerPage, users.length)} of {users.length}
+          </span>
+          <div className="ac-pager__nav">
+            <AdminIconButton
+              icon={<ChevronLeft size={16} aria-hidden="true" />}
+              label="Previous page"
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+            />
+            <span className="ac-secondary">
+              Page {currentPage} of {totalPages}
+            </span>
+            <AdminIconButton
+              icon={<ChevronRight size={16} aria-hidden="true" />}
+              label="Next page"
+              disabled={currentPage >= totalPages}
+              onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+            />
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const renderRolesTab = () => (
+    <div className="admin-card table-responsive">
+      <Table hover className="ac-roles-table ac-stack-table">
+        <thead>
+          <tr>
+            <th>Role</th>
+            <th>Type</th>
+            <th>Users</th>
+            <th>Permissions</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {roles.map((role) => (
+            <tr key={role.id}>
+              <td>
+                <div className="admin-name">{role.role_name}</div>
+                {role.description && <div className="ac-secondary">{role.description}</div>}
+              </td>
+              <td>
+                <span
+                  className={`admin-badge ${role.is_system ? 'admin-badge--muted' : 'admin-badge--info'}`}
+                >
+                  {role.is_system ? 'System' : 'Custom'}
+                </span>
+              </td>
+              <td
+                className="ac-number"
+                data-label={role.assigned_user_count === 1 ? 'user' : 'users'}
+              >
+                {role.assigned_user_count}
+              </td>
+              <td
+                className="ac-number"
+                data-label={role.permissions.length === 1 ? 'permission' : 'permissions'}
+              >
+                {role.permissions.length}
+              </td>
+              <td>
+                <div className="admin-actions">
+                  <AdminIconButton
+                    icon={<Eye size={16} aria-hidden="true" />}
+                    label={`View ${role.role_name}`}
+                    onClick={() => openRole(role)}
+                  />
+                  {viewerIsSuperAdmin && !role.is_system && (
+                    <AdminIconButton
+                      icon={<Trash2 size={16} aria-hidden="true" />}
+                      label={
+                        role.assigned_user_count > 0
+                          ? 'Remove this role from every user before deleting it'
+                          : `Delete ${role.role_name}`
+                      }
+                      variant="danger"
+                      disabled={deletingRoleId === role.id || role.assigned_user_count > 0}
+                      onClick={() => handleDeleteRoleClick(role)}
+                    />
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+          {roles.length === 0 && (
+            <tr>
+              <td colSpan={5} className="admin-empty">
+                No roles found.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </Table>
+    </div>
+  );
+
+  const renderUserModal = () => {
+    if (!editingUser) return null;
+
+    const draftRoleCodes = userRoleDrafts[editingUser.id] || [];
+    const draftEntityRoles = userEntityRoleDrafts[editingUser.id] || [];
+    const selectedGlobalCount = globalRoles.filter((role) =>
+      draftRoleCodes.includes(role.role_code),
+    ).length;
+    const entityRoleKey = (er: EntityRole) => `${er.role_code}:${er.entity_id}`;
+    const userChanged =
+      !sameKeys(
+        draftRoleCodes,
+        editingUser.roles.map((r) => r.role_code),
+      ) ||
+      !sameKeys(
+        draftEntityRoles.map(entityRoleKey),
+        (editingUser.entity_roles || []).map(entityRoleKey),
+      );
+
+    return (
+      <CustomModal
+        show
+        onHide={closeUser}
+        title={`Edit roles — ${editingUser.name || 'Unnamed User'}`}
+        className="admin-modal ac-user-modal"
+        footer={
+          <>
+            <CustomButton variant="light" className="admin-btn-secondary" onClick={closeUser}>
+              Cancel
+            </CustomButton>
+            <CustomButton
+              onClick={() => void saveUserRoles(editingUser.id)}
+              loading={savingUserId === editingUser.id}
+              disabled={!userChanged}
+            >
+              Save
+            </CustomButton>
+          </>
+        }
+      >
+        {dialogError}
+        <p className="ac-secondary ac-modal-lead">{editingUser.email}</p>
+
+        <div className="ac-section-label ac-section-label--split">
+          Roles
+          <span className="ac-secondary">{selectedGlobalCount} selected</span>
+        </div>
+        <div className="ac-role-list">
+          {globalRoles.map((role) => {
+            const checkboxId = `user-${editingUser.id}-role-${role.role_code}`;
+            const selected = draftRoleCodes.includes(role.role_code);
+            // Shown, not hidden, so an Admin can still see who is a Super Admin.
+            const locked = role.role_code === 'super_admin' && !viewerIsSuperAdmin;
+            const description = locked
+              ? 'Only a Super Admin can grant or remove this role'
+              : role.description;
+
+            return (
+              <div
+                key={role.role_code}
+                className={`ac-role-row ${selected ? 'is-selected' : ''} ${locked ? 'is-locked' : ''}`.trim()}
+              >
+                <CustomCheckbox
+                  id={checkboxId}
+                  name={checkboxId}
+                  label={role.role_name}
+                  checked={selected}
+                  disabled={locked}
+                  onChange={() => toggleUserRoleDraft(editingUser.id, role.role_code)}
+                />
+                {/* A label too, so the whole row toggles; the full text shows on hover when
+                    it is cut short. */}
+                <label
+                  htmlFor={checkboxId}
+                  className="ac-role-row__desc"
+                  title={description || undefined}
+                >
+                  {description}
+                </label>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="ac-section-label">Department &amp; club roles</div>
+        <div className="admin-form-grid">
+          <CustomDropdown
+            label="HOD of department"
+            name={`user-${editingUser.id}-hod`}
+            options={hodOptions}
+            value={null}
+            placeholder="Add a department..."
+            onChange={(selected) => {
+              const option = selected as EntityOption | null;
+              if (option) {
+                addUserEntityRoleDraft(editingUser.id, 'hod', Number(option.value), option.type);
+              }
+            }}
+          />
+          <CustomDropdown
+            label="Coordinator of club / cell"
+            name={`user-${editingUser.id}-coordinator`}
+            options={coordinatorOptions}
+            value={null}
+            placeholder="Add a club or cell..."
+            onChange={(selected) => {
+              const option = selected as EntityOption | null;
+              if (option) {
+                addUserEntityRoleDraft(
+                  editingUser.id,
+                  'coordinator',
+                  Number(option.value),
+                  option.type,
+                );
+              }
+            }}
+          />
+        </div>
+
+        {draftEntityRoles.length > 0 ? (
+          <div className="ac-scope-chips">
+            {draftEntityRoles.map((er) => (
+              <span key={`${er.role_code}-${er.entity_id}`} className="ac-scope-chip">
+                <span className="ac-scope-chip__role">
+                  {er.role_code === 'hod' ? 'HOD' : er.role_name}
+                </span>
+                {er.entity_name}
+                <button
+                  type="button"
+                  className="ac-scope-chip__remove"
+                  aria-label={`Remove ${er.role_name} of ${er.entity_name}`}
+                  title="Remove"
+                  onClick={() =>
+                    removeUserEntityRoleDraft(editingUser.id, er.role_code, er.entity_id)
+                  }
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="ac-secondary">Not HOD or coordinator of anything.</p>
+        )}
+      </CustomModal>
+    );
+  };
+
+  const renderRoleModal = () => {
+    if (!viewingRole) return null;
+
+    const isSuperAdminRole = viewingRole.role_code === 'super_admin';
+    const draftKeys = rolePermissionDrafts[viewingRole.id] || [];
+    const metaDraft = roleMetaDrafts[viewingRole.id];
+    const permissionsChanged = !sameKeys(
+      draftKeys,
+      viewingRole.permissions.map((permission) => permission.permission_key),
+    );
+    const detailsChanged =
+      !!metaDraft &&
+      (metaDraft.role_name !== viewingRole.role_name ||
+        metaDraft.description !== (viewingRole.description || '') ||
+        metaDraft.is_admin_role !== viewingRole.is_admin_role);
+    const grantedGroups = permissionGroups
+      .map(
+        ([moduleKey, modulePermissions]) =>
+          [
+            moduleKey,
+            modulePermissions.filter((permission) =>
+              viewingRole.permissions.some(
+                (granted) => granted.permission_key === permission.permission_key,
+              ),
+            ),
+          ] as [string, Permission[]],
+      )
+      .filter(([, granted]) => granted.length > 0);
+
+    const footer = editingRolePermissions ? (
+      <>
+        <CustomButton
+          variant="light"
+          className="admin-btn-secondary"
+          onClick={cancelRolePermissionEdit}
+        >
+          Cancel
+        </CustomButton>
+        <CustomButton
+          onClick={() => confirmSaveRolePermissions(viewingRole)}
+          loading={savingRoleId === viewingRole.id}
+          disabled={!permissionsChanged}
+        >
+          Save permissions
+        </CustomButton>
+      </>
+    ) : (
+      <>
+        <CustomButton variant="light" className="admin-btn-secondary" onClick={closeRole}>
+          Close
+        </CustomButton>
+        {viewerIsSuperAdmin && !isSuperAdminRole && (
+          <CustomButton onClick={() => setEditingRolePermissions(true)}>
+            Edit permissions
+          </CustomButton>
+        )}
+      </>
+    );
+
+    return (
+      <CustomModal
+        show
+        onHide={closeRole}
+        title={viewingRole.role_name}
+        className="admin-modal ac-role-modal"
+        scrollable
+        footer={footer}
+      >
+        {dialogError}
+        <div className="ac-role-meta">
+          <span
+            className={`admin-badge ${viewingRole.is_system ? 'admin-badge--muted' : 'admin-badge--info'}`}
+          >
+            {viewingRole.is_system ? 'System' : 'Custom'}
+          </span>
+          {viewingRole.is_admin_role && (
+            <span className="admin-badge admin-badge--yes">Opens the admin area</span>
+          )}
+          <span className="ac-secondary">
+            {viewingRole.assigned_user_count} user
+            {viewingRole.assigned_user_count === 1 ? '' : 's'} · code {viewingRole.role_code}
+          </span>
+        </div>
+        {(viewingRole.is_system || !viewerIsSuperAdmin) && viewingRole.description && (
+          <p className="ac-modal-lead">{viewingRole.description}</p>
+        )}
+
+        {viewerIsSuperAdmin && !viewingRole.is_system && metaDraft && (
+          <div className="ac-role-details">
+            <div className="admin-form-grid">
+              <CustomInput
+                label="Role name"
+                name={`role-${viewingRole.id}-name`}
+                value={metaDraft.role_name}
+                onChange={(value) => updateRoleMetaDraft(viewingRole.id, 'role_name', value)}
+                required
+              />
+              <CustomInput
+                label="Description"
+                name={`role-${viewingRole.id}-description`}
+                value={metaDraft.description}
+                onChange={(value) => updateRoleMetaDraft(viewingRole.id, 'description', value)}
+              />
+            </div>
+            <div className="ac-role-details__actions">
+              <CustomToggle
+                name={`role-${viewingRole.id}-admin`}
+                label="Opens the admin area"
+                checked={metaDraft.is_admin_role}
+                onChange={(checked) =>
+                  updateRoleMetaDraft(viewingRole.id, 'is_admin_role', checked)
+                }
+              />
+              <CustomButton
+                size="sm"
+                onClick={() => void handleSaveRoleMeta(viewingRole.id)}
+                loading={savingRoleMetaId === viewingRole.id}
+                disabled={!detailsChanged}
+              >
+                Save details
+              </CustomButton>
+            </div>
+          </div>
+        )}
+
+        <div className="ac-section-label">
+          {editingRolePermissions
+            ? `Permissions — ${draftKeys.length} of ${permissions.length} selected`
+            : `Permissions (${viewingRole.permissions.length})`}
+        </div>
+
+        {isSuperAdminRole ? (
+          <p className="ac-secondary">Super Admin&apos;s permissions are locked.</p>
+        ) : (
+          !viewerIsSuperAdmin && (
+            <p className="ac-secondary">Only a Super Admin can change what a role allows.</p>
+          )
+        )}
+
+        {editingRolePermissions ? (
+          <PermissionPicker
+            groups={permissionGroups}
+            selectedKeys={draftKeys}
+            idPrefix={`role-${viewingRole.id}`}
+            onToggle={(key) =>
+              setRolePermissionDrafts((prev) => ({
+                ...prev,
+                [viewingRole.id]: toggleKey(prev[viewingRole.id] || [], key),
+              }))
+            }
+            onToggleGroup={(keys, select) =>
+              setRolePermissionDrafts((prev) => ({
+                ...prev,
+                [viewingRole.id]: toggleKeyGroup(prev[viewingRole.id] || [], keys, select),
+              }))
+            }
+          />
+        ) : grantedGroups.length > 0 ? (
+          <div className="ac-permission-groups">
+            {grantedGroups.map(([moduleKey, granted]) => (
+              <div key={moduleKey} className="ac-permission-group">
+                <div className="ac-permission-group__header">
+                  <span className="ac-permission-group__title">{formatModuleLabel(moduleKey)}</span>
+                </div>
+                {granted.map((permission) => (
+                  <div key={permission.permission_key} className="ac-permission-granted">
+                    <Check size={16} aria-hidden="true" className="ac-permission-granted__icon" />
+                    <div>
+                      <div>{permission.description || permission.action_key}</div>
+                      <span className="ac-permission-key">{permission.permission_key}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="ac-secondary">This role has no permissions.</p>
+        )}
+      </CustomModal>
+    );
+  };
+
+  const renderCreateRoleModal = () => (
+    <CustomModal
+      show={showCreateRole}
+      onHide={closeCreateRole}
+      title="New role"
+      className="admin-modal ac-role-modal"
+      scrollable
+      footer={
+        <>
+          <CustomButton variant="light" className="admin-btn-secondary" onClick={closeCreateRole}>
+            Cancel
+          </CustomButton>
+          <CustomButton type="submit" form="ac-create-role-form" loading={roleCreationLoading}>
+            Create role
+          </CustomButton>
+        </>
+      }
+    >
+      <Form id="ac-create-role-form" onSubmit={handleCreateRole}>
+        {dialogError}
+        <div className="admin-form-grid">
+          <CustomInput
+            label="Role name"
+            name="new-role-name"
+            value={roleName}
+            onChange={setRoleName}
+            placeholder="e.g. Department Reviewer"
+            required
+          />
+          <CustomInput
+            label="Role code (optional)"
+            name="new-role-code"
+            value={roleCode}
+            onChange={setRoleCode}
+            placeholder="e.g. department_reviewer"
+          />
+          <CustomInput
+            label="Description"
+            name="new-role-description"
+            className="admin-field--full"
+            value={roleDescription}
+            onChange={setRoleDescription}
+            placeholder="Optional description"
+          />
+        </div>
+
+        <div className="ac-section-label">
+          Permissions — {selectedPermissionKeys.length} of {permissions.length} selected
+        </div>
+        <PermissionPicker
+          groups={permissionGroups}
+          selectedKeys={selectedPermissionKeys}
+          idPrefix="new-role"
+          onToggle={(key) => setSelectedPermissionKeys((prev) => toggleKey(prev, key))}
+          onToggleGroup={(keys, select) =>
+            setSelectedPermissionKeys((prev) => toggleKeyGroup(prev, keys, select))
+          }
+        />
+      </Form>
+    </CustomModal>
+  );
 
   return (
     <>
-      <div className="access-control-wrapper">
-        <div className="access-control-header">
-          <h2>Access Control</h2>
-          <p>
-            Fully role-based access: create roles, map existing permissions, and assign roles to
-            users.
-          </p>
-        </div>
+      <div className="admin-screen ac-screen">
+        <AdminScreenHeader
+          title="Access Control"
+          description="Give people roles, and see what each role lets them do."
+          actions={
+            activeTab === 'users' ? (
+              <CustomButton
+                variant="light"
+                className="admin-btn-secondary"
+                onClick={handleSyncRolesClick}
+                disabled={syncRolesLoading || loading}
+              >
+                {syncRolesLoading ? (
+                  <Spinner as="span" animation="border" size="sm" aria-hidden="true" />
+                ) : (
+                  <RefreshCw size={16} aria-hidden="true" />
+                )}
+                Sync HODs &amp; coordinators
+              </CustomButton>
+            ) : viewerIsSuperAdmin ? (
+              <CustomButton
+                onClick={() => {
+                  setError('');
+                  setShowCreateRole(true);
+                }}
+                disabled={loading}
+              >
+                <Plus size={16} aria-hidden="true" />
+                New role
+              </CustomButton>
+            ) : null
+          }
+        />
 
-        {error && <Alert variant="danger">{error}</Alert>}
-        {successMessage && <Alert variant="success">{successMessage}</Alert>}
+        {!dialogOpen && error && <Alert variant="danger">{error}</Alert>}
+        {successMessage && (
+          <Alert variant="success" dismissible onClose={() => setSuccessMessage('')}>
+            {successMessage}
+          </Alert>
+        )}
+
+        <AdminTabs<TabKey>
+          tabs={[
+            { key: 'users', label: 'Users', count: users.length },
+            { key: 'roles', label: 'Roles', count: roles.length },
+          ]}
+          active={activeTab}
+          onChange={setActiveTab}
+        />
 
         {loading ? (
-          <div className="loading-state">
+          <div className="text-center py-5">
             <Spinner animation="border" role="status">
               <span className="visually-hidden">Loading...</span>
             </Spinner>
           </div>
+        ) : activeTab === 'users' ? (
+          renderUsersTab()
         ) : (
-          <>
-            <section className="access-card">
-              <h4>Create New Role</h4>
-              <Form onSubmit={handleCreateRole}>
-                <div className="role-form-grid">
-                  <Form.Group>
-                    <Form.Label>Role Name *</Form.Label>
-                    <Form.Control
-                      type="text"
-                      value={roleName}
-                      onChange={(event) => setRoleName(event.target.value)}
-                      placeholder="e.g. Department Reviewer"
-                      required
-                    />
-                  </Form.Group>
-
-                  <Form.Group>
-                    <Form.Label>Role Code (optional)</Form.Label>
-                    <Form.Control
-                      type="text"
-                      value={roleCode}
-                      onChange={(event) => setRoleCode(event.target.value)}
-                      placeholder="e.g. department_reviewer"
-                    />
-                  </Form.Group>
-                </div>
-
-                <Form.Group className="mt-3">
-                  <Form.Label>Description</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={2}
-                    value={roleDescription}
-                    onChange={(event) => setRoleDescription(event.target.value)}
-                    placeholder="Optional description"
-                  />
-                </Form.Group>
-
-                <div className="permissions-container mt-3">
-                  {Object.keys(permissionsByModule)
-                    .sort()
-                    .map((moduleKey) => (
-                      <div key={moduleKey} className="permission-module-block">
-                        <h6>{moduleKey.replace(/_/g, ' ')}</h6>
-                        <div className="permission-checkbox-group">
-                          {permissionsByModule[moduleKey].map((permission) => (
-                            <Form.Check
-                              key={permission.permission_key}
-                              type="checkbox"
-                              id={`new-role-${permission.permission_key}`}
-                              label={`${permission.action_key.toUpperCase()} (${permission.permission_key})`}
-                              checked={selectedPermissionKeys.includes(permission.permission_key)}
-                              onChange={() =>
-                                toggleCreateRolePermissionSelection(permission.permission_key)
-                              }
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                </div>
-
-                <Button type="submit" className="mt-3" disabled={roleCreationLoading}>
-                  {roleCreationLoading ? 'Creating Role...' : 'Create Role'}
-                </Button>
-              </Form>
-            </section>
-
-            <section className="access-card mt-4">
-              <div className="role-overview-header">
-                <h4>Manage Roles</h4>
-              </div>
-              <div className="role-badges">
-                {roles.map((role) => {
-                  const roleMetaDraft = roleMetaDrafts[role.id];
-                  const rolePermissionDraft = rolePermissionDrafts[role.id] || [];
-
-                  return (
-                    <div key={role.id} className="role-chip role-chip-detailed">
-                      <div className="role-chip-title">
-                        <span>{role.role_name}</span>
-                        {role.is_system ? (
-                          <Badge bg="secondary">System</Badge>
-                        ) : (
-                          <Badge bg="info">Custom</Badge>
-                        )}
-                      </div>
-
-                      <small>{role.role_code}</small>
-                      <small>Assigned Users: {role.assigned_user_count}</small>
-
-                      <Form.Group>
-                        <Form.Label>Role Name</Form.Label>
-                        <Form.Control
-                          type="text"
-                          value={roleMetaDraft?.role_name || ''}
-                          disabled={role.is_system}
-                          onChange={(event) =>
-                            updateRoleMetaDraft(role.id, 'role_name', event.target.value)
-                          }
-                        />
-                      </Form.Group>
-
-                      <Form.Group>
-                        <Form.Label>Description</Form.Label>
-                        <Form.Control
-                          as="textarea"
-                          rows={2}
-                          value={roleMetaDraft?.description || ''}
-                          disabled={role.is_system}
-                          onChange={(event) =>
-                            updateRoleMetaDraft(role.id, 'description', event.target.value)
-                          }
-                        />
-                      </Form.Group>
-
-                      <Form.Check
-                        type="checkbox"
-                        label="Counts as Admin role"
-                        checked={Boolean(roleMetaDraft?.is_admin_role)}
-                        disabled={role.is_system}
-                        onChange={(event) =>
-                          updateRoleMetaDraft(role.id, 'is_admin_role', event.target.checked)
-                        }
-                      />
-
-                      {!role.is_system && (
-                        <div className="role-action-buttons-wrapper mt-2">
-                          <Button
-                            size="sm"
-                            variant="primary"
-                            onClick={() => handleSaveRoleMeta(role.id)}
-                            disabled={savingRoleMetaId === role.id}
-                          >
-                            {savingRoleMetaId === role.id ? 'Saving...' : 'Save Role Info'}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="danger"
-                            onClick={() => handleDeleteRoleClick(role)}
-                            disabled={deletingRoleId === role.id || role.assigned_user_count > 0}
-                          >
-                            {deletingRoleId === role.id ? 'Deleting...' : 'Delete Role'}
-                          </Button>
-                        </div>
-                      )}
-
-                      <div className="permission-checkbox-group role-permission-grid">
-                        {permissions.map((permission) => (
-                          <Form.Check
-                            key={`${role.id}-${permission.permission_key}`}
-                            type="checkbox"
-                            id={`role-${role.id}-${permission.permission_key}`}
-                            label={permission.permission_key}
-                            checked={rolePermissionDraft.includes(permission.permission_key)}
-                            onChange={() =>
-                              toggleRolePermissionDraft(role.id, permission.permission_key)
-                            }
-                            disabled={role.role_code === 'super_admin'}
-                          />
-                        ))}
-                      </div>
-
-                      <Button
-                        size="sm"
-                        onClick={() => handleSaveRolePermissions(role.id)}
-                        disabled={savingRoleId === role.id || role.role_code === 'super_admin'}
-                      >
-                        {savingRoleId === role.id
-                          ? 'Saving...'
-                          : role.role_code === 'super_admin'
-                            ? 'Locked'
-                            : 'Save Role Permissions'}
-                      </Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className="access-card mt-4">
-              <div className="users-header-row">
-                <div className="d-flex align-items-center gap-3">
-                  <h4 className="mb-0">User Role Assignment</h4>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={handleSyncRolesClick}
-                    disabled={syncRolesLoading}
-                  >
-                    {syncRolesLoading ? (
-                      <>
-                        <Spinner
-                          as="span"
-                          animation="border"
-                          size="sm"
-                          role="status"
-                          aria-hidden="true"
-                        />{' '}
-                        Syncing...
-                      </>
-                    ) : (
-                      'Sync Roles'
-                    )}
-                  </Button>
-                </div>
-                <div className="search-form">
-                  <Form.Control
-                    type="text"
-                    placeholder="Search by name or email"
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void runUserSearch();
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline-primary"
-                    onClick={() => void runUserSearch()}
-                  >
-                    Search
-                  </Button>
-                </div>
-              </div>
-              <div className="accordion-wrapper mt-3 bg-white border rounded shadow-sm">
-                <div
-                  className="d-flex align-items-center text-muted fw-bold px-4 py-3 border-bottom bg-light bg-opacity-50"
-                  style={{ fontSize: 'var(--font-size-secondary)' }}
-                >
-                  <div style={{ flex: '0 0 35%' }}>USER</div>
-                  <div style={{ flex: '1' }}>ROLE SUMMARY</div>
-                  <div style={{ flex: '0 0 150px', textAlign: 'right' }}>ACTIONS</div>
-                </div>
-
-                <Accordion
-                  activeKey={expandedUser?.toString()}
-                  onSelect={(k) => setExpandedUser(k ? Number(k) : null)}
-                  flush
-                >
-                  {(() => {
-                    const indexOfLastUser = currentPage * rowsPerPage;
-                    const indexOfFirstUser = indexOfLastUser - rowsPerPage;
-                    const currentUsers = users.slice(indexOfFirstUser, indexOfLastUser);
-
-                    if (users.length === 0) {
-                      return (
-                        <div className="text-center p-5 text-muted">
-                          No users found for this search.
-                        </div>
-                      );
-                    }
-
-                    return currentUsers.map((accessUser) => {
-                      const draftRoleCodes = userRoleDrafts[accessUser.id] || [];
-                      const draftEntityRoles = userEntityRoleDrafts[accessUser.id] || [];
-                      const allRoles = [
-                        ...accessUser.roles.map((r) => ({ ...r, type: 'global' })),
-                        ...(accessUser.entity_roles || []).map((r) => ({ ...r, type: 'context' })),
-                      ].filter((r) => String(r.role_code || '').toLowerCase() !== 'user');
-                      const visibleRoles = allRoles.slice(0, 2);
-                      const remainingCount = allRoles.length - 2;
-
-                      return (
-                        <Accordion.Item
-                          eventKey={accessUser.id.toString()}
-                          key={accessUser.id}
-                          className="border-bottom-0 border-top"
-                        >
-                          <Accordion.Header className="user-accordion-header">
-                            <div className="d-flex align-items-center w-100 pe-3">
-                              <div
-                                className="me-3 text-secondary d-flex align-items-center"
-                                style={{ width: '20px' }}
-                              >
-                                {expandedUser === accessUser.id ? (
-                                  <ChevronDown size={18} />
-                                ) : (
-                                  <ChevronRight size={18} />
-                                )}
-                              </div>
-                              <div style={{ flex: '0 0 34%' }} className="d-flex flex-column">
-                                <strong className="text-dark">
-                                  {accessUser.name || 'Unnamed User'}
-                                </strong>
-                                <span className="text-muted small">
-                                  {accessUser.email}, ID: {accessUser.id}
-                                </span>
-                              </div>
-                              <div
-                                style={{ flex: '1' }}
-                                className="d-flex align-items-center gap-2"
-                              >
-                                {visibleRoles.map((r, i) => (
-                                  <span key={i} className={getRoleBadgeClassName(r.role_code)}>
-                                    {r.role_code === 'hod'
-                                      ? 'Head of Department'
-                                      : r.role_code === 'coordinator'
-                                        ? 'Coordinator'
-                                        : r.role_name}
-                                    {r.type === 'context' && (r as any).entity_name && (
-                                      <span
-                                        className="ms-1 opacity-75"
-                                        style={{ fontSize: 'var(--font-size-tertiary)' }}
-                                      >
-                                        : {(r as any).entity_name}
-                                      </span>
-                                    )}
-                                  </span>
-                                ))}
-                                {remainingCount > 0 && (
-                                  <span className="assigned-role-tag assigned-role-tag-default">
-                                    +{remainingCount} more
-                                  </span>
-                                )}
-                                {allRoles.length === 0 && (
-                                  <span className="assigned-role-tag assigned-role-tag-empty">
-                                    No roles assigned
-                                  </span>
-                                )}
-                              </div>
-                              <div style={{ flex: '0 0 150px', textAlign: 'right' }}>
-                                <Button
-                                  variant="light"
-                                  size="sm"
-                                  className="rounded-pill px-3 border shadow-sm fw-medium d-flex align-items-center ms-auto gap-1 bg-white"
-                                  style={{ color: '#6c757d', borderColor: '#dee2e6' }}
-                                >
-                                  <Edit2
-                                    size={13}
-                                    style={{ strokeWidth: 3 }}
-                                    className="text-muted"
-                                  />{' '}
-                                  Edit Roles
-                                </Button>
-                              </div>
-                            </div>
-                          </Accordion.Header>
-                          <Accordion.Body className="bg-light bg-opacity-50 border-top p-4">
-                            <div className="row g-4 mb-4">
-                              {/* Global Roles Column */}
-                              <div className="col-md-5">
-                                <h6 className="fw-bold mb-3 fontSize-sm text-dark">GLOBAL ROLES</h6>
-                                <div className="d-flex gap-4 flex-wrap">
-                                  {roles
-                                    .filter(
-                                      (r) =>
-                                        r.is_admin_role &&
-                                        !['hod', 'coordinator'].includes(r.role_code),
-                                    )
-                                    .map((role) => (
-                                      <Form.Check
-                                        key={`${accessUser.id}-${role.role_code}`}
-                                        type="checkbox"
-                                        id={`user-role-${accessUser.id}-${role.role_code}`}
-                                        label={role.role_name}
-                                        checked={draftRoleCodes.includes(role.role_code)}
-                                        onChange={() =>
-                                          toggleUserRoleDraft(accessUser.id, role.role_code)
-                                        }
-                                        className="mb-0 custom-checkbox"
-                                      />
-                                    ))}
-                                </div>
-                              </div>
-
-                              {/* Context Roles Column */}
-                              <div className="col-md-7">
-                                {/* <h6 className="fw-bold mb-3 fontSize-sm text-dark">CONTEXT ROLES (ENTITY-BASED)</h6> */}
-                                <div className="row g-2">
-                                  <div className="col-md-6">
-                                    <label className="text-secondary small fw-medium mb-1">
-                                      HOD (Department)
-                                    </label>
-                                    <Select
-                                      classNamePrefix="react-select"
-                                      options={hodOptions}
-                                      value={null}
-                                      onChange={(selectedOption: any) => {
-                                        if (selectedOption) {
-                                          addUserEntityRoleDraft(
-                                            accessUser.id,
-                                            'hod',
-                                            selectedOption.value,
-                                            selectedOption.type,
-                                          );
-                                        }
-                                      }}
-                                      placeholder="Select Department..."
-                                      isClearable
-                                      onMenuOpen={() => {}}
-                                      menuPortalTarget={document.body}
-                                      styles={{
-                                        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                                        control: (base) => ({
-                                          ...base,
-                                          minHeight: 'var(--control-height)',
-                                          borderRadius: '8px',
-                                        }),
-                                      }}
-                                    />
-                                  </div>
-                                  <div className="col-md-6">
-                                    <label className="text-secondary small fw-medium mb-1">
-                                      Coordinator (Club/Other)
-                                    </label>
-                                    <Select
-                                      classNamePrefix="react-select"
-                                      options={coordinatorOptions}
-                                      components={{
-                                        GroupHeading: CollapsibleGroupHeading,
-                                        Group: CollapsibleGroup,
-                                      }}
-                                      value={null}
-                                      onChange={(selectedOption: any) => {
-                                        if (selectedOption) {
-                                          addUserEntityRoleDraft(
-                                            accessUser.id,
-                                            'coordinator',
-                                            selectedOption.value,
-                                            selectedOption.type,
-                                          );
-                                        }
-                                      }}
-                                      placeholder="Select Entity..."
-                                      isClearable
-                                      menuPortalTarget={document.body}
-                                      styles={{
-                                        menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-                                        control: (base) => ({
-                                          ...base,
-                                          minHeight: 'var(--control-height)',
-                                          borderRadius: '8px',
-                                        }),
-                                      }}
-                                    />
-                                  </div>
-
-                                  {/* Assigned Entity Roles Pills */}
-                                  {draftEntityRoles.length > 0 && (
-                                    <div className="mt-3 d-flex flex-wrap gap-2">
-                                      {draftEntityRoles.map((er, idx) => (
-                                        <div
-                                          key={`${accessUser.id}-${er.role_code}-${er.entity_id}-${idx}`}
-                                          className="d-inline-flex align-items-center bg-light text-dark rounded-pill px-3 py-1 mb-1 border shadow-sm"
-                                          style={{
-                                            fontSize: 'var(--font-size-tertiary)',
-                                            fontWeight: 500,
-                                          }}
-                                        >
-                                          <span
-                                            className="fw-bold text-muted me-2"
-                                            style={{
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.5px',
-                                              fontWeight: 'var(--weight-bold)',
-                                              fontSize: 'var(--font-size-tertiary)',
-                                            }}
-                                          >
-                                            {er.role_name}:
-                                          </span>
-                                          <span className="me-2">{er.entity_name}</span>
-                                          <button
-                                            className="btn btn-link p-0 text-dark opacity-50 d-flex align-items-center justify-content-center hover-opacity-100"
-                                            onClick={() =>
-                                              removeUserEntityRoleDraft(
-                                                accessUser.id,
-                                                er.role_code,
-                                                er.entity_id,
-                                              )
-                                            }
-                                            title="Remove assignment"
-                                            style={{
-                                              textDecoration: 'none',
-                                              transition: 'opacity 0.2s',
-                                            }}
-                                          >
-                                            <X size={12} strokeWidth={3} />
-                                          </button>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Action Footer */}
-                            <div
-                              className="d-flex justify-content-end gap-2 pt-3 border-top bg-white px-4 py-3 mx-n4 mb-n4 rounded-bottom"
-                              style={{
-                                borderBottomLeftRadius: 'var(--bs-border-radius)',
-                                borderBottomRightRadius: 'var(--bs-border-radius)',
-                              }}
-                            >
-                              <Button
-                                variant="primary"
-                                size="sm"
-                                className="px-4 shadow-sm fw-medium"
-                                onClick={() => {
-                                  showAlert(
-                                    `Are you sure you want to save the role assignments for ${accessUser.name}?`,
-                                    'info',
-                                    'Confirm Save',
-                                    true,
-                                    'Save',
-                                    async () => {
-                                      closeAlert();
-                                      await saveUserRoles(accessUser.id);
-                                      setExpandedUser(null);
-                                    },
-                                  );
-                                }}
-                                disabled={savingUserId === accessUser.id}
-                              >
-                                {savingUserId === accessUser.id ? 'Saving...' : 'Save'}
-                              </Button>
-                              <Button
-                                variant="light"
-                                size="sm"
-                                className="px-4 border shadow-sm fw-medium text-secondary"
-                                onClick={() => setExpandedUser(null)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </Accordion.Body>
-                        </Accordion.Item>
-                      );
-                    });
-                  })()}
-                </Accordion>
-
-                {users.length > 0 && (
-                  <div className="d-flex justify-content-end align-items-center py-3 px-4 bg-white border-top rounded-bottom">
-                    <div className="d-flex align-items-center gap-4">
-                      <div className="d-flex align-items-center gap-2">
-                        <span className="text-secondary small fw-medium">Rows per page:</span>
-                        <Form.Select
-                          size="sm"
-                          className="border rounded shadow-sm d-inline-block w-auto"
-                          style={{
-                            minWidth: '70px',
-                            padding: '0 2.25rem 0 0.75rem',
-                            fontSize: 'var(--font-size-body)',
-                          }}
-                          value={rowsPerPage}
-                          onChange={(e) => {
-                            setRowsPerPage(Number(e.target.value));
-                            setCurrentPage(1);
-                          }}
-                        >
-                          <option value={10}>10</option>
-                          <option value={20}>20</option>
-                          <option value={50}>50</option>
-                        </Form.Select>
-                      </div>
-
-                      <span className="text-secondary small fw-medium">
-                        {(currentPage - 1) * rowsPerPage + 1}-
-                        {Math.min(currentPage * rowsPerPage, users.length)} of {users.length}
-                      </span>
-
-                      <div className="d-flex align-items-center gap-1 ms-2">
-                        <Button
-                          variant="light"
-                          size="sm"
-                          className="d-flex align-items-center gap-1 text-secondary border-0 bg-transparent fw-medium pagination-nav-btn"
-                          disabled={currentPage === 1}
-                          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                        >
-                          <ChevronLeft size={16} /> Previous
-                        </Button>
-
-                        <div className="d-flex align-items-center gap-1">
-                          {Array.from(
-                            { length: Math.ceil(users.length / rowsPerPage) },
-                            (_, i) => i + 1,
-                          )
-                            .filter(
-                              (p) =>
-                                p === 1 ||
-                                p === Math.ceil(users.length / rowsPerPage) ||
-                                Math.abs(p - currentPage) <= 1,
-                            )
-                            .map((p, idx, arr) => (
-                              <React.Fragment key={p}>
-                                {idx > 0 && arr[idx - 1] !== p - 1 && (
-                                  <span className="text-muted px-1">...</span>
-                                )}
-                                <Button
-                                  variant={currentPage === p ? 'primary' : 'light'}
-                                  size="sm"
-                                  className={`rounded fw-medium ${currentPage === p ? 'shadow-sm px-3' : 'border-0 bg-transparent text-secondary'}`}
-                                  style={{ minWidth: '32px' }}
-                                  onClick={() => setCurrentPage(p)}
-                                >
-                                  {p}
-                                </Button>
-                              </React.Fragment>
-                            ))}
-                        </div>
-
-                        <Button
-                          variant="light"
-                          size="sm"
-                          className="d-flex align-items-center gap-1 text-secondary border-0 bg-transparent fw-medium pagination-nav-btn"
-                          disabled={
-                            currentPage === Math.ceil(users.length / rowsPerPage) ||
-                            Math.ceil(users.length / rowsPerPage) === 0
-                          }
-                          onClick={() =>
-                            setCurrentPage((prev) =>
-                              Math.min(prev + 1, Math.ceil(users.length / rowsPerPage)),
-                            )
-                          }
-                        >
-                          Next <ChevronRight size={16} />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-          </>
+          renderRolesTab()
         )}
       </div>
+
+      {renderUserModal()}
+      {renderRoleModal()}
+      {renderCreateRoleModal()}
 
       <AlertModal
         show={alertConfig.show}
