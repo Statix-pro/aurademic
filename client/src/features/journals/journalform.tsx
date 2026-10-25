@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 
@@ -142,6 +142,41 @@ interface ExternalAuthorDetails {
   is_primary: boolean;
 }
 
+/** One year of a journal's official SCImago quartile, loaded by the Journal Import. */
+interface OfficialQuartile {
+  year: number;
+  quartile: string;
+}
+
+/** What the journal list knows about the chosen journal beyond its name and ISSNs. */
+interface JournalReference {
+  quartiles: OfficialQuartile[];
+  discontinued: boolean;
+  hasImpactFactor: boolean;
+}
+
+/** Reads the reference fields the journal search and the publication load both return. */
+const toJournalReference = (row: {
+  official_quartiles?: unknown;
+  scopus_discontinued?: unknown;
+  registry_impact_factor?: unknown;
+}): JournalReference => {
+  const raw =
+    typeof row.official_quartiles === 'string'
+      ? JSON.parse(row.official_quartiles)
+      : row.official_quartiles;
+  return {
+    quartiles: Array.isArray(raw)
+      ? raw
+          .filter((entry) => entry && entry.quartile)
+          .map((entry) => ({ year: Number(entry.year), quartile: String(entry.quartile) }))
+      : [],
+    discontinued: Boolean(Number(row.scopus_discontinued)),
+    hasImpactFactor:
+      row.registry_impact_factor !== null && row.registry_impact_factor !== undefined,
+  };
+};
+
 type PageOrArticleChoice = 'pages' | 'article';
 type EditRequestStatus = 'pending' | 'approved' | 'rejected' | 'none' | null;
 type ApprovalWorkflowStatus = 'pending' | 'approved' | 'rejected';
@@ -283,6 +318,12 @@ const JournalForm: React.FC<JournalFormProps> = ({
   // Which journal_options row the user picked. Sent with the submission so the server
   // links to exactly that entry rather than re-resolving an ambiguous journal name.
   const [journalOptionsId, setJournalOptionsId] = useState<number | null>(null);
+  // The chosen journal's official quartiles, Scopus status and whether the list has its
+  // Impact Factor — null until a journal is chosen.
+  const [journalReference, setJournalReference] = useState<JournalReference | null>(null);
+  // Bumped each time a saved record's quartile is written onto the radios, which happens a
+  // tick after the record loads, so the official quartile can be re-applied after it.
+  const [savedQuartileTicks, setSavedQuartileTicks] = useState(0);
   const [editMode, setEditMode] = useState<boolean>(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const mode = searchParams.get('mode');
@@ -489,6 +530,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
   const [bookChapterTitle, setBookChapterTitle] = useState<string>('');
   const [selectedSDGs, setSelectedSDGs] = useState<string[]>([]);
   const [currentType, setCurrentType] = useState<string>('');
+
   const [publicationDetails, setPublicationDetails] = useState<PublicationDetails>({
     conference_title: '',
     source: '',
@@ -538,6 +580,10 @@ const JournalForm: React.FC<JournalFormProps> = ({
     ? modeProp === 'view'
     : !!(journalId && new URLSearchParams(window.location.search).get('mode') !== 'edit');
 
+  // The journal list has no Impact Factor for the chosen journal, so the author enters one.
+  const impactFactorNeeded =
+    Boolean(journalReference) && !journalReference.hasImpactFactor && !(!editMode && isViewMode);
+
   // Parse category from URL path
   const pathname = window.location.pathname;
   let categoryParam = '';
@@ -569,6 +615,52 @@ const JournalForm: React.FC<JournalFormProps> = ({
 
   const effectiveCategory = getEffectiveCategory();
   const effectiveIsJournal = effectiveCategory === 'Journal';
+
+  /**
+   * The journal's official quartile for this paper: SCImago's for the publication year, or the
+   * latest year before it (a 2026 paper takes the 2025 ranking). The server applies the same
+   * rule on save, so while a journal article is being edited the radios are locked to it.
+   * Viewing a saved record shows the quartile it was saved with, untouched.
+   */
+  const officialQuartile = useMemo<OfficialQuartile | null>(() => {
+    if (!journalReference?.quartiles.length) return null;
+    const publicationYear = Number.parseInt(year, 10) || new Date().getFullYear();
+    return (
+      journalReference.quartiles
+        .filter((entry) => entry.year <= publicationYear)
+        .sort((a, b) => b.year - a.year)[0] ?? null
+    );
+  }, [journalReference, year]);
+
+  const lockedQuartile =
+    officialQuartile && effectiveIsJournal && !(!editMode && isViewMode) ? officialQuartile : null;
+
+  // The quartile radios are uncontrolled, like the rest of this form's fields read on submit,
+  // so the official value is ticked on the element itself. When it stops applying — another
+  // journal, an earlier year, a conference paper — the tick this form made is taken back, so
+  // it is never submitted as the author's own choice.
+  const autoTickedQuartileRef = useRef<string | null>(null);
+  const lockedQuartileValue = lockedQuartile?.quartile ?? null;
+  useEffect(() => {
+    const radioFor = (value: string) =>
+      document.querySelector<HTMLInputElement>(`input[name="quartile"][value="${value}"]`);
+
+    if (lockedQuartileValue) {
+      const radio = radioFor(lockedQuartileValue);
+      if (radio) {
+        radio.checked = true;
+        autoTickedQuartileRef.current = lockedQuartileValue;
+      }
+      return;
+    }
+
+    const previous = autoTickedQuartileRef.current;
+    if (previous) {
+      const radio = radioFor(previous);
+      if (radio?.checked) radio.checked = false;
+      autoTickedQuartileRef.current = null;
+    }
+  }, [lockedQuartileValue, savedQuartileTicks]);
   const effectiveIsConference = effectiveCategory === 'Conference';
   const effectiveIsBook = effectiveCategory === 'Book';
   const effectiveIsBookChapter = effectiveCategory === 'Book Chapter';
@@ -658,6 +750,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
         // the previous journal's National/International value.
         setIsInternational(false);
         setJournalOptionsId(null);
+        setJournalReference(null);
       }
     }
   }, [journalSearchQuery]);
@@ -1036,6 +1129,8 @@ const JournalForm: React.FC<JournalFormProps> = ({
           `input[name="quartile"][value="${journalData.quartile}"]`,
         ) as HTMLInputElement;
         if (quartileRadio) quartileRadio.checked = true;
+        // That ticked the saved value; when editing, the official quartile re-applies over it.
+        setSavedQuartileTicks((count) => count + 1);
 
         // Set Impact Factor
         if (journalData.impact_factor) {
@@ -1198,6 +1293,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
           onlineISSN: journalData.online_issn || '',
           website: journalData.website || '',
         });
+        setJournalReference(toJournalReference(journalData));
         // Set ref before setting search query to prevent dropdown from showing
         isLoadingJournalDataRef.current = true;
         setJournalSearchQuery(journalData.journal_name || '');
@@ -1538,6 +1634,7 @@ const JournalForm: React.FC<JournalFormProps> = ({
     setJournalSearchQuery(journal.name);
     setShowJournalSuggestions(false);
     setJournalOptionsId(Number(journal.id) || null);
+    setJournalReference(toJournalReference(journal));
 
     // Set Impact Factor and Cite Score from journal options
     const impactFactorInput = document.getElementById('impactFactorInput') as HTMLInputElement;
@@ -3368,14 +3465,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
                       </div>
                       <div className="col-lg">
                         <label className="form-label">Impact Factor</label>
+                        {/* From the journal list when it has one; when it does not, the
+                              author supplies it from the publisher's page. */}
                         <input
                           type="number"
                           step="0.001"
+                          min="0"
                           id="impactFactorInput"
                           name="impactFactorInput"
                           className="form-control"
-                          disabled={true}
-                          readOnly
+                          disabled={!impactFactorNeeded}
+                          readOnly={!impactFactorNeeded}
+                          placeholder={impactFactorNeeded ? 'Enter from publisher' : undefined}
                         />
                       </div>
                       <div className="col-lg">
@@ -3391,6 +3492,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
                         />
                       </div>
                     </div>
+                    {journalReference?.discontinued && (
+                      <p className="journal-reference-note journal-reference-note--warn mb-3">
+                        Scopus has discontinued this journal. Papers published after its last
+                        covered year are not Scopus-indexed.
+                      </p>
+                    )}
+                    {impactFactorNeeded && (
+                      <p className="journal-reference-note mb-3">
+                        The journal list has no Impact Factor for this journal yet — enter the one
+                        shown on the publisher&apos;s page.
+                      </p>
+                    )}
                   </>
                 )}
 
@@ -3556,12 +3669,18 @@ const JournalForm: React.FC<JournalFormProps> = ({
                             id={q.toLowerCase()}
                             name="quartile"
                             value={q === 'Nil' ? 'NA' : q}
-                            disabled={!editMode && isViewMode}
+                            disabled={(!editMode && isViewMode) || Boolean(lockedQuartile)}
                           />
                           <label htmlFor={q.toLowerCase()}>{q}</label>
                         </div>
                       ))}
                     </div>
+                    {lockedQuartile && (
+                      <p className="journal-reference-note">
+                        {lockedQuartile.quartile} · SCImago {lockedQuartile.year}, from the journal
+                        list
+                      </p>
+                    )}
                   </div>
                 </div>
               </div>

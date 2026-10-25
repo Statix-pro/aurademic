@@ -110,6 +110,41 @@ const resolveOptionCategory = async (executor, journalOptionsId, submittedCatego
   return normalizeCategory(rows[0]?.category, normalizeCategory(submittedCategory));
 };
 
+/**
+ * A journal's official quartiles by year (SCImago, loaded by the Journal Import), for the
+ * publication form to show and lock. Read alongside the journal's Scopus status so the form
+ * can warn about a journal Scopus has discontinued or never covered, and the list's Impact
+ * Factor so the form knows whether the faculty member has to supply one.
+ */
+const JOURNAL_REFERENCE_COLUMNS = `
+  jo.scopus_status,
+  jo.scopus_discontinued,
+  jo.impact_factor AS registry_impact_factor,
+  (SELECT JSON_ARRAYAGG(JSON_OBJECT('year', m.metric_year, 'quartile', m.value_text))
+     FROM journal_metrics_yearly m
+    WHERE m.journal_option_id = jo.id AND m.metric = 'quartile' AND m.source = 'scimago'
+  ) AS official_quartiles`;
+
+/**
+ * The quartile a journal article carries when the journal has an official one: SCImago's for
+ * the publication's year, or the latest year before it — a 2026 paper takes the 2025 ranking,
+ * since a year's ranking comes out the year after. The submitted value is used only when no
+ * such year exists (the journal is not ranked, or the paper predates every ranking loaded),
+ * the same way `resolveOptionCategory` takes the level from the registry rather than the form.
+ */
+const resolveOfficialQuartile = async (executor, journalOptionsId, publicationType, year) => {
+  if (!journalOptionsId || usesPlaceholderOption(publicationType)) return null;
+  const publicationYear = Number.parseInt(year, 10) || new Date().getFullYear();
+  const [rows] = await executor.query(
+    `SELECT value_text FROM journal_metrics_yearly
+      WHERE journal_option_id = ? AND metric = 'quartile' AND source = 'scimago'
+        AND metric_year <= ?
+      ORDER BY metric_year DESC LIMIT 1`,
+    [journalOptionsId, publicationYear],
+  );
+  return rows?.[0]?.value_text ?? null;
+};
+
 const journalModel = {
   async create(journalData) {
     const connection = await db.getConnection();
@@ -203,7 +238,13 @@ const journalModel = {
         book_chapter_title: journalData.book_chapter_title || null,
         type: journalData.type,
         journal_options_id: journalOptionsId,
-        quartile: journalData.quartile,
+        quartile:
+          (await resolveOfficialQuartile(
+            connection,
+            journalOptionsId,
+            journalData.type,
+            journalData.year,
+          )) ?? journalData.quartile,
         impact_factor: journalData.impact_factor,
         cite_score: journalData.cite_score,
         acknowledgement: JSON.stringify(journalData.acknowledgement),
@@ -319,7 +360,7 @@ const journalModel = {
       await connection.beginTransaction();
 
       const [journalRows] = await connection.query(
-        `SELECT j.journal_options_id, j.type, jo.journal_name
+        `SELECT j.journal_options_id, j.type, j.year, jo.journal_name
            FROM journals j
            LEFT JOIN journal_options jo ON jo.id = j.journal_options_id
           WHERE j.id = ?`,
@@ -388,6 +429,13 @@ const journalModel = {
         journal_options_id: journalOptionsId,
         category: await resolveOptionCategory(connection, journalOptionsId, journalData.category),
       };
+      const officialQuartile = await resolveOfficialQuartile(
+        connection,
+        journalOptionsId,
+        publicationType,
+        journalData.year ?? journalRows[0].year,
+      );
+      if (officialQuartile) updateData.quartile = officialQuartile;
 
       await connection.query('UPDATE journals SET ? WHERE id = ?', [updateData, journalId]);
 
@@ -774,51 +822,48 @@ const journalModel = {
     return rows;
   },
 
+  /**
+   * The publication form's journal picker. An ISSN finds its journal however it is typed —
+   * `2190-572X`, `2190572x` — since that is what a faculty member reads off a paper, and
+   * names alone collide ("International Journal of Engineering and Technology" is several
+   * journals).
+   */
   async searchJournals(query) {
     try {
       const queryStr = query ? query.trim() : '';
-      let sql = '';
-      let params = [];
+      const where = ['jo.is_placeholder = 0'];
+      const params = [];
 
-      if (!queryStr) {
-        // Return all journals when query is empty
-        sql = `
-          SELECT
-            jo.id,
-            jo.journal_name as name,
-            jo.publisher,
-            jo.website,
-            jo.print_issn as printISSN,
-            jo.online_issn as onlineISSN,
-            jo.impact_factor as impactFactor,
-            jo.cite_score as citeScore,
-            jo.category
-          FROM journal_options jo
-          WHERE jo.is_placeholder = 0
-          ORDER BY jo.journal_name
-          LIMIT 20
-        `;
-      } else {
-        const searchTerm = `%${queryStr}%`;
-        sql = `
-          SELECT
-            jo.id,
-            jo.journal_name as name,
-            jo.publisher,
-            jo.website,
-            jo.print_issn as printISSN,
-            jo.online_issn as onlineISSN,
-            jo.impact_factor as impactFactor,
-            jo.cite_score as citeScore,
-            jo.category
-          FROM journal_options jo
-          WHERE jo.journal_name LIKE ?
-            AND jo.is_placeholder = 0
-          ORDER BY jo.journal_name
-          LIMIT 20
-        `;
-        params = [searchTerm];
+      if (queryStr) {
+        const bareIssn = queryStr.toUpperCase().replace(/[^0-9X]/g, '');
+        if (/^\d{7}[\dX]$/.test(bareIssn)) {
+          where.push(
+            `(jo.journal_name LIKE ? OR REPLACE(jo.print_issn, '-', '') = ? OR REPLACE(jo.online_issn, '-', '') = ?)`,
+          );
+          params.push(`%${queryStr}%`, bareIssn, bareIssn);
+        } else {
+          where.push('jo.journal_name LIKE ?');
+          params.push(`%${queryStr}%`);
+        }
       }
+
+      const sql = `
+          SELECT
+            jo.id,
+            jo.journal_name as name,
+            jo.publisher,
+            jo.website,
+            jo.print_issn as printISSN,
+            jo.online_issn as onlineISSN,
+            jo.impact_factor as impactFactor,
+            jo.cite_score as citeScore,
+            jo.category,
+            ${JOURNAL_REFERENCE_COLUMNS}
+          FROM journal_options jo
+          WHERE ${where.join(' AND ')}
+          ORDER BY jo.journal_name
+          LIMIT 20
+        `;
 
       const [rows] = await db.query(sql, params);
       return rows;
@@ -900,7 +945,8 @@ j.*,
   jo.publisher,
   jo.website,
   jo.print_issn,
-  jo.online_issn
+  jo.online_issn,
+  ${JOURNAL_REFERENCE_COLUMNS}
                 FROM journals j
                 JOIN journal_options jo ON j.journal_options_id = jo.id
                 WHERE j.id = ?

@@ -418,6 +418,19 @@
   flex-wrap: nowrap;
 }
 
+/* Where a value came from the journal list (an official quartile), or what it is missing
+   (an Impact Factor) — help text under the field it explains. */
+.journal-reference-note {
+  margin: var(--space-2) 0 0;
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+}
+
+.journal-reference-note--warn {
+  color: var(--tint-danger-fg);
+}
+
 /* The shared tag inputs and dropdown bring a 16px bottom margin for stacked forms; in
    this card's rows it would push them out of line with the plain inputs beside them. */
 .article-details-card .custom-input-group {
