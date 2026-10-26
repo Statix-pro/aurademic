@@ -306,3 +306,212 @@
 .custom-tag-badge.badge:hover {
   background-color: #d0e6f9 !important;
 }
+
+/* CustomTable rows that open their record (onRowClick). */
+.custom-table tbody tr.custom-table-row-link {
+  cursor: pointer;
+}
+
+.custom-table tbody tr.custom-table-row-link:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -2px;
+}
+
+/* CustomPagination: rows-per-page and count on the left, page buttons on the right. */
+.custom-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-top: 12px;
+}
+
+.custom-pagination-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.custom-pagination-group .custom-input-group {
+  margin-bottom: 0;
+}
+
+/* Page buttons: 32px squares (the table icon-action size), the current page filled. */
+.custom-pagination-pages {
+  gap: 4px;
+}
+
+.custom-pagination .custom-btn.custom-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--icon-action-size);
+  height: var(--icon-action-size);
+  min-height: 0;
+  padding: 0 6px;
+  border: 1px solid #dbe4ed;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text-body);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
+  box-shadow: none;
+}
+
+.custom-pagination .custom-btn.custom-page-btn:hover:not(:disabled) {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  background: #f0f6ff;
+}
+
+.custom-pagination .custom-btn.custom-page-btn.active {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+  color: #ffffff;
+}
+
+.custom-pagination .custom-btn.custom-page-btn:disabled {
+  opacity: 0.45;
+}
+
+.custom-pagination-text {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  white-space: nowrap;
+}
+
+/* CustomChipList: read-only chips in a table cell (status-pill size, 12px 600). */
+.custom-chip-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.custom-chip {
+  display: inline-flex;
+  align-items: center;
+  height: var(--tag-height);
+  padding: 0 8px;
+  border-radius: 6px;
+  background: #eef2f7;
+  color: var(--text-body);
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.custom-chip.custom-chip--more {
+  background: transparent;
+  color: var(--text-soft);
+}
+
+/* CustomFilterSearch: a list header's search box, the same on every list page. */
+.custom-filter-search {
+  position: relative;
+  width: 300px;
+  max-width: 100%;
+}
+
+.custom-filter-search .custom-input-group {
+  margin-bottom: 0;
+}
+
+.custom-filter-search .form-control.custom-input {
+  height: var(--control-height);
+  padding: 0 36px 0 38px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  background: var(--bg-input);
+  box-shadow: none;
+  font-size: var(--font-size-body);
+}
+
+.custom-filter-search .form-control.custom-input:focus {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-focus);
+}
+
+.custom-filter-search .custom-filter-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 12px;
+  z-index: 2;
+  transform: translateY(-50%);
+  color: var(--placeholder-color);
+  pointer-events: none;
+}
+
+.custom-filter-search .custom-filter-search-clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-soft);
+  transform: translateY(-50%);
+  cursor: pointer;
+}
+
+.custom-filter-search .custom-filter-search-clear:hover {
+  color: var(--text-strong);
+  background: #eef2f7;
+}
+
+/* CustomSubmitterLine: who added a record, above its details. */
+.custom-submitter {
+  margin: 0 0 12px;
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+}
+
+.custom-submitter strong {
+  color: var(--text-body);
+  font-weight: var(--weight-semibold);
+}
+
+.custom-submitter.custom-submitter--prominent {
+  padding: 10px 14px;
+  border: 1px solid #dbe4ed;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--text-body);
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+}
+
+.custom-submitter.custom-submitter--prominent strong {
+  color: var(--text-strong);
+}
+
+/* CustomTabs: chip tabs that switch a page between views (32px chips, 13px 600). */
+.custom-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.custom-tabs .custom-tab {
+  height: var(--chip-height);
+  padding: 0 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text-body);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.custom-tabs .custom-tab.active {
+  border-color: #0069ab;
+  background: #0069ab;
+  color: #ffffff;
+}
