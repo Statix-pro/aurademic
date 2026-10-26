@@ -464,7 +464,8 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       const org = (p.organization || '').trim();
       const c = (p.city || '').trim();
       const s = (p.state || '').trim();
-      const co = (p.country || '').trim();
+      // Every new row starts with the default country, so it alone is not an entry.
+      const co = (p.country || '').trim() === DEFAULT_COUNTRY ? '' : (p.country || '').trim();
       const email = (p.officialEmail || '').trim();
       return (
         d !== '' || dept !== '' || org !== '' || c !== '' || s !== '' || co !== '' || email !== ''

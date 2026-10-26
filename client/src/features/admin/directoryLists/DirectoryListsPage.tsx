@@ -1,13 +1,17 @@
 import { Edit3, Plus, Trash2 } from 'lucide-react';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Badge } from 'react-bootstrap';
 import { useSearchParams } from 'react-router-dom';
 
 import { useAuth } from '../../../contexts/AuthContext';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomCard from '../../../shared/components/ui/CustomCard';
+import CustomFilterSearch from '../../../shared/components/ui/CustomFilterSearch';
 import CustomInput from '../../../shared/components/ui/CustomInput';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomPagination, {
+  PAGE_SIZE_OPTIONS,
+} from '../../../shared/components/ui/CustomPagination';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import CustomTabs, { TabOption } from '../../../shared/components/ui/CustomTabs';
 import CustomToggle from '../../../shared/components/ui/CustomToggle';
@@ -45,6 +49,10 @@ const DIRECTORIES: Record<
   },
 };
 
+// DEFAULT_TAG in server/modules/shared/directoryLists.js, which refuses to rename, retire or
+// delete it.
+const DEFAULT_TAG = 'General';
+
 const LISTS: TabOption<ListKey>[] = [
   { value: 'tag', label: 'Tag' },
   { value: 'specialization', label: 'Specialization' },
@@ -79,24 +87,50 @@ export default function DirectoryListsPage() {
   const [deleting, setDeleting] = useState<ListEntry | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    try {
-      const response = (await authenticityUtility.get(`${endpoint}/all`)) as any;
-      setEntries(response.data || []);
-      setError('');
-    } catch (err: any) {
-      setError(err?.message || 'Failed to load the lists.');
-    }
-  }, [endpoint]);
+  // Entry ids are per directory, and edits and deletes go to the current directory's
+  // endpoint by id. So a response for a directory the admin has since left is dropped, and
+  // an open dialog closes when the directory changes.
+  const endpointRef = useRef(endpoint);
+  endpointRef.current = endpoint;
 
   useEffect(() => {
+    let current = true;
     setEntries([]);
     setNotice('');
-    void load();
-  }, [load]);
+    setEditing(null);
+    setDeleting(null);
+    (async () => {
+      try {
+        const response = (await authenticityUtility.get(`${endpoint}/all`)) as any;
+        if (!current) return;
+        setEntries(response.data || []);
+        setError('');
+      } catch (err: any) {
+        if (current) setError(err?.message || 'Failed to load the lists.');
+      }
+    })();
+    return () => {
+      current = false;
+    };
+  }, [endpoint]);
 
-  const rows = useMemo(() => entries.filter((entry) => entry.list_key === list), [entries, list]);
+  const [search, setSearch] = useState('');
+  const rows = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    return entries.filter(
+      (entry) => entry.list_key === list && (!needle || entry.name.toLowerCase().includes(needle)),
+    );
+  }, [entries, list, search]);
   const listLabel = LISTS.find((item) => item.value === list)?.label ?? '';
+  // The whole list is already loaded (the forms need every entry), so pages are cut here.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => {
+    setPage(1);
+  }, [endpoint, list, pageSize, search]);
 
   const openForm = (entry: Partial<ListEntry> | null) => {
     setEditing(entry ?? {});
@@ -113,12 +147,14 @@ export default function DirectoryListsPage() {
     }
     setSaving(true);
     setFormError('');
+    const target = endpoint;
     try {
       if (editing.id) {
-        const response = (await authenticityUtility.put(`${endpoint}/${editing.id}`, {
+        const response = (await authenticityUtility.put(`${target}/${editing.id}`, {
           name: name.trim(),
           is_active: isActive,
         })) as any;
+        if (endpointRef.current !== target) return;
         const saved = response.data as ListEntry;
         setEntries((current) => current.map((entry) => (entry.id === saved.id ? saved : entry)));
         setNotice('');
@@ -128,10 +164,11 @@ export default function DirectoryListsPage() {
           .split(/[,\n]/)
           .map((value) => value.trim())
           .filter(Boolean);
-        const response = (await authenticityUtility.post(`${endpoint}/${list}`, {
+        const response = (await authenticityUtility.post(`${target}/${list}`, {
           names,
           is_active: isActive,
         })) as any;
+        if (endpointRef.current !== target) return;
         const { added, skipped } = response.data as { added: ListEntry[]; skipped: string[] };
         setEntries((current) => [...current, ...added]);
         setNotice(
@@ -151,8 +188,10 @@ export default function DirectoryListsPage() {
   const confirmDelete = async () => {
     if (!deleting) return;
     setIsDeleting(true);
+    const target = endpoint;
     try {
-      const response = (await authenticityUtility.delete(`${endpoint}/${deleting.id}`)) as any;
+      const response = (await authenticityUtility.delete(`${target}/${deleting.id}`)) as any;
+      if (endpointRef.current !== target) return;
       setEntries((current) =>
         response.data?.deactivated
           ? current.map((entry) =>
@@ -174,7 +213,7 @@ export default function DirectoryListsPage() {
     {
       key: 'sno',
       label: 'S.No.',
-      render: (_entry: ListEntry, index: number) => index + 1,
+      render: (_entry: ListEntry, index: number) => (currentPage - 1) * pageSize + index + 1,
     },
     {
       key: 'name',
@@ -193,28 +232,32 @@ export default function DirectoryListsPage() {
     {
       key: 'action',
       label: 'Action',
-      render: (entry: ListEntry) => (
-        <div className="dlp-actions">
-          <CustomButton
-            variant="outline-primary"
-            className="dlp-icon-btn"
-            onClick={() => openForm(entry)}
-            title={`Edit ${entry.name}`}
-            aria-label={`Edit ${entry.name}`}
-          >
-            <Edit3 size={15} />
-          </CustomButton>
-          <CustomButton
-            variant="outline-danger"
-            className="dlp-icon-btn dlp-icon-btn--delete"
-            onClick={() => setDeleting(entry)}
-            title={`Delete ${entry.name}`}
-            aria-label={`Delete ${entry.name}`}
-          >
-            <Trash2 size={15} />
-          </CustomButton>
-        </div>
-      ),
+      // General is the Tag a record gets when none is chosen; the server keeps it as it is.
+      render: (entry: ListEntry) =>
+        entry.list_key === 'tag' && entry.name.toLowerCase() === DEFAULT_TAG.toLowerCase() ? (
+          <span className="dlp-default-note">Default</span>
+        ) : (
+          <div className="dlp-actions">
+            <CustomButton
+              variant="outline-primary"
+              className="dlp-icon-btn"
+              onClick={() => openForm(entry)}
+              title={`Edit ${entry.name}`}
+              aria-label={`Edit ${entry.name}`}
+            >
+              <Edit3 size={15} />
+            </CustomButton>
+            <CustomButton
+              variant="outline-danger"
+              className="dlp-icon-btn dlp-icon-btn--delete"
+              onClick={() => setDeleting(entry)}
+              title={`Delete ${entry.name}`}
+              aria-label={`Delete ${entry.name}`}
+            >
+              <Trash2 size={15} />
+            </CustomButton>
+          </div>
+        ),
     },
   ];
 
@@ -226,6 +269,8 @@ export default function DirectoryListsPage() {
         .dlp-title { color: var(--text-strong); font-size: var(--font-size-page-title); line-height: var(--leading-page-title); font-weight: 700; }
         .dlp-admin-badge { background: #0878bd !important; border-radius: 6px !important; color: #fff !important; display: inline-flex; align-items: center; height: var(--tag-height); font-size: var(--font-size-tertiary); font-weight: 700; letter-spacing: .04em; padding: 0 10px !important; }
         .dlp-intro { color: var(--text-soft); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); }
+        .dlp-header-controls { gap: 12px; }
+        .dlp-header-controls .custom-filter-search { width: 180px; }
         .custom-btn.dlp-add-btn { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 0 16px; border: 0; border-radius: 12px; }
         .dlp-table.custom-table thead th { padding: var(--table-cell-padding); background: #eef5fd; color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); }
         .dlp-table.custom-table tbody td { padding: var(--table-cell-padding); color: var(--text-body); font-size: var(--font-size-body); line-height: var(--leading-body); vertical-align: middle; }
@@ -237,6 +282,7 @@ export default function DirectoryListsPage() {
         .dlp-table .dlp-status-pill.active { background: #dcfce7; color: #166534; }
         .dlp-table .dlp-status-pill.inactive { background: #eef2f6; color: #475569; }
         .dlp-table .dlp-actions { display: flex; gap: 6px; justify-content: center; }
+        .dlp-table .dlp-default-note { color: var(--text-muted); font-size: var(--font-size-tertiary); line-height: var(--leading-tertiary); }
         .custom-btn.dlp-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: var(--icon-action-size); height: var(--icon-action-size); min-width: 0; min-height: 0; padding: 0; border: 1px solid #0069ab; border-radius: 8px; background: #fff; color: #0069ab; }
         .custom-btn.dlp-icon-btn:hover { background: #e0f0ff; color: #0069ab; }
         .custom-btn.dlp-icon-btn--delete { border-color: #b91c1c; color: #b91c1c; }
@@ -250,9 +296,17 @@ export default function DirectoryListsPage() {
             <h2 className="dlp-title mb-0">Directory Lists</h2>
             <Badge className="dlp-admin-badge">ADMIN</Badge>
           </div>
-          <CustomButton className="dlp-add-btn" onClick={() => openForm(null)}>
-            Add <Plus size={15} aria-hidden="true" />
-          </CustomButton>
+          <div className="dlp-header-controls d-flex align-items-center flex-wrap">
+            <CustomFilterSearch
+              name="dlp-search"
+              value={search}
+              onChange={setSearch}
+              placeholder="Search"
+            />
+            <CustomButton className="dlp-add-btn" onClick={() => openForm(null)}>
+              Add <Plus size={15} aria-hidden="true" />
+            </CustomButton>
+          </div>
         </div>
         {directories.length > 1 && (
           <CustomTabs
@@ -289,10 +343,22 @@ export default function DirectoryListsPage() {
 
         <CustomTable
           columns={columns}
-          data={rows}
+          data={pageRows}
           keyField="id"
           className="dlp-table"
-          emptyMessage={`No ${listLabel.toLowerCase()} entries yet. Click "Add +" to add one.`}
+          emptyMessage={
+            search.trim()
+              ? `No ${listLabel.toLowerCase()} entries match "${search.trim()}".`
+              : `No ${listLabel.toLowerCase()} entries yet. Click "Add +" to add one.`
+          }
+        />
+        <CustomPagination
+          page={currentPage}
+          pageSize={pageSize}
+          total={rows.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          name="dlp-rows-per-page"
         />
       </CustomCard>
 
