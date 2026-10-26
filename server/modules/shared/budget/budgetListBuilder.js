@@ -116,6 +116,9 @@ export async function buildBudgetList(options) {
       MAX(bp.updated_at) AS updated_at,
       DATE_FORMAT(MAX(bp.created_at), '%Y-%m-%d %H:%i') AS created_date,
       DATE_FORMAT(MAX(bp.updated_at), '%Y-%m-%d %H:%i') AS updated_date,
+      -- The applicant's resubmit writes a 'resubmitted' row to the approval log, and
+      -- nothing else does; updated_at moves on every write, so it cannot stand in.
+      MAX(CASE WHEN bpa.decision = 'resubmitted' THEN bpa.decided_at END) AS resubmitted_at,
       COUNT(DISTINCT bpl.id) AS line_count,
       COUNT(DISTINCT bpa.id) AS approval_count
       ${adminFields}

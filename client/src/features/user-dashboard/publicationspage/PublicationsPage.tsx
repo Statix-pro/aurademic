@@ -551,7 +551,7 @@ const PublicationsPage: React.FC = () => {
                 <h5 className="research-details-title">List of Details</h5>
                 <div className="d-flex flex-wrap gap-2 align-items-center">
                   <select
-                    className="form-select form-select-sm"
+                    className="form-select form-select-sm w-auto"
                     value={statusFilter}
                     onChange={(e) => {
                       setStatusFilter(e.target.value);
@@ -567,7 +567,7 @@ const PublicationsPage: React.FC = () => {
                     <option value="underReview">Under Review</option>
                   </select>
                   <select
-                    className="form-select form-select-sm"
+                    className="form-select form-select-sm w-auto"
                     value={sortBy}
                     onChange={(e) => {
                       setSortBy(e.target.value);
