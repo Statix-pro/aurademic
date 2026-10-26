@@ -525,6 +525,28 @@ select.adminbudget-control {
   white-space: nowrap;
 }
 
+/* The name over its submission dates. Together they stay within the height of the
+   amount stack on the right, so the dates add no height to the card. */
+.adminbudget-name-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.adminbudget-name-block .adminbudget-name {
+  line-height: var(--leading-body);
+}
+
+.adminbudget-submitted {
+  font-size: var(--font-size-tertiary);
+  line-height: var(--leading-tertiary);
+  font-weight: var(--weight-regular);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .adminbudget-name {
   margin: 0;
   font-size: var(--font-size-body);

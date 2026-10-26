@@ -530,6 +530,28 @@
   max-width: 240px;
 }
 
+/* The name over its submission dates. Together they stay within the height of the
+   Amount stack on the right, so the dates add no height to the card. */
+.fw-name-block {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-name-block .fw-name {
+  line-height: var(--leading-body);
+}
+
+.fw-submitted {
+  font-size: var(--font-size-tertiary);
+  line-height: var(--leading-tertiary);
+  font-weight: var(--weight-regular);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .fw-tag-pill {
   display: inline-flex;
   align-items: center;
@@ -828,117 +850,179 @@
   overflow-y: auto;
 }
 
-.fw-log-item {
+/* Who, which request and when, above the activity list. */
+.fw-log-summary {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin: 0 0 20px;
+  padding: 14px 20px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-md);
+}
+
+.fw-log-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fw-log-summary-label {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-regular);
+  color: var(--text-soft);
+}
+
+.fw-log-summary-value {
+  margin: 0;
   font-size: var(--font-size-body);
-}
-
-.fw-log-label {
-  color: #64748b;
-  font-weight: var(--weight-medium);
-}
-
-.fw-log-value {
-  color: #1e293b;
+  line-height: var(--leading-body);
   font-weight: var(--weight-semibold);
+  color: var(--text-strong);
 }
 
-.fw-log-approvals {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #f1f5f9;
+.fw-log-activity-label {
+  margin: 0 0 12px;
+  font-size: var(--font-size-tertiary);
+  line-height: var(--leading-tertiary);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-soft);
 }
 
-.fw-log-approval-item {
+/* A vertical rail: each entry hangs off a dot coloured by its decision. */
+.fw-log-timeline {
   position: relative;
-  background: #fdfdfd;
-  border: 1px solid #f1f5f9;
-  border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 10px;
+  margin: 0;
+  padding: 0 0 0 28px;
+  list-style: none;
 }
 
-.fw-log-approval-meta {
+.fw-log-timeline::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 7px;
+  width: 2px;
+  background: var(--border-subtle);
+}
+
+.fw-log-entry {
+  --fw-log-fg: var(--text-soft);
+  --fw-log-bg: var(--tint-neutral-bg);
+  position: relative;
+  padding-bottom: 20px;
+}
+
+.fw-log-entry:last-child {
+  padding-bottom: 0;
+}
+
+.fw-log-entry::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: -26px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--fw-log-fg);
+  box-shadow: 0 0 0 3px var(--bg-surface);
+}
+
+.fw-log-entry--approved {
+  --fw-log-fg: var(--tint-success-fg);
+  --fw-log-bg: var(--tint-success-bg);
+}
+
+.fw-log-entry--rejected {
+  --fw-log-fg: var(--tint-danger-fg);
+  --fw-log-bg: var(--tint-danger-bg);
+}
+
+.fw-log-entry--returned {
+  --fw-log-fg: #92400e;
+  --fw-log-bg: #fef3c7;
+}
+
+.fw-log-entry--submitted,
+.fw-log-entry--resubmitted {
+  --fw-log-fg: var(--tint-primary-fg);
+  --fw-log-bg: var(--tint-primary-bg);
+}
+
+.fw-log-entry-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 6px;
 }
 
-.fw-log-decision {
+.fw-log-status {
+  display: inline-flex;
+  align-items: center;
+  height: var(--tag-height);
+  padding: 0 10px;
+  border-radius: 6px;
   font-size: var(--font-size-tertiary);
-  font-weight: var(--weight-bold);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.fw-log-decision--approved {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.fw-log-decision--rejected {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-.fw-log-decision--returned {
-  background: #fef9c3;
-  color: #854d0e;
-}
-
-.fw-log-decision--submitted {
-  background: #e0f2fe;
-  color: #075985;
-}
-
-.fw-log-decision--resubmitted {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.fw-log-role {
-  font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
-  color: #475569;
+  color: var(--fw-log-fg);
+  background: var(--fw-log-bg);
 }
 
-.fw-log-feedback {
+.fw-log-stage {
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-semibold);
+  color: var(--text-strong);
+}
+
+.fw-log-time {
+  margin-left: auto;
+  font-size: var(--font-size-tertiary);
+  line-height: var(--leading-tertiary);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.fw-log-actor {
+  margin: 6px 0 0;
   font-size: var(--font-size-secondary);
-  color: #856404;
-  background: #fff3cd;
-  padding: 2px 6px;
-  border-radius: 4px;
+  line-height: var(--leading-secondary);
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.fw-log-actor-name {
+  font-weight: var(--weight-semibold);
+  color: var(--text-body);
+}
+
+.fw-log-remark {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  color: var(--text-body);
+  background: var(--surface-subtle);
+  border-left: 3px solid var(--fw-log-bg);
+  border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
+  overflow-wrap: anywhere;
 }
 
 .fw-log-toggle-btn {
-  margin-top: 4px;
-  align-self: flex-start;
+  margin-top: 6px;
+  padding: 0;
   border: none;
   background: transparent;
-  color: #0d6efd;
+  color: var(--primary-color);
   cursor: pointer;
-  padding: 0;
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
-}
-
-.fw-log-actor-line {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-  font-size: var(--font-size-secondary);
-  font-weight: var(--weight-bold);
-  color: #334155;
-}
-
-.fw-log-date {
-  font-size: var(--font-size-tertiary);
-  color: #667085;
-  margin-left: auto;
 }
 
 /* Responsive */

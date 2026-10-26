@@ -37,6 +37,7 @@ import {
   joinCsvSections,
   type CsvCell,
 } from '../../../../shared/utils/csvExportUtils';
+import { formatFullDate, formatSubmissionDates } from '../../../../shared/utils/dateFormat';
 import { formatRowRanges, summarizeLineChanges } from '../../../../shared/utils/logDiffUtils';
 import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 
@@ -74,6 +75,8 @@ interface BudgetRequestItem {
   status: string;
   current_stage: string;
   created_date: string;
+  created_at?: string;
+  resubmitted_at?: string | null;
   level1_route_type?: string | null;
 }
 
@@ -327,6 +330,7 @@ const AdminBudget: React.FC = () => {
   const [logLoading, setLogLoading] = useState(false);
   const [logRef, setLogRef] = useState<string>('');
   const [logProposal, setLogProposal] = useState<any>(null);
+  const [logDates, setLogDates] = useState({ submitted: '', resubmitted: '' });
   const [logEntries, setLogEntries] = useState<BudgetHistoryEntry[]>([]);
   const [logEdits, setLogEdits] = useState<any[]>([]);
   const [expandedLogDetails, setExpandedLogDetails] = useState<Record<string, boolean>>({});
@@ -1262,6 +1266,10 @@ const AdminBudget: React.FC = () => {
     setLogPopupOpen(true);
     setLogLoading(true);
     setLogRef(item.proposal_ref || '');
+    setLogDates({
+      submitted: formatFullDate(item.created_at),
+      resubmitted: formatFullDate(item.resubmitted_at),
+    });
     setLogProposal(null);
     setLogEntries([]);
     setLogEdits([]);
@@ -1294,6 +1302,7 @@ const AdminBudget: React.FC = () => {
     setLogEdits([]);
     setExpandedLogDetails({});
     setLogRef('');
+    setLogDates({ submitted: '', resubmitted: '' });
   };
 
   const formatFreezeDate = (value?: string) => {
@@ -1946,6 +1955,10 @@ const AdminBudget: React.FC = () => {
                           const isApprovedForDisplay = getStatusCategory(item) === 'approved';
                           const displayAmountLabel = isApprovedForDisplay ? 'Approved' : 'Proposed';
                           const displayAmountValue = effectiveAmount;
+                          const submissionDates = formatSubmissionDates(
+                            item.created_at,
+                            item.resubmitted_at,
+                          );
 
                           return (
                             <div className="adminbudget-item-wrap" key={item.id}>
@@ -1966,9 +1979,19 @@ const AdminBudget: React.FC = () => {
                                 <div className="adminbudget-topbar">
                                   <div className="adminbudget-topbar-left">
                                     <span className="adminbudget-id">{item.proposal_ref}</span>
-                                    <h5 className="adminbudget-name">
-                                      {item.applicant_name || 'Unknown'}
-                                    </h5>
+                                    <div className="adminbudget-name-block">
+                                      <h5 className="adminbudget-name">
+                                        {item.applicant_name || 'Unknown'}
+                                      </h5>
+                                      {submissionDates.text && (
+                                        <span
+                                          className="adminbudget-submitted"
+                                          title={submissionDates.title}
+                                        >
+                                          {submissionDates.text}
+                                        </span>
+                                      )}
+                                    </div>
                                     <span className="adminbudget-tag-pill">
                                       {item.budget_tag || 'No Tag'}
                                     </span>
@@ -2417,6 +2440,18 @@ const AdminBudget: React.FC = () => {
             <span className="log-label">Proposal:</span>
             <span className="log-value">{logRef || '--'}</span>
           </div>
+          {logDates.submitted && (
+            <div className="budgetdashboard-log-item">
+              <span className="log-label">Submitted:</span>
+              <span className="log-value">{logDates.submitted}</span>
+            </div>
+          )}
+          {logDates.resubmitted && (
+            <div className="budgetdashboard-log-item">
+              <span className="log-label">Resubmitted:</span>
+              <span className="log-value">{logDates.resubmitted}</span>
+            </div>
+          )}
 
           {(logProposal?.updated_at || logProposal?.updatedAt) &&
             (logProposal?.created_at || logProposal?.createdAt) &&

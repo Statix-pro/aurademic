@@ -38,6 +38,7 @@ import {
   joinCsvSections,
   type CsvCell,
 } from '../../utils/csvExportUtils';
+import { formatFullDate, formatFullDateTime, formatSubmissionDates } from '../../utils/dateFormat';
 import {
   WorkflowApprovalModuleConfig,
   WorkflowCsvExportMeta,
@@ -676,6 +677,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [logEntries, setLogEntries] = useState<WorkflowTimelineItem[]>([]);
   const [expandedLogDetails, setExpandedLogDetails] = useState<Record<string, boolean>>({});
   const [logRef, setLogRef] = useState<string>('');
+  const [logDates, setLogDates] = useState({ submitted: '', resubmitted: '' });
   const [logLevel1Role, setLogLevel1Role] = useState<'hod' | 'coordinator' | null>(null);
   const [logLoading, setLogLoading] = useState(false);
   const [archivingIds, setArchivingIds] = useState<Set<number | string>>(new Set());
@@ -1687,6 +1689,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     async (record: Record<string, any>, id: number | string, ref: string) => {
       setLogLoading(true);
       setLogRef(ref);
+      setLogDates({
+        submitted: formatFullDate(record?.created_at),
+        resubmitted: formatFullDate(record?.workflow_state?.resubmittedAt || record?.resubmittedAt),
+      });
       setLogPopupOpen(true);
       if (enableLevel1RoleTabs) {
         const routeType = String(record?.level1_route_type || record?.level1RouteType || '')
@@ -2555,6 +2561,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
         }
       }
 
+      // Updates by a HOD carry the role as their stage; title-casing would read "Hod".
+      if (stageToken === 'hod') {
+        return 'HOD';
+      }
+
       return formatStageLabel(entry.stage, config.stageLabels);
     },
     [config.stageLabels, enableLevel1RoleTabs, logLevel1Role],
@@ -2565,6 +2576,7 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     setLogEntries([]);
     setExpandedLogDetails({});
     setLogRef('');
+    setLogDates({ submitted: '', resubmitted: '' });
     setLogLevel1Role(null);
   };
 
@@ -3570,6 +3582,10 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                         const tag = getWorkflowRecordTag(record);
 
                         const isResubmitted = isResubmittedRecord(record);
+                        const submissionDates = formatSubmissionDates(
+                          record.created_at,
+                          record.workflow_state?.resubmittedAt || record.resubmittedAt,
+                        );
 
                         return (
                           <div key={timelineKey} className="fw-item-wrap">
@@ -3595,12 +3611,22 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                 <div className="fw-topbar-left">
                                   {config.moduleKey === 'expenditure' ? (
                                     <>
-                                      <h5 className="fw-name">
-                                        {record.applicant_name ||
-                                          record.user_name ||
-                                          record.faculty_name ||
-                                          'Unknown'}
-                                      </h5>
+                                      <div className="fw-name-block">
+                                        <h5 className="fw-name">
+                                          {record.applicant_name ||
+                                            record.user_name ||
+                                            record.faculty_name ||
+                                            'Unknown'}
+                                        </h5>
+                                        {submissionDates.text && (
+                                          <span
+                                            className="fw-submitted"
+                                            title={submissionDates.title}
+                                          >
+                                            {submissionDates.text}
+                                          </span>
+                                        )}
+                                      </div>
                                       {tag && tag.trim() !== '' && (
                                         <span className="fw-tag-pill">{tag}</span>
                                       )}
@@ -3634,12 +3660,22 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                                   ) : (
                                     <>
                                       <span className="fw-id">{proposalRef}</span>
-                                      <h5 className="fw-name">
-                                        {record.applicant_name ||
-                                          record.user_name ||
-                                          record.faculty_name ||
-                                          'Unknown'}
-                                      </h5>
+                                      <div className="fw-name-block">
+                                        <h5 className="fw-name">
+                                          {record.applicant_name ||
+                                            record.user_name ||
+                                            record.faculty_name ||
+                                            'Unknown'}
+                                        </h5>
+                                        {submissionDates.text && (
+                                          <span
+                                            className="fw-submitted"
+                                            title={submissionDates.title}
+                                          >
+                                            {submissionDates.text}
+                                          </span>
+                                        )}
+                                      </div>
                                       {tag && tag.trim() !== '' && (
                                         <span className="fw-tag-pill">{tag}</span>
                                       )}
@@ -4410,10 +4446,24 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           }
         >
           <div className="fw-log-body">
-            <div className="fw-log-item">
-              <span className="fw-log-label">Reference:</span>
-              <span className="fw-log-value">{logRef || '--'}</span>
-            </div>
+            <dl className="fw-log-summary">
+              <div className="fw-log-summary-item">
+                <dt className="fw-log-summary-label">Reference</dt>
+                <dd className="fw-log-summary-value">{logRef || '--'}</dd>
+              </div>
+              {logDates.submitted && (
+                <div className="fw-log-summary-item">
+                  <dt className="fw-log-summary-label">Submitted</dt>
+                  <dd className="fw-log-summary-value">{logDates.submitted}</dd>
+                </div>
+              )}
+              {logDates.resubmitted && (
+                <div className="fw-log-summary-item">
+                  <dt className="fw-log-summary-label">Resubmitted</dt>
+                  <dd className="fw-log-summary-value">{logDates.resubmitted}</dd>
+                </div>
+              )}
+            </dl>
 
             {logLoading && (
               <div className="fw-state" style={{ padding: '24px 0' }}>
@@ -4427,60 +4477,71 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
             )}
 
             {!logLoading && logEntries.length > 0 && (
-              <div className="fw-log-approvals">
-                {logEntries.map((entry, idx) => {
-                  const decisionToken = String(entry.decision || '')
-                    .trim()
-                    .toLowerCase();
-                  const actorRoleToken = String(entry.actorRole || '')
-                    .trim()
-                    .toLowerCase();
-                  const stageLabel = getTimelineStageLabel(entry);
-                  const isWorkflowUpdater = [
-                    'hod',
-                    'coordinator',
-                    'entity_approver',
-                    'ithead',
-                    'dof',
-                    'principal',
-                    'admin',
-                    'super_admin',
-                    'superadmin',
-                  ].includes(actorRoleToken);
-                  const shouldShowStage =
-                    Boolean(stageLabel && stageLabel !== '-') &&
-                    (decisionToken !== 'updated' || isWorkflowUpdater);
-                  const entryKey = String(entry.id || idx);
-                  const updatedSubtitle =
-                    decisionToken === 'updated' ? buildUpdatedLogSubtitles(entry) : null;
-                  const subtitleText = updatedSubtitle
-                    ? expandedLogDetails[entryKey] && updatedSubtitle.full
-                      ? updatedSubtitle.full
-                      : updatedSubtitle.compact
-                    : normalizeLogText(entry.feedback || entry.comment || entry.summary);
-                  const hasExpandedSubtitle = Boolean(
-                    updatedSubtitle &&
-                    updatedSubtitle.full &&
-                    updatedSubtitle.compact &&
-                    updatedSubtitle.full !== updatedSubtitle.compact,
-                  );
-                  const actorLine = normalizeLogText(entry.userName)
-                    ? `${normalizeLogText(entry.userName)} (${entry.actorEmail || 'Unknown'})`
-                    : entry.actorEmail || 'Unknown';
-                  const entryDate = entry.decidedAt || entry.createdAt || null;
+              <>
+                <h6 className="fw-log-activity-label">Activity</h6>
+                <ol className="fw-log-timeline">
+                  {logEntries.map((entry, idx) => {
+                    const decisionToken = String(entry.decision || '')
+                      .trim()
+                      .toLowerCase();
+                    const actorRoleToken = String(entry.actorRole || '')
+                      .trim()
+                      .toLowerCase();
+                    const stageLabel = getTimelineStageLabel(entry);
+                    const isWorkflowUpdater = [
+                      'hod',
+                      'coordinator',
+                      'entity_approver',
+                      'ithead',
+                      'dof',
+                      'principal',
+                      'admin',
+                      'super_admin',
+                      'superadmin',
+                    ].includes(actorRoleToken);
+                    const shouldShowStage =
+                      Boolean(stageLabel && stageLabel !== '-') &&
+                      (decisionToken !== 'updated' || isWorkflowUpdater);
+                    const entryKey = String(entry.id || idx);
+                    const updatedSubtitle =
+                      decisionToken === 'updated' ? buildUpdatedLogSubtitles(entry) : null;
+                    const subtitleText = updatedSubtitle
+                      ? expandedLogDetails[entryKey] && updatedSubtitle.full
+                        ? updatedSubtitle.full
+                        : updatedSubtitle.compact
+                      : normalizeLogText(entry.feedback || entry.comment || entry.summary);
+                    const hasExpandedSubtitle = Boolean(
+                      updatedSubtitle &&
+                      updatedSubtitle.full &&
+                      updatedSubtitle.compact &&
+                      updatedSubtitle.full !== updatedSubtitle.compact,
+                    );
+                    const actorName = normalizeLogText(entry.userName);
+                    const actorEmail = normalizeLogText(entry.actorEmail);
+                    const entryDate = entry.decidedAt || entry.createdAt || null;
+                    const decisionLabel = decisionToken
+                      ? decisionToken.charAt(0).toUpperCase() + decisionToken.slice(1)
+                      : 'Update';
 
-                  return (
-                    <div key={entryKey} className="fw-log-approval-item">
-                      <div className="fw-log-approval-meta">
-                        <span
-                          className={`fw-log-decision fw-log-decision--${entry.decision?.toLowerCase() || 'approved'}`}
-                        >
-                          {entry.decision?.toUpperCase() || 'UPDATE'}
-                        </span>
-                        {shouldShowStage && <span className="fw-log-role">{stageLabel}</span>}
-                        {subtitleText && (
-                          <span className="fw-log-feedback">Remarks: {subtitleText}</span>
-                        )}
+                    return (
+                      <li
+                        key={entryKey}
+                        className={`fw-log-entry fw-log-entry--${decisionToken || 'updated'}`}
+                      >
+                        <div className="fw-log-entry-head">
+                          <span className="fw-log-status">{decisionLabel}</span>
+                          {shouldShowStage && <span className="fw-log-stage">{stageLabel}</span>}
+                          <time className="fw-log-time">
+                            {entryDate ? formatFullDateTime(entryDate) : '-'}
+                          </time>
+                        </div>
+                        <p className="fw-log-actor">
+                          <span className="fw-log-actor-name">
+                            {actorName || actorEmail || 'Unknown'}
+                          </span>
+                          {actorName && actorEmail && ` · ${actorEmail}`}
+                        </p>
+                        {subtitleText && <p className="fw-log-remark">{subtitleText}</p>}
                         {hasExpandedSubtitle && (
                           <button
                             type="button"
@@ -4495,15 +4556,11 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                             {expandedLogDetails[entryKey] ? 'Show less' : 'Show full changes'}
                           </button>
                         )}
-                        <span className="fw-log-actor-line">By: {actorLine}</span>
-                        <span className="fw-log-date">
-                          {entryDate ? new Date(entryDate).toLocaleString() : '-'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+              </>
             )}
           </div>
         </CustomModal>
