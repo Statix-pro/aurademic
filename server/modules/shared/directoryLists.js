@@ -34,12 +34,24 @@ export const parseSpecializations = (value) => {
   return specializations.map((v) => v.trim()).filter(Boolean);
 };
 
-const toOptionName = (name) => {
+// A Tag is stored in the record's `tag` column, VARCHAR(100); a Specialization in a picks
+// table's VARCHAR(255) `name`. An entry longer than its column could be picked but not saved.
+const MAX_NAME_LENGTH = { tag: 100, specialization: 255 };
+
+const toOptionName = (name, listKey) => {
   const trimmed = String(name ?? '').trim();
+  const max = MAX_NAME_LENGTH[listKey];
   if (!trimmed) throw failWith('Name is required.', 400);
-  if (trimmed.length > 255) throw failWith('Name must be 255 characters or fewer.', 400);
+  if (trimmed.length > max) throw failWith(`Name must be ${max} characters or fewer.`, 400);
   return trimmed;
 };
+
+// General is the Tag a record gets when none is chosen (the forms send it, and it is the
+// columns' default), so its entry stays in the Tag list, active and under that name. The
+// directory migration also relies on the Tag list never being empty again once seeded.
+const isDefaultTag = (entry) =>
+  entry.list_key === 'tag' && entry.name.toLowerCase() === DEFAULT_TAG.toLowerCase();
+const DEFAULT_TAG_LOCKED = `"${DEFAULT_TAG}" is the Tag a record gets when none is chosen, so it stays in the list as it is.`;
 
 /**
  * @param {object} tables
@@ -120,8 +132,10 @@ export const createDirectoryLists = ({ options, picks, recordColumn, records }) 
 
   /**
    * Adds one entry (`name`) or several at once (`names`, e.g. split from "A, B, C").
-   * Names already in the list -- compared case-insensitively, as the unique key does --
-   * are skipped rather than failing the rest; the caller reports them.
+   * Names already in the list are skipped rather than failing the rest; the caller reports
+   * them. "Already in the list" is decided by the database, under the column's collation
+   * (utf8mb4_unicode_ci ignores accents as well as case, so "Cafe" matches "Café"): a check
+   * in JavaScript would miss those, and the unique key would then fail the whole add.
    */
   async addOptions(listKey, input = {}) {
     if (!LIST_KEYS.includes(listKey)) throw failWith('Unknown list.', 400);
@@ -130,46 +144,66 @@ export const createDirectoryLists = ({ options, picks, recordColumn, records }) 
     if (requested.length > 200) throw failWith('Add at most 200 entries at a time.', 400);
     const names = [];
     for (const raw of requested) {
-      const name = toOptionName(raw);
+      const name = toOptionName(raw, listKey);
       if (!names.some((n) => n.toLowerCase() === name.toLowerCase())) names.push(name);
     }
-    const [existing] = await db.execute(`SELECT name FROM ${options} WHERE list_key = ?`, [
-      listKey,
-    ]);
-    const taken = new Set(existing.map((row) => row.name.toLowerCase()));
-    const fresh = names.filter((name) => !taken.has(name.toLowerCase()));
-    const skipped = names.filter((name) => taken.has(name.toLowerCase()));
-    if (!fresh.length) {
-      throw failWith(
-        `${skipped.length === 1 ? `"${skipped[0]}" is` : 'These are all'} already in the list.`,
-        409,
-      );
-    }
     const isActive = input.is_active === false ? 0 : 1;
+    const addedIds = [];
+    const skipped = [];
+    const connection = await db.getConnection();
     try {
-      await db.execute(
-        `INSERT INTO ${options} (list_key, name, is_active) VALUES ${fresh.map(() => '(?,?,?)').join(', ')}`,
-        fresh.flatMap((name) => [listKey, name, isActive]),
+      await connection.beginTransaction();
+      for (const name of names) {
+        const [[listed]] = await connection.execute(
+          `SELECT id FROM ${options} WHERE list_key = ? AND name = ?`,
+          [listKey, name],
+        );
+        if (listed) {
+          skipped.push(name);
+          continue;
+        }
+        try {
+          const [result] = await connection.execute(
+            `INSERT INTO ${options} (list_key, name, is_active) VALUES (?,?,?)`,
+            [listKey, name, isActive],
+          );
+          addedIds.push(result.insertId);
+        } catch (error) {
+          // Another admin added it since the check; only this statement is undone.
+          if (error?.code !== 'ER_DUP_ENTRY') throw error;
+          skipped.push(name);
+        }
+      }
+      if (!addedIds.length) {
+        throw failWith(
+          `${skipped.length === 1 ? `"${skipped[0]}" is` : 'These are all'} already in the list.`,
+          409,
+        );
+      }
+      const [rows] = await connection.execute(
+        `SELECT id, list_key, name, is_active FROM ${options}
+         WHERE id IN (${addedIds.map(() => '?').join(', ')})`,
+        addedIds,
       );
+      await connection.commit();
+      return {
+        added: rows.map((row) => ({ ...row, is_active: Boolean(row.is_active) })),
+        skipped,
+      };
     } catch (error) {
-      // Another admin added one of these between the check and the insert.
-      if (error?.code === 'ER_DUP_ENTRY')
-        throw failWith('Some of these were just added by someone else. Reload and try again.', 409);
+      await connection.rollback();
       throw error;
+    } finally {
+      connection.release();
     }
-    const [rows] = await db.execute(
-      `SELECT id, list_key, name, is_active FROM ${options}
-       WHERE list_key = ? AND name IN (${fresh.map(() => '?').join(', ')})`,
-      [listKey, ...fresh],
-    );
-    return {
-      added: rows.map((row) => ({ ...row, is_active: Boolean(row.is_active) })),
-      skipped,
-    };
   },
 
   async updateOption(id, input = {}) {
-    const name = toOptionName(input.name);
+    const [[entry]] = await db.execute(`SELECT list_key, name FROM ${options} WHERE id = ?`, [id]);
+    if (!entry) throw failWith('List entry not found.', 404);
+    const name = toOptionName(input.name, entry.list_key);
+    if (isDefaultTag(entry) && (name !== entry.name || input.is_active === false))
+      throw failWith(DEFAULT_TAG_LOCKED, 400);
     try {
       const [result] = await db.execute(
         `UPDATE ${options} SET name = ?, is_active = ? WHERE id = ?`,
@@ -190,6 +224,7 @@ export const createDirectoryLists = ({ options, picks, recordColumn, records }) 
   async deleteOption(id) {
     const [[entry]] = await db.execute(`SELECT list_key, name FROM ${options} WHERE id = ?`, [id]);
     if (!entry) throw failWith('List entry not found.', 404);
+    if (isDefaultTag(entry)) throw failWith(DEFAULT_TAG_LOCKED, 400);
     const [[usage]] = await db.execute(
       entry.list_key === 'tag'
         ? `SELECT COUNT(*) AS used FROM ${records} WHERE tag = ?`

@@ -62,11 +62,23 @@ import db from '../config/connection.js';
 import workflowService from '../modules/shared/workflow/workflowService.js';
 import app from '../server.js';
 
+// Reviewing a resource person and adding list entries run in a transaction on a pooled
+// connection; its statements are answered by the pool mocks, so tests queue them there.
+const pooledConnection = {
+  beginTransaction: vi.fn(),
+  commit: vi.fn(),
+  rollback: vi.fn(),
+  release: vi.fn(),
+  execute: (...args) => db.execute(...args),
+  query: (...args) => db.query(...args),
+};
+
 describe('directory route authentication', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    db.getConnection.mockResolvedValue(pooledConnection);
     db.execute.mockResolvedValue([[]]);
-    // Approving a resource person first checks its organizations on the pool.
+    // Approving a resource person first checks its organizations.
     db.query.mockResolvedValue([[]]);
   });
 
@@ -236,7 +248,7 @@ describe('directory route authentication', () => {
   it('lets the organization Directory Admin add a list entry', async () => {
     db.execute
       .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{ insertId: 5 }])
       .mockResolvedValueOnce([[{ id: 5, list_key: 'tag', name: 'Research', is_active: 1 }]]);
 
     const response = await request(app)
@@ -254,7 +266,7 @@ describe('directory route authentication', () => {
   it('lets the resource-person Directory Admin add a list entry', async () => {
     db.execute
       .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{ insertId: 12 }])
       .mockResolvedValueOnce([
         [{ id: 12, list_key: 'specialization', name: 'Microbiology', is_active: 1 }],
       ]);

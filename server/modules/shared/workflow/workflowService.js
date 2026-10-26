@@ -711,6 +711,7 @@ export async function actOnWorkflow({
   feedback,
   actor,
   metadata = {},
+  tx = null,
 }) {
   const moduleConfig = getWorkflowModule(moduleKey);
   const normalizedDecision = validateDecision(decision);
@@ -720,7 +721,9 @@ export async function actOnWorkflow({
     throw new WorkflowError('Actor user ID is required', 400, 'ACTOR_REQUIRED');
   }
 
-  return withTransaction(async (conn) => {
+  // A caller's transaction (tx) lets its own checks commit or roll back with the decision.
+  const inTransaction = (callback) => withTransaction(callback, { tx });
+  return inTransaction(async (conn) => {
     const context = await moduleConfig.adapter.getRecordContext(recordId, {
       tx: conn,
       forUpdate: true,

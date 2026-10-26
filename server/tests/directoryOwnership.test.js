@@ -7,8 +7,12 @@ const execute = vi.fn();
 const activeOptions = [];
 // A record's stored specializations, as the update reads them.
 const storedSpecializations = [];
+// The organization links a record's profession rows hold, as the update reads them.
+const storedOrganizationLinks = [];
 const specializationRows = vi.fn();
 const answerListQuery = (sql, params) => {
+  if (/^\s*SELECT organization_id FROM directory_resource_person_professions/.test(sql))
+    return [storedOrganizationLinks];
   if (/FROM directory_(resource_person|organization)_options WHERE is_active = 1/.test(sql))
     return [activeOptions];
   if (/directory_(resource_person|organization)_specializations/.test(sql)) {
@@ -24,6 +28,7 @@ const connection = {
   rollback: vi.fn(),
   release: vi.fn(),
   execute: async (sql, params) => answerListQuery(sql, params) ?? execute(sql, params),
+  query: async (sql, params) => answerListQuery(sql, params) ?? execute(sql, params),
 };
 
 vi.mock('../config/connection.js', () => ({
@@ -891,21 +896,28 @@ describe('resource person Tag and Specialization lists', () => {
     expect(db.execute.mock.calls[2][0]).toMatch(/^DELETE FROM directory_resource_person_options/);
   });
 
-  it('answers an entry already in the list with a 409, matching case-insensitively', async () => {
-    db.execute.mockResolvedValueOnce([[{ name: 'Microbiology' }]]);
+  it('answers an entry already in the list with a 409', async () => {
+    execute.mockResolvedValueOnce([[{ id: 3 }]]);
 
     await expect(
       resourcePersonModel.addOptions('specialization', { name: ' microbiology ' }),
     ).rejects.toMatchObject({ status: 409, message: '"microbiology" is already in the list.' });
-    expect(db.execute).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(execute.mock.calls[0][1]).toEqual(['specialization', 'microbiology']);
+    expect(connection.rollback).toHaveBeenCalledOnce();
   });
 
-  // "A, B, C" on the Add form arrives as several names: one insert adds the new ones,
-  // and names already listed (or repeated in the request) are skipped, not fatal.
-  it('adds several entries at once and reports the ones already listed', async () => {
-    db.execute
-      .mockResolvedValueOnce([[{ name: 'Microbiology' }]])
-      .mockResolvedValueOnce([{}])
+  // "A, B, C" on the Add form arrives as several names: the new ones are added, and names
+  // already listed (or repeated in the request) are skipped, not fatal. Whether a name is
+  // listed is the database's call under the column's collation, which also ignores accents:
+  // with "Café" listed, "Cafe" must be skipped, not fail the whole add on the unique key.
+  it('adds several entries at once and skips the ones the database finds listed', async () => {
+    execute
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([{ insertId: 7 }])
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([{ insertId: 8 }])
+      .mockResolvedValueOnce([[{ id: 2 }]])
       .mockResolvedValueOnce([
         [
           { id: 7, list_key: 'specialization', name: 'Chemistry', is_active: 1 },
@@ -914,26 +926,85 @@ describe('resource person Tag and Specialization lists', () => {
       ]);
 
     const result = await resourcePersonModel.addOptions('specialization', {
-      names: ['Chemistry', ' Physics ', 'microbiology', 'chemistry'],
+      names: ['Chemistry', ' Physics ', 'Cafe', 'chemistry'],
     });
 
-    const [insertSql, insertValues] = db.execute.mock.calls[1];
-    expect(insertSql).toMatch(/VALUES \(\?,\?,\?\), \(\?,\?,\?\)$/);
-    expect(insertValues).toEqual([
-      'specialization',
-      'Chemistry',
-      1,
-      'specialization',
-      'Physics',
-      1,
-    ]);
+    const lookups = execute.mock.calls.filter(([sql]) => /^SELECT id FROM/.test(sql));
+    expect(lookups.map(([, values]) => values[1])).toEqual(['Chemistry', 'Physics', 'Cafe']);
+    expect(execute.mock.calls[1][1]).toEqual(['specialization', 'Chemistry', 1]);
+    expect(execute.mock.calls[3][1]).toEqual(['specialization', 'Physics', 1]);
+    expect(connection.commit).toHaveBeenCalledOnce();
     expect(result).toEqual({
       added: [
         { id: 7, list_key: 'specialization', name: 'Chemistry', is_active: true },
         { id: 8, list_key: 'specialization', name: 'Physics', is_active: true },
       ],
-      skipped: ['microbiology'],
+      skipped: ['Cafe'],
     });
+  });
+
+  it('skips a name another admin added since the check, keeping the rest', async () => {
+    execute
+      .mockResolvedValueOnce([[]])
+      .mockRejectedValueOnce(Object.assign(new Error('dup'), { code: 'ER_DUP_ENTRY' }))
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([{ insertId: 8 }])
+      .mockResolvedValueOnce([[{ id: 8, list_key: 'tag', name: 'Physics', is_active: 1 }]]);
+
+    const result = await resourcePersonModel.addOptions('tag', { names: ['Chemistry', 'Physics'] });
+
+    expect(result.skipped).toEqual(['Chemistry']);
+    expect(result.added.map((row) => row.name)).toEqual(['Physics']);
+    expect(connection.commit).toHaveBeenCalledOnce();
+  });
+
+  // A Tag is stored in the records' VARCHAR(100) tag column; a longer entry could be picked
+  // but never saved.
+  it('limits a Tag to 100 characters and a Specialization to 255', async () => {
+    await expect(
+      resourcePersonModel.addOptions('tag', { name: 'x'.repeat(101) }),
+    ).rejects.toMatchObject({ status: 400, message: 'Name must be 100 characters or fewer.' });
+    db.execute.mockResolvedValueOnce([[{ list_key: 'tag', name: 'Short' }]]);
+    await expect(
+      resourcePersonModel.updateOption(4, { name: 'x'.repeat(101) }),
+    ).rejects.toMatchObject({ status: 400, message: 'Name must be 100 characters or fewer.' });
+    await expect(
+      resourcePersonModel.addOptions('specialization', { name: 'x'.repeat(256) }),
+    ).rejects.toMatchObject({ status: 400, message: 'Name must be 255 characters or fewer.' });
+  });
+
+  // The forms send General when no Tag is chosen and the columns default to it, so its entry
+  // can be neither renamed, retired nor deleted; the migration also counts on the Tag list
+  // never emptying again.
+  it.each([
+    ['renamed', (id) => resourcePersonModel.updateOption(id, { name: 'Misc' })],
+    [
+      'retired',
+      (id) => resourcePersonModel.updateOption(id, { name: 'General', is_active: false }),
+    ],
+    ['deleted', (id) => resourcePersonModel.deleteOption(id)],
+  ])('refuses to let the General Tag be %s', async (_label, act) => {
+    db.execute.mockResolvedValueOnce([[{ list_key: 'tag', name: 'General' }]]);
+
+    await expect(act(1)).rejects.toMatchObject({
+      status: 400,
+      message:
+        '"General" is the Tag a record gets when none is chosen, so it stays in the list as it is.',
+    });
+    expect(db.execute).toHaveBeenCalledOnce();
+  });
+
+  it('still lets a General Specialization be retired', async () => {
+    db.execute
+      .mockResolvedValueOnce([[{ list_key: 'specialization', name: 'General' }]])
+      .mockResolvedValueOnce([{ affectedRows: 1 }])
+      .mockResolvedValueOnce([
+        [{ id: 1, list_key: 'specialization', name: 'General', is_active: 0 }],
+      ]);
+
+    await expect(
+      resourcePersonModel.updateOption(1, { name: 'General', is_active: false }),
+    ).resolves.toMatchObject({ is_active: false });
   });
 });
 
@@ -992,9 +1063,16 @@ describe('organization Tag and Specialization lists', () => {
 // pointing at an organization that never reaches the directory.
 describe('resource person approval waits for its organizations', () => {
   beforeEach(() => {
+    execute.mockReset();
+    connection.commit.mockReset();
+    connection.rollback.mockReset();
     db.query.mockReset();
     workflowService.actOnWorkflow.mockReset();
   });
+
+  // Each approval first locks the person row, then reads its holds.
+  const holdRows = (rows) =>
+    execute.mockResolvedValueOnce([[{ id: 5 }]]).mockResolvedValueOnce([rows]);
 
   it.each([
     [
@@ -1006,23 +1084,43 @@ describe('resource person approval waits for its organizations', () => {
       'The organization "Old Org" was rejected; the submitter needs to choose another.',
     ],
   ])('refuses to approve while an organization is held (%j)', async (row, message) => {
-    db.query.mockResolvedValueOnce([[{ resource_person_id: 5, ...row }]]);
+    holdRows([{ resource_person_id: 5, ...row }]);
 
     await expect(resourcePersonModel.review(5, 'approve', { id: 1 })).rejects.toMatchObject({
       status: 409,
       message,
     });
     expect(workflowService.actOnWorkflow).not.toHaveBeenCalled();
+    expect(connection.rollback).toHaveBeenCalledOnce();
   });
 
   it('approves when an Approved organization carries the name', async () => {
-    db.query.mockResolvedValueOnce([
-      [{ resource_person_id: 5, name: 'IISc', approved: 1, pending: 1 }],
-    ]);
+    holdRows([{ resource_person_id: 5, name: 'IISc', approved: 1, pending: 1 }]);
     workflowService.actOnWorkflow.mockResolvedValueOnce({});
 
     await expect(resourcePersonModel.review(5, 'approve', { id: 1 })).resolves.toBeTruthy();
     expect(workflowService.actOnWorkflow).toHaveBeenCalledOnce();
+  });
+
+  // Pins the race the review of #89 found: the check ran before, and outside, the approving
+  // transaction, so an edit saved in between was approved unchecked. Now the person row is
+  // locked first, the holds are read with share locks, and the decision joins that same
+  // transaction, committing or rolling back with the check.
+  it('checks the holds inside the approving transaction, after locking the person', async () => {
+    holdRows([]);
+    workflowService.actOnWorkflow.mockResolvedValueOnce({});
+
+    await resourcePersonModel.review(5, 'approve', { id: 1 });
+
+    expect(connection.beginTransaction).toHaveBeenCalled();
+    expect(execute.mock.calls[0][0]).toMatch(
+      /FROM directory_resource_persons WHERE id = \? FOR UPDATE$/,
+    );
+    expect(execute.mock.calls[1][0]).toMatch(/FOR SHARE$/);
+    expect(workflowService.actOnWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ decision: 'approved', tx: connection }),
+    );
+    expect(connection.commit).toHaveBeenCalledOnce();
   });
 
   it('never holds a rejection', async () => {
@@ -1030,8 +1128,10 @@ describe('resource person approval waits for its organizations', () => {
 
     await resourcePersonModel.review(5, 'reject', { id: 1 });
 
-    expect(db.query).not.toHaveBeenCalled();
-    expect(workflowService.actOnWorkflow).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+    expect(workflowService.actOnWorkflow).toHaveBeenCalledWith(
+      expect.objectContaining({ decision: 'rejected', tx: connection }),
+    );
   });
 });
 
@@ -1046,6 +1146,7 @@ describe('resource person profession organization link', () => {
     db.query.mockReset();
     db.query.mockImplementation(async (sql, params) => answerListQuery(sql, params) ?? [[]]);
     activeOptions.splice(0);
+    storedOrganizationLinks.splice(0);
   });
 
   const submitWith = (organizationId) =>
@@ -1091,6 +1192,103 @@ describe('resource person profession organization link', () => {
     execute.mockResolvedValueOnce([{ insertId: 70 }]).mockResolvedValueOnce([[org]]);
 
     await expect(submitWith(9)).rejects.toMatchObject({ status: 400, message });
+    expect(connection.commit).not.toHaveBeenCalled();
+    expect(connection.rollback).toHaveBeenCalledOnce();
+  });
+
+  // Pins the review finding on #89: the edit form sends every row's stored organizationId
+  // back, so a link to another user's organization that went back to Pending (its owner
+  // edited it, or the migration linked it) must not block the owner's save.
+  const editWith = (organizationId) =>
+    resourcePersonModel.update(
+      30,
+      {
+        firstName: 'A',
+        lastName: 'B',
+        professions: JSON.stringify([{ organization: 'Theirs', organizationId }]),
+      },
+      {},
+      2,
+    );
+  const theirPendingOrg = { id: 9, name: 'Theirs', is_active: 0, updated_by: null, created_by: 5 };
+
+  it('keeps a stored link to another user’s Pending organization on edit, with its hold', async () => {
+    storedOrganizationLinks.push({ organization_id: 9 });
+    execute
+      .mockResolvedValueOnce([[{ id: 30, created_by: 2 }]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([[theirPendingOrg]])
+      .mockResolvedValue([{}]);
+
+    const saved = await editWith(9);
+
+    expect(connection.commit).toHaveBeenCalledOnce();
+    expect(saved.professions[0]).toMatchObject({ organization: 'Theirs', organizationId: 9 });
+    expect(saved.organizationHolds).toEqual([{ name: 'Theirs', status: 'Pending' }]);
+  });
+
+  // A loaded profession carries both officialEmail and official_email, and the form edits
+  // only the first; clearing it must remove the address, not fall back to the stored one.
+  it('clears an official email the owner emptied on edit', async () => {
+    execute
+      .mockResolvedValueOnce([[{ id: 30, created_by: 2 }]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValue([{}]);
+
+    await resourcePersonModel.update(
+      30,
+      {
+        firstName: 'A',
+        lastName: 'B',
+        professions: JSON.stringify([
+          { designation: 'HOD', officialEmail: '', official_email: 'old@college.edu' },
+        ]),
+      },
+      {},
+      2,
+    );
+
+    const [, values] = execute.mock.calls.find(([sql]) =>
+      sql.startsWith('INSERT INTO directory_resource_person_professions'),
+    );
+    expect(values[9]).toBeNull();
+  });
+
+  // The queue's Organization column follows a rename, as the record's details do.
+  it('shows the queue a linked organization under its current name', async () => {
+    db.query
+      .mockResolvedValueOnce([[{ id: 3, created_by: 2, is_active: 0, approvalStatus: 'Pending' }]])
+      .mockResolvedValueOnce([
+        [
+          {
+            id: 1,
+            resource_person_id: 3,
+            organization: 'Old Name',
+            organization_id: 9,
+            linked_organization_name: 'New Name',
+            organization_status: 'Approved',
+          },
+        ],
+      ]);
+
+    const [row] = await resourcePersonModel.pending();
+
+    expect(row.organization).toBe('New Name');
+  });
+
+  it('still refuses another user’s Pending organization the record did not hold', async () => {
+    execute
+      .mockResolvedValueOnce([[{ id: 30, created_by: 2 }]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([[theirPendingOrg]]);
+
+    await expect(editWith(9)).rejects.toMatchObject({
+      status: 400,
+      message: 'Organization not found. Choose it again.',
+    });
     expect(connection.commit).not.toHaveBeenCalled();
     expect(connection.rollback).toHaveBeenCalledOnce();
   });

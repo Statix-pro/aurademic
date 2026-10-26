@@ -52,8 +52,14 @@
 --   directory_resource_persons.official_email, directory_resource_persons.specialization,
 --   organizations.sector (the organization form's old Specialization).
 --
--- Every step is guarded, so running the file twice is a no-op, and a second run never
--- brings back a list entry the Directory Admin has since deleted.
+-- Every step is guarded, so running the file twice is a no-op. The backfills (A2, A3, D2,
+-- and the picks in B and C) copy legacy values only in the run that seeds that directory's
+-- lists: an empty destination is not proof a record was never migrated, since its owner
+-- may have cleared it on purpose. The marker is the list itself -- read in the same
+-- transaction that seeds it and backfills, so a failed run leaves it empty and the next run
+-- does both; once seeded it never empties again, as the General Tag cannot be deleted
+-- (modules/shared/directoryLists.js). A second run never brings back a list entry the
+-- Directory Admin has since deleted, nor a value a user has since removed.
 --
 -- Read-only audit, run before and after:
 --
@@ -169,6 +175,10 @@ CREATE TABLE IF NOT EXISTS `directory_organization_specializations` (
 
 START TRANSACTION;
 
+-- Whether this run seeds each directory's lists, and so is the run that backfills it.
+SET @rp_first_run = (SELECT COUNT(*) = 0 FROM `directory_resource_person_options`);
+SET @org_first_run = (SELECT COUNT(*) = 0 FROM `directory_organization_options`);
+
 -- ==================================================================
 -- A2, A3. Copy each person's official email onto a profession row
 -- ==================================================================
@@ -184,7 +194,8 @@ JOIN (
    GROUP BY p.resource_person_id
 ) chosen ON chosen.profession_id = target.id
 SET target.official_email = rp.official_email
-WHERE COALESCE(rp.official_email, '') <> ''
+WHERE @rp_first_run = 1
+  AND COALESCE(rp.official_email, '') <> ''
   AND NOT EXISTS (
     SELECT 1 FROM (
       SELECT resource_person_id FROM directory_resource_person_professions
@@ -197,7 +208,8 @@ INSERT INTO directory_resource_person_professions
   (resource_person_id, official_email, status, sort_order)
 SELECT rp.id, rp.official_email, 'Working', 0
   FROM directory_resource_persons rp
- WHERE COALESCE(rp.official_email, '') <> ''
+ WHERE @rp_first_run = 1
+   AND COALESCE(rp.official_email, '') <> ''
    AND NOT EXISTS (SELECT 1 FROM directory_resource_person_professions p
                     WHERE p.resource_person_id = rp.id);
 
@@ -212,14 +224,13 @@ SET p.organization_id = (
    WHERE o.name = TRIM(p.organization)
    ORDER BY o.is_active DESC, (o.created_by <=> rp.created_by) DESC, o.id
    LIMIT 1)
-WHERE p.organization_id IS NULL
+WHERE @rp_first_run = 1
+  AND p.organization_id IS NULL
   AND COALESCE(TRIM(p.organization), '') <> '';
 
 -- ==================================================================
 -- B. Seed the resource person lists (only while empty) and backfill picks
 -- ==================================================================
-
-SET @seeded = (SELECT COUNT(*) FROM `directory_resource_person_options`);
 
 -- IGNORE: the unique key is case-insensitive, so 'general' and 'General' are one entry;
 -- the first spelling met is kept, and the owner's spellings come first.
@@ -247,21 +258,20 @@ SELECT seed.list_key, seed.name
     SELECT DISTINCT 1, 'specialization', TRIM(specialization) FROM directory_resource_persons
      WHERE COALESCE(TRIM(specialization), '') <> ''
   ) seed
- WHERE @seeded = 0
+ WHERE @rp_first_run = 1
  ORDER BY seed.priority;
 
 INSERT INTO `directory_resource_person_specializations` (`resource_person_id`, `name`, `sort_order`)
 SELECT rp.id, TRIM(rp.specialization), 0
   FROM directory_resource_persons rp
- WHERE COALESCE(TRIM(rp.specialization), '') <> ''
+ WHERE @rp_first_run = 1
+   AND COALESCE(TRIM(rp.specialization), '') <> ''
    AND NOT EXISTS (SELECT 1 FROM directory_resource_person_specializations s
                     WHERE s.resource_person_id = rp.id);
 
 -- ==================================================================
 -- C. Seed the organization lists (only while empty) and backfill picks
 -- ==================================================================
-
-SET @seeded = (SELECT COUNT(*) FROM `directory_organization_options`);
 
 INSERT IGNORE INTO `directory_organization_options` (`list_key`, `name`)
 SELECT seed.list_key, seed.name
@@ -287,13 +297,14 @@ SELECT seed.list_key, seed.name
     SELECT DISTINCT 1, 'specialization', TRIM(sector) FROM organizations
      WHERE COALESCE(TRIM(sector), '') <> ''
   ) seed
- WHERE @seeded = 0
+ WHERE @org_first_run = 1
  ORDER BY seed.priority;
 
 INSERT INTO `directory_organization_specializations` (`organization_id`, `name`, `sort_order`)
 SELECT o.id, TRIM(o.sector), 0
   FROM organizations o
- WHERE COALESCE(TRIM(o.sector), '') <> ''
+ WHERE @org_first_run = 1
+   AND COALESCE(TRIM(o.sector), '') <> ''
    AND NOT EXISTS (SELECT 1 FROM directory_organization_specializations s
                     WHERE s.organization_id = o.id);
 

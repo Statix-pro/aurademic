@@ -137,10 +137,12 @@ const lists = createDirectoryLists({
 // Rejected. A profession row linked by organization_id is held by that organization; an
 // unlinked row (older free text) by the organizations of that name, unless one is Approved.
 // A name that matches no organization holds nothing.
-const loadOrganizationHoldsByPerson = async (personIds) => {
+// `lock` (inside a transaction, `tx`) share-locks the rows read, so an organization cannot
+// leave Approved, and the profession rows cannot change, until that transaction ends.
+const loadOrganizationHoldsByPerson = async (personIds, { tx = db, lock = false } = {}) => {
   if (!personIds.length) return new Map();
   const placeholders = personIds.map(() => '?').join(', ');
-  const [rows] = await db.query(
+  const [rows] = await tx.query(
     `SELECT p.resource_person_id, MIN(o.name) AS name,
             MAX(o.is_active = 1) AS approved,
             MAX(o.is_active = 0 AND o.updated_by IS NULL) AS pending
@@ -149,7 +151,7 @@ const loadOrganizationHoldsByPerson = async (personIds) => {
          ON (p.organization_id IS NOT NULL AND o.id = p.organization_id)
          OR (p.organization_id IS NULL AND o.name = TRIM(p.organization))
       WHERE p.resource_person_id IN (${placeholders})
-      GROUP BY p.resource_person_id, p.id`,
+      GROUP BY p.resource_person_id, p.id${lock ? ' FOR SHARE' : ''}`,
     personIds,
   );
   const byPerson = new Map();
@@ -165,7 +167,16 @@ const loadOrganizationHoldsByPerson = async (personIds) => {
 // A profession row that picks an organization stores its id and, as the fallback name, its
 // current name. Only an organization the submitter can see may be picked -- an Approved one
 // or their own -- and never a Rejected one. Rows without an id keep their text unlinked.
-const resolveProfessionOrganizations = async (connection, professions, userId) => {
+// `keptIds` are the links the record already holds: like a retired list value, a stored link
+// stays even when the submitter could not pick it now (its owner edited it back to Pending,
+// or the migration linked another user's Pending organization). The approval hold still
+// stops the record being approved until that organization is.
+const resolveProfessionOrganizations = async (
+  connection,
+  professions,
+  userId,
+  keptIds = new Set(),
+) => {
   const ids = [
     ...new Set(
       professions
@@ -185,7 +196,8 @@ const resolveProfessionOrganizations = async (connection, professions, userId) =
     if (!Number.isInteger(id) || id <= 0) return { ...p, organizationId: null };
     const org = byId.get(id);
     const visible =
-      org && (Number(org.is_active) === 1 || Number(org.created_by) === Number(userId));
+      org &&
+      (Number(org.is_active) === 1 || Number(org.created_by) === Number(userId) || keptIds.has(id));
     if (!visible) {
       throw Object.assign(new Error('Organization not found. Choose it again.'), { status: 400 });
     }
@@ -223,7 +235,9 @@ const insertProfessions = async (connection, personId, professions) => {
         p.state || null,
         p.country || null,
         p.orgLinkedIn ?? p.org_linked_in ?? null,
-        p.officialEmail || p.official_email || null,
+        // A loaded row carries both keys and the form edits only officialEmail, so a
+        // cleared field ('') must not fall back to the stored official_email.
+        (p.officialEmail ?? p.official_email) || null,
         p.status || 'Working',
         index,
       ],
@@ -456,6 +470,11 @@ export default {
         `UPDATE directory_resource_persons SET ${updateFields.map((field) => `${field} = ?`).join(', ')} WHERE id = ?`,
         values,
       );
+      const [storedLinks] = await connection.execute(
+        'SELECT organization_id FROM directory_resource_person_professions WHERE resource_person_id = ? AND organization_id IS NOT NULL',
+        [id],
+      );
+      const keptOrganizationIds = new Set(storedLinks.map((row) => Number(row.organization_id)));
       await connection.execute(
         'DELETE FROM directory_resource_person_professions WHERE resource_person_id = ?',
         [id],
@@ -464,6 +483,7 @@ export default {
         connection,
         professions,
         userId,
+        keptOrganizationIds,
       );
       await insertProfessions(connection, id, savedProfessions);
       await lists.replaceSpecializations(connection, id, listed.specializations);
@@ -519,10 +539,12 @@ export default {
     const holdsByPerson = await loadOrganizationHoldsByPerson(personIds);
     return rows.map((person) => {
       const professions = professionsByPerson.get(Number(person.id)) || [];
-      const primaryProfession = professions[0];
       const specializations = specializationsByPerson.get(Number(person.id)) || [];
+      const serialized = serializePerson({ ...person, specializations }, professions);
+      // From the serialized row, so a linked organization shows under its current name.
+      const primaryProfession = serialized.professions[0];
       return {
-        ...serializePerson({ ...person, specializations }, professions),
+        ...serialized,
         submitted_by_name: person.submitted_by_name,
         submitted_by_email: person.submitted_by_email,
         approvalStatus: person.approvalStatus,
@@ -538,38 +560,58 @@ export default {
   updateOption: lists.updateOption,
   deleteOption: lists.deleteOption,
   async review(id, decision, actor, comment) {
-    if (decision === 'approve') {
-      const holds = (await loadOrganizationHoldsByPerson([Number(id)])).get(Number(id)) || [];
-      if (holds.length) {
-        const pending = holds.filter((hold) => hold.status === 'Pending').map((h) => `"${h.name}"`);
-        const rejected = holds
-          .filter((hold) => hold.status === 'Rejected')
-          .map((h) => `"${h.name}"`);
-        const error = new Error(
-          [
-            pending.length &&
-              `Approve the organization ${pending.join(', ')} first; it is still pending.`,
-            rejected.length &&
-              `The organization ${rejected.join(', ')} was rejected; the submitter needs to choose another.`,
-          ]
-            .filter(Boolean)
-            .join(' '),
-        );
-        error.status = 409;
-        throw error;
-      }
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      if (decision === 'approve') await assertNoOrganizationHolds(connection, id);
+      await workflowService.actOnWorkflow({
+        moduleKey: 'resource_person_directory',
+        recordId: id,
+        decision: decision === 'approve' ? 'approved' : 'rejected',
+        feedback: comment || (decision === 'reject' ? 'Rejected by super administrator' : null),
+        actor,
+        metadata: {
+          origin: 'api',
+          moduleMeta: { route: 'PATCH /api/resource-person-submissions/:id/review' },
+        },
+        tx: connection,
+      });
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
     }
-    await workflowService.actOnWorkflow({
-      moduleKey: 'resource_person_directory',
-      recordId: id,
-      decision: decision === 'approve' ? 'approved' : 'rejected',
-      feedback: comment || (decision === 'reject' ? 'Rejected by super administrator' : null),
-      actor,
-      metadata: {
-        origin: 'api',
-        moduleMeta: { route: 'PATCH /api/resource-person-submissions/:id/review' },
-      },
-    });
     return { id: Number(id), status: decision === 'approve' ? 'Approved' : 'Rejected' };
   },
 };
+// Runs in the approving transaction, so what it checks is what gets approved. The person
+// row is locked first -- the order update() takes it in -- so an owner's edit has either
+// committed or waits for the decision; the share locks on the profession and organization
+// rows then keep a linked organization from leaving Approved before the approval commits.
+async function assertNoOrganizationHolds(connection, id) {
+  await connection.execute('SELECT id FROM directory_resource_persons WHERE id = ? FOR UPDATE', [
+    id,
+  ]);
+  const holds =
+    (await loadOrganizationHoldsByPerson([Number(id)], { tx: connection, lock: true })).get(
+      Number(id),
+    ) || [];
+  if (holds.length) {
+    const pending = holds.filter((hold) => hold.status === 'Pending').map((h) => `"${h.name}"`);
+    const rejected = holds.filter((hold) => hold.status === 'Rejected').map((h) => `"${h.name}"`);
+    const error = new Error(
+      [
+        pending.length &&
+          `Approve the organization ${pending.join(', ')} first; it is still pending.`,
+        rejected.length &&
+          `The organization ${rejected.join(', ')} was rejected; the submitter needs to choose another.`,
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
+    error.status = 409;
+    throw error;
+  }
+}
