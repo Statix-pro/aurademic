@@ -8,11 +8,11 @@ import Dashboard from '../features/admin/admindashboard';
 import AdminBudget from '../features/admin/budget/budget-approval/adminbudget';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
+import DirectoryApprovalPage from '../features/admin/directoryApproval/DirectoryApprovalPage';
+import DirectoryListsPage from '../features/admin/directoryLists/DirectoryListsPage';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
-import OrganizationApprovalPage from '../features/admin/organizationApproval/OrganizationApprovalPage';
 import PublicationReview from '../features/admin/PublicationReview';
-import ResourcePersonApprovalPage from '../features/admin/resourcePersonApproval/ResourcePersonApprovalPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
 import EventDashboard from '../features/events/components/EventDashboard';
@@ -366,20 +366,51 @@ function App() {
                           </AdminRoute>
                         }
                       />
+                      {/* Both directories' approval queues on one page, a tab each. */}
+                      <Route
+                        path="/admin/directory-approval"
+                        element={
+                          <DirectoryApprovalRoute
+                            moduleKey={['organization_directory', 'resource_person_directory']}
+                          >
+                            <DirectoryApprovalPage />
+                          </DirectoryApprovalRoute>
+                        }
+                      />
+                      <Route
+                        path="/directory/lists"
+                        element={
+                          <DirectoryApprovalRoute
+                            moduleKey={['organization_directory', 'resource_person_directory']}
+                          >
+                            <DirectoryListsPage />
+                          </DirectoryApprovalRoute>
+                        }
+                      />
+                      {/* LEGACY: the pages these paths served became tabs of the two above.
+                      In-app notifications already sent link here (notificationCatalog.js), so
+                      they redirect; remove once the catalog links point at the new paths and
+                      older notifications have been purged. */}
                       <Route
                         path="/admin/organization-approval"
                         element={
-                          <DirectoryApprovalRoute moduleKey="organization_directory">
-                            <OrganizationApprovalPage />
-                          </DirectoryApprovalRoute>
+                          <Navigate to="/admin/directory-approval?tab=organization" replace />
                         }
                       />
                       <Route
                         path="/admin/resource-person-approval"
                         element={
-                          <DirectoryApprovalRoute moduleKey="resource_person_directory">
-                            <ResourcePersonApprovalPage />
-                          </DirectoryApprovalRoute>
+                          <Navigate to="/admin/directory-approval?tab=resource-person" replace />
+                        }
+                      />
+                      <Route
+                        path="/admin/organization-lists"
+                        element={<Navigate to="/directory/lists?directory=organization" replace />}
+                      />
+                      <Route
+                        path="/admin/resource-person-lists"
+                        element={
+                          <Navigate to="/directory/lists?directory=resource-person" replace />
                         }
                       />
                       {/* One publication under review, on its own page, so it can be linked

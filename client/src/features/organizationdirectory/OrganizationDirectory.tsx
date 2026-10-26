@@ -2,8 +2,12 @@ import { Linkedin, Globe } from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
 import './OrganizationDirectory.css';
+import RegionFields from '../../shared/components/RegionFields';
 import CustomButton from '../../shared/components/ui/CustomButton';
+import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 import CustomInput from '../../shared/components/ui/CustomInput';
+import authenticityUtility from '../../shared/utils/authenticityUtility';
+import { DEFAULT_COUNTRY } from '../../shared/utils/regions';
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -12,7 +16,8 @@ export interface Organization {
   name: string;
   abbreviation: string;
   establishmentYear: string;
-  sector: string;
+  /** Picked from the Directory Admin's Specialization list. */
+  specializations: string[];
   category: string;
   tag: string;
   website: string;
@@ -26,6 +31,9 @@ export interface Organization {
   status: string; // 'Active' | 'Inactive'
   approvalStatus?: 'Pending' | 'Approved' | 'Rejected';
   isOwner?: boolean;
+  /** Who added the record, so a reader can ask them about it. */
+  submitted_by_name?: string | null;
+  submitted_by_email?: string | null;
 }
 
 interface OrganizationDirectoryProps {
@@ -42,7 +50,66 @@ const CATEGORY_OPTIONS = [
   'Incubation',
   'Start-up',
   'Government',
+  'Others',
 ];
+
+// Tag and Specialization sit on --control-height like the inputs beside them; the colours
+// and corners match this form's own inputs. CustomDropdown merges styles shallowly, so the
+// control restates them.
+const listDropdownStyles = {
+  control: (provided: any, state: any) => ({
+    ...provided,
+    minHeight: 'var(--control-height)',
+    height: 'var(--control-height)',
+    backgroundColor: '#ffffff',
+    borderColor: state.isFocused ? '#0069ab' : '#e0e0e0',
+    borderRadius: '12px',
+    boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.15)' : 'none',
+    '&:hover': { borderColor: '#0069ab' },
+  }),
+  valueContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+    padding: '0 12px',
+  }),
+  indicatorsContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+  }),
+  // Text per AGENTS.md typography: 14px, primary-text colour.
+  container: (provided: any) => ({ ...provided, fontSize: 'var(--font-size-body)' }),
+  singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
+  indicatorSeparator: () => ({ display: 'none' }),
+};
+
+// Several picks stay on one line and scroll sideways, so the field never grows taller
+// than the Tag dropdown beside it.
+const specializationDropdownStyles = {
+  ...listDropdownStyles,
+  valueContainer: (provided: any) => ({
+    ...listDropdownStyles.valueContainer(provided),
+    flexWrap: 'nowrap',
+    overflowX: 'auto',
+  }),
+  multiValue: (provided: any) => ({ ...provided, flexShrink: 0, borderRadius: '6px' }),
+  multiValueLabel: (provided: any) => ({
+    ...provided,
+    fontSize: 'var(--font-size-secondary)',
+    color: 'var(--text-body)',
+  }),
+  // A read-only view shows the picks without the remove button they could not use.
+  multiValueRemove: (provided: any, state: any) =>
+    state.selectProps.isDisabled ? { display: 'none' } : provided,
+};
+
+/** A stored value the list no longer offers is still shown, so an edit never drops it. */
+const toOptions = (names: string[], selected: string[]) =>
+  [...names, ...selected.filter((value) => value && !names.includes(value))].map((name) => ({
+    value: name,
+    label: name,
+  }));
 
 /* ═══════════════════════════════════════════════════════════
    Organization Form Component
@@ -59,7 +126,12 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
   const [name, setName] = useState('');
   const [abbreviation, setAbbreviation] = useState('');
   const [establishmentYear, setEstablishmentYear] = useState('');
-  const [sector, setSector] = useState('');
+  const [specializations, setSpecializations] = useState<string[]>([]);
+  const [listNames, setListNames] = useState<{ tag: string[]; specialization: string[] }>({
+    tag: [],
+    specialization: [],
+  });
+  const [listError, setListError] = useState<string | null>(null);
   const [tag, setTag] = useState('');
   const [website, setWebsite] = useState('');
   const [linkedIn, setLinkedIn] = useState('');
@@ -68,7 +140,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
-  const [country, setCountry] = useState('');
+  const [country, setCountry] = useState(DEFAULT_COUNTRY);
   const [pinCode, setPinCode] = useState('');
 
   const [status, setStatus] = useState('Active');
@@ -81,18 +153,45 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       setName(editingOrg.name || '');
       setAbbreviation(editingOrg.abbreviation || '');
       setEstablishmentYear(editingOrg.establishmentYear || '');
-      setSector(editingOrg.sector || '');
+      setSpecializations(editingOrg.specializations || []);
       setTag(editingOrg.tag || '');
       setWebsite(editingOrg.website || '');
       setLinkedIn(editingOrg.linkedIn || '');
       setAddress(editingOrg.address || '');
       setCity(editingOrg.city || '');
       setState(editingOrg.state || '');
-      setCountry(editingOrg.country || '');
+      setCountry(editingOrg.country || DEFAULT_COUNTRY);
       setPinCode(editingOrg.pinCode || '');
       setStatus(editingOrg.status || 'Active');
     }
   }, [editingOrg]);
+
+  // Tag and Specialization come from the Directory Admin's lists; a read-only view shows
+  // the stored values and needs no list.
+  useEffect(() => {
+    if (readOnly) return;
+    let cancelled = false;
+    authenticityUtility
+      .get('/organization-options')
+      .then((response: any) => {
+        if (cancelled) return;
+        const rows: { list_key: string; name: string }[] = response?.data || [];
+        setListNames({
+          tag: rows.filter((row) => row.list_key === 'tag').map((row) => row.name),
+          specialization: rows
+            .filter((row) => row.list_key === 'specialization')
+            .map((row) => row.name),
+        });
+        setListError(null);
+      })
+      .catch((err: any) => {
+        if (!cancelled)
+          setListError(err?.message || 'Failed to load the Tag and Specialization lists.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [readOnly]);
 
   const handleSubmit = () => {
     setFormError(null);
@@ -104,7 +203,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       name: name.trim(),
       abbreviation: abbreviation.trim(),
       establishmentYear: establishmentYear.trim(),
-      sector: sector.trim(),
+      specializations,
       category,
       tag: tag.trim() || 'General',
       website: website.trim(),
@@ -250,26 +349,18 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
               className="mb-0"
             />
           </div>
-          <div className="orgd-field">
-            <CustomInput
-              label="State"
-              name="orgd-state-input"
-              value={state}
-              onChange={setState}
-              placeholder="State"
-              className="mb-0"
-            />
-          </div>
-          <div className="orgd-field">
-            <CustomInput
-              label="Country"
-              name="orgd-country-input"
-              value={country}
-              onChange={setCountry}
-              placeholder="Country"
-              className="mb-0"
-            />
-          </div>
+          <RegionFields
+            idPrefix="orgd"
+            country={country}
+            state={state}
+            onChange={(region) => {
+              setCountry(region.country);
+              setState(region.state);
+            }}
+            disabled={readOnly}
+            fieldClassName="orgd-field"
+            dropdownStyles={listDropdownStyles}
+          />
           <div className="orgd-field">
             <CustomInput
               label="PIN"
@@ -285,23 +376,34 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
         {/* Tag and Specialization (Sector) Row */}
         <div style={{ display: 'flex', gap: '20px', marginBottom: '24px' }}>
           <div className="orgd-field" style={{ flex: '0 0 180px' }}>
-            <CustomInput
-              label="Tag"
-              name="orgd-tag-input"
-              value={tag}
-              onChange={setTag}
-              placeholder="Tag"
+            <label>Tag</label>
+            <CustomDropdown
+              name="orgd-tag"
               className="mb-0"
+              value={tag ? { value: tag, label: tag } : null}
+              onChange={(option: any) => setTag(option ? String(option.value) : '')}
+              options={toOptions(listNames.tag, [tag])}
+              placeholder="Select tag"
+              styles={listDropdownStyles}
+              isDisabled={readOnly}
+              isClearable
+              error={listError || undefined}
             />
           </div>
-          <div className="orgd-field" style={{ flex: '1' }}>
-            <CustomInput
-              label="Specialization"
-              name="orgd-sector-input"
-              value={sector}
-              onChange={setSector}
-              placeholder="Specialization"
+          <div className="orgd-field" style={{ flex: '1', minWidth: 0 }}>
+            <label>Specialization</label>
+            <CustomDropdown
+              name="orgd-specializations"
               className="mb-0"
+              isMulti
+              value={specializations.map((name) => ({ value: name, label: name }))}
+              onChange={(options: any) =>
+                setSpecializations((options || []).map((option: any) => String(option.value)))
+              }
+              options={toOptions(listNames.specialization, specializations)}
+              placeholder="Select specializations"
+              styles={specializationDropdownStyles}
+              isDisabled={readOnly}
             />
           </div>
         </div>

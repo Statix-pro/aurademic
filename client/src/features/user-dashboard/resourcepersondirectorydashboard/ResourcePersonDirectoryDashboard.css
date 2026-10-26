@@ -162,7 +162,7 @@
   border-right: none;
 }
 .rpd-table td {
-  padding: 12px 14px;
+  padding: var(--table-cell-padding);
   border-bottom: 1px solid #f1f5f9;
   border-right: 1px solid #f1f5f9;
   font-size: var(--font-size-body);
@@ -299,31 +299,6 @@
   background: #fde1e5;
 }
 
-/* The header search/filter are CustomInput; match the financecard search box they
-   replaced (CustomInput's `.form-control.custom-input` would otherwise win). */
-.rpd-dashboard-search .form-control.custom-input,
-.rpd-dashboard-filter .form-control.custom-input {
-  height: var(--control-height);
-  border-radius: 12px;
-  border: 1px solid #d7dee8;
-  background: #ffffff;
-  box-shadow: none;
-  font-size: var(--font-size-body);
-  color: #334155;
-}
-.rpd-dashboard-search .form-control.custom-input {
-  padding: 0 38px 0 40px;
-}
-.rpd-dashboard-filter .form-control.custom-input {
-  padding: 0 var(--control-padding-x);
-  min-width: 160px;
-}
-.rpd-dashboard-search .form-control.custom-input:focus,
-.rpd-dashboard-filter .form-control.custom-input:focus {
-  border-color: #0069ab;
-  box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.12);
-}
-
 /* The form is laid out for page width; CustomModal's dialog is narrower, which made the
    fields overlap. Same sizing as the approval page's details modal. */
 .rpd-form-modal .modal-dialog {
@@ -384,4 +359,71 @@
   font-size: var(--font-size-modal-title);
   line-height: var(--leading-modal-title);
   font-weight: var(--weight-semibold);
+}
+
+/* Under the organization: what holds the submitter's own record back. Scoped like the
+   meta line rule above, which it overrides. */
+.rpd-directory .rpd-org-cell .rpd-org-hold {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  color: #9b5f00;
+}
+
+.rpd-directory .rpd-org-cell .rpd-org-hold.rejected {
+  color: #b4253a;
+}
+
+/* Directory / My submissions tabs: chips per the size table (32px, 13px 600). */
+.rpd-directory .rpd-dir-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.rpd-directory .rpd-dir-tab {
+  height: var(--chip-height);
+  padding: 0 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text-body);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.rpd-directory .rpd-dir-tab.active {
+  background: #0069ab;
+  border-color: #0069ab;
+  color: #ffffff;
+}
+
+/* S.No. needs only its status dot and digits; the width goes to the names. */
+.rpd-directory .rpd-table th:first-child,
+.rpd-directory .rpd-table td:first-child {
+  width: 72px;
+}
+
+/* The name, then a small link to the LinkedIn profile on the same line. */
+.rpd-directory .rpd-name-cell .rpd-name-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rpd-directory .rpd-linkedin-link {
+  display: inline-flex;
+  color: #0a66c2;
+}
+
+.rpd-directory .rpd-linkedin-link:hover {
+  color: #004182;
+}
+
+/* A toolbar button (AGENTS.md size table): icon first, 16px padding, no form-action
+   minimum width, so it fits its short label -- the same as the Organization page's. */
+.custom-btn.rpd-add-btn {
+  min-width: 0;
+  padding: 0 16px;
+  border-radius: 12px;
 }

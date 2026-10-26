@@ -1,12 +1,16 @@
-import { BriefcaseBusiness, CheckCircle, Clock3, Eye, XCircle } from 'lucide-react';
+import { BriefcaseBusiness, Check, CheckCircle, Clock3, X, XCircle } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from 'react-bootstrap';
 
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomCard from '../../../shared/components/ui/CustomCard';
 import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
-import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomFilterSearch from '../../../shared/components/ui/CustomFilterSearch';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomPagination, {
+  PAGE_SIZE_OPTIONS,
+} from '../../../shared/components/ui/CustomPagination';
+import CustomSubmitterLine from '../../../shared/components/ui/CustomSubmitterLine';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import ResourcePersonDirectory from '../../resourcepersondirectory/ResourcePersonDirectory';
@@ -47,6 +51,15 @@ const FILTER_DROPDOWN_STYLES = {
 };
 
 type Row = Record<string, any> & { id: number; approvalStatus?: Filter };
+// The server refuses to approve while an organization the record names is Pending or
+// Rejected (organizationHolds); the row says why and its Approve button waits.
+const organizationHoldNote = (row: Row) => {
+  const holds: { name: string; status: string }[] = row.organizationHolds || [];
+  if (!holds.length) return '';
+  return holds.some((hold) => hold.status === 'Rejected')
+    ? 'Organization rejected: submitter must choose another'
+    : 'Organization pending approval';
+};
 const statusStyle = (s: string) =>
   s === 'Approved'
     ? { background: '#d9f8e5', color: '#087b43' }
@@ -54,7 +67,8 @@ const statusStyle = (s: string) =>
       ? { background: '#fde1e5', color: '#c12c41' }
       : { background: '#fff0d2', color: '#9b5f00' };
 
-export default function ResourcePersonApprovalPage() {
+/** `switcher`: the Directory Approval page's Organization / Resource Person tabs. */
+export default function ResourcePersonApprovalPage({ switcher }: { switcher?: React.ReactNode }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [filter, setFilter] = useState<Filter>('All');
   const [search, setSearch] = useState('');
@@ -108,7 +122,7 @@ export default function ResourcePersonApprovalPage() {
   );
   const categories = [...new Set(rows.map((r) => r.category).filter(Boolean))] as string[];
   const categoryOptions: OptionType[] = [
-    { value: 'All', label: 'All categories' },
+    { value: 'All', label: 'Search Category' },
     ...categories.map((item) => ({ value: item, label: item })),
   ];
   const filteredRows = rows.filter((row) => {
@@ -120,6 +134,15 @@ export default function ResourcePersonApprovalPage() {
       (category === 'All' || row.category === category)
     );
   });
+  // A page at a time; the queue keeps the server's order, oldest submission first.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const pageCount = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = filteredRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => {
+    setPage(1);
+  }, [filter, search, category, pageSize]);
   const toFormPerson = (row: Row) => {
     const fallbackProfession = {
       designation: row.designation || '',
@@ -129,6 +152,7 @@ export default function ResourcePersonApprovalPage() {
       state: row.state || '',
       country: row.country || '',
       orgLinkedIn: row.org_linked_in || row.orgLinkedIn || '',
+      officialEmail: '',
       status: row.profession_status || 'Working',
     };
     const professions =
@@ -137,6 +161,7 @@ export default function ResourcePersonApprovalPage() {
             ...fallbackProfession,
             ...profession,
             orgLinkedIn: profession.orgLinkedIn || profession.org_linked_in || '',
+            officialEmail: profession.officialEmail || profession.official_email || '',
           }))
         : [fallbackProfession];
 
@@ -151,10 +176,9 @@ export default function ResourcePersonApprovalPage() {
       status: row.person_status || row.status || 'In Service',
       category: row.category || 'Academic',
       tag: row.tag || '',
-      specialization: row.specialization || '',
+      specializations: row.specializations || [],
       mobile: row.mobile || '',
       personalEmail: row.personalEmail || row.personal_email || '',
-      officialEmail: row.officialEmail || row.official_email || '',
       linkedIn: row.linkedIn || row.linked_in || '',
       professions,
       photoName: row.photoName || row.photo_name || '',
@@ -217,52 +241,101 @@ export default function ResourcePersonApprovalPage() {
       </div>
     </CustomCard>
   );
+  const personName = (row: Row) =>
+    `${row.title || ''} ${row.first_name || ''} ${row.last_name || ''}`.trim();
+  const primaryProfession = (row: Row) =>
+    (row.professions || []).find((p: Record<string, any>) => p.status === 'Working') ||
+    (row.professions || [])[0];
+  // Same layout as the Organization approval page: who, where from, category and tag, then
+  // Approve / Reject while pending or the decision once made. A row click views it.
   const columns = [
     {
       key: 'name',
       label: 'RESOURCE PERSON',
       render: (row: Row) => (
-        <strong>
-          {`${row.title || ''} ${row.first_name || ''} ${row.last_name || ''}`.trim()}
-        </strong>
+        <div className="d-flex flex-column">
+          <strong>{personName(row)}</strong>
+          {primaryProfession(row)?.designation && (
+            <span className="resource-person-approval-meta">
+              {primaryProfession(row).designation}
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'organization',
+      label: 'ORGANIZATION',
+      render: (row: Row) => (
+        <div className="d-flex flex-column">
+          <span>{row.organization || '—'}</span>
+          {row.city && <span className="resource-person-approval-meta">{row.city}</span>}
+          {organizationHoldNote(row) && (
+            <span className="resource-person-approval-hold">{organizationHoldNote(row)}</span>
+          )}
+        </div>
       ),
     },
     { key: 'category', label: 'CATEGORY', render: (row: Row) => row.category || '—' },
-    { key: 'organization', label: 'ORGANIZATION', render: (row: Row) => row.organization || '—' },
     {
-      key: 'approvalStatus',
-      label: 'STATUS',
+      key: 'tag',
+      label: 'TAG',
+      render: (row: Row) =>
+        row.tag ? <span className="resource-person-approval-tag">{row.tag}</span> : '—',
+    },
+    {
+      key: 'actions',
+      label: 'ACTIONS',
       render: (row: Row) => {
         const status = row.approvalStatus || 'Pending';
         return (
-          <span
-            style={{
-              ...statusStyle(status),
-              display: 'inline-block',
-              padding: '7px 12px',
-              borderRadius: 18,
-              fontWeight: 600,
-              fontSize: 'var(--font-size-tertiary)',
-            }}
+          // Kept off the row, whose click opens the read-only view.
+          <div
+            className="resource-person-approval-actions"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
           >
-            {status}
-          </span>
+            {status === 'Pending' ? (
+              <>
+                <CustomButton
+                  variant="outline-success"
+                  className="resource-person-approval-decision approve"
+                  loading={reviewingId === row.id}
+                  disabled={reviewingId !== null || Boolean(organizationHoldNote(row))}
+                  title={organizationHoldNote(row) || undefined}
+                  onClick={() => void review(row.id, 'approve')}
+                >
+                  <Check size={13} strokeWidth={3} aria-hidden="true" />
+                  Approve
+                </CustomButton>
+                <CustomButton
+                  variant="outline-danger"
+                  className="resource-person-approval-decision reject"
+                  loading={reviewingId === row.id}
+                  disabled={reviewingId !== null}
+                  onClick={() => void review(row.id, 'reject')}
+                >
+                  <X size={13} strokeWidth={3} aria-hidden="true" />
+                  Reject
+                </CustomButton>
+              </>
+            ) : (
+              <span
+                style={{
+                  ...statusStyle(status),
+                  display: 'inline-block',
+                  padding: '7px 12px',
+                  borderRadius: 18,
+                  fontWeight: 600,
+                  fontSize: 'var(--font-size-tertiary)',
+                }}
+              >
+                {status}
+              </span>
+            )}
+          </div>
         );
       },
-    },
-    {
-      key: 'view',
-      label: 'VIEW',
-      render: (row: Row) => (
-        <CustomButton
-          variant="outline-primary"
-          className="resource-person-view-button"
-          aria-label="View resource person submission"
-          onClick={() => setViewing(row)}
-        >
-          <Eye size={15} />
-        </CustomButton>
-      ),
     },
   ];
   return (
@@ -270,8 +343,9 @@ export default function ResourcePersonApprovalPage() {
       className="resource-person-approval-page p-4"
       style={{ minHeight: '100%', background: '#f1f6fb' }}
     >
-      <style>{`.resource-person-approval-page .request-summary-card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); } .resource-person-approval-page .request-summary-card .card-body { padding: 14px 20px; } .resource-person-approval-page .resource-person-view-button { width: var(--icon-action-size); height: var(--icon-action-size); min-width: 0; min-height: 0; border-radius: 8px; padding: 0; display: inline-flex; align-items: center; justify-content: center; color: #006db4; border-color: #bfdbfe; background: #eff6ff; } .resource-person-approval-page .resource-person-view-button:hover { color: #fff; background: #0878bd; border-color: #0878bd; } .resource-person-approval-page .custom-table { color: #29436a; } .resource-person-approval-page .custom-table thead th { color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); } .resource-person-approval-page .custom-table tbody td { vertical-align: middle; font-size: var(--font-size-body); line-height: var(--leading-body); color: var(--text-body); } .resource-person-approval-page .custom-table tbody td strong { font-weight: 700; color: var(--text-strong); } .resource-person-details-modal .modal-title { font-size: var(--font-size-modal-title); line-height: var(--leading-modal-title); font-weight: 600; } .resource-person-approval-header-controls .custom-input { height: var(--control-height); width: 260px; font-size: var(--font-size-body); } .resource-person-approval-page .resource-person-admin-badge { background-color: #0069ab !important; } .resource-person-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); } .resource-person-details-modal .modal-content { max-height: calc(100vh - 3.5rem); } .resource-person-details-modal .modal-body { overflow-y: auto; }`}</style>
+      <style>{`.resource-person-approval-page .request-summary-card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); } .resource-person-approval-page .request-summary-card .card-body { padding: 14px 20px; } .resource-person-approval-page .custom-table { color: #29436a; } .resource-person-approval-page .custom-table thead th { color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); } .resource-person-approval-page .custom-table tbody td { padding: var(--table-cell-padding); vertical-align: middle; font-size: var(--font-size-body); line-height: var(--leading-body); color: var(--text-body); } .resource-person-approval-page .custom-table thead th { padding: var(--table-cell-padding); } .resource-person-approval-page .resource-person-approval-meta { margin-top: 2px; color: var(--text-soft); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); } .resource-person-approval-page .resource-person-approval-tag { display: inline-block; padding: 4px 12px; border-radius: 6px; background: #e0f0ff; color: #0069ab; font-size: var(--font-size-tertiary); font-weight: 600; } .resource-person-approval-page .resource-person-approval-header-controls { gap: 12px !important; } .resource-person-approval-page .resource-person-approval-actions { display: flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap; } .resource-person-approval-table.custom-table th:nth-child(1), .resource-person-approval-table.custom-table td:nth-child(1) { width: 28%; } .resource-person-approval-table.custom-table th:nth-child(2), .resource-person-approval-table.custom-table td:nth-child(2) { width: 26%; } .resource-person-approval-table.custom-table th:nth-child(4), .resource-person-approval-table.custom-table td:nth-child(4) { text-align: center; } .resource-person-approval-table.custom-table th:last-child, .resource-person-approval-table.custom-table td:last-child { width: 22%; text-align: center; } .resource-person-approval-page .custom-table tbody td strong { font-weight: 700; color: var(--text-strong); } .resource-person-details-modal .modal-title { font-size: var(--font-size-modal-title); line-height: var(--leading-modal-title); font-weight: 600; } .resource-person-approval-page .resource-person-admin-badge { background-color: #0069ab !important; } .resource-person-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); } .resource-person-details-modal .modal-content { max-height: calc(100vh - 3.5rem); } .resource-person-details-modal .modal-body { overflow-y: auto; } .resource-person-approval-page .resource-person-approval-hold { margin-top: 2px; color: #9b5f00; font-size: var(--font-size-secondary); line-height: var(--leading-secondary); } .custom-btn.resource-person-approval-decision { display: inline-flex; align-items: center; gap: 4px; height: var(--inline-action-height); min-height: 0; min-width: 0; padding: 0 10px; border-radius: 6px; border: 1px solid; font-size: var(--font-size-tertiary); font-weight: 700; white-space: nowrap; flex-shrink: 0; } .custom-btn.resource-person-approval-decision.approve, .custom-btn.resource-person-approval-decision.approve:disabled { background: #e8f6ee; border-color: #9fd8b6; color: #087b43; } .custom-btn.resource-person-approval-decision.approve:hover:not(:disabled) { background: #d3efdf; border-color: #087b43; color: #066535; } .custom-btn.resource-person-approval-decision.reject, .custom-btn.resource-person-approval-decision.reject:disabled { background: #fdecee; border-color: #f3b4bd; color: #b4253a; } .custom-btn.resource-person-approval-decision.reject:hover:not(:disabled) { background: #fbd9de; border-color: #b4253a; color: #9a1d30; }`}</style>
       <CustomCard className="mx-auto" style={{ maxWidth: 1250 }}>
+        {switcher}
         <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
           <div className="d-flex align-items-center gap-3">
             <h2
@@ -303,24 +377,25 @@ export default function ResourcePersonApprovalPage() {
               ADMIN
             </Badge>
           </div>
-          <div className="resource-person-approval-header-controls d-flex align-items-center gap-3">
-            <CustomInput
+          <div className="resource-person-approval-header-controls d-flex align-items-center gap-2">
+            <CustomFilterSearch
               name="resource-person-search"
               value={search}
               onChange={setSearch}
               placeholder="Search resource person"
-              className="mb-0"
             />
-            <CustomDropdown
-              name="resource-person-category"
-              options={categoryOptions}
-              value={categoryOptions.find((o) => o.value === category)}
-              onChange={(option) => {
-                if (option && 'value' in option) setCategory(String(option.value));
-              }}
-              className="mb-0"
-              styles={FILTER_DROPDOWN_STYLES}
-            />
+            <div style={{ minWidth: 190 }}>
+              <CustomDropdown
+                name="resource-person-category"
+                options={categoryOptions}
+                value={categoryOptions.find((o) => o.value === category)}
+                onChange={(option) => {
+                  if (option && 'value' in option) setCategory(String(option.value));
+                }}
+                className="mb-0"
+                styles={FILTER_DROPDOWN_STYLES}
+              />
+            </div>
           </div>
         </div>
         {error && (
@@ -344,58 +419,21 @@ export default function ResourcePersonApprovalPage() {
         </div>
         <CustomTable
           columns={columns}
-          data={filteredRows}
+          data={pageRows}
           keyField="id"
           loading={loading}
+          className="resource-person-approval-table"
           emptyMessage="No resource persons found."
-          // Approve/Reject only apply to Pending rows; with none in view the column is noise.
-          actions={
-            filteredRows.some((row) => (row.approvalStatus || 'Pending') === 'Pending')
-              ? (row: Row) =>
-                  (row.approvalStatus || 'Pending') === 'Pending' ? (
-                    <div className="d-flex flex-nowrap gap-1">
-                      <CustomButton
-                        variant="success"
-                        style={{
-                          height: 'var(--inline-action-height)',
-                          minHeight: 0,
-                          minWidth: 0,
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0,
-                          padding: '0 10px',
-                          fontSize: 'var(--font-size-tertiary)',
-                          fontWeight: 700,
-                          borderRadius: 6,
-                        }}
-                        loading={reviewingId === row.id}
-                        disabled={reviewingId !== null}
-                        onClick={() => void review(row.id, 'approve')}
-                      >
-                        ✓ Approve
-                      </CustomButton>
-                      <CustomButton
-                        variant="danger"
-                        style={{
-                          height: 'var(--inline-action-height)',
-                          minHeight: 0,
-                          minWidth: 0,
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0,
-                          padding: '0 10px',
-                          fontSize: 'var(--font-size-tertiary)',
-                          fontWeight: 700,
-                          borderRadius: 6,
-                        }}
-                        loading={reviewingId === row.id}
-                        disabled={reviewingId !== null}
-                        onClick={() => void review(row.id, 'reject')}
-                      >
-                        × Reject
-                      </CustomButton>
-                    </div>
-                  ) : null
-              : undefined
-          }
+          onRowClick={(row: Row) => setViewing(row)}
+          rowLabel={(row: Row) => `View ${personName(row)}`}
+        />
+        <CustomPagination
+          page={currentPage}
+          pageSize={pageSize}
+          total={filteredRows.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          name="resource-person-approval-rows-per-page"
         />
         <CustomModal
           show={viewing !== null}
@@ -406,7 +444,14 @@ export default function ResourcePersonApprovalPage() {
           className="resource-person-details-modal"
         >
           {viewing && (
-            <div className="p-3">
+            <div>
+              <CustomSubmitterLine
+                label="Submitted by"
+                name={viewing.submitted_by_name}
+                email={viewing.submitted_by_email}
+                date={viewing.created_at || viewing.date}
+                prominent
+              />
               <ResourcePersonDirectory
                 editingPerson={toFormPerson(viewing)}
                 readOnly

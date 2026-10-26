@@ -1096,6 +1096,9 @@
 .rpd-grid-3.rpd-choice-row {
   display: flex;
   flex-wrap: wrap;
+  /* The spare width goes between Gender, Date of Birth and Status rather than piling up
+     after Status; 12px stays the least gap when the row is tight. */
+  justify-content: space-between;
   column-gap: 12px;
   row-gap: 12px;
 }
@@ -1156,4 +1159,54 @@
 .rpd-form-wrapper .rpd-upload-filename {
   font-size: var(--font-size-secondary);
   line-height: var(--leading-secondary);
+}
+
+/* Marks a contact only the submitter and admins can read; for anyone else the server
+   withholds it and the field shows dots. */
+.rpd-contact-lock {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--placeholder-color);
+  cursor: help;
+}
+
+.rpd-field .rpd-locked-label,
+.rpd-upload-label.rpd-locked-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The field-input rules above also reach react-select's search input: at 40px inside the
+   38px value box it pushed the selected value 5px below centre, and once focused or filled
+   it drew its own blue box beside the value. It keeps react-select's own size and no box;
+   the last selector out-ranks the filled-input rule. */
+.rpd-form-wrapper .rpd-field .react-select__input-container input,
+.rpd-form-wrapper .rpd-field .react-select__input-container input:focus,
+.rpd-form-wrapper
+  .rpd-field
+  .react-select__input-container
+  input:not([type='date']):not(:placeholder-shown) {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Beside the Organization label: why this record cannot be approved yet. On the label
+   line, so the row keeps its height. */
+.rpd-field .rpd-org-status {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-semibold);
+}
+
+.rpd-field .rpd-org-status.pending {
+  color: #9b5f00;
+}
+
+.rpd-field .rpd-org-status.rejected {
+  color: #b4253a;
 }

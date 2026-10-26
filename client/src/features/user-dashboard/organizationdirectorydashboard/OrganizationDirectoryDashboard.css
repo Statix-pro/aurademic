@@ -12,34 +12,40 @@
   vertical-align: middle !important;
 }
 
+/* Column widths for My submissions (S.No. | Organization | Category | Specializations |
+   Tag | Status | Action). S.No. needs only its digits; the name gets the most room. */
 .org-table th:nth-child(1),
 .org-table td:nth-child(1) {
-  width: 8%;
+  width: 64px;
   text-align: center;
 }
 .org-table th:nth-child(2),
 .org-table td:nth-child(2) {
-  width: 36%;
+  width: 30%;
   text-align: left;
 }
 .org-table th:nth-child(3),
 .org-table td:nth-child(3) {
-  width: 18%;
+  width: 13%;
   text-align: left;
 }
 .org-table th:nth-child(4),
 .org-table td:nth-child(4) {
-  width: 13%;
-  text-align: center;
+  width: 21%;
+  text-align: left;
 }
 .org-table th:nth-child(5),
 .org-table td:nth-child(5) {
-  width: 14%;
+  width: 11%;
   text-align: center;
 }
 .org-table th:nth-child(6),
 .org-table td:nth-child(6) {
   width: 11%;
+  text-align: center;
+}
+.org-table th:nth-child(7),
+.org-table td:nth-child(7) {
   text-align: center;
 }
 
@@ -51,7 +57,7 @@
 }
 
 .org-table td {
-  padding: 14px 16px !important;
+  padding: var(--table-cell-padding) !important;
   font-size: var(--font-size-body) !important;
   line-height: var(--leading-body);
   color: var(--text-body) !important;
@@ -91,13 +97,6 @@
 .org-status-pill.rejected {
   background: #fde1e5;
   color: #9f1239;
-}
-
-/* Keeps typed text clear of the search / clear icon drawn over the input's right edge. */
-.org-search-field .custom-input {
-  height: var(--control-height);
-  font-size: var(--font-size-body);
-  padding-right: 32px;
 }
 
 /* Paired with .custom-btn to beat the global `.btn { color: white }` leaking from the
@@ -169,4 +168,76 @@
   font-size: var(--font-size-modal-title);
   line-height: var(--leading-modal-title);
   font-weight: var(--weight-semibold);
+}
+
+/* Directory / My submissions tabs: chips per the size table (32px, 13px 600). */
+.org-directory .org-dir-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.org-directory .org-dir-tab {
+  height: var(--chip-height);
+  padding: 0 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text-body);
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.org-directory .org-dir-tab.active {
+  background: #0069ab;
+  border-color: #0069ab;
+  color: #ffffff;
+}
+
+/* The Directory tab has no Status or Action column (S.No. | Organization | Category |
+   Specializations | Tag). */
+.org-table.org-table--directory th:nth-child(2),
+.org-table.org-table--directory td:nth-child(2) {
+  width: 38%;
+}
+.org-table.org-table--directory th:nth-child(3),
+.org-table.org-table--directory td:nth-child(3) {
+  width: 15%;
+}
+.org-table.org-table--directory th:nth-child(4),
+.org-table.org-table--directory td:nth-child(4) {
+  width: 28%;
+}
+.org-table.org-table--directory th:nth-child(5),
+.org-table.org-table--directory td:nth-child(5) {
+  width: auto;
+}
+
+/* The name, then a small link to the website on the same line. */
+.org-directory .org-name-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.org-directory .org-website-link {
+  display: inline-flex;
+  color: var(--primary-color);
+}
+
+.org-directory .org-website-link:hover {
+  color: #004f80;
+}
+
+/* A toolbar button (AGENTS.md size table): icon first, 16px padding, no form-action
+   minimum width, so it fits its short label. */
+.custom-btn.org-add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
 }

@@ -1,4 +1,4 @@
-import { Search, X, Edit3, Eye } from 'lucide-react';
+import { Edit3, Globe, Plus, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -6,9 +6,14 @@ import './OrganizationDirectoryDashboard.css';
 // The add/edit form reuses the resource-person directory's form styles (.rpd-form-wrapper).
 import '../../resourcepersondirectory/ResourcePersonDirectory.css';
 import CustomButton from '../../../shared/components/ui/CustomButton';
+import CustomChipList from '../../../shared/components/ui/CustomChipList';
 import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
-import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomFilterSearch from '../../../shared/components/ui/CustomFilterSearch';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomPagination, {
+  PAGE_SIZE_OPTIONS,
+} from '../../../shared/components/ui/CustomPagination';
+import CustomSubmitterLine from '../../../shared/components/ui/CustomSubmitterLine';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import OrganizationDirectory, {
@@ -44,6 +49,9 @@ const apiUpdate = async (
 
 /* ─── Constants ─────────────────────────────────────────────────────────── */
 
+// A stored website or LinkedIn may be typed without its scheme.
+const toHref = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
+
 const CATEGORY_OPTIONS = [
   'Academic',
   'Industry',
@@ -51,6 +59,7 @@ const CATEGORY_OPTIONS = [
   'Incubation',
   'Start-up',
   'Government',
+  'Others',
 ];
 
 // '' is the "no filter" choice, so picking "Search Category" again clears the filter.
@@ -109,6 +118,9 @@ const OrganizationDirectoryDashboard: React.FC = () => {
   const [viewingOrg, setViewingOrg] = useState<Organization | null>(null);
   const [searchName, setSearchName] = useState('');
   const [searchCategory, setSearchCategory] = useState('');
+  // Directory: the shared list, Approved records only. Mine: the user's own submissions in
+  // every status, which is where Status and the Edit-to-resubmit flow matter.
+  const [view, setView] = useState<'directory' | 'mine'>('directory');
 
   const scrollToFormTop = () => {
     document.querySelector<HTMLElement>('.app-content')?.scrollTo({ top: 0, behavior: 'auto' });
@@ -145,13 +157,32 @@ const OrganizationDirectoryDashboard: React.FC = () => {
 
     return records.filter(
       (record) =>
+        (view === 'mine' ? record.isOwner : record.approvalStatus === 'Approved') &&
         (!nameFilter ||
           (record.name ?? '').toLowerCase().includes(nameFilter) ||
           (record.abbreviation ?? '').toLowerCase().includes(nameFilter) ||
+          (record.specializations ?? []).some((s) => s.toLowerCase().includes(nameFilter)) ||
           (record.city && record.city.toLowerCase().includes(nameFilter))) &&
         (!categoryFilter || (record.category ?? '').toLowerCase() === categoryFilter),
     );
-  }, [records, searchName, searchCategory]);
+  }, [records, searchName, searchCategory, view]);
+  const mineCount = records.filter((record) => record.isOwner).length;
+  // A–Z by name, a page at a time, so the list stays quick to scan as it grows.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const sorted = useMemo(
+    () =>
+      [...filtered].sort((a, b) =>
+        (a.name ?? '').localeCompare(b.name ?? '', undefined, { sensitivity: 'base' }),
+      ),
+    [filtered],
+  );
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => {
+    setPage(1);
+  }, [searchName, searchCategory, view, pageSize]);
 
   const handleAdd = () => {
     scrollToFormTop();
@@ -182,6 +213,8 @@ const OrganizationDirectoryDashboard: React.FC = () => {
       }
       setEditingOrg(null);
       setShowForm(false);
+      // A new or edited record waits for approval, so it is found under My submissions.
+      setView('mine');
     } catch (err: any) {
       setError(
         err?.message || err?.response?.data?.message || 'Failed to save record. Please try again.',
@@ -193,20 +226,47 @@ const OrganizationDirectoryDashboard: React.FC = () => {
     {
       key: 'sno',
       label: 'S.No.',
-      style: { width: '80px', textAlign: 'center' as const },
-      render: (_org: Organization, index: number) => index + 1,
+      style: { textAlign: 'center' as const },
+      render: (_org: Organization, index: number) => (currentPage - 1) * pageSize + index + 1,
     },
     {
       key: 'name',
       label: 'Organization',
-      render: (org: Organization) => (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span className="org-name">{org.name}</span>
-          {org.city && <span className="org-meta">{org.city}</span>}
-        </div>
-      ),
+      // What a reader looks for first: the name, then where it is; the website is one click.
+      render: (org: Organization) => {
+        const meta = [org.abbreviation, [org.city, org.state].filter(Boolean).join(', ')]
+          .filter(Boolean)
+          .join(' · ');
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <span className="org-name-line">
+              <span className="org-name">{org.name}</span>
+              {org.website && (
+                <a
+                  className="org-website-link"
+                  href={toHref(org.website)}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={`Open ${org.website}`}
+                  aria-label={`Website of ${org.name}`}
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
+                  <Globe size={14} aria-hidden="true" />
+                </a>
+              )}
+            </span>
+            {meta && <span className="org-meta">{meta}</span>}
+          </div>
+        );
+      },
     },
     { key: 'category', label: 'Category' },
+    {
+      key: 'specializations',
+      label: 'Specializations',
+      render: (org: Organization) => <CustomChipList items={org.specializations ?? []} />,
+    },
     {
       key: 'tag',
       label: 'Tag',
@@ -231,34 +291,36 @@ const OrganizationDirectoryDashboard: React.FC = () => {
       ),
     },
     {
-      // A column rather than CustomTable's `actions` so the header keeps reading "Action".
+      // My submissions only: a row click views the record; Edit is its own button. Saving an
+      // edit sends the record for approval again, so looking never needs the edit form.
       key: 'action',
       label: 'Action',
-      style: { width: '100px', textAlign: 'center' as const },
-      render: (org: Organization) =>
-        org.isOwner ? (
-          <CustomButton
-            variant="outline-primary"
-            size="sm"
-            className="org-action-edit-btn"
-            onClick={() => handleEdit(org)}
-            title="Edit Organization"
-            aria-label="Edit Organization"
-          >
-            <Edit3 size={15} />
-          </CustomButton>
-        ) : (
-          <CustomButton
-            variant="outline-primary"
-            size="sm"
-            className="org-action-edit-btn"
-            onClick={() => setViewingOrg(org)}
-            title="View Organization"
-            aria-label="View Organization"
-          >
-            <Eye size={15} />
-          </CustomButton>
-        ),
+      style: { textAlign: 'center' as const },
+      render: (org: Organization) => (
+        // Kept off the row, whose click opens the read-only view.
+        <span
+          className="d-inline-flex"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {org.isOwner && (
+            <CustomButton
+              variant="outline-primary"
+              size="sm"
+              className="org-action-edit-btn"
+              onClick={() => handleEdit(org)}
+              title={
+                org.approvalStatus === 'Approved'
+                  ? 'Edit Organization (saving sends it for approval again)'
+                  : 'Edit Organization'
+              }
+              aria-label="Edit Organization"
+            >
+              <Edit3 size={15} />
+            </CustomButton>
+          )}
+        </span>
+      ),
     },
   ];
 
@@ -310,47 +372,14 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                   className="budgetdashboard-header-search-group"
                   style={{ display: 'flex', alignItems: 'center' }}
                 >
-                  <div
-                    className="org-search-field"
-                    style={{
-                      position: 'relative',
-                      display: 'flex',
-                      alignItems: 'center',
-                      marginRight: '10px',
-                    }}
-                  >
-                    <CustomInput
-                      name="organization-search"
-                      placeholder="Search Organization"
-                      value={searchName}
-                      onChange={setSearchName}
-                      aria-label="Search Organization"
-                      className="mb-0"
-                    />
-                    {searchName ? (
-                      <CustomButton
-                        variant="link"
-                        aria-label="Clear organization search"
-                        className="p-0"
-                        style={{ position: 'absolute', right: '10px' }}
-                        onClick={() => setSearchName('')}
-                      >
-                        <X size={16} style={{ color: '#64748b' }} aria-hidden="true" />
-                      </CustomButton>
-                    ) : (
-                      <Search
-                        size={16}
-                        style={{
-                          position: 'absolute',
-                          right: '10px',
-                          color: 'var(--placeholder-color)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                    )}
-                  </div>
+                  <CustomFilterSearch
+                    name="organization-search"
+                    value={searchName}
+                    onChange={setSearchName}
+                    placeholder="Search organization"
+                  />
 
-                  <div style={{ minWidth: 190, marginRight: '10px' }}>
+                  <div style={{ minWidth: 190 }}>
                     <CustomDropdown
                       name="organization-category-filter"
                       options={CATEGORY_FILTER_OPTIONS}
@@ -368,7 +397,9 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <CustomButton onClick={handleAdd}>Add +</CustomButton>
+                <CustomButton className="org-add-btn" onClick={handleAdd}>
+                  Add <Plus size={15} aria-hidden="true" />
+                </CustomButton>
               </div>
             </div>
 
@@ -398,17 +429,56 @@ const OrganizationDirectoryDashboard: React.FC = () => {
             )}
 
             <div className="budgetdashboard-body">
+              <div className="org-dir-tabs" role="tablist" aria-label="Organization lists">
+                {(
+                  [
+                    ['directory', 'Directory'],
+                    ['mine', `My submissions (${mineCount})`],
+                  ] as const
+                ).map(([key, text]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={view === key}
+                    className={`org-dir-tab${view === key ? ' active' : ''}`}
+                    onClick={() => setView(key)}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
               <div className="budgetdashboard-table-wrapper">
                 <CustomTable
-                  columns={columns}
-                  data={filtered}
-                  keyField="id"
-                  className="budgetdashboard-table org-table"
-                  emptyMessage={
-                    records.length === 0
-                      ? 'No records yet. Click "Add +" to add an organization.'
-                      : 'No records match the filter criteria.'
+                  columns={
+                    view === 'mine'
+                      ? columns
+                      : columns.filter(
+                          (column) => column.key !== 'approvalStatus' && column.key !== 'action',
+                        )
                   }
+                  data={pageRows}
+                  keyField="id"
+                  onRowClick={(org: Organization) => setViewingOrg(org)}
+                  rowLabel={(org: Organization) => `View ${org.name}`}
+                  className={`budgetdashboard-table org-table${
+                    view === 'directory' ? ' org-table--directory' : ''
+                  }`}
+                  emptyMessage={
+                    view === 'mine'
+                      ? 'You have not submitted any organizations. Click "Add" to add one.'
+                      : records.length === 0
+                        ? 'No organizations in the directory yet.'
+                        : 'No records match the filter criteria.'
+                  }
+                />
+                <CustomPagination
+                  page={currentPage}
+                  pageSize={pageSize}
+                  total={sorted.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                  name="org-rows-per-page"
                 />
               </div>
             </div>
@@ -424,12 +494,20 @@ const OrganizationDirectoryDashboard: React.FC = () => {
         className="org-form-modal"
       >
         {viewingOrg && (
-          <OrganizationDirectory
-            editingOrg={viewingOrg}
-            readOnly
-            onSave={() => undefined}
-            onCancel={() => setViewingOrg(null)}
-          />
+          <div>
+            <CustomSubmitterLine
+              name={viewingOrg.submitted_by_name}
+              email={viewingOrg.submitted_by_email}
+              date={viewingOrg.date}
+              isYou={viewingOrg.isOwner}
+            />
+            <OrganizationDirectory
+              editingOrg={viewingOrg}
+              readOnly
+              onSave={() => undefined}
+              onCancel={() => setViewingOrg(null)}
+            />
+          </div>
         )}
       </CustomModal>
     </section>
