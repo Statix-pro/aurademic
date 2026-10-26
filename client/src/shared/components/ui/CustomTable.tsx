@@ -17,6 +17,10 @@ interface CustomTableProps {
   className?: string;
   loading?: boolean;
   emptyMessage?: string;
+  /** Makes each row open the record: click, or Enter/Space when the row has focus. */
+  onRowClick?: (row: any) => void;
+  /** The accessible name of a clickable row, e.g. "View National Chemical Laboratory". */
+  rowLabel?: (row: any) => string;
 }
 
 const CustomTable: React.FC<CustomTableProps> = ({
@@ -27,6 +31,8 @@ const CustomTable: React.FC<CustomTableProps> = ({
   className = '',
   loading = false,
   emptyMessage = 'No data available',
+  onRowClick,
+  rowLabel,
 }) => {
   return (
     <div className="table-responsive">
@@ -57,7 +63,23 @@ const CustomTable: React.FC<CustomTableProps> = ({
             </tr>
           ) : data && data.length > 0 ? (
             data.map((row, rowIndex) => (
-              <tr key={row[keyField] || rowIndex}>
+              <tr
+                key={row[keyField] || rowIndex}
+                {...(onRowClick && {
+                  className: 'custom-table-row-link',
+                  tabIndex: 0,
+                  'aria-label': rowLabel?.(row),
+                  onClick: () => onRowClick(row),
+                  // Only when the row itself has focus, so a button inside it keeps its own keys.
+                  onKeyDown: (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+                    if (event.target !== event.currentTarget) return;
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onRowClick(row);
+                    }
+                  },
+                })}
+              >
                 {columns.map((col, colIndex) => (
                   <td key={`${row[keyField] || rowIndex}-${col.key || colIndex}`}>
                     {col.render ? col.render(row, rowIndex) : row[col.key]}

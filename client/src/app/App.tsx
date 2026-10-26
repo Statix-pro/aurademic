@@ -8,11 +8,11 @@ import Dashboard from '../features/admin/admindashboard';
 import AdminBudget from '../features/admin/budget/budget-approval/adminbudget';
 import AdminBudgetDashboard from '../features/admin/budget/budget-dashboard/adminbudgetdashboard';
 import BudgetCatalogPage from '../features/admin/budgetCatalog/BudgetCatalogPage';
+import DirectoryApprovalPage from '../features/admin/directoryApproval/DirectoryApprovalPage';
+import DirectoryListsPage from '../features/admin/directoryLists/DirectoryListsPage';
 import JournalManagement from '../features/admin/formManagement/JournalFormOptions';
 import MasterDataPage from '../features/admin/masterData/MasterDataPage';
-import OrganizationApprovalPage from '../features/admin/organizationApproval/OrganizationApprovalPage';
 import PublicationReview from '../features/admin/PublicationReview';
-import ResourcePersonApprovalPage from '../features/admin/resourcePersonApproval/ResourcePersonApprovalPage';
 import Login from '../features/auth/login/login';
 import Budget from '../features/budget/budget';
 import EventDashboard from '../features/events/components/EventDashboard';
@@ -366,19 +366,24 @@ function App() {
                           </AdminRoute>
                         }
                       />
+                      {/* Both directories' approval queues on one page, a tab each. */}
                       <Route
-                        path="/admin/organization-approval"
+                        path="/admin/directory-approval"
                         element={
-                          <DirectoryApprovalRoute moduleKey="organization_directory">
-                            <OrganizationApprovalPage />
+                          <DirectoryApprovalRoute
+                            moduleKey={['organization_directory', 'resource_person_directory']}
+                          >
+                            <DirectoryApprovalPage />
                           </DirectoryApprovalRoute>
                         }
                       />
                       <Route
-                        path="/admin/resource-person-approval"
+                        path="/directory/lists"
                         element={
-                          <DirectoryApprovalRoute moduleKey="resource_person_directory">
-                            <ResourcePersonApprovalPage />
+                          <DirectoryApprovalRoute
+                            moduleKey={['organization_directory', 'resource_person_directory']}
+                          >
+                            <DirectoryListsPage />
                           </DirectoryApprovalRoute>
                         }
                       />

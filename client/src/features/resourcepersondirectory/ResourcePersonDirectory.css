@@ -322,16 +322,43 @@
   margin-top: 2px;
 }
 
+/* The chosen or stored file sits where the Choose File button was, on the box's right. */
 .rpd-upload-filename {
-  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  max-width: 140px;
+  gap: 2px;
+  margin-left: 16px;
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
   color: #0069ab;
   overflow-wrap: anywhere;
 }
 
+/* Up to two lines, then cut with an ellipsis; the full name is in its title. The bin stays
+   beside it. A name with no spaces breaks anywhere rather than overflowing. */
+.rpd-upload-filename-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.rpd-upload-filename-text a {
+  color: inherit;
+}
+
+/* The bin keeps its size however long the name beside it is. */
+.custom-btn.rpd-upload-remove {
+  flex-shrink: 0;
+}
+
 /* CustomFileUploader is used for its button only. Its "No file selected" text is hidden
-   because the name shows under the hint, and the button gets the box's original look
+   because a chosen file takes the button's place, and the button gets the box's original look
    (!important: the uploader sets these inline). */
 .rpd-upload-button {
   flex-shrink: 0;
@@ -1081,6 +1108,22 @@
   flex-wrap: wrap;
 }
 
+/* The boxes share the row equally; a long file name is cut, never widens its box. */
+.rpd-docs-row > .rpd-upload-box {
+  min-width: 0;
+}
+
+/* Remarks sits in the row beside Photo and Resume, in the same frame, with its label above
+   the box instead of an icon and a button beside it. */
+.rpd-upload-box.rpd-remarks-box {
+  display: block;
+  padding: 12px 20px;
+}
+
+.rpd-remarks-box .rpd-field {
+  margin-bottom: 0;
+}
+
 .rpd-req {
   color: #ef4444;
 }
@@ -1096,6 +1139,9 @@
 .rpd-grid-3.rpd-choice-row {
   display: flex;
   flex-wrap: wrap;
+  /* The spare width goes between Gender, Date of Birth and Status rather than piling up
+     after Status; 12px stays the least gap when the row is tight. */
+  justify-content: space-between;
   column-gap: 12px;
   row-gap: 12px;
 }
@@ -1156,4 +1202,54 @@
 .rpd-form-wrapper .rpd-upload-filename {
   font-size: var(--font-size-secondary);
   line-height: var(--leading-secondary);
+}
+
+/* Marks a contact only the submitter and admins can read; for anyone else the server
+   withholds it and the field shows dots. */
+.rpd-contact-lock {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  color: var(--placeholder-color);
+  cursor: help;
+}
+
+.rpd-field .rpd-locked-label,
+.rpd-upload-label.rpd-locked-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The field-input rules above also reach react-select's search input: at 40px inside the
+   38px value box it pushed the selected value 5px below centre, and once focused or filled
+   it drew its own blue box beside the value. It keeps react-select's own size and no box;
+   the last selector out-ranks the filled-input rule. */
+.rpd-form-wrapper .rpd-field .react-select__input-container input,
+.rpd-form-wrapper .rpd-field .react-select__input-container input:focus,
+.rpd-form-wrapper
+  .rpd-field
+  .react-select__input-container
+  input:not([type='date']):not(:placeholder-shown) {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Beside the Organization label: why this record cannot be approved yet. On the label
+   line, so the row keeps its height. */
+.rpd-field .rpd-org-status {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-semibold);
+}
+
+.rpd-field .rpd-org-status.pending {
+  color: #9b5f00;
+}
+
+.rpd-field .rpd-org-status.rejected {
+  color: #b4253a;
 }

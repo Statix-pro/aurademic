@@ -418,3 +418,14 @@
 .orgd-legend {
   margin-bottom: 6px;
 }
+
+/* The field-input rule above also reaches react-select's search input inside the Tag and
+   Specialization dropdowns; it keeps react-select's own size and no box of its own. */
+.orgd-form-wrapper .orgd-field .react-select__input-container input,
+.orgd-form-wrapper .orgd-field .react-select__input-container input:focus {
+  height: auto;
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}

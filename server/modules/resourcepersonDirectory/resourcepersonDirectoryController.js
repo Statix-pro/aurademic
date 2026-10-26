@@ -28,7 +28,7 @@ const fail = (res, e) => {
 };
 export const list = async (req, res) => {
   try {
-    return res.json({ success: true, data: await model.list(req.user?.id) });
+    return res.json({ success: true, data: await model.list(req.user) });
   } catch (e) {
     return fail(res, e);
   }
@@ -80,4 +80,59 @@ export const review = async (req, res) => {
     return fail(res, e);
   }
 };
-export default { list, submit, update, pending, review };
+export const listOptions = async (req, res) => {
+  try {
+    return res.json({ success: true, data: await model.listOptions() });
+  } catch (e) {
+    return fail(res, e);
+  }
+};
+export const listAllOptions = async (req, res) => {
+  try {
+    return res.json({ success: true, data: await model.listOptions({ includeInactive: true }) });
+  } catch (e) {
+    return fail(res, e);
+  }
+};
+export const addOption = async (req, res) => {
+  try {
+    return res
+      .status(201)
+      .json({ success: true, data: await model.addOptions(req.params.list, req.body) });
+  } catch (e) {
+    return fail(res, e);
+  }
+};
+export const updateOption = async (req, res) => {
+  try {
+    return res.json({ success: true, data: await model.updateOption(req.params.id, req.body) });
+  } catch (e) {
+    return fail(res, e);
+  }
+};
+export const deleteOption = async (req, res) => {
+  try {
+    const data = await model.deleteOption(req.params.id);
+    return res.json({
+      success: true,
+      data,
+      message: data.deactivated
+        ? 'Records already use this entry, so it was made inactive instead of deleted.'
+        : 'Entry deleted.',
+    });
+  } catch (e) {
+    return fail(res, e);
+  }
+};
+export default {
+  list,
+  submit,
+  update,
+  pending,
+  review,
+  listOptions,
+  listAllOptions,
+  addOption,
+  updateOption,
+  deleteOption,
+};

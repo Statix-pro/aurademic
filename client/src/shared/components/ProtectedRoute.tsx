@@ -111,8 +111,11 @@ export const ModuleWorkflowRoute: React.FC<RouteProps> = ({ children }) => {
 };
 
 /** A directory approval page: super admins, or holders of that directory's review key. */
+type DirectoryModuleKey = 'organization_directory' | 'resource_person_directory';
+
+/** Admits a reviewer of the given directory, or of any one of several. */
 export const DirectoryApprovalRoute: React.FC<
-  RouteProps & { moduleKey: 'organization_directory' | 'resource_person_directory' }
+  RouteProps & { moduleKey: DirectoryModuleKey | DirectoryModuleKey[] }
 > = ({ children, moduleKey }) => {
   const { user, loading } = useAuth();
 
@@ -120,7 +123,8 @@ export const DirectoryApprovalRoute: React.FC<
     return <div>Loading...</div>;
   }
 
-  if (!user || !canAccessModuleWorkflow(user, moduleKey)) {
+  const moduleKeys = Array.isArray(moduleKey) ? moduleKey : [moduleKey];
+  if (!user || !moduleKeys.some((key) => canAccessModuleWorkflow(user, key))) {
     return <Navigate to="/dashboard" />;
   }
 

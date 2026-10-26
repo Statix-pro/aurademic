@@ -1,21 +1,16 @@
-import {
-  BriefcaseBusiness,
-  Check,
-  CircleCheck,
-  CircleX,
-  Clock3,
-  Eye,
-  Search,
-  X,
-} from 'lucide-react';
+import { BriefcaseBusiness, Check, CircleCheck, CircleX, Clock3, Edit3, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from 'react-bootstrap';
 
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomCard from '../../../shared/components/ui/CustomCard';
 import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
-import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomFilterSearch from '../../../shared/components/ui/CustomFilterSearch';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomPagination, {
+  PAGE_SIZE_OPTIONS,
+} from '../../../shared/components/ui/CustomPagination';
+import CustomSubmitterLine from '../../../shared/components/ui/CustomSubmitterLine';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import OrganizationDirectory, {
@@ -61,7 +56,10 @@ type Organization = Record<string, any> & { id: number; approvalStatus?: Approva
 
 const BLUE = '#0878bd';
 
-export default function OrganizationApprovalPage() {
+const isPending = (row: Organization) => (row.approvalStatus || 'Pending') === 'Pending';
+
+/** `switcher`: the Directory Approval page's Organization / Resource Person tabs. */
+export default function OrganizationApprovalPage({ switcher }: { switcher?: React.ReactNode }) {
   const [rows, setRows] = useState<Organization[]>([]);
   const [tab, setTab] = useState<Tab>('All');
   const [search, setSearch] = useState('');
@@ -69,6 +67,9 @@ export default function OrganizationApprovalPage() {
   const [error, setError] = useState('');
   const [reviewingId, setReviewingId] = useState<number | null>(null);
   const [viewing, setViewing] = useState<Organization | null>(null);
+  const [editing, setEditing] = useState<Organization | null>(null);
+  const [editError, setEditError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   const load = async () => {
     try {
@@ -100,6 +101,30 @@ export default function OrganizationApprovalPage() {
     }
   };
 
+  const openEdit = (row: Organization) => {
+    setEditError('');
+    setEditing(row);
+  };
+
+  const saveEdit = async (orgData: Omit<OrganizationForm, 'id' | 'date'>) => {
+    if (!editing || saving) return;
+    setSaving(true);
+    setEditError('');
+    try {
+      const response = (await authenticityUtility.put(
+        `/organization-submissions/${editing.id}`,
+        orgData,
+      )) as any;
+      const updated = response.data as Organization;
+      setRows((current) => current.map((row) => (row.id === updated.id ? updated : row)));
+      setEditing(null);
+    } catch (err: any) {
+      setEditError(err?.message || 'Failed to update organization.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const counts = useMemo(
     () => ({
       pending: rows.filter((row) => (row.approvalStatus || 'Pending') === 'Pending').length,
@@ -115,7 +140,7 @@ export default function OrganizationApprovalPage() {
     [rows],
   );
   const categoryOptions: OptionType[] = [
-    { value: 'All categories', label: 'All categories' },
+    { value: 'All categories', label: 'Search Category' },
     ...categories.map((item) => ({ value: item, label: item })),
   ];
   const filtered = useMemo(
@@ -136,6 +161,15 @@ export default function OrganizationApprovalPage() {
       }),
     [rows, tab, search, category],
   );
+  // A page at a time; the queue keeps the server's order, oldest submission first.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => {
+    setPage(1);
+  }, [tab, search, category, pageSize]);
 
   const stat = (icon: React.ReactNode, value: number, label: string, filter: Tab) => (
     <CustomCard
@@ -190,80 +224,91 @@ export default function OrganizationApprovalPage() {
     </CustomCard>
   );
 
+  // Same layout as the Organization dashboard: the city sits under the name instead of in
+  // its own column, and the decided status replaces Approve/Reject in Actions rather than
+  // taking a Status column of its own.
   const columns = [
     {
       key: 'name',
       label: 'Organization',
-      render: (row: Organization) => <strong>{row.name}</strong>,
-    },
-    {
-      key: 'category',
-      label: 'Category',
       render: (row: Organization) => (
-        <span className="organization-category">{row.category || '—'}</span>
+        <div className="d-flex flex-column">
+          <span className="organization-approval-name">{row.name}</span>
+          {row.city && <span className="organization-approval-meta">{row.city}</span>}
+        </div>
       ),
     },
-    { key: 'city', label: 'City', render: (row: Organization) => row.city || '—' },
+    { key: 'category', label: 'Category', render: (row: Organization) => row.category || '—' },
     {
-      key: 'submitted_by',
-      label: 'Submitted by',
-      render: (row: Organization) => row.submitted_by_name || row.submitted_by_email || '—',
+      key: 'tag',
+      label: 'Tag',
+      render: (row: Organization) =>
+        row.tag ? <span className="organization-approval-tag">{row.tag}</span> : '—',
     },
     {
-      key: 'approvalStatus',
-      label: 'Status',
+      key: 'actions',
+      label: 'Actions',
       render: (row: Organization) => {
         const status = row.approvalStatus || 'Pending';
         const statusStyle =
           status === 'Approved'
             ? { background: '#d9f8e5', color: '#087b43' }
-            : status === 'Rejected'
-              ? { background: '#fde1e5', color: '#c12c41' }
-              : { background: '#fff0d2', color: '#9b5f00' };
+            : { background: '#fde1e5', color: '#c12c41' };
         return (
-          <span
-            style={{
-              ...statusStyle,
-              display: 'inline-block',
-              padding: '7px 12px',
-              borderRadius: 18,
-              fontWeight: 600,
-              fontSize: 'var(--font-size-tertiary)',
-            }}
+          // Kept off the row, whose click opens the read-only view.
+          <div
+            className="organization-approval-actions"
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
           >
-            {status}
-          </span>
+            {isPending(row) ? (
+              <>
+                <CustomButton
+                  variant="outline-primary"
+                  onClick={() => openEdit(row)}
+                  disabled={reviewingId !== null}
+                  aria-label="Edit organization submission"
+                  title="Edit organization submission"
+                  className="organization-approval-icon-btn"
+                >
+                  <Edit3 size={15} />
+                </CustomButton>
+                <CustomButton
+                  variant="outline-success"
+                  className="organization-approval-decision approve"
+                  onClick={() => void review(row.id, 'approve')}
+                  disabled={reviewingId !== null}
+                >
+                  <Check size={13} strokeWidth={3} aria-hidden="true" />
+                  Approve
+                </CustomButton>
+                <CustomButton
+                  variant="outline-danger"
+                  className="organization-approval-decision reject"
+                  onClick={() => void review(row.id, 'reject')}
+                  disabled={reviewingId !== null}
+                >
+                  <X size={13} strokeWidth={3} aria-hidden="true" />
+                  Reject
+                </CustomButton>
+              </>
+            ) : (
+              <span
+                style={{
+                  ...statusStyle,
+                  display: 'inline-block',
+                  padding: '7px 12px',
+                  borderRadius: 18,
+                  fontWeight: 600,
+                  fontSize: 'var(--font-size-tertiary)',
+                }}
+              >
+                {status}
+              </span>
+            )}
+          </div>
         );
       },
-    },
-    {
-      key: 'view',
-      label: 'View',
-      render: (row: Organization) => (
-        <CustomButton
-          variant="outline-primary"
-          onClick={() => setViewing(row)}
-          aria-label="View organization submission"
-          title="View organization submission"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: 'var(--icon-action-size)',
-            height: 'var(--icon-action-size)',
-            minWidth: 0,
-            minHeight: 0,
-            padding: 0,
-            border: '1px solid #bfdbfe',
-            borderRadius: 8,
-            background: '#eff6ff',
-            color: '#006db4',
-            cursor: 'pointer',
-          }}
-        >
-          <Eye size={15} />
-        </CustomButton>
-      ),
     },
   ];
 
@@ -277,28 +322,29 @@ export default function OrganizationApprovalPage() {
         .organization-approval-card { max-width: 1250px; border: 0; border-radius: 18px; background: #fff; box-shadow: 0 8px 24px rgba(15,42,70,.08); }
         .organization-approval-title { color: var(--text-strong) !important; font-size: var(--font-size-page-title); line-height: var(--leading-page-title); font-weight: 700; }
         .organization-admin-badge { background: #0878bd !important; border-radius: 6px !important; color: #fff !important; display: inline-flex; align-items: center; justify-content: center; height: var(--tag-height); font-size: var(--font-size-tertiary); font-weight: 700; letter-spacing: .04em; padding: 0 10px !important; }
-        .organization-approval-header-controls { align-items: center !important; }
-        .organization-approval-header-controls > .position-relative { width: 285px; height: var(--control-height); }
-        .organization-approval-header-controls > .position-relative > svg { left: 14px; z-index: 2; color: #006db4 !important; }
-        .organization-approval-header-controls .custom-input { height: var(--control-height); font-size: var(--font-size-body); margin: 0 !important; padding-left: 50px !important; }
-        .organization-approval-header-controls > div[style*='min-width'] { height: var(--control-height); }
+        .organization-approval-header-controls { align-items: center !important; gap: 12px !important; }
         .organization-approval-card .row.g-3 > [class*='col-'] > .card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); }
         .organization-approval-card .row.g-3 > [class*='col-'] > .card .card-body { padding: 14px 20px; }
         .organization-approval-table.custom-table { min-width: 980px; margin-bottom: 0; table-layout: auto; color: var(--text-body); font-size: var(--font-size-body); }
-        .organization-approval-table.custom-table thead th { padding: 15px 10px; background: #eef5fd; border-bottom: 1px solid #cddceb; color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); text-align: left; }
-        .organization-approval-table.custom-table tbody td { padding: 16px 10px; border-color: #e1e8f0; color: var(--text-body); font-size: var(--font-size-body); line-height: var(--leading-body); vertical-align: middle; }
-        .organization-approval-table.custom-table tbody td:first-child { color: var(--text-strong); font-weight: 700; }
-        .organization-approval-table.custom-table tbody td:first-child strong { font-weight: 700; }
+        .organization-approval-table.custom-table thead th { padding: var(--table-cell-padding); background: #eef5fd; border-bottom: 1px solid #cddceb; color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); text-align: left; }
+        .organization-approval-table.custom-table tbody td { padding: var(--table-cell-padding); border-color: #e1e8f0; color: var(--text-body); font-size: var(--font-size-body); line-height: var(--leading-body); vertical-align: middle; }
+        .organization-approval-table .organization-approval-name { color: var(--text-strong); font-size: var(--font-size-body); line-height: var(--leading-body); font-weight: 700; }
+        .organization-approval-table .organization-approval-meta { margin-top: 2px; color: var(--text-soft); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); }
+        .organization-approval-table .organization-approval-tag { display: inline-block; padding: 4px 12px; border-radius: 6px; background: #e0f0ff; color: #0069ab; font-size: var(--font-size-tertiary); font-weight: 600; text-transform: capitalize; }
+        /* The outlined Edit/View square from the Organization dashboard (32×32, --icon-action-size). */
+        .custom-btn.organization-approval-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: var(--icon-action-size); height: var(--icon-action-size); min-width: 0; min-height: 0; padding: 0; border: 1px solid #0069ab; border-radius: 8px; background: #ffffff; color: #0069ab; }
+        .custom-btn.organization-approval-icon-btn:hover { background: #e0f0ff; color: #0069ab; }
+        /* Approve / Reject: 28px inline actions (AGENTS.md §17), tinted to sit with the outlined icons. */
+        .custom-btn.organization-approval-decision { display: inline-flex; align-items: center; gap: 4px; height: var(--inline-action-height); min-height: 0; min-width: 0; padding: 0 10px; border-radius: 6px; border: 1px solid; font-size: var(--font-size-tertiary); font-weight: 700; white-space: nowrap; flex-shrink: 0; } .custom-btn.organization-approval-decision.approve, .custom-btn.organization-approval-decision.approve:disabled { background: #e8f6ee; border-color: #9fd8b6; color: #087b43; } .custom-btn.organization-approval-decision.approve:hover:not(:disabled) { background: #d3efdf; border-color: #087b43; color: #066535; } .custom-btn.organization-approval-decision.reject, .custom-btn.organization-approval-decision.reject:disabled { background: #fdecee; border-color: #f3b4bd; color: #b4253a; } .custom-btn.organization-approval-decision.reject:hover:not(:disabled) { background: #fbd9de; border-color: #b4253a; color: #9a1d30; }
+        .organization-approval-table .organization-approval-actions { display: flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap; }
         .organization-details-modal .modal-title { font-size: var(--font-size-modal-title); line-height: var(--leading-modal-title); font-weight: 600; }
-        .organization-approval-table.custom-table th:nth-child(1), .organization-approval-table.custom-table td:nth-child(1) { width: 18%; }
-        .organization-approval-table.custom-table th:nth-child(2), .organization-approval-table.custom-table td:nth-child(2) { width: 14%; }
-        .organization-approval-table.custom-table th:nth-child(3), .organization-approval-table.custom-table td:nth-child(3) { width: 11%; }
-        .organization-approval-table.custom-table th:nth-child(4), .organization-approval-table.custom-table td:nth-child(4) { width: 16%; }
-        .organization-approval-table.custom-table th:nth-child(5), .organization-approval-table.custom-table td:nth-child(5) { width: 13%; }
-        .organization-approval-table.custom-table th:nth-last-child(2), .organization-approval-table.custom-table td:nth-last-child(2) { width: 8%; text-align: center; }
-        .organization-approval-table.custom-table th:last-child, .organization-approval-table.custom-table td:last-child { width: 20% !important; text-align: center; white-space: nowrap; }
+        .organization-approval-table.custom-table th:nth-child(1), .organization-approval-table.custom-table td:nth-child(1) { width: 40%; }
+        .organization-approval-table.custom-table th:nth-child(2), .organization-approval-table.custom-table td:nth-child(2) { width: 15%; }
+        .organization-approval-table.custom-table th:nth-child(3), .organization-approval-table.custom-table td:nth-child(3) { width: 13%; text-align: center; }
+        .organization-approval-table.custom-table th:last-child, .organization-approval-table.custom-table td:last-child { width: 32% !important; text-align: center; white-space: nowrap; }
       `}</style>
       <CustomCard className="organization-approval-card mx-auto" style={{ maxWidth: 1250 }}>
+        {switcher}
         <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
           <div className="d-flex align-items-center gap-3">
             <h2 className="organization-approval-title h4 mb-0">Organization Request</h2>
@@ -310,20 +356,12 @@ export default function OrganizationApprovalPage() {
             </Badge>
           </div>
           <div className="organization-approval-header-controls d-flex align-items-center gap-3 flex-wrap">
-            <div className="position-relative">
-              <Search
-                size={17}
-                className="position-absolute top-50 translate-middle-y ms-3 text-secondary"
-                aria-hidden="true"
-              />
-              <CustomInput
-                name="organization-search"
-                value={search}
-                onChange={setSearch}
-                placeholder="Search organization"
-                className="mb-0"
-              />
-            </div>
+            <CustomFilterSearch
+              name="organization-search"
+              value={search}
+              onChange={setSearch}
+              placeholder="Search organization"
+            />
             <div style={{ minWidth: 190 }}>
               <CustomDropdown
                 name="organization-category"
@@ -364,73 +402,42 @@ export default function OrganizationApprovalPage() {
 
         <CustomTable
           columns={columns}
-          data={filtered}
+          data={pageRows}
           keyField="id"
           className="organization-approval-table"
           emptyMessage="No organizations found."
-          // Approve/Reject only apply to Pending rows; with none in view the column is noise.
-          actions={
-            filtered.some((row) => row.approvalStatus === 'Pending' || !row.approvalStatus)
-              ? (row: Organization) =>
-                  row.approvalStatus === 'Pending' || !row.approvalStatus ? (
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: 4,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <CustomButton
-                        variant="success"
-                        onClick={() => void review(row.id, 'approve')}
-                        disabled={reviewingId !== null}
-                        style={{
-                          minWidth: 0,
-                          height: 'var(--inline-action-height)',
-                          minHeight: 0,
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0,
-                          padding: '0 10px',
-                          border: 0,
-                          borderRadius: 6,
-                          background: '#168554',
-                          color: '#fff',
-                          fontWeight: 700,
-                          fontSize: 'var(--font-size-tertiary)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        ✓ Approve
-                      </CustomButton>
-                      <CustomButton
-                        variant="danger"
-                        onClick={() => void review(row.id, 'reject')}
-                        disabled={reviewingId !== null}
-                        style={{
-                          minWidth: 68,
-                          height: 'var(--inline-action-height)',
-                          minHeight: 0,
-                          whiteSpace: 'nowrap',
-                          flexShrink: 0,
-                          padding: '0 10px',
-                          border: 0,
-                          borderRadius: 6,
-                          background: '#da3147',
-                          color: '#fff',
-                          fontWeight: 700,
-                          fontSize: 'var(--font-size-tertiary)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        × Reject
-                      </CustomButton>
-                    </div>
-                  ) : null
-              : undefined
-          }
+          onRowClick={(row: Organization) => setViewing(row)}
+          rowLabel={(row: Organization) => `View ${row.name}`}
         />
+        <CustomPagination
+          page={currentPage}
+          pageSize={pageSize}
+          total={filtered.length}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+          name="organization-approval-rows-per-page"
+        />
+        <CustomModal
+          show={editing !== null}
+          onHide={() => !saving && setEditing(null)}
+          title="Edit Organization"
+          size="xl"
+          scrollable
+          className="organization-details-modal"
+        >
+          {editError && (
+            <div className="alert alert-danger" role="alert">
+              {editError}
+            </div>
+          )}
+          {editing && (
+            <OrganizationDirectory
+              editingOrg={editing as OrganizationForm}
+              onSave={(orgData) => void saveEdit(orgData)}
+              onCancel={() => !saving && setEditing(null)}
+            />
+          )}
+        </CustomModal>
         <CustomModal
           show={viewing !== null}
           onHide={() => setViewing(null)}
@@ -467,12 +474,21 @@ export default function OrganizationApprovalPage() {
           }
         >
           {viewing && (
-            <OrganizationDirectory
-              editingOrg={viewing as OrganizationForm}
-              readOnly
-              onSave={() => undefined}
-              onCancel={() => setViewing(null)}
-            />
+            <div>
+              <CustomSubmitterLine
+                label="Submitted by"
+                name={viewing.submitted_by_name}
+                email={viewing.submitted_by_email}
+                date={viewing.created_at || viewing.date}
+                prominent
+              />
+              <OrganizationDirectory
+                editingOrg={viewing as OrganizationForm}
+                readOnly
+                onSave={() => undefined}
+                onCancel={() => setViewing(null)}
+              />
+            </div>
           )}
         </CustomModal>
       </CustomCard>

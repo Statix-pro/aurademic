@@ -226,10 +226,14 @@ describe('notificationCatalog', () => {
     // The generic /workflow/:moduleKey queue lists nothing for directories, so an
     // approver sent there would find no record to act on.
     it.each([
-      ['organization_directory', '/admin/organization-approval', '/organizationdirectorydashboard'],
+      [
+        'organization_directory',
+        '/admin/directory-approval?tab=organization',
+        '/organizationdirectorydashboard',
+      ],
       [
         'resource_person_directory',
-        '/admin/resource-person-approval',
+        '/admin/directory-approval?tab=resource-person',
         '/resourcepersondirectorydashboard',
       ],
     ])('routes %s notifications to the directory pages', (moduleKey, queue, record) => {

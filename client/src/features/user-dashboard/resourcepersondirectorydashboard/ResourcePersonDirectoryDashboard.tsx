@@ -1,4 +1,4 @@
-import { Search, Plus, X, Edit3, Eye } from 'lucide-react';
+import { Edit3, Linkedin, Plus, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 
 import './ResourcePersonDirectoryDashboard.css';
@@ -6,12 +6,19 @@ import '../financecard/financecard.css';
 // The add/edit form reuses the resource-person directory's form styles (.rpd-form-wrapper).
 import '../../resourcepersondirectory/ResourcePersonDirectory.css';
 import CustomButton from '../../../shared/components/ui/CustomButton';
-import CustomInput from '../../../shared/components/ui/CustomInput';
+import CustomChipList from '../../../shared/components/ui/CustomChipList';
+import CustomDropdown, { OptionType } from '../../../shared/components/ui/CustomDropdown';
+import CustomFilterSearch from '../../../shared/components/ui/CustomFilterSearch';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomPagination, {
+  PAGE_SIZE_OPTIONS,
+} from '../../../shared/components/ui/CustomPagination';
+import CustomSubmitterLine from '../../../shared/components/ui/CustomSubmitterLine';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import OrganizationDirectory from '../../organizationdirectory/OrganizationDirectory';
 import ResourcePersonDirectory, {
+  CATEGORY_OPTIONS,
   ResourcePerson,
 } from '../../resourcepersondirectory/ResourcePersonDirectory';
 
@@ -44,11 +51,53 @@ const apiCreateOrganization = async (
   throw new Error(res?.message || 'Failed to create organization.');
 };
 
+// A stored website or LinkedIn may be typed without its scheme.
+const toHref = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
+
+// The category filter offers the form's own categories; '' is the "no filter" choice, so
+// picking "Search Category" again clears it.
+const CATEGORY_FILTER_OPTIONS: OptionType[] = [
+  { value: '', label: 'Search Category' },
+  ...CATEGORY_OPTIONS.map((category) => ({ value: category, label: category })),
+];
+
+// Matches the search box beside it and the Organization page's filter: --control-height and
+// the shared input border, background and focus ring. CustomDropdown merges styles
+// shallowly, so the control restates them.
+const CATEGORY_FILTER_STYLES = {
+  control: (provided: any, state: any) => ({
+    ...provided,
+    minWidth: 190,
+    minHeight: 'var(--control-height)',
+    height: 'var(--control-height)',
+    backgroundColor: 'var(--bg-input)',
+    borderColor: state.isFocused ? 'var(--border-focus)' : 'var(--border-color)',
+    borderRadius: 'var(--border-radius-md)',
+    boxShadow: state.isFocused ? 'var(--shadow-focus)' : 'none',
+    '&:hover': { borderColor: 'var(--border-focus)' },
+  }),
+  valueContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+    padding: '0 12px',
+  }),
+  indicatorsContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+  }),
+  // Text per AGENTS.md typography: 14px, primary-text colour.
+  container: (provided: any) => ({ ...provided, fontSize: 'var(--font-size-body)' }),
+  singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
+  indicatorSeparator: () => ({ display: 'none' }),
+};
+
 // Helper: build multipart FormData for ResourcePerson operations
 const buildPersonFormData = (personData: Omit<ResourcePerson, 'id' | 'date'>): FormData => {
   const formData = new FormData();
   Object.entries(personData).forEach(([key, val]) => {
-    if (key === 'professions') {
+    if (key === 'professions' || key === 'specializations') {
       formData.append(key, JSON.stringify(val));
     } else if (key === 'photoFile' || key === 'resumeFile') {
       if (val instanceof File) {
@@ -103,6 +152,9 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
   const [viewingPerson, setViewingPerson] = useState<ResourcePerson | null>(null);
   const [searchName, setSearchName] = useState('');
   const [searchCategory, setSearchCategory] = useState('');
+  // Directory: the shared list, Approved records only. Mine: the user's own submissions in
+  // every status, which is where Status and the Edit-to-resubmit flow matter.
+  const [view, setView] = useState<'directory' | 'mine'>('directory');
   // Set while the "add organization" modal is open; receives the saved organization so
   // the resource-person form can select it on the row that asked for it.
   const [organizationRequest, setOrganizationRequest] = useState<{
@@ -147,10 +199,31 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
 
     return records.filter(
       (record) =>
-        (!nameFilter || (record.name ?? '').toLowerCase().includes(nameFilter)) &&
-        (!categoryFilter || (record.category ?? '').toLowerCase().includes(categoryFilter)),
+        (view === 'mine' ? record.isOwner : record.approvalStatus === 'Approved') &&
+        (!nameFilter ||
+          (record.name ?? '').toLowerCase().includes(nameFilter) ||
+          (record.specializations ?? []).some((s) => s.toLowerCase().includes(nameFilter))) &&
+        (!categoryFilter || (record.category ?? '').toLowerCase() === categoryFilter),
     );
-  }, [records, searchName, searchCategory]);
+  }, [records, searchName, searchCategory, view]);
+  const mineCount = records.filter((record) => record.isOwner).length;
+  // A–Z by first and last name (the title, Dr./Prof., would group everyone under D and P),
+  // a page at a time, so the list stays quick to scan as it grows.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const sorted = useMemo(() => {
+    const sortName = (person: ResourcePerson) =>
+      `${person.firstName ?? ''} ${person.lastName ?? ''}`.trim() || person.name || '';
+    return [...filtered].sort((a, b) =>
+      sortName(a).localeCompare(sortName(b), undefined, { sensitivity: 'base' }),
+    );
+  }, [filtered]);
+  const pageCount = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageRows = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => {
+    setPage(1);
+  }, [searchName, searchCategory, view, pageSize]);
 
   const handleAdd = () => {
     scrollToFormTop();
@@ -209,6 +282,8 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
       }
       setEditingPerson(null);
       setShowForm(false);
+      // A new or edited record waits for approval, so it is found under My submissions.
+      setView('mine');
     } catch (err: any) {
       setError(err?.message || 'Failed to save record. Please try again.');
     }
@@ -227,7 +302,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
             }}
             title={person.status}
           />
-          <span>{index + 1}</span>
+          <span>{(currentPage - 1) * pageSize + index + 1}</span>
         </div>
       ),
     },
@@ -236,11 +311,28 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
       label: 'Resource Person',
       render: (person: ResourcePerson) => (
         <div className="rpd-name-cell">
-          <strong>
-            {person.name ||
-              `${person.title || ''} ${person.firstName || ''} ${person.lastName || ''}`.trim() ||
-              '—'}
-          </strong>
+          <span className="rpd-name-line">
+            <strong>
+              {person.name ||
+                `${person.title || ''} ${person.firstName || ''} ${person.lastName || ''}`.trim() ||
+                '—'}
+            </strong>
+            {/* LinkedIn is public, and the quickest way to check an expert's background. */}
+            {person.linkedIn && (
+              <a
+                className="rpd-linkedin-link"
+                href={toHref(person.linkedIn)}
+                target="_blank"
+                rel="noreferrer"
+                title="Open LinkedIn profile"
+                aria-label={`LinkedIn profile of ${person.name}`}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => event.stopPropagation()}
+              >
+                <Linkedin size={14} aria-hidden="true" />
+              </a>
+            )}
+          </span>
           <span>{getPrimary(person)?.designation || '—'}</span>
         </div>
       ),
@@ -254,9 +346,29 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
           <div className="rpd-org-cell">
             <strong>{primary?.organization || '—'}</strong>
             <span>{primary?.city || ''}</span>
+            {/* The submitter's own record, held by an organization not yet approved. */}
+            {person.organizationHolds?.length ? (
+              <span
+                className={`rpd-org-hold${
+                  person.organizationHolds.some((hold) => hold.status === 'Rejected')
+                    ? ' rejected'
+                    : ''
+                }`}
+              >
+                {person.organizationHolds.some((hold) => hold.status === 'Rejected')
+                  ? 'Organization rejected: edit and choose another'
+                  : 'Waiting for organization approval'}
+              </span>
+            ) : null}
           </div>
         );
       },
+    },
+    // Finding a speaker or expert starts here, so it sits right after their organization.
+    {
+      key: 'specializations',
+      label: 'Specializations',
+      render: (person: ResourcePerson) => <CustomChipList items={person.specializations ?? []} />,
     },
     { key: 'category', label: 'Category', render: (person: ResourcePerson) => person.category },
     {
@@ -285,30 +397,31 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
       key: 'action',
       label: 'Action',
       style: { textAlign: 'center' as const },
+      // My submissions only: a row click views the record; Edit is its own button. Saving an
+      // edit sends the record for approval again, so looking never needs the edit form.
       render: (person: ResourcePerson) => (
-        <div className="rpd-center">
-          {person.isOwner ? (
+        // Kept off the row, whose click opens the read-only view.
+        <span
+          className="d-flex justify-content-center"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          {person.isOwner && (
             <CustomButton
               variant="outline-primary"
               className="rpd-icon-btn"
               onClick={() => handleEdit(person)}
-              title="Edit Resource Person"
+              title={
+                person.approvalStatus === 'Approved'
+                  ? 'Edit Resource Person (saving sends it for approval again)'
+                  : 'Edit Resource Person'
+              }
               aria-label="Edit Resource Person"
             >
               <Edit3 size={15} />
             </CustomButton>
-          ) : (
-            <CustomButton
-              variant="outline-primary"
-              className="rpd-icon-btn"
-              onClick={() => setViewingPerson(person)}
-              title="View Resource Person"
-              aria-label="View Resource Person"
-            >
-              <Eye size={15} />
-            </CustomButton>
           )}
-        </div>
+        </span>
       ),
     },
   ];
@@ -391,36 +504,34 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
               </div>
 
               <div className="header-right-section">
-                <div className="search-box rpd-dashboard-search">
-                  <Search size={18} className="search-icon" />
-                  <CustomInput
-                    name="rp-search-name"
-                    type="search"
-                    placeholder="Search Resource Person Name"
-                    value={searchName}
-                    onChange={setSearchName}
-                    className="mb-0"
-                  />
-                  {searchName && (
-                    <X size={16} className="clear-icon" onClick={() => setSearchName('')} />
-                  )}
-                </div>
+                <CustomFilterSearch
+                  name="rp-search-name"
+                  value={searchName}
+                  onChange={setSearchName}
+                  placeholder="Search resource person"
+                />
 
                 <div className="filter-group">
                   <div className="filter-item">
-                    <CustomInput
+                    <CustomDropdown
                       name="rp-search-category"
-                      type="search"
-                      placeholder="Search Category"
-                      value={searchCategory}
-                      onChange={setSearchCategory}
-                      className="mb-0 rpd-dashboard-filter"
+                      options={CATEGORY_FILTER_OPTIONS}
+                      value={CATEGORY_FILTER_OPTIONS.find(
+                        (option) => option.value === searchCategory,
+                      )}
+                      onChange={(option) => {
+                        if (option && !Array.isArray(option) && 'value' in option) {
+                          setSearchCategory(String(option.value));
+                        }
+                      }}
+                      className="mb-0"
+                      styles={CATEGORY_FILTER_STYLES}
                     />
                   </div>
                 </div>
 
                 <CustomButton className="rpd-add-btn" onClick={handleAdd}>
-                  <Plus size={15} /> Add
+                  Add <Plus size={15} aria-hidden="true" />
                 </CustomButton>
               </div>
             </div>
@@ -451,17 +562,54 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
             )}
 
             <div className="financecard-body">
+              <div className="rpd-dir-tabs" role="tablist" aria-label="Resource person lists">
+                {(
+                  [
+                    ['directory', 'Directory'],
+                    ['mine', `My submissions (${mineCount})`],
+                  ] as const
+                ).map(([key, text]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={view === key}
+                    className={`rpd-dir-tab${view === key ? ' active' : ''}`}
+                    onClick={() => setView(key)}
+                  >
+                    {text}
+                  </button>
+                ))}
+              </div>
               <div className="rpd-table-wrap">
                 <CustomTable
                   className="rpd-table"
-                  columns={tableColumns}
-                  data={filtered}
-                  keyField="id"
-                  emptyMessage={
-                    records.length === 0
-                      ? 'No records yet. Click "Add" to add a resource person.'
-                      : 'No records match the filter criteria.'
+                  columns={
+                    view === 'mine'
+                      ? tableColumns
+                      : tableColumns.filter(
+                          (column) => column.key !== 'approvalStatus' && column.key !== 'action',
+                        )
                   }
+                  data={pageRows}
+                  keyField="id"
+                  onRowClick={(person: ResourcePerson) => setViewingPerson(person)}
+                  rowLabel={(person: ResourcePerson) => `View ${person.name}`}
+                  emptyMessage={
+                    view === 'mine'
+                      ? 'You have not submitted any resource persons. Click "Add" to add one.'
+                      : records.length === 0
+                        ? 'No resource persons in the directory yet.'
+                        : 'No records match the filter criteria.'
+                  }
+                />
+                <CustomPagination
+                  page={currentPage}
+                  pageSize={pageSize}
+                  total={sorted.length}
+                  onPageChange={setPage}
+                  onPageSizeChange={setPageSize}
+                  name="rp-rows-per-page"
                 />
               </div>
             </div>
@@ -477,13 +625,21 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
         className="rpd-form-modal"
       >
         {viewingPerson && (
-          <ResourcePersonDirectory
-            editingPerson={viewingPerson}
-            organizations={organizations}
-            readOnly
-            onSave={() => undefined}
-            onCancel={() => setViewingPerson(null)}
-          />
+          <div>
+            <CustomSubmitterLine
+              name={viewingPerson.submitted_by_name}
+              email={viewingPerson.submitted_by_email}
+              date={viewingPerson.date}
+              isYou={viewingPerson.isOwner}
+            />
+            <ResourcePersonDirectory
+              editingPerson={viewingPerson}
+              organizations={organizations}
+              readOnly
+              onSave={() => undefined}
+              onCancel={() => setViewingPerson(null)}
+            />
+          </div>
         )}
       </CustomModal>
     </div>

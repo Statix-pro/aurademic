@@ -521,6 +521,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
               isGroupActive([
                 '/organizationdirectorydashboard',
                 '/resourcepersondirectorydashboard',
+                '/directory/lists',
               ])
                 ? 'active'
                 : ''
@@ -541,7 +542,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 }`}
                 onClick={handleLinkClick}
               >
-                Organizations
+                Organization
               </Link>
               <Link
                 to="/resourcepersondirectorydashboard"
@@ -550,8 +551,18 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 }`}
                 onClick={handleLinkClick}
               >
-                Resource Persons
+                Resource Person
               </Link>
+              {/* The Tag / Specialization lists both directory forms pick from. */}
+              {(showOrganizationApproval || showResourcePersonApproval) && (
+                <Link
+                  to="/directory/lists"
+                  className={`sb-sublink ${isActive('/directory/lists') ? 'active' : ''}`}
+                  onClick={handleLinkClick}
+                >
+                  Directory Lists
+                </Link>
+              )}
             </div>
           )}
         </div>
@@ -566,8 +577,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                   '/project-dashboard',
                   '/admin-dashboard',
                   '/admin/budget',
-                  '/admin/organization-approval',
-                  '/admin/resource-person-approval',
+                  '/admin/directory-approval',
                   '/workflow/finance',
                   '/workflow/expenditure',
                 ])
@@ -635,22 +645,13 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                     Expenditure Approval
                   </Link>
                 )}
-                {showOrganizationApproval && (
+                {(showOrganizationApproval || showResourcePersonApproval) && (
                   <Link
-                    to="/admin/organization-approval"
-                    className={`sb-sublink ${isActive('/admin/organization-approval') ? 'active' : ''}`}
+                    to="/admin/directory-approval"
+                    className={`sb-sublink ${isActive('/admin/directory-approval') ? 'active' : ''}`}
                     onClick={handleLinkClick}
                   >
-                    Organization Approval
-                  </Link>
-                )}
-                {showResourcePersonApproval && (
-                  <Link
-                    to="/admin/resource-person-approval"
-                    className={`sb-sublink ${isActive('/admin/resource-person-approval') ? 'active' : ''}`}
-                    onClick={handleLinkClick}
-                  >
-                    Resource Person Approval
+                    Directory Approval
                   </Link>
                 )}
               </div>

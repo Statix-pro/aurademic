@@ -1,13 +1,24 @@
-import { Smartphone, Mail, Linkedin, Image, FileText, PlusCircle, Trash2 } from 'lucide-react';
+import {
+  Smartphone,
+  Mail,
+  Linkedin,
+  Image,
+  FileText,
+  Lock,
+  PlusCircle,
+  Trash2,
+} from 'lucide-react';
 import React, { useState, useEffect } from 'react';
 
 import './ResourcePersonDirectory.css';
+import RegionFields from '../../shared/components/RegionFields';
 import AlertModal from '../../shared/components/ui/AlertModal';
 import CustomButton from '../../shared/components/ui/CustomButton';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
 import CustomInput from '../../shared/components/ui/CustomInput';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
+import { DEFAULT_COUNTRY } from '../../shared/utils/regions';
 
 import type { Organization } from '../organizationdirectory/OrganizationDirectory';
 
@@ -18,10 +29,16 @@ export interface ProfessionDetail {
   designation: string;
   department: string;
   organization: string;
+  /** The picked organization; null for older free text that names none. */
+  organizationId?: number | null;
+  /** Its approval state, from the server; a Pending or Rejected one holds the record. */
+  organizationStatus?: 'Pending' | 'Approved' | 'Rejected' | null;
   city: string;
   state: string;
   country: string;
   orgLinkedIn: string;
+  /** The post's official email: the person's own institutional address or a role mailbox. */
+  officialEmail: string;
   status: string; // 'Working' | 'Relieved'
 }
 
@@ -36,11 +53,13 @@ export interface ResourcePerson {
   status: string; // 'In Service' | 'Retired' | 'Inactive'
   category: string;
   tag: string;
-  specialization: string;
+  /** Picked from the Directory Admin's Specialization list. */
+  specializations: string[];
   mobile: string;
   personalEmail: string;
-  officialEmail: string;
   linkedIn: string;
+  /** The submitter's notes on the person; withheld from others like the contacts. */
+  remarks?: string;
   professions: ProfessionDetail[];
   photoName?: string;
   photoPath?: string;
@@ -54,6 +73,13 @@ export interface ResourcePerson {
   date: string;
   approvalStatus?: 'Pending' | 'Approved' | 'Rejected';
   isOwner?: boolean;
+  /** Set by the server when this viewer may not see the contact details. */
+  contactHidden?: boolean;
+  /** Who added the record, so a reader can ask them about it. */
+  submitted_by_name?: string | null;
+  submitted_by_email?: string | null;
+  /** On the submitter's own records: organizations that keep it from being approved. */
+  organizationHolds?: { name: string; status: 'Pending' | 'Rejected' }[];
 }
 
 interface ResourcePersonDirectoryProps {
@@ -66,7 +92,7 @@ interface ResourcePersonDirectoryProps {
   readOnly?: boolean;
 }
 
-const CATEGORY_OPTIONS = [
+export const CATEGORY_OPTIONS = [
   'Academic',
   'Industry',
   'Scientist',
@@ -76,6 +102,7 @@ const CATEGORY_OPTIONS = [
   'Entrepreneur',
   'Alumni',
   'Social Activist',
+  'Others',
 ];
 
 const ADD_ORGANIZATION_VALUE = '__add_organization__';
@@ -87,12 +114,25 @@ const emptyProfession = (): ProfessionDetail => ({
   designation: '',
   department: '',
   organization: '',
+  organizationId: null,
+  organizationStatus: null,
   city: '',
   state: '',
-  country: '',
+  country: DEFAULT_COUNTRY,
   orgLinkedIn: '',
+  officialEmail: '',
   status: 'Working',
 });
+
+// Stands in for a contact the server withheld; no part of the real value reaches the page.
+const HIDDEN_CONTACT = '••••••••••';
+const CONTACT_LOCK_TITLE = 'Private: visible only to the submitter and admins';
+
+const ContactLock: React.FC = () => (
+  <span className="rpd-contact-lock" title={CONTACT_LOCK_TITLE} aria-label={CONTACT_LOCK_TITLE}>
+    <Lock size={14} aria-hidden="true" />
+  </span>
+);
 
 // Every single-line control sits on --control-height, as on the project form;
 // CustomDropdown's own default is 45px.
@@ -129,6 +169,41 @@ const customDropdownStyles = {
     display: 'none',
   }),
 };
+
+// Several picks stay on one line and scroll sideways, so the field never grows taller
+// than the Tag dropdown beside it.
+const specializationDropdownStyles = {
+  ...customDropdownStyles,
+  valueContainer: (provided: any) => ({
+    ...provided,
+    minHeight: 'calc(var(--control-height) - 2px)',
+    height: 'calc(var(--control-height) - 2px)',
+    padding: '0 10px',
+    flexWrap: 'nowrap',
+    overflowX: 'auto',
+  }),
+  multiValue: (provided: any) => ({ ...provided, flexShrink: 0, borderRadius: '6px' }),
+  // A read-only view shows the picks without the remove button they could not use.
+  multiValueRemove: (provided: any, state: any) =>
+    state.selectProps.isDisabled ? { display: 'none' } : provided,
+  multiValueLabel: (provided: any) => ({
+    ...provided,
+    fontSize: 'var(--font-size-secondary)',
+    color: 'var(--text-body)',
+  }),
+};
+
+interface ListOption {
+  list_key: 'tag' | 'specialization';
+  name: string;
+}
+
+/** A stored value the list no longer offers is still shown, so an edit never drops it. */
+const toOptions = (names: string[], selected: string[]) =>
+  [...names, ...selected.filter((value) => value && !names.includes(value))].map((name) => ({
+    value: name,
+    label: name,
+  }));
 
 const titleDropdownStyles = {
   ...customDropdownStyles,
@@ -177,6 +252,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   readOnly = false,
 }) => {
   const isReadOnly = readOnly;
+  const contactHidden = Boolean(editingPerson?.contactHidden);
 
   /* form fields */
   const [category, setCategory] = useState('Academic');
@@ -187,11 +263,16 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   const [dob, setDob] = useState('');
   const [serviceStatus, setServiceStatus] = useState('In Service');
   const [tag, setTag] = useState('');
-  const [specialization, setSpecialization] = useState('');
+  const [specializations, setSpecializations] = useState<string[]>([]);
+  const [listNames, setListNames] = useState<{ tag: string[]; specialization: string[] }>({
+    tag: [],
+    specialization: [],
+  });
+  const [listError, setListError] = useState<string | null>(null);
   const [mobile, setMobile] = useState('');
   const [personalEmail, setPersonalEmail] = useState('');
-  const [officialEmail, setOfficialEmail] = useState('');
   const [linkedIn, setLinkedIn] = useState('');
+  const [remarks, setRemarks] = useState('');
   const [professions, setProfessions] = useState<ProfessionDetail[]>([emptyProfession()]);
   const [photoName, setPhotoName] = useState('');
   const [resumeName, setResumeName] = useState('');
@@ -213,15 +294,18 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       setDob(editingPerson.dob || '');
       setServiceStatus(editingPerson.status || 'In Service');
       setTag(editingPerson.tag || '');
-      setSpecialization(editingPerson.specialization || '');
+      setSpecializations(editingPerson.specializations || []);
       setMobile(editingPerson.mobile || '');
       setPersonalEmail(editingPerson.personalEmail || '');
-      setOfficialEmail(editingPerson.officialEmail || '');
       setLinkedIn(editingPerson.linkedIn || '');
+      setRemarks(editingPerson.remarks || '');
       setProfessions(
         editingPerson.professions?.length
           ? editingPerson.professions.map((p) => ({
-              ...p,
+              // The server sends empty columns as null; every input here stays controlled.
+              ...emptyProfession(),
+              ...Object.fromEntries(Object.entries(p).filter(([, value]) => value !== null)),
+              country: p.country || DEFAULT_COUNTRY,
               id: p.id || newProfessionId(),
             }))
           : [emptyProfession()],
@@ -233,6 +317,33 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
     setRemoveResume(false);
   }, [editingPerson]);
 
+  // Tag and Specialization come from the Directory Admin's lists; a read-only view shows
+  // the stored values and needs no list.
+  useEffect(() => {
+    if (readOnly) return;
+    let cancelled = false;
+    authenticityUtility
+      .get('/resource-person-options')
+      .then((response: any) => {
+        if (cancelled) return;
+        const rows: ListOption[] = response?.data || [];
+        setListNames({
+          tag: rows.filter((row) => row.list_key === 'tag').map((row) => row.name),
+          specialization: rows
+            .filter((row) => row.list_key === 'specialization')
+            .map((row) => row.name),
+        });
+        setListError(null);
+      })
+      .catch((err: any) => {
+        if (!cancelled)
+          setListError(err?.message || 'Failed to load the Tag and Specialization lists.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [readOnly]);
+
   /* ── Profession helpers ── */
   const addProfession = () =>
     setProfessions((prev) => [...prev, { ...emptyProfession(), status: 'Relieved' }]);
@@ -240,13 +351,39 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
     setProfessions((prev) => prev.filter((_, idx) => idx !== i));
   const changeProfession = (i: number, field: keyof ProfessionDetail, val: string) =>
     setProfessions((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: val } : p)));
+  // Picking an organization copies its address and website into the row, replacing what
+  // was there so a switch never leaves the previous organization's city behind. The
+  // fields stay editable. The Website input is stored as orgLinkedIn.
+  const selectOrganization = (i: number, organization: Organization) =>
+    setProfessions((prev) =>
+      prev.map((p, idx) =>
+        idx === i
+          ? {
+              ...p,
+              organization: organization.name,
+              organizationId: organization.id,
+              organizationStatus: organization.approvalStatus ?? null,
+              city: organization.city || '',
+              state: organization.state || '',
+              country: organization.country || DEFAULT_COUNTRY,
+              orgLinkedIn: organization.website || '',
+            }
+          : p,
+      ),
+    );
+  // A Rejected organization is never offered. The submitter's own Pending one is (Add an
+  // organization selects it straight away), marked so it reads as not yet in the directory;
+  // the resource person cannot be approved until it is.
   const organizationOptions = [
-    ...organizations.map((organization) => ({
-      value: organization.name,
-      label: organization.approvalStatus
-        ? `${organization.name} (${organization.approvalStatus})`
-        : organization.name,
-    })),
+    ...organizations
+      .filter((organization) => organization.approvalStatus !== 'Rejected')
+      .map((organization) => ({
+        value: String(organization.id),
+        label:
+          organization.approvalStatus === 'Pending'
+            ? `${organization.name} (Pending)`
+            : organization.name,
+      })),
     ...(onAddOrganization
       ? [{ value: ADD_ORGANIZATION_VALUE, label: 'Add an organization...' }]
       : []),
@@ -331,8 +468,12 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       const org = (p.organization || '').trim();
       const c = (p.city || '').trim();
       const s = (p.state || '').trim();
-      const co = (p.country || '').trim();
-      return d !== '' || dept !== '' || org !== '' || c !== '' || s !== '' || co !== '';
+      // Every new row starts with the default country, so it alone is not an entry.
+      const co = (p.country || '').trim() === DEFAULT_COUNTRY ? '' : (p.country || '').trim();
+      const email = (p.officialEmail || '').trim();
+      return (
+        d !== '' || dept !== '' || org !== '' || c !== '' || s !== '' || co !== '' || email !== ''
+      );
     });
 
     onSave({
@@ -345,11 +486,11 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       status: serviceStatus,
       category,
       tag: tag.trim() || 'General',
-      specialization: specialization.trim(),
+      specializations,
       mobile: mobile.trim(),
       personalEmail: personalEmail.trim(),
-      officialEmail: officialEmail.trim(),
       linkedIn: linkedIn.trim(),
+      remarks: remarks.trim(),
       // An empty list, not a blank row: the server stores every entry it receives,
       // and the form already shows one blank row when it loads an empty list.
       professions: filteredProfessions.map((p) => ({ ...p })),
@@ -465,11 +606,15 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                   </div>
                 </div>
                 <div className="rpd-field">
+                  <label htmlFor="rp-dob" className="rpd-locked-label">
+                    Date of Birth
+                    <ContactLock />
+                  </label>
                   <CustomInput
-                    label="Date of Birth"
                     name="rp-dob"
-                    type="date"
-                    value={dob}
+                    // A date input cannot show the dots, so a withheld date is plain text.
+                    type={contactHidden ? 'text' : 'date'}
+                    value={contactHidden ? HIDDEN_CONTACT : dob}
                     onChange={setDob}
                     disabled={isReadOnly}
                     className="mb-0"
@@ -495,25 +640,34 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               </div>
               <div className="rpd-grid-2">
                 <div className="rpd-field">
-                  <CustomInput
-                    label="Tag"
+                  <label>Tag</label>
+                  <CustomDropdown
                     name="rp-tag"
-                    value={tag}
-                    onChange={setTag}
-                    placeholder="e.g. Skilling, Accreditation"
-                    disabled={isReadOnly}
                     className="mb-0"
+                    value={tag ? { value: tag, label: tag } : null}
+                    onChange={(option: any) => setTag(option ? String(option.value) : '')}
+                    options={toOptions(listNames.tag, [tag])}
+                    placeholder="Select tag"
+                    styles={customDropdownStyles}
+                    isDisabled={isReadOnly}
+                    isClearable
+                    error={listError || undefined}
                   />
                 </div>
                 <div className="rpd-field">
-                  <CustomInput
-                    label="Specialization"
-                    name="rp-specialization"
-                    value={specialization}
-                    onChange={setSpecialization}
-                    placeholder="e.g. Machine Learning"
-                    disabled={isReadOnly}
+                  <label>Specialization</label>
+                  <CustomDropdown
+                    name="rp-specializations"
                     className="mb-0"
+                    isMulti
+                    value={specializations.map((name) => ({ value: name, label: name }))}
+                    onChange={(options: any) =>
+                      setSpecializations((options || []).map((option: any) => String(option.value)))
+                    }
+                    options={toOptions(listNames.specialization, specializations)}
+                    placeholder="Select specializations"
+                    styles={specializationDropdownStyles}
+                    isDisabled={isReadOnly}
                   />
                 </div>
               </div>
@@ -532,12 +686,13 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     label="Mobile number"
                     name="rp-mobile"
                     type="tel"
-                    value={mobile}
+                    value={contactHidden ? HIDDEN_CONTACT : mobile}
                     onChange={setMobile}
                     placeholder="Mobile number"
                     disabled={isReadOnly}
                     className="mb-0"
                   />
+                  <ContactLock />
                 </div>
               </div>
 
@@ -548,28 +703,13 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     label="Personal email"
                     name="rp-personalEmail"
                     type="email"
-                    value={personalEmail}
+                    value={contactHidden ? HIDDEN_CONTACT : personalEmail}
                     onChange={setPersonalEmail}
                     placeholder="Personal email"
                     disabled={isReadOnly}
                     className="mb-0"
                   />
-                </div>
-              </div>
-
-              <div className="rpd-field">
-                <div className="rpd-input-icon">
-                  <Mail size={15} />
-                  <CustomInput
-                    label="Official email"
-                    name="rp-officialEmail"
-                    type="email"
-                    value={officialEmail}
-                    onChange={setOfficialEmail}
-                    placeholder="Official email"
-                    disabled={isReadOnly}
-                    className="mb-0"
-                  />
+                  <ContactLock />
                 </div>
               </div>
 
@@ -657,27 +797,57 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       </div>
                     ))}
                     <div className="rpd-field" style={{ marginBottom: 0 }}>
-                      <label>Organization</label>
+                      <div className="d-flex justify-content-between align-items-start">
+                        <label>Organization</label>
+                        {prof.organizationStatus === 'Pending' && (
+                          <span className="rpd-org-status pending">Pending approval</span>
+                        )}
+                        {prof.organizationStatus === 'Rejected' && (
+                          <span className="rpd-org-status rejected">Rejected — choose another</span>
+                        )}
+                      </div>
                       <CustomDropdown
                         name={`organization-${idx}`}
                         className="mb-0"
                         value={
-                          prof.organization
+                          prof.organizationId
                             ? (organizationOptions.find(
-                                (option) => option.value === prof.organization,
-                              ) ?? { value: prof.organization, label: prof.organization })
-                            : null
+                                (option) => option.value === String(prof.organizationId),
+                              ) ?? { value: String(prof.organizationId), label: prof.organization })
+                            : prof.organization
+                              ? { value: prof.organization, label: prof.organization }
+                              : null
                         }
                         onChange={(option: any) => {
                           if (option?.value === ADD_ORGANIZATION_VALUE) {
                             // The flow saves the organization and hands it back, so only this
                             // row changes and the rest of the unsaved form stays as it is.
                             onAddOrganization?.((organization) =>
-                              changeProfession(idx, 'organization', organization.name),
+                              selectOrganization(idx, organization),
                             );
                             return;
                           }
-                          changeProfession(idx, 'organization', option ? String(option.value) : '');
+                          const picked = option
+                            ? organizations.find(
+                                (organization) => String(organization.id) === option.value,
+                              )
+                            : undefined;
+                          if (picked) {
+                            selectOrganization(idx, picked);
+                            return;
+                          }
+                          setProfessions((prev) =>
+                            prev.map((p, i) =>
+                              i === idx
+                                ? {
+                                    ...p,
+                                    organization: '',
+                                    organizationId: null,
+                                    organizationStatus: null,
+                                  }
+                                : p,
+                            ),
+                          );
                         }}
                         options={organizationOptions}
                         placeholder="Select organization"
@@ -695,30 +865,66 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       marginTop: '10px',
                     }}
                   >
-                    {(
-                      [
-                        { label: 'City', field: 'city', ph: 'City' },
-                        { label: 'State', field: 'state', ph: 'State' },
-                        { label: 'Country', field: 'country', ph: 'Country' },
-                        { label: 'Website', field: 'orgLinkedIn', ph: 'Website URL' },
-                      ] as { label: string; field: keyof ProfessionDetail; ph: string }[]
-                    ).map(({ label, field, ph }) => (
-                      <div
-                        key={field}
-                        className="rpd-field"
-                        style={{ flex: '1', minWidth: '120px', marginBottom: 0 }}
-                      >
-                        <CustomInput
-                          label={label}
-                          name={`rp-${field}-${idx}`}
-                          value={prof[field]}
-                          onChange={(value) => changeProfession(idx, field, value)}
-                          placeholder={ph}
-                          disabled={isReadOnly}
-                          className="mb-0"
-                        />
-                      </div>
-                    ))}
+                    <div
+                      className="rpd-field"
+                      style={{ flex: '1', minWidth: '120px', marginBottom: 0 }}
+                    >
+                      <CustomInput
+                        label="City"
+                        name={`rp-city-${idx}`}
+                        value={prof.city}
+                        onChange={(value) => changeProfession(idx, 'city', value)}
+                        placeholder="City"
+                        disabled={isReadOnly}
+                        className="mb-0"
+                      />
+                    </div>
+                    <RegionFields
+                      idPrefix={`rp-${idx}`}
+                      country={prof.country}
+                      state={prof.state}
+                      onChange={(region) =>
+                        setProfessions((prev) =>
+                          prev.map((p, i) => (i === idx ? { ...p, ...region } : p)),
+                        )
+                      }
+                      disabled={isReadOnly}
+                      fieldClassName="rpd-field"
+                      fieldStyle={{ flex: '1', minWidth: '120px', marginBottom: 0 }}
+                      dropdownStyles={customDropdownStyles}
+                    />
+                    <div
+                      className="rpd-field"
+                      style={{ flex: '1', minWidth: '120px', marginBottom: 0 }}
+                    >
+                      <CustomInput
+                        label="Website"
+                        name={`rp-orgLinkedIn-${idx}`}
+                        value={prof.orgLinkedIn}
+                        onChange={(value) => changeProfession(idx, 'orgLinkedIn', value)}
+                        placeholder="Website URL"
+                        disabled={isReadOnly}
+                        className="mb-0"
+                      />
+                    </div>
+                    <div
+                      className="rpd-field"
+                      style={{ flex: '1.6', minWidth: '180px', marginBottom: 0 }}
+                    >
+                      <label htmlFor={`rp-officialEmail-${idx}`} className="rpd-locked-label">
+                        Official email
+                        <ContactLock />
+                      </label>
+                      <CustomInput
+                        name={`rp-officialEmail-${idx}`}
+                        type="email"
+                        value={contactHidden ? HIDDEN_CONTACT : prof.officialEmail}
+                        onChange={(value) => changeProfession(idx, 'officialEmail', value)}
+                        placeholder="Own or role mailbox"
+                        disabled={isReadOnly}
+                        className="mb-0"
+                      />
+                    </div>
                     <div
                       className="rpd-field"
                       style={{ flex: '1', minWidth: '120px', marginBottom: 0 }}
@@ -791,50 +997,52 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                 <div>
                   <div className="rpd-upload-label">Photo</div>
                   <div className="rpd-upload-hint">JPG, JPEG, PNG (Maximum 2 MB)</div>
-                  {photoName && (
-                    <div className="rpd-upload-filename">
-                      {!photoFile && !removePhoto && editingPerson?.photoPath ? (
-                        <a
-                          href={uploadUrl(editingPerson.photoPath)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {photoName}
-                        </a>
-                      ) : (
-                        photoName
-                      )}
-                      {!isReadOnly && (
-                        <CustomButton
-                          variant="link"
-                          onClick={handleRemovePhoto}
-                          title="Remove photo"
-                          aria-label="Remove photo"
-                          style={{
-                            color: '#b91c1c',
-                            padding: '0 4px',
-                            marginLeft: '6px',
-                            verticalAlign: 'middle',
-                            lineHeight: 1,
-                          }}
-                        >
-                          <Trash2 size={14} aria-hidden="true" />
-                        </CustomButton>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
-              {/* Only the button is used: the chosen file shows under the hint, as before, so
-                  the uploader's own filename chip would squeeze the text column. */}
-              <CustomFileUploader
-                name="rp-photo"
-                accept=".jpg,.jpeg,.png"
-                buttonText="Choose File"
-                onChange={handlePhoto}
-                disabled={isReadOnly}
-                className="mb-0 rpd-upload-button"
-              />
+              {/* One file at a time: the chosen or stored file takes the button's place,
+                  and the button returns once the file is removed with the bin icon. Only
+                  the uploader's button is used; its own filename chip would squeeze the
+                  text column. */}
+              {photoName ? (
+                <div className="rpd-upload-filename">
+                  <span className="rpd-upload-filename-text" title={photoName}>
+                    {!photoFile && !removePhoto && editingPerson?.photoPath ? (
+                      <a href={uploadUrl(editingPerson.photoPath)} target="_blank" rel="noreferrer">
+                        {photoName}
+                      </a>
+                    ) : (
+                      photoName
+                    )}
+                  </span>
+                  {!isReadOnly && (
+                    <CustomButton
+                      variant="link"
+                      className="rpd-upload-remove"
+                      onClick={handleRemovePhoto}
+                      title="Remove photo"
+                      aria-label="Remove photo"
+                      style={{
+                        color: '#b91c1c',
+                        padding: '0 4px',
+                        marginLeft: '6px',
+                        verticalAlign: 'middle',
+                        lineHeight: 1,
+                      }}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </CustomButton>
+                  )}
+                </div>
+              ) : (
+                <CustomFileUploader
+                  name="rp-photo"
+                  accept=".jpg,.jpeg,.png"
+                  buttonText="Choose File"
+                  onChange={handlePhoto}
+                  disabled={isReadOnly}
+                  className="mb-0 rpd-upload-button"
+                />
+              )}
             </div>
             <div className="rpd-upload-box" style={isReadOnly ? { opacity: 0.6 } : undefined}>
               <div className="rpd-upload-info">
@@ -842,52 +1050,82 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                   <FileText size={36} strokeWidth={1.5} />
                 </div>
                 <div>
-                  <div className="rpd-upload-label">Resume</div>
+                  <div className="rpd-upload-label rpd-locked-label">
+                    Resume
+                    <ContactLock />
+                  </div>
                   <div className="rpd-upload-hint">PDF, DOC, DOCX (Maximum 5 MB)</div>
-                  {resumeName && (
-                    <div className="rpd-upload-filename">
-                      {!resumeFile && !removeResume && editingPerson?.resumePath ? (
-                        <a
-                          href={uploadUrl(editingPerson.resumePath)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {resumeName}
-                        </a>
-                      ) : (
-                        resumeName
-                      )}
-                      {!isReadOnly && (
-                        <CustomButton
-                          variant="link"
-                          onClick={handleRemoveResume}
-                          title="Remove resume"
-                          aria-label="Remove resume"
-                          style={{
-                            color: '#b91c1c',
-                            padding: '0 4px',
-                            marginLeft: '6px',
-                            verticalAlign: 'middle',
-                            lineHeight: 1,
-                          }}
-                        >
-                          <Trash2 size={14} aria-hidden="true" />
-                        </CustomButton>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
-              {/* Only the button is used: the chosen file shows under the hint, as before, so
-                  the uploader's own filename chip would squeeze the text column. */}
-              <CustomFileUploader
-                name="rp-resume"
-                accept=".pdf,.doc,.docx"
-                buttonText="Choose File"
-                onChange={handleResume}
-                disabled={isReadOnly}
-                className="mb-0 rpd-upload-button"
-              />
+              {/* One file at a time: the chosen or stored file takes the button's place,
+                  and the button returns once the file is removed with the bin icon. Only
+                  the uploader's button is used; its own filename chip would squeeze the
+                  text column. */}
+              {resumeName ? (
+                <div className="rpd-upload-filename">
+                  <span className="rpd-upload-filename-text" title={resumeName}>
+                    {!resumeFile && !removeResume && editingPerson?.resumePath ? (
+                      <a
+                        href={uploadUrl(editingPerson.resumePath)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {resumeName}
+                      </a>
+                    ) : (
+                      resumeName
+                    )}
+                  </span>
+                  {!isReadOnly && (
+                    <CustomButton
+                      variant="link"
+                      className="rpd-upload-remove"
+                      onClick={handleRemoveResume}
+                      title="Remove resume"
+                      aria-label="Remove resume"
+                      style={{
+                        color: '#b91c1c',
+                        padding: '0 4px',
+                        marginLeft: '6px',
+                        verticalAlign: 'middle',
+                        lineHeight: 1,
+                      }}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </CustomButton>
+                  )}
+                </div>
+              ) : (
+                <CustomFileUploader
+                  name="rp-resume"
+                  accept=".pdf,.doc,.docx"
+                  buttonText="Choose File"
+                  onChange={handleResume}
+                  disabled={isReadOnly}
+                  className="mb-0 rpd-upload-button"
+                />
+              )}
+            </div>
+            <div
+              className="rpd-upload-box rpd-remarks-box"
+              style={isReadOnly ? { opacity: 0.6 } : undefined}
+            >
+              <div className="rpd-field">
+                <label htmlFor="rp-remarks" className="rpd-locked-label">
+                  Remarks
+                  <ContactLock />
+                </label>
+                <CustomInput
+                  name="rp-remarks"
+                  as="textarea"
+                  rows={2}
+                  value={contactHidden ? HIDDEN_CONTACT : remarks}
+                  onChange={setRemarks}
+                  placeholder="Notes about this person"
+                  disabled={isReadOnly}
+                  className="mb-0"
+                />
+              </div>
             </div>
           </div>
           {fileError && (

@@ -49,8 +49,7 @@ export const ALLOWED_LINK_PREFIXES = Object.freeze([
   '/event/',
   '/eventdashboard',
   '/access-control',
-  '/admin/organization-approval',
-  '/admin/resource-person-approval',
+  '/admin/directory-approval',
   '/organizationdirectorydashboard',
   '/resourcepersondirectorydashboard',
 ]);
@@ -129,9 +128,10 @@ const queueLink = (d) => {
   if (moduleKey === 'expenditure') return '/expenditure/approval';
   if (moduleKey === 'budget') return '/admin/budget';
   // The generic /workflow/:moduleKey queue is empty for directories: their adapter has
-  // no queue listing, and reviewers work from the dedicated approval pages.
-  if (moduleKey === 'organization_directory') return '/admin/organization-approval';
-  if (moduleKey === 'resource_person_directory') return '/admin/resource-person-approval';
+  // no queue listing, and reviewers work from the directory approval page, a tab each.
+  if (moduleKey === 'organization_directory') return '/admin/directory-approval?tab=organization';
+  if (moduleKey === 'resource_person_directory')
+    return '/admin/directory-approval?tab=resource-person';
   return `/workflow/${moduleKey || 'finance'}`;
 };
 

@@ -597,7 +597,8 @@ Multer stages into `uploads/temp/`; files land in `server/uploads/<category>/`; 
   bearer token, checks expiry, auto-logs-out on 401, exposes `postFile()` for multipart.
 - **Reuse the UI kit** in `shared/components/ui/`: `CustomButton`, `CustomInput`, `CustomDropdown`,
   `CustomTable`, `CustomModal`, `AlertModal`, `CustomFileUploader`, `CustomCheckbox`, `CustomRadio`,
-  `CustomToggle`, `CustomTagInput`, `CustomSearchInput`, `CustomCard`, `DeleteConfirmationModal`,
+  `CustomToggle`, `CustomTagInput`, `CustomSearchInput`, `CustomCard`, `CustomPagination`, `CustomTabs`, `CustomFilterSearch`, `CustomChipList`,
+  `CustomSubmitterLine`, `DeleteConfirmationModal`,
   `RecordHeaderBanner`. `features/storybook/` is their playground.
 - Styling is Bootstrap 5 utilities plus component CSS. No CSS-in-JS, no Tailwind.
 - Permission helpers: `shared/utils/permissionUtils.ts` (`isSuperAdmin`, `hasPermission`,
@@ -816,7 +817,7 @@ bottom; tested against a restored dump; dump refreshed after significant changes
 | Events       | `events`, `pre_events`, `participants`, `resource_persons`, `events_uploads` — **not created by `structure.sql` or any migration**; they exist only in `schema/legacy/04_events.sql`, so the events module has no schema on a fresh database                                                                                                                                                                                                                                                                                                      |
 | Workflow     | `workflow_actions`, `workflow_stage_policies`, `approval_flow_config`                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Notification | `notification_events`, `notifications`, `notification_deliveries`, `notification_preferences`, `push_subscriptions` — created by `migrations/20260902_create_notification_system.sql`, not by `structure.sql`                                                                                                                                                                                                                                                                                                                                     |
-| Directory    | `organizations`, `directory_resource_persons`, `directory_resource_person_professions` — created by `migrations/20261024_create_directory_module.sql` (with the `directory.*` permissions and the `directory_admin` role), not by `structure.sql`                                                                                                                                                                                                                                                                                                 |
+| Directory    | `organizations`, `directory_resource_persons`, `directory_resource_person_professions` — created by `migrations/20261024_create_directory_module.sql` (with the `directory.*` permissions and the `directory_admin` role), not by `structure.sql`; `directory_resource_person_options` / `directory_organization_options` (each directory's Tag/Specialization lists) and `directory_resource_person_specializations` / `directory_organization_specializations` — created by `migrations/20261026_directory_contacts_and_lists.sql`              |
 
 ---
 
