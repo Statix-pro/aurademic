@@ -1091,3 +1091,65 @@
 .budgetdashboard-beneficiary-filter:hover {
   border-color: #9ca3af;
 }
+
+/* Consolidated Budget on a phone. Last in the file: the 768px block above sits before
+   the base rules for these controls, so their desktop widths (a fixed 320px
+   beneficiary filter) used to win and push the filters off the card. */
+@media (max-width: 768px) {
+  .budgetdashboard-consolidated .budgetdashboard-header-right,
+  .budgetdashboard-consolidated .budgetdashboard-header-search-group {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .budgetdashboard-consolidated .budgetdashboard-search {
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
+  .budgetdashboard-consolidated .budgetdashboard-financial-year {
+    flex: 1 1 120px;
+    width: auto;
+  }
+
+  .budgetdashboard-consolidated .budgetdashboard-beneficiary-filter {
+    flex: 1 1 200px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+  }
+
+  /* All six columns, scrolled sideways, rather than hiding Initial and Additional and
+     squeezing S.No into Budget Head. */
+  .budgetdashboard-consolidated .budgetdashboard-table {
+    min-width: 640px;
+  }
+
+  .budgetdashboard-consolidated .budgetdashboard-table th:nth-child(n),
+  .budgetdashboard-consolidated .budgetdashboard-table td:nth-child(n) {
+    display: table-cell;
+    width: auto;
+  }
+
+  .budgetdashboard-consolidated .budgetdashboard-table th:nth-child(1),
+  .budgetdashboard-consolidated .budgetdashboard-table td:nth-child(1) {
+    width: 56px;
+  }
+
+  .budgetdashboard-consolidated .budgetdashboard-table th:nth-child(2),
+  .budgetdashboard-consolidated .budgetdashboard-table td:nth-child(2) {
+    width: 200px;
+  }
+
+  /* "Additional Budget 1 ⓘ", then the applicant and tag on the next line, instead of
+     the applicant shrinking to its first letter. */
+  .budgetdashboard-consolidated .budgetdashboard-proposal-title-group {
+    flex-wrap: wrap;
+    row-gap: 6px;
+  }
+
+  .budgetdashboard-consolidated .budgetdashboard-proposal-applicant {
+    flex-shrink: 0;
+    max-width: 100%;
+  }
+}

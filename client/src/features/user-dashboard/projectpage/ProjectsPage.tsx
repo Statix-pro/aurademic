@@ -1,8 +1,9 @@
-import React, { useState, useEffect, ChangeEvent } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomPagination from '../../../shared/components/ui/CustomPagination';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import { PROJECT_TYPE_OPTIONS } from '../../projects/constants';
 import projectsApi from '../../projects/projectsApi';
@@ -74,6 +75,7 @@ const formatDuration = (project: Project): string => {
 
 interface ProjectsResponse {
   data: Project[];
+  pagination?: { total: number };
 }
 
 interface KpiData {
@@ -90,7 +92,7 @@ const ProjectsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [totalPages, setTotalPages] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
   const [kpiData, setKpiData] = useState<KpiData>({
     ongoing: 0,
     completed: 0,
@@ -117,11 +119,11 @@ const ProjectsPage: React.FC = () => {
 
       if (response?.data && Array.isArray(response.data)) {
         setProjects(response.data);
-        setTotalPages(Math.ceil(response.data.length / perPage));
+        setTotalItems(response.pagination?.total ?? 0);
         setError(null);
       } else {
         setProjects([]);
-        setTotalPages(0);
+        setTotalItems(0);
       }
 
       setLoading(false);
@@ -130,7 +132,7 @@ const ProjectsPage: React.FC = () => {
       const error = err as { message?: string };
       setError(error.message || 'Failed to fetch projects');
       setProjects([]);
-      setTotalPages(0);
+      setTotalItems(0);
       setLoading(false);
     }
   };
@@ -219,15 +221,6 @@ const ProjectsPage: React.FC = () => {
   const handleTypeSelect = (projectType: string) => {
     setShowTypeModal(false);
     navigate(`/project?type=${projectType}`);
-  };
-
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage);
-  };
-
-  const handleItemsPerPageChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setItemsPerPage(Number(event.target.value));
-    setCurrentPage(1);
   };
 
   if (loading) return <div>Loading...</div>;
@@ -405,29 +398,18 @@ const ProjectsPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="pagination-controls">
-                <select value={itemsPerPage} onChange={handleItemsPerPageChange}>
-                  <option value={5}>5 per page</option>
-                  <option value={10}>10 per page</option>
-                  <option value={20}>20 per page</option>
-                  <option value={50}>50 per page</option>
-                </select>
-                <span>
-                  Page {currentPage} of {totalPages || 1}
-                </span>
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                >
-                  Next
-                </button>
-              </div>
+              <CustomPagination
+                name="projects-rows-per-page"
+                page={currentPage}
+                pageSize={itemsPerPage}
+                total={totalItems}
+                pageSizeOptions={[5, 10, 20, 50]}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(size) => {
+                  setItemsPerPage(size);
+                  setCurrentPage(1);
+                }}
+              />
             </div>
           </div>
         </div>

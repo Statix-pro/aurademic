@@ -353,7 +353,11 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
           /* On a phone (Category and Tag hidden via hideOnPhone) the actions wrap instead of
              widening the table. */
           .organization-approval-table.custom-table { min-width: 0; }
-          .organization-approval-table .organization-approval-actions { flex-wrap: wrap; white-space: normal; }
+          /* Edit on the left across both rows, Approve over Reject at one width beside it:
+             left to wrap, Reject fell under Edit and Approve out of line. */
+          .organization-approval-table .organization-approval-actions { display: grid; grid-template-rows: auto auto; grid-auto-flow: column; grid-auto-columns: max-content; justify-content: center; white-space: normal; }
+          .organization-approval-table .organization-approval-actions .organization-approval-icon-btn { grid-row: span 2; }
+          .organization-approval-table .organization-approval-actions .organization-approval-decision { justify-content: center; }
           .organization-approval-table.custom-table th:last-child, .organization-approval-table.custom-table td:last-child { width: auto !important; white-space: normal; }
         }
       `}</style>

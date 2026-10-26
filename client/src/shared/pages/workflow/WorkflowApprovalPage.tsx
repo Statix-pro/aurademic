@@ -22,6 +22,7 @@ import PendingPayeeApprovals from './PendingPayeeApprovals';
 import { useAuth } from '../../../contexts/AuthContext';
 import AlertModal, { type AlertType } from '../../../shared/components/ui/AlertModal';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomPagination from '../../../shared/components/ui/CustomPagination';
 import ExportOptionsModal, {
   type ExportOptions,
   type ExportRunResult,
@@ -2509,8 +2510,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
     [applyStatusScope, searchScopedRows],
   );
 
-  const totalPages = Math.max(1, Math.ceil((totalRows || 0) / (limit || 20)));
-
   const formatAmount = (value: any) => {
     const num = Number(value);
     if (isNaN(num)) return value || '-';
@@ -4057,61 +4056,21 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
                       })}
                     </div>
 
-                    <div className="fw-pagination">
-                      <div className="fw-pagination-left">
-                        <div className="fw-rows-control">
-                          <label htmlFor="workflow-rows-per-page" className="fw-rows-label">
-                            Rows per page
-                          </label>
-                          <select
-                            id="workflow-rows-per-page"
-                            className="fw-rows-select"
-                            value={limit}
-                            onChange={(e) => {
-                              const newLimit = Number(e.target.value);
-                              setLimit(newLimit);
-                              setPage(1);
-                            }}
-                          >
-                            {[5, 10, 20, 50].map((size) => (
-                              <option key={size} value={size}>
-                                {size}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <span className="fw-pagecount">
-                          {filteredRows.length === 0
-                            ? '0-0 of 0'
-                            : `${(page - 1) * limit + 1}-${Math.min((page - 1) * limit + filteredRows.length, totalRows)} of ${totalRows}`}
-                        </span>
-                      </div>
-
-                      <div className="fw-pagination-right">
-                        <button
-                          type="button"
-                          className="fw-pagebtn"
-                          disabled={page <= 1 || loading}
-                          onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                        >
-                          Previous
-                        </button>
-
-                        <span className="fw-pageinfo">
-                          Page {page} of {totalPages}
-                        </span>
-
-                        <button
-                          type="button"
-                          className="fw-pagebtn"
-                          disabled={page >= totalPages || loading}
-                          onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                        >
-                          Next
-                        </button>
-                      </div>
-                    </div>
+                    <CustomPagination
+                      name="workflow-rows-per-page"
+                      page={page}
+                      pageSize={limit}
+                      total={totalRows}
+                      pageRowCount={filteredRows.length}
+                      pageSizeOptions={[5, 10, 20, 50]}
+                      onPageChange={(nextPage) => {
+                        if (!loading) setPage(nextPage);
+                      }}
+                      onPageSizeChange={(newLimit) => {
+                        setLimit(newLimit);
+                        setPage(1);
+                      }}
+                    />
                   </>
                 )}
               </div>

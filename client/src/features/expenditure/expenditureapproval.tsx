@@ -5861,10 +5861,13 @@ const ExpenditureApproval: React.FC = () => {
       activeTab === 'Advance' ? '₹ 0' : getUnplannedBudgetAmountPlaceholder();
 
     return (
-      <div style={{ overflowX: 'visible' }}>
+      <div style={{ overflowX: 'auto' }}>
+        {/* Scrolls sideways on a phone instead of squeezing the selects; the
+            dropdown menus portal out, so the scroller doesn't clip them. */}
         <table
           style={{
             width: '100%',
+            minWidth: '640px',
             borderCollapse: 'collapse',
             backgroundColor: '#fff',
             border: '1px solid #e0e0e0',
@@ -7103,10 +7106,11 @@ const ExpenditureApproval: React.FC = () => {
             >
               Advance
             </h6>
-            <div style={{ overflowX: 'visible' }}>
+            <div style={{ overflowX: 'auto' }}>
               <table
                 style={{
                   width: '100%',
+                  minWidth: '640px',
                   borderCollapse: 'collapse',
                   backgroundColor: '#fff',
                   border: '1px solid #e0e0e0',
@@ -7521,10 +7525,11 @@ const ExpenditureApproval: React.FC = () => {
             >
               Settlement
             </h6>
-            <div style={{ overflowX: 'visible' }}>
+            <div style={{ overflowX: 'auto' }}>
               <table
                 style={{
                   width: '100%',
+                  minWidth: '640px',
                   borderCollapse: 'collapse',
                   backgroundColor: '#fff',
                   border: '1px solid #e0e0e0',
@@ -7965,10 +7970,11 @@ const ExpenditureApproval: React.FC = () => {
             >
               Expenditure
             </h6>
-            <div style={{ overflowX: 'visible' }}>
+            <div style={{ overflowX: 'auto' }}>
               <table
                 style={{
                   width: '100%',
+                  minWidth: '640px',
                   borderCollapse: 'collapse',
                   backgroundColor: '#fff',
                   border: '1px solid #e0e0e0',

@@ -2440,6 +2440,29 @@
   .pf-grid--budget {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  /* Six tabs don't fit a phone: the strip starts at the left edge and swipes
+     sideways, its cut-off last tab showing there is more. A bar under a
+     5px-padded pill would sit on the tabs, so the strip hides it. */
+  .pf-tabs {
+    margin-left: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .pf-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pf-tabs__tab {
+    flex-shrink: 0;
+  }
+
+  /* A long label ("Submission of full proposal copy to CFRD") wraps rather than
+     pushing its Yes/No pill off the screen. */
+  .pf-inline-field__label {
+    white-space: normal;
+  }
 }
 
 /* Documents tab. Shares the Outcomes tables' column classes; only the date and

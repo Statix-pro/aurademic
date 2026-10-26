@@ -17,6 +17,8 @@ interface CustomPaginationProps {
   pageSizeOptions?: number[];
   /** Name for the rows-per-page control, unique on the page. */
   name?: string;
+  /** Rows actually shown on this page, when the screen filters a fetched page further. */
+  pageRowCount?: number;
 }
 
 // --control-height like every other dropdown; CustomDropdown's own default is 45px, and its
@@ -69,11 +71,15 @@ const CustomPagination: React.FC<CustomPaginationProps> = ({
   onPageSizeChange,
   pageSizeOptions = PAGE_SIZE_OPTIONS,
   name = 'rows-per-page',
+  pageRowCount,
 }) => {
   if (!total) return null;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const first = (page - 1) * pageSize + 1;
-  const last = Math.min(page * pageSize, total);
+  const last = Math.min(
+    pageRowCount === undefined ? page * pageSize : first + pageRowCount - 1,
+    total,
+  );
   const options = pageSizeOptions.map((size) => ({ value: size, label: String(size) }));
 
   return (
@@ -95,7 +101,7 @@ const CustomPagination: React.FC<CustomPaginationProps> = ({
           styles={PAGE_SIZE_STYLES}
         />
         <span className="custom-pagination-text">
-          {first}–{last} of {total}
+          {last < first ? '0–0' : `${first}–${last}`} of {total}
         </span>
       </div>
       {pageCount > 1 && (

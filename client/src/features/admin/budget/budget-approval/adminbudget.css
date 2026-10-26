@@ -781,90 +781,6 @@ select.adminbudget-control {
   transform: translateY(-1px);
 }
 
-.adminbudget-pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  padding-top: 16px;
-  margin-top: 16px;
-  border-top: 1px solid rgba(15, 23, 42, 0.12);
-}
-
-.adminbudget-pagination-left {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.adminbudget-pagination-right {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.adminbudget-rows-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.adminbudget-rows-label {
-  font-size: var(--font-size-secondary);
-  color: #475569;
-  font-weight: var(--weight-semibold);
-}
-
-.adminbudget-rows-select {
-  width: 52px;
-  min-width: 52px;
-  height: var(--control-height);
-  padding: 0 22px 0 8px;
-  border-radius: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  background: #ffffff;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23334155' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 10px 6px;
-  color: #0f172a;
-  font-weight: 600;
-}
-
-.adminbudget-pagecount {
-  font-size: var(--font-size-secondary);
-  color: #64748b;
-  font-weight: 600;
-}
-
-.adminbudget-pagebtn {
-  height: var(--chip-height);
-  padding: 0 14px;
-  border-radius: 12px;
-  border: 1px solid rgba(15, 23, 42, 0.18);
-  background: rgba(255, 255, 255, 0.92);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.adminbudget-pagebtn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.adminbudget-pagebtn:hover:not(:disabled) {
-  border-color: #0069ab;
-  box-shadow: 0 8px 18px rgba(2, 6, 23, 0.08);
-}
-
-.adminbudget-pageinfo {
-  font-size: var(--font-size-secondary);
-  color: #475569;
-  font-weight: 700;
-}
-
 @media (max-width: 768px) {
   .adminbudget-view-toggle {
     width: calc(100% - 24px);
@@ -886,9 +802,11 @@ select.adminbudget-control {
     order: 3;
   }
 
+  /* The desktop cap (260px) would leave each filter at two-thirds of a phone's width. */
   .adminbudget-control {
-    min-width: 160px;
-    flex: 1;
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 160px;
   }
 
   .adminbudget-item-wrap {
@@ -902,24 +820,65 @@ select.adminbudget-control {
   }
 
   .adminbudget-name {
-    max-width: 160px;
+    max-width: 100%;
   }
 
-  .adminbudget-pagination {
-    justify-content: center;
+  .adminbudget-item {
+    min-width: 0;
+    padding: 14px 16px;
+  }
+
+  /* The ID and name take their own line; amounts and the icon actions share the next,
+     so the ID pill is never squeezed under the amount. Same layout as the workflow
+     approval cards (WorkflowApprovalPage.css). */
+  .adminbudget-topbar {
     flex-wrap: wrap;
-    gap: 10px;
+    align-items: flex-start;
   }
 
-  .adminbudget-pagination-left,
-  .adminbudget-pagination-right {
-    width: 100%;
-    justify-content: center;
+  .adminbudget-topbar-left {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    gap: 8px;
   }
 
-  .adminbudget-rows-control {
+  .adminbudget-topbar-right {
+    flex: 1 1 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .adminbudget-amounts-container {
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-right: auto;
+    text-align: left;
+  }
+
+  .adminbudget-amount-item {
+    align-items: flex-start;
+  }
+
+  .adminbudget-icon-btn {
+    flex-shrink: 0;
+  }
+
+  .adminbudget-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .adminbudget-left,
+  .adminbudget-right {
+    flex: none;
     width: 100%;
-    justify-content: center;
+    min-width: 0;
+  }
+
+  .adminbudget-right {
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 }
 
@@ -967,6 +926,9 @@ select.adminbudget-control {
   /* More breathing room */
   padding: 20px 0;
   overflow-x: auto;
+  /* Outranks base.css's `* { scrollbar-width: thin }`, which makes Chrome ignore the
+     ::-webkit-scrollbar rule below. */
+  scrollbar-width: none;
 }
 
 .adminbudget-stats::-webkit-scrollbar {
@@ -1073,15 +1035,25 @@ select.adminbudget-control {
 
 /* Mobile: Stack vertically if too small */
 @media (max-width: 768px) {
+  /* Tiles in a grid rather than one per row: six stacked tiles pushed the first
+     request a full screen down. */
   .adminbudget-stats {
-    flex-direction: column;
-    align-items: center;
-    gap: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 16px 0;
   }
 
   .adminbudget-stats-card {
-    width: 200px;
-    min-height: 80px;
+    width: auto;
+    min-width: 0;
+    padding: 14px;
+  }
+}
+
+@media (max-width: 576px) {
+  .adminbudget-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

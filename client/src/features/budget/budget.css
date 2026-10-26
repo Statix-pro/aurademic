@@ -424,6 +424,15 @@
     min-width: 40px;
     width: 40px;
   }
+
+  /* Budget Head and Sub Head are selects: at 80px "Select or type" broke over three
+     lines. The wrapper scrolls sideways, so these columns can keep a usable width. */
+  .budgetEntryTable th:nth-child(2),
+  .budgetEntryTable td:nth-child(2),
+  .budgetEntryTable th:nth-child(3),
+  .budgetEntryTable td:nth-child(3) {
+    min-width: 170px;
+  }
 }
 
 @media (max-width: 480px) {

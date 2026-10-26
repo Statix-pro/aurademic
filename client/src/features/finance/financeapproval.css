@@ -256,6 +256,35 @@
   transform: translateY(-13px);
 }
 
+/* Phone: label and toggle share the top line, the account picker gets the line below.
+   Beside the label its 260px minimum slid the picker under the toggle. */
+@media (max-width: 576px) {
+  .finance-debit-card {
+    padding: 16px;
+  }
+
+  .finance-debit-control {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .finance-debit-fields {
+    display: contents;
+  }
+
+  .finance-debit-toggle {
+    order: 1;
+    margin-left: auto;
+    transform: none;
+  }
+
+  .finance-debit-dropdown {
+    order: 2;
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+}
+
 @media (max-width: 900px) {
   .finance-workflow-actions {
     justify-content: flex-start;

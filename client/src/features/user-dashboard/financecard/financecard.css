@@ -308,76 +308,6 @@
   gap: 18px;
 }
 
-.financecard-pagination {
-  margin-top: 22px;
-  padding-top: 18px;
-  border-top: 1px solid #e7edf5;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.financecard-pagination-left,
-.financecard-pagination-right {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.financecard-pagination-label,
-.financecard-pagination-count,
-.financecard-page-indicator {
-  font-size: var(--font-size-secondary);
-  color: #344a69;
-  font-weight: 600;
-}
-
-.financecard-page-size {
-  min-width: 80px;
-  height: var(--control-height);
-  padding: 0 32px 0 var(--control-padding-x);
-  border-radius: var(--border-radius-md);
-  border: 1px solid #d7dee8;
-  background: #ffffff;
-  color: #0f2744;
-  font-size: var(--font-size-body);
-  font-weight: 400;
-  outline: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%23707f95' d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  background-size: 10px 6px;
-  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.05);
-}
-
-.financecard-page-btn {
-  min-width: 96px;
-  height: var(--chip-height);
-  padding: 0 14px;
-  border-radius: var(--border-radius-sm);
-  border: 1px solid #dde5ef;
-  background: #ffffff;
-  color: #9aa7b8;
-  font-size: var(--font-size-secondary);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.financecard-page-btn:hover:not(:disabled) {
-  border-color: #c8d4e2;
-  color: #223b5a;
-}
-
-.financecard-page-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
 /* Item Card */
 .financecard-item-card {
   background: linear-gradient(180deg, #ffffff 0%, #fffefd 100%);
@@ -1083,28 +1013,50 @@
     gap: 12px;
   }
 
-  .card-header-left {
-    flex-direction: column;
-    align-items: flex-start;
+  /* A phone card uses its whole width: ID, applicant and tag share a line, Proposed and
+     Approved sit side by side above the actions, and the beneficiary gets a full line
+     with the document button and status beneath it. One column of everything left the
+     right half of the card empty. */
+  .financecard-item-card .card-row-top {
+    gap: 12px;
+  }
+
+  .financecard-item-card .card-header-left {
     gap: 8px;
   }
 
-  .card-header-right {
-    flex-direction: column;
-    align-items: flex-start;
+  .financecard-item-card .card-header-right {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: flex-end;
+    gap: 12px 32px;
   }
 
-  .card-amount-box {
+  .financecard-item-card .card-amount-box {
     align-items: flex-start;
+    min-width: 0;
   }
 
-  .financecard-pagination {
+  .financecard-item-card .card-actions-main {
+    flex: 1 1 100%;
+  }
+
+  .financecard-item-card .card-row-bottom {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
 
-  .financecard-pagination-left,
-  .financecard-pagination-right {
+  .financecard-item-card .card-row-middle {
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+
+  .financecard-item-card .beneficiary-label {
+    white-space: nowrap;
+  }
+
+  .financecard-item-card .card-footer-right {
     justify-content: space-between;
   }
 }

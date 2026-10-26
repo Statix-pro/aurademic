@@ -132,6 +132,22 @@
   margin-bottom: 20px;
 }
 
+/* Tag beside Specialization; Specialization takes the rest of the row. */
+.orgd-list-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.orgd-list-row__tag {
+  flex: 0 0 180px;
+}
+
+.orgd-list-row__specialization {
+  flex: 1;
+  min-width: 0;
+}
+
 /* Fields Styling matching budget form */
 .orgd-field {
   display: flex;
@@ -308,6 +324,13 @@
   }
   .orgd-row-4 {
     grid-template-columns: 1fr;
+  }
+  /* Beside a 180px Tag, Specialization was left 95px wide on a phone. */
+  .orgd-list-row {
+    flex-direction: column;
+  }
+  .orgd-list-row__tag {
+    flex: none;
   }
 }
 

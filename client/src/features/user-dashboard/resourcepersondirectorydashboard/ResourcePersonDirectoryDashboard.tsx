@@ -594,7 +594,11 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                   className="rpd-table"
                   columns={
                     view === 'mine'
-                      ? tableColumns
+                      ? // Status and Action need the room on a phone; the organization
+                        // is still on the record the row opens.
+                        tableColumns.map((column) =>
+                          column.key === 'organization' ? { ...column, hideOnPhone: true } : column,
+                        )
                       : tableColumns.filter(
                           (column) => column.key !== 'approvalStatus' && column.key !== 'action',
                         )

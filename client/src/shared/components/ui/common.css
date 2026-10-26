@@ -349,6 +349,8 @@
 /* Page buttons: 32px squares (the table icon-action size), the current page filled. */
 .custom-pagination-pages {
   gap: 4px;
+  /* Stays at the right edge when a phone wraps it under the rows-per-page group. */
+  margin-left: auto;
 }
 
 .custom-pagination .custom-btn.custom-page-btn {

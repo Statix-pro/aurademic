@@ -2246,6 +2246,56 @@
     padding-left: 0;
     padding-top: 18px;
   }
+
+  /* The desktop 200px cap left the search box beside the filters at half width. */
+  .expenditure-search-wrap {
+    flex: 1 1 100%;
+    max-width: none;
+  }
+
+  /* Two tiles a row instead of one: six full-width tiles pushed the first request
+     a full screen down. */
+  .expenditure-stats-container {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .expenditure-stats-card {
+    min-width: 0;
+    padding: 14px;
+  }
+
+  .expenditure-individual-card {
+    padding: 14px 16px;
+  }
+
+  /* Reference on its own line; amount and the icon actions share the next, so the
+     reference pill is never drawn over the amount. */
+  .expenditure-individual-card__row1,
+  .expenditure-individual-card__row2 {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .expenditure-individual-card__row1-left {
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+  }
+
+  .expenditure-individual-card__row1-right {
+    flex: 1 1 100%;
+    flex-shrink: 1;
+    justify-content: space-between;
+  }
+
+  .expenditure-individual-card__amount-block {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .expenditure-individual-card__meta-details {
+    flex: 1 1 100%;
+  }
 }
 
 @media (max-width: 480px) {
@@ -2265,5 +2315,12 @@
   .expenditure-status-detail-line {
     gap: 6px;
     flex-wrap: wrap;
+  }
+
+  /* Icon above the figures: beside them, a half-width tile cut "₹1,15,500" short. */
+  .expenditure-stats-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
 }

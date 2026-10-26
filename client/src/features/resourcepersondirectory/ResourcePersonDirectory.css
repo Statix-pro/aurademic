@@ -1098,6 +1098,26 @@
   .rpd-prof-row > .rpd-field {
     flex-basis: 100% !important;
   }
+  /* Tag over Specialization: side by side, Specialization was left too narrow to read. */
+  .rpd-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  /* Photo / Resume: the text keeps the box's width and the button (or the chosen file)
+     takes the line below, instead of squeezing the hint into a one-word column. */
+  .rpd-upload-box {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .rpd-upload-button,
+  .rpd-upload-filename {
+    flex: 1 1 100%;
+    max-width: none;
+    margin-left: 0;
+  }
+  .rpd-upload-button .btn {
+    width: 100%;
+    justify-content: center;
+  }
 }
 
 @media (max-width: 768px) {

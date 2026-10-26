@@ -483,66 +483,6 @@
   font-size: var(--font-size-body);
 }
 
-/* Pagination Controls */
-.pagination-controls {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  padding: 20px 0;
-  border-top: 1px solid #e0e0e0;
-}
-
-.pagination-controls select {
-  padding: 8px 12px;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  background: #fcfdff;
-  /* Very light blue tint - matching journalform theme */
-  font-size: var(--font-size-body);
-  color: #5d6b8a;
-  /* Blue-gray text - matching journalform theme */
-  height: var(--control-height);
-}
-
-.pagination-controls button {
-  /* A fixed chip height: the label is centred by flex, not by vertical padding. */
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  border: 1px solid #e0e0e0;
-  border-radius: 12px;
-  background: #fcfdff;
-  /* Very light blue tint - matching journalform theme */
-  color: #5d6b8a;
-  /* Blue-gray text - matching journalform theme */
-  cursor: pointer;
-  font-size: var(--font-size-body);
-  transition: all 0.3s ease;
-  height: var(--chip-height);
-}
-
-.pagination-controls button:hover:not(:disabled) {
-  background: #e1f0ff;
-  /* Light blue background - matching journalform theme */
-  border-color: #0069ab;
-  /* Primary blue border - matching journalform theme */
-  color: #0069ab;
-  /* Primary blue text - matching journalform theme */
-}
-
-.pagination-controls button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.pagination-controls span {
-  color: #5d6b8a;
-  /* Blue-gray text - matching journalform theme */
-  font-size: var(--font-size-body);
-}
-
 /* Responsive Design */
 @media (max-width: 768px) {
   .publications-page {
@@ -574,11 +514,6 @@
     flex-direction: column;
     gap: 16px;
     align-items: flex-start;
-  }
-
-  .pagination-controls {
-    flex-direction: column;
-    gap: 12px;
   }
 
   .compact-header {

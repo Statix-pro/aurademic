@@ -374,8 +374,8 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
         </div>
 
         {/* Tag and Specialization (Sector) Row */}
-        <div style={{ display: 'flex', gap: '20px', marginBottom: '24px' }}>
-          <div className="orgd-field" style={{ flex: '0 0 180px' }}>
+        <div className="orgd-list-row">
+          <div className="orgd-field orgd-list-row__tag">
             <label>Tag</label>
             <CustomDropdown
               name="orgd-tag"
@@ -390,7 +390,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
               error={listError || undefined}
             />
           </div>
-          <div className="orgd-field" style={{ flex: '1', minWidth: 0 }}>
+          <div className="orgd-field orgd-list-row__specialization">
             <label>Specialization</label>
             <CustomDropdown
               name="orgd-specializations"

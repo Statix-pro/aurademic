@@ -1,14 +1,15 @@
 import { FilePen } from 'lucide-react';
-import React, { useState, useEffect, ChangeEvent, MouseEvent } from 'react';
+import React, { useState, useEffect, MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import '../../user-dashboard/userdashboard.css';
 import '../recordCard.css';
 import './PublicationsPage.css';
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomPagination from '../../../shared/components/ui/CustomPagination';
 import DeleteConfirmationModal from '../../../shared/components/ui/DeleteConfirmationModal';
+import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
 type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
@@ -80,7 +81,7 @@ const PublicationsPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [totalPages, setTotalPages] = useState(0);
+  const [totalItems, setTotalItems] = useState(0);
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [showEditRequestModal, setShowEditRequestModal] = useState(false);
   const [selectedJournalForEditRequest, setSelectedJournalForEditRequest] =
@@ -136,10 +137,10 @@ const PublicationsPage: React.FC = () => {
 
       if (apiResponseData && Array.isArray(apiResponseData.data) && apiResponseData.pagination) {
         setJournals(apiResponseData.data);
-        setTotalPages(apiResponseData.pagination.total_pages || 0);
+        setTotalItems(apiResponseData.pagination.total || 0);
       } else {
         setJournals([]);
-        setTotalPages(0);
+        setTotalItems(0);
       }
     } catch (err: unknown) {
       console.error('Error fetching journals:', err);
@@ -151,7 +152,7 @@ const PublicationsPage: React.FC = () => {
         axiosError.response?.data?.message || axiosError.message || 'Failed to fetch journals',
       );
       setJournals([]);
-      setTotalPages(0);
+      setTotalItems(0);
     } finally {
       setLoading(false);
     }
@@ -186,15 +187,6 @@ const PublicationsPage: React.FC = () => {
     } catch (err) {
       console.error('Error fetching KPI data:', err);
     }
-  };
-
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage);
-  };
-
-  const handleItemsPerPageChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setItemsPerPage(Number(event.target.value));
-    setCurrentPage(1);
   };
 
   const formatDate = (dateString: string): string => {
@@ -557,7 +549,7 @@ const PublicationsPage: React.FC = () => {
             <div className="research-details">
               <div className="research-details-header">
                 <h5 className="research-details-title">List of Details</h5>
-                <div className="d-flex gap-2 align-items-center">
+                <div className="d-flex flex-wrap gap-2 align-items-center">
                   <select
                     className="form-select form-select-sm"
                     value={statusFilter}
@@ -637,29 +629,18 @@ const PublicationsPage: React.FC = () => {
                 )}
               </div>
 
-              <div className="pagination-controls">
-                <select value={itemsPerPage} onChange={handleItemsPerPageChange}>
-                  <option value={5}>5 per page</option>
-                  <option value={10}>10 per page</option>
-                  <option value={20}>20 per page</option>
-                  <option value={50}>50 per page</option>
-                </select>
-                <span>
-                  Page {currentPage} of {totalPages || 1}
-                </span>
-                <button
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages || totalPages === 0}
-                >
-                  Next
-                </button>
-              </div>
+              <CustomPagination
+                name="publications-rows-per-page"
+                page={currentPage}
+                pageSize={itemsPerPage}
+                total={totalItems}
+                pageSizeOptions={[5, 10, 20, 50]}
+                onPageChange={setCurrentPage}
+                onPageSizeChange={(size) => {
+                  setItemsPerPage(size);
+                  setCurrentPage(1);
+                }}
+              />
             </div>
           </div>
         </div>

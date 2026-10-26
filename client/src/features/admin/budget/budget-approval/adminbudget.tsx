@@ -25,6 +25,7 @@ import ExportOptionsModal, {
 } from '../../../../shared/components/export/ExportOptionsModal';
 import AlertModal, { type AlertType } from '../../../../shared/components/ui/AlertModal';
 import CustomModal from '../../../../shared/components/ui/CustomModal';
+import CustomPagination from '../../../../shared/components/ui/CustomPagination';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
 import {
   buildCsvFilename,
@@ -836,7 +837,6 @@ const AdminBudget: React.FC = () => {
     });
   }, [baseFilteredData, statusFilter]);
   const totalItemsCount = pagination.total;
-  const totalPagesCount = pagination.pages;
   const safeCurrentPage = pagination.page;
 
   const statusClass = (item: BudgetRequestItem) => {
@@ -2168,61 +2168,18 @@ const AdminBudget: React.FC = () => {
                         })}
                       </div>
 
-                      <div className="adminbudget-pagination">
-                        <div className="adminbudget-pagination-left">
-                          <div className="adminbudget-rows-control">
-                            <label
-                              htmlFor="adminbudget-rows-per-page"
-                              className="adminbudget-rows-label"
-                            >
-                              Rows per page
-                            </label>
-                            <select
-                              id="adminbudget-rows-per-page"
-                              className="adminbudget-rows-select"
-                              value={itemsPerPage}
-                              onChange={(e) => {
-                                const next = Number(e.target.value);
-                                setItemsPerPage(Number.isFinite(next) ? next : 10);
-                              }}
-                            >
-                              {ROWS_PER_PAGE_OPTIONS.map((size) => (
-                                <option key={size} value={size}>
-                                  {size}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-
-                          <span className="adminbudget-pagecount">
-                            {totalItemsCount === 0
-                              ? '0-0 of 0'
-                              : `${(safeCurrentPage - 1) * itemsPerPage + 1}-${Math.min(safeCurrentPage * itemsPerPage, totalItemsCount)} of ${totalItemsCount}`}
-                          </span>
-                        </div>
-
-                        <div className="adminbudget-pagination-right">
-                          <button
-                            className="adminbudget-pagebtn"
-                            disabled={safeCurrentPage <= 1}
-                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                          >
-                            Previous
-                          </button>
-
-                          <span className="adminbudget-pageinfo">
-                            Page {safeCurrentPage} of {totalPagesCount}
-                          </span>
-
-                          <button
-                            className="adminbudget-pagebtn"
-                            disabled={safeCurrentPage >= totalPagesCount}
-                            onClick={() => setCurrentPage((p) => Math.min(totalPagesCount, p + 1))}
-                          >
-                            Next
-                          </button>
-                        </div>
-                      </div>
+                      <CustomPagination
+                        name="adminbudget-rows-per-page"
+                        page={safeCurrentPage}
+                        pageSize={itemsPerPage}
+                        total={totalItemsCount}
+                        pageSizeOptions={ROWS_PER_PAGE_OPTIONS}
+                        onPageChange={setCurrentPage}
+                        onPageSizeChange={(size) => {
+                          setItemsPerPage(size);
+                          setCurrentPage(1);
+                        }}
+                      />
                     </>
                   )}
                 </div>

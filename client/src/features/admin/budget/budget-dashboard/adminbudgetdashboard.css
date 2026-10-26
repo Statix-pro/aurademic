@@ -467,6 +467,16 @@
   .adminbudgetdashboard-detail-filter-input {
     width: 100%;
   }
+
+  /* Eight and seven amount columns don't fit a phone: squeezed, the figures printed
+     over each other. Their wrappers scroll sideways, so the tables keep a readable width. */
+  .adminbudgetdashboard-table {
+    min-width: 780px;
+  }
+
+  .adminbudgetdashboard-detail-table {
+    min-width: 720px;
+  }
 }
 
 @media (max-width: 480px) {

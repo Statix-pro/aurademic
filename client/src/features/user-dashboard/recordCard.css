@@ -11,6 +11,8 @@
   gap: 14px;
   padding: 18px 20px 14px;
   border-color: #e6edf6;
+  /* A grid item: without this a long team list stretches the card past a phone's edge. */
+  min-width: 0;
 }
 
 /* A lift that jumped the card 3px and greyed it read as a drag handle; a

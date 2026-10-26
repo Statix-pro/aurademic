@@ -261,3 +261,21 @@
     justify-content: center;
   }
 }
+
+/* My submissions on a phone: S.No., Category, Specializations and Tag are hidden, and the
+   desktop percentages left the name 86px and Status 31px (its pill overprinted the
+   heading) while Action took 169px. The name takes the spare width instead. */
+@media (max-width: 576px) {
+  .org-table th:nth-child(2),
+  .org-table td:nth-child(2) {
+    width: auto;
+  }
+  .org-table th:nth-child(6),
+  .org-table td:nth-child(6) {
+    width: 104px;
+  }
+  .org-table th:nth-child(7),
+  .org-table td:nth-child(7) {
+    width: 64px;
+  }
+}

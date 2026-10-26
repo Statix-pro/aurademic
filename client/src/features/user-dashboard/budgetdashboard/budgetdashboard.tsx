@@ -4,6 +4,7 @@ import { Eye, Edit2, Plus, Trash2, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomPagination from '../../../shared/components/ui/CustomPagination';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import { formatRowRanges, summarizeLineChanges } from '../../../shared/utils/logDiffUtils';
 
@@ -971,7 +972,7 @@ const BudgetDashboard: React.FC = () => {
 
   return (
     <>
-      <section className="budgetdashboard-page">
+      <section className="budgetdashboard-page budgetdashboard-consolidated">
         <div className="budgetdashboard-container">
           <div className="budgetdashboard-card">
             {/* Header */}
@@ -1379,70 +1380,15 @@ const BudgetDashboard: React.FC = () => {
                 </div>
               )}
 
-              {!loading && pagination.pages > 1 && (
-                <div
-                  className="budgetdashboard-pagination"
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginTop: '30px',
-                    padding: '20px',
-                    borderTop: '1px solid #e5e7eb',
-                  }}
-                >
-                  <div className="budgetdashboard-pagination-left">
-                    <span style={{ fontSize: 'var(--font-size-secondary)', color: '#6b7280' }}>
-                      Showing {(pagination.page - 1) * pagination.limit + 1} to{' '}
-                      {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                      {pagination.total} proposals
-                    </span>
-                  </div>
-                  <div
-                    className="budgetdashboard-pagination-right"
-                    style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
-                  >
-                    <button
-                      className="budgetdashboard-pagebtn"
-                      disabled={pagination.page <= 1}
-                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                      style={{
-                        height: 'var(--chip-height)',
-                        padding: '0 14px',
-                        fontSize: 'var(--font-size-secondary)',
-                        fontWeight: 600,
-                        borderRadius: '6px',
-                        border: '1px solid #d1d5db',
-                        background: pagination.page <= 1 ? '#f3f4f6' : 'white',
-                        color: pagination.page <= 1 ? '#9ca3af' : '#374151',
-                        cursor: pagination.page <= 1 ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      Previous
-                    </button>
-                    <span style={{ fontSize: 'var(--font-size-secondary)', fontWeight: 500 }}>
-                      Page {pagination.page} of {pagination.pages}
-                    </span>
-                    <button
-                      className="budgetdashboard-pagebtn"
-                      disabled={pagination.page >= pagination.pages}
-                      onClick={() => setCurrentPage((p) => Math.min(pagination.pages, p + 1))}
-                      style={{
-                        height: 'var(--chip-height)',
-                        padding: '0 14px',
-                        fontSize: 'var(--font-size-secondary)',
-                        fontWeight: 600,
-                        borderRadius: '6px',
-                        border: '1px solid #d1d5db',
-                        background: pagination.page >= pagination.pages ? '#f3f4f6' : 'white',
-                        color: pagination.page >= pagination.pages ? '#9ca3af' : '#374151',
-                        cursor: pagination.page >= pagination.pages ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
+              {!loading && (
+                <CustomPagination
+                  name="budgetdashboard-rows-per-page"
+                  page={pagination.page}
+                  pageSize={pageSize}
+                  total={pagination.total}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setPageSize}
+                />
               )}
             </div>
           </div>

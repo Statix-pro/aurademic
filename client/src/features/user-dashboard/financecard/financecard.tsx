@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../contexts/AuthContext';
 import CustomModal from '../../../shared/components/ui/CustomModal';
+import CustomPagination from '../../../shared/components/ui/CustomPagination';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 
 interface FinanceCardItem {
@@ -1439,48 +1440,14 @@ const FinanceCard: React.FC = () => {
               )}
 
               {!loading && filteredData.length > 0 && (
-                <div className="financecard-pagination">
-                  <div className="financecard-pagination-left">
-                    <label className="financecard-pagination-label" htmlFor="financecard-page-size">
-                      Rows per page
-                    </label>
-                    <select
-                      id="financecard-page-size"
-                      className="financecard-page-size"
-                      value={pageSize}
-                      onChange={(e) => setPageSize(Number(e.target.value))}
-                    >
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                    </select>
-                    <span className="financecard-pagination-count">
-                      {pageStartIndex + 1}-{pageEndIndex} of {filteredData.length}
-                    </span>
-                  </div>
-
-                  <div className="financecard-pagination-right">
-                    <button
-                      type="button"
-                      className="financecard-page-btn"
-                      disabled={safeCurrentPage <= 1}
-                      onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                    >
-                      Previous
-                    </button>
-                    <span className="financecard-page-indicator">
-                      Page {safeCurrentPage} of {totalPages}
-                    </span>
-                    <button
-                      type="button"
-                      className="financecard-page-btn"
-                      disabled={safeCurrentPage >= totalPages}
-                      onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                    >
-                      Next
-                    </button>
-                  </div>
-                </div>
+                <CustomPagination
+                  name="financecard-page-size"
+                  page={safeCurrentPage}
+                  pageSize={pageSize}
+                  total={filteredData.length}
+                  onPageChange={setCurrentPage}
+                  onPageSizeChange={setPageSize}
+                />
               )}
             </div>
           </div>

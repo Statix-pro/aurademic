@@ -643,12 +643,22 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
+  /* One line that swipes sideways: squeezed to share the width, five tabs broke
+     their labels over two and three lines. Two tabs still fill the strip. */
   .admin-tabs {
     width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .admin-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .admin-tab {
-    flex: 1;
+    flex: 1 0 auto;
     justify-content: center;
+    white-space: nowrap;
   }
 }

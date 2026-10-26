@@ -46,6 +46,33 @@ input {
   font-variant-numeric: tabular-nums;
 }
 
+/* Every scroller — the page, a modal, a wide table, a dropdown menu — gets the thin, pale,
+   rounded bar the directory tables use, instead of the browser's thick grey one. It stays
+   visible so a reader knows there is more to see. A screen that hides its bar (a swipeable
+   chip rail) does so with its own class rule, which outranks these. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c3cede transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c3cede;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a9b8cc;
+}
+
 /* ---------------------------------------------------------------------------
    Type roles on Bootstrap's own elements (AGENTS.md §17). Same specificity as
    Bootstrap and loaded after it, so these win over Bootstrap and lose to any

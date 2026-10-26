@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, ChangeEvent, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 
@@ -17,6 +17,7 @@ import ProjectFormOptions from './formManagement/ProjectFormOptions';
 import PublisherFormOptions from './formManagement/PublisherFormOptions';
 import { useAuth } from '../../contexts/AuthContext';
 import AlertModal, { AlertType } from '../../shared/components/ui/AlertModal';
+import CustomPagination from '../../shared/components/ui/CustomPagination';
 import { canManageFormOptions } from '../../shared/utils/permissionUtils';
 
 interface ColumnConfigItem {
@@ -1496,79 +1497,19 @@ const Dashboard: React.FC = () => {
     );
   };
 
-  const renderPagination = () => {
-    const totalPages = Math.ceil(totalItems / itemsPerPage);
-    const pages: JSX.Element[] = [];
-
-    // Simple visible pages logic
-    const startPage = Math.max(1, currentPage - 2);
-    const endPage = Math.min(totalPages, startPage + 4);
-
-    for (let i = startPage; i <= endPage; i++) {
-      pages.push(
-        <li key={i} className={`page-item ${currentPage === i ? 'active' : ''}`}>
-          <button className="page-link" onClick={() => setCurrentPage(i)}>
-            {i}
-          </button>
-        </li>,
-      );
-    }
-
-    return (
-      <div className="adminbudget-pagination">
-        <div className="adminbudget-pagination-left">
-          <div className="adminbudget-rows-control">
-            <label htmlFor="adminbudget-rows-per-page" className="adminbudget-rows-label">
-              Rows per page
-            </label>
-            <select
-              id="adminbudget-rows-per-page"
-              className="adminbudget-rows-select"
-              value={itemsPerPage}
-              onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                setItemsPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-            >
-              {[10, 20, 50].map((size) => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <span className="adminbudget-pagecount">
-            {totalItems === 0
-              ? '0-0 of 0'
-              : `${(currentPage - 1) * itemsPerPage + 1}-${Math.min(currentPage * itemsPerPage, totalItems)} of ${totalItems}`}
-          </span>
-        </div>
-
-        <div className="adminbudget-pagination-right">
-          <button
-            className="adminbudget-pagebtn"
-            disabled={currentPage <= 1}
-            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-          >
-            Previous
-          </button>
-
-          <span className="adminbudget-pageinfo">
-            Page {currentPage} of {totalPages}
-          </span>
-
-          <button
-            className="adminbudget-pagebtn"
-            disabled={currentPage >= totalPages}
-            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-          >
-            Next
-          </button>
-        </div>
-      </div>
-    );
-  };
+  const renderPagination = () => (
+    <CustomPagination
+      name="adminbudget-rows-per-page"
+      page={currentPage}
+      pageSize={itemsPerPage}
+      total={totalItems}
+      onPageChange={setCurrentPage}
+      onPageSizeChange={(size) => {
+        setItemsPerPage(size);
+        setCurrentPage(1);
+      }}
+    />
+  );
 
   const renderProjectDetails = () => {
     if (!selectedItem) return null;
