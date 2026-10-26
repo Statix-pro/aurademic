@@ -215,6 +215,7 @@ type ActiveRoomDetail = { guestId: string; rowId: string } | null;
 type ActiveAllotmentDropdown = { guestId: string; rowId: string; field: 'roomType' | 'block' | 'roomNumber' } | null;
 type RoomDetailOption = { label: string; Icon: React.ElementType };
 type RoomDetailGroup = { title: string; items: RoomDetailOption[] };
+type RoomFacilityMap = Record<string, boolean>;
 type RoomRequirementField = 'roomSingle' | 'roomDouble' | 'roomDeluxe';
 type TravelTimeField = 'checkInTime' | 'checkOutTime';
 type ManagedRoomStatus = 'Active' | 'Maintenance';
@@ -231,6 +232,7 @@ interface ManagedRoomRow {
   floor: string;
   roomNumber: string;
   status: ManagedRoomStatus;
+  facilities: Record<string, boolean>;
 }
 
 interface CareTakerRow {
@@ -569,6 +571,7 @@ const createManagedRoomRow = (): ManagedRoomRow => ({
   floor: '',
   roomNumber: '',
   status: 'Active',
+  facilities: {},
 });
 
 const createCareTakerRow = (): CareTakerRow => ({
@@ -650,6 +653,26 @@ const ROOM_DETAIL_SERVICES: RoomDetailOption[] = [
   { label: 'Laundry', Icon: WashingMachine },
   { label: 'Additional Bed', Icon: BedDouble },
 ];
+
+const normalizeRoomFacilities = (value: unknown): RoomFacilityMap => {
+  let facilities = value;
+  if (typeof facilities === 'string') {
+    try {
+      facilities = JSON.parse(facilities);
+    } catch {
+      facilities = {};
+    }
+  }
+  if (!facilities || typeof facilities !== 'object' || Array.isArray(facilities)) return {};
+  return Object.fromEntries(
+    Object.entries(facilities as Record<string, unknown>)
+      .filter(([, selected]) => selected === true || selected === 1 || selected === 'true')
+      .map(([label]) => [label, true]),
+  );
+};
+
+const roomFacilityKey = (block: unknown, roomNumber: unknown) =>
+  `${String(block || '').trim().toLowerCase()}::${String(roomNumber || '').trim().toLowerCase()}`;
 
 const createGuestAmenities = (
   previous?: Partial<Record<GuestAmenityKey, boolean>>,
@@ -1121,6 +1144,7 @@ const GuestHouseBooking: React.FC = () => {
     useState<BeneficiaryEmployeeOption[]>([]);
   const [beneficiarySearchOpen, setBeneficiarySearchOpen] = useState(false);
   const [roomBlockOptions, setRoomBlockOptions] = useState<RoomBlockOption[]>([]);
+  const [roomFacilitiesByKey, setRoomFacilitiesByKey] = useState<Record<string, RoomFacilityMap>>({});
   const [spocOptions, setSpocOptions] = useState<Array<{ name: string; mobile: string }>>([]);
   const [roomAllotments, setRoomAllotments] = useState<RoomAllotmentsByGuest>({});
   const [activeRoomDetail, setActiveRoomDetail] = useState<ActiveRoomDetail>(null);
@@ -1169,7 +1193,15 @@ const GuestHouseBooking: React.FC = () => {
           authenticityUtility.get('/guesthouse/admin/rooms'),
           authenticityUtility.get('/guesthouse/admin/caretakers'),
         ]);
-        setManagedRooms((roomsResponse?.data || []).map((room: any) => ({ id: room.id, roomType: room.room_type, block: room.block, floor: room.floor || '', roomNumber: room.room_number, status: room.status })));
+        setManagedRooms((roomsResponse?.data || []).map((room: any) => ({
+          id: room.id,
+          roomType: room.room_type,
+          block: room.block,
+          floor: room.floor || '',
+          roomNumber: room.room_number,
+          status: room.status,
+          facilities: normalizeRoomFacilities(room.facilities),
+        })));
         setCareTakers((caretakersResponse?.data || []).map((caretaker: any) => ({ id: caretaker.id, name: caretaker.name, mobile: caretaker.mobile || '', status: caretaker.status })));
       } catch (error) {
         showAlert('Unable to load Guest House resources.', 'error');
@@ -1460,9 +1492,23 @@ const GuestHouseBooking: React.FC = () => {
         const query = params.toString();
         const response = await authenticityUtility.get(`/guesthouse/room-options${query ? `?${query}` : ''}`);
         const options = normalizeRoomBlockOptions(response);
+        const roomPayload = getPayloadData(response);
+        const roomRows = Array.isArray(roomPayload)
+          ? roomPayload
+          : roomPayload && typeof roomPayload === 'object'
+            ? (roomPayload as ApiRecord).rooms || []
+            : [];
+        const facilitiesByKey: Record<string, RoomFacilityMap> = {};
+        if (Array.isArray(roomRows)) {
+          roomRows.forEach((room: any) => {
+            const key = roomFacilityKey(room?.block || room?.block_name, room?.room_number || room?.roomNumber);
+            if (key !== '::') facilitiesByKey[key] = normalizeRoomFacilities(room?.facilities);
+          });
+        }
 
-        if (isMounted && options.length) {
+        if (isMounted) {
           setRoomBlockOptions(options);
+          setRoomFacilitiesByKey(facilitiesByKey);
         }
       } catch (error) {
         if (import.meta.env.DEV) {
@@ -2094,12 +2140,22 @@ const GuestHouseBooking: React.FC = () => {
 
   const updateManagedRoom = (
     id: number,
-    field: keyof Omit<ManagedRoomRow, 'id'>,
+    field: keyof Omit<ManagedRoomRow, 'id' | 'facilities'>,
     value: string,
   ) => {
     setManagedRooms((prevRooms) =>
       prevRooms.map((room) => (room.id === id ? { ...room, [field]: value } : room)),
     );
+  };
+
+  const updateManagedRoomFacility = (id: number, label: string, checked: boolean) => {
+    setManagedRooms((previousRooms) => previousRooms.map((room) => {
+      if (room.id !== id) return room;
+      const facilities = { ...room.facilities };
+      if (checked) facilities[label] = true;
+      else delete facilities[label];
+      return { ...room, facilities };
+    }));
   };
 
   const addManagedRoom = () => {
@@ -2120,6 +2176,11 @@ const GuestHouseBooking: React.FC = () => {
     setViewingManagedRoomId(room.id);
   };
 
+  const editManagedRoom = (roomId: number) => {
+    setViewingManagedRoomId(roomId);
+    setEditingManagedRoomId(roomId);
+  };
+
   const saveManagedRoom = async (room: ManagedRoomRow) => {
     if (!room.block.trim() || !room.floor.trim() || !room.roomNumber.trim()) {
       showAlert('Block, floor, and room number are required.', 'warning');
@@ -2133,6 +2194,7 @@ const GuestHouseBooking: React.FC = () => {
         floor: room.floor.trim(),
         roomNumber: room.roomNumber.trim(),
         status: room.status,
+        facilities: room.facilities,
       };
       const isNewRoom = room.id >= 1_000_000_000;
       const response: any = isNewRoom
@@ -2310,7 +2372,15 @@ const GuestHouseBooking: React.FC = () => {
       }
       await authenticityUtility.post('/guesthouse/admin/resources/bulk-import', { type: 'rooms', rows: imported });
       const saved: any = await authenticityUtility.get('/guesthouse/admin/rooms');
-      setManagedRooms((saved?.data || []).map((room: any) => ({ id: room.id, roomType: room.room_type, block: room.block, floor: room.floor || '', roomNumber: room.room_number, status: room.status })));
+      setManagedRooms((saved?.data || []).map((room: any) => ({
+        id: room.id,
+        roomType: room.room_type,
+        block: room.block,
+        floor: room.floor || '',
+        roomNumber: room.room_number,
+        status: room.status,
+        facilities: normalizeRoomFacilities(room.facilities),
+      })));
       showAlert(`${imported.length} rooms saved. Re-uploading this CSV updates the same rooms without duplicates.`, 'success');
       return;
     }
@@ -2575,12 +2645,18 @@ const GuestHouseBooking: React.FC = () => {
     return floorDigit ? `${floorDigit} Floor` : '';
   };
 
-  const renderRoomDetailControl = (label: string, value: string, asSelect = false) => (
+  const renderRoomDetailControl = (
+    label: string,
+    value: string,
+    asSelect = false,
+    onValueChange?: (nextValue: string) => void,
+    options?: string[],
+  ) => (
     <label className="guesthousebooking-room-detail-meta-field">
       <span>{label}</span>
       {asSelect ? (
-        <select value={value} disabled aria-label={`Room details ${label}`}>
-          <option value={value}>{value}</option>
+        <select value={value} disabled={!onValueChange} onChange={(event) => onValueChange?.(event.target.value)} aria-label={`Room details ${label}`}>
+          {(options?.length ? options : [value]).map((option) => <option key={option} value={option}>{option}</option>)}
         </select>
       ) : (
         <input value={value} readOnly aria-label={`Room details ${label}`} />
@@ -2588,14 +2664,24 @@ const GuestHouseBooking: React.FC = () => {
     </label>
   );
 
-  const renderRoomDetailItem = (item: RoomDetailOption) => {
+  const renderRoomDetailItem = (
+    item: RoomDetailOption,
+    facilities: RoomFacilityMap = {},
+    onChange?: (label: string, checked: boolean) => void,
+    showUnselected = false,
+  ) => {
     const Icon = item.Icon;
+    const selected = Boolean(facilities[item.label]);
+    if (!onChange && !selected && !showUnselected) return null;
 
     return (
       <label className="guesthousebooking-room-detail-item" key={item.label}>
         <input
           className="guesthousebooking-checkbox guesthousebooking-room-detail-checkbox"
           type="checkbox"
+          checked={selected}
+          disabled={!onChange}
+          onChange={(event) => onChange?.(item.label, event.target.checked)}
         />
         <Icon className="guesthousebooking-room-detail-item-icon" size={22} aria-hidden="true" />
         <span>{item.label}</span>
@@ -2610,8 +2696,14 @@ const GuestHouseBooking: React.FC = () => {
     </div>
   );
 
-  const renderRoomDetailsCard = (row: RoomAllotmentRow) => {
-    const status = row.roomNumber ? 'Ready' : 'Pending';
+  const renderRoomDetailsCard = (
+    row: { id?: string | number; roomNumber: string; roomType: string; block: string; floor?: string },
+    facilities: RoomFacilityMap = {},
+    onFacilityChange?: (label: string, checked: boolean) => void,
+    statusOverride?: string,
+    onStatusChange?: (value: string) => void,
+  ) => {
+    const status = statusOverride || (row.roomNumber ? 'Ready' : 'Pending');
 
     return (
       <div className="guesthousebooking-room-details-card" id={`room-details-${row.id}`}>
@@ -2623,9 +2715,9 @@ const GuestHouseBooking: React.FC = () => {
           <div className="guesthousebooking-room-details-meta-row">
             {renderRoomDetailControl('Number', row.roomNumber)}
             {renderRoomDetailControl('Type', row.roomType, true)}
-            {renderRoomDetailControl('Floor', getRoomFloor(row.roomNumber), true)}
+            {renderRoomDetailControl('Floor', row.floor || getRoomFloor(row.roomNumber), true)}
             {renderRoomDetailControl('Block', row.block, true)}
-            {renderRoomDetailControl('Status', status, true)}
+            {renderRoomDetailControl('Status', status, true, onStatusChange, onStatusChange ? ['Active', 'Maintenance'] : undefined)}
             <CircleCheck className="guesthousebooking-room-detail-ready-icon" size={18} aria-hidden="true" />
           </div>
 
@@ -2636,7 +2728,7 @@ const GuestHouseBooking: React.FC = () => {
                 <div className="guesthousebooking-room-detail-group" key={group.title}>
                   <h3>{group.title}</h3>
                   <div className="guesthousebooking-room-detail-group-items">
-                    {group.items.map(renderRoomDetailItem)}
+                    {group.items.map((item) => renderRoomDetailItem(item, facilities, onFacilityChange, !onFacilityChange))}
                   </div>
                 </div>
               ))}
@@ -2646,14 +2738,14 @@ const GuestHouseBooking: React.FC = () => {
           <section className="guesthousebooking-room-detail-section" aria-label="Essentials">
             {renderRoomDetailSectionTitle('Essentials')}
             <div className="guesthousebooking-room-detail-flat-list">
-              {ROOM_DETAIL_ESSENTIALS.map(renderRoomDetailItem)}
+              {ROOM_DETAIL_ESSENTIALS.map((item) => renderRoomDetailItem(item, facilities, onFacilityChange, !onFacilityChange))}
             </div>
           </section>
 
           <section className="guesthousebooking-room-detail-section" aria-label="Services">
             {renderRoomDetailSectionTitle('Services')}
             <div className="guesthousebooking-room-detail-flat-list guesthousebooking-room-detail-services-list">
-              {ROOM_DETAIL_SERVICES.map(renderRoomDetailItem)}
+              {ROOM_DETAIL_SERVICES.map((item) => renderRoomDetailItem(item, facilities, onFacilityChange, !onFacilityChange))}
             </div>
           </section>
         </div>
@@ -2833,93 +2925,108 @@ const GuestHouseBooking: React.FC = () => {
                 const isViewing = viewingManagedRoomId === room.id;
 
                 return (
-                  <tr className={isViewing ? 'is-viewing' : ''} key={room.id}>
-                    <td>{index + 1}</td>
-                    <td>
-                      <select
-                        className="guesthousebooking-management-control"
-                        value={room.roomType}
-                        onChange={(event) =>
-                          updateManagedRoom(room.id, 'roomType', event.target.value)
-                        }
-                        disabled={!isEditing}
-                        aria-label="Room type"
-                      >
-                        {ROOM_REQUIREMENT_CONFIG.map((option) => (
-                          <option key={option.roomType} value={option.roomType}>
-                            {option.roomType}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td>
-                      <input
-                        className="guesthousebooking-management-control"
-                        type="text"
-                        value={room.block}
-                        onChange={(event) =>
-                          updateManagedRoom(room.id, 'block', event.target.value)
-                        }
-                        readOnly={!isEditing}
-                        aria-label="Room block"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="guesthousebooking-management-control"
-                        type="text"
-                        value={room.floor}
-                        onChange={(event) =>
-                          updateManagedRoom(room.id, 'floor', event.target.value)
-                        }
-                        readOnly={!isEditing}
-                        aria-label="Room floor"
-                      />
-                    </td>
-                    <td>
-                      <input
-                        className="guesthousebooking-management-control"
-                        type="text"
-                        value={room.roomNumber}
-                        onChange={(event) =>
-                          updateManagedRoom(room.id, 'roomNumber', event.target.value)
-                        }
-                        readOnly={!isEditing}
-                        aria-label="Room number"
-                      />
-                    </td>
-                    <td>
-                      <select
-                        className={`guesthousebooking-management-status guesthousebooking-management-status--${room.status.toLowerCase()}`}
-                        value={room.status}
-                        onChange={(event) =>
-                          updateManagedRoom(room.id, 'status', event.target.value)
-                        }
-                        disabled={!isEditing}
-                        aria-label="Room status"
-                      >
-                        <option value="Active">Active</option>
-                        <option value="Maintenance">Maintenance</option>
-                      </select>
-                    </td>
-                    <td>
-                      {renderGuesthouseManagementActions(
-                        addManagedRoom,
-                        () => setEditingManagedRoomId(room.id),
-                        () =>
-                          setViewingManagedRoomId((currentId) =>
-                            currentId === room.id ? null : room.id,
-                          ),
-                        () => void removeManagedRoom(room.id),
-                        false,
-                        isEditing,
-                        isViewing,
-                        'room',
-                        () => void saveManagedRoom(room),
-                        index === managedRooms.length - 1,
-                      )}
-                    </td>
-                  </tr>
+                  <React.Fragment key={room.id}>
+                    <tr className={isViewing ? 'is-viewing' : ''}>
+                      <td>{index + 1}</td>
+                      <td>
+                        <select
+                          className="guesthousebooking-management-control"
+                          value={room.roomType}
+                          onChange={(event) =>
+                            updateManagedRoom(room.id, 'roomType', event.target.value)
+                          }
+                          disabled={!isEditing}
+                          aria-label="Room type"
+                        >
+                          {ROOM_REQUIREMENT_CONFIG.map((option) => (
+                            <option key={option.roomType} value={option.roomType}>
+                              {option.roomType}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+                      <td>
+                        <input
+                          className="guesthousebooking-management-control"
+                          type="text"
+                          value={room.block}
+                          onChange={(event) =>
+                            updateManagedRoom(room.id, 'block', event.target.value)
+                          }
+                          readOnly={!isEditing}
+                          aria-label="Room block"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="guesthousebooking-management-control"
+                          type="text"
+                          value={room.floor}
+                          onChange={(event) =>
+                            updateManagedRoom(room.id, 'floor', event.target.value)
+                          }
+                          readOnly={!isEditing}
+                          aria-label="Room floor"
+                        />
+                      </td>
+                      <td>
+                        <input
+                          className="guesthousebooking-management-control"
+                          type="text"
+                          value={room.roomNumber}
+                          onChange={(event) =>
+                            updateManagedRoom(room.id, 'roomNumber', event.target.value)
+                          }
+                          readOnly={!isEditing}
+                          aria-label="Room number"
+                        />
+                      </td>
+                      <td>
+                        <select
+                          className={`guesthousebooking-management-status guesthousebooking-management-status--${room.status.toLowerCase()}`}
+                          value={room.status}
+                          onChange={(event) =>
+                            updateManagedRoom(room.id, 'status', event.target.value)
+                          }
+                          disabled={!isEditing}
+                          aria-label="Room status"
+                        >
+                          <option value="Active">Active</option>
+                          <option value="Maintenance">Maintenance</option>
+                        </select>
+                      </td>
+                      <td>
+                        {renderGuesthouseManagementActions(
+                          addManagedRoom,
+                          () => editManagedRoom(room.id),
+                          () =>
+                            setViewingManagedRoomId((currentId) =>
+                              currentId === room.id ? null : room.id,
+                            ),
+                          () => void removeManagedRoom(room.id),
+                          false,
+                          isEditing,
+                          isViewing,
+                          'room',
+                          () => void saveManagedRoom(room),
+                          index === managedRooms.length - 1,
+                        )}
+                      </td>
+                    </tr>
+                    {isEditing && (
+                      <tr className="guesthousebooking-room-details-row">
+                        <td colSpan={7}>
+                          {renderRoomDetailsCard(
+                            room,
+                            room.facilities,
+                            (label, checked) => updateManagedRoomFacility(room.id, label, checked),
+                            room.status,
+                            (value) => updateManagedRoom(room.id, 'status', value),
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -3983,6 +4090,9 @@ const GuestHouseBooking: React.FC = () => {
                 activeRoomDetail?.guestId === guestId
                   ? allotment.rows.find((row) => row.id === activeRoomDetail.rowId)
                   : undefined;
+              const activeRoomFacilities = activeRoomDetailRow
+                ? roomFacilitiesByKey[roomFacilityKey(activeRoomDetailRow.block, activeRoomDetailRow.roomNumber)] || {}
+                : {};
 
               return (
                 <section
@@ -4182,7 +4292,7 @@ const GuestHouseBooking: React.FC = () => {
                       </div>
                     </div>
 
-                    {activeRoomDetailRow && renderRoomDetailsCard(activeRoomDetailRow)}
+                    {activeRoomDetailRow && renderRoomDetailsCard(activeRoomDetailRow, activeRoomFacilities)}
 
                     <div className="guesthousebooking-allotment-caretaker-bar">
                       <span className="guesthousebooking-caretaker-title">Care Taker Details</span>
