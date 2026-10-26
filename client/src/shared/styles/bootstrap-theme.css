@@ -293,6 +293,23 @@ input[type='checkbox'],
 .table-responsive {
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  /* A wide table's sideways scrollbar: thin, light and rounded instead of the browser's
+     thick grey bar, still visible so a reader knows more columns are there. */
+  scrollbar-width: thin;
+  scrollbar-color: #c3cede transparent;
+}
+
+.table-responsive::-webkit-scrollbar {
+  height: 6px;
+}
+
+.table-responsive::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.table-responsive::-webkit-scrollbar-thumb {
+  background: #c3cede;
+  border-radius: 999px;
 }
 
 .table {

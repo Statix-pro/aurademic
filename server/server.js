@@ -20,6 +20,7 @@ import budgetRoutes from './modules/budget/budgetRoutes.js';
 
 // Events routes
 import budgetCatalogRoutes from './modules/budgetCatalog/budgetCatalogRoutes.js';
+import directoryOptionsRoutes from './modules/directoryOptions/directoryOptionsRoutes.js';
 import editRequestRoutes from './modules/editRequest/editRequestRoutes.js';
 import documentsRoutes from './modules/events/documents/documentsRoutes.js';
 import eventRoutes from './modules/events/events/eventRoutes.js';
@@ -190,6 +191,7 @@ app.use('/api/access-control', accessControlRoutes);
 app.use('/api/master-data', masterDataRoutes);
 
 // Organization and resource person directories
+app.use('/api/directory-options', directoryOptionsRoutes);
 app.use('/api', organizationDirectoryRoutes);
 app.use('/api', resourcepersonDirectoryRoutes);
 

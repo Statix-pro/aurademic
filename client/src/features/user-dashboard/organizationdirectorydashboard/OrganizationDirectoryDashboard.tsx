@@ -225,6 +225,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
   const columns = [
     {
       key: 'sno',
+      hideOnPhone: true,
       label: 'S.No.',
       style: { textAlign: 'center' as const },
       render: (_org: Organization, index: number) => (currentPage - 1) * pageSize + index + 1,
@@ -261,14 +262,16 @@ const OrganizationDirectoryDashboard: React.FC = () => {
         );
       },
     },
-    { key: 'category', label: 'Category' },
+    { key: 'category', hideOnPhone: true, label: 'Category' },
     {
       key: 'specializations',
+      hideOnPhone: true,
       label: 'Specializations',
       render: (org: Organization) => <CustomChipList items={org.specializations ?? []} />,
     },
     {
       key: 'tag',
+      hideOnPhone: true,
       label: 'Tag',
       render: (org: Organization) => org.tag && <span className="org-tag-pill">{org.tag}</span>,
     },
@@ -367,9 +370,9 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                 </h5>
               </div>
 
-              <div className="budgetdashboard-header-right">
+              <div className="budgetdashboard-header-right orgdash-header-controls">
                 <div
-                  className="budgetdashboard-header-search-group"
+                  className="budgetdashboard-header-search-group orgdash-filters"
                   style={{ display: 'flex', alignItems: 'center' }}
                 >
                   <CustomFilterSearch
@@ -379,7 +382,7 @@ const OrganizationDirectoryDashboard: React.FC = () => {
                     placeholder="Search organization"
                   />
 
-                  <div style={{ minWidth: 190 }}>
+                  <div className="orgdash-category" style={{ minWidth: 190 }}>
                     <CustomDropdown
                       name="organization-category-filter"
                       options={CATEGORY_FILTER_OPTIONS}

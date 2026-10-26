@@ -162,6 +162,8 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
             ...profession,
             orgLinkedIn: profession.orgLinkedIn || profession.org_linked_in || '',
             officialEmail: profession.officialEmail || profession.official_email || '',
+            officialEmailType:
+              profession.officialEmailType || profession.official_email_type || null,
           }))
         : [fallbackProfession];
 
@@ -208,6 +210,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
           style={{
             width: 40,
             height: 40,
+            flexShrink: 0,
             borderRadius: 10,
             background: '#0878bd',
             color: '#fff',
@@ -266,6 +269,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
     },
     {
       key: 'organization',
+      hideOnPhone: true,
       label: 'ORGANIZATION',
       render: (row: Row) => (
         <div className="d-flex flex-column">
@@ -277,9 +281,15 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
         </div>
       ),
     },
-    { key: 'category', label: 'CATEGORY', render: (row: Row) => row.category || '—' },
+    {
+      key: 'category',
+      hideOnPhone: true,
+      label: 'CATEGORY',
+      render: (row: Row) => row.category || '—',
+    },
     {
       key: 'tag',
+      hideOnPhone: true,
       label: 'TAG',
       render: (row: Row) =>
         row.tag ? <span className="resource-person-approval-tag">{row.tag}</span> : '—',
@@ -341,10 +351,10 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
   ];
   return (
     <div
-      className="resource-person-approval-page p-4"
+      className="resource-person-approval-page p-3 p-md-4"
       style={{ minHeight: '100%', background: '#f1f6fb' }}
     >
-      <style>{`.resource-person-approval-page .request-summary-card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); } .resource-person-approval-page .request-summary-card .card-body { padding: 14px 20px; } .resource-person-approval-page .custom-table { color: #29436a; } .resource-person-approval-page .custom-table thead th { color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); } .resource-person-approval-page .custom-table tbody td { padding: var(--table-cell-padding); vertical-align: middle; font-size: var(--font-size-body); line-height: var(--leading-body); color: var(--text-body); } .resource-person-approval-page .custom-table thead th { padding: var(--table-cell-padding); } .resource-person-approval-page .resource-person-approval-meta { margin-top: 2px; color: var(--text-soft); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); } .resource-person-approval-page .resource-person-approval-tag { display: inline-block; padding: 4px 12px; border-radius: 6px; background: #e0f0ff; color: #0069ab; font-size: var(--font-size-tertiary); font-weight: 600; } .resource-person-approval-page .resource-person-approval-header-controls { gap: 12px !important; } .resource-person-approval-page .resource-person-approval-actions { display: flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap; } .resource-person-approval-table.custom-table th:nth-child(1), .resource-person-approval-table.custom-table td:nth-child(1) { width: 28%; } .resource-person-approval-table.custom-table th:nth-child(2), .resource-person-approval-table.custom-table td:nth-child(2) { width: 26%; } .resource-person-approval-table.custom-table th:nth-child(4), .resource-person-approval-table.custom-table td:nth-child(4) { text-align: center; } .resource-person-approval-table.custom-table th:last-child, .resource-person-approval-table.custom-table td:last-child { width: 22%; text-align: center; } .resource-person-approval-page .custom-table tbody td strong { font-weight: 700; color: var(--text-strong); } .resource-person-details-modal .modal-title { font-size: var(--font-size-modal-title); line-height: var(--leading-modal-title); font-weight: 600; } .resource-person-approval-page .resource-person-admin-badge { background-color: #0069ab !important; } .resource-person-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); } .resource-person-details-modal .modal-content { max-height: calc(100vh - 3.5rem); } .resource-person-details-modal .modal-body { overflow-y: auto; } .resource-person-approval-page .resource-person-approval-hold { margin-top: 2px; color: #9b5f00; font-size: var(--font-size-secondary); line-height: var(--leading-secondary); } .custom-btn.resource-person-approval-decision { display: inline-flex; align-items: center; gap: 4px; height: var(--inline-action-height); min-height: 0; min-width: 0; padding: 0 10px; border-radius: 6px; border: 1px solid; font-size: var(--font-size-tertiary); font-weight: 700; white-space: nowrap; flex-shrink: 0; } .custom-btn.resource-person-approval-decision.approve, .custom-btn.resource-person-approval-decision.approve:disabled { background: #e8f6ee; border-color: #9fd8b6; color: #087b43; } .custom-btn.resource-person-approval-decision.approve:hover:not(:disabled) { background: #d3efdf; border-color: #087b43; color: #066535; } .custom-btn.resource-person-approval-decision.reject, .custom-btn.resource-person-approval-decision.reject:disabled { background: #fdecee; border-color: #f3b4bd; color: #b4253a; } .custom-btn.resource-person-approval-decision.reject:hover:not(:disabled) { background: #fbd9de; border-color: #b4253a; color: #9a1d30; }`}</style>
+      <style>{`.resource-person-approval-page .request-summary-card { min-height: 80px; border: 1px solid #dbe4ed; border-radius: 14px; box-shadow: 0 6px 18px rgba(15,42,70,.08); } .resource-person-approval-page .request-summary-card .card-body { padding: 14px 20px; } .resource-person-approval-page .custom-table { color: #29436a; } .resource-person-approval-page .custom-table thead th { color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); } .resource-person-approval-page .custom-table tbody td { padding: var(--table-cell-padding); vertical-align: middle; font-size: var(--font-size-body); line-height: var(--leading-body); color: var(--text-body); } .resource-person-approval-page .custom-table thead th { padding: var(--table-cell-padding); } .resource-person-approval-page .resource-person-approval-meta { margin-top: 2px; color: var(--text-soft); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); } .resource-person-approval-page .resource-person-approval-tag { display: inline-block; padding: 4px 12px; border-radius: 6px; background: #e0f0ff; color: #0069ab; font-size: var(--font-size-tertiary); font-weight: 600; } .resource-person-approval-page .resource-person-approval-header-controls { gap: 12px !important; } .resource-person-approval-page .resource-person-approval-actions { display: flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap; } .resource-person-approval-table.custom-table th:nth-child(1), .resource-person-approval-table.custom-table td:nth-child(1) { width: 28%; } .resource-person-approval-table.custom-table th:nth-child(2), .resource-person-approval-table.custom-table td:nth-child(2) { width: 26%; } .resource-person-approval-table.custom-table th:nth-child(4), .resource-person-approval-table.custom-table td:nth-child(4) { text-align: center; } .resource-person-approval-table.custom-table th:last-child, .resource-person-approval-table.custom-table td:last-child { width: 22%; text-align: center; } .resource-person-approval-page .custom-table tbody td strong { font-weight: 700; color: var(--text-strong); } .resource-person-details-modal .modal-title { font-size: var(--font-size-modal-title); line-height: var(--leading-modal-title); font-weight: 600; } .resource-person-approval-page .resource-person-admin-badge { background-color: #0069ab !important; } .resource-person-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); } .resource-person-details-modal .modal-content { max-height: calc(100vh - 3.5rem); } .resource-person-details-modal .modal-body { overflow-y: auto; } .resource-person-approval-page .resource-person-approval-hold { margin-top: 2px; color: #9b5f00; font-size: var(--font-size-secondary); line-height: var(--leading-secondary); } .custom-btn.resource-person-approval-decision { display: inline-flex; align-items: center; gap: 4px; height: var(--inline-action-height); min-height: 0; min-width: 0; padding: 0 10px; border-radius: 6px; border: 1px solid; font-size: var(--font-size-tertiary); font-weight: 700; white-space: nowrap; flex-shrink: 0; } .custom-btn.resource-person-approval-decision.approve, .custom-btn.resource-person-approval-decision.approve:disabled { background: #e8f6ee; border-color: #9fd8b6; color: #087b43; } .custom-btn.resource-person-approval-decision.approve:hover:not(:disabled) { background: #d3efdf; border-color: #087b43; color: #066535; } .custom-btn.resource-person-approval-decision.reject, .custom-btn.resource-person-approval-decision.reject:disabled { background: #fdecee; border-color: #f3b4bd; color: #b4253a; } .custom-btn.resource-person-approval-decision.reject:hover:not(:disabled) { background: #fbd9de; border-color: #b4253a; color: #9a1d30; } @media (max-width: 576px) { .resource-person-approval-table.custom-table th:nth-child(1), .resource-person-approval-table.custom-table td:nth-child(1) { width: auto; } .resource-person-approval-page .resource-person-approval-actions { flex-wrap: wrap; white-space: normal; } .resource-person-approval-table.custom-table th:last-child, .resource-person-approval-table.custom-table td:last-child { width: auto; } }`}</style>
       <CustomCard className="mx-auto" style={{ maxWidth: 1250 }}>
         {switcher}
         <div className="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-4">
@@ -378,7 +388,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
               ADMIN
             </Badge>
           </div>
-          <div className="resource-person-approval-header-controls d-flex align-items-center gap-2">
+          <div className="resource-person-approval-header-controls d-flex align-items-center gap-2 flex-wrap">
             <CustomFilterSearch
               name="resource-person-search"
               value={search}
@@ -405,16 +415,16 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
           </div>
         )}
         <div className="row g-3 mb-4">
-          <div className="col-12 col-sm-6 col-xl-3">
+          <div className="col-6 col-xl-3">
             {stat('Total', counts.total, <BriefcaseBusiness size={22} />, 'All')}
           </div>
-          <div className="col-12 col-sm-6 col-xl-3">
+          <div className="col-6 col-xl-3">
             {stat('Pending', counts.pending, <Clock3 size={22} />, 'Pending')}
           </div>
-          <div className="col-12 col-sm-6 col-xl-3">
+          <div className="col-6 col-xl-3">
             {stat('Approved', counts.approved, <CheckCircle size={22} />, 'Approved')}
           </div>
-          <div className="col-12 col-sm-6 col-xl-3">
+          <div className="col-6 col-xl-3">
             {stat('Rejected', counts.rejected, <XCircle size={22} />, 'Rejected')}
           </div>
         </div>

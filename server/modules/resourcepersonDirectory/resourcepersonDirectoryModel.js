@@ -36,14 +36,7 @@ const fields = [
   'resume_mime_type',
   'resume_file_size',
 ];
-// LEGACY: directory_resource_persons.official_email and .specialization predate the
-// per-profession email and the specializations table (20261026_directory_contacts_and_lists.sql). Neither is read
-// or written any more; both are dropped from every response so a stale copy never shows.
-// Remove with the columns.
-const serializePerson = (
-  { official_email: _legacyOfficialEmail, specialization: _legacySpecialization, ...person },
-  professions = person.professions || [],
-) => ({
+const serializePerson = (person, professions = person.professions || []) => ({
   ...person,
   specializations: person.specializations || [],
   name: [person.title, person.first_name, person.last_name].filter(Boolean).join(' '),
@@ -68,6 +61,7 @@ const serializePerson = (
       organizationStatus: linkedStatus ?? profession.organizationStatus ?? null,
       orgLinkedIn: profession.org_linked_in ?? profession.orgLinkedIn,
       officialEmail: profession.official_email ?? profession.officialEmail,
+      officialEmailType: profession.official_email_type ?? profession.officialEmailType ?? null,
     }),
   ),
   date:
@@ -99,7 +93,13 @@ const serializePublicPerson = (person, professions) => {
   for (const field of PRIVATE_PERSON_FIELDS) delete publicPerson[field];
   // A profession's official email is a contact too.
   publicPerson.professions = publicPerson.professions.map(
-    ({ official_email: _officialEmail, officialEmail: _email, ...profession }) => profession,
+    ({
+      official_email: _officialEmail,
+      officialEmail: _email,
+      official_email_type: _officialEmailType,
+      officialEmailType: _emailType,
+      ...profession
+    }) => profession,
   );
   // Tells the form the contact fields were withheld, not left blank, so it shows them locked.
   publicPerson.contactHidden = true;
@@ -129,12 +129,11 @@ const loadProfessionsByPerson = async (personIds) => {
   }
   return byPerson;
 };
-// Tag and Specialization lists, shared rules in modules/shared/directoryLists.js.
+// Specialization picks against the Tag and Specialization lists both directories share
+// (modules/shared/directoryLists.js).
 const lists = createDirectoryLists({
-  options: 'directory_resource_person_options',
   picks: 'directory_resource_person_specializations',
   recordColumn: 'resource_person_id',
-  records: 'directory_resource_persons',
 });
 // A resource person is not approved while an organization it names is still Pending or was
 // Rejected. A profession row linked by organization_id is held by that organization; an
@@ -224,10 +223,20 @@ const holdsFromProfessions = (professions) =>
     .filter((p) => p.organizationId && p.organizationStatus !== 'Approved')
     .map((p) => ({ name: p.organization, status: p.organizationStatus }))
     .filter((hold, i, all) => all.findIndex((h) => h.name === hold.name) === i);
+// Whether the official email is the person's own or a role mailbox (membersecretary@...)
+// that the post's next holder reads. Kept only beside an email, and only as one of the two.
+// A loaded row carries both keys and the form edits only officialEmailType, so a type the
+// form left unset (null) must not fall back to the stored one, which may belong to an
+// address since replaced.
+const OFFICIAL_EMAIL_TYPES = ['personal', 'role'];
+const officialEmailType = (p) => {
+  const type = 'officialEmailType' in p ? p.officialEmailType : p.official_email_type;
+  return (p.officialEmail ?? p.official_email) && OFFICIAL_EMAIL_TYPES.includes(type) ? type : null;
+};
 const insertProfessions = async (connection, personId, professions) => {
   for (const [index, p] of professions.entries())
     await connection.execute(
-      'INSERT INTO directory_resource_person_professions (resource_person_id, designation, department, organization, organization_id, city, state, country, org_linked_in, official_email, status, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO directory_resource_person_professions (resource_person_id, designation, department, organization, organization_id, city, state, country, org_linked_in, official_email, official_email_type, status, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
       [
         personId,
         p.designation || null,
@@ -241,6 +250,7 @@ const insertProfessions = async (connection, personId, professions) => {
         // A loaded row carries both keys and the form edits only officialEmail, so a
         // cleared field ('') must not fall back to the stored official_email.
         (p.officialEmail ?? p.official_email) || null,
+        officialEmailType(p),
         p.status || 'Working',
         index,
       ],
@@ -559,10 +569,6 @@ export default {
       };
     });
   },
-  listOptions: lists.listOptions,
-  addOptions: lists.addOptions,
-  updateOption: lists.updateOption,
-  deleteOption: lists.deleteOption,
   async review(id, decision, actor, comment) {
     const connection = await db.getConnection();
     try {

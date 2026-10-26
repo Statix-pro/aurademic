@@ -206,9 +206,9 @@
   gap: 10px;
 }
 
-/* Profession grid: make designation smaller, organization larger */
+/* Profession grid: designation smaller, organization larger, then its website */
 .rpd-profession-block .rpd-grid-3 {
-  grid-template-columns: 0.9fr 1fr 1.6fr;
+  grid-template-columns: 0.9fr 1fr 1.6fr 1fr;
   column-gap: 12px;
 }
 
@@ -1071,6 +1071,33 @@
   .form-grid-five-col {
     grid-template-columns: repeat(3, 1fr);
   }
+  /* Designation, Department, Organization, Website: two by two. */
+  .rpd-profession-block .rpd-grid-3 {
+    grid-template-columns: 1fr 1fr;
+    row-gap: 12px;
+  }
+  /* The contact panel moves under the main fields instead of forcing a sideways scroll. */
+  .rpd-split-row {
+    flex-direction: column;
+  }
+  .rpd-split-main {
+    padding-right: 0;
+  }
+  .rpd-split-side {
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 576px) {
+  .rpd-profession-block .rpd-grid-3 {
+    grid-template-columns: 1fr;
+  }
+  /* City, State, Country, Official email, Status: one per line, so none is cut short. */
+  .rpd-prof-row > .rpd-field {
+    flex-basis: 100% !important;
+  }
 }
 
 @media (max-width: 768px) {
@@ -1108,14 +1135,18 @@
   flex-wrap: wrap;
 }
 
-/* The boxes share the row equally; a long file name is cut, never widens its box. */
+/* The boxes share the row equally; a long file name is cut, never widens its box. Each
+   needs 260px, so on a narrow screen they stack instead of squeezing. */
 .rpd-docs-row > .rpd-upload-box {
+  flex: 1 1 260px;
   min-width: 0;
 }
 
-/* Remarks sits in the row beside Photo and Resume, in the same frame, with its label above
-   the box instead of an icon and a button beside it. */
+/* Remarks sits under Photo and Resume, in the same frame, with its label above the box
+   instead of an icon and a button beside it. */
 .rpd-upload-box.rpd-remarks-box {
+  /* A row of its own under Photo and Resume, full width. */
+  flex-basis: 100%;
   display: block;
   padding: 12px 20px;
 }
@@ -1156,6 +1187,76 @@
 
 .rpd-choice-row .rpd-toggle-group {
   width: auto;
+}
+
+/* Official email's label line: the label, then the Personal / Role radios just after it (not
+   against the far edge, where they crowded the Status label). It keeps the label line's
+   height, so the input lines up with its neighbours; on a narrow screen the radios wrap. */
+.rpd-email-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 4px;
+  margin-bottom: 6px;
+}
+
+.rpd-form-wrapper .rpd-email-head > label {
+  margin-bottom: 0;
+}
+
+.rpd-email-kind {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.rpd-email-kind .custom-check-container {
+  min-height: 0;
+  margin: 0;
+  padding-left: 0;
+  gap: 4px;
+}
+
+/* The form's text-input rules (`.rpd-form-wrapper .rpd-field input...`) reach these too and
+   drew them as 40px boxes; this out-ranks them and restores a Bootstrap radio. */
+.rpd-form-wrapper .rpd-field .rpd-email-kind input.form-check-input[type='radio'] {
+  float: none;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #94a3b8;
+  border-radius: 50%;
+  background-color: #ffffff;
+  /* The text-input rule's `background` shorthand also wiped Bootstrap's checked dot. */
+  background-image: var(--bs-form-check-bg-image);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+}
+
+.rpd-form-wrapper .rpd-field .rpd-email-kind input.form-check-input[type='radio']:checked {
+  border-color: #0069ab;
+  background-color: #0069ab;
+}
+
+.rpd-form-wrapper .rpd-field .rpd-email-kind label {
+  margin: 0;
+  font-weight: var(--weight-regular);
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+/* Beside the Official email label, for a relieved person's own address; the reason is in
+   its tooltip. */
+.rpd-email-warn {
+  display: inline-flex;
+  align-items: center;
+  color: #9b5f00;
+  cursor: help;
 }
 
 /* CustomInput's label: under the wrapper so it also beats `.modal-body .form-label

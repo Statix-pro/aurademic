@@ -41,19 +41,14 @@ export const normalizePayload = (input = {}) => {
   );
 };
 
-// Tag and Specialization lists, shared rules in modules/shared/directoryLists.js.
+// Specialization picks against the Tag and Specialization lists both directories share
+// (modules/shared/directoryLists.js).
 const lists = createDirectoryLists({
-  options: 'directory_organization_options',
   picks: 'directory_organization_specializations',
   recordColumn: 'organization_id',
-  records: 'organizations',
 });
 
-// LEGACY: organizations.sector held one free-text Specialization before the
-// directory_organization_specializations table (20261026_directory_contacts_and_lists.sql). It is no longer read
-// or written, and is dropped from every response so a stale copy never shows. Remove with
-// the column.
-const serialize = ({ sector: _legacySector, ...row }) => ({
+const serialize = (row) => ({
   ...row,
   specializations: row.specializations || [],
   establishmentYear: row.establishment_year,
@@ -264,11 +259,6 @@ export default {
       connection.release();
     }
   },
-
-  listOptions: lists.listOptions,
-  addOptions: lists.addOptions,
-  updateOption: lists.updateOption,
-  deleteOption: lists.deleteOption,
 
   async review(id, decision, actor, comment) {
     // Approved organizations are shared, but names are unique only per submitter, so two

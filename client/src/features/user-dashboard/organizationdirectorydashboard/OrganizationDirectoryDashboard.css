@@ -241,3 +241,23 @@
   border: 0;
   border-radius: 12px;
 }
+
+/* The header borrows the budget dashboard's classes, whose controls row never wraps: on a
+   phone the search, the Category filter and Add stack at full width instead of the search
+   being squeezed and Add cut off. */
+@media (max-width: 768px) {
+  .orgdash-header-controls,
+  .orgdash-filters {
+    flex-direction: column;
+    align-items: stretch !important;
+    width: 100%;
+  }
+  .orgdash-filters .custom-filter-search,
+  .orgdash-category {
+    width: 100%;
+  }
+  .orgdash-header-controls .org-add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}

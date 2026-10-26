@@ -13,8 +13,7 @@ const specializationRows = vi.fn();
 const answerListQuery = (sql, params) => {
   if (/^\s*SELECT organization_id FROM directory_resource_person_professions/.test(sql))
     return [storedOrganizationLinks];
-  if (/FROM directory_(resource_person|organization)_options WHERE is_active = 1/.test(sql))
-    return [activeOptions];
+  if (/FROM directory_options WHERE is_active = 1/.test(sql)) return [activeOptions];
   if (/directory_(resource_person|organization)_specializations/.test(sql)) {
     specializationRows(sql, params);
     if (/^\s*SELECT name FROM/.test(sql)) return [storedSpecializations];
@@ -53,6 +52,7 @@ vi.mock('../modules/shared/uploadPaths.js', () => ({
 import db from '../config/connection.js';
 import organizationModel from '../modules/organizationDirectory/organizationDirectoryModel.js';
 import resourcePersonModel from '../modules/resourcepersonDirectory/resourcepersonDirectoryModel.js';
+import * as directoryLists from '../modules/shared/directoryLists.js';
 import { deleteUploadedFile } from '../modules/shared/uploadPaths.js';
 import workflowService from '../modules/shared/workflow/workflowService.js';
 
@@ -584,7 +584,6 @@ describe('directory owner-only edits', () => {
             is_active: 1,
             linked_in: 'https://linkedin.example/person',
             mobile: '9999999999',
-            official_email: 'official@example.test',
             personal_email: 'personal@example.test',
             remarks: 'Charges a fee; prefers mornings',
             photo_name: 'photo.jpg',
@@ -599,7 +598,15 @@ describe('directory owner-only edits', () => {
         ],
       ])
       .mockResolvedValueOnce([
-        [{ id: 7, resource_person_id: 1, organization: 'Org', official_email: 'hod@x.edu' }],
+        [
+          {
+            id: 7,
+            resource_person_id: 1,
+            organization: 'Org',
+            official_email: 'hod@x.edu',
+            official_email_type: 'role',
+          },
+        ],
       ]);
 
     const [person] = await resourcePersonModel.list({ id: 2 });
@@ -613,6 +620,8 @@ describe('directory owner-only edits', () => {
       expect.not.objectContaining({ official_email: expect.anything() }),
     ]);
     expect(person.professions[0]).not.toHaveProperty('officialEmail');
+    expect(person.professions[0]).not.toHaveProperty('official_email_type');
+    expect(person.professions[0]).not.toHaveProperty('officialEmailType');
     expect(person.professions[0].organization).toBe('Org');
     for (const field of [
       'dob',
@@ -751,7 +760,6 @@ describe('resource person contacts', () => {
     is_active: 1,
     mobile: '9999999999',
     personal_email: 'personal@example.test',
-    official_email: 'legacy@example.test',
   };
 
   it('shows a super admin another user’s contacts in full', async () => {
@@ -768,7 +776,6 @@ describe('resource person contacts', () => {
     expect(person.mobile).toBe('9999999999');
     expect(person.personalEmail).toBe('personal@example.test');
     expect(person.professions[0].officialEmail).toBe('hod@x.edu');
-    expect(person).not.toHaveProperty('official_email');
     expect(person).not.toHaveProperty('officialEmail');
   });
 
@@ -802,7 +809,7 @@ describe('resource person contacts', () => {
     expect(personSql).not.toMatch(/official_email/);
     expect(personValues).not.toContain('ignored@example.test');
     const [professionSql, professionValues] = execute.mock.calls[1];
-    expect(professionSql).toMatch(/org_linked_in, official_email, status/);
+    expect(professionSql).toMatch(/org_linked_in, official_email, official_email_type, status/);
     expect(professionValues).toContain('hod@x.edu');
   });
 });
@@ -900,12 +907,34 @@ describe('resource person Tag and Specialization lists', () => {
       .mockResolvedValueOnce([[{ used: 3 }]])
       .mockResolvedValueOnce([{}]);
 
-    await expect(resourcePersonModel.deleteOption(9)).resolves.toEqual({
+    await expect(directoryLists.deleteOption(9)).resolves.toEqual({
       id: 9,
       deleted: false,
       deactivated: true,
     });
     expect(db.execute.mock.calls[2][0]).toMatch(/SET is_active = 0/);
+  });
+
+  // Both directories pick from the one list, so an entry is in use while a record in either
+  // holds it: deleting a Tag only organizations use must not drop it from under them.
+  it.each([
+    [
+      'tag',
+      /FROM organizations WHERE tag = \?\) \+ \(SELECT COUNT\(\*\) FROM directory_resource_persons WHERE tag = \?/,
+    ],
+    [
+      'specialization',
+      /FROM directory_organization_specializations WHERE name = \?\) \+ \(SELECT COUNT\(\*\) FROM directory_resource_person_specializations WHERE name = \?/,
+    ],
+  ])('counts a %s as used by either directory', async (listKey, usageSql) => {
+    db.execute
+      .mockResolvedValueOnce([[{ list_key: listKey, name: 'Research' }]])
+      .mockResolvedValueOnce([[{ used: 1 }]])
+      .mockResolvedValueOnce([{}]);
+
+    await expect(directoryLists.deleteOption(9)).resolves.toMatchObject({ deactivated: true });
+    expect(db.execute.mock.calls[1][0]).toMatch(usageSql);
+    expect(db.execute.mock.calls[1][1]).toEqual(['Research', 'Research']);
   });
 
   it('deletes an entry no record uses', async () => {
@@ -914,15 +943,15 @@ describe('resource person Tag and Specialization lists', () => {
       .mockResolvedValueOnce([[{ used: 0 }]])
       .mockResolvedValueOnce([{}]);
 
-    await expect(resourcePersonModel.deleteOption(9)).resolves.toMatchObject({ deleted: true });
-    expect(db.execute.mock.calls[2][0]).toMatch(/^DELETE FROM directory_resource_person_options/);
+    await expect(directoryLists.deleteOption(9)).resolves.toMatchObject({ deleted: true });
+    expect(db.execute.mock.calls[2][0]).toMatch(/^DELETE FROM directory_options /);
   });
 
   it('answers an entry already in the list with a 409', async () => {
     execute.mockResolvedValueOnce([[{ id: 3 }]]);
 
     await expect(
-      resourcePersonModel.addOptions('specialization', { name: ' microbiology ' }),
+      directoryLists.addOptions('specialization', { name: ' microbiology ' }),
     ).rejects.toMatchObject({ status: 409, message: '"microbiology" is already in the list.' });
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute.mock.calls[0][1]).toEqual(['specialization', 'microbiology']);
@@ -947,7 +976,7 @@ describe('resource person Tag and Specialization lists', () => {
         ],
       ]);
 
-    const result = await resourcePersonModel.addOptions('specialization', {
+    const result = await directoryLists.addOptions('specialization', {
       names: ['Chemistry', ' Physics ', 'Cafe', 'chemistry'],
     });
 
@@ -973,7 +1002,7 @@ describe('resource person Tag and Specialization lists', () => {
       .mockResolvedValueOnce([{ insertId: 8 }])
       .mockResolvedValueOnce([[{ id: 8, list_key: 'tag', name: 'Physics', is_active: 1 }]]);
 
-    const result = await resourcePersonModel.addOptions('tag', { names: ['Chemistry', 'Physics'] });
+    const result = await directoryLists.addOptions('tag', { names: ['Chemistry', 'Physics'] });
 
     expect(result.skipped).toEqual(['Chemistry']);
     expect(result.added.map((row) => row.name)).toEqual(['Physics']);
@@ -983,15 +1012,16 @@ describe('resource person Tag and Specialization lists', () => {
   // A Tag is stored in the records' VARCHAR(100) tag column; a longer entry could be picked
   // but never saved.
   it('limits a Tag to 100 characters and a Specialization to 255', async () => {
-    await expect(
-      resourcePersonModel.addOptions('tag', { name: 'x'.repeat(101) }),
-    ).rejects.toMatchObject({ status: 400, message: 'Name must be 100 characters or fewer.' });
+    await expect(directoryLists.addOptions('tag', { name: 'x'.repeat(101) })).rejects.toMatchObject(
+      { status: 400, message: 'Name must be 100 characters or fewer.' },
+    );
     db.execute.mockResolvedValueOnce([[{ list_key: 'tag', name: 'Short' }]]);
+    await expect(directoryLists.updateOption(4, { name: 'x'.repeat(101) })).rejects.toMatchObject({
+      status: 400,
+      message: 'Name must be 100 characters or fewer.',
+    });
     await expect(
-      resourcePersonModel.updateOption(4, { name: 'x'.repeat(101) }),
-    ).rejects.toMatchObject({ status: 400, message: 'Name must be 100 characters or fewer.' });
-    await expect(
-      resourcePersonModel.addOptions('specialization', { name: 'x'.repeat(256) }),
+      directoryLists.addOptions('specialization', { name: 'x'.repeat(256) }),
     ).rejects.toMatchObject({ status: 400, message: 'Name must be 255 characters or fewer.' });
   });
 
@@ -999,12 +1029,9 @@ describe('resource person Tag and Specialization lists', () => {
   // can be neither renamed, retired nor deleted; the migration also counts on the Tag list
   // never emptying again.
   it.each([
-    ['renamed', (id) => resourcePersonModel.updateOption(id, { name: 'Misc' })],
-    [
-      'retired',
-      (id) => resourcePersonModel.updateOption(id, { name: 'General', is_active: false }),
-    ],
-    ['deleted', (id) => resourcePersonModel.deleteOption(id)],
+    ['renamed', (id) => directoryLists.updateOption(id, { name: 'Misc' })],
+    ['retired', (id) => directoryLists.updateOption(id, { name: 'General', is_active: false })],
+    ['deleted', (id) => directoryLists.deleteOption(id)],
   ])('refuses to let the General Tag be %s', async (_label, act) => {
     db.execute.mockResolvedValueOnce([[{ list_key: 'tag', name: 'General' }]]);
 
@@ -1025,13 +1052,13 @@ describe('resource person Tag and Specialization lists', () => {
       ]);
 
     await expect(
-      resourcePersonModel.updateOption(1, { name: 'General', is_active: false }),
+      directoryLists.updateOption(1, { name: 'General', is_active: false }),
     ).resolves.toMatchObject({ is_active: false });
   });
 });
 
-// The organization form follows the same list rules, against its own lists; the legacy
-// free-text `sector` column is neither written nor returned.
+// The organization form follows the same list rules; a `sector` field from an old client
+// (the free-text Specialization the lists replaced, its column since dropped) is ignored.
 describe('organization Tag and Specialization lists', () => {
   beforeEach(() => {
     execute.mockReset();
@@ -1050,7 +1077,7 @@ describe('organization Tag and Specialization lists', () => {
   it('stores listed picks for a new organization and never writes sector', async () => {
     execute
       .mockResolvedValueOnce([{ insertId: 60 }])
-      .mockResolvedValueOnce([[{ id: 60, created_by: 2, sector: 'stale' }]]);
+      .mockResolvedValueOnce([[{ id: 60, created_by: 2 }]]);
 
     const saved = await organizationModel.submit(
       { name: 'Org', tag: 'research', sector: 'Typed', specializations: ['chemistry'] },
@@ -1066,7 +1093,6 @@ describe('organization Tag and Specialization lists', () => {
       0,
     ]);
     expect(saved.specializations).toEqual(['Chemistry']);
-    expect(saved).not.toHaveProperty('sector');
   });
 
   it('refuses an organization Specialization the list does not have', async () => {
@@ -1276,6 +1302,50 @@ describe('resource person profession organization link', () => {
       sql.startsWith('INSERT INTO directory_resource_person_professions'),
     );
     expect(values[9]).toBeNull();
+  });
+
+  // The type says whether the official email is the person's own or a role mailbox the
+  // post's next holder reads; it is kept only beside an email and only as one of the two.
+  it.each([
+    [{ officialEmail: 'membersecretary@tnscst.in', officialEmailType: 'role' }, 'role'],
+    [{ officialEmail: 'rk.sharma@tnscst.in', officialEmailType: 'personal' }, 'personal'],
+    [{ officialEmail: '', officialEmailType: 'role' }, null],
+    [{ officialEmail: 'x@y.in', officialEmailType: 'shared' }, null],
+    // A loaded row carries both keys and the form edits only officialEmailType, so a type
+    // the form left unset must not fall back to the stored one, which belonged to the old
+    // address.
+    [
+      {
+        officialEmail: 'new@tnscst.in',
+        officialEmailType: null,
+        official_email: 'old@tnscst.in',
+        official_email_type: 'personal',
+      },
+      null,
+    ],
+  ])('stores the official email type of %j as %s', async (profession, stored) => {
+    execute
+      .mockResolvedValueOnce([[{ id: 30, created_by: 2 }]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValue([{}]);
+
+    await resourcePersonModel.update(
+      30,
+      {
+        firstName: 'A',
+        lastName: 'B',
+        professions: JSON.stringify([{ designation: 'Member Secretary', ...profession }]),
+      },
+      {},
+      2,
+    );
+
+    const [sql, values] = execute.mock.calls.find(([statement]) =>
+      statement.startsWith('INSERT INTO directory_resource_person_professions'),
+    );
+    const columns = sql.match(/\(([^)]*)\) VALUES/)[1].split(', ');
+    expect(values[columns.indexOf('official_email_type')]).toBe(stored);
   });
 
   // The queue's Organization column follows a rename, as the record's details do.

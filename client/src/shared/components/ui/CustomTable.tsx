@@ -7,7 +7,12 @@ interface TableColumn {
   label: string;
   render?: (row: any, rowIndex: number) => React.ReactNode;
   style?: React.CSSProperties;
+  /** A secondary column (S.No., Category, Tag, ...) that a phone drops so the table fits
+   *  without a sideways scroll; the row's details still carry the value. */
+  hideOnPhone?: boolean;
 }
+
+const PHONE_HIDDEN = 'custom-table-col--phone-hidden';
 
 interface CustomTableProps {
   columns: TableColumn[];
@@ -40,7 +45,11 @@ const CustomTable: React.FC<CustomTableProps> = ({
         <thead className="table-light">
           <tr>
             {columns.map((col, index) => (
-              <th key={col.key || index} style={col.style}>
+              <th
+                key={col.key || index}
+                style={col.style}
+                className={col.hideOnPhone ? PHONE_HIDDEN : undefined}
+              >
                 {col.label}
               </th>
             ))}
@@ -81,7 +90,10 @@ const CustomTable: React.FC<CustomTableProps> = ({
                 })}
               >
                 {columns.map((col, colIndex) => (
-                  <td key={`${row[keyField] || rowIndex}-${col.key || colIndex}`}>
+                  <td
+                    key={`${row[keyField] || rowIndex}-${col.key || colIndex}`}
+                    className={col.hideOnPhone ? PHONE_HIDDEN : undefined}
+                  >
                     {col.render ? col.render(row, rowIndex) : row[col.key]}
                   </td>
                 ))}

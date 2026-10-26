@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Smartphone,
   Mail,
   Linkedin,
@@ -17,6 +18,7 @@ import CustomButton from '../../shared/components/ui/CustomButton';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
 import CustomInput from '../../shared/components/ui/CustomInput';
+import CustomRadio from '../../shared/components/ui/CustomRadio';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { DEFAULT_COUNTRY } from '../../shared/utils/regions';
 
@@ -39,8 +41,58 @@ export interface ProfessionDetail {
   orgLinkedIn: string;
   /** The post's official email: the person's own institutional address or a role mailbox. */
   officialEmail: string;
+  /** Whether that email is the person's own or a role mailbox the post's next holder reads. */
+  officialEmailType?: OfficialEmailType | null;
+  /** Form-only: the submitter picked the type, so typing no longer re-guesses it. */
+  officialEmailTypeChosen?: boolean;
   status: string; // 'Working' | 'Relieved'
 }
+
+export type OfficialEmailType = 'personal' | 'role';
+
+// Words that make an address's local part read as a post rather than a person
+// (membersecretary@, hod.cse@, principal@). Only a first guess: the submitter can change it.
+const ROLE_MAILBOX_WORDS = [
+  'principal',
+  'secretary',
+  'registrar',
+  'director',
+  'dean',
+  'head',
+  'chairman',
+  'chairperson',
+  'president',
+  'office',
+  'admin',
+  'info',
+  'contact',
+  'enquiry',
+  'enquiries',
+  'accounts',
+  'admission',
+  'admissions',
+  'placement',
+  'placements',
+  'exam',
+  'exams',
+  'coordinator',
+  'helpdesk',
+  'support',
+  'library',
+  'hostel',
+];
+const ROLE_MAILBOX_SHORT_WORDS = ['hod', 'tpo', 'coe', 'ceo', 'cfo', 'ms'];
+const guessOfficialEmailType = (email: string): OfficialEmailType | null => {
+  const local = email.trim().toLowerCase().split('@')[0];
+  if (!local) return null;
+  const tokens = local.split(/[^a-z]+/).filter(Boolean);
+  const isRole = tokens.some(
+    (token) =>
+      ROLE_MAILBOX_SHORT_WORDS.includes(token) ||
+      ROLE_MAILBOX_WORDS.some((word) => token.startsWith(word) || token.endsWith(word)),
+  );
+  return isRole ? 'role' : 'personal';
+};
 
 export interface ResourcePerson {
   id: number;
@@ -121,6 +173,8 @@ const emptyProfession = (): ProfessionDetail => ({
   country: DEFAULT_COUNTRY,
   orgLinkedIn: '',
   officialEmail: '',
+  officialEmailType: null,
+  officialEmailTypeChosen: false,
   status: 'Working',
 });
 
@@ -160,6 +214,13 @@ const customDropdownStyles = {
   // Text per AGENTS.md typography: 14px, primary-text colour.
   container: (provided: any) => ({ ...provided, fontSize: 'var(--font-size-body)' }),
   singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
+  // One line, cut with an ellipsis: "Select state" wrapped in the narrow State field.
+  placeholder: (provided: any) => ({
+    ...provided,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  }),
   indicatorsContainer: (provided: any) => ({
     ...provided,
     minHeight: 'calc(var(--control-height) - 2px)',
@@ -306,6 +367,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
               ...emptyProfession(),
               ...Object.fromEntries(Object.entries(p).filter(([, value]) => value !== null)),
               country: p.country || DEFAULT_COUNTRY,
+              officialEmailTypeChosen: Boolean(p.officialEmailType),
               id: p.id || newProfessionId(),
             }))
           : [emptyProfession()],
@@ -323,7 +385,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
     if (readOnly) return;
     let cancelled = false;
     authenticityUtility
-      .get('/resource-person-options')
+      .get('/directory-options')
       .then((response: any) => {
         if (cancelled) return;
         const rows: ListOption[] = response?.data || [];
@@ -351,6 +413,34 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
     setProfessions((prev) => prev.filter((_, idx) => idx !== i));
   const changeProfession = (i: number, field: keyof ProfessionDetail, val: string) =>
     setProfessions((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: val } : p)));
+  // Typing an email guesses its type until the submitter picks one. A cleared email has none,
+  // and drops the pick with it, so the next address typed is guessed afresh.
+  const changeOfficialEmail = (i: number, email: string) =>
+    setProfessions((prev) =>
+      prev.map((p, idx) => {
+        if (idx !== i) return p;
+        if (!email.trim())
+          return {
+            ...p,
+            officialEmail: email,
+            officialEmailType: null,
+            officialEmailTypeChosen: false,
+          };
+        return {
+          ...p,
+          officialEmail: email,
+          officialEmailType: p.officialEmailTypeChosen
+            ? p.officialEmailType
+            : guessOfficialEmailType(email),
+        };
+      }),
+    );
+  const chooseOfficialEmailType = (i: number, type: OfficialEmailType) =>
+    setProfessions((prev) =>
+      prev.map((p, idx) =>
+        idx === i ? { ...p, officialEmailType: type, officialEmailTypeChosen: true } : p,
+      ),
+    );
   // Picking an organization copies its address and website into the row, replacing what
   // was there so a switch never leaves the previous organization's city behind. The
   // fields stay editable. The Website input is stored as orgLinkedIn.
@@ -493,7 +583,10 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       remarks: remarks.trim(),
       // An empty list, not a blank row: the server stores every entry it receives,
       // and the form already shows one blank row when it loads an empty list.
-      professions: filteredProfessions.map((p) => ({ ...p })),
+      professions: filteredProfessions.map(({ officialEmailTypeChosen: _chosen, ...p }) => ({
+        ...p,
+        officialEmailType: p.officialEmail?.trim() ? p.officialEmailType : null,
+      })),
       photoName,
       resumeName,
       photoFile,
@@ -782,7 +875,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       [
                         { label: 'Designation', field: 'designation', ph: 'e.g. Professor' },
                         { label: 'Department', field: 'department', ph: 'e.g. Computer Science' },
-                      ] as { label: string; field: keyof ProfessionDetail; ph: string }[]
+                      ] as { label: string; field: 'designation' | 'department'; ph: string }[]
                     ).map(({ label, field, ph }) => (
                       <div key={field} className="rpd-field" style={{ marginBottom: 0 }}>
                         <CustomInput
@@ -855,8 +948,21 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                         isDisabled={isReadOnly}
                       />
                     </div>
+                    {/* Next to the organization it is filled from. */}
+                    <div className="rpd-field" style={{ marginBottom: 0 }}>
+                      <CustomInput
+                        label="Website"
+                        name={`rp-orgLinkedIn-${idx}`}
+                        value={prof.orgLinkedIn}
+                        onChange={(value) => changeProfession(idx, 'orgLinkedIn', value)}
+                        placeholder="Website URL"
+                        disabled={isReadOnly}
+                        className="mb-0"
+                      />
+                    </div>
                   </div>
                   <div
+                    className="rpd-prof-row"
                     style={{
                       display: 'flex',
                       gap: '12px',
@@ -895,31 +1001,63 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     />
                     <div
                       className="rpd-field"
-                      style={{ flex: '1', minWidth: '120px', marginBottom: 0 }}
+                      style={{ flex: '1.6', minWidth: '220px', marginBottom: 0 }}
                     >
-                      <CustomInput
-                        label="Website"
-                        name={`rp-orgLinkedIn-${idx}`}
-                        value={prof.orgLinkedIn}
-                        onChange={(value) => changeProfession(idx, 'orgLinkedIn', value)}
-                        placeholder="Website URL"
-                        disabled={isReadOnly}
-                        className="mb-0"
-                      />
-                    </div>
-                    <div
-                      className="rpd-field"
-                      style={{ flex: '1.6', minWidth: '180px', marginBottom: 0 }}
-                    >
-                      <label htmlFor={`rp-officialEmail-${idx}`} className="rpd-locked-label">
-                        Official email
-                        <ContactLock />
-                      </label>
+                      {/* Both mailbox types are always on show beside the label: typing guesses
+                          one, a click changes it. */}
+                      <div className="rpd-email-head">
+                        <label htmlFor={`rp-officialEmail-${idx}`} className="rpd-locked-label">
+                          Official email
+                          <ContactLock />
+                          {/* A personal address goes with the person: once they are relieved
+                              it may no longer reach them. A role mailbox stays with the post. */}
+                          {prof.status === 'Relieved' &&
+                            prof.officialEmailType === 'personal' &&
+                            prof.officialEmail &&
+                            !contactHidden && (
+                              <span
+                                className="rpd-email-warn"
+                                title="Individual address of a relieved person: it may no longer reach them."
+                                aria-label="May be outdated: individual address of a relieved person"
+                              >
+                                <AlertTriangle size={14} aria-hidden="true" />
+                              </span>
+                            )}
+                        </label>
+                        {!contactHidden && (
+                          <div
+                            className="rpd-email-kind"
+                            role="radiogroup"
+                            aria-label="Mailbox type"
+                          >
+                            <span title="The person’s own individual address">
+                              <CustomRadio
+                                name={`rp-email-kind-${idx}`}
+                                value="personal"
+                                label="Individual"
+                                checked={prof.officialEmailType === 'personal'}
+                                onChange={() => chooseOfficialEmailType(idx, 'personal')}
+                                disabled={isReadOnly || !prof.officialEmail.trim()}
+                              />
+                            </span>
+                            <span title="A mailbox for the post, read by whoever holds it next (e.g. membersecretary@)">
+                              <CustomRadio
+                                name={`rp-email-kind-${idx}`}
+                                value="role"
+                                label="Role"
+                                checked={prof.officialEmailType === 'role'}
+                                onChange={() => chooseOfficialEmailType(idx, 'role')}
+                                disabled={isReadOnly || !prof.officialEmail.trim()}
+                              />
+                            </span>
+                          </div>
+                        )}
+                      </div>
                       <CustomInput
                         name={`rp-officialEmail-${idx}`}
                         type="email"
                         value={contactHidden ? HIDDEN_CONTACT : prof.officialEmail}
-                        onChange={(value) => changeProfession(idx, 'officialEmail', value)}
+                        onChange={(value) => changeOfficialEmail(idx, value)}
                         placeholder="Own or role mailbox"
                         disabled={isReadOnly}
                         className="mb-0"
@@ -946,17 +1084,19 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                         isDisabled={isReadOnly}
                       />
                     </div>
-                    <div
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        height: 'var(--control-height)',
-                        width: '38px',
-                        paddingBottom: '2px',
-                      }}
-                    >
-                      {!isReadOnly && professions.length > 1 ? (
+                    {/* The delete slot exists only when a row can be removed, so a single row's
+                        fields (the official email most) use the full width. */}
+                    {!isReadOnly && professions.length > 1 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: 'var(--control-height)',
+                          width: '38px',
+                          paddingBottom: '2px',
+                        }}
+                      >
                         <CustomButton
                           variant="link"
                           onClick={() => removeProfession(idx)}
@@ -975,10 +1115,8 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                         >
                           <Trash2 size={20} />
                         </CustomButton>
-                      ) : (
-                        <div style={{ width: '38px' }} />
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

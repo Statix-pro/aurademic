@@ -292,6 +292,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
   const tableColumns = [
     {
       key: 'sno',
+      hideOnPhone: true,
       label: 'S.No.',
       render: (person: ResourcePerson, index: number) => (
         <div className="rpd-sno-cell">
@@ -367,12 +368,19 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
     // Finding a speaker or expert starts here, so it sits right after their organization.
     {
       key: 'specializations',
+      hideOnPhone: true,
       label: 'Specializations',
       render: (person: ResourcePerson) => <CustomChipList items={person.specializations ?? []} />,
     },
-    { key: 'category', label: 'Category', render: (person: ResourcePerson) => person.category },
+    {
+      key: 'category',
+      hideOnPhone: true,
+      label: 'Category',
+      render: (person: ResourcePerson) => person.category,
+    },
     {
       key: 'tag',
+      hideOnPhone: true,
       label: 'Tag',
       render: (person: ResourcePerson) => <span className="rpd-tag">{person.tag}</span>,
     },

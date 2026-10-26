@@ -317,6 +317,15 @@
   outline-offset: -2px;
 }
 
+/* Columns marked hideOnPhone: a phone shows the record's name and actions without a
+   sideways scroll; the record's details still carry the hidden values. */
+@media (max-width: 576px) {
+  .custom-table th.custom-table-col--phone-hidden,
+  .custom-table td.custom-table-col--phone-hidden {
+    display: none;
+  }
+}
+
 /* CustomPagination: rows-per-page and count on the left, page buttons on the right. */
 .custom-pagination {
   display: flex;

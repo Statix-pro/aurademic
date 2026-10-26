@@ -20,16 +20,5 @@ const canReviewOrganizations = permissionMiddleware([
 router.get('/organization-submissions', canReviewOrganizations, controller.pending);
 router.put('/organization-submissions/:id', canReviewOrganizations, controller.updateSubmission);
 router.patch('/organization-submissions/:id/review', canReviewOrganizations, controller.review);
-// Tag and Specialization lists: every directory user reads the active entries for the
-// form; only the Directory Admin sees retired ones and changes the lists.
-router.get('/organization-options', canReadDirectory, controller.listOptions);
-router.get('/organization-options/all', canReviewOrganizations, controller.listAllOptions);
-router.post(
-  '/organization-options/:list(tag|specialization)',
-  canReviewOrganizations,
-  controller.addOption,
-);
-router.put('/organization-options/:id(\\d+)', canReviewOrganizations, controller.updateOption);
-router.delete('/organization-options/:id(\\d+)', canReviewOrganizations, controller.deleteOption);
 
 export default router;

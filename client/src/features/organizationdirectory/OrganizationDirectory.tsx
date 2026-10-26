@@ -172,7 +172,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
     if (readOnly) return;
     let cancelled = false;
     authenticityUtility
-      .get('/organization-options')
+      .get('/directory-options')
       .then((response: any) => {
         if (cancelled) return;
         const rows: { list_key: string; name: string }[] = response?.data || [];
@@ -244,8 +244,8 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
         <div className="orgd-split-row">
           {/* Left panel - Basic fields */}
           <div className="orgd-left-col">
-            <div style={{ display: 'flex', gap: '16px' }}>
-              <div className="orgd-field" style={{ flex: '1.6' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+              <div className="orgd-field" style={{ flex: '1.6', minWidth: '200px' }}>
                 {/* CustomInput's label is plain text, so the label sits outside to keep the
                     red required marker; CustomInput uses `name` as the input id. */}
                 <label htmlFor="orgd-name-input">
@@ -259,7 +259,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                   className="mb-0"
                 />
               </div>
-              <div className="orgd-field" style={{ flex: '1' }}>
+              <div className="orgd-field" style={{ flex: '1', minWidth: '160px' }}>
                 <CustomInput
                   label="Abbreviation / Short Name"
                   name="orgd-abbrev-input"
@@ -270,8 +270,8 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                 />
               </div>
             </div>
-            <div style={{ display: 'flex', gap: '16px' }}>
-              <div className="orgd-field" style={{ flex: '1.6' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
+              <div className="orgd-field" style={{ flex: '1.6', minWidth: '200px' }}>
                 <CustomInput
                   label="Address"
                   name="orgd-address-input"
@@ -283,7 +283,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
               </div>
               <fieldset
                 className="orgd-field"
-                style={{ flex: '1', border: 'none', padding: 0, margin: 0 }}
+                style={{ flex: '1 0 auto', border: 'none', padding: 0, margin: 0 }}
               >
                 <legend className="orgd-legend">Status</legend>
                 <div className="orgd-toggle-group">

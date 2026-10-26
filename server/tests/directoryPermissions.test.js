@@ -178,7 +178,7 @@ describe('directory route authentication', () => {
       release: vi.fn(),
       execute: vi.fn(async (sql) => {
         if (/FOR UPDATE/.test(sql)) return [[{ id: 1, is_active: 0, updated_by: null }]];
-        if (/directory_organization_options|SELECT name FROM/.test(sql)) return [[]];
+        if (/directory_options|SELECT name FROM/.test(sql)) return [[]];
         if (/^SELECT o\.\*/.test(sql.trim())) return [[{ id: 1, name: 'Edited', created_by: 4 }]];
         return [{}];
       }),
@@ -198,13 +198,13 @@ describe('directory route authentication', () => {
     expect(connection.release).toHaveBeenCalledOnce();
   });
 
-  // Every directory user reads the Tag and Specialization lists for the form; only the
-  // resource-person Directory Admin changes them.
-  it('lets a directory user read the resource-person lists', async () => {
+  // Every directory user reads the shared Tag and Specialization lists for the forms;
+  // either directory's Directory Admin, or a super admin, changes them.
+  it('lets a directory user read the shared lists', async () => {
     db.query.mockResolvedValueOnce([[{ id: 1, list_key: 'tag', name: 'General', is_active: 1 }]]);
 
     const response = await request(app)
-      .get('/api/resource-person-options')
+      .get('/api/directory-options')
       .set('Authorization', 'Bearer directory-user');
 
     expect(response.status).toBe(200);
@@ -214,74 +214,85 @@ describe('directory route authentication', () => {
   });
 
   it.each([
-    ['directory-user', 'post', '/api/resource-person-options/tag'],
-    ['directory-user', 'put', '/api/resource-person-options/1'],
-    ['directory-user', 'delete', '/api/resource-person-options/1'],
-    ['directory-user', 'get', '/api/resource-person-options/all'],
-    ['org-reviewer', 'post', '/api/resource-person-options/tag'],
-  ])('refuses %s a list change at %s %s', async (token, method, path) => {
-    const response = await request(app)
-      [method](path)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'New' });
+    [undefined, 'get', '/api/directory-options', 401],
+    ['nobody', 'get', '/api/directory-options', 403],
+    ['directory-user', 'post', '/api/directory-options/tag', 403],
+    ['directory-user', 'put', '/api/directory-options/1', 403],
+    ['directory-user', 'delete', '/api/directory-options/1', 403],
+    ['directory-user', 'get', '/api/directory-options/all', 403],
+  ])('refuses %s at %s %s', async (token, method, path, status) => {
+    const call = request(app)[method](path);
+    if (token) call.set('Authorization', `Bearer ${token}`);
+    const response = await call.send({ name: 'New' });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(status);
     expect(db.execute).not.toHaveBeenCalled();
   });
 
-  // Each directory's lists belong to that directory's admin alone.
-  it.each([
-    ['directory-user', 'post', '/api/organization-options/tag'],
-    ['directory-user', 'delete', '/api/organization-options/1'],
-    ['directory-user', 'get', '/api/organization-options/all'],
-    ['rp-reviewer', 'post', '/api/organization-options/tag'],
-  ])('refuses %s an organization list change at %s %s', async (token, method, path) => {
-    const response = await request(app)
-      [method](path)
-      .set('Authorization', `Bearer ${token}`)
-      .send({ name: 'New' });
+  // The per-directory list routes are gone; nothing answers there any more.
+  it.each(['/api/organization-options', '/api/resource-person-options'])(
+    'no longer serves %s',
+    async (path) => {
+      const response = await request(app).get(path).set('Authorization', 'Bearer super-admin');
 
-    expect(response.status).toBe(403);
-    expect(db.execute).not.toHaveBeenCalled();
-  });
+      expect(response.status).toBe(404);
+    },
+  );
 
-  it('lets the organization Directory Admin add a list entry', async () => {
-    db.execute
-      .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([{ insertId: 5 }])
-      .mockResolvedValueOnce([[{ id: 5, list_key: 'tag', name: 'Research', is_active: 1 }]]);
+  it.each(['org-reviewer', 'rp-reviewer', 'super-admin'])(
+    'lets %s add an entry to the shared list',
+    async (token) => {
+      db.execute
+        .mockResolvedValueOnce([[]])
+        .mockResolvedValueOnce([{ insertId: 5 }])
+        .mockResolvedValueOnce([[{ id: 5, list_key: 'tag', name: 'Research', is_active: 1 }]]);
 
-    const response = await request(app)
-      .post('/api/organization-options/tag')
-      .set('Authorization', 'Bearer org-reviewer')
-      .send({ name: 'Research' });
+      const response = await request(app)
+        .post('/api/directory-options/tag')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'Research' });
 
-    expect(response.status).toBe(201);
-    expect(response.body.data).toEqual({
-      added: [{ id: 5, list_key: 'tag', name: 'Research', is_active: true }],
-      skipped: [],
-    });
-  });
+      expect(response.status).toBe(201);
+      expect(response.body.data).toEqual({
+        added: [{ id: 5, list_key: 'tag', name: 'Research', is_active: true }],
+        skipped: [],
+      });
+      expect(db.execute.mock.calls[1][0]).toMatch(/^INSERT INTO directory_options /);
+    },
+  );
 
-  it('lets the resource-person Directory Admin add a list entry', async () => {
-    db.execute
-      .mockResolvedValueOnce([[]])
-      .mockResolvedValueOnce([{ insertId: 12 }])
-      .mockResolvedValueOnce([
-        [{ id: 12, list_key: 'specialization', name: 'Microbiology', is_active: 1 }],
-      ]);
+  it.each(['org-reviewer', 'rp-reviewer'])(
+    'lets %s see retired entries, rename and delete',
+    async (token) => {
+      db.query.mockResolvedValueOnce([[]]);
+      const all = await request(app)
+        .get('/api/directory-options/all')
+        .set('Authorization', `Bearer ${token}`);
+      expect(all.status).toBe(200);
 
-    const response = await request(app)
-      .post('/api/resource-person-options/specialization')
-      .set('Authorization', 'Bearer rp-reviewer')
-      .send({ names: [' Microbiology '] });
+      db.execute
+        .mockResolvedValueOnce([[{ list_key: 'specialization', name: 'Old' }]])
+        .mockResolvedValueOnce([{ affectedRows: 1 }])
+        .mockResolvedValueOnce([
+          [{ id: 4, list_key: 'specialization', name: 'New', is_active: 1 }],
+        ]);
+      const renamed = await request(app)
+        .put('/api/directory-options/4')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ name: 'New' });
+      expect(renamed.status).toBe(200);
 
-    expect(response.status).toBe(201);
-    expect(response.body.data.added).toEqual([
-      { id: 12, list_key: 'specialization', name: 'Microbiology', is_active: true },
-    ]);
-    expect(db.execute.mock.calls[1][1]).toEqual(['specialization', 'Microbiology', 1]);
-  });
+      db.execute
+        .mockResolvedValueOnce([[{ list_key: 'specialization', name: 'New' }]])
+        .mockResolvedValueOnce([[{ used: 0 }]])
+        .mockResolvedValueOnce([{}]);
+      const deleted = await request(app)
+        .delete('/api/directory-options/4')
+        .set('Authorization', `Bearer ${token}`);
+      expect(deleted.status).toBe(200);
+      expect(deleted.body).toMatchObject({ success: true, message: 'Entry deleted.' });
+    },
+  );
 
   it.each(['/api/organization-submissions/1/review', '/api/resource-person-submissions/1/review'])(
     'returns 404 when review targets a missing record at %s',

@@ -1,9 +1,7 @@
 import { Edit3, Plus, Trash2 } from 'lucide-react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from 'react-bootstrap';
-import { useSearchParams } from 'react-router-dom';
 
-import { useAuth } from '../../../contexts/AuthContext';
 import CustomButton from '../../../shared/components/ui/CustomButton';
 import CustomCard from '../../../shared/components/ui/CustomCard';
 import CustomFilterSearch from '../../../shared/components/ui/CustomFilterSearch';
@@ -17,7 +15,6 @@ import CustomTabs, { TabOption } from '../../../shared/components/ui/CustomTabs'
 import CustomToggle from '../../../shared/components/ui/CustomToggle';
 import DeleteConfirmationModal from '../../../shared/components/ui/DeleteConfirmationModal';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
-import { canAccessModuleWorkflow } from '../../../shared/utils/permissionUtils';
 
 type ListKey = 'tag' | 'specialization';
 
@@ -28,26 +25,8 @@ interface ListEntry {
   is_active: boolean;
 }
 
-type DirectoryKey = 'organization' | 'resource-person';
-
-// Each directory keeps its own lists, edited by its own Directory Admin.
-const DIRECTORIES: Record<
-  DirectoryKey,
-  { label: string; endpoint: string; formName: string; moduleKey: string }
-> = {
-  organization: {
-    label: 'Organization',
-    endpoint: '/organization-options',
-    formName: 'organization',
-    moduleKey: 'organization_directory',
-  },
-  'resource-person': {
-    label: 'Resource Person',
-    endpoint: '/resource-person-options',
-    formName: 'resource person',
-    moduleKey: 'resource_person_directory',
-  },
-};
+// Both directories pick from these lists; either directory's Directory Admin edits them.
+const ENDPOINT = '/directory-options';
 
 // DEFAULT_TAG in server/modules/shared/directoryLists.js, which refuses to rename, retire or
 // delete it.
@@ -59,22 +38,11 @@ const LISTS: TabOption<ListKey>[] = [
 ];
 
 /**
- * The directories' Tag and Specialization lists, which their forms offer as the only choices.
- * A Directory Admin sees the directories they manage, switched by tab (kept in ?directory=).
- * Records store an entry by name, so renaming or retiring one changes only what the form
- * offers next.
+ * The Tag and Specialization lists the organization and resource person forms both offer as
+ * the only choices. Records store an entry by name, so renaming or retiring one changes only
+ * what the forms offer next.
  */
 export default function DirectoryListsPage() {
-  const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const directories: TabOption<DirectoryKey>[] = (Object.keys(DIRECTORIES) as DirectoryKey[])
-    .filter((key) => canAccessModuleWorkflow(user, DIRECTORIES[key].moduleKey))
-    .map((key) => ({ value: key, label: DIRECTORIES[key].label }));
-  const directory =
-    directories.find((option) => option.value === searchParams.get('directory'))?.value ??
-    directories[0]?.value ??
-    'organization';
-  const { endpoint, formName } = DIRECTORIES[directory];
   const [entries, setEntries] = useState<ListEntry[]>([]);
   const [list, setList] = useState<ListKey>('tag');
   const [error, setError] = useState('');
@@ -87,21 +55,11 @@ export default function DirectoryListsPage() {
   const [deleting, setDeleting] = useState<ListEntry | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Entry ids are per directory, and edits and deletes go to the current directory's
-  // endpoint by id. So a response for a directory the admin has since left is dropped, and
-  // an open dialog closes when the directory changes.
-  const endpointRef = useRef(endpoint);
-  endpointRef.current = endpoint;
-
   useEffect(() => {
     let current = true;
-    setEntries([]);
-    setNotice('');
-    setEditing(null);
-    setDeleting(null);
     (async () => {
       try {
-        const response = (await authenticityUtility.get(`${endpoint}/all`)) as any;
+        const response = (await authenticityUtility.get(`${ENDPOINT}/all`)) as any;
         if (!current) return;
         setEntries(response.data || []);
         setError('');
@@ -112,7 +70,7 @@ export default function DirectoryListsPage() {
     return () => {
       current = false;
     };
-  }, [endpoint]);
+  }, []);
 
   const [search, setSearch] = useState('');
   const rows = useMemo(() => {
@@ -130,7 +88,7 @@ export default function DirectoryListsPage() {
   const pageRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   useEffect(() => {
     setPage(1);
-  }, [endpoint, list, pageSize, search]);
+  }, [list, pageSize, search]);
 
   const openForm = (entry: Partial<ListEntry> | null) => {
     setEditing(entry ?? {});
@@ -147,14 +105,12 @@ export default function DirectoryListsPage() {
     }
     setSaving(true);
     setFormError('');
-    const target = endpoint;
     try {
       if (editing.id) {
-        const response = (await authenticityUtility.put(`${target}/${editing.id}`, {
+        const response = (await authenticityUtility.put(`${ENDPOINT}/${editing.id}`, {
           name: name.trim(),
           is_active: isActive,
         })) as any;
-        if (endpointRef.current !== target) return;
         const saved = response.data as ListEntry;
         setEntries((current) => current.map((entry) => (entry.id === saved.id ? saved : entry)));
         setNotice('');
@@ -164,11 +120,10 @@ export default function DirectoryListsPage() {
           .split(/[,\n]/)
           .map((value) => value.trim())
           .filter(Boolean);
-        const response = (await authenticityUtility.post(`${target}/${list}`, {
+        const response = (await authenticityUtility.post(`${ENDPOINT}/${list}`, {
           names,
           is_active: isActive,
         })) as any;
-        if (endpointRef.current !== target) return;
         const { added, skipped } = response.data as { added: ListEntry[]; skipped: string[] };
         setEntries((current) => [...current, ...added]);
         setNotice(
@@ -188,10 +143,8 @@ export default function DirectoryListsPage() {
   const confirmDelete = async () => {
     if (!deleting) return;
     setIsDeleting(true);
-    const target = endpoint;
     try {
-      const response = (await authenticityUtility.delete(`${target}/${deleting.id}`)) as any;
-      if (endpointRef.current !== target) return;
+      const response = (await authenticityUtility.delete(`${ENDPOINT}/${deleting.id}`)) as any;
       setEntries((current) =>
         response.data?.deactivated
           ? current.map((entry) =>
@@ -212,16 +165,28 @@ export default function DirectoryListsPage() {
   const columns = [
     {
       key: 'sno',
+      hideOnPhone: true,
       label: 'S.No.',
       render: (_entry: ListEntry, index: number) => (currentPage - 1) * pageSize + index + 1,
     },
     {
       key: 'name',
       label: 'Name',
-      render: (entry: ListEntry) => <span className="dlp-entry-name">{entry.name}</span>,
+      // On a phone the Status column is hidden and the pill shows under the name instead.
+      render: (entry: ListEntry) => (
+        <>
+          <span className="dlp-entry-name">{entry.name}</span>
+          <span
+            className={`dlp-status-pill dlp-status-inline ${entry.is_active ? 'active' : 'inactive'}`}
+          >
+            {entry.is_active ? 'Active' : 'Inactive'}
+          </span>
+        </>
+      ),
     },
     {
       key: 'is_active',
+      hideOnPhone: true,
       label: 'Status',
       render: (entry: ListEntry) => (
         <span className={`dlp-status-pill ${entry.is_active ? 'active' : 'inactive'}`}>
@@ -262,7 +227,7 @@ export default function DirectoryListsPage() {
   ];
 
   return (
-    <div className="dlp-page p-4">
+    <div className="dlp-page p-3 p-md-4">
       <style>{`
         .dlp-page { min-height: 100%; background: #f1f6fb; }
         .dlp-card { max-width: 900px; border: 0; border-radius: 18px; background: #fff; box-shadow: 0 8px 24px rgba(15,42,70,.08); }
@@ -278,11 +243,13 @@ export default function DirectoryListsPage() {
         .dlp-table.custom-table th:nth-child(3), .dlp-table.custom-table td:nth-child(3) { width: 18%; text-align: center; }
         .dlp-table.custom-table th:nth-child(4), .dlp-table.custom-table td:nth-child(4) { width: 18%; text-align: center; }
         .dlp-table .dlp-entry-name { color: var(--text-strong); font-weight: 700; }
+        .dlp-table .dlp-status-pill.dlp-status-inline { display: none; }
         .dlp-table .dlp-status-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: var(--font-size-tertiary); font-weight: 600; }
         .dlp-table .dlp-status-pill.active { background: #dcfce7; color: #166534; }
         .dlp-table .dlp-status-pill.inactive { background: #eef2f6; color: #475569; }
         .dlp-table .dlp-actions { display: flex; gap: 6px; justify-content: center; }
         .dlp-table .dlp-default-note { color: var(--text-muted); font-size: var(--font-size-tertiary); line-height: var(--leading-tertiary); }
+        @media (max-width: 576px) { .dlp-table .dlp-status-pill.dlp-status-inline { display: table; margin-top: 4px; } }
         .custom-btn.dlp-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: var(--icon-action-size); height: var(--icon-action-size); min-width: 0; min-height: 0; padding: 0; border: 1px solid #0069ab; border-radius: 8px; background: #fff; color: #0069ab; }
         .custom-btn.dlp-icon-btn:hover { background: #e0f0ff; color: #0069ab; }
         .custom-btn.dlp-icon-btn--delete { border-color: #b91c1c; color: #b91c1c; }
@@ -308,18 +275,10 @@ export default function DirectoryListsPage() {
             </CustomButton>
           </div>
         </div>
-        {directories.length > 1 && (
-          <CustomTabs
-            options={directories}
-            value={directory}
-            onChange={(next) => setSearchParams({ directory: next }, { replace: true })}
-            ariaLabel="Directory"
-            className="mb-2"
-          />
-        )}
         <p className="dlp-intro mb-3">
-          The {formName} form offers only these entries. Renaming or making one inactive changes
-          what the form offers next; records keep the value they already hold.
+          The organization and resource person forms both offer only these entries. Renaming or
+          making one inactive changes what the forms offer next; records keep the value they already
+          hold.
         </p>
 
         <CustomTabs<ListKey>

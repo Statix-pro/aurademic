@@ -277,6 +277,13 @@
     grid-template-columns: 1fr;
   }
 }
+/* A phone hides the secondary columns (hideOnPhone), so the table no longer needs its
+   desktop minimum width or a sideways scroll. */
+@media (max-width: 576px) {
+  .rpd-table {
+    min-width: 0;
+  }
+}
 .rpd-status-pill {
   display: inline-block;
   padding: 5px 10px;

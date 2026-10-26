@@ -190,6 +190,7 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
           style={{
             width: 40,
             height: 40,
+            flexShrink: 0,
             borderRadius: 10,
             background: BLUE,
             color: '#fff',
@@ -238,9 +239,15 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
         </div>
       ),
     },
-    { key: 'category', label: 'Category', render: (row: Organization) => row.category || '—' },
+    {
+      key: 'category',
+      hideOnPhone: true,
+      label: 'Category',
+      render: (row: Organization) => row.category || '—',
+    },
     {
       key: 'tag',
+      hideOnPhone: true,
       label: 'Tag',
       render: (row: Organization) =>
         row.tag ? <span className="organization-approval-tag">{row.tag}</span> : '—',
@@ -313,7 +320,7 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
   ];
 
   return (
-    <div className="organization-approval-page p-4">
+    <div className="organization-approval-page p-3 p-md-4">
       <style>{`
         .organization-approval-page { min-height: 100%; background: #f1f6fb; color: #29436a; }
         .organization-details-modal .modal-dialog { max-width: 1150px; width: calc(100% - 32px); }
@@ -342,6 +349,13 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
         .organization-approval-table.custom-table th:nth-child(2), .organization-approval-table.custom-table td:nth-child(2) { width: 15%; }
         .organization-approval-table.custom-table th:nth-child(3), .organization-approval-table.custom-table td:nth-child(3) { width: 13%; text-align: center; }
         .organization-approval-table.custom-table th:last-child, .organization-approval-table.custom-table td:last-child { width: 32% !important; text-align: center; white-space: nowrap; }
+        @media (max-width: 576px) {
+          /* On a phone (Category and Tag hidden via hideOnPhone) the actions wrap instead of
+             widening the table. */
+          .organization-approval-table.custom-table { min-width: 0; }
+          .organization-approval-table .organization-approval-actions { flex-wrap: wrap; white-space: normal; }
+          .organization-approval-table.custom-table th:last-child, .organization-approval-table.custom-table td:last-child { width: auto !important; white-space: normal; }
+        }
       `}</style>
       <CustomCard className="organization-approval-card mx-auto" style={{ maxWidth: 1250 }}>
         {switcher}
@@ -386,16 +400,16 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
         )}
 
         <div className="row g-3 mb-4">
-          <div className="col-12 col-sm-6 col-xl-3">
+          <div className="col-6 col-xl-3">
             {stat(<BriefcaseBusiness size={22} />, counts.total, 'Total', 'All')}
           </div>
-          <div className="col-12 col-sm-6 col-xl-3">
+          <div className="col-6 col-xl-3">
             {stat(<Clock3 size={22} />, counts.pending, 'Pending', 'Pending')}
           </div>
-          <div className="col-12 col-sm-6 col-xl-3">
+          <div className="col-6 col-xl-3">
             {stat(<CircleCheck size={22} />, counts.approved, 'Approved', 'Approved')}
           </div>
-          <div className="col-12 col-sm-6 col-xl-3">
+          <div className="col-6 col-xl-3">
             {stat(<CircleX size={22} />, counts.rejected, 'Rejected', 'Rejected')}
           </div>
         </div>
