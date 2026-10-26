@@ -180,6 +180,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
       mobile: row.mobile || '',
       personalEmail: row.personalEmail || row.personal_email || '',
       linkedIn: row.linkedIn || row.linked_in || '',
+      remarks: row.remarks || '',
       professions,
       photoName: row.photoName || row.photo_name || '',
       photoPath: row.photoPath || row.photo_path || '',

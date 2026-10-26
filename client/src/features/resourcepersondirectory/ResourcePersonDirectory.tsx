@@ -58,6 +58,8 @@ export interface ResourcePerson {
   mobile: string;
   personalEmail: string;
   linkedIn: string;
+  /** The submitter's notes on the person; withheld from others like the contacts. */
+  remarks?: string;
   professions: ProfessionDetail[];
   photoName?: string;
   photoPath?: string;
@@ -270,6 +272,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   const [mobile, setMobile] = useState('');
   const [personalEmail, setPersonalEmail] = useState('');
   const [linkedIn, setLinkedIn] = useState('');
+  const [remarks, setRemarks] = useState('');
   const [professions, setProfessions] = useState<ProfessionDetail[]>([emptyProfession()]);
   const [photoName, setPhotoName] = useState('');
   const [resumeName, setResumeName] = useState('');
@@ -295,6 +298,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       setMobile(editingPerson.mobile || '');
       setPersonalEmail(editingPerson.personalEmail || '');
       setLinkedIn(editingPerson.linkedIn || '');
+      setRemarks(editingPerson.remarks || '');
       setProfessions(
         editingPerson.professions?.length
           ? editingPerson.professions.map((p) => ({
@@ -486,6 +490,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       mobile: mobile.trim(),
       personalEmail: personalEmail.trim(),
       linkedIn: linkedIn.trim(),
+      remarks: remarks.trim(),
       // An empty list, not a blank row: the server stores every entry it receives,
       // and the form already shows one blank row when it loads an empty list.
       professions: filteredProfessions.map((p) => ({ ...p })),
@@ -992,50 +997,52 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                 <div>
                   <div className="rpd-upload-label">Photo</div>
                   <div className="rpd-upload-hint">JPG, JPEG, PNG (Maximum 2 MB)</div>
-                  {photoName && (
-                    <div className="rpd-upload-filename">
-                      {!photoFile && !removePhoto && editingPerson?.photoPath ? (
-                        <a
-                          href={uploadUrl(editingPerson.photoPath)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {photoName}
-                        </a>
-                      ) : (
-                        photoName
-                      )}
-                      {!isReadOnly && (
-                        <CustomButton
-                          variant="link"
-                          onClick={handleRemovePhoto}
-                          title="Remove photo"
-                          aria-label="Remove photo"
-                          style={{
-                            color: '#b91c1c',
-                            padding: '0 4px',
-                            marginLeft: '6px',
-                            verticalAlign: 'middle',
-                            lineHeight: 1,
-                          }}
-                        >
-                          <Trash2 size={14} aria-hidden="true" />
-                        </CustomButton>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
-              {/* Only the button is used: the chosen file shows under the hint, as before, so
-                  the uploader's own filename chip would squeeze the text column. */}
-              <CustomFileUploader
-                name="rp-photo"
-                accept=".jpg,.jpeg,.png"
-                buttonText="Choose File"
-                onChange={handlePhoto}
-                disabled={isReadOnly}
-                className="mb-0 rpd-upload-button"
-              />
+              {/* One file at a time: the chosen or stored file takes the button's place,
+                  and the button returns once the file is removed with the bin icon. Only
+                  the uploader's button is used; its own filename chip would squeeze the
+                  text column. */}
+              {photoName ? (
+                <div className="rpd-upload-filename">
+                  <span className="rpd-upload-filename-text" title={photoName}>
+                    {!photoFile && !removePhoto && editingPerson?.photoPath ? (
+                      <a href={uploadUrl(editingPerson.photoPath)} target="_blank" rel="noreferrer">
+                        {photoName}
+                      </a>
+                    ) : (
+                      photoName
+                    )}
+                  </span>
+                  {!isReadOnly && (
+                    <CustomButton
+                      variant="link"
+                      className="rpd-upload-remove"
+                      onClick={handleRemovePhoto}
+                      title="Remove photo"
+                      aria-label="Remove photo"
+                      style={{
+                        color: '#b91c1c',
+                        padding: '0 4px',
+                        marginLeft: '6px',
+                        verticalAlign: 'middle',
+                        lineHeight: 1,
+                      }}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </CustomButton>
+                  )}
+                </div>
+              ) : (
+                <CustomFileUploader
+                  name="rp-photo"
+                  accept=".jpg,.jpeg,.png"
+                  buttonText="Choose File"
+                  onChange={handlePhoto}
+                  disabled={isReadOnly}
+                  className="mb-0 rpd-upload-button"
+                />
+              )}
             </div>
             <div className="rpd-upload-box" style={isReadOnly ? { opacity: 0.6 } : undefined}>
               <div className="rpd-upload-info">
@@ -1048,50 +1055,77 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     <ContactLock />
                   </div>
                   <div className="rpd-upload-hint">PDF, DOC, DOCX (Maximum 5 MB)</div>
-                  {resumeName && (
-                    <div className="rpd-upload-filename">
-                      {!resumeFile && !removeResume && editingPerson?.resumePath ? (
-                        <a
-                          href={uploadUrl(editingPerson.resumePath)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {resumeName}
-                        </a>
-                      ) : (
-                        resumeName
-                      )}
-                      {!isReadOnly && (
-                        <CustomButton
-                          variant="link"
-                          onClick={handleRemoveResume}
-                          title="Remove resume"
-                          aria-label="Remove resume"
-                          style={{
-                            color: '#b91c1c',
-                            padding: '0 4px',
-                            marginLeft: '6px',
-                            verticalAlign: 'middle',
-                            lineHeight: 1,
-                          }}
-                        >
-                          <Trash2 size={14} aria-hidden="true" />
-                        </CustomButton>
-                      )}
-                    </div>
-                  )}
                 </div>
               </div>
-              {/* Only the button is used: the chosen file shows under the hint, as before, so
-                  the uploader's own filename chip would squeeze the text column. */}
-              <CustomFileUploader
-                name="rp-resume"
-                accept=".pdf,.doc,.docx"
-                buttonText="Choose File"
-                onChange={handleResume}
-                disabled={isReadOnly}
-                className="mb-0 rpd-upload-button"
-              />
+              {/* One file at a time: the chosen or stored file takes the button's place,
+                  and the button returns once the file is removed with the bin icon. Only
+                  the uploader's button is used; its own filename chip would squeeze the
+                  text column. */}
+              {resumeName ? (
+                <div className="rpd-upload-filename">
+                  <span className="rpd-upload-filename-text" title={resumeName}>
+                    {!resumeFile && !removeResume && editingPerson?.resumePath ? (
+                      <a
+                        href={uploadUrl(editingPerson.resumePath)}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        {resumeName}
+                      </a>
+                    ) : (
+                      resumeName
+                    )}
+                  </span>
+                  {!isReadOnly && (
+                    <CustomButton
+                      variant="link"
+                      className="rpd-upload-remove"
+                      onClick={handleRemoveResume}
+                      title="Remove resume"
+                      aria-label="Remove resume"
+                      style={{
+                        color: '#b91c1c',
+                        padding: '0 4px',
+                        marginLeft: '6px',
+                        verticalAlign: 'middle',
+                        lineHeight: 1,
+                      }}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </CustomButton>
+                  )}
+                </div>
+              ) : (
+                <CustomFileUploader
+                  name="rp-resume"
+                  accept=".pdf,.doc,.docx"
+                  buttonText="Choose File"
+                  onChange={handleResume}
+                  disabled={isReadOnly}
+                  className="mb-0 rpd-upload-button"
+                />
+              )}
+            </div>
+            <div
+              className="rpd-upload-box rpd-remarks-box"
+              style={isReadOnly ? { opacity: 0.6 } : undefined}
+            >
+              <div className="rpd-field">
+                <label htmlFor="rp-remarks" className="rpd-locked-label">
+                  Remarks
+                  <ContactLock />
+                </label>
+                <CustomInput
+                  name="rp-remarks"
+                  as="textarea"
+                  rows={2}
+                  value={contactHidden ? HIDDEN_CONTACT : remarks}
+                  onChange={setRemarks}
+                  placeholder="Notes about this person"
+                  disabled={isReadOnly}
+                  className="mb-0"
+                />
+              </div>
             </div>
           </div>
           {fileError && (

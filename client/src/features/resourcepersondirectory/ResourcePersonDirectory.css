@@ -322,16 +322,43 @@
   margin-top: 2px;
 }
 
+/* The chosen or stored file sits where the Choose File button was, on the box's right. */
 .rpd-upload-filename {
-  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  max-width: 140px;
+  gap: 2px;
+  margin-left: 16px;
   font-size: var(--font-size-secondary);
   font-weight: var(--weight-semibold);
   color: #0069ab;
   overflow-wrap: anywhere;
 }
 
+/* Up to two lines, then cut with an ellipsis; the full name is in its title. The bin stays
+   beside it. A name with no spaces breaks anywhere rather than overflowing. */
+.rpd-upload-filename-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.rpd-upload-filename-text a {
+  color: inherit;
+}
+
+/* The bin keeps its size however long the name beside it is. */
+.custom-btn.rpd-upload-remove {
+  flex-shrink: 0;
+}
+
 /* CustomFileUploader is used for its button only. Its "No file selected" text is hidden
-   because the name shows under the hint, and the button gets the box's original look
+   because a chosen file takes the button's place, and the button gets the box's original look
    (!important: the uploader sets these inline). */
 .rpd-upload-button {
   flex-shrink: 0;
@@ -1079,6 +1106,22 @@
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
+}
+
+/* The boxes share the row equally; a long file name is cut, never widens its box. */
+.rpd-docs-row > .rpd-upload-box {
+  min-width: 0;
+}
+
+/* Remarks sits in the row beside Photo and Resume, in the same frame, with its label above
+   the box instead of an icon and a button beside it. */
+.rpd-upload-box.rpd-remarks-box {
+  display: block;
+  padding: 12px 20px;
+}
+
+.rpd-remarks-box .rpd-field {
+  margin-bottom: 0;
 }
 
 .rpd-req {
