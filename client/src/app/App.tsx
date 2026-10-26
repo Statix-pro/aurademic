@@ -335,14 +335,6 @@ function App() {
 
                       {/* ADMIN */}
                       <Route
-                        path="/admin-dashboard"
-                        element={
-                          <AdminRoute>
-                            <Dashboard />
-                          </AdminRoute>
-                        }
-                      />
-                      <Route
                         path="/publication-dashboard"
                         element={
                           <AdminRoute>

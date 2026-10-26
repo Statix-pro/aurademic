@@ -575,7 +575,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 isGroupActive([
                   '/publication-dashboard',
                   '/project-dashboard',
-                  '/admin-dashboard',
                   '/admin/budget',
                   '/admin/directory-approval',
                   '/workflow/finance',
@@ -608,13 +607,6 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                       onClick={handleLinkClick}
                     >
                       Project Approval
-                    </Link>
-                    <Link
-                      to="/admin-dashboard"
-                      className={`sb-sublink ${isActive('/admin-dashboard') ? 'active' : ''}`}
-                      onClick={handleLinkClick}
-                    >
-                      Dashboard
                     </Link>
                   </>
                 )}

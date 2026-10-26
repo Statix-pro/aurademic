@@ -597,7 +597,7 @@ const Dashboard: React.FC = () => {
     const path = location.pathname;
     if (path === '/project-dashboard') {
       setActiveTab('projects');
-    } else if (path === '/publication-dashboard' || path === '/admin-dashboard') {
+    } else if (path === '/publication-dashboard') {
       setActiveTab('journals');
     }
   }, [location.pathname]);
