@@ -26,6 +26,7 @@ const fields = [
   'mobile',
   'personal_email',
   'linked_in',
+  'remarks',
   'photo_name',
   'photo_path',
   'photo_mime_type',
@@ -88,6 +89,8 @@ const PRIVATE_PERSON_FIELDS = [
   'resumePath',
   'resume_mime_type',
   'resume_file_size',
+  // The submitter's own notes on the person (fees, availability, ...), locked like a contact.
+  'remarks',
   // Holds the reviewer's feedback, which is between the submitter and the reviewer.
   'workflow_state',
 ];
@@ -272,6 +275,7 @@ const normalize = (input = {}, files = {}) => ({
   mobile: text(input.mobile),
   personal_email: text(input.personal_email ?? input.personalEmail),
   linked_in: text(input.linked_in ?? input.linkedIn),
+  remarks: text(typeof input.remarks === 'string' ? input.remarks.trim() : input.remarks),
   ...uploadedFileFields(files.photoFile?.[0], 'photo'),
   ...uploadedFileFields(files.resumeFile?.[0], 'resume'),
 });

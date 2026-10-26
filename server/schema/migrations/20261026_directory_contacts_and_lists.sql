@@ -30,6 +30,11 @@
 --            first, then one the resource person's own submitter created, then the
 --            oldest. Rows whose name matches no organization stay unlinked.
 --
+--   E. A resource person gets Remarks: the submitter's free-text notes on the person
+--      (availability, fees, how they were found). Locked like the contacts -- only the
+--      submitter and super admins read it.
+--        E1. `directory_resource_persons.remarks` is added (TEXT, NULL).
+--
 --   B. Resource person Tag and Specializations are picked from lists.
 --   C. Organization Tag and Specializations are picked from lists.
 --      Both were free text, so one value arrived in several spellings. Each directory now
@@ -118,6 +123,19 @@ SET @has_fk = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
                   AND CONSTRAINT_NAME = 'fk_drp_professions_organization');
 SET @sql = IF(@has_fk = 0,
   'ALTER TABLE directory_resource_person_professions ADD CONSTRAINT fk_drp_professions_organization FOREIGN KEY (organization_id) REFERENCES organizations (id) ON DELETE SET NULL ON UPDATE CASCADE',
+  'SELECT 1');
+PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- ==================================================================
+-- E1. Remarks on the resource person
+-- ==================================================================
+
+SET @has_col = (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = @db_name
+                   AND TABLE_NAME = 'directory_resource_persons'
+                   AND COLUMN_NAME = 'remarks');
+SET @sql = IF(@has_col = 0,
+  'ALTER TABLE directory_resource_persons ADD COLUMN remarks TEXT NULL DEFAULT NULL COMMENT ''Notes by the submitter on the person; private like the contacts'' AFTER linked_in',
   'SELECT 1');
 PREPARE stmt FROM @sql; EXECUTE stmt; DEALLOCATE PREPARE stmt;
 
@@ -322,6 +340,7 @@ COMMIT;
 --  WHERE designation IS NULL AND department IS NULL AND organization IS NULL
 --    AND city IS NULL AND state IS NULL AND country IS NULL AND org_linked_in IS NULL
 --    AND official_email IS NOT NULL;
+-- ALTER TABLE directory_resource_persons DROP COLUMN remarks;
 -- ALTER TABLE directory_resource_person_professions DROP COLUMN official_email;
 -- ALTER TABLE directory_resource_person_professions
 --   DROP FOREIGN KEY fk_drp_professions_organization, DROP COLUMN organization_id;

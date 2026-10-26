@@ -135,6 +135,26 @@ describe('directory owner-only edits', () => {
     );
   });
 
+  // Remarks are the submitter's notes on the person: saved on create and edit, trimmed.
+  it('saves remarks with the record', async () => {
+    execute
+      .mockResolvedValueOnce([[{ id: 11, created_at: null }]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([{}]);
+
+    const saved = await resourcePersonModel.update(
+      11,
+      { firstName: 'A', lastName: 'B', remarks: '  Prefers mornings  ', professions: '[]' },
+      {},
+      2,
+    );
+
+    const [sql, values] = execute.mock.calls[1];
+    const columns = sql.match(/SET (.*) WHERE/)[1].split(', ');
+    expect(values[columns.indexOf('remarks = ?')]).toBe('Prefers mornings');
+    expect(saved.remarks).toBe('Prefers mornings');
+  });
+
   it('rejects a resource-person edit by another user', async () => {
     execute.mockResolvedValueOnce([[]]);
     await expect(
@@ -566,6 +586,7 @@ describe('directory owner-only edits', () => {
             mobile: '9999999999',
             official_email: 'official@example.test',
             personal_email: 'personal@example.test',
+            remarks: 'Charges a fee; prefers mornings',
             photo_name: 'photo.jpg',
             photo_path: '/uploads/resource-persons/photo.jpg',
             photo_mime_type: 'image/jpeg',
@@ -601,6 +622,7 @@ describe('directory owner-only edits', () => {
       'official_email',
       'officialEmail',
       'address',
+      'remarks',
       'resume_name',
       'resumeName',
       'resume_path',
