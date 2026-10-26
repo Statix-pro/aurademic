@@ -66,6 +66,8 @@ describe('directory route authentication', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     db.execute.mockResolvedValue([[]]);
+    // Approving a resource person first checks its organizations on the pool.
+    db.query.mockResolvedValue([[]]);
   });
 
   it.each(['/api/organizations', '/api/resource-persons'])(
@@ -138,6 +140,135 @@ describe('directory route authentication', () => {
 
     expect(response.status).toBe(403);
     expect(workflowService.actOnWorkflow).not.toHaveBeenCalled();
+  });
+
+  // Editing someone else's submission is a reviewer power: the owner's directory.edit
+  // must not reach it, and neither may the other directory's reviewer.
+  it.each([
+    ['', 401],
+    ['Bearer directory-user', 403],
+    ['Bearer rp-reviewer', 403],
+  ])('refuses a reviewer edit of an organization with %j', async (authorization, status) => {
+    const call = request(app).put('/api/organization-submissions/1');
+    if (authorization) call.set('Authorization', authorization);
+
+    const response = await call.send({ name: 'Edited' });
+
+    expect(response.status).toBe(status);
+    expect(db.getConnection).not.toHaveBeenCalled();
+  });
+
+  it('lets an organization reviewer edit a Pending submission', async () => {
+    const connection = {
+      beginTransaction: vi.fn(),
+      commit: vi.fn(),
+      rollback: vi.fn(),
+      release: vi.fn(),
+      execute: vi.fn(async (sql) => {
+        if (/FOR UPDATE/.test(sql)) return [[{ id: 1, is_active: 0, updated_by: null }]];
+        if (/directory_organization_options|SELECT name FROM/.test(sql)) return [[]];
+        if (/^SELECT o\.\*/.test(sql.trim())) return [[{ id: 1, name: 'Edited', created_by: 4 }]];
+        return [{}];
+      }),
+    };
+    db.getConnection.mockResolvedValueOnce(connection);
+
+    const response = await request(app)
+      .put('/api/organization-submissions/1')
+      .set('Authorization', 'Bearer org-reviewer')
+      .send({ name: 'Edited' });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      success: true,
+      data: { id: 1, name: 'Edited', approvalStatus: 'Pending' },
+    });
+    expect(connection.release).toHaveBeenCalledOnce();
+  });
+
+  // Every directory user reads the Tag and Specialization lists for the form; only the
+  // resource-person Directory Admin changes them.
+  it('lets a directory user read the resource-person lists', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 1, list_key: 'tag', name: 'General', is_active: 1 }]]);
+
+    const response = await request(app)
+      .get('/api/resource-person-options')
+      .set('Authorization', 'Bearer directory-user');
+
+    expect(response.status).toBe(200);
+    expect(response.body.data).toEqual([
+      { id: 1, list_key: 'tag', name: 'General', is_active: true },
+    ]);
+  });
+
+  it.each([
+    ['directory-user', 'post', '/api/resource-person-options/tag'],
+    ['directory-user', 'put', '/api/resource-person-options/1'],
+    ['directory-user', 'delete', '/api/resource-person-options/1'],
+    ['directory-user', 'get', '/api/resource-person-options/all'],
+    ['org-reviewer', 'post', '/api/resource-person-options/tag'],
+  ])('refuses %s a list change at %s %s', async (token, method, path) => {
+    const response = await request(app)
+      [method](path)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'New' });
+
+    expect(response.status).toBe(403);
+    expect(db.execute).not.toHaveBeenCalled();
+  });
+
+  // Each directory's lists belong to that directory's admin alone.
+  it.each([
+    ['directory-user', 'post', '/api/organization-options/tag'],
+    ['directory-user', 'delete', '/api/organization-options/1'],
+    ['directory-user', 'get', '/api/organization-options/all'],
+    ['rp-reviewer', 'post', '/api/organization-options/tag'],
+  ])('refuses %s an organization list change at %s %s', async (token, method, path) => {
+    const response = await request(app)
+      [method](path)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ name: 'New' });
+
+    expect(response.status).toBe(403);
+    expect(db.execute).not.toHaveBeenCalled();
+  });
+
+  it('lets the organization Directory Admin add a list entry', async () => {
+    db.execute
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([[{ id: 5, list_key: 'tag', name: 'Research', is_active: 1 }]]);
+
+    const response = await request(app)
+      .post('/api/organization-options/tag')
+      .set('Authorization', 'Bearer org-reviewer')
+      .send({ name: 'Research' });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data).toEqual({
+      added: [{ id: 5, list_key: 'tag', name: 'Research', is_active: true }],
+      skipped: [],
+    });
+  });
+
+  it('lets the resource-person Directory Admin add a list entry', async () => {
+    db.execute
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([
+        [{ id: 12, list_key: 'specialization', name: 'Microbiology', is_active: 1 }],
+      ]);
+
+    const response = await request(app)
+      .post('/api/resource-person-options/specialization')
+      .set('Authorization', 'Bearer rp-reviewer')
+      .send({ names: [' Microbiology '] });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data.added).toEqual([
+      { id: 12, list_key: 'specialization', name: 'Microbiology', is_active: true },
+    ]);
+    expect(db.execute.mock.calls[1][1]).toEqual(['specialization', 'Microbiology', 1]);
   });
 
   it.each(['/api/organization-submissions/1/review', '/api/resource-person-submissions/1/review'])(

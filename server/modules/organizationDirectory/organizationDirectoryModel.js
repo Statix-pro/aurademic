@@ -1,5 +1,10 @@
 import db from '../../config/connection.js';
 import { getDirectoryApprovalStatus } from '../shared/directoryApprovalStatus.js';
+import {
+  DEFAULT_TAG,
+  createDirectoryLists,
+  parseSpecializations,
+} from '../shared/directoryLists.js';
 import '../shared/workflow/directoryWorkflowAdapter.js';
 import workflowService from '../shared/workflow/workflowService.js';
 
@@ -7,7 +12,6 @@ const ORG_FIELDS = [
   'name',
   'abbreviation',
   'establishment_year',
-  'sector',
   'category',
   'tag',
   'website',
@@ -30,15 +34,28 @@ export const normalizePayload = (input = {}) => {
     ORG_FIELDS.map((field) => {
       const value = input[field] ?? input[aliases[field]];
       if (field === 'category') return [field, value || 'Academic'];
-      if (field === 'tag') return [field, value || 'General'];
+      if (field === 'tag') return [field, value || DEFAULT_TAG];
       if (field === 'status') return [field, value || 'Active'];
       return [field, value === '' ? null : (value ?? null)];
     }),
   );
 };
 
-const serialize = (row) => ({
+// Tag and Specialization lists, shared rules in modules/shared/directoryLists.js.
+const lists = createDirectoryLists({
+  options: 'directory_organization_options',
+  picks: 'directory_organization_specializations',
+  recordColumn: 'organization_id',
+  records: 'organizations',
+});
+
+// LEGACY: organizations.sector held one free-text Specialization before the
+// directory_organization_specializations table (20261026_directory_contacts_and_lists.sql). It is no longer read
+// or written, and is dropped from every response so a stale copy never shows. Remove with
+// the column.
+const serialize = ({ sector: _legacySector, ...row }) => ({
   ...row,
+  specializations: row.specializations || [],
   establishmentYear: row.establishment_year,
   linkedIn: row.linked_in,
   pinCode: row.pin_code,
@@ -49,13 +66,19 @@ export default {
   async listApproved(userId) {
     const [rows] = await db.query(
       // Approved organizations form the shared directory; Pending and Rejected ones stay
-      // with their submitter. Organization fields are public, so nothing is redacted.
-      `SELECT *, DATE(created_at) AS date FROM organizations
-       WHERE created_by = ? OR is_active = 1
-       ORDER BY id DESC`,
+      // with their submitter. Organization fields are public, so nothing is redacted. The
+      // submitter's name and email let a reader ask them about the organization.
+      `SELECT o.*, DATE(o.created_at) AS date,
+              u.name AS submitted_by_name, u.email AS submitted_by_email
+         FROM organizations o
+         LEFT JOIN users u ON u.id = o.created_by
+        WHERE o.created_by = ? OR o.is_active = 1
+        ORDER BY o.id DESC`,
       [userId || 0],
     );
+    const specializationsByOrg = await lists.loadSpecializationsByRecord(rows.map((row) => row.id));
     return rows.map((row) => {
+      row.specializations = specializationsByOrg.get(Number(row.id)) || [];
       const isOwner = Number(row.created_by) === Number(userId);
       // workflow_state holds the reviewer's feedback, which is only the submitter's.
       const { workflow_state: workflowState, ...publicRow } = row;
@@ -70,15 +93,24 @@ export default {
   async submit(input, userId) {
     const payload = normalizePayload(input);
     if (!payload.name) throw new Error('Organization name is required');
+    const requestedSpecializations = parseSpecializations(input.specializations);
     const columns = [...ORG_FIELDS, 'is_active', 'created_by'];
-    const values = [...ORG_FIELDS.map((field) => payload[field]), 0, userId || null];
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
+      const listed = await lists.toListedValues(connection, {
+        tag: payload.tag,
+        specializations: requestedSpecializations,
+      });
+      payload.tag = listed.tag;
+      const values = [...ORG_FIELDS.map((field) => payload[field]), 0, userId || null];
       const [result] = await connection.execute(
         `INSERT INTO organizations (${columns.join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`,
         values,
       );
+      await lists.replaceSpecializations(connection, result.insertId, listed.specializations, {
+        isNew: true,
+      });
       await workflowService.startWorkflow({
         moduleKey: 'organization_directory',
         recordId: result.insertId,
@@ -90,7 +122,11 @@ export default {
       );
       await connection.commit();
       // Same shape as listApproved, so the dashboard row keeps its Edit button.
-      return { ...serialize(rows[0]), approvalStatus: 'Pending', isOwner: true };
+      return {
+        ...serialize({ ...rows[0], specializations: listed.specializations }),
+        approvalStatus: 'Pending',
+        isOwner: true,
+      };
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -102,15 +138,22 @@ export default {
   async update(id, input, userId) {
     const payload = normalizePayload(input);
     if (!payload.name) throw new Error('Organization name is required');
+    const requestedSpecializations = parseSpecializations(input.specializations);
     const assignments = ORG_FIELDS.map((field) => `${field} = ?`).join(', ');
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
       const [existing] = await connection.execute(
-        'SELECT id FROM organizations WHERE id = ? AND created_by = ? FOR UPDATE',
+        'SELECT id, tag FROM organizations WHERE id = ? AND created_by = ? FOR UPDATE',
         [id, userId || 0],
       );
       if (!existing[0]) throw new Error('Organization not found');
+      const listed = await lists.toListedValues(
+        connection,
+        { tag: payload.tag, specializations: requestedSpecializations },
+        { tag: existing[0].tag, specializations: await lists.loadSpecializations(connection, id) },
+      );
+      payload.tag = listed.tag;
 
       // Editing reopens this owner's record for review. updated_by identifies
       // a reviewer, so clear it until an admin makes the next decision.
@@ -118,6 +161,7 @@ export default {
         `UPDATE organizations SET ${assignments}, is_active = 0, updated_by = NULL WHERE id = ?`,
         [...ORG_FIELDS.map((field) => payload[field]), id],
       );
+      await lists.replaceSpecializations(connection, id, listed.specializations);
       const workflow = await workflowService.startWorkflow({
         moduleKey: 'organization_directory',
         recordId: id,
@@ -135,7 +179,11 @@ export default {
         [id],
       );
       await connection.commit();
-      return { ...serialize(rows[0]), approvalStatus: 'Pending', isOwner: true };
+      return {
+        ...serialize({ ...rows[0], specializations: listed.specializations }),
+        approvalStatus: 'Pending',
+        isOwner: true,
+      };
     } catch (error) {
       await connection.rollback();
       throw error;
@@ -150,14 +198,77 @@ export default {
        FROM organizations o LEFT JOIN users u ON u.id = o.created_by
        ORDER BY o.created_at ASC`,
     );
+    const specializationsByOrg = await lists.loadSpecializationsByRecord(rows.map((row) => row.id));
     return rows.map((row) => ({
-      ...serialize(row),
+      ...serialize({ ...row, specializations: specializationsByOrg.get(Number(row.id)) || [] }),
       approvalStatus: row.is_active ? 'Approved' : row.updated_by ? 'Rejected' : 'Pending',
       submitted_by: row.created_by,
       submitted_by_name: row.submitted_by_name,
       submitted_by_email: row.submitted_by_email,
     }));
   },
+
+  // A reviewer corrects a submission before deciding on it. Only Pending rows qualify, and
+  // the approval state is left alone: updated_by marks a decision, so setting it here would
+  // read as Rejected, and no workflow step runs because nothing has been decided yet.
+  async updateSubmission(id, input) {
+    const payload = normalizePayload(input);
+    if (!payload.name) throw new Error('Organization name is required');
+    const requestedSpecializations = parseSpecializations(input.specializations);
+    const assignments = ORG_FIELDS.map((field) => `${field} = ?`).join(', ');
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const [existing] = await connection.execute(
+        'SELECT id, tag, is_active, updated_by FROM organizations WHERE id = ? FOR UPDATE',
+        [id],
+      );
+      if (!existing[0]) throw new Error('Organization not found');
+      if (getDirectoryApprovalStatus(existing[0]) !== 'Pending') {
+        const error = new Error('Only pending organizations can be edited.');
+        error.status = 409;
+        throw error;
+      }
+      const listed = await lists.toListedValues(
+        connection,
+        { tag: payload.tag, specializations: requestedSpecializations },
+        { tag: existing[0].tag, specializations: await lists.loadSpecializations(connection, id) },
+      );
+      payload.tag = listed.tag;
+
+      await connection.execute(`UPDATE organizations SET ${assignments} WHERE id = ?`, [
+        ...ORG_FIELDS.map((field) => payload[field]),
+        id,
+      ]);
+      await lists.replaceSpecializations(connection, id, listed.specializations);
+      const [rows] = await connection.execute(
+        `SELECT o.*, u.name AS submitted_by_name, u.email AS submitted_by_email
+         FROM organizations o LEFT JOIN users u ON u.id = o.created_by
+         WHERE o.id = ?`,
+        [id],
+      );
+      await connection.commit();
+      // Same shape as listPending, so the approval row is replaced in place.
+      const row = rows[0];
+      return {
+        ...serialize({ ...row, specializations: listed.specializations }),
+        approvalStatus: 'Pending',
+        submitted_by: row.created_by,
+        submitted_by_name: row.submitted_by_name,
+        submitted_by_email: row.submitted_by_email,
+      };
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
+  },
+
+  listOptions: lists.listOptions,
+  addOptions: lists.addOptions,
+  updateOption: lists.updateOption,
+  deleteOption: lists.deleteOption,
 
   async review(id, decision, actor, comment) {
     // Approved organizations are shared, but names are unique only per submitter, so two

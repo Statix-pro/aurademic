@@ -2,6 +2,11 @@ import path from 'path';
 
 import db from '../../config/connection.js';
 import { getDirectoryApprovalStatus } from '../shared/directoryApprovalStatus.js';
+import {
+  DEFAULT_TAG,
+  createDirectoryLists,
+  parseSpecializations,
+} from '../shared/directoryLists.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import '../shared/workflow/directoryWorkflowAdapter.js';
 import workflowService from '../shared/workflow/workflowService.js';
@@ -18,10 +23,8 @@ const fields = [
   'status',
   'category',
   'tag',
-  'specialization',
   'mobile',
   'personal_email',
-  'official_email',
   'linked_in',
   'photo_name',
   'photo_path',
@@ -32,42 +35,53 @@ const fields = [
   'resume_mime_type',
   'resume_file_size',
 ];
-const serializePerson = (person, professions = person.professions || []) => ({
+// LEGACY: directory_resource_persons.official_email and .specialization predate the
+// per-profession email and the specializations table (20261026_directory_contacts_and_lists.sql). Neither is read
+// or written any more; both are dropped from every response so a stale copy never shows.
+// Remove with the columns.
+const serializePerson = (
+  { official_email: _legacyOfficialEmail, specialization: _legacySpecialization, ...person },
+  professions = person.professions || [],
+) => ({
   ...person,
+  specializations: person.specializations || [],
   name: [person.title, person.first_name, person.last_name].filter(Boolean).join(' '),
   firstName: person.first_name,
   lastName: person.last_name,
   personalEmail: person.personal_email,
-  officialEmail: person.official_email,
   linkedIn: person.linked_in,
   photoName: person.photo_name,
   photoPath: person.photo_path,
   resumeName: person.resume_name,
   resumePath: person.resume_path,
-  professions: professions.map((profession) => ({
-    ...profession,
-    orgLinkedIn: profession.org_linked_in ?? profession.orgLinkedIn,
-  })),
+  professions: professions.map(
+    ({
+      linked_organization_name: linkedName,
+      organization_status: linkedStatus,
+      ...profession
+    }) => ({
+      ...profession,
+      // A linked organization shows under its current name, so a rename carries through.
+      organization: linkedName ?? profession.organization,
+      organizationId: profession.organization_id ?? profession.organizationId ?? null,
+      organizationStatus: linkedStatus ?? profession.organizationStatus ?? null,
+      orgLinkedIn: profession.org_linked_in ?? profession.orgLinkedIn,
+      officialEmail: profession.official_email ?? profession.officialEmail,
+    }),
+  ),
   date:
     person.date ??
     (person.created_at ? new Date(person.created_at).toISOString().slice(0, 10) : null),
 });
+// Everything else in an Approved record (photo included) is visible to every user; only
+// its creator may edit it. These are locked: contacts show to others as dots, the resume
+// not at all.
 const PRIVATE_PERSON_FIELDS = [
   'dob',
   'mobile',
   'personal_email',
   'personalEmail',
-  'official_email',
-  'officialEmail',
-  'linked_in',
-  'linkedIn',
   'address',
-  'photo_name',
-  'photoName',
-  'photo_path',
-  'photoPath',
-  'photo_mime_type',
-  'photo_file_size',
   'resume_name',
   'resumeName',
   'resume_path',
@@ -80,15 +94,27 @@ const PRIVATE_PERSON_FIELDS = [
 const serializePublicPerson = (person, professions) => {
   const publicPerson = serializePerson(person, professions);
   for (const field of PRIVATE_PERSON_FIELDS) delete publicPerson[field];
+  // A profession's official email is a contact too.
+  publicPerson.professions = publicPerson.professions.map(
+    ({ official_email: _officialEmail, officialEmail: _email, ...profession }) => profession,
+  );
+  // Tells the form the contact fields were withheld, not left blank, so it shows them locked.
+  publicPerson.contactHidden = true;
   return publicPerson;
 };
 const loadProfessionsByPerson = async (personIds) => {
   if (!personIds.length) return new Map();
   const placeholders = personIds.map(() => '?').join(', ');
   const [professions] = await db.query(
-    `SELECT * FROM directory_resource_person_professions
-     WHERE resource_person_id IN (${placeholders})
-     ORDER BY resource_person_id, sort_order, id`,
+    `SELECT p.*, o.name AS linked_organization_name,
+            CASE WHEN o.id IS NULL THEN NULL
+                 WHEN o.is_active = 1 THEN 'Approved'
+                 WHEN o.updated_by IS NOT NULL THEN 'Rejected'
+                 ELSE 'Pending' END AS organization_status
+       FROM directory_resource_person_professions p
+       LEFT JOIN organizations o ON o.id = p.organization_id
+      WHERE p.resource_person_id IN (${placeholders})
+      ORDER BY p.resource_person_id, p.sort_order, p.id`,
     personIds,
   );
   const byPerson = new Map();
@@ -99,6 +125,109 @@ const loadProfessionsByPerson = async (personIds) => {
     byPerson.set(personId, items);
   }
   return byPerson;
+};
+// Tag and Specialization lists, shared rules in modules/shared/directoryLists.js.
+const lists = createDirectoryLists({
+  options: 'directory_resource_person_options',
+  picks: 'directory_resource_person_specializations',
+  recordColumn: 'resource_person_id',
+  records: 'directory_resource_persons',
+});
+// A resource person is not approved while an organization it names is still Pending or was
+// Rejected. A profession row linked by organization_id is held by that organization; an
+// unlinked row (older free text) by the organizations of that name, unless one is Approved.
+// A name that matches no organization holds nothing.
+const loadOrganizationHoldsByPerson = async (personIds) => {
+  if (!personIds.length) return new Map();
+  const placeholders = personIds.map(() => '?').join(', ');
+  const [rows] = await db.query(
+    `SELECT p.resource_person_id, MIN(o.name) AS name,
+            MAX(o.is_active = 1) AS approved,
+            MAX(o.is_active = 0 AND o.updated_by IS NULL) AS pending
+       FROM directory_resource_person_professions p
+       JOIN organizations o
+         ON (p.organization_id IS NOT NULL AND o.id = p.organization_id)
+         OR (p.organization_id IS NULL AND o.name = TRIM(p.organization))
+      WHERE p.resource_person_id IN (${placeholders})
+      GROUP BY p.resource_person_id, p.id`,
+    personIds,
+  );
+  const byPerson = new Map();
+  for (const row of rows) {
+    if (Number(row.approved)) continue;
+    const personId = Number(row.resource_person_id);
+    const hold = { name: row.name, status: Number(row.pending) ? 'Pending' : 'Rejected' };
+    const holds = byPerson.get(personId) || [];
+    if (!holds.some((h) => h.name === hold.name)) byPerson.set(personId, [...holds, hold]);
+  }
+  return byPerson;
+};
+// A profession row that picks an organization stores its id and, as the fallback name, its
+// current name. Only an organization the submitter can see may be picked -- an Approved one
+// or their own -- and never a Rejected one. Rows without an id keep their text unlinked.
+const resolveProfessionOrganizations = async (connection, professions, userId) => {
+  const ids = [
+    ...new Set(
+      professions
+        .map((p) => Number(p.organizationId ?? p.organization_id))
+        .filter((id) => Number.isInteger(id) && id > 0),
+    ),
+  ];
+  if (!ids.length) return professions.map((p) => ({ ...p, organizationId: null }));
+  const [rows] = await connection.execute(
+    `SELECT id, name, is_active, updated_by, created_by FROM organizations
+      WHERE id IN (${ids.map(() => '?').join(', ')})`,
+    ids,
+  );
+  const byId = new Map(rows.map((row) => [Number(row.id), row]));
+  return professions.map((p) => {
+    const id = Number(p.organizationId ?? p.organization_id);
+    if (!Number.isInteger(id) || id <= 0) return { ...p, organizationId: null };
+    const org = byId.get(id);
+    const visible =
+      org && (Number(org.is_active) === 1 || Number(org.created_by) === Number(userId));
+    if (!visible) {
+      throw Object.assign(new Error('Organization not found. Choose it again.'), { status: 400 });
+    }
+    if (getDirectoryApprovalStatus(org) === 'Rejected') {
+      throw Object.assign(new Error(`"${org.name}" was rejected. Choose another organization.`), {
+        status: 400,
+      });
+    }
+    return {
+      ...p,
+      organizationId: id,
+      organization: org.name,
+      organizationStatus: getDirectoryApprovalStatus(org),
+    };
+  });
+};
+// The holds of rows just saved, from the organizations resolveProfessionOrganizations read.
+// (Unlinked free-text rows are left to the next list(), which matches them by name.)
+const holdsFromProfessions = (professions) =>
+  professions
+    .filter((p) => p.organizationId && p.organizationStatus !== 'Approved')
+    .map((p) => ({ name: p.organization, status: p.organizationStatus }))
+    .filter((hold, i, all) => all.findIndex((h) => h.name === hold.name) === i);
+const insertProfessions = async (connection, personId, professions) => {
+  for (const [index, p] of professions.entries())
+    await connection.execute(
+      'INSERT INTO directory_resource_person_professions (resource_person_id, designation, department, organization, organization_id, city, state, country, org_linked_in, official_email, status, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      [
+        personId,
+        p.designation || null,
+        p.department || null,
+        p.organization || null,
+        p.organizationId || null,
+        p.city || null,
+        p.state || null,
+        p.country || null,
+        p.orgLinkedIn ?? p.org_linked_in ?? null,
+        p.officialEmail || p.official_email || null,
+        p.status || 'Working',
+        index,
+      ],
+    );
 };
 const RESOURCE_PERSON_UPLOAD_DIR = path.resolve(process.cwd(), 'uploads', 'resource-persons');
 // File columns come only from a file multer has just written. A path taken from the
@@ -125,11 +254,9 @@ const normalize = (input = {}, files = {}) => ({
   dob: text(input.dob),
   status: text(input.status) || 'In Service',
   category: text(input.category) || 'Academic',
-  tag: text(input.tag) || 'General',
-  specialization: text(input.specialization),
+  tag: text(input.tag) || DEFAULT_TAG,
   mobile: text(input.mobile),
   personal_email: text(input.personal_email ?? input.personalEmail),
-  official_email: text(input.official_email ?? input.officialEmail),
   linked_in: text(input.linked_in ?? input.linkedIn),
   ...uploadedFileFields(files.photoFile?.[0], 'photo'),
   ...uploadedFileFields(files.resumeFile?.[0], 'resume'),
@@ -170,22 +297,47 @@ const deleteReplacedFile = (storedPath) => {
 };
 
 export default {
-  async list(userId) {
+  async list(user) {
+    const userId = user?.id;
     const [people] = await db.query(
       // Approved records form the shared directory; Pending and Rejected ones stay with
-      // their submitter. Other users' records are redacted below (serializePublicPerson).
-      'SELECT *, DATE(created_at) AS date FROM directory_resource_persons WHERE created_by = ? OR is_active = 1 ORDER BY id DESC',
+      // their submitter. Other users' records are redacted below (serializePublicPerson),
+      // but who added a record stays visible, so a reader can ask them about it.
+      `SELECT rp.*, DATE(rp.created_at) AS date,
+              u.name AS submitted_by_name, u.email AS submitted_by_email
+         FROM directory_resource_persons rp
+         LEFT JOIN users u ON u.id = rp.created_by
+        WHERE rp.created_by = ? OR rp.is_active = 1
+        ORDER BY rp.id DESC`,
       [userId || 0],
     );
-    const professionsByPerson = await loadProfessionsByPerson(people.map((person) => person.id));
-    for (const person of people)
+    const personIds = people.map((person) => person.id);
+    const professionsByPerson = await loadProfessionsByPerson(personIds);
+    const specializationsByPerson = await lists.loadSpecializationsByRecord(personIds);
+    for (const person of people) {
       person.professions = professionsByPerson.get(Number(person.id)) || [];
+      person.specializations = specializationsByPerson.get(Number(person.id)) || [];
+    }
+    // The submitter is told which organization holds a record up; an Approved record has
+    // none, so only the user's own unapproved ones are checked.
+    const holdsByPerson = await loadOrganizationHoldsByPerson(
+      people
+        .filter(
+          (person) =>
+            Number(person.created_by) === Number(userId) &&
+            getDirectoryApprovalStatus(person) !== 'Approved',
+        )
+        .map((person) => person.id),
+    );
     return people.map((person) => {
       const isOwner = Number(person.created_by) === Number(userId);
+      // Super admins see every record in full, as they already do on the approval page.
+      const seesContacts = isOwner || Boolean(user?.isSuperAdmin);
       return {
-        ...(isOwner ? serializePerson(person) : serializePublicPerson(person)),
+        ...(seesContacts ? serializePerson(person) : serializePublicPerson(person)),
         approvalStatus: getDirectoryApprovalStatus(person),
         isOwner,
+        ...(isOwner ? { organizationHolds: holdsByPerson.get(Number(person.id)) || [] } : {}),
       };
     });
   },
@@ -194,30 +346,29 @@ export default {
     if (!person.first_name || !person.last_name)
       throw new Error('First name and last name are required');
     const professions = parseProfessions(input.professions);
+    const requestedSpecializations = parseSpecializations(input.specializations);
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
+      const listed = await lists.toListedValues(connection, {
+        tag: person.tag,
+        specializations: requestedSpecializations,
+      });
+      person.tag = listed.tag;
       const cols = [...fields, 'is_active', 'created_by'];
       const [result] = await connection.execute(
         `INSERT INTO directory_resource_persons (${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`,
         [...fields.map((f) => person[f]), 0, userId || null],
       );
-      for (const [i, p] of professions.entries())
-        await connection.execute(
-          'INSERT INTO directory_resource_person_professions (resource_person_id, designation, department, organization, city, state, country, org_linked_in, status, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)',
-          [
-            result.insertId,
-            p.designation || null,
-            p.department || null,
-            p.organization || null,
-            p.city || null,
-            p.state || null,
-            p.country || null,
-            p.orgLinkedIn ?? p.org_linked_in ?? null,
-            p.status || 'Working',
-            i,
-          ],
-        );
+      const savedProfessions = await resolveProfessionOrganizations(
+        connection,
+        professions,
+        userId,
+      );
+      await insertProfessions(connection, result.insertId, savedProfessions);
+      await lists.replaceSpecializations(connection, result.insertId, listed.specializations, {
+        isNew: true,
+      });
       await workflowService.startWorkflow({
         moduleKey: 'resource_person_directory',
         recordId: result.insertId,
@@ -229,9 +380,14 @@ export default {
       );
       await connection.commit();
       return {
-        ...serializePerson(rows[0], professions),
+        ...serializePerson(
+          { ...rows[0], specializations: listed.specializations },
+          savedProfessions,
+        ),
         approvalStatus: 'Pending',
         isOwner: true,
+        // Same shape as list(), so the dashboard row says at once what holds it.
+        organizationHolds: holdsFromProfessions(savedProfessions),
       };
     } catch (e) {
       await connection.rollback();
@@ -245,6 +401,7 @@ export default {
     if (!person.first_name || !person.last_name)
       throw new Error('First name and last name are required');
     const professions = parseProfessions(input.professions);
+    const requestedSpecializations = parseSpecializations(input.specializations);
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
@@ -258,6 +415,12 @@ export default {
         throw error;
       }
       const current = existing[0];
+      const listed = await lists.toListedValues(
+        connection,
+        { tag: person.tag, specializations: requestedSpecializations },
+        { tag: current.tag, specializations: await lists.loadSpecializations(connection, id) },
+      );
+      person.tag = listed.tag;
       const fileFields = [
         'photo_name',
         'photo_path',
@@ -297,22 +460,13 @@ export default {
         'DELETE FROM directory_resource_person_professions WHERE resource_person_id = ?',
         [id],
       );
-      for (const [index, profession] of professions.entries())
-        await connection.execute(
-          'INSERT INTO directory_resource_person_professions (resource_person_id, designation, department, organization, city, state, country, org_linked_in, status, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?)',
-          [
-            id,
-            profession.designation || null,
-            profession.department || null,
-            profession.organization || null,
-            profession.city || null,
-            profession.state || null,
-            profession.country || null,
-            profession.orgLinkedIn ?? profession.org_linked_in ?? null,
-            profession.status || 'Working',
-            index,
-          ],
-        );
+      const savedProfessions = await resolveProfessionOrganizations(
+        connection,
+        professions,
+        userId,
+      );
+      await insertProfessions(connection, id, savedProfessions);
+      await lists.replaceSpecializations(connection, id, listed.specializations);
       const workflow = await workflowService.startWorkflow({
         moduleKey: 'resource_person_directory',
         recordId: id,
@@ -340,11 +494,13 @@ export default {
         ...(fileChanges.photo ? {} : storedFileFields(current, 'photo')),
         ...(fileChanges.resume ? {} : storedFileFields(current, 'resume')),
         created_at: current.created_at,
+        specializations: listed.specializations,
       };
       return {
-        ...serializePerson(savedPerson, professions),
+        ...serializePerson(savedPerson, savedProfessions),
         approvalStatus: 'Pending',
         isOwner: true,
+        organizationHolds: holdsFromProfessions(savedProfessions),
       };
     } catch (error) {
       await connection.rollback();
@@ -357,21 +513,52 @@ export default {
     const [rows] = await db.query(
       "SELECT rp.*, u.name AS submitted_by_name, u.email AS submitted_by_email, CASE WHEN rp.is_active=1 THEN 'Approved' WHEN rp.updated_by IS NOT NULL THEN 'Rejected' ELSE 'Pending' END AS approvalStatus FROM directory_resource_persons rp LEFT JOIN users u ON u.id=rp.created_by ORDER BY rp.created_at",
     );
-    const professionsByPerson = await loadProfessionsByPerson(rows.map((person) => person.id));
+    const personIds = rows.map((person) => person.id);
+    const professionsByPerson = await loadProfessionsByPerson(personIds);
+    const specializationsByPerson = await lists.loadSpecializationsByRecord(personIds);
+    const holdsByPerson = await loadOrganizationHoldsByPerson(personIds);
     return rows.map((person) => {
       const professions = professionsByPerson.get(Number(person.id)) || [];
       const primaryProfession = professions[0];
+      const specializations = specializationsByPerson.get(Number(person.id)) || [];
       return {
-        ...serializePerson(person, professions),
+        ...serializePerson({ ...person, specializations }, professions),
         submitted_by_name: person.submitted_by_name,
         submitted_by_email: person.submitted_by_email,
         approvalStatus: person.approvalStatus,
         organization: primaryProfession?.organization || null,
         city: primaryProfession?.city || null,
+        // Organizations that keep this record from being approved; see review().
+        organizationHolds: holdsByPerson.get(Number(person.id)) || [],
       };
     });
   },
+  listOptions: lists.listOptions,
+  addOptions: lists.addOptions,
+  updateOption: lists.updateOption,
+  deleteOption: lists.deleteOption,
   async review(id, decision, actor, comment) {
+    if (decision === 'approve') {
+      const holds = (await loadOrganizationHoldsByPerson([Number(id)])).get(Number(id)) || [];
+      if (holds.length) {
+        const pending = holds.filter((hold) => hold.status === 'Pending').map((h) => `"${h.name}"`);
+        const rejected = holds
+          .filter((hold) => hold.status === 'Rejected')
+          .map((h) => `"${h.name}"`);
+        const error = new Error(
+          [
+            pending.length &&
+              `Approve the organization ${pending.join(', ')} first; it is still pending.`,
+            rejected.length &&
+              `The organization ${rejected.join(', ')} was rejected; the submitter needs to choose another.`,
+          ]
+            .filter(Boolean)
+            .join(' '),
+        );
+        error.status = 409;
+        throw error;
+      }
+    }
     await workflowService.actOnWorkflow({
       moduleKey: 'resource_person_directory',
       recordId: id,

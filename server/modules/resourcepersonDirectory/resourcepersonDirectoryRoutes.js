@@ -97,4 +97,19 @@ router.patch(
   canReviewResourcePersons,
   controller.review,
 );
+// Tag and Specialization lists: every directory user reads the active entries for the
+// form; only the Directory Admin sees retired ones and changes the lists.
+router.get('/resource-person-options', canReadDirectory, controller.listOptions);
+router.get('/resource-person-options/all', canReviewResourcePersons, controller.listAllOptions);
+router.post(
+  '/resource-person-options/:list(tag|specialization)',
+  canReviewResourcePersons,
+  controller.addOption,
+);
+router.put('/resource-person-options/:id(\\d+)', canReviewResourcePersons, controller.updateOption);
+router.delete(
+  '/resource-person-options/:id(\\d+)',
+  canReviewResourcePersons,
+  controller.deleteOption,
+);
 export default router;
