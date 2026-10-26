@@ -387,32 +387,6 @@ function App() {
                           </DirectoryApprovalRoute>
                         }
                       />
-                      {/* LEGACY: the pages these paths served became tabs of the two above.
-                      In-app notifications already sent link here (notificationCatalog.js), so
-                      they redirect; remove once the catalog links point at the new paths and
-                      older notifications have been purged. */}
-                      <Route
-                        path="/admin/organization-approval"
-                        element={
-                          <Navigate to="/admin/directory-approval?tab=organization" replace />
-                        }
-                      />
-                      <Route
-                        path="/admin/resource-person-approval"
-                        element={
-                          <Navigate to="/admin/directory-approval?tab=resource-person" replace />
-                        }
-                      />
-                      <Route
-                        path="/admin/organization-lists"
-                        element={<Navigate to="/directory/lists?directory=organization" replace />}
-                      />
-                      <Route
-                        path="/admin/resource-person-lists"
-                        element={
-                          <Navigate to="/directory/lists?directory=resource-person" replace />
-                        }
-                      />
                       {/* One publication under review, on its own page, so it can be linked
                       to, refreshed and left with the browser's Back button. */}
                       <Route
