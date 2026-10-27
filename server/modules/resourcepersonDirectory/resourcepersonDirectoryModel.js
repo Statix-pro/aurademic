@@ -91,15 +91,16 @@ const PRIVATE_PERSON_FIELDS = [
 const serializePublicPerson = (person, professions) => {
   const publicPerson = serializePerson(person, professions);
   for (const field of PRIVATE_PERSON_FIELDS) delete publicPerson[field];
-  // A profession's official email is a contact too.
+  // A profession's official email is a contact too. Whether one exists is not: a project
+  // collaborator picked from the directory shows a filled, unreadable Email field.
   publicPerson.professions = publicPerson.professions.map(
     ({
-      official_email: _officialEmail,
-      officialEmail: _email,
+      official_email: officialEmail,
+      officialEmail: email,
       official_email_type: _officialEmailType,
       officialEmailType: _emailType,
       ...profession
-    }) => profession,
+    }) => ({ ...profession, hasOfficialEmail: Boolean(officialEmail ?? email) }),
   );
   // Tells the form the contact fields were withheld, not left blank, so it shows them locked.
   publicPerson.contactHidden = true;
@@ -289,6 +290,28 @@ const normalize = (input = {}, files = {}) => ({
   ...uploadedFileFields(files.photoFile?.[0], 'photo'),
   ...uploadedFileFields(files.resumeFile?.[0], 'resume'),
 });
+const filled = (value) => typeof value === 'string' && value.trim() !== '';
+// Beyond the name, a directory entry is only useful if the person can be reached, holds a
+// post (projects take a collaborator's designation from it) and can be found by subject.
+// Records saved before this rule get these on their next edit.
+const assertRequired = (person, professions, specializations) => {
+  const missing = [];
+  const hasPostEmail = professions.some((p) => filled(p.officialEmail ?? p.official_email));
+  if (!filled(person.mobile) && !filled(person.personal_email) && !hasPostEmail)
+    missing.push('a mobile number or an email');
+  const hasPost = professions.some(
+    (p) =>
+      filled(p.designation) &&
+      (filled(p.organization) || Number(p.organizationId ?? p.organization_id) > 0),
+  );
+  if (!hasPost) missing.push('a post with its designation and organization');
+  if (specializations.length === 0) missing.push('at least one specialization');
+  if (missing.length > 0) {
+    const error = new Error(`Add ${missing.join(', ')}.`);
+    error.status = 400;
+    throw error;
+  }
+};
 const parseProfessions = (value) => {
   let professions = value || [];
   if (typeof professions === 'string') {
@@ -375,6 +398,7 @@ export default {
       throw new Error('First name and last name are required');
     const professions = parseProfessions(input.professions);
     const requestedSpecializations = parseSpecializations(input.specializations);
+    assertRequired(person, professions, requestedSpecializations);
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
@@ -430,6 +454,7 @@ export default {
       throw new Error('First name and last name are required');
     const professions = parseProfessions(input.professions);
     const requestedSpecializations = parseSpecializations(input.specializations);
+    assertRequired(person, professions, requestedSpecializations);
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();

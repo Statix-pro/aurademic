@@ -14,6 +14,10 @@
 
 import { PROJECT_DOCUMENT_TYPES, ROW_DOCUMENT_SCOPES } from './projectPayload.js';
 import db from '../../config/connection.js';
+import {
+  fillDirectoryCollaborators,
+  loadDirectoryEmailOnFile,
+} from '../shared/directoryCollaborators.js';
 
 /** Raised for input the pure normalizer cannot check without the database. */
 export class ProjectValidationError extends Error {
@@ -300,13 +304,31 @@ async function replaceTags(connection, projectId, tags) {
   ]);
 }
 
-async function replaceCollaborators(connection, projectId, collaborators) {
+async function replaceCollaborators(connection, projectId, submitted, userId) {
+  // Directory picks are filled from the directory before anything is written. The links
+  // already stored stay usable whoever saves (see fillDirectoryCollaborators).
+  const [stored] = await connection.query(
+    `SELECT directory_organization_id, directory_resource_person_id
+       FROM project_collaborators
+      WHERE project_id = ?`,
+    [projectId],
+  );
+  const keptIds = (column) =>
+    new Set(stored.filter((row) => row[column]).map((row) => Number(row[column])));
+  const { rows: collaborators, errors } = await fillDirectoryCollaborators(connection, submitted, {
+    userId,
+    keptOrganizationIds: keptIds('directory_organization_id'),
+    keptPersonIds: keptIds('directory_resource_person_id'),
+  });
+  if (errors.length > 0) throw new ProjectValidationError(errors);
+
   await connection.query('DELETE FROM project_collaborators WHERE project_id = ?', [projectId]);
   if (collaborators.length === 0) return;
 
   await connection.query(
     `INSERT INTO project_collaborators
-      (project_id, category, role, organization_id, organization_name, city, has_active_mou,
+      (project_id, category, role, organization_id, organization_name,
+       directory_organization_id, city, has_active_mou, directory_resource_person_id,
        contact_name, contact_designation, contact_email, display_order)
      VALUES ?`,
     [
@@ -316,8 +338,10 @@ async function replaceCollaborators(connection, projectId, collaborators) {
         row.role,
         row.organization_id,
         row.organization_name,
+        row.directory_organization_id,
         row.city,
         row.has_active_mou,
+        row.directory_resource_person_id,
         row.contact_name,
         row.contact_designation,
         row.contact_email,
@@ -922,7 +946,7 @@ const projectModel = {
 
       await replaceInvestigators(connection, savedId, aggregate.investigators, authorIds);
       await replaceTags(connection, savedId, aggregate.tags);
-      await replaceCollaborators(connection, savedId, aggregate.collaborators);
+      await replaceCollaborators(connection, savedId, aggregate.collaborators, userId);
       await replaceFinanceRows(connection, savedId, aggregate.financeRows);
       await replaceIncomeHeads(connection, savedId, aggregate.incomeHeads);
       await replaceBudgetAllotment(connection, savedId, aggregate.budget);
@@ -1258,6 +1282,7 @@ const projectModel = {
     }, new Map());
 
     const documentRows = documents[0];
+    const emailOnFile = await loadDirectoryEmailOnFile(db, collaborators[0]);
 
     const projectDocuments = PROJECT_DOCUMENT_TYPES.reduce((map, documentType) => {
       const row = documentRows.find(
@@ -1276,7 +1301,11 @@ const projectModel = {
         .filter((tag) => tag.tag_type === 'national_initiative')
         .map((tag) => tag.tag_value),
       sdgs: tags[0].filter((tag) => tag.tag_type === 'sdg').map((tag) => tag.tag_value),
-      collaborators: collaborators[0],
+      // A linked person's email stays in the directory; the form shows that one exists.
+      collaborators: collaborators[0].map((row) => ({
+        ...row,
+        contact_email_on_file: emailOnFile.get(row.id) ?? false,
+      })),
       financial_contributions: financeRows[0]
         .filter((row) => row.row_type === 'contribution')
         .map((row) => ({ ...row, heads: headsByRow.get(row.id) ?? [] })),

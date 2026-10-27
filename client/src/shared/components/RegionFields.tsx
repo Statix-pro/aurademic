@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 
-import CustomButton from './ui/CustomButton';
 import CustomDropdown from './ui/CustomDropdown';
 import CustomInput from './ui/CustomInput';
 import { DEFAULT_COUNTRY, INDIAN_STATES, isIndia, toListedState } from '../utils/regions';
@@ -27,13 +26,20 @@ interface RegionFieldsProps {
   fieldStyle?: React.CSSProperties;
   /** The host form's dropdown styles, so the dropdowns match its other controls. */
   dropdownStyles: any;
+  /**
+   * The host form's required marker. Given, Country is required, and State too while it is
+   * India's list (another country's province is optional).
+   */
+  requiredMark?: React.ReactNode;
+  /** Save-time errors, shown under their field. */
+  errors?: { state?: string; country?: string };
 }
 
 /**
  * State and Country for an address. Country offers India or Other; State lists India's
  * states and union territories when the country is India. Either "Other…" turns that cell
  * into a text box for a value of the user's own, in the same cell so the row never grows,
- * with "Show list" to go back. Both are stored as the plain text shown.
+ * with a × inside it to go back. Both are stored as the plain text shown.
  */
 const RegionFields: React.FC<RegionFieldsProps> = ({
   idPrefix,
@@ -44,6 +50,8 @@ const RegionFields: React.FC<RegionFieldsProps> = ({
   fieldClassName,
   fieldStyle,
   dropdownStyles,
+  requiredMark,
+  errors = {},
 }) => {
   const [countryTyped, setCountryTyped] = useState(() => !isIndia(country));
   const [stateTyped, setStateTyped] = useState(
@@ -62,60 +70,39 @@ const RegionFields: React.FC<RegionFieldsProps> = ({
   const stateIsFree = countryTyped;
   const countryName = `${idPrefix}-country`;
   const stateName = `${idPrefix}-state`;
-
-  const showListButton = (onClick: () => void) =>
-    !disabled && (
-      <CustomButton
-        variant="link"
-        className="p-0"
-        onClick={onClick}
-        // Exactly one label line tall, so a cell with the link lines up with its neighbours.
-        style={{
-          border: 0,
-          height: 'var(--leading-secondary)',
-          fontSize: 'var(--font-size-secondary)',
-          lineHeight: 'var(--leading-secondary)',
-        }}
-      >
-        Show list
-      </CustomButton>
-    );
-
-  const labelRow = (htmlFor: string, text: string, action?: React.ReactNode) => (
-    <div className="d-flex justify-content-between align-items-start">
-      <label htmlFor={htmlFor}>{text}</label>
-      {action}
-    </div>
-  );
+  const mark = (required: boolean) => (required && requiredMark ? <> {requiredMark}</> : null);
 
   return (
     <>
       <div className={fieldClassName} style={fieldStyle}>
         {stateIsFree || stateTyped ? (
           <>
-            {labelRow(
-              stateName,
-              'State',
-              !stateIsFree &&
-                showListButton(() => {
-                  setStateTyped(false);
-                  onChange({ country, state: '' });
-                }),
-            )}
+            <label htmlFor={stateName}>State{mark(!stateIsFree)}</label>
             <CustomInput
               name={stateName}
+              error={errors.state}
               value={state}
               onChange={(value) => onChange({ country, state: value })}
               placeholder={stateIsFree ? 'State / Province' : 'Type the state'}
               disabled={disabled}
               className="mb-0"
+              onClear={
+                stateIsFree
+                  ? undefined
+                  : () => {
+                      setStateTyped(false);
+                      onChange({ country, state: '' });
+                    }
+              }
+              clearLabel="Back to the state list"
             />
           </>
         ) : (
           <>
-            {labelRow(stateName, 'State')}
+            <label htmlFor={stateName}>State{mark(true)}</label>
             <CustomDropdown
               name={stateName}
+              error={errors.state}
               className="mb-0"
               value={state ? { value: toListedState(state) ?? state, label: state } : null}
               onChange={(option: any) => {
@@ -137,28 +124,28 @@ const RegionFields: React.FC<RegionFieldsProps> = ({
       <div className={fieldClassName} style={fieldStyle}>
         {countryTyped ? (
           <>
-            {labelRow(
-              countryName,
-              'Country',
-              showListButton(() => {
-                setCountryTyped(false);
-                onChange({ country: DEFAULT_COUNTRY, state: '' });
-              }),
-            )}
+            <label htmlFor={countryName}>Country{mark(true)}</label>
             <CustomInput
               name={countryName}
+              error={errors.country}
               value={country}
               onChange={(value) => onChange({ country: value, state })}
               placeholder="Type the country"
               disabled={disabled}
               className="mb-0"
+              onClear={() => {
+                setCountryTyped(false);
+                onChange({ country: DEFAULT_COUNTRY, state: '' });
+              }}
+              clearLabel="Back to the country list"
             />
           </>
         ) : (
           <>
-            {labelRow(countryName, 'Country')}
+            <label htmlFor={countryName}>Country{mark(true)}</label>
             <CustomDropdown
               name={countryName}
+              error={errors.country}
               className="mb-0"
               value={COUNTRY_OPTIONS[0]}
               onChange={(option: any) => {

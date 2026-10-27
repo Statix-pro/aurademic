@@ -255,7 +255,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
   const columns = [
     {
       key: 'name',
-      label: 'RESOURCE PERSON',
+      label: 'Resource Person',
       render: (row: Row) => (
         <div className="d-flex flex-column">
           <strong>{personName(row)}</strong>
@@ -270,7 +270,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
     {
       key: 'organization',
       hideOnPhone: true,
-      label: 'ORGANIZATION',
+      label: 'Organization',
       render: (row: Row) => (
         <div className="d-flex flex-column">
           <span>{row.organization || '—'}</span>
@@ -284,19 +284,19 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
     {
       key: 'category',
       hideOnPhone: true,
-      label: 'CATEGORY',
+      label: 'Category',
       render: (row: Row) => row.category || '—',
     },
     {
       key: 'tag',
       hideOnPhone: true,
-      label: 'TAG',
+      label: 'Tag',
       render: (row: Row) =>
         row.tag ? <span className="resource-person-approval-tag">{row.tag}</span> : '—',
     },
     {
       key: 'actions',
-      label: 'ACTIONS',
+      label: 'Actions',
       render: (row: Row) => {
         const status = row.approvalStatus || 'Pending';
         return (

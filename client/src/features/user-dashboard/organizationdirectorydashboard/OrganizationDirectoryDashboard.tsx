@@ -59,6 +59,7 @@ const CATEGORY_OPTIONS = [
   'Incubation',
   'Start-up',
   'Government',
+  'Organization',
   'Others',
 ];
 
@@ -264,16 +265,23 @@ const OrganizationDirectoryDashboard: React.FC = () => {
     },
     { key: 'category', hideOnPhone: true, label: 'Category' },
     {
-      key: 'specializations',
-      hideOnPhone: true,
-      label: 'Specializations',
-      render: (org: Organization) => <CustomChipList items={org.specializations ?? []} />,
-    },
-    {
       key: 'tag',
       hideOnPhone: true,
       label: 'Tag',
       render: (org: Organization) => org.tag && <span className="org-tag-pill">{org.tag}</span>,
+    },
+    {
+      key: 'funding',
+      hideOnPhone: true,
+      label: 'Funding',
+      // Older records have none until their next edit.
+      render: (org: Organization) => org.funding || '—',
+    },
+    {
+      key: 'specializations',
+      hideOnPhone: true,
+      label: 'Specializations',
+      render: (org: Organization) => <CustomChipList items={org.specializations ?? []} />,
     },
     {
       key: 'approvalStatus',

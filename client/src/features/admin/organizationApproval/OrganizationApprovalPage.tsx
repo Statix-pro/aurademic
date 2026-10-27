@@ -253,6 +253,12 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
         row.tag ? <span className="organization-approval-tag">{row.tag}</span> : '—',
     },
     {
+      key: 'funding',
+      hideOnPhone: true,
+      label: 'Funding',
+      render: (row: Organization) => row.funding || '—',
+    },
+    {
       key: 'actions',
       label: 'Actions',
       render: (row: Organization) => {
@@ -345,9 +351,11 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
         .custom-btn.organization-approval-decision { display: inline-flex; align-items: center; gap: 4px; height: var(--inline-action-height); min-height: 0; min-width: 0; padding: 0 10px; border-radius: 6px; border: 1px solid; font-size: var(--font-size-tertiary); font-weight: 700; white-space: nowrap; flex-shrink: 0; } .custom-btn.organization-approval-decision.approve, .custom-btn.organization-approval-decision.approve:disabled { background: #e8f6ee; border-color: #9fd8b6; color: #087b43; } .custom-btn.organization-approval-decision.approve:hover:not(:disabled) { background: #d3efdf; border-color: #087b43; color: #066535; } .custom-btn.organization-approval-decision.reject, .custom-btn.organization-approval-decision.reject:disabled { background: #fdecee; border-color: #f3b4bd; color: #b4253a; } .custom-btn.organization-approval-decision.reject:hover:not(:disabled) { background: #fbd9de; border-color: #b4253a; color: #9a1d30; }
         .organization-approval-table .organization-approval-actions { display: flex; gap: 6px; align-items: center; justify-content: center; white-space: nowrap; }
         .organization-details-modal .modal-title { font-size: var(--font-size-modal-title); line-height: var(--leading-modal-title); font-weight: 600; }
-        .organization-approval-table.custom-table th:nth-child(1), .organization-approval-table.custom-table td:nth-child(1) { width: 40%; }
-        .organization-approval-table.custom-table th:nth-child(2), .organization-approval-table.custom-table td:nth-child(2) { width: 15%; }
+        /* Organization | Category | Tag | Funding | Actions */
+        .organization-approval-table.custom-table th:nth-child(1), .organization-approval-table.custom-table td:nth-child(1) { width: 32%; }
+        .organization-approval-table.custom-table th:nth-child(2), .organization-approval-table.custom-table td:nth-child(2) { width: 13%; }
         .organization-approval-table.custom-table th:nth-child(3), .organization-approval-table.custom-table td:nth-child(3) { width: 13%; text-align: center; }
+        .organization-approval-table.custom-table th:nth-child(4), .organization-approval-table.custom-table td:nth-child(4) { width: 10%; }
         .organization-approval-table.custom-table th:last-child, .organization-approval-table.custom-table td:last-child { width: 32% !important; text-align: center; white-space: nowrap; }
         @media (max-width: 576px) {
           /* On a phone (Category and Tag hidden via hideOnPhone) the actions wrap instead of

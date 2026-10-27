@@ -312,8 +312,8 @@
   color: var(--text-body);
   font-weight: var(--weight-bold);
   font-size: var(--font-size-secondary);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: capitalize;
   white-space: nowrap;
 }
 

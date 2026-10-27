@@ -80,11 +80,20 @@ export interface CollaboratorRow {
   roles: string[];
   organizationId: number | null;
   organizationName: string;
+  /** The Organization directory entry picked; its name and city are then locked. */
+  directoryOrganizationId: number | null;
   city: string;
   hasActiveMou: boolean;
+  /** The Resource Person directory entry picked; name, designation and email are locked. */
+  directoryResourcePersonId: number | null;
   contactName: string;
   contactDesignation: string;
   contactEmail: string;
+  /**
+   * A linked person's email stays private in the directory; this says one exists, so the
+   * field shows filled without its address.
+   */
+  contactEmailOnFile: boolean;
 }
 
 export interface FinanceRow {

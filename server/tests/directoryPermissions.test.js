@@ -188,7 +188,13 @@ describe('directory route authentication', () => {
     const response = await request(app)
       .put('/api/organization-submissions/1')
       .set('Authorization', 'Bearer org-reviewer')
-      .send({ name: 'Edited' });
+      .send({
+        name: 'Edited',
+        funding: 'Public',
+        city: 'Chennai',
+        state: 'Tamil Nadu',
+        country: 'India',
+      });
 
     expect(response.status).toBe(200);
     expect(response.body).toMatchObject({

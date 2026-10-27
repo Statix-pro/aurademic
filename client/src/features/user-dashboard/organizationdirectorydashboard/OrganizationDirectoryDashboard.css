@@ -12,8 +12,9 @@
   vertical-align: middle !important;
 }
 
-/* Column widths for My submissions (S.No. | Organization | Category | Specializations |
-   Tag | Status | Action). S.No. needs only its digits; the name gets the most room. */
+/* Column widths for My submissions (S.No. | Organization | Category | Tag | Funding |
+   Specializations | Status | Action). S.No. needs only its digits; the name gets the most
+   room. */
 .org-table th:nth-child(1),
 .org-table td:nth-child(1) {
   width: 64px;
@@ -21,31 +22,36 @@
 }
 .org-table th:nth-child(2),
 .org-table td:nth-child(2) {
-  width: 30%;
+  width: 26%;
   text-align: left;
 }
 .org-table th:nth-child(3),
 .org-table td:nth-child(3) {
-  width: 13%;
+  width: 12%;
   text-align: left;
 }
 .org-table th:nth-child(4),
 .org-table td:nth-child(4) {
-  width: 21%;
-  text-align: left;
+  width: 11%;
+  text-align: center;
 }
 .org-table th:nth-child(5),
 .org-table td:nth-child(5) {
-  width: 11%;
-  text-align: center;
+  width: 9%;
+  text-align: left;
 }
 .org-table th:nth-child(6),
 .org-table td:nth-child(6) {
-  width: 11%;
-  text-align: center;
+  width: 18%;
+  text-align: left;
 }
 .org-table th:nth-child(7),
 .org-table td:nth-child(7) {
+  width: 11%;
+  text-align: center;
+}
+.org-table th:nth-child(8),
+.org-table td:nth-child(8) {
   text-align: center;
 }
 
@@ -195,22 +201,26 @@
   color: #ffffff;
 }
 
-/* The Directory tab has no Status or Action column (S.No. | Organization | Category |
-   Specializations | Tag). */
+/* The Directory tab has no Status or Action column (S.No. | Organization | Category | Tag |
+   Funding | Specializations). */
 .org-table.org-table--directory th:nth-child(2),
 .org-table.org-table--directory td:nth-child(2) {
-  width: 38%;
+  width: 32%;
 }
 .org-table.org-table--directory th:nth-child(3),
 .org-table.org-table--directory td:nth-child(3) {
-  width: 15%;
+  width: 13%;
 }
 .org-table.org-table--directory th:nth-child(4),
 .org-table.org-table--directory td:nth-child(4) {
-  width: 28%;
+  width: 13%;
 }
 .org-table.org-table--directory th:nth-child(5),
 .org-table.org-table--directory td:nth-child(5) {
+  width: 10%;
+}
+.org-table.org-table--directory th:nth-child(6),
+.org-table.org-table--directory td:nth-child(6) {
   width: auto;
 }
 

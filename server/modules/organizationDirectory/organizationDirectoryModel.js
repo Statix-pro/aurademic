@@ -22,7 +22,10 @@ const ORG_FIELDS = [
   'country',
   'pin_code',
   'status',
+  'funding',
 ];
+// The column is an ENUM; anything else, '' included, is stored as unknown.
+const FUNDING_VALUES = ['Private', 'Public'];
 
 export const normalizePayload = (input = {}) => {
   const aliases = {
@@ -36,9 +39,36 @@ export const normalizePayload = (input = {}) => {
       if (field === 'category') return [field, value || 'Academic'];
       if (field === 'tag') return [field, value || DEFAULT_TAG];
       if (field === 'status') return [field, value || 'Active'];
+      if (field === 'funding') return [field, FUNDING_VALUES.includes(value) ? value : null];
       return [field, value === '' ? null : (value ?? null)];
     }),
   );
+};
+
+// Every save -- submit, owner edit, reviewer edit -- needs a name and a funding. Funding
+// arrived after records existed, so an older one gets it on its next edit.
+const filled = (value) => typeof value === 'string' && value.trim() !== '';
+const isIndia = (country) => filled(country) && country.trim().toLowerCase() === 'india';
+const assertRequired = (payload) => {
+  if (!payload.name) throw new Error('Organization name is required');
+  if (!payload.funding) {
+    const error = new Error('Choose whether the organization is privately or publicly funded.');
+    error.status = 400;
+    throw error;
+  }
+  // Where it is: the Resource Person form and project collaborators copy this address, so a
+  // gap here would spread. A state is required in India, whose list the form offers; other
+  // countries type a province, and not every country has one.
+  const missing = [
+    !filled(payload.city) && 'the city',
+    isIndia(payload.country) && !filled(payload.state) && 'the state',
+    !filled(payload.country) && 'the country',
+  ].filter(Boolean);
+  if (missing.length > 0) {
+    const error = new Error(`Add ${missing.join(', ')}.`);
+    error.status = 400;
+    throw error;
+  }
 };
 
 // Specialization picks against the Tag and Specialization lists both directories share
@@ -87,7 +117,7 @@ export default {
 
   async submit(input, userId) {
     const payload = normalizePayload(input);
-    if (!payload.name) throw new Error('Organization name is required');
+    assertRequired(payload);
     const requestedSpecializations = parseSpecializations(input.specializations);
     const columns = [...ORG_FIELDS, 'is_active', 'created_by'];
     const connection = await db.getConnection();
@@ -132,7 +162,7 @@ export default {
 
   async update(id, input, userId) {
     const payload = normalizePayload(input);
-    if (!payload.name) throw new Error('Organization name is required');
+    assertRequired(payload);
     const requestedSpecializations = parseSpecializations(input.specializations);
     const assignments = ORG_FIELDS.map((field) => `${field} = ?`).join(', ');
     const connection = await db.getConnection();
@@ -208,7 +238,7 @@ export default {
   // read as Rejected, and no workflow step runs because nothing has been decided yet.
   async updateSubmission(id, input) {
     const payload = normalizePayload(input);
-    if (!payload.name) throw new Error('Organization name is required');
+    assertRequired(payload);
     const requestedSpecializations = parseSpecializations(input.specializations);
     const assignments = ORG_FIELDS.map((field) => `${field} = ?`).join(', ');
     const connection = await db.getConnection();

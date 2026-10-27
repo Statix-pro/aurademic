@@ -27,6 +27,8 @@ import type {
   ProjectOrganization,
   ProjectScheme,
 } from './types';
+import type { Organization } from '../organizationdirectory/OrganizationDirectory';
+import type { ResourcePerson } from '../resourcepersondirectory/ResourcePersonDirectory';
 
 /** An API rejection carrying per-field messages the form can render inline. */
 export class ProjectSaveError extends Error {
@@ -118,8 +120,11 @@ export function buildProjectPayload(form: ProjectFormState) {
       role: row.roles.join(', ') || null,
       organization_id: row.organizationId,
       organization_name: row.organizationName || null,
+      // The server fills a linked row's name, city, designation and email itself.
+      directory_organization_id: row.directoryOrganizationId,
       city: row.city || null,
       has_active_mou: row.hasActiveMou,
+      directory_resource_person_id: row.directoryResourcePersonId,
       contact_name: row.contactName || null,
       contact_designation: row.contactDesignation || null,
       contact_email: row.contactEmail || null,
@@ -383,6 +388,20 @@ const projectsApi = {
       budgetHeads: response.data?.budgetHeads ?? [],
       vocabulary: response.data?.vocabulary ?? [],
     };
+  },
+
+  /** The Organization and Resource Person directories, for picking a collaborator. */
+  async fetchCollaboratorDirectory(): Promise<{
+    organizations: Organization[];
+    people: ResourcePerson[];
+  }> {
+    const [organizations, people] = await Promise.all([
+      authenticityUtility.get('/organizations') as unknown as Promise<Envelope<Organization[]>>,
+      authenticityUtility.get('/resource-persons') as unknown as Promise<
+        Envelope<ResourcePerson[]>
+      >,
+    ]);
+    return { organizations: organizations.data ?? [], people: people.data ?? [] };
   },
 
   async searchOrganizations(query: string, fundingOnly = false): Promise<ProjectOrganization[]> {

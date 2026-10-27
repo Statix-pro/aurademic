@@ -244,6 +244,19 @@ describe('directory controller error envelopes', () => {
     });
   });
 
+  // `funding` is an ENUM column: a value outside it would fail the whole save under strict
+  // mode, so the payload keeps only the two known values and stores anything else as unknown.
+  it.each([
+    ['Private', 'Private'],
+    ['Public', 'Public'],
+    [undefined, null],
+    ['', null],
+    ['public', null],
+    ['Government', null],
+  ])('keeps funding %j as %j', (funding, expected) => {
+    expect(normalizePayload({ name: 'X', funding }).funding).toBe(expected);
+  });
+
   // 404/409/400 are expected outcomes; logging their stacks buried real faults in the log.
   it.each([
     ['organization', 404, organizationController, organizationModel, false],

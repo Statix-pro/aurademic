@@ -435,10 +435,18 @@
     background 0.2s ease;
 }
 
-/* Blue border + tint when input has a value */
-.rpd-form-wrapper .rpd-field input:not([type='date']):not(:placeholder-shown) {
+/* Blue border + tint when input has a value -- not when it is locked, which would read as
+   an active field. */
+.rpd-form-wrapper .rpd-field input:not([type='date']):not(:placeholder-shown):not(:disabled) {
   border-color: #0069ab;
   background: #f0f7ff;
+}
+
+/* A locked field (filled from the picked organization, or a read-only view). */
+.rpd-form-wrapper .rpd-field input:disabled {
+  border-color: var(--border-subtle);
+  background: var(--surface-muted);
+  color: var(--text-soft);
 }
 
 .rpd-form-wrapper .rpd-field input:focus,
@@ -446,6 +454,16 @@
   outline: none;
   border-color: #0069ab;
   box-shadow: 0 0 0 4px rgba(0, 105, 171, 0.12);
+}
+
+/* A required field left empty on save stays red while the user fixes it. */
+.rpd-form-wrapper .rpd-field input.is-invalid,
+.rpd-form-wrapper .rpd-field input.is-invalid:focus {
+  border-color: var(--error-color);
+}
+
+.rpd-form-wrapper .rpd-field input.is-invalid:focus {
+  box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.12);
 }
 
 /* Icon wrapper for contact fields (Mobile, Email, LinkedIn) */
@@ -504,8 +522,18 @@
   box-shadow: 0 0 0 4px rgba(0, 105, 171, 0.12);
 }
 
+/* No contact given on save (the message sits under the box). */
+.rpd-input-icon.is-invalid,
+.rpd-input-icon.is-invalid:focus-within {
+  border-color: var(--error-color);
+}
+
+.rpd-input-icon.is-invalid:focus-within {
+  box-shadow: 0 0 0 4px rgba(220, 53, 69, 0.12);
+}
+
 /* Blue tint when icon-wrapped input is filled */
-.rpd-input-icon:has(input:not(:placeholder-shown)) {
+.rpd-input-icon:has(input:not(:placeholder-shown):not(:disabled)) {
   border-color: #0069ab;
   background: #f0f7ff;
 }

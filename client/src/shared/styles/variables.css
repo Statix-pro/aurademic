@@ -113,6 +113,13 @@
   --tint-neutral-bg: #f1f3f7;
   --tint-neutral-fg: var(--text-muted);
 
+  /* A picked value shown as a chip — CustomTagInput's badges and CustomDropdown's
+     multi-select values share it, so every multi-select looks the same. */
+  --tag-chip-bg: var(--hover-primary-bg);
+  --tag-chip-border: var(--hover-primary-border);
+  --tag-chip-text: var(--primary-color);
+  --tag-chip-remove-hover-bg: var(--hover-primary-border);
+
   /* Interactive surfaces — hover and focus rings on quiet controls. */
   --hover-primary-bg: #eef5fd;
   --hover-primary-border: #cfe2f6;
@@ -127,6 +134,8 @@
   --button-sm-height: 2rem;
   --chip-height: 2rem;
   --icon-action-size: 2rem;
+  /* The × inside a clearable CustomInput — the WCAG 2.2 SC 2.5.8 24px minimum target. */
+  --input-clear-size: 1.5rem;
   --inline-action-height: 1.75rem;
   --tag-height: 1.5rem;
   --table-cell-padding: 0.75rem 1rem;

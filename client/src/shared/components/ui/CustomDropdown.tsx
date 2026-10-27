@@ -59,12 +59,15 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
       minHeight: 'var(--control-height)',
       height: 'var(--control-height)',
       fontSize: 'var(--font-size-body)',
-      backgroundColor: 'var(--bg-input)',
+      // Locked like a disabled input (bootstrap-theme.css .form-control:disabled).
+      backgroundColor: state.isDisabled ? 'var(--surface-muted)' : 'var(--bg-input)',
       borderColor: error
         ? 'var(--error-color)'
-        : state.isFocused
-          ? 'var(--border-focus)'
-          : 'var(--border-color)',
+        : state.isDisabled
+          ? 'var(--border-subtle)'
+          : state.isFocused
+            ? 'var(--border-focus)'
+            : 'var(--border-color)',
       borderRadius: 'var(--border-radius-md)',
       padding: '0 4px',
       boxShadow: state.isFocused ? 'var(--shadow-focus)' : 'none',
@@ -114,10 +117,41 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
         backgroundColor: 'var(--primary-color)',
       },
     }),
-    singleValue: (provided: any) => ({
+    singleValue: (provided: any, state: any) => ({
       ...provided,
-      color: 'var(--text-main)',
+      color: state.isDisabled ? 'var(--text-soft)' : 'var(--text-main)',
     }),
+    // Multi-select values look like CustomTagInput's chips (common.css .custom-tag-badge),
+    // so a picked list reads the same on every form. They never shrink: a row that runs
+    // out of room scrolls or wraps, per the host's valueContainer.
+    multiValue: (provided: any) => ({
+      ...provided,
+      flexShrink: 0,
+      backgroundColor: 'var(--tag-chip-bg)',
+      border: '1px solid var(--tag-chip-border)',
+      borderRadius: 'var(--border-radius-sm)',
+    }),
+    multiValueLabel: (provided: any) => ({
+      ...provided,
+      // 28px tall with its border, the same as CustomTagInput's chips.
+      padding: '0.1875rem 0 0.1875rem 0.625rem',
+      fontSize: 'var(--font-size-secondary)',
+      fontWeight: 600,
+      color: 'var(--tag-chip-text)',
+    }),
+    // A disabled field shows the picks without the remove button they could not use.
+    multiValueRemove: (provided: any, state: any) =>
+      state.selectProps.isDisabled
+        ? { display: 'none' }
+        : {
+            ...provided,
+            margin: '0.125rem 0.25rem 0.125rem 0.125rem',
+            padding: '0 0.25rem',
+            borderRadius: '6px',
+            color: 'var(--tag-chip-text)',
+            cursor: 'pointer',
+            ':hover': { backgroundColor: 'var(--tag-chip-remove-hover-bg)' },
+          },
     // Light grey like every other hint, and hidden while the field is disabled
     // (see the placeholder rules in shared/styles/base.css). One line, cut with an
     // ellipsis, so a narrow field on a phone never grows taller than its neighbours.
@@ -159,6 +193,8 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
               : null
         }
         menuPosition={menuPosition}
+        // Also lets a host's own control style show the error border (selectProps).
+        aria-invalid={Boolean(error)}
         {...props}
       />
       {error && <div className="custom-error-text">{error}</div>}

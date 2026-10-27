@@ -13,7 +13,6 @@ import React, { useState, useEffect } from 'react';
 
 import './ResourcePersonDirectory.css';
 import RegionFields from '../../shared/components/RegionFields';
-import AlertModal from '../../shared/components/ui/AlertModal';
 import CustomButton from '../../shared/components/ui/CustomButton';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
@@ -43,6 +42,8 @@ export interface ProfessionDetail {
   officialEmail: string;
   /** Whether that email is the person's own or a role mailbox the post's next holder reads. */
   officialEmailType?: OfficialEmailType | null;
+  /** Sent in place of the address when this viewer may not see it. */
+  hasOfficialEmail?: boolean;
   /** Form-only: the submitter picked the type, so typing no longer re-guesses it. */
   officialEmailTypeChosen?: boolean;
   status: string; // 'Working' | 'Relieved'
@@ -134,6 +135,15 @@ export interface ResourcePerson {
   organizationHolds?: { name: string; status: 'Pending' | 'Rejected' }[];
 }
 
+/** Save-time errors, each shown under its field; `post` names the row it is shown on. */
+interface FieldErrors {
+  firstName?: string;
+  lastName?: string;
+  specializations?: string;
+  contact?: string;
+  post?: { row: number; designation?: string; organization?: string };
+}
+
 interface ResourcePersonDirectoryProps {
   editingPerson: ResourcePerson | null;
   organizations?: Organization[];
@@ -195,8 +205,15 @@ const customDropdownStyles = {
     ...provided,
     minHeight: 'var(--control-height)',
     height: 'var(--control-height)',
-    backgroundColor: '#ffffff',
-    borderColor: state.isFocused ? '#0069ab' : '#dbeafe',
+    // Locked like the inputs beside it (bootstrap-theme.css .form-control:disabled).
+    backgroundColor: state.isDisabled ? 'var(--surface-muted)' : '#ffffff',
+    borderColor: state.isDisabled
+      ? 'var(--border-subtle)'
+      : state.selectProps['aria-invalid']
+        ? 'var(--error-color)'
+        : state.isFocused
+          ? '#0069ab'
+          : '#dbeafe',
     borderRadius: '12px',
     fontSize: 'var(--font-size-body)',
     padding: '0 4px',
@@ -213,7 +230,10 @@ const customDropdownStyles = {
   }),
   // Text per AGENTS.md typography: 14px, primary-text colour.
   container: (provided: any) => ({ ...provided, fontSize: 'var(--font-size-body)' }),
-  singleValue: (provided: any) => ({ ...provided, color: 'var(--text-body)' }),
+  singleValue: (provided: any, state: any) => ({
+    ...provided,
+    color: state.isDisabled ? 'var(--text-soft)' : 'var(--text-body)',
+  }),
   // One line, cut with an ellipsis: "Select state" wrapped in the narrow State field.
   placeholder: (provided: any) => ({
     ...provided,
@@ -243,15 +263,6 @@ const specializationDropdownStyles = {
     flexWrap: 'nowrap',
     overflowX: 'auto',
   }),
-  multiValue: (provided: any) => ({ ...provided, flexShrink: 0, borderRadius: '6px' }),
-  // A read-only view shows the picks without the remove button they could not use.
-  multiValueRemove: (provided: any, state: any) =>
-    state.selectProps.isDisabled ? { display: 'none' } : provided,
-  multiValueLabel: (provided: any) => ({
-    ...provided,
-    fontSize: 'var(--font-size-secondary)',
-    color: 'var(--text-body)',
-  }),
 };
 
 interface ListOption {
@@ -268,19 +279,10 @@ const toOptions = (names: string[], selected: string[]) =>
 
 const titleDropdownStyles = {
   ...customDropdownStyles,
+  // The form's control, locked state included, with tighter padding for the narrow field.
   control: (provided: any, state: any) => ({
-    ...provided,
-    minHeight: 'var(--control-height)',
-    height: 'var(--control-height)',
-    backgroundColor: '#ffffff',
-    borderColor: state.isFocused ? '#0069ab' : '#dbeafe',
-    borderRadius: '12px',
-    fontSize: 'var(--font-size-body)',
+    ...customDropdownStyles.control(provided, state),
     padding: '0 2px',
-    boxShadow: state.isFocused ? '0 0 0 4px rgba(0, 105, 171, 0.12)' : 'none',
-    '&:hover': {
-      borderColor: state.isFocused ? '#0069ab' : '#0069ab',
-    },
   }),
   valueContainer: (provided: any) => ({
     ...provided,
@@ -342,7 +344,17 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   const [removePhoto, setRemovePhoto] = useState(false);
   const [removeResume, setRemoveResume] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
-  const [showNameAlert, setShowNameAlert] = useState(false);
+  // Shown under the field they belong to, and cleared as soon as it is filled in. The server
+  // applies the same rules (assertRequired in resourcepersonDirectoryModel.js).
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const clearError = (key: keyof FieldErrors) =>
+    setFieldErrors(({ [key]: _cleared, ...rest }) => rest);
+  const clearPostError = (key: 'designation' | 'organization') =>
+    setFieldErrors(({ post, ...rest }) => {
+      if (!post) return rest;
+      const left = { ...post, [key]: undefined };
+      return left.designation || left.organization ? { ...rest, post: left } : rest;
+    });
 
   /* Initialize form values */
   useEffect(() => {
@@ -409,14 +421,18 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   /* ── Profession helpers ── */
   const addProfession = () =>
     setProfessions((prev) => [...prev, { ...emptyProfession(), status: 'Relieved' }]);
-  const removeProfession = (i: number) =>
+  const removeProfession = (i: number) => {
     setProfessions((prev) => prev.filter((_, idx) => idx !== i));
+    // Its row number no longer points at the same post; the next save re-checks.
+    clearError('post');
+  };
   const changeProfession = (i: number, field: keyof ProfessionDetail, val: string) =>
     setProfessions((prev) => prev.map((p, idx) => (idx === i ? { ...p, [field]: val } : p)));
   // Typing an email guesses its type until the submitter picks one. A cleared email has none,
   // and drops the pick with it, so the next address typed is guessed afresh.
-  const changeOfficialEmail = (i: number, email: string) =>
-    setProfessions((prev) =>
+  const changeOfficialEmail = (i: number, email: string) => {
+    if (email.trim()) clearError('contact');
+    return setProfessions((prev) =>
       prev.map((p, idx) => {
         if (idx !== i) return p;
         if (!email.trim())
@@ -435,6 +451,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
         };
       }),
     );
+  };
   const chooseOfficialEmailType = (i: number, type: OfficialEmailType) =>
     setProfessions((prev) =>
       prev.map((p, idx) =>
@@ -442,9 +459,11 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       ),
     );
   // Picking an organization copies its address and website into the row, replacing what
-  // was there so a switch never leaves the previous organization's city behind. The
-  // fields stay editable. The Website input is stored as orgLinkedIn.
-  const selectOrganization = (i: number, organization: Organization) =>
+  // was there so a switch never leaves the previous organization's city behind. Those
+  // fields are then locked: they belong to the organization's own record, edited in the
+  // Organization directory. The Website input is stored as orgLinkedIn.
+  const selectOrganization = (i: number, organization: Organization) => {
+    clearPostError('organization');
     setProfessions((prev) =>
       prev.map((p, idx) =>
         idx === i
@@ -461,6 +480,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
           : p,
       ),
     );
+  };
   // A Rejected organization is never offered. The submitter's own Pending one is (Add an
   // organization selects it straight away), marked so it reads as not yet in the directory;
   // the resource person cannot be approved until it is.
@@ -547,8 +567,50 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   };
 
   const handleSubmit = () => {
-    if (!firstName.trim() || !lastName.trim()) {
-      setShowNameAlert(true);
+    const errors: FieldErrors = {};
+    if (!firstName.trim()) errors.firstName = 'Enter the first name.';
+    if (!lastName.trim()) errors.lastName = 'Enter the last name.';
+    if (specializations.length === 0) errors.specializations = 'Pick at least one specialization.';
+    const filledText = (value?: string | null) => Boolean((value || '').trim());
+    if (
+      !filledText(mobile) &&
+      !filledText(personalEmail) &&
+      !professions.some((p) => filledText(p.officialEmail))
+    )
+      errors.contact = 'Add a mobile number or an email.';
+    const hasPost = professions.some(
+      (p) => filledText(p.designation) && (filledText(p.organization) || Boolean(p.organizationId)),
+    );
+    if (!hasPost) {
+      // On the row the user started filling in, else the first.
+      const row = Math.max(
+        0,
+        professions.findIndex((p) => filledText(p.designation) || filledText(p.organization)),
+      );
+      errors.post = {
+        row,
+        ...(!filledText(professions[row]?.designation)
+          ? { designation: 'Enter the designation.' }
+          : {}),
+        ...(!filledText(professions[row]?.organization) && !professions[row]?.organizationId
+          ? { organization: 'Pick the organization.' }
+          : {}),
+      };
+    }
+    setFieldErrors(errors);
+    // Take the user to the first field that needs them, in the order the form shows them.
+    const firstInvalid = [
+      errors.firstName && 'rp-firstName',
+      errors.lastName && 'rp-lastName',
+      errors.specializations && 'rp-specializations',
+      errors.contact && 'rp-mobile',
+      errors.post?.designation && `rp-designation-${errors.post.row}`,
+      errors.post?.organization && `organization-${errors.post.row}`,
+    ].find(Boolean);
+    if (firstInvalid) {
+      const target = document.getElementById(firstInvalid);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target?.focus({ preventScroll: true });
       return;
     }
     const fullName = `${title} ${firstName.trim()} ${lastName.trim()}`;
@@ -658,7 +720,11 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                   <CustomInput
                     name="rp-firstName"
                     value={firstName}
-                    onChange={setFirstName}
+                    onChange={(value) => {
+                      setFirstName(value);
+                      if (value.trim()) clearError('firstName');
+                    }}
+                    error={fieldErrors.firstName}
                     placeholder="First name"
                     disabled={isReadOnly}
                     required
@@ -672,7 +738,11 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                   <CustomInput
                     name="rp-lastName"
                     value={lastName}
-                    onChange={setLastName}
+                    onChange={(value) => {
+                      setLastName(value);
+                      if (value.trim()) clearError('lastName');
+                    }}
+                    error={fieldErrors.lastName}
                     placeholder="Last name"
                     disabled={isReadOnly}
                     required
@@ -748,15 +818,21 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                   />
                 </div>
                 <div className="rpd-field">
-                  <label>Specialization</label>
+                  <label htmlFor="rp-specializations">
+                    Specialization <span className="rpd-req">*</span>
+                  </label>
                   <CustomDropdown
                     name="rp-specializations"
                     className="mb-0"
                     isMulti
                     value={specializations.map((name) => ({ value: name, label: name }))}
-                    onChange={(options: any) =>
-                      setSpecializations((options || []).map((option: any) => String(option.value)))
-                    }
+                    onChange={(options: any) => {
+                      setSpecializations(
+                        (options || []).map((option: any) => String(option.value)),
+                      );
+                      if (options?.length) clearError('specializations');
+                    }}
+                    error={fieldErrors.specializations}
                     options={toOptions(listNames.specialization, specializations)}
                     placeholder="Select specializations"
                     styles={specializationDropdownStyles}
@@ -769,24 +845,36 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
             {/* Contact Details */}
             <div className="rpd-split-side" style={{ paddingLeft: '8px' }}>
               <h5 className="rpd-subsection-title" style={{ marginBottom: '4px' }}>
-                Contact Details
+                {/* A mobile number or an email: either will do, so the heading is starred,
+                    not one field. */}
+                Contact Details <span className="rpd-req">*</span>
               </h5>
 
               <div className="rpd-field">
-                <div className="rpd-input-icon">
+                {/* The icon box draws the border, so it shows the error and the message
+                    sits under the box rather than inside it. */}
+                <div className={`rpd-input-icon${fieldErrors.contact ? ' is-invalid' : ''}`}>
                   <Smartphone size={15} />
                   <CustomInput
                     label="Mobile number"
                     name="rp-mobile"
                     type="tel"
                     value={contactHidden ? HIDDEN_CONTACT : mobile}
-                    onChange={setMobile}
+                    onChange={(value) => {
+                      setMobile(value);
+                      if (value.trim()) clearError('contact');
+                    }}
                     placeholder="Mobile number"
                     disabled={isReadOnly}
                     className="mb-0"
                   />
                   <ContactLock />
                 </div>
+                {fieldErrors.contact && (
+                  <div className="custom-error-text" role="alert">
+                    {fieldErrors.contact}
+                  </div>
+                )}
               </div>
 
               <div className="rpd-field">
@@ -797,7 +885,10 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     name="rp-personalEmail"
                     type="email"
                     value={contactHidden ? HIDDEN_CONTACT : personalEmail}
-                    onChange={setPersonalEmail}
+                    onChange={(value) => {
+                      setPersonalEmail(value);
+                      if (value.trim()) clearError('contact');
+                    }}
                     placeholder="Personal email"
                     disabled={isReadOnly}
                     className="mb-0"
@@ -878,20 +969,46 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                       ] as { label: string; field: 'designation' | 'department'; ph: string }[]
                     ).map(({ label, field, ph }) => (
                       <div key={field} className="rpd-field" style={{ marginBottom: 0 }}>
+                        {/* A post needs its designation; the first row is where one goes. */}
+                        <label htmlFor={`rp-${field}-${idx}`}>
+                          {label}
+                          {field === 'designation' && idx === 0 && (
+                            <>
+                              {' '}
+                              <span className="rpd-req">*</span>
+                            </>
+                          )}
+                        </label>
                         <CustomInput
-                          label={label}
                           name={`rp-${field}-${idx}`}
                           value={prof[field]}
-                          onChange={(value) => changeProfession(idx, field, value)}
+                          onChange={(value) => {
+                            changeProfession(idx, field, value);
+                            if (field === 'designation' && value.trim())
+                              clearPostError('designation');
+                          }}
                           placeholder={ph}
                           disabled={isReadOnly}
                           className="mb-0"
+                          error={
+                            field === 'designation' && fieldErrors.post?.row === idx
+                              ? fieldErrors.post.designation
+                              : undefined
+                          }
                         />
                       </div>
                     ))}
                     <div className="rpd-field" style={{ marginBottom: 0 }}>
                       <div className="d-flex justify-content-between align-items-start">
-                        <label>Organization</label>
+                        <label htmlFor={`organization-${idx}`}>
+                          Organization
+                          {idx === 0 && (
+                            <>
+                              {' '}
+                              <span className="rpd-req">*</span>
+                            </>
+                          )}
+                        </label>
                         {prof.organizationStatus === 'Pending' && (
                           <span className="rpd-org-status pending">Pending approval</span>
                         )}
@@ -946,6 +1063,9 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                         placeholder="Select organization"
                         styles={customDropdownStyles}
                         isDisabled={isReadOnly}
+                        error={
+                          fieldErrors.post?.row === idx ? fieldErrors.post.organization : undefined
+                        }
                       />
                     </div>
                     {/* Next to the organization it is filled from. */}
@@ -956,7 +1076,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                         value={prof.orgLinkedIn}
                         onChange={(value) => changeProfession(idx, 'orgLinkedIn', value)}
                         placeholder="Website URL"
-                        disabled={isReadOnly}
+                        disabled={isReadOnly || Boolean(prof.organizationId)}
                         className="mb-0"
                       />
                     </div>
@@ -981,7 +1101,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                         value={prof.city}
                         onChange={(value) => changeProfession(idx, 'city', value)}
                         placeholder="City"
-                        disabled={isReadOnly}
+                        disabled={isReadOnly || Boolean(prof.organizationId)}
                         className="mb-0"
                       />
                     </div>
@@ -994,7 +1114,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                           prev.map((p, i) => (i === idx ? { ...p, ...region } : p)),
                         )
                       }
-                      disabled={isReadOnly}
+                      disabled={isReadOnly || Boolean(prof.organizationId)}
                       fieldClassName="rpd-field"
                       fieldStyle={{ flex: '1', minWidth: '120px', marginBottom: 0 }}
                       dropdownStyles={customDropdownStyles}
@@ -1338,13 +1458,6 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
           Cancel
         </CustomButton>
       </div>
-
-      <AlertModal
-        show={showNameAlert}
-        onHide={() => setShowNameAlert(false)}
-        type="warning"
-        message="Please fill in the Name fields."
-      />
     </div>
   );
 };

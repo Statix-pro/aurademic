@@ -163,7 +163,8 @@
   display: block;
 }
 
-.orgd-field label .req {
+.orgd-field label .req,
+.orgd-legend .req {
   color: #ef4444;
   margin-left: 2px;
 }
@@ -189,6 +190,16 @@
 .orgd-form-wrapper .orgd-field select:focus {
   border-color: #0069ab;
   box-shadow: 0 0 0 3px rgba(0, 105, 171, 0.15);
+}
+
+/* A required field left empty on save stays red while the user fixes it. */
+.orgd-form-wrapper .orgd-field input.is-invalid,
+.orgd-form-wrapper .orgd-field input.is-invalid:focus {
+  border-color: var(--error-color);
+}
+
+.orgd-form-wrapper .orgd-field input.is-invalid:focus {
+  box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.15);
 }
 
 /* Toggle Group for Active/Inactive status */
@@ -440,6 +451,11 @@
 
 .orgd-legend {
   margin-bottom: 6px;
+}
+
+/* Funding left unchosen on save: the chips take the error colour, like an input's border. */
+.orgd-toggle-group.is-invalid .orgd-toggle-btn:not(.active) {
+  border-color: var(--error-color);
 }
 
 /* The field-input rule above also reaches react-select's search input inside the Tag and

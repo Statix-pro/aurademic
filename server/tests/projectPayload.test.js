@@ -433,6 +433,27 @@ describe('normalizeProjectPayload', () => {
     );
   });
 
+  // A directory pick is enough to keep a row: the model fills its name from the directory,
+  // and does so inside the transaction, so the row keeps the index its errors are keyed by.
+  it('keeps directory-linked collaborator rows with their ids and submitted index', () => {
+    const { aggregate, errors } = normalizeProjectPayload(
+      validPayload({
+        collaborators_enabled: true,
+        collaborators: [{}, { directoryOrganizationId: '5', directoryResourcePersonId: 9 }],
+      }),
+    );
+
+    expect(errors).toEqual([]);
+    expect(aggregate.collaborators).toEqual([
+      expect.objectContaining({
+        directory_organization_id: 5,
+        directory_resource_person_id: 9,
+        sourceIndex: 1,
+        display_order: 0,
+      }),
+    ]);
+  });
+
   it('validates collaborator email and financial year formats', () => {
     const { errors } = normalizeProjectPayload(
       validPayload({

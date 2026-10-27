@@ -26,8 +26,8 @@ interface SuggestInputProps {
 /**
  * A free-text field that suggests as you type — `SelectField`'s look and keyboard, without
  * restricting the value to the list. For values that should usually come from a list but
- * may not be in it yet (a collaborating organization, until the organization directory
- * exists). Nothing is armed until the user moves through the menu, so Enter or Tab on typed
+ * may not be in it yet (a collaborating organization or contact, picked from the
+ * directories or typed). Nothing is armed until the user moves through the menu, so Enter or Tab on typed
  * text keeps that text rather than swapping in the first suggestion.
  */
 const SuggestInput: React.FC<SuggestInputProps> = ({

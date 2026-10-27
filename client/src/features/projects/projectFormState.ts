@@ -98,11 +98,14 @@ export function createCollaboratorRow(): CollaboratorRow {
     roles: [],
     organizationId: null,
     organizationName: '',
+    directoryOrganizationId: null,
     city: '',
     hasActiveMou: false,
+    directoryResourcePersonId: null,
     contactName: '',
     contactDesignation: '',
     contactEmail: '',
+    contactEmailOnFile: false,
   };
 }
 
@@ -455,11 +458,14 @@ export function projectToFormState(project: any): ProjectFormState {
           .filter(Boolean),
         organizationId: row.organization_id ?? null,
         organizationName: text(row.organization_name || row.organization_label),
+        directoryOrganizationId: row.directory_organization_id ?? null,
         city: text(row.city),
         hasActiveMou: flag(row.has_active_mou),
+        directoryResourcePersonId: row.directory_resource_person_id ?? null,
         contactName: text(row.contact_name),
         contactDesignation: text(row.contact_designation),
         contactEmail: text(row.contact_email),
+        contactEmailOnFile: flag(row.contact_email_on_file),
       }))
     : [];
 

@@ -564,8 +564,15 @@ function normalizeCollaborators(raw, enabled, errors) {
         role: toNullableString(row?.role, 255),
         organization_id: toId(row?.organization_id ?? row?.organizationId),
         organization_name: toNullableString(row?.organization_name ?? row?.organizationName, 255),
+        // Directory picks; the model fills the linked fields from the directory itself.
+        directory_organization_id: toId(
+          row?.directory_organization_id ?? row?.directoryOrganizationId,
+        ),
         city: toNullableString(row?.city, 150),
         has_active_mou: toBoolean(row?.has_active_mou ?? row?.hasActiveMou),
+        directory_resource_person_id: toId(
+          row?.directory_resource_person_id ?? row?.directoryResourcePersonId,
+        ),
         contact_name: toNullableString(row?.contact_name ?? row?.contactName, 255),
         contact_designation: toNullableString(
           row?.contact_designation ?? row?.contactDesignation,
@@ -579,10 +586,20 @@ function normalizeCollaborators(raw, enabled, errors) {
         display_order: index,
       }))
       // A row the user added but never filled in is dropped instead of failing the save.
-      .filter((row) => row.organization_id || row.organization_name || row.role || row.contact_name)
-      .map(({ sourceIndex, ...row }, index) => {
-        const field = `collaborators[${sourceIndex}]`;
-        if (!row.organization_id && !row.organization_name) {
+      .filter(
+        (row) =>
+          row.organization_id ||
+          row.organization_name ||
+          row.directory_organization_id ||
+          row.role ||
+          row.contact_name ||
+          row.directory_resource_person_id,
+      )
+      // sourceIndex stays on the row: the directory fill runs in the save transaction and
+      // keys its errors the same way. replaceCollaborators writes named columns only.
+      .map((row, index) => {
+        const field = `collaborators[${row.sourceIndex}]`;
+        if (!row.organization_id && !row.organization_name && !row.directory_organization_id) {
           errors.push({
             field: `${field}.organization`,
             message: 'Enter the collaborating organization.',

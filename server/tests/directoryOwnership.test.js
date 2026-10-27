@@ -10,9 +10,16 @@ const storedSpecializations = [];
 // The organization links a record's profession rows hold, as the update reads them.
 const storedOrganizationLinks = [];
 const specializationRows = vi.fn();
+// Profession rows are recorded apart from `execute`, so a record's post does not take a
+// result queued for the statement after it.
+const professionInserts = vi.fn();
 const answerListQuery = (sql, params) => {
   if (/^\s*SELECT organization_id FROM directory_resource_person_professions/.test(sql))
     return [storedOrganizationLinks];
+  if (/^\s*INSERT INTO directory_resource_person_professions/.test(sql)) {
+    professionInserts(sql, params);
+    return [{}];
+  }
   if (/FROM directory_options WHERE is_active = 1/.test(sql)) return [activeOptions];
   if (/directory_(resource_person|organization)_specializations/.test(sql)) {
     specializationRows(sql, params);
@@ -21,6 +28,17 @@ const answerListQuery = (sql, params) => {
   }
   return undefined;
 };
+// What every saved organization needs beyond a name: its funding and where it is.
+const ORG_REQUIRED = { funding: 'Public', city: 'Chennai', state: 'Tamil Nadu', country: 'India' };
+// What every saved resource person needs beyond a name -- a contact, a post and a
+// specialization -- for tests about something else. The specialization is one each
+// describe block's list offers.
+const POST = { designation: 'Professor', organization: 'Typed Org' };
+const completePerson = (specialization = 'Chemistry') => ({
+  mobile: '9000000000',
+  specializations: JSON.stringify([specialization]),
+  professions: JSON.stringify([POST]),
+});
 const connection = {
   beginTransaction: vi.fn(),
   commit: vi.fn(),
@@ -70,6 +88,12 @@ describe('directory owner-only edits', () => {
     workflowService.startWorkflow.mockReset();
     workflowService.logWorkflowResubmission.mockReset();
     deleteUploadedFile.mockReset();
+    professionInserts.mockReset();
+    // completePerson()'s specialization.
+    activeOptions.splice(0, activeOptions.length, {
+      list_key: 'specialization',
+      name: 'Chemistry',
+    });
   });
 
   it('allows an organization owner to edit their record', async () => {
@@ -78,7 +102,9 @@ describe('directory owner-only edits', () => {
       .mockResolvedValueOnce([{}])
       .mockResolvedValueOnce([[{ id: 10, name: 'Updated', category: 'Academic', tag: 'General' }]]);
 
-    await expect(organizationModel.update(10, { name: 'Updated' }, 2)).resolves.toBeTruthy();
+    await expect(
+      organizationModel.update(10, { name: 'Updated', ...ORG_REQUIRED }, 2),
+    ).resolves.toBeTruthy();
     expect(execute.mock.calls[0][1]).toEqual([10, 2]);
     expect(execute.mock.calls[1][0]).toMatch(/is_active = 0, updated_by = NULL/);
     expect(workflowService.logWorkflowResubmission).toHaveBeenCalledWith(
@@ -93,9 +119,9 @@ describe('directory owner-only edits', () => {
 
   it('refuses a non-owner edit of an approved organization without changing it', async () => {
     execute.mockResolvedValueOnce([[]]);
-    await expect(organizationModel.update(10, { name: 'Updated' }, 3)).rejects.toThrow(
-      'Organization not found',
-    );
+    await expect(
+      organizationModel.update(10, { name: 'Updated', ...ORG_REQUIRED }, 3),
+    ).rejects.toThrow('Organization not found');
     expect(execute).toHaveBeenCalledTimes(1);
     expect(execute.mock.calls[0][0]).toMatch(/^SELECT id, tag FROM organizations/);
     expect(connection.commit).not.toHaveBeenCalled();
@@ -114,7 +140,7 @@ describe('directory owner-only edits', () => {
         {
           firstName: 'A',
           lastName: 'B',
-          professions: '[]',
+          ...completePerson(),
         },
         {},
         2,
@@ -144,7 +170,7 @@ describe('directory owner-only edits', () => {
 
     const saved = await resourcePersonModel.update(
       11,
-      { firstName: 'A', lastName: 'B', remarks: '  Prefers mornings  ', professions: '[]' },
+      { firstName: 'A', lastName: 'B', remarks: '  Prefers mornings  ', ...completePerson() },
       {},
       2,
     );
@@ -163,7 +189,7 @@ describe('directory owner-only edits', () => {
         {
           firstName: 'A',
           lastName: 'B',
-          professions: '[]',
+          ...completePerson(),
         },
         {},
         3,
@@ -186,7 +212,7 @@ describe('directory owner-only edits', () => {
       {
         firstName: 'A',
         lastName: 'B',
-        professions: '[]',
+        ...completePerson(),
       },
       {
         photoFile: [
@@ -225,7 +251,7 @@ describe('directory owner-only edits', () => {
 
     await resourcePersonModel.update(
       11,
-      { firstName: 'A', lastName: 'B', professions: '[]' },
+      { firstName: 'A', lastName: 'B', ...completePerson() },
       {
         photoFile: [
           { filename: 'new-photo.jpg', mimetype: 'image/jpeg', originalname: 'new.jpg', size: 10 },
@@ -252,7 +278,7 @@ describe('directory owner-only edits', () => {
       {
         firstName: 'A',
         lastName: 'B',
-        professions: '[]',
+        ...completePerson(),
         photoName: 'victim.pdf',
         photoPath: '/uploads/journal-article/victim-article.pdf',
         photoMimeType: 'application/pdf',
@@ -295,7 +321,7 @@ describe('directory owner-only edits', () => {
       {
         firstName: 'A',
         lastName: 'B',
-        professions: '[]',
+        ...completePerson(),
         removePhoto: 'true',
         removeResume: 'false',
       },
@@ -332,7 +358,7 @@ describe('directory owner-only edits', () => {
 
     const saved = await resourcePersonModel.update(
       11,
-      { firstName: 'A', lastName: 'B', professions: '[]', removePhoto: 'true' },
+      { firstName: 'A', lastName: 'B', ...completePerson(), removePhoto: 'true' },
       {
         photoFile: [
           { filename: 'new-photo.jpg', mimetype: 'image/jpeg', originalname: 'new.jpg', size: 10 },
@@ -364,7 +390,7 @@ describe('directory owner-only edits', () => {
 
     await resourcePersonModel.update(
       11,
-      { firstName: 'A', lastName: 'B', professions: '[]' },
+      { firstName: 'A', lastName: 'B', ...completePerson() },
       {
         photoFile: [
           { filename: 'new-photo.jpg', mimetype: 'image/jpeg', originalname: 'new.jpg', size: 10 },
@@ -394,7 +420,7 @@ describe('directory owner-only edits', () => {
 
     await resourcePersonModel.update(
       11,
-      { firstName: 'A', lastName: 'B', professions: '[]' },
+      { firstName: 'A', lastName: 'B', ...completePerson() },
       {},
       2,
     );
@@ -512,8 +538,8 @@ describe('directory owner-only edits', () => {
       .mockResolvedValueOnce([{ insertId: 32 }])
       .mockResolvedValueOnce([[{ id: 32, created_by: 3 }]]);
 
-    await organizationModel.submit({ name: 'Shared name' }, 2);
-    await organizationModel.submit({ name: 'Shared name' }, 3);
+    await organizationModel.submit({ name: 'Shared name', ...ORG_REQUIRED }, 2);
+    await organizationModel.submit({ name: 'Shared name', ...ORG_REQUIRED }, 3);
 
     const inserts = execute.mock.calls.filter(([sql]) =>
       sql.startsWith('INSERT INTO organizations'),
@@ -527,23 +553,29 @@ describe('directory owner-only edits', () => {
   it.each([
     [
       'organization submit',
-      () => organizationModel.submit({ name: 'Org', status: 'Active' }, 2),
+      () => organizationModel.submit({ name: 'Org', ...ORG_REQUIRED, status: 'Active' }, 2),
       [[{ insertId: 31 }], [[{ id: 31, created_by: 2, name: 'Org', status: 'Active' }]]],
     ],
     [
       'organization update',
-      () => organizationModel.update(31, { name: 'Org' }, 2),
+      () => organizationModel.update(31, { name: 'Org', ...ORG_REQUIRED }, 2),
       [[[{ id: 31 }]], [{}], [[{ id: 31, created_by: 2, name: 'Org' }]]],
     ],
     [
       'resource-person submit',
-      () => resourcePersonModel.submit({ firstName: 'A', lastName: 'B', professions: '[]' }, {}, 2),
+      () =>
+        resourcePersonModel.submit({ firstName: 'A', lastName: 'B', ...completePerson() }, {}, 2),
       [[{ insertId: 21 }], [[{ id: 21, created_by: 2 }]]],
     ],
     [
       'resource-person update',
       () =>
-        resourcePersonModel.update(21, { firstName: 'A', lastName: 'B', professions: '[]' }, {}, 2),
+        resourcePersonModel.update(
+          21,
+          { firstName: 'A', lastName: 'B', ...completePerson() },
+          {},
+          2,
+        ),
       [[[{ id: 21, created_by: 2 }]], [{}], [{}]],
     ],
   ])('returns an owned Pending record from %s', async (_label, save, results) => {
@@ -565,11 +597,57 @@ describe('directory owner-only edits', () => {
   it('enforces organization-name uniqueness per submitter', async () => {
     execute.mockRejectedValueOnce({ code: 'ER_DUP_ENTRY' });
 
-    await expect(organizationModel.submit({ name: 'Already used' }, 2)).rejects.toMatchObject({
+    await expect(
+      organizationModel.submit({ name: 'Already used', ...ORG_REQUIRED }, 2),
+    ).rejects.toMatchObject({
       code: 'ER_DUP_ENTRY',
     });
     expect(execute.mock.calls[0][1].at(-1)).toBe(2);
     expect(connection.rollback).toHaveBeenCalledOnce();
+  });
+
+  // Funding is required on every save, so an older record without one gets it on its next
+  // edit; the refusal is a 400 before any connection is taken.
+  it.each([
+    ['submit', () => organizationModel.submit({ name: 'Org' }, 2)],
+    ['owner edit', () => organizationModel.update(10, { name: 'Org', funding: '' }, 2)],
+    ['reviewer edit', () => organizationModel.updateSubmission(10, { name: 'Org' })],
+  ])('refuses an organization %s without funding', async (_label, save) => {
+    await expect(save()).rejects.toMatchObject({ status: 400 });
+    expect(db.getConnection).not.toHaveBeenCalled();
+  });
+
+  // The Resource Person form and project collaborators copy an organization's address, so
+  // it must have one: a city always, a country, and a state when that country is India
+  // (whose list the form offers; other countries' provinces are optional).
+  it.each([
+    ['no city', { city: '' }, 'Add the city.'],
+    ['no state in India', { state: '' }, 'Add the state.'],
+    ['no state, India in other capitals', { state: '', country: 'INDIA' }, 'Add the state.'],
+    ['no country', { country: '' }, 'Add the country.'],
+    ['no address at all', { city: '', state: '', country: '' }, 'Add the city, the country.'],
+  ])('refuses an organization with %s', async (_label, gap, message) => {
+    const input = { name: 'Org', ...ORG_REQUIRED, ...gap };
+
+    for (const save of [
+      () => organizationModel.submit(input, 2),
+      () => organizationModel.update(10, input, 2),
+      () => organizationModel.updateSubmission(10, input),
+    ]) {
+      await expect(save()).rejects.toMatchObject({ status: 400, message });
+    }
+    expect(db.getConnection).not.toHaveBeenCalled();
+  });
+
+  it('accepts an organization abroad without a state', async () => {
+    execute.mockResolvedValueOnce([{ insertId: 30 }]).mockResolvedValueOnce([[{ id: 30 }]]);
+
+    await expect(
+      organizationModel.submit(
+        { name: 'ETH Zurich', ...ORG_REQUIRED, city: 'Zurich', state: '', country: 'Switzerland' },
+        2,
+      ),
+    ).resolves.toBeTruthy();
   });
 
   it('keeps non-owner contact-field redaction as defense in depth', async () => {
@@ -623,6 +701,9 @@ describe('directory owner-only edits', () => {
     expect(person.professions[0]).not.toHaveProperty('official_email_type');
     expect(person.professions[0]).not.toHaveProperty('officialEmailType');
     expect(person.professions[0].organization).toBe('Org');
+    // Only that an email exists -- a project collaborator shows it as a filled, locked field.
+    expect(person.professions[0].hasOfficialEmail).toBe(true);
+    expect(JSON.stringify(person)).not.toContain('hod@x.edu');
     for (const field of [
       'dob',
       'mobile',
@@ -699,7 +780,10 @@ describe('organization reviewer edits', () => {
         [{ id: 10, name: 'Fixed', created_by: 4, submitted_by_name: 'Submitter' }],
       ]);
 
-    const result = await organizationModel.updateSubmission(10, { name: 'Fixed' });
+    const result = await organizationModel.updateSubmission(10, {
+      name: 'Fixed',
+      ...ORG_REQUIRED,
+    });
 
     expect(execute.mock.calls[1][0]).toMatch(/^UPDATE organizations SET name = \?/);
     expect(execute.mock.calls[1][0]).not.toMatch(/is_active|updated_by|created_by/);
@@ -722,7 +806,9 @@ describe('organization reviewer edits', () => {
   ])('refuses to edit an %s submission', async (_state, row) => {
     execute.mockResolvedValueOnce([[{ id: 10, ...row }]]);
 
-    await expect(organizationModel.updateSubmission(10, { name: 'Fixed' })).rejects.toMatchObject({
+    await expect(
+      organizationModel.updateSubmission(10, { name: 'Fixed', ...ORG_REQUIRED }),
+    ).rejects.toMatchObject({
       message: 'Only pending organizations can be edited.',
       status: 409,
     });
@@ -735,9 +821,9 @@ describe('organization reviewer edits', () => {
   it('reports a missing submission as not found', async () => {
     execute.mockResolvedValueOnce([[]]);
 
-    await expect(organizationModel.updateSubmission(99, { name: 'Fixed' })).rejects.toThrow(
-      'Organization not found',
-    );
+    await expect(
+      organizationModel.updateSubmission(99, { name: 'Fixed', ...ORG_REQUIRED }),
+    ).rejects.toThrow('Organization not found');
     expect(connection.rollback).toHaveBeenCalledOnce();
   });
 });
@@ -752,6 +838,11 @@ describe('resource person contacts', () => {
     connection.rollback.mockReset();
     db.query.mockReset();
     workflowService.startWorkflow.mockReset();
+    professionInserts.mockReset();
+    activeOptions.splice(0, activeOptions.length, {
+      list_key: 'specialization',
+      name: 'Chemistry',
+    });
   });
 
   const otherUsersRecord = {
@@ -791,7 +882,6 @@ describe('resource person contacts', () => {
   it('saves the official email on each profession row, not on the person', async () => {
     execute
       .mockResolvedValueOnce([{ insertId: 40 }])
-      .mockResolvedValueOnce([{}])
       .mockResolvedValueOnce([[{ id: 40, created_by: 2 }]]);
 
     await resourcePersonModel.submit(
@@ -799,7 +889,10 @@ describe('resource person contacts', () => {
         firstName: 'A',
         lastName: 'B',
         officialEmail: 'ignored@example.test',
-        professions: JSON.stringify([{ organization: 'Org', officialEmail: 'hod@x.edu' }]),
+        specializations: JSON.stringify(['Chemistry']),
+        professions: JSON.stringify([
+          { designation: 'Professor', organization: 'Org', officialEmail: 'hod@x.edu' },
+        ]),
       },
       {},
       2,
@@ -808,9 +901,64 @@ describe('resource person contacts', () => {
     const [personSql, personValues] = execute.mock.calls[0];
     expect(personSql).not.toMatch(/official_email/);
     expect(personValues).not.toContain('ignored@example.test');
-    const [professionSql, professionValues] = execute.mock.calls[1];
+    const [professionSql, professionValues] = professionInserts.mock.calls[0];
     expect(professionSql).toMatch(/org_linked_in, official_email, official_email_type, status/);
     expect(professionValues).toContain('hod@x.edu');
+  });
+
+  // Beyond the name, an entry must be reachable, hold a post and have a subject; each gap is
+  // named in one 400, on create and edit alike, before any connection is taken.
+  it.each([
+    ['no contact', { mobile: '' }, 'Add a mobile number or an email.'],
+    [
+      'a post without its organization',
+      { professions: JSON.stringify([{ designation: 'Professor' }]) },
+      'Add a post with its designation and organization.',
+    ],
+    [
+      'a post without its designation',
+      { professions: JSON.stringify([{ organization: 'Org' }]) },
+      'Add a post with its designation and organization.',
+    ],
+    ['no specialization', { specializations: '[]' }, 'Add at least one specialization.'],
+    [
+      'nothing beyond the name',
+      { mobile: '', professions: '[]', specializations: '[]' },
+      'Add a mobile number or an email, a post with its designation and organization, at least one specialization.',
+    ],
+  ])('refuses a resource person with %s', async (_label, gap, message) => {
+    db.getConnection.mockClear();
+    const input = { firstName: 'A', lastName: 'B', ...completePerson(), ...gap };
+
+    await expect(resourcePersonModel.submit(input, {}, 2)).rejects.toMatchObject({
+      status: 400,
+      message,
+    });
+    await expect(resourcePersonModel.update(11, input, {}, 2)).rejects.toMatchObject({
+      status: 400,
+      message,
+    });
+    expect(db.getConnection).not.toHaveBeenCalled();
+  });
+
+  it('counts a post linked to a directory organization by id', async () => {
+    execute
+      .mockResolvedValueOnce([{ insertId: 41 }])
+      .mockResolvedValueOnce([[{ id: 9, name: 'Linked Org', is_active: 1, created_by: 3 }]])
+      .mockResolvedValueOnce([[{ id: 41, created_by: 2 }]]);
+
+    await expect(
+      resourcePersonModel.submit(
+        {
+          firstName: 'A',
+          lastName: 'B',
+          ...completePerson(),
+          professions: JSON.stringify([{ designation: 'Dean', organizationId: 9 }]),
+        },
+        {},
+        2,
+      ),
+    ).resolves.toBeTruthy();
   });
 });
 
@@ -843,6 +991,7 @@ describe('resource person Tag and Specialization lists', () => {
       {
         firstName: 'A',
         lastName: 'B',
+        ...completePerson(),
         tag: 'skilling',
         specializations: JSON.stringify(['microbiology', 'Machine Learning', 'MICROBIOLOGY']),
       },
@@ -872,7 +1021,11 @@ describe('resource person Tag and Specialization lists', () => {
     ],
   ])('refuses a value the list does not have (%j)', async (input, message) => {
     await expect(
-      resourcePersonModel.submit({ firstName: 'A', lastName: 'B', ...input }, {}, 2),
+      resourcePersonModel.submit(
+        { firstName: 'A', lastName: 'B', ...completePerson('Microbiology'), ...input },
+        {},
+        2,
+      ),
     ).rejects.toMatchObject({ message, status: 400 });
     expect(execute).not.toHaveBeenCalled();
     expect(connection.rollback).toHaveBeenCalledOnce();
@@ -889,6 +1042,7 @@ describe('resource person Tag and Specialization lists', () => {
       {
         firstName: 'A',
         lastName: 'B',
+        ...completePerson(),
         tag: 'Retired Tag',
         specializations: JSON.stringify(['Old Field', 'Microbiology']),
       },
@@ -1080,7 +1234,13 @@ describe('organization Tag and Specialization lists', () => {
       .mockResolvedValueOnce([[{ id: 60, created_by: 2 }]]);
 
     const saved = await organizationModel.submit(
-      { name: 'Org', tag: 'research', sector: 'Typed', specializations: ['chemistry'] },
+      {
+        name: 'Org',
+        ...ORG_REQUIRED,
+        tag: 'research',
+        sector: 'Typed',
+        specializations: ['chemistry'],
+      },
       2,
     );
 
@@ -1097,7 +1257,7 @@ describe('organization Tag and Specialization lists', () => {
 
   it('refuses an organization Specialization the list does not have', async () => {
     await expect(
-      organizationModel.submit({ name: 'Org', specializations: ['Astrology'] }, 2),
+      organizationModel.submit({ name: 'Org', ...ORG_REQUIRED, specializations: ['Astrology'] }, 2),
     ).rejects.toMatchObject({
       status: 400,
       message: '"Astrology" is not in the Specialization list.',
@@ -1193,16 +1353,29 @@ describe('resource person profession organization link', () => {
     connection.rollback.mockReset();
     db.query.mockReset();
     db.query.mockImplementation(async (sql, params) => answerListQuery(sql, params) ?? [[]]);
-    activeOptions.splice(0);
+    activeOptions.splice(0, activeOptions.length, {
+      list_key: 'specialization',
+      name: 'Chemistry',
+    });
     storedOrganizationLinks.splice(0);
+    professionInserts.mockReset();
   });
+
+  // A contact and a specialization, so the save reaches the organization link.
+  const contactAndSpecialization = {
+    mobile: '9000000000',
+    specializations: JSON.stringify(['Chemistry']),
+  };
 
   const submitWith = (organizationId) =>
     resourcePersonModel.submit(
       {
         firstName: 'A',
         lastName: 'B',
-        professions: JSON.stringify([{ organization: 'Typed Name', organizationId }]),
+        ...contactAndSpecialization,
+        professions: JSON.stringify([
+          { designation: 'Professor', organization: 'Typed Name', organizationId },
+        ]),
       },
       {},
       2,
@@ -1214,14 +1387,13 @@ describe('resource person profession organization link', () => {
       .mockResolvedValueOnce([
         [{ id: 9, name: 'Renamed Org', is_active: 1, updated_by: 4, created_by: 3 }],
       ])
-      .mockResolvedValueOnce([{}])
       .mockResolvedValueOnce([[{ id: 70, created_by: 2 }]]);
 
     const saved = await submitWith(9);
 
-    const [sql, values] = execute.mock.calls[2];
+    const [sql, values] = professionInserts.mock.calls[0];
     expect(sql).toMatch(/organization, organization_id, city/);
-    expect(values.slice(0, 5)).toEqual([70, null, null, 'Renamed Org', 9]);
+    expect(values.slice(0, 5)).toEqual([70, 'Professor', null, 'Renamed Org', 9]);
     expect(saved.professions[0]).toMatchObject({ organization: 'Renamed Org', organizationId: 9 });
   });
 
@@ -1253,7 +1425,10 @@ describe('resource person profession organization link', () => {
       {
         firstName: 'A',
         lastName: 'B',
-        professions: JSON.stringify([{ organization: 'Theirs', organizationId }]),
+        ...contactAndSpecialization,
+        professions: JSON.stringify([
+          { designation: 'Professor', organization: 'Theirs', organizationId },
+        ]),
       },
       {},
       2,
@@ -1290,17 +1465,21 @@ describe('resource person profession organization link', () => {
       {
         firstName: 'A',
         lastName: 'B',
+        ...contactAndSpecialization,
         professions: JSON.stringify([
-          { designation: 'HOD', officialEmail: '', official_email: 'old@college.edu' },
+          {
+            designation: 'HOD',
+            organization: 'Typed Org',
+            officialEmail: '',
+            official_email: 'old@college.edu',
+          },
         ]),
       },
       {},
       2,
     );
 
-    const [, values] = execute.mock.calls.find(([sql]) =>
-      sql.startsWith('INSERT INTO directory_resource_person_professions'),
-    );
+    const [, values] = professionInserts.mock.calls[0];
     expect(values[9]).toBeNull();
   });
 
@@ -1335,15 +1514,16 @@ describe('resource person profession organization link', () => {
       {
         firstName: 'A',
         lastName: 'B',
-        professions: JSON.stringify([{ designation: 'Member Secretary', ...profession }]),
+        ...contactAndSpecialization,
+        professions: JSON.stringify([
+          { designation: 'Member Secretary', organization: 'Typed Org', ...profession },
+        ]),
       },
       {},
       2,
     );
 
-    const [sql, values] = execute.mock.calls.find(([statement]) =>
-      statement.startsWith('INSERT INTO directory_resource_person_professions'),
-    );
+    const [sql, values] = professionInserts.mock.calls[0];
     const columns = sql.match(/\(([^)]*)\) VALUES/)[1].split(', ');
     expect(values[columns.indexOf('official_email_type')]).toBe(stored);
   });

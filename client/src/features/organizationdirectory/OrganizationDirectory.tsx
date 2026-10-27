@@ -7,7 +7,7 @@ import CustomButton from '../../shared/components/ui/CustomButton';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 import CustomInput from '../../shared/components/ui/CustomInput';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
-import { DEFAULT_COUNTRY } from '../../shared/utils/regions';
+import { DEFAULT_COUNTRY, isIndia } from '../../shared/utils/regions';
 
 /* ─── Types ─────────────────────────────────────────────── */
 
@@ -29,6 +29,8 @@ export interface Organization {
   pinCode: string;
   date: string;
   status: string; // 'Active' | 'Inactive'
+  /** How it is funded; null where nobody has said yet. */
+  funding?: 'Private' | 'Public' | null;
   approvalStatus?: 'Pending' | 'Approved' | 'Rejected';
   isOwner?: boolean;
   /** Who added the record, so a reader can ask them about it. */
@@ -43,6 +45,8 @@ interface OrganizationDirectoryProps {
   readOnly?: boolean;
 }
 
+const FUNDING_OPTIONS = ['Private', 'Public'] as const;
+
 const CATEGORY_OPTIONS = [
   'Academic',
   'Industry',
@@ -50,6 +54,7 @@ const CATEGORY_OPTIONS = [
   'Incubation',
   'Start-up',
   'Government',
+  'Organization',
   'Others',
 ];
 
@@ -62,7 +67,12 @@ const listDropdownStyles = {
     minHeight: 'var(--control-height)',
     height: 'var(--control-height)',
     backgroundColor: '#ffffff',
-    borderColor: state.isFocused ? '#0069ab' : '#e0e0e0',
+    // CustomDropdown marks a field it shows an error for aria-invalid.
+    borderColor: state.selectProps['aria-invalid']
+      ? 'var(--error-color)'
+      : state.isFocused
+        ? '#0069ab'
+        : '#e0e0e0',
     borderRadius: '12px',
     boxShadow: state.isFocused ? '0 0 0 3px rgba(0, 105, 171, 0.15)' : 'none',
     '&:hover': { borderColor: '#0069ab' },
@@ -93,15 +103,6 @@ const specializationDropdownStyles = {
     flexWrap: 'nowrap',
     overflowX: 'auto',
   }),
-  multiValue: (provided: any) => ({ ...provided, flexShrink: 0, borderRadius: '6px' }),
-  multiValueLabel: (provided: any) => ({
-    ...provided,
-    fontSize: 'var(--font-size-secondary)',
-    color: 'var(--text-body)',
-  }),
-  // A read-only view shows the picks without the remove button they could not use.
-  multiValueRemove: (provided: any, state: any) =>
-    state.selectProps.isDisabled ? { display: 'none' } : provided,
 };
 
 /** A stored value the list no longer offers is still shown, so an edit never drops it. */
@@ -144,7 +145,17 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
   const [pinCode, setPinCode] = useState('');
 
   const [status, setStatus] = useState('Active');
-  const [formError, setFormError] = useState<string | null>(null);
+  const [funding, setFunding] = useState<Organization['funding']>(null);
+  // Shown under the field they belong to, and cleared as soon as it is filled in.
+  const [fieldErrors, setFieldErrors] = useState<{
+    name?: string;
+    funding?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+  }>({});
+  const clearError = (key: keyof typeof fieldErrors) =>
+    setFieldErrors(({ [key]: _cleared, ...rest }) => rest);
 
   /* Initialize form values */
   useEffect(() => {
@@ -163,6 +174,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       setCountry(editingOrg.country || DEFAULT_COUNTRY);
       setPinCode(editingOrg.pinCode || '');
       setStatus(editingOrg.status || 'Active');
+      setFunding(editingOrg.funding ?? null);
     }
   }, [editingOrg]);
 
@@ -194,9 +206,27 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
   }, [readOnly]);
 
   const handleSubmit = () => {
-    setFormError(null);
-    if (!name.trim()) {
-      setFormError('Please fill in the Organization Name field.');
+    // The server applies the same rules (assertRequired in organizationDirectoryModel.js).
+    const errors: typeof fieldErrors = {};
+    if (!name.trim()) errors.name = 'Enter the organization name.';
+    if (!funding) errors.funding = 'Choose Private or Public.';
+    if (!city.trim()) errors.city = 'Enter the city.';
+    // India's states are listed; another country's province is optional.
+    if (country.trim() && isIndia(country) && !state.trim()) errors.state = 'Pick the state.';
+    if (!country.trim()) errors.country = 'Enter the country.';
+    setFieldErrors(errors);
+    // Take the user to the first field that needs them, in the order the form shows them.
+    const firstInvalid = [
+      errors.name && 'orgd-name-input',
+      errors.funding && 'orgd-funding-private',
+      errors.city && 'orgd-city-input',
+      errors.state && 'orgd-state',
+      errors.country && 'orgd-country',
+    ].find(Boolean);
+    if (firstInvalid) {
+      const target = document.getElementById(firstInvalid);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      target?.focus({ preventScroll: true });
       return;
     }
     onSave({
@@ -214,6 +244,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       country: country.trim(),
       pinCode: pinCode.trim(),
       status,
+      funding,
     });
   };
 
@@ -254,7 +285,11 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                 <CustomInput
                   name="orgd-name-input"
                   value={name}
-                  onChange={setName}
+                  onChange={(value) => {
+                    setName(value);
+                    if (value.trim()) clearError('name');
+                  }}
+                  error={fieldErrors.name}
                   placeholder="e.g. KSRCT Research Center"
                   className="mb-0"
                 />
@@ -271,7 +306,8 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
               </div>
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px' }}>
-              <div className="orgd-field" style={{ flex: '1.6', minWidth: '200px' }}>
+              {/* Address takes what the two toggles, each as wide as its chips, leave. */}
+              <div className="orgd-field" style={{ flex: '1', minWidth: '200px' }}>
                 <CustomInput
                   label="Address"
                   name="orgd-address-input"
@@ -283,7 +319,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
               </div>
               <fieldset
                 className="orgd-field"
-                style={{ flex: '1 0 auto', border: 'none', padding: 0, margin: 0 }}
+                style={{ flex: '0 0 auto', border: 'none', padding: 0, margin: 0 }}
               >
                 <legend className="orgd-legend">Status</legend>
                 <div className="orgd-toggle-group">
@@ -299,6 +335,40 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
                     </button>
                   ))}
                 </div>
+              </fieldset>
+              {/* Required, but neither is picked until someone says: older records have none. */}
+              <fieldset
+                className="orgd-field"
+                style={{ flex: '0 0 auto', border: 'none', padding: 0, margin: 0 }}
+              >
+                <legend className="orgd-legend">
+                  Funding <span className="req">*</span>
+                </legend>
+                <div
+                  className={`orgd-toggle-group${fieldErrors.funding ? ' is-invalid' : ''}`}
+                  aria-describedby={fieldErrors.funding ? 'orgd-funding-error' : undefined}
+                >
+                  {FUNDING_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      id={`orgd-funding-${option.toLowerCase()}`}
+                      type="button"
+                      className={`orgd-toggle-btn${funding === option ? ' active' : ''}`}
+                      onClick={() => {
+                        setFunding(option);
+                        clearError('funding');
+                      }}
+                      aria-pressed={funding === option}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+                {fieldErrors.funding && (
+                  <div id="orgd-funding-error" className="custom-error-text" role="alert">
+                    {fieldErrors.funding}
+                  </div>
+                )}
               </fieldset>
             </div>
           </div>
@@ -340,13 +410,19 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
         {/* City, State, Country, PIN Row */}
         <div className="orgd-row-4" style={{ marginTop: '8px', marginBottom: '16px' }}>
           <div className="orgd-field">
+            <label htmlFor="orgd-city-input">
+              City <span className="req">*</span>
+            </label>
             <CustomInput
-              label="City"
               name="orgd-city-input"
               value={city}
-              onChange={setCity}
+              onChange={(value) => {
+                setCity(value);
+                if (value.trim()) clearError('city');
+              }}
               placeholder="City"
               className="mb-0"
+              error={fieldErrors.city}
             />
           </div>
           <RegionFields
@@ -356,10 +432,14 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
             onChange={(region) => {
               setCountry(region.country);
               setState(region.state);
+              if (region.state.trim() || !isIndia(region.country)) clearError('state');
+              if (region.country.trim()) clearError('country');
             }}
             disabled={readOnly}
             fieldClassName="orgd-field"
             dropdownStyles={listDropdownStyles}
+            requiredMark={<span className="req">*</span>}
+            errors={{ state: fieldErrors.state, country: fieldErrors.country }}
           />
           <div className="orgd-field">
             <CustomInput
@@ -410,22 +490,6 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       </div>
 
       {/* Form actions - outside the card */}
-      {formError && (
-        <div
-          role="alert"
-          style={{
-            color: '#b91c1c',
-            background: '#fef2f2',
-            border: '1px solid #fca5a5',
-            borderRadius: '8px',
-            padding: '10px 16px',
-            marginBottom: '12px',
-            fontSize: 'var(--font-size-body)',
-          }}
-        >
-          {formError}
-        </div>
-      )}
       {!readOnly && (
         <div className="orgd-actions-row">
           <CustomButton className="orgd-btn-save" onClick={handleSubmit}>

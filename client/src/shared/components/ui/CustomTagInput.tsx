@@ -107,30 +107,7 @@ const CustomTagInput: React.FC<CustomTagInputProps> = ({
           <Badge key={index} className="custom-tag-badge">
             {renderTag ? renderTag(item) : item}
             {!disabled && (
-              <span
-                className="ms-2"
-                onClick={() => handleRemove(item)}
-                style={{
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#495057',
-                  borderRadius: '50%',
-                  // ui-standard-allow: icon glyph, not text
-                  fontSize: '18px',
-                  lineHeight: '1',
-                  transition: 'color 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = '#343a40';
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = '#495057';
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
+              <span className="custom-tag-remove ms-2" onClick={() => handleRemove(item)}>
                 <svg
                   height="14"
                   width="14"
