@@ -1,11 +1,19 @@
-import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import './budgetdashboard.css';
 import { Eye, Edit2, Plus, Trash2, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import AlertModal, { AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomActivityLog, {
+  type ActivityLogEntry,
+} from '../../../shared/components/ui/CustomActivityLog';
 import CustomPagination from '../../../shared/components/ui/CustomPagination';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import {
+  formatFullDate,
+  formatFullDateTime,
+  formatSubmissionDates,
+} from '../../../shared/utils/dateFormat';
 import { formatRowRanges, summarizeLineChanges } from '../../../shared/utils/logDiffUtils';
 
 // --- Interfaces ---
@@ -33,6 +41,7 @@ interface ProposalGroup {
   requestDate?: string;
   budgetWindowType?: string;
   updatedAt: string;
+  resubmittedAt?: string | null;
   items: DashboardLineItem[];
   approvals: any[];
   edits: any[];
@@ -52,16 +61,16 @@ interface ConsolidatedRow {
   balance: number;
 }
 
-interface LogEvent {
-  key: string;
-  title: string;
-  subtitle?: string;
-  actorLine?: string;
-  actorIsAdmin?: boolean;
-  actorBadgeLabel?: string;
+/** The stage an edit's workflow badge stands for, as the approval pages name it. */
+const BADGE_STAGE_LABELS: Record<string, string> = {
+  HOD: 'HoD',
+  DOF: 'DoF',
+  SUPERADMIN: 'Admin',
+};
+
+/** An activity entry, with the time it is sorted by. */
+interface LogEvent extends ActivityLogEntry {
   timestamp: number;
-  dateLabel: string;
-  decision?: string;
 }
 
 interface BeneficiaryScopeOption {
@@ -114,9 +123,6 @@ const BudgetDashboard: React.FC = () => {
     {},
   );
   const [activeLogId, setActiveLogId] = useState<number | null>(null);
-  const [logPopoverStyle, setLogPopoverStyle] = useState<React.CSSProperties>({});
-  const infoTriggerRefs = useRef<Record<number, HTMLDivElement | null>>({});
-  const popoverRef = useRef<HTMLDivElement | null>(null);
   const formatFY = (fyStart: number) => `${fyStart}-${String(fyStart + 1).slice(2)}`;
   const INITIAL_WINDOW_MONTH = 1; // February (0-indexed)
   const INITIAL_WINDOW_DAY = 1;
@@ -156,21 +162,6 @@ const BudgetDashboard: React.FC = () => {
       return { value, label: `FY ${value}` };
     });
   }, []);
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setActiveLogId(null);
-      }
-    };
-
-    if (activeLogId !== null) {
-      window.addEventListener('keydown', handleKeyDown);
-    }
-
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [activeLogId]);
 
   const parseDateSafe = (value?: string) => {
     if (!value) return null;
@@ -275,107 +266,6 @@ const BudgetDashboard: React.FC = () => {
     return proposalDateOnly.getTime() <= cutoff.getTime();
   };
 
-  // Close on outside click
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (activeLogId === null || !popoverRef.current) return;
-      const activeTrigger = infoTriggerRefs.current[activeLogId];
-      if (!activeTrigger) return;
-
-      if (
-        !activeTrigger.contains(e.target as Node) &&
-        !popoverRef.current.contains(e.target as Node)
-      ) {
-        setActiveLogId(null);
-      }
-    };
-
-    if (activeLogId !== null) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [activeLogId]);
-
-  const updatePopoverPosition = (proposalId: number) => {
-    const trigger = infoTriggerRefs.current[proposalId];
-    if (!trigger) return;
-
-    const rect = trigger.getBoundingClientRect();
-    const viewportPadding = 10;
-    const gap = 10;
-    const preferredWidth = 320;
-    const naturalHeight = popoverRef.current?.scrollHeight || 360;
-
-    let left = rect.left;
-    if (left + preferredWidth > window.innerWidth - viewportPadding) {
-      left = window.innerWidth - preferredWidth - viewportPadding;
-    }
-    if (left < viewportPadding) {
-      left = viewportPadding;
-    }
-
-    // The fixed top bar covers the top of the viewport, so the popover's usable band starts below
-    // it — clamping to the viewport edge alone hid the "Submission Logs" header behind the bar.
-    const topBarBottom = document.querySelector('.topbar')?.getBoundingClientRect().bottom ?? 0;
-    const safeTop = topBarBottom + viewportPadding;
-    const safeBottom = window.innerHeight - viewportPadding;
-    const spaceBelow = safeBottom - (rect.bottom + gap);
-    const spaceAbove = rect.top - gap - safeTop;
-
-    // Below the icon if it fits, otherwise on the side with more room; the height is capped to that
-    // room and the log list scrolls inside, so the header always stays on screen.
-    let top: number;
-    let maxHeight: number;
-    if (naturalHeight <= spaceBelow || spaceBelow >= spaceAbove) {
-      top = rect.bottom + gap;
-      maxHeight = spaceBelow;
-    } else {
-      maxHeight = spaceAbove;
-      top = rect.top - gap - Math.min(naturalHeight, spaceAbove);
-    }
-    top = Math.max(top, safeTop);
-
-    setLogPopoverStyle({
-      position: 'fixed',
-      top: `${top}px`,
-      left: `${left}px`,
-      width: `${preferredWidth}px`,
-      maxHeight: `${Math.max(maxHeight, 160)}px`,
-      zIndex: 1000,
-    });
-  };
-
-  // When we open a popover, compute position
-  const handleInfoClick = (proposalId: number) => {
-    if (activeLogId === proposalId) {
-      setActiveLogId(null);
-    } else {
-      setActiveLogId(proposalId);
-      requestAnimationFrame(() => {
-        updatePopoverPosition(proposalId);
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (activeLogId === null) return;
-    const reflowPopover = () => updatePopoverPosition(activeLogId);
-    window.addEventListener('resize', reflowPopover);
-    window.addEventListener('scroll', reflowPopover, true);
-    // The logs load after the popover opens, so it is first placed at its "Loading…" height; place
-    // it again whenever it grows. Placement reads the content's full height, which the max-height
-    // cap does not change, so this settles instead of looping.
-    const resizeObserver = new ResizeObserver(reflowPopover);
-    if (popoverRef.current) resizeObserver.observe(popoverRef.current);
-    return () => {
-      window.removeEventListener('resize', reflowPopover);
-      window.removeEventListener('scroll', reflowPopover, true);
-      resizeObserver.disconnect();
-    };
-  }, [activeLogId]);
   // --- Fetch Data ---
   // --- Fetch Data ---
   const fetchDashboardData = useCallback(async () => {
@@ -456,6 +346,7 @@ const BudgetDashboard: React.FC = () => {
           requestDate: master.request_date || '',
           budgetWindowType: master.budget_window_type || '',
           updatedAt: master.updated_at || master.updated_date || '',
+          resubmittedAt: master.resubmitted_at || null,
           items: items,
           approvals: Array.isArray(data.approvals)
             ? data.approvals
@@ -556,12 +447,6 @@ const BudgetDashboard: React.FC = () => {
     return '';
   };
 
-  const formatDateTime = (value?: string) => {
-    const parsed = parseDateSafe(value);
-    if (!parsed) return '-';
-    return parsed.toLocaleString('en-IN');
-  };
-
   const parseDateMs = (value?: string | null) => {
     const parsed = parseDateSafe(value || undefined);
     if (!parsed) return 0;
@@ -585,6 +470,11 @@ const BudgetDashboard: React.FC = () => {
       headcfrd: 'CFRD',
       dof: 'DoF',
       principal: 'Principal',
+      admin: 'Admin',
+      super_admin: 'Super Admin',
+      // A resubmission is logged under the applicant's role.
+      applicant: 'Applicant',
+      user: 'Applicant',
     };
     return map[normalized] || (role ? role.toUpperCase() : 'Approver');
   };
@@ -602,12 +492,11 @@ const BudgetDashboard: React.FC = () => {
     if (createdAtMs) {
       events.push({
         key: 'submitted',
-        title: 'Submitted',
-        subtitle: 'Proposal created',
-        actorLine: `Submitted By: ${submitterEmail || '-'}`,
-        timestamp: createdAtMs,
-        dateLabel: formatDateTime(proposal.createdAt),
         decision: 'submitted',
+        status: 'Submitted',
+        actorEmail: submitterEmail,
+        timestamp: createdAtMs,
+        date: formatFullDateTime(proposal.createdAt),
       });
     }
 
@@ -648,6 +537,7 @@ const BudgetDashboard: React.FC = () => {
           getWorkflowBadgeLabel(editorRole) || (actorIsAdmin ? 'SUPERADMIN' : '');
         let rowSummary = '';
         let detailSummary = '';
+        let fullDetailSummary = '';
 
         if (edit.details) {
           try {
@@ -676,7 +566,9 @@ const BudgetDashboard: React.FC = () => {
                 rowSummary = `Row No. ${formatRowRanges(rowNumbers)}`;
               }
 
-              detailSummary = summarizeLineChanges(lines).compact;
+              const lineSummaries = summarizeLineChanges(lines);
+              detailSummary = lineSummaries.compact;
+              fullDetailSummary = lineSummaries.full;
             }
             if (proposalChanges.length > 0) {
               const proposalSummary = proposalChanges
@@ -684,6 +576,7 @@ const BudgetDashboard: React.FC = () => {
                 .filter(Boolean)
                 .join('; ');
               detailSummary = [detailSummary, proposalSummary].filter(Boolean).join(' | ');
+              fullDetailSummary = [fullDetailSummary, proposalSummary].filter(Boolean).join(' | ');
             }
           } catch {
             // ignore parse errors, keep summary fallback
@@ -691,18 +584,22 @@ const BudgetDashboard: React.FC = () => {
         }
 
         const subtitle = [rowSummary || summary, detailSummary].filter(Boolean).join(' | ');
+        const fullSubtitle = [rowSummary || summary, fullDetailSummary || detailSummary]
+          .filter(Boolean)
+          .join(' | ');
         if (!subtitle) return;
 
         events.push({
           key: `edit-${edit.id || idx}`,
-          title: 'Updated',
-          subtitle,
-          actorLine: `Updated By: ${editorEmail || '-'}`,
-          actorIsAdmin,
-          actorBadgeLabel,
-          timestamp: createdMs,
-          dateLabel: formatDateTime(createdAt || proposal.updatedAt || proposal.createdAt),
           decision: 'updated',
+          status: 'Updated',
+          // An edit names a stage only when an approver or admin made it.
+          stage: BADGE_STAGE_LABELS[actorBadgeLabel],
+          actorEmail: editorEmail,
+          remark: subtitle,
+          fullRemark: fullSubtitle,
+          timestamp: createdMs,
+          date: formatFullDateTime(createdAt || proposal.updatedAt || proposal.createdAt),
         });
       });
     }
@@ -726,30 +623,22 @@ const BudgetDashboard: React.FC = () => {
       ]);
       const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
       const decidedAtMs = parseDateMs(decidedAt);
-      const feedbackNote =
-        feedback && !feedback.startsWith('__archive_meta__:') ? `Note: ${feedback}` : '';
-      const actorPrefix =
-        decision === 'approved'
-          ? 'Approved By'
-          : `${decision.charAt(0).toUpperCase() + decision.slice(1)} By`;
-      const subtitleParts = [`by ${getRoleLabel(app.role, proposal)}`, feedbackNote].filter(
-        Boolean,
-      );
-      const actorIsAdmin =
-        isAdminRoleToken(app.role) ||
-        Boolean(app.is_admin ?? app.isAdmin ?? app.updated_by_admin ?? app.updatedByAdmin);
-      const actorBadgeLabel = decision === 'updated' ? getWorkflowBadgeLabel(app.role) : '';
+      // Archiving stores its own metadata in the feedback column; it is not a remark.
+      const remark = feedback && !feedback.startsWith('__archive_meta__:') ? feedback : '';
+      const stage =
+        decision === 'updated'
+          ? BADGE_STAGE_LABELS[getWorkflowBadgeLabel(app.role)]
+          : getRoleLabel(app.role, proposal);
 
       events.push({
         key: `approval-${idx}`,
-        title: decision.charAt(0).toUpperCase() + decision.slice(1),
-        subtitle: subtitleParts.join(' | '),
-        actorLine: `${actorPrefix}: ${approverEmail || '-'}`,
-        actorIsAdmin,
-        actorBadgeLabel,
-        timestamp: decidedAtMs || createdAtMs,
-        dateLabel: decidedAt ? formatDateTime(decidedAt) : '-',
         decision,
+        status: decision.charAt(0).toUpperCase() + decision.slice(1),
+        stage,
+        actorEmail: approverEmail,
+        remark,
+        timestamp: decidedAtMs || createdAtMs,
+        date: decidedAt ? formatFullDateTime(decidedAt) : '-',
       });
     });
 
@@ -914,6 +803,11 @@ const BudgetDashboard: React.FC = () => {
       return nameMatch || refMatch || lineMatch;
     });
   }, [scopeFilteredProposals, searchTerm]);
+
+  const activeLogProposal =
+    activeLogId !== null
+      ? (proposals.find((proposal) => proposal.proposalId === activeLogId) ?? null)
+      : null;
 
   // --- Timeline Logic ---
   const getTimelineState = (proposal: ProposalGroup, step: string) => {
@@ -1095,6 +989,10 @@ const BudgetDashboard: React.FC = () => {
                       : `Additional Budget ${++additionalBudgetCount}`;
                     const displayTag = resolveProposalTag(proposal);
                     const isExpanded = showBudgetStatusDetail[proposal.proposalId] || false;
+                    const submissionDates = formatSubmissionDates(
+                      proposal.createdAt,
+                      proposal.resubmittedAt,
+                    );
 
                     // Status Pill Text
                     let statusLabel = 'Submitted';
@@ -1116,74 +1014,27 @@ const BudgetDashboard: React.FC = () => {
                         <div className="budgetdashboard-proposal-header budgetdashboard-proposal-flat">
                           <div className="budgetdashboard-proposal-title-group">
                             <div className="budgetdashboard-proposal-left">{label}</div>
-                            <div
+                            <button
+                              type="button"
                               className="budgetdashboard-info-trigger"
-                              ref={(el) => {
-                                infoTriggerRefs.current[proposal.proposalId] = el;
-                              }}
-                              onClick={() => handleInfoClick(proposal.proposalId)}
+                              onClick={() => setActiveLogId(proposal.proposalId)}
+                              title="Logs"
+                              aria-label="View proposal logs"
                             >
-                              <Info size={20} color="#6b7280" style={{ cursor: 'pointer' }} />
-                              {activeLogId === proposal.proposalId && (
-                                <div
-                                  className="budgetdashboard-log-popover"
-                                  style={logPopoverStyle}
-                                  ref={popoverRef}
-                                  onClick={(e) => e.stopPropagation()}
+                              <Info size={20} color="#6b7280" />
+                            </button>
+                            <div className="budgetdashboard-proposal-name-block">
+                              <div className="budgetdashboard-proposal-applicant">
+                                {proposal.applicantName || '-'}
+                              </div>
+                              {submissionDates.text && (
+                                <span
+                                  className="budgetdashboard-proposal-submitted"
+                                  title={submissionDates.title}
                                 >
-                                  <div className="budgetdashboard-log-header">Submission Logs</div>
-                                  <div className="budgetdashboard-log-body">
-                                    {parseDateMs(proposal.updatedAt) >
-                                      parseDateMs(proposal.createdAt) && (
-                                      <div className="budgetdashboard-log-item">
-                                        <span className="log-label">Last Edited:</span>
-                                        <span className="log-value">
-                                          {formatDateTime(proposal.updatedAt)}
-                                        </span>
-                                      </div>
-                                    )}
-
-                                    <div className="budgetdashboard-log-approvals">
-                                      {buildLogEvents(proposal).map((event) => (
-                                        <div
-                                          key={event.key}
-                                          className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
-                                        >
-                                          {event.actorBadgeLabel && (
-                                            <span
-                                              className="log-admin-mark"
-                                              title="Updated by Admin"
-                                            >
-                                              {`\u2605 ${event.actorBadgeLabel}`}
-                                            </span>
-                                          )}
-                                          <div className="log-approval-meta">
-                                            <span
-                                              className={`log-decision log-decision--${
-                                                event.decision || 'approved'
-                                              }`}
-                                            >
-                                              {event.title.toUpperCase()}
-                                            </span>
-                                            <span className="log-role">
-                                              {event.subtitle || 'Status update'}
-                                            </span>
-                                            {event.actorLine && (
-                                              <span className="log-actor-line">
-                                                {event.actorLine}
-                                              </span>
-                                            )}
-                                            <span className="log-date">{event.dateLabel}</span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                </div>
+                                  {submissionDates.text}
+                                </span>
                               )}
-                            </div>
-                            <div className="budgetdashboard-proposal-applicant">
-                              {proposal.applicantName || '-'}
                             </div>
                             {displayTag && (
                               <div className="budgetdashboard-proposal-tag-pill">{displayTag}</div>
@@ -1394,6 +1245,26 @@ const BudgetDashboard: React.FC = () => {
           </div>
         </div>
       </section>
+
+      {activeLogProposal && (
+        <CustomActivityLog
+          show
+          onHide={() => setActiveLogId(null)}
+          summary={[
+            { label: 'Reference', value: activeLogProposal.proposalRef || '--' },
+            { label: 'Submitted', value: formatFullDate(activeLogProposal.createdAt) },
+            { label: 'Resubmitted', value: formatFullDate(activeLogProposal.resubmittedAt) },
+            {
+              label: 'Last edited',
+              value:
+                parseDateMs(activeLogProposal.updatedAt) > parseDateMs(activeLogProposal.createdAt)
+                  ? formatFullDateTime(activeLogProposal.updatedAt)
+                  : '',
+            },
+          ]}
+          entries={buildLogEvents(activeLogProposal)}
+        />
+      )}
 
       <AlertModal
         show={alertConfig.show}

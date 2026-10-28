@@ -153,6 +153,15 @@
   margin-top: 0.25rem;
 }
 
+/* A hint under a field (CustomDropdown helpText): the Help text role. */
+.custom-help-text {
+  color: var(--text-soft);
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-regular);
+  margin-top: 0.25rem;
+}
+
 /* Custom Checkbox/Radio */
 .custom-check-container {
   display: flex;
@@ -565,4 +574,199 @@
   border-color: #0069ab;
   background: #0069ab;
   color: #ffffff;
+}
+
+/* CustomActivityLog: a record's workflow history. 760px, like the other log dialogs: a short
+   vertical list reads best at a moderate width. The shared .modal-lg rule (80% wide,
+   !important) is overridden here. One scrollbar, the dialog's. */
+.custom-modal.custom-activity-modal .modal-dialog.modal-lg {
+  max-width: 760px !important;
+  width: calc(100% - 32px) !important;
+}
+
+.custom-activity-body {
+  padding: 16px;
+}
+
+/* Which request and when, above the activity list. */
+.custom-activity-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin: 0 0 20px;
+  padding: 14px 20px;
+  background: var(--surface-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--border-radius-md);
+}
+
+.custom-activity-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.custom-activity-summary-label {
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  font-weight: var(--weight-regular);
+  color: var(--text-soft);
+}
+
+.custom-activity-summary-value {
+  margin: 0;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-semibold);
+  color: var(--text-strong);
+}
+
+.custom-activity-state {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  color: var(--text-soft);
+}
+
+.custom-activity-label {
+  margin: 0 0 12px;
+  font-size: var(--font-size-tertiary);
+  line-height: var(--leading-tertiary);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-soft);
+}
+
+/* A vertical rail: each entry hangs off a dot coloured by its decision. */
+.custom-activity-timeline {
+  position: relative;
+  margin: 0;
+  padding: 0 0 0 28px;
+  list-style: none;
+}
+
+.custom-activity-timeline::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 7px;
+  width: 2px;
+  background: var(--border-subtle);
+}
+
+.custom-activity-entry {
+  --custom-activity-fg: var(--text-soft);
+  --custom-activity-bg: var(--tint-neutral-bg);
+  position: relative;
+  padding-bottom: 20px;
+}
+
+.custom-activity-entry:last-child {
+  padding-bottom: 0;
+}
+
+.custom-activity-entry::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: -26px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--custom-activity-fg);
+  box-shadow: 0 0 0 3px var(--bg-surface);
+}
+
+.custom-activity-entry--approved {
+  --custom-activity-fg: var(--tint-success-fg);
+  --custom-activity-bg: var(--tint-success-bg);
+}
+
+.custom-activity-entry--rejected {
+  --custom-activity-fg: var(--tint-danger-fg);
+  --custom-activity-bg: var(--tint-danger-bg);
+}
+
+.custom-activity-entry--returned {
+  --custom-activity-fg: #92400e;
+  --custom-activity-bg: #fef3c7;
+}
+
+.custom-activity-entry--submitted {
+  --custom-activity-fg: var(--tint-primary-fg);
+  --custom-activity-bg: var(--tint-primary-bg);
+}
+
+.custom-activity-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-activity-status {
+  display: inline-flex;
+  align-items: center;
+  height: var(--tag-height);
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: var(--font-size-tertiary);
+  font-weight: var(--weight-semibold);
+  color: var(--custom-activity-fg);
+  background: var(--custom-activity-bg);
+}
+
+.custom-activity-stage {
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  font-weight: var(--weight-semibold);
+  color: var(--text-strong);
+}
+
+.custom-activity-time {
+  margin-left: auto;
+  font-size: var(--font-size-tertiary);
+  line-height: var(--leading-tertiary);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.custom-activity-actor {
+  margin: 6px 0 0;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  color: var(--text-soft);
+  overflow-wrap: anywhere;
+}
+
+.custom-activity-actor-name {
+  font-weight: var(--weight-semibold);
+  color: var(--text-body);
+}
+
+.custom-activity-remark {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  font-size: var(--font-size-body);
+  line-height: var(--leading-body);
+  color: var(--text-body);
+  background: var(--surface-subtle);
+  border-left: 3px solid var(--custom-activity-bg);
+  border-radius: 0 var(--border-radius-sm) var(--border-radius-sm) 0;
+  overflow-wrap: anywhere;
+}
+
+.custom-activity-toggle {
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: var(--font-size-secondary);
+  font-weight: var(--weight-semibold);
 }

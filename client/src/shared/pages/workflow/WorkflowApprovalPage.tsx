@@ -21,6 +21,9 @@ import { useNavigate } from 'react-router-dom';
 import PendingPayeeApprovals from './PendingPayeeApprovals';
 import { useAuth } from '../../../contexts/AuthContext';
 import AlertModal, { type AlertType } from '../../../shared/components/ui/AlertModal';
+import CustomActivityLog, {
+  type ActivityLogEntry,
+} from '../../../shared/components/ui/CustomActivityLog';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import CustomPagination from '../../../shared/components/ui/CustomPagination';
 import ExportOptionsModal, {
@@ -675,7 +678,6 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const [actingRecordId, setActingRecordId] = useState<number | string | null>(null);
   const [logPopupOpen, setLogPopupOpen] = useState(false);
   const [logEntries, setLogEntries] = useState<WorkflowTimelineItem[]>([]);
-  const [expandedLogDetails, setExpandedLogDetails] = useState<Record<string, boolean>>({});
   const [logRef, setLogRef] = useState<string>('');
   const [logDates, setLogDates] = useState({ submitted: '', resubmitted: '' });
   const [logLevel1Role, setLogLevel1Role] = useState<'hod' | 'coordinator' | null>(null);
@@ -2574,11 +2576,57 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
   const closeLogPopup = () => {
     setLogPopupOpen(false);
     setLogEntries([]);
-    setExpandedLogDetails({});
     setLogRef('');
     setLogDates({ submitted: '', resubmitted: '' });
     setLogLevel1Role(null);
   };
+
+  const logActivity = useMemo<ActivityLogEntry[]>(
+    () =>
+      logEntries.map((entry, idx) => {
+        const decisionToken = String(entry.decision || '')
+          .trim()
+          .toLowerCase();
+        const actorRoleToken = String(entry.actorRole || '')
+          .trim()
+          .toLowerCase();
+        const stageLabel = getTimelineStageLabel(entry);
+        const isWorkflowUpdater = [
+          'hod',
+          'coordinator',
+          'entity_approver',
+          'ithead',
+          'dof',
+          'principal',
+          'admin',
+          'super_admin',
+          'superadmin',
+        ].includes(actorRoleToken);
+        const shouldShowStage =
+          Boolean(stageLabel && stageLabel !== '-') &&
+          (decisionToken !== 'updated' || isWorkflowUpdater);
+        const updatedSubtitle =
+          decisionToken === 'updated' ? buildUpdatedLogSubtitles(entry) : null;
+        const entryDate = entry.decidedAt || entry.createdAt || null;
+
+        return {
+          key: String(entry.id || idx),
+          decision: decisionToken,
+          status: decisionToken
+            ? decisionToken.charAt(0).toUpperCase() + decisionToken.slice(1)
+            : 'Update',
+          stage: shouldShowStage ? stageLabel : undefined,
+          date: entryDate ? formatFullDateTime(entryDate) : '-',
+          actorName: normalizeLogText(entry.userName),
+          actorEmail: normalizeLogText(entry.actorEmail),
+          remark: updatedSubtitle
+            ? updatedSubtitle.compact
+            : normalizeLogText(entry.feedback || entry.comment || entry.summary),
+          fullRemark: updatedSubtitle?.full,
+        };
+      }),
+    [logEntries, getTimelineStageLabel],
+  );
 
   const handleArchiveToggle = async (record: Record<string, any>) => {
     const recordId = getRecordId(record);
@@ -4427,143 +4475,17 @@ const WorkflowApprovalPage: React.FC<WorkflowApprovalPageProps> = ({ config }) =
           </div>
         </CustomModal>
 
-        <CustomModal
+        <CustomActivityLog
           show={logPopupOpen}
           onHide={closeLogPopup}
-          title="Workflow Timeline"
-          size="lg"
-          centered
-          scrollable
-          className="fw-log-modal"
-          footer={
-            <button
-              type="button"
-              className="btn btn-sm btn-outline-secondary"
-              onClick={closeLogPopup}
-            >
-              Close
-            </button>
-          }
-        >
-          <div className="fw-log-body">
-            <dl className="fw-log-summary">
-              <div className="fw-log-summary-item">
-                <dt className="fw-log-summary-label">Reference</dt>
-                <dd className="fw-log-summary-value">{logRef || '--'}</dd>
-              </div>
-              {logDates.submitted && (
-                <div className="fw-log-summary-item">
-                  <dt className="fw-log-summary-label">Submitted</dt>
-                  <dd className="fw-log-summary-value">{logDates.submitted}</dd>
-                </div>
-              )}
-              {logDates.resubmitted && (
-                <div className="fw-log-summary-item">
-                  <dt className="fw-log-summary-label">Resubmitted</dt>
-                  <dd className="fw-log-summary-value">{logDates.resubmitted}</dd>
-                </div>
-              )}
-            </dl>
-
-            {logLoading && (
-              <div className="fw-state" style={{ padding: '24px 0' }}>
-                Loading timeline...
-              </div>
-            )}
-            {!logLoading && logEntries.length === 0 && (
-              <div className="fw-state" style={{ padding: '24px 0' }}>
-                No timeline entries available.
-              </div>
-            )}
-
-            {!logLoading && logEntries.length > 0 && (
-              <>
-                <h6 className="fw-log-activity-label">Activity</h6>
-                <ol className="fw-log-timeline">
-                  {logEntries.map((entry, idx) => {
-                    const decisionToken = String(entry.decision || '')
-                      .trim()
-                      .toLowerCase();
-                    const actorRoleToken = String(entry.actorRole || '')
-                      .trim()
-                      .toLowerCase();
-                    const stageLabel = getTimelineStageLabel(entry);
-                    const isWorkflowUpdater = [
-                      'hod',
-                      'coordinator',
-                      'entity_approver',
-                      'ithead',
-                      'dof',
-                      'principal',
-                      'admin',
-                      'super_admin',
-                      'superadmin',
-                    ].includes(actorRoleToken);
-                    const shouldShowStage =
-                      Boolean(stageLabel && stageLabel !== '-') &&
-                      (decisionToken !== 'updated' || isWorkflowUpdater);
-                    const entryKey = String(entry.id || idx);
-                    const updatedSubtitle =
-                      decisionToken === 'updated' ? buildUpdatedLogSubtitles(entry) : null;
-                    const subtitleText = updatedSubtitle
-                      ? expandedLogDetails[entryKey] && updatedSubtitle.full
-                        ? updatedSubtitle.full
-                        : updatedSubtitle.compact
-                      : normalizeLogText(entry.feedback || entry.comment || entry.summary);
-                    const hasExpandedSubtitle = Boolean(
-                      updatedSubtitle &&
-                      updatedSubtitle.full &&
-                      updatedSubtitle.compact &&
-                      updatedSubtitle.full !== updatedSubtitle.compact,
-                    );
-                    const actorName = normalizeLogText(entry.userName);
-                    const actorEmail = normalizeLogText(entry.actorEmail);
-                    const entryDate = entry.decidedAt || entry.createdAt || null;
-                    const decisionLabel = decisionToken
-                      ? decisionToken.charAt(0).toUpperCase() + decisionToken.slice(1)
-                      : 'Update';
-
-                    return (
-                      <li
-                        key={entryKey}
-                        className={`fw-log-entry fw-log-entry--${decisionToken || 'updated'}`}
-                      >
-                        <div className="fw-log-entry-head">
-                          <span className="fw-log-status">{decisionLabel}</span>
-                          {shouldShowStage && <span className="fw-log-stage">{stageLabel}</span>}
-                          <time className="fw-log-time">
-                            {entryDate ? formatFullDateTime(entryDate) : '-'}
-                          </time>
-                        </div>
-                        <p className="fw-log-actor">
-                          <span className="fw-log-actor-name">
-                            {actorName || actorEmail || 'Unknown'}
-                          </span>
-                          {actorName && actorEmail && ` · ${actorEmail}`}
-                        </p>
-                        {subtitleText && <p className="fw-log-remark">{subtitleText}</p>}
-                        {hasExpandedSubtitle && (
-                          <button
-                            type="button"
-                            className="fw-log-toggle-btn"
-                            onClick={() => {
-                              setExpandedLogDetails((prev) => ({
-                                ...prev,
-                                [entryKey]: !prev[entryKey],
-                              }));
-                            }}
-                          >
-                            {expandedLogDetails[entryKey] ? 'Show less' : 'Show full changes'}
-                          </button>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ol>
-              </>
-            )}
-          </div>
-        </CustomModal>
+          summary={[
+            { label: 'Reference', value: logRef || '--' },
+            { label: 'Submitted', value: logDates.submitted },
+            { label: 'Resubmitted', value: logDates.resubmitted },
+          ]}
+          entries={logActivity}
+          loading={logLoading}
+        />
 
         <CustomModal
           show={previewRecordId !== null}

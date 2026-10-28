@@ -1,6 +1,10 @@
 import React, { useEffect, useState, useMemo } from 'react';
 
+import CustomActivityLog, {
+  type ActivityLogEntry,
+} from '../../../shared/components/ui/CustomActivityLog';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { formatFullDate, formatFullDateTime } from '../../../shared/utils/dateFormat';
 import './expendituredashboard.css';
 import AddPayeeModal, { AddPayeeModalPayee } from '../../../shared/components/AddPayeeModal';
 
@@ -186,17 +190,6 @@ interface ExpenditureStatusUpdate {
   actorEmail?: string | null;
   actorRole?: string | null;
   isAdmin?: number | boolean | null;
-}
-
-interface ExpenditureLogEvent {
-  key: string;
-  badge: string;
-  title: string;
-  subtitle: string;
-  actorLabel: string;
-  actorValue: string;
-  actorBadgeLabel: string;
-  dateLabel: string;
 }
 
 interface IndividualExpenditureCard {
@@ -1118,27 +1111,8 @@ const ExpenditureDashboard: React.FC = () => {
   const buildExpenditureLogEvents = (
     item: ExpenditureItem,
     updates: ExpenditureStatusUpdate[],
-  ): ExpenditureLogEvent[] => {
-    const formatActorIdentity = (
-      name?: string | null,
-      email?: string | null,
-      fallback?: string | null,
-    ) => {
-      const normalizedName = normalizeText(name);
-      const normalizedEmail = normalizeText(email);
-      const normalizedFallback = normalizeText(fallback);
-
-      if (
-        normalizedName &&
-        normalizedEmail &&
-        normalizedName.toLowerCase() !== normalizedEmail.toLowerCase()
-      ) {
-        return `${normalizedName} (${normalizedEmail})`;
-      }
-      return normalizedName || normalizedEmail || normalizedFallback || '-';
-    };
-
-    return [...updates]
+  ): ActivityLogEntry[] =>
+    [...updates]
       .sort((left, right) => {
         const leftMs = Date.parse(normalizeText(left.createdAt || left.decidedAt)) || 0;
         const rightMs = Date.parse(normalizeText(right.createdAt || right.decidedAt)) || 0;
@@ -1147,10 +1121,6 @@ const ExpenditureDashboard: React.FC = () => {
       })
       .map((update, index) => {
         const decision = normalizeText(update.decision || update.status).toLowerCase();
-        const isSubmitted = decision.includes('submitted');
-        const isReturned = decision.includes('returned');
-        const isRejected = decision.includes('rejected');
-        const isApproved = decision.includes('approved') || decision.includes('completed');
         const isUpdated = decision === 'updated';
         const isAdmin =
           Boolean(update.isAdmin) ||
@@ -1158,43 +1128,22 @@ const ExpenditureDashboard: React.FC = () => {
             normalizeText(update.actorRole).toLowerCase(),
           );
         const stage = getStageBadgeLabel(update.stage || update.role, update.actorRole);
-
-        let badge = 'UPDATED';
-        let title = 'Request updated';
-        let actorLabel = 'Updated By';
-
-        if (isSubmitted) {
-          badge = 'SUBMITTED';
-          title = 'Request submitted';
-          actorLabel = 'Submitted By';
-        } else if (isReturned) {
-          badge = 'RETURNED';
-          title = 'Request returned';
-        } else if (isRejected) {
-          badge = 'REJECTED';
-          title = 'Request rejected';
-        } else if (isApproved) {
-          badge = 'APPROVED';
-          title = 'Request approved';
-        }
+        const actorEmail = normalizeText(update.actorEmail);
 
         return {
           key: `${update.id}-${index}`,
-          badge,
-          title,
-          subtitle:
-            normalizeText(update.summary || update.feedback || update.comment) || 'Status update',
-          actorLabel,
-          actorValue: formatActorIdentity(
-            update.userName,
-            update.actorEmail,
-            update.actorRole || item.applicantname,
-          ),
-          actorBadgeLabel: isUpdated && isAdmin ? 'SUPERADMIN' : stage,
-          dateLabel: formatDateTime(update.createdAt || update.decidedAt || item.createdat),
+          decision,
+          status: decision ? formatLogLabel(decision) : 'Update',
+          // An edit names a stage only when an admin made it, as on the approval page.
+          stage: isUpdated ? (isAdmin ? 'Admin' : undefined) : stage !== '-' ? stage : undefined,
+          date: formatFullDateTime(update.createdAt || update.decidedAt || item.createdat),
+          actorName:
+            normalizeText(update.userName) ||
+            (actorEmail ? '' : normalizeText(update.actorRole) || item.applicantname),
+          actorEmail,
+          remark: normalizeText(update.summary || update.feedback || update.comment),
         };
       });
-  };
 
   const fetchStatusUpdates = async (requestId: number) => {
     if (statusUpdatesById[requestId]) return;
@@ -3169,76 +3118,30 @@ const ExpenditureDashboard: React.FC = () => {
         </div>
       </div>
 
-      {activeInfoItem && (
-        <div className="expenditure-log-overlay" onClick={() => setActiveInfoId(null)}>
-          <div className="expenditure-log-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="expenditure-log-header">Submission Logs</div>
-            <div className="expenditure-log-body">
-              <div className="expenditure-log-summary">
-                <div className="expenditure-log-summary-row">
-                  <span className="expenditure-log-label">Request:</span>
-                  <span className="expenditure-log-value">
-                    {activeInfoItem.requestref ||
-                      `#EX-${new Date(activeInfoItem.createdat).getFullYear()}-${String(activeInfoItem.id).padStart(4, '0')}`}
-                  </span>
-                </div>
-                <div className="expenditure-log-summary-row">
-                  <span className="expenditure-log-label">Submitted:</span>
-                  <span className="expenditure-log-value">
-                    {formatDateTime(activeInfoItem.createdat)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="expenditure-log-timeline">
-                {loadingInfoId === activeInfoItem.id ? (
-                  <div className="expenditure-log-empty">Loading updates...</div>
-                ) : activeLogEvents.length > 0 ? (
-                  activeLogEvents.map((event) => (
-                    <div
-                      key={event.key}
-                      className={`expenditure-log-entry${event.actorBadgeLabel ? ' expenditure-log-entry--stage' : ''}`}
-                    >
-                      <div className="expenditure-log-entry-top">
-                        <div className="expenditure-log-entry-title">
-                          <span
-                            className={`expenditure-log-badge expenditure-log-badge--${event.badge.toLowerCase()}`}
-                          >
-                            {event.badge}
-                          </span>
-                          <span className="expenditure-log-title-text">{event.title}</span>
-                        </div>
-                        {event.actorBadgeLabel && (
-                          <span className="expenditure-log-stage-pill">
-                            {event.actorBadgeLabel}
-                          </span>
-                        )}
-                      </div>
-                      <div className="expenditure-log-role">{event.subtitle}</div>
-                      <div className="expenditure-log-actor-line">
-                        <strong>{event.actorLabel}:</strong> {event.actorValue}
-                      </div>
-                      <div className="expenditure-log-date">{event.dateLabel}</div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="expenditure-log-empty">No updates found.</div>
-                )}
-              </div>
-
-              <div className="expenditure-log-footer">
-                <button
-                  type="button"
-                  className="expenditure-log-close-btn"
-                  onClick={() => setActiveInfoId(null)}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <CustomActivityLog
+        show={Boolean(activeInfoItem)}
+        onHide={() => setActiveInfoId(null)}
+        summary={
+          activeInfoItem
+            ? [
+                {
+                  label: 'Reference',
+                  value:
+                    activeInfoItem.requestref ||
+                    `#EX-${new Date(activeInfoItem.createdat).getFullYear()}-${String(activeInfoItem.id).padStart(4, '0')}`,
+                },
+                { label: 'Submitted', value: formatFullDate(activeInfoItem.createdat) },
+                {
+                  label: 'Resubmitted',
+                  value: formatFullDate(getRequestWorkflowState(activeInfoItem)?.resubmittedAt),
+                },
+              ]
+            : []
+        }
+        entries={activeLogEvents}
+        loading={activeInfoItem ? loadingInfoId === activeInfoItem.id : false}
+        emptyMessage="No updates found."
+      />
 
       <Modal
         show={dialogConfig.show}

@@ -21,9 +21,17 @@ import {
 import { useNavigate } from 'react-router-dom';
 
 import { useAuth } from '../../../contexts/AuthContext';
+import CustomActivityLog, {
+  type ActivityLogEntry,
+} from '../../../shared/components/ui/CustomActivityLog';
 import CustomModal from '../../../shared/components/ui/CustomModal';
 import CustomPagination from '../../../shared/components/ui/CustomPagination';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import {
+  formatFullDate,
+  formatFullDateTime,
+  formatSubmissionDates,
+} from '../../../shared/utils/dateFormat';
 
 interface FinanceCardItem {
   id: number;
@@ -62,6 +70,7 @@ interface FinanceCardItem {
     submittedTotalBudget?: number | string | null;
     topupAt?: string | null;
     topupAmount?: number | string | null;
+    resubmittedAt?: string | null;
   };
   has_topup?: boolean | number | null;
   // Set when the card has been finalized and closed from the Expenditure module.
@@ -92,19 +101,6 @@ interface FinanceStatusUpdate {
   actorEmail?: string | null;
   actorRole?: string | null;
   isAdmin?: number | boolean | null;
-}
-
-interface FinanceLogEvent {
-  key: string;
-  badge: string;
-  title: string;
-  subtitle?: string;
-  actorLabel: string;
-  actorValue: string;
-  actorBadgeLabel?: string;
-  timestamp: string | number;
-  dateLabel: string;
-  decision?: string;
 }
 
 const FinanceCard: React.FC = () => {
@@ -715,19 +711,6 @@ const FinanceCard: React.FC = () => {
     return parts.join(' | ');
   };
 
-  const formatDateTime = (value?: string | null) => {
-    if (!value) return '-';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
   const getProposalRef = (item: FinanceCardItem) =>
     String(item.proposal_ref || '').trim() ||
     `#F-${new Date(item.created_at).getFullYear()}-${String(item.id).padStart(4, '0')}`;
@@ -735,29 +718,7 @@ const FinanceCard: React.FC = () => {
   const buildFinanceLogEvents = (
     item: FinanceCardItem,
     updates: FinanceStatusUpdate[],
-  ): FinanceLogEvent[] => {
-    const formatActorIdentity = (
-      name?: string | null,
-      email?: string | null,
-      fallback?: string | null,
-    ) => {
-      const normalizedName = String(name || '').trim();
-      const normalizedEmail = String(email || '').trim();
-      const normalizedFallback = String(fallback || '').trim();
-
-      if (
-        normalizedName &&
-        normalizedEmail &&
-        normalizedName.toLowerCase() !== normalizedEmail.toLowerCase()
-      ) {
-        return `${normalizedName} (${normalizedEmail})`;
-      }
-
-      if (normalizedName) return normalizedName;
-      if (normalizedEmail) return normalizedEmail;
-      return normalizedFallback || '-';
-    };
-
+  ): ActivityLogEntry[] => {
     const hasSubmittedUpdate = updates.some((update) => {
       const decision = String(update.decision || update.status || '')
         .trim()
@@ -765,20 +726,16 @@ const FinanceCard: React.FC = () => {
       return decision === 'submitted';
     });
 
-    const events: FinanceLogEvent[] = hasSubmittedUpdate
+    // Requests from before submissions were logged have no row for it; the creation stands in.
+    const events: ActivityLogEntry[] = hasSubmittedUpdate
       ? []
       : [
           {
             key: `created-${item.id}`,
-            badge: 'SUBMITTED',
-            title: 'Proposal created',
-            subtitle: 'Initial finance request submitted',
-            actorLabel: 'Submitted By',
-            actorValue: item.applicant_name,
-            actorBadgeLabel: '',
-            timestamp: item.created_at,
-            dateLabel: formatDateTime(item.created_at),
             decision: 'submitted',
+            status: 'Submitted',
+            date: formatFullDateTime(item.created_at),
+            actorName: item.applicant_name,
           },
         ];
 
@@ -802,87 +759,52 @@ const FinanceCard: React.FC = () => {
     sortedUpdates.forEach((update, index) => {
       const decision = String(update.decision || update.status || '').toLowerCase();
       const stage = getStageBadgeLabel(item, update.stage || update.role, update.actorRole);
-      const actorName = update.userName;
-      const actorEmail = update.actorEmail;
       const actorRole = update.actorRole;
-      const eventSummary = update.summary ?? update.feedback ?? update.comment;
+      const eventSummary = String(update.summary ?? update.feedback ?? update.comment ?? '').trim();
       const eventCreatedAt = update.createdAt ?? update.decidedAt ?? null;
-      const actorValue = formatActorIdentity(actorName, actorEmail, actorRole || 'Workflow');
-      // Checked before isSubmitted, since 'topup_submitted' also contains 'submitted'.
       const isTopupSubmitted = decision === 'topup_submitted';
-      const isSubmitted = !isTopupSubmitted && decision.includes('submitted');
-      const isReturned = decision.includes('returned');
-      const isRejected = decision.includes('rejected');
-      const isApproved = decision.includes('approved') || decision.includes('completed');
       const isUpdated = decision === 'updated';
       const isAdmin =
         Boolean(update.isAdmin) ||
         ['admin', 'super_admin', 'superadmin'].includes(String(actorRole || '').toLowerCase());
 
-      let badge = 'UPDATED';
-      let title = 'Proposal edited';
-      let actorLabel = 'Updated By';
-      let subtitle = String(eventSummary || '').trim();
-      let actorBadgeLabel = '';
-
-      if (isTopupSubmitted) {
-        badge = 'TOP-UP';
-        title = 'Top-up request submitted';
-        actorLabel = 'Submitted By';
-        if (!subtitle) subtitle = 'Additional budget requested via top-up';
-      } else if (isSubmitted) {
-        badge = 'SUBMITTED';
-        title = 'Proposal created';
-        actorLabel = 'Submitted By';
-      } else if (isReturned) {
-        badge = 'RETURNED';
-        title = 'Proposal returned';
-      } else if (isRejected) {
-        badge = 'REJECTED';
-        title = 'Proposal rejected';
-      } else if (isApproved) {
-        badge = 'APPROVED';
-        title = 'Proposal approved';
+      let remark = eventSummary;
+      let fullRemark: string | undefined;
+      if (isTopupSubmitted && !remark) {
+        remark = 'Additional budget requested via top-up';
       } else if (isUpdated) {
-        badge = 'UPDATED';
-        title = 'Proposal updated';
         const details =
           update.details && typeof update.details === 'object' ? update.details : null;
         const changedFields = Array.isArray(details?.changedFields) ? details.changedFields : [];
         const fieldCountSummary =
           changedFields.length > 0 ? `${changedFields.length} field(s) updated` : '';
         const rowSummary = buildRowUpdateSummary(details);
-        const fieldSummary = changedFields.length
-          ? changedFields
-              .map((field: any) => {
-                const label = String(field?.label || '').trim() || 'Field';
-                const before = formatAuditValue(label, field?.before);
-                const after = formatAuditValue(label, field?.after);
-                return `${label}: ${before} -> ${after}`;
-              })
-              .join(' | ')
-          : '';
-        const fallbackSummary = trimUpdatedSummary(String(eventSummary || '').trim());
-        subtitle =
-          [fieldCountSummary, rowSummary || fallbackSummary, fieldSummary]
-            .filter(Boolean)
-            .join(' | ') || 'Proposal updated';
-        if (isAdmin) {
-          actorBadgeLabel = 'SUPERADMIN';
-        }
+        const fieldSummary = changedFields
+          .map((field: any) => {
+            const label = String(field?.label || '').trim() || 'Field';
+            const before = formatAuditValue(label, field?.before);
+            const after = formatAuditValue(label, field?.after);
+            return `${label}: ${before} -> ${after}`;
+          })
+          .join(' | ');
+        const fallbackSummary = trimUpdatedSummary(eventSummary);
+        remark =
+          [fieldCountSummary, rowSummary || fallbackSummary].filter(Boolean).join(' | ') ||
+          'Proposal updated';
+        fullRemark = fieldSummary ? [remark, fieldSummary].join(' | ') : undefined;
       }
 
       events.push({
         key: `${update.id}-${index}`,
-        badge,
-        title,
-        subtitle,
-        actorLabel,
-        actorValue,
-        actorBadgeLabel: isUpdated ? actorBadgeLabel : stage !== '-' ? stage : '',
-        timestamp: eventCreatedAt || item.created_at,
-        dateLabel: formatDateTime(eventCreatedAt || item.created_at),
         decision,
+        status: isTopupSubmitted ? 'Top-up' : decision ? formatLabel(decision) : 'Update',
+        // An edit names a stage only when an approver or admin made it, as on the approval page.
+        stage: isUpdated ? (isAdmin ? 'Admin' : undefined) : stage !== '-' ? stage : undefined,
+        date: formatFullDateTime(eventCreatedAt || item.created_at),
+        actorName: update.userName || (update.actorEmail ? '' : actorRole || ''),
+        actorEmail: update.actorEmail || '',
+        remark,
+        fullRemark,
       });
     });
 
@@ -1229,12 +1151,26 @@ const FinanceCard: React.FC = () => {
                     ).trim();
                     const showPrincipalDocumentAction = canShowPrincipalDocumentAction(item);
                     const principalActionLoading = principalDocBusyId === item.id;
+                    const submissionDates = formatSubmissionDates(
+                      item.created_at,
+                      item.workflow_state?.resubmittedAt,
+                    );
                     return (
                       <div key={item.id} className="financecard-item-card">
                         <div className="card-row-top">
                           <div className="card-header-left">
                             <span className="card-id-pill">{getProposalRef(item)}</span>
-                            <span className="card-applicant-name">{item.applicant_name}</span>
+                            <div className="financecard-name-block">
+                              <span className="card-applicant-name">{item.applicant_name}</span>
+                              {submissionDates.text && (
+                                <span
+                                  className="financecard-submitted"
+                                  title={submissionDates.title}
+                                >
+                                  {submissionDates.text}
+                                </span>
+                              )}
+                            </div>
                             <span className="card-category-tag">{item.budget_tag || '-'}</span>
                             {Boolean(item.workflow_state?.topupAt) && (
                               <span
@@ -1453,83 +1389,28 @@ const FinanceCard: React.FC = () => {
           </div>
         </div>
       </section>
-      <CustomModal
+      <CustomActivityLog
         show={Boolean(activeInfoItem)}
         onHide={() => setActiveInfoId(null)}
-        title="Submission Logs"
-        size="lg"
-        centered
-        scrollable
-        className="financecard-log-dialog"
-        footer={
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-secondary"
-            onClick={() => setActiveInfoId(null)}
-          >
-            Close
-          </button>
+        summary={
+          activeInfoItem
+            ? [
+                { label: 'Reference', value: getProposalRef(activeInfoItem) },
+                { label: 'Submitted', value: formatFullDate(activeInfoItem.created_at) },
+                {
+                  label: 'Resubmitted',
+                  value: formatFullDate(activeInfoItem.workflow_state?.resubmittedAt),
+                },
+                {
+                  label: 'Last edited',
+                  value: formatFullDateTime(activeInfoItem.updated_at || activeInfoItem.created_at),
+                },
+              ]
+            : []
         }
-      >
-        {activeInfoItem && (
-          <div className="financecard-log-body financecard-log-body-modal">
-            <div className="financecard-log-summary">
-              <div className="financecard-log-summary-row">
-                <span className="financecard-log-label">Proposal:</span>
-                <span className="financecard-log-value">{getProposalRef(activeInfoItem)}</span>
-              </div>
-              <div className="financecard-log-summary-row">
-                <span className="financecard-log-label">Last Edited:</span>
-                <span className="financecard-log-value">
-                  {formatDateTime(activeInfoItem.updated_at || activeInfoItem.created_at)}
-                </span>
-              </div>
-            </div>
-
-            <div className="financecard-log-timeline">
-              {loadingInfoId === activeInfoItem.id ? (
-                <div className="financecard-log-empty">Loading updates...</div>
-              ) : (
-                activeLogEvents.map((event) => (
-                  <div
-                    key={event.key}
-                    className={`financecard-log-entry financecard-log-entry-modal${event.actorBadgeLabel ? ' financecard-log-entry--admin' : ''}`}
-                  >
-                    {event.actorBadgeLabel === 'SUPERADMIN' && (
-                      <span className="financecard-log-admin-mark" title="Updated by Admin">
-                        {`\u2605 ${event.actorBadgeLabel}`}
-                      </span>
-                    )}
-                    <div className="financecard-log-entry-top">
-                      <div className="financecard-log-entry-title">
-                        <span
-                          className={`financecard-log-badge financecard-log-badge--${event.badge.toLowerCase()}`}
-                        >
-                          {event.badge}
-                        </span>
-                        <span className="financecard-log-title-text">{event.title}</span>
-                      </div>
-                      {event.actorBadgeLabel &&
-                        !['SUPERADMIN', 'HOD', 'DOF'].includes(event.actorBadgeLabel) && (
-                          <span className="financecard-log-stage-pill">
-                            {event.actorBadgeLabel}
-                          </span>
-                        )}
-                    </div>
-                    <div className="financecard-log-role">{event.subtitle || 'Status update'}</div>
-                    <div className="financecard-log-actor-line">
-                      <strong>{event.actorLabel}:</strong> {event.actorValue}
-                    </div>
-                    <div className="financecard-log-date financecard-log-date-right">
-                      {event.dateLabel}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        )}
-      </CustomModal>
+        entries={activeLogEvents}
+        loading={activeInfoItem ? loadingInfoId === activeInfoItem.id : false}
+      />
       <CustomModal
         show={previewRecordId !== null}
         onHide={() => setPreviewRecordId(null)}

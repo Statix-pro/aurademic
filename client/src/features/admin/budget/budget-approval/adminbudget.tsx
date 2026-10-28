@@ -24,7 +24,9 @@ import ExportOptionsModal, {
   type ExportRunResult,
 } from '../../../../shared/components/export/ExportOptionsModal';
 import AlertModal, { type AlertType } from '../../../../shared/components/ui/AlertModal';
-import CustomModal from '../../../../shared/components/ui/CustomModal';
+import CustomActivityLog, {
+  type ActivityLogEntry,
+} from '../../../../shared/components/ui/CustomActivityLog';
 import CustomPagination from '../../../../shared/components/ui/CustomPagination';
 import authenticityUtility from '../../../../shared/utils/authenticityUtility';
 import {
@@ -37,7 +39,11 @@ import {
   joinCsvSections,
   type CsvCell,
 } from '../../../../shared/utils/csvExportUtils';
-import { formatFullDate, formatSubmissionDates } from '../../../../shared/utils/dateFormat';
+import {
+  formatFullDate,
+  formatFullDateTime,
+  formatSubmissionDates,
+} from '../../../../shared/utils/dateFormat';
 import { formatRowRanges, summarizeLineChanges } from '../../../../shared/utils/logDiffUtils';
 import { hasPermission, isSuperAdmin } from '../../../../shared/utils/permissionUtils';
 
@@ -89,18 +95,17 @@ interface BudgetHistoryEntry {
   approver_email?: string;
 }
 
-interface AdminLogEvent {
-  key: string;
-  title: string;
-  subtitle: string;
-  fullSubtitle?: string;
-  actorLine: string;
-  dateLabel: string;
-  decision: string;
+/** An activity entry, with the time it is sorted by. */
+interface AdminLogEvent extends ActivityLogEntry {
   timestamp: number;
-  actorIsAdmin?: boolean;
-  actorBadgeLabel?: string;
 }
+
+/** The stage an edit's workflow badge stands for, as the approval pages name it. */
+const BADGE_STAGE_LABELS: Record<string, string> = {
+  HOD: 'HoD',
+  DOF: 'DoF',
+  SUPERADMIN: 'Admin',
+};
 
 const BENEFICIARY_OPTIONS = [
   'All Beneficiary',
@@ -333,7 +338,6 @@ const AdminBudget: React.FC = () => {
   const [logDates, setLogDates] = useState({ submitted: '', resubmitted: '' });
   const [logEntries, setLogEntries] = useState<BudgetHistoryEntry[]>([]);
   const [logEdits, setLogEdits] = useState<any[]>([]);
-  const [expandedLogDetails, setExpandedLogDetails] = useState<Record<string, boolean>>({});
 
   // Archive animation/state
   const [archivingIds, setArchivingIds] = useState<Set<number>>(new Set<number>());
@@ -1273,7 +1277,6 @@ const AdminBudget: React.FC = () => {
     setLogProposal(null);
     setLogEntries([]);
     setLogEdits([]);
-    setExpandedLogDetails({});
 
     try {
       const response: any = await authenticityUtility.get(`/adminbudget/${item.id}`);
@@ -1300,7 +1303,6 @@ const AdminBudget: React.FC = () => {
     setLogProposal(null);
     setLogEntries([]);
     setLogEdits([]);
-    setExpandedLogDetails({});
     setLogRef('');
     setLogDates({ submitted: '', resubmitted: '' });
   };
@@ -1378,12 +1380,6 @@ const AdminBudget: React.FC = () => {
     return Number.isNaN(fallbackMs) ? 0 : fallbackMs;
   };
 
-  const formatDateTimeForLog = (value?: string) => {
-    const ms = parseDateMsForLog(value);
-    if (!ms) return '-';
-    return new Date(ms).toLocaleString('en-IN');
-  };
-
   const readActorEmail = (record: any, keys: string[]) => {
     for (const key of keys) {
       const value = normalizeEmailForLog(record?.[key]);
@@ -1443,12 +1439,11 @@ const AdminBudget: React.FC = () => {
     if (createdAtMs) {
       events.push({
         key: 'submitted',
-        title: 'Submitted',
-        subtitle: 'Proposal created',
-        actorLine: `Submitted By: ${submitterEmail || '-'}`,
-        timestamp: createdAtMs,
-        dateLabel: formatDateTimeForLog(createdAt),
         decision: 'submitted',
+        status: 'Submitted',
+        actorEmail: submitterEmail,
+        timestamp: createdAtMs,
+        date: formatFullDateTime(createdAt),
       });
     }
 
@@ -1543,15 +1538,15 @@ const AdminBudget: React.FC = () => {
 
         events.push({
           key: `edit-${edit.id || idx}`,
-          title: 'Updated',
-          subtitle,
-          fullSubtitle,
-          actorLine: `Updated By: ${editorEmail || '-'}`,
-          actorIsAdmin,
-          actorBadgeLabel,
-          timestamp: editCreatedMs,
-          dateLabel: formatDateTimeForLog(editCreatedAt || updatedAt || createdAt),
           decision: 'updated',
+          status: 'Updated',
+          // An edit names a stage only when an approver or admin made it.
+          stage: BADGE_STAGE_LABELS[actorBadgeLabel],
+          actorEmail: editorEmail,
+          remark: subtitle,
+          fullRemark: fullSubtitle,
+          timestamp: editCreatedMs,
+          date: formatFullDateTime(editCreatedAt || updatedAt || createdAt),
         });
       });
     }
@@ -1575,28 +1570,22 @@ const AdminBudget: React.FC = () => {
       ]);
       const decidedAt = app.decided_at || app.decidedAt || app.decided_at_formatted;
       const decidedAtMs = parseDateMsForLog(decidedAt);
-      const feedbackNote =
-        feedback && !feedback.startsWith('__archive_meta__:') ? `Remarks: ${feedback}` : '';
-      const actorPrefix =
-        decision === 'approved'
-          ? 'Approved By'
-          : `${decision.charAt(0).toUpperCase() + decision.slice(1)} By`;
-      const subtitleParts = [`by ${getRoleLabelForLog(app.role)}`, feedbackNote].filter(Boolean);
-      const actorIsAdmin =
-        isAdminRoleToken(app.role) ||
-        Boolean(app.is_admin ?? app.isAdmin ?? app.updated_by_admin ?? app.updatedByAdmin);
-      const actorBadgeLabel = decision === 'updated' ? getWorkflowBadgeLabel(app.role) : '';
+      // Archiving stores its own metadata in the feedback column; it is not a remark.
+      const remark = feedback && !feedback.startsWith('__archive_meta__:') ? feedback : '';
+      const stage =
+        decision === 'updated'
+          ? BADGE_STAGE_LABELS[getWorkflowBadgeLabel(app.role)]
+          : getRoleLabelForLog(app.role);
 
       events.push({
         key: `approval-${idx}`,
-        title: decision.charAt(0).toUpperCase() + decision.slice(1),
-        subtitle: subtitleParts.join(' | '),
-        actorLine: `${actorPrefix}: ${approverEmail || '-'}`,
-        actorIsAdmin,
-        actorBadgeLabel,
-        timestamp: decidedAtMs || createdAtMs,
-        dateLabel: decidedAt ? formatDateTimeForLog(decidedAt) : '-',
         decision,
+        status: decision.charAt(0).toUpperCase() + decision.slice(1),
+        stage,
+        actorEmail: approverEmail,
+        remark,
+        timestamp: decidedAtMs || createdAtMs,
+        date: decidedAt ? formatFullDateTime(decidedAt) : '-',
       });
     });
 
@@ -2417,119 +2406,26 @@ const AdminBudget: React.FC = () => {
         </div>
       )}
 
-      <CustomModal
+      <CustomActivityLog
         show={logPopupOpen}
         onHide={closeLogPopup}
-        title="Submission Logs"
-        size="lg"
-        centered
-        scrollable
-        className="adminbudget-log-modal"
-        footer={
-          <button
-            type="button"
-            className="btn btn-sm btn-outline-secondary"
-            onClick={closeLogPopup}
-          >
-            Close
-          </button>
-        }
-      >
-        <div className="budgetdashboard-log-body adminbudget-log-body">
-          <div className="budgetdashboard-log-item">
-            <span className="log-label">Proposal:</span>
-            <span className="log-value">{logRef || '--'}</span>
-          </div>
-          {logDates.submitted && (
-            <div className="budgetdashboard-log-item">
-              <span className="log-label">Submitted:</span>
-              <span className="log-value">{logDates.submitted}</span>
-            </div>
-          )}
-          {logDates.resubmitted && (
-            <div className="budgetdashboard-log-item">
-              <span className="log-label">Resubmitted:</span>
-              <span className="log-value">{logDates.resubmitted}</span>
-            </div>
-          )}
-
-          {(logProposal?.updated_at || logProposal?.updatedAt) &&
-            (logProposal?.created_at || logProposal?.createdAt) &&
-            parseDateMsForLog(logProposal.updated_at || logProposal.updatedAt) >
-              parseDateMsForLog(logProposal.created_at || logProposal.createdAt) && (
-              <div className="budgetdashboard-log-item">
-                <span className="log-label">Last Edited:</span>
-                <span className="log-value">
-                  {formatDateTimeForLog(logProposal.updated_at || logProposal.updatedAt)}
-                </span>
-              </div>
-            )}
-
-          {logLoading && (
-            <div className="adminbudget-state" style={{ padding: '24px 0' }}>
-              Loading logs...
-            </div>
-          )}
-          {!logLoading && buildAdminLogEvents.length === 0 && (
-            <div className="adminbudget-state" style={{ padding: '24px 0' }}>
-              No logs available.
-            </div>
-          )}
-
-          {!logLoading && buildAdminLogEvents.length > 0 && (
-            <div className="budgetdashboard-log-approvals">
-              {buildAdminLogEvents.map((event) => (
-                <div
-                  key={event.key}
-                  className={`log-approval-item${event.actorBadgeLabel ? ' log-approval-item--admin' : ''}`}
-                >
-                  {event.actorBadgeLabel && (
-                    <span className="log-admin-mark" title="Updated by Admin">
-                      {`\u2605 ${event.actorBadgeLabel}`}
-                    </span>
-                  )}
-                  <div className="log-approval-meta">
-                    <span className={`log-decision log-decision--${event.decision || 'approved'}`}>
-                      {event.title.toUpperCase()}
-                    </span>
-                    <span className="log-role">
-                      {expandedLogDetails[event.key] && event.fullSubtitle
-                        ? event.fullSubtitle
-                        : event.subtitle || 'Status update'}
-                    </span>
-                    {event.fullSubtitle && event.fullSubtitle !== event.subtitle && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setExpandedLogDetails((prev) => ({
-                            ...prev,
-                            [event.key]: !prev[event.key],
-                          }));
-                        }}
-                        style={{
-                          marginTop: '4px',
-                          alignSelf: 'flex-start',
-                          border: 'none',
-                          background: 'transparent',
-                          color: '#0d6efd',
-                          cursor: 'pointer',
-                          padding: 0,
-                          fontSize: 'var(--font-size-tertiary)',
-                          fontWeight: 600,
-                        }}
-                      >
-                        {expandedLogDetails[event.key] ? 'Show less' : 'Show full changes'}
-                      </button>
-                    )}
-                    {event.actorLine && <span className="log-actor-line">{event.actorLine}</span>}
-                    <span className="log-date">{event.dateLabel}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </CustomModal>
+        summary={[
+          { label: 'Reference', value: logRef || '--' },
+          { label: 'Submitted', value: logDates.submitted },
+          { label: 'Resubmitted', value: logDates.resubmitted },
+          {
+            label: 'Last edited',
+            value:
+              parseDateMsForLog(logProposal?.updated_at || logProposal?.updatedAt) >
+              parseDateMsForLog(logProposal?.created_at || logProposal?.createdAt)
+                ? formatFullDateTime(logProposal?.updated_at || logProposal?.updatedAt)
+                : '',
+          },
+        ]}
+        entries={buildAdminLogEvents}
+        loading={logLoading}
+        emptyMessage="No logs available."
+      />
     </>
   );
 };
