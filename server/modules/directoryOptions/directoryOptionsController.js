@@ -2,6 +2,8 @@ import {
   addOptions,
   deleteOption as deleteListOption,
   listOptions,
+  reviewOption,
+  suggestSpecialization,
   updateOption as updateListOption,
 } from '../shared/directoryLists.js';
 
@@ -18,7 +20,8 @@ const sendError = (res, error) => {
 
 export const list = async (req, res) => {
   try {
-    return res.json({ success: true, data: await listOptions() });
+    // The user's own suggestions are offered to them while they wait for review.
+    return res.json({ success: true, data: await listOptions({ userId: req.user?.id }) });
   } catch (error) {
     return sendError(res, error);
   }
@@ -37,6 +40,32 @@ export const add = async (req, res) => {
     return res
       .status(201)
       .json({ success: true, data: await addOptions(req.params.list, req.body) });
+  } catch (error) {
+    return sendError(res, error);
+  }
+};
+
+export const suggest = async (req, res) => {
+  try {
+    const { entry, created } = await suggestSpecialization(req.body, req.user?.id);
+    return res.status(created ? 201 : 200).json({
+      success: true,
+      data: entry,
+      message: created
+        ? 'Added. The Directory Admin will review it; until then only you can pick it.'
+        : undefined,
+    });
+  } catch (error) {
+    return sendError(res, error);
+  }
+};
+
+export const review = async (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      data: await reviewOption(req.params.id, req.body?.decision, req.user?.id),
+    });
   } catch (error) {
     return sendError(res, error);
   }
@@ -65,4 +94,4 @@ export const remove = async (req, res) => {
   }
 };
 
-export default { list, listAll, add, update, remove };
+export default { list, listAll, add, suggest, review, update, remove };

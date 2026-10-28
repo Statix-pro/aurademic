@@ -15,6 +15,7 @@ import {
 } from './constants';
 import { PROJECT_DOCUMENT_TYPES, allotmentKey } from './projectFormState';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
+import { buildResourcePersonFormData } from '../resourcepersondirectory/ResourcePersonDirectory';
 
 import type {
   DocumentSlotState,
@@ -402,6 +403,38 @@ const projectsApi = {
       >,
     ]);
     return { organizations: organizations.data ?? [], people: people.data ?? [] };
+  },
+
+  /** Adds an organization to the directory from a collaborator row; it waits for approval. */
+  async createDirectoryOrganization(
+    organization: Omit<Organization, 'id' | 'date'>,
+  ): Promise<Organization> {
+    try {
+      const response = (await authenticityUtility.post(
+        '/organizations',
+        organization,
+      )) as unknown as Envelope<Organization>;
+      if (!response.data) throw new Error(response.message || 'The organization was not saved.');
+      return response.data;
+    } catch (error) {
+      throw toSaveError(error, 'The organization could not be added to the directory.');
+    }
+  },
+
+  /** Adds a resource person to the directory from a collaborator row; it waits for approval. */
+  async createDirectoryPerson(
+    person: Omit<ResourcePerson, 'id' | 'date'>,
+  ): Promise<ResourcePerson> {
+    try {
+      const response = (await authenticityUtility.postFile(
+        '/resource-persons',
+        buildResourcePersonFormData(person),
+      )) as unknown as Envelope<ResourcePerson>;
+      if (!response.data) throw new Error(response.message || 'The person was not saved.');
+      return response.data;
+    } catch (error) {
+      throw toSaveError(error, 'The person could not be added to the directory.');
+    }
   },
 
   async searchOrganizations(query: string, fundingOnly = false): Promise<ProjectOrganization[]> {

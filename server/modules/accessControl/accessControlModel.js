@@ -264,21 +264,21 @@ const SYSTEM_PERMISSION_SEED = [
     module_key: 'directory',
     action_key: 'read',
     permission_key: 'directory.read',
-    description: 'View the organization and resource-person directories',
+    description: 'View the organization and people directories',
     is_system: true,
   },
   {
     module_key: 'directory',
     action_key: 'create',
     permission_key: 'directory.create',
-    description: 'Create organization and resource-person directory records',
+    description: 'Create organization and people directory records',
     is_system: true,
   },
   {
     module_key: 'directory',
     action_key: 'edit',
     permission_key: 'directory.edit',
-    description: 'Edit owned organization and resource-person directory records',
+    description: 'Edit owned organization and people directory records',
     is_system: true,
   },
   {
@@ -292,7 +292,7 @@ const SYSTEM_PERMISSION_SEED = [
     module_key: 'resource_person_directory_workflow',
     action_key: 'directory_admin',
     permission_key: 'resource_person_directory.workflow.directory_admin',
-    description: 'Approve or reject resource-person directory submissions',
+    description: 'Approve or reject people directory submissions',
     is_system: true,
   },
 ];

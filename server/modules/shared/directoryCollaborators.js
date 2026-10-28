@@ -8,15 +8,38 @@ import { getDirectoryApprovalStatus } from './directoryApprovalStatus.js';
 const toId = (value) => (value === null || value === undefined ? null : Number(value));
 
 /**
+ * Whether a post is at the given directory organization: linked to it, or -- for a post
+ * typed in before the organization was in the directory -- naming it. The Resource Person
+ * directory matches posts to organizations the same way.
+ */
+const isPostAt = (profession, organizationId, organizationName) => {
+  const linkedId = toId(profession.organization_id);
+  if (linkedId) return linkedId === organizationId;
+  const name = String(organizationName ?? '')
+    .trim()
+    .toLowerCase();
+  return (
+    Boolean(name) &&
+    String(profession.organization ?? '')
+      .trim()
+      .toLowerCase() === name
+  );
+};
+
+/**
  * The post a collaborator's designation comes from: the person's post at the collaborating
  * organization, else their current one. A post they still hold beats one they left, and
  * otherwise the directory's own order decides. The project form applies the same rule.
  */
-export const pickDirectoryProfession = (professions = [], organizationId = null) => {
+export const pickDirectoryProfession = (
+  professions = [],
+  organizationId = null,
+  organizationName = null,
+) => {
   const orgId = toId(organizationId);
   const isCurrent = (profession) => profession.status !== 'Relieved';
   const atOrganization = orgId
-    ? professions.filter((profession) => toId(profession.organization_id) === orgId)
+    ? professions.filter((profession) => isPostAt(profession, orgId, organizationName))
     : [];
   return (
     atOrganization.find(isCurrent) ??
@@ -30,7 +53,7 @@ export const pickDirectoryProfession = (professions = [], organizationId = null)
 const loadProfessions = async (connection, personIds) => {
   if (personIds.length === 0) return new Map();
   const [rows] = await connection.query(
-    `SELECT resource_person_id, organization_id, designation, official_email, status
+    `SELECT resource_person_id, organization_id, organization, designation, official_email, status
        FROM directory_resource_person_professions
       WHERE resource_person_id IN (?)
       ORDER BY resource_person_id, sort_order, id`,
@@ -120,9 +143,11 @@ export const fillDirectoryCollaborators = async (
     if (personId) {
       const person = personById.get(personId);
       if (usable(person, keptPersonIds)) {
+        const linkedOrganization = organizationById.get(organizationId);
         const profession = pickDirectoryProfession(
           professionsByPerson.get(personId),
           organizationId,
+          linkedOrganization?.name,
         );
         next.contact_name = person.name;
         next.contact_designation =
@@ -156,6 +181,8 @@ export const loadDirectoryEmailOnFile = async (connection, collaborators) => {
       const profession = pickDirectoryProfession(
         professionsByPerson.get(Number(row.directory_resource_person_id)),
         row.directory_organization_id,
+        // Copied from the directory on save, so it is the linked organization's name.
+        row.organization_name,
       );
       return [row.id, Boolean(profession?.official_email)];
     }),

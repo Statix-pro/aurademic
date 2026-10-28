@@ -22,7 +22,7 @@ export default function DirectoryApprovalPage() {
       ? [{ value: 'organization' as const, label: 'Organization' }]
       : []),
     ...(canAccessModuleWorkflow(user, 'resource_person_directory')
-      ? [{ value: 'resource-person' as const, label: 'Resource Person' }]
+      ? [{ value: 'resource-person' as const, label: 'People' }]
       : []),
   ];
   const requested = searchParams.get('tab');

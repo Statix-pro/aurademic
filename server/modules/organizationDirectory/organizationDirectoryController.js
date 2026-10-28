@@ -71,7 +71,7 @@ export const updateSubmission = async (req, res) => {
   try {
     return res.json({
       success: true,
-      data: await model.updateSubmission(req.params.id, req.body),
+      data: await model.updateSubmission(req.params.id, req.body, req.user?.id),
     });
   } catch (error) {
     return sendError(res, error);

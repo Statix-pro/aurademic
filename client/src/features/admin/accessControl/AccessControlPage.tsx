@@ -106,7 +106,13 @@ const getPermissionGroupKey = (permission: { permission_key: string; module_key:
   return permission.module_key;
 };
 
+// A module whose stored key no longer matches what the screens call it.
+const MODULE_LABELS: Record<string, string> = {
+  resource_person_directory_workflow: 'People directory workflow',
+};
+
 const formatModuleLabel = (moduleKey: string): string => {
+  if (MODULE_LABELS[moduleKey]) return MODULE_LABELS[moduleKey];
   const words = moduleKey.replace(/_/g, ' ').trim();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };

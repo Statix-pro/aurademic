@@ -13,6 +13,7 @@ import CustomPagination, {
 import CustomSubmitterLine from '../../../shared/components/ui/CustomSubmitterLine';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { specializationHoldNote } from '../../../shared/utils/directoryHolds';
 import OrganizationDirectory, {
   Organization as OrganizationForm,
 } from '../../organizationdirectory/OrganizationDirectory';
@@ -58,7 +59,7 @@ const BLUE = '#0878bd';
 
 const isPending = (row: Organization) => (row.approvalStatus || 'Pending') === 'Pending';
 
-/** `switcher`: the Directory Approval page's Organization / Resource Person tabs. */
+/** `switcher`: the Directory Approval page's Organization / People tabs. */
 export default function OrganizationApprovalPage({ switcher }: { switcher?: React.ReactNode }) {
   const [rows, setRows] = useState<Organization[]>([]);
   const [tab, setTab] = useState<Tab>('All');
@@ -236,6 +237,12 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
         <div className="d-flex flex-column">
           <span className="organization-approval-name">{row.name}</span>
           {row.city && <span className="organization-approval-meta">{row.city}</span>}
+          {/* The server refuses to approve until then; the Approve button waits too. */}
+          {specializationHoldNote(row.specializationHolds) && (
+            <span className="organization-approval-hold">
+              {specializationHoldNote(row.specializationHolds)}
+            </span>
+          )}
         </div>
       ),
     },
@@ -290,7 +297,10 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
                   variant="outline-success"
                   className="organization-approval-decision approve"
                   onClick={() => void review(row.id, 'approve')}
-                  disabled={reviewingId !== null}
+                  disabled={
+                    reviewingId !== null || Boolean(specializationHoldNote(row.specializationHolds))
+                  }
+                  title={specializationHoldNote(row.specializationHolds) || undefined}
                 >
                   <Check size={13} strokeWidth={3} aria-hidden="true" />
                   Approve
@@ -342,7 +352,7 @@ export default function OrganizationApprovalPage({ switcher }: { switcher?: Reac
         .organization-approval-table.custom-table thead th { padding: var(--table-cell-padding); background: #eef5fd; border-bottom: 1px solid #cddceb; color: var(--primary-color); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); font-weight: var(--weight-bold); text-align: left; }
         .organization-approval-table.custom-table tbody td { padding: var(--table-cell-padding); border-color: #e1e8f0; color: var(--text-body); font-size: var(--font-size-body); line-height: var(--leading-body); vertical-align: middle; }
         .organization-approval-table .organization-approval-name { color: var(--text-strong); font-size: var(--font-size-body); line-height: var(--leading-body); font-weight: 700; }
-        .organization-approval-table .organization-approval-meta { margin-top: 2px; color: var(--text-soft); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); }
+        .organization-approval-table .organization-approval-meta { margin-top: 2px; color: var(--text-soft); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); } .organization-approval-page .organization-approval-hold { margin-top: 2px; color: #9b5f00; font-size: var(--font-size-secondary); line-height: var(--leading-secondary); }
         .organization-approval-table .organization-approval-tag { display: inline-block; padding: 4px 12px; border-radius: 6px; background: #e0f0ff; color: #0069ab; font-size: var(--font-size-tertiary); font-weight: 600; text-transform: capitalize; }
         /* The outlined Edit/View square from the Organization dashboard (32×32, --icon-action-size). */
         .custom-btn.organization-approval-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: var(--icon-action-size); height: var(--icon-action-size); min-width: 0; min-height: 0; padding: 0; border: 1px solid #0069ab; border-radius: 8px; background: #ffffff; color: #0069ab; }

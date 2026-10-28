@@ -18,6 +18,7 @@ import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
 import OrganizationDirectory from '../../organizationdirectory/OrganizationDirectory';
 import ResourcePersonDirectory, {
+  buildResourcePersonFormData,
   CATEGORY_OPTIONS,
   ResourcePerson,
 } from '../../resourcepersondirectory/ResourcePersonDirectory';
@@ -33,7 +34,7 @@ import type { Organization } from '../../organizationdirectory/OrganizationDirec
 const apiGetAll = async (): Promise<ResourcePerson[]> => {
   const res = (await authenticityUtility.get('/resource-persons')) as any;
   if (res?.success && Array.isArray(res.data)) return res.data as ResourcePerson[];
-  throw new Error(res?.message || 'Failed to load resource persons.');
+  throw new Error(res?.message || 'Failed to load people.');
 };
 
 const apiGetOrganizations = async (): Promise<Organization[]> => {
@@ -93,40 +94,23 @@ const CATEGORY_FILTER_STYLES = {
   indicatorSeparator: () => ({ display: 'none' }),
 };
 
-// Helper: build multipart FormData for ResourcePerson operations
-const buildPersonFormData = (personData: Omit<ResourcePerson, 'id' | 'date'>): FormData => {
-  const formData = new FormData();
-  Object.entries(personData).forEach(([key, val]) => {
-    if (key === 'professions' || key === 'specializations') {
-      formData.append(key, JSON.stringify(val));
-    } else if (key === 'photoFile' || key === 'resumeFile') {
-      if (val instanceof File) {
-        formData.append(key, val);
-      }
-    } else if (val !== undefined && val !== null) {
-      formData.append(key, String(val));
-    }
-  });
-  return formData;
-};
-
 const apiCreate = async (
   personData: Omit<ResourcePerson, 'id' | 'date'>,
 ): Promise<ResourcePerson> => {
-  const formData = buildPersonFormData(personData);
+  const formData = buildResourcePersonFormData(personData);
   const res = (await authenticityUtility.postFile('/resource-persons', formData)) as any;
   if (res?.success && res.data) return res.data as ResourcePerson;
-  throw new Error(res?.message || 'Failed to create resource person.');
+  throw new Error(res?.message || 'Failed to add person.');
 };
 
 const apiUpdate = async (
   id: number,
   personData: Omit<ResourcePerson, 'id' | 'date'>,
 ): Promise<ResourcePerson> => {
-  const formData = buildPersonFormData(personData);
+  const formData = buildResourcePersonFormData(personData);
   const res = (await authenticityUtility.putFile(`/resource-persons/${id}`, formData)) as any;
   if (res?.success && res.data) return res.data as ResourcePerson;
-  throw new Error(res?.message || 'Failed to update resource person.');
+  throw new Error(res?.message || 'Failed to update person.');
 };
 
 const getPrimary = (p: ResourcePerson) => {
@@ -173,7 +157,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
       const data = await apiGetAll();
       setRecords(data);
     } catch (err: any) {
-      setLoadError(err?.message || 'Failed to load resource persons.');
+      setLoadError(err?.message || 'Failed to load people.');
     } finally {
       setIsLoading(false);
     }
@@ -309,7 +293,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
     },
     {
       key: 'name',
-      label: 'Resource Person',
+      label: 'Person',
       render: (person: ResourcePerson) => (
         <div className="rpd-name-cell">
           <span className="rpd-name-line">
@@ -359,6 +343,20 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                 {person.organizationHolds.some((hold) => hold.status === 'Rejected')
                   ? 'Organization rejected: edit and choose another'
                   : 'Waiting for organization approval'}
+              </span>
+            ) : null}
+            {/* Or by a specialization they added from the form, not yet approved. */}
+            {person.specializationHolds?.length ? (
+              <span
+                className={`rpd-org-hold${
+                  person.specializationHolds.some((hold) => hold.status === 'Rejected')
+                    ? ' rejected'
+                    : ''
+                }`}
+              >
+                {person.specializationHolds.some((hold) => hold.status === 'Rejected')
+                  ? 'Specialization rejected: edit and remove it'
+                  : 'Waiting for specialization approval'}
               </span>
             ) : null}
           </div>
@@ -421,10 +419,10 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
               onClick={() => handleEdit(person)}
               title={
                 person.approvalStatus === 'Approved'
-                  ? 'Edit Resource Person (saving sends it for approval again)'
-                  : 'Edit Resource Person'
+                  ? 'Edit Person (saving sends it for approval again)'
+                  : 'Edit Person'
               }
-              aria-label="Edit Resource Person"
+              aria-label="Edit Person"
             >
               <Edit3 size={15} />
             </CustomButton>
@@ -508,7 +506,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
           <div className="financecard-card">
             <div className="financecard-header-single">
               <div className="header-left-section">
-                <h5 className="financecard-title">Resource Person</h5>
+                <h5 className="financecard-title">People</h5>
               </div>
 
               <div className="header-right-section">
@@ -516,7 +514,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                   name="rp-search-name"
                   value={searchName}
                   onChange={setSearchName}
-                  placeholder="Search resource person"
+                  placeholder="Search people"
                 />
 
                 <div className="filter-group">
@@ -570,7 +568,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
             )}
 
             <div className="financecard-body">
-              <div className="rpd-dir-tabs" role="tablist" aria-label="Resource person lists">
+              <div className="rpd-dir-tabs" role="tablist" aria-label="People lists">
                 {(
                   [
                     ['directory', 'Directory'],
@@ -609,9 +607,9 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
                   rowLabel={(person: ResourcePerson) => `View ${person.name}`}
                   emptyMessage={
                     view === 'mine'
-                      ? 'You have not submitted any resource persons. Click "Add" to add one.'
+                      ? 'You have not submitted any people. Click "Add" to add one.'
                       : records.length === 0
-                        ? 'No resource persons in the directory yet.'
+                        ? 'No people in the directory yet.'
                         : 'No records match the filter criteria.'
                   }
                 />
@@ -631,7 +629,7 @@ const ResourcePersonDirectoryDashboard: React.FC = () => {
       <CustomModal
         show={viewingPerson !== null}
         onHide={() => setViewingPerson(null)}
-        title="Resource Person Details"
+        title="Person Details"
         size="xl"
         scrollable
         className="rpd-form-modal"

@@ -597,6 +597,36 @@
   font-weight: var(--weight-semibold);
 }
 
+/* "Add … to the directory": an action, not a value, so it is set off below the matches. */
+.pf-combo__option.pf-combo__action {
+  margin-top: 4px;
+  border-top: 1px solid #e2e8f2;
+  border-radius: 0 0 8px 8px;
+  color: var(--primary-color, #0069ab);
+  font-weight: var(--weight-semibold);
+}
+
+.pf-combo__option.pf-combo__action:first-child {
+  margin-top: 0;
+  border-top: 0;
+  border-radius: 8px;
+}
+
+/* The directory forms are laid out for page width, so the dialog that hosts one is
+   widened as AGENTS.md §17 sets for a modal that hosts a form. */
+.pf-directory-modal .modal-dialog {
+  max-width: 1150px;
+  width: calc(100% - 32px);
+}
+
+.pf-directory-modal .modal-content {
+  max-height: calc(100vh - 3.5rem);
+}
+
+.pf-directory-modal .modal-body {
+  overflow-y: auto;
+}
+
 /* --------------------------------------------------------------- yes/no pill */
 
 .pf-yesno {

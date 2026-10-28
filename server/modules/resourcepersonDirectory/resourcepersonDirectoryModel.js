@@ -6,6 +6,7 @@ import {
   DEFAULT_TAG,
   createDirectoryLists,
   parseSpecializations,
+  specializationHoldError,
 } from '../shared/directoryLists.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
 import '../shared/workflow/directoryWorkflowAdapter.js';
@@ -371,15 +372,15 @@ export default {
     }
     // The submitter is told which organization holds a record up; an Approved record has
     // none, so only the user's own unapproved ones are checked.
-    const holdsByPerson = await loadOrganizationHoldsByPerson(
-      people
-        .filter(
-          (person) =>
-            Number(person.created_by) === Number(userId) &&
-            getDirectoryApprovalStatus(person) !== 'Approved',
-        )
-        .map((person) => person.id),
-    );
+    const ownUnapprovedIds = people
+      .filter(
+        (person) =>
+          Number(person.created_by) === Number(userId) &&
+          getDirectoryApprovalStatus(person) !== 'Approved',
+      )
+      .map((person) => person.id);
+    const holdsByPerson = await loadOrganizationHoldsByPerson(ownUnapprovedIds);
+    const specializationHoldsByPerson = await lists.loadSpecializationHolds(ownUnapprovedIds);
     return people.map((person) => {
       const isOwner = Number(person.created_by) === Number(userId);
       // Super admins see every record in full, as they already do on the approval page.
@@ -388,7 +389,12 @@ export default {
         ...(seesContacts ? serializePerson(person) : serializePublicPerson(person)),
         approvalStatus: getDirectoryApprovalStatus(person),
         isOwner,
-        ...(isOwner ? { organizationHolds: holdsByPerson.get(Number(person.id)) || [] } : {}),
+        ...(isOwner
+          ? {
+              organizationHolds: holdsByPerson.get(Number(person.id)) || [],
+              specializationHolds: specializationHoldsByPerson.get(Number(person.id)) || [],
+            }
+          : {}),
       };
     });
   },
@@ -402,10 +408,12 @@ export default {
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
-      const listed = await lists.toListedValues(connection, {
-        tag: person.tag,
-        specializations: requestedSpecializations,
-      });
+      const listed = await lists.toListedValues(
+        connection,
+        { tag: person.tag, specializations: requestedSpecializations },
+        {},
+        { userId },
+      );
       person.tag = listed.tag;
       const cols = [...fields, 'is_active', 'created_by'];
       const [result] = await connection.execute(
@@ -431,6 +439,7 @@ export default {
         [result.insertId],
       );
       await connection.commit();
+      const specializationHolds = await lists.loadSpecializationHolds([result.insertId]);
       return {
         ...serializePerson(
           { ...rows[0], specializations: listed.specializations },
@@ -440,6 +449,7 @@ export default {
         isOwner: true,
         // Same shape as list(), so the dashboard row says at once what holds it.
         organizationHolds: holdsFromProfessions(savedProfessions),
+        specializationHolds: specializationHolds.get(Number(result.insertId)) || [],
       };
     } catch (e) {
       await connection.rollback();
@@ -472,6 +482,7 @@ export default {
         connection,
         { tag: person.tag, specializations: requestedSpecializations },
         { tag: current.tag, specializations: await lists.loadSpecializations(connection, id) },
+        { userId },
       );
       person.tag = listed.tag;
       const fileFields = [
@@ -555,11 +566,13 @@ export default {
         created_at: current.created_at,
         specializations: listed.specializations,
       };
+      const specializationHolds = await lists.loadSpecializationHolds([Number(id)]);
       return {
         ...serializePerson(savedPerson, savedProfessions),
         approvalStatus: 'Pending',
         isOwner: true,
         organizationHolds: holdsFromProfessions(savedProfessions),
+        specializationHolds: specializationHolds.get(Number(id)) || [],
       };
     } catch (error) {
       await connection.rollback();
@@ -576,6 +589,7 @@ export default {
     const professionsByPerson = await loadProfessionsByPerson(personIds);
     const specializationsByPerson = await lists.loadSpecializationsByRecord(personIds);
     const holdsByPerson = await loadOrganizationHoldsByPerson(personIds);
+    const specializationHoldsByPerson = await lists.loadSpecializationHolds(personIds);
     return rows.map((person) => {
       const professions = professionsByPerson.get(Number(person.id)) || [];
       const specializations = specializationsByPerson.get(Number(person.id)) || [];
@@ -589,8 +603,10 @@ export default {
         approvalStatus: person.approvalStatus,
         organization: primaryProfession?.organization || null,
         city: primaryProfession?.city || null,
-        // Organizations that keep this record from being approved; see review().
+        // Organizations and suggested specializations that keep this record from being
+        // approved; see review().
         organizationHolds: holdsByPerson.get(Number(person.id)) || [],
+        specializationHolds: specializationHoldsByPerson.get(Number(person.id)) || [],
       };
     });
   },
@@ -598,7 +614,15 @@ export default {
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
-      if (decision === 'approve') await assertNoOrganizationHolds(connection, id);
+      if (decision === 'approve') {
+        await assertNoOrganizationHolds(connection, id);
+        const holds = await lists.loadSpecializationHolds([Number(id)], {
+          tx: connection,
+          lock: true,
+        });
+        const holdError = specializationHoldError(holds.get(Number(id)));
+        if (holdError) throw holdError;
+      }
       await workflowService.actOnWorkflow({
         moduleKey: 'resource_person_directory',
         recordId: id,

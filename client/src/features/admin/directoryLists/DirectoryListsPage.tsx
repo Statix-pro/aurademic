@@ -1,4 +1,4 @@
-import { Edit3, Plus, Trash2 } from 'lucide-react';
+import { Check, Edit3, Plus, Trash2, X } from 'lucide-react';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Badge } from 'react-bootstrap';
 
@@ -23,7 +23,23 @@ interface ListEntry {
   list_key: ListKey;
   name: string;
   is_active: boolean;
+  /** A Specialization a directory user added from the form is Pending until reviewed here. */
+  approval_status?: 'Approved' | 'Pending' | 'Rejected';
+  suggested_by_name?: string | null;
+  suggested_by_email?: string | null;
 }
+
+const isUnreviewed = (entry: ListEntry) =>
+  Boolean(entry.approval_status) && entry.approval_status !== 'Approved';
+
+/** The status pill: a suggestion's review state, otherwise whether the form offers it. */
+const statusOf = (entry: ListEntry) => {
+  if (entry.approval_status === 'Pending') return { label: 'Pending', tone: 'pending' };
+  if (entry.approval_status === 'Rejected') return { label: 'Rejected', tone: 'rejected' };
+  return entry.is_active
+    ? { label: 'Active', tone: 'active' }
+    : { label: 'Inactive', tone: 'inactive' };
+};
 
 // Both directories pick from these lists; either directory's Directory Admin edits them.
 const ENDPOINT = '/directory-options';
@@ -31,11 +47,6 @@ const ENDPOINT = '/directory-options';
 // DEFAULT_TAG in server/modules/shared/directoryLists.js, which refuses to rename, retire or
 // delete it.
 const DEFAULT_TAG = 'General';
-
-const LISTS: TabOption<ListKey>[] = [
-  { value: 'tag', label: 'Tag' },
-  { value: 'specialization', label: 'Specialization' },
-];
 
 /**
  * The Tag and Specialization lists the organization and resource person forms both offer as
@@ -54,6 +65,7 @@ export default function DirectoryListsPage() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState<ListEntry | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [reviewingId, setReviewingId] = useState<number | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -75,11 +87,26 @@ export default function DirectoryListsPage() {
   const [search, setSearch] = useState('');
   const rows = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    return entries.filter(
-      (entry) => entry.list_key === list && (!needle || entry.name.toLowerCase().includes(needle)),
-    );
+    // Suggestions waiting for review come first, so they are not lost down the list.
+    const rank = (entry: ListEntry) => (entry.approval_status === 'Pending' ? 0 : 1);
+    return entries
+      .filter(
+        (entry) =>
+          entry.list_key === list && (!needle || entry.name.toLowerCase().includes(needle)),
+      )
+      .sort((a, b) => rank(a) - rank(b));
   }, [entries, list, search]);
-  const listLabel = LISTS.find((item) => item.value === list)?.label ?? '';
+  const pendingCount = entries.filter(
+    (entry) => entry.list_key === 'specialization' && entry.approval_status === 'Pending',
+  ).length;
+  const lists: TabOption<ListKey>[] = [
+    { value: 'tag', label: 'Tag' },
+    {
+      value: 'specialization',
+      label: pendingCount ? `Specialization (${pendingCount} pending)` : 'Specialization',
+    },
+  ];
+  const listLabel = list === 'tag' ? 'Tag' : 'Specialization';
   // The whole list is already loaded (the forms need every entry), so pages are cut here.
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
@@ -140,6 +167,29 @@ export default function DirectoryListsPage() {
     }
   };
 
+  const review = async (entry: ListEntry, decision: 'approve' | 'reject') => {
+    setReviewingId(entry.id);
+    try {
+      const response = (await authenticityUtility.patch(`${ENDPOINT}/${entry.id}/review`, {
+        decision,
+      })) as any;
+      const saved = response.data as ListEntry;
+      setEntries((current) =>
+        current.map((item) => (item.id === saved.id ? { ...item, ...saved } : item)),
+      );
+      setNotice(
+        decision === 'approve'
+          ? `"${entry.name}" is now in the list for everyone.`
+          : `"${entry.name}" was rejected. Records that picked it stay unapproved until their owners remove it.`,
+      );
+      setError('');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to review the suggestion.');
+    } finally {
+      setReviewingId(null);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleting) return;
     setIsDeleting(true);
@@ -176,10 +226,13 @@ export default function DirectoryListsPage() {
       render: (entry: ListEntry) => (
         <>
           <span className="dlp-entry-name">{entry.name}</span>
-          <span
-            className={`dlp-status-pill dlp-status-inline ${entry.is_active ? 'active' : 'inactive'}`}
-          >
-            {entry.is_active ? 'Active' : 'Inactive'}
+          {entry.approval_status && entry.approval_status !== 'Approved' && (
+            <span className="dlp-suggested-by">
+              Suggested by {entry.suggested_by_name || entry.suggested_by_email || 'a user'}
+            </span>
+          )}
+          <span className={`dlp-status-pill dlp-status-inline ${statusOf(entry).tone}`}>
+            {statusOf(entry).label}
           </span>
         </>
       ),
@@ -189,9 +242,7 @@ export default function DirectoryListsPage() {
       hideOnPhone: true,
       label: 'Status',
       render: (entry: ListEntry) => (
-        <span className={`dlp-status-pill ${entry.is_active ? 'active' : 'inactive'}`}>
-          {entry.is_active ? 'Active' : 'Inactive'}
-        </span>
+        <span className={`dlp-status-pill ${statusOf(entry).tone}`}>{statusOf(entry).label}</span>
       ),
     },
     {
@@ -199,8 +250,42 @@ export default function DirectoryListsPage() {
       label: 'Action',
       // General is the Tag a record gets when none is chosen; the server keeps it as it is.
       render: (entry: ListEntry) =>
-        entry.list_key === 'tag' && entry.name.toLowerCase() === DEFAULT_TAG.toLowerCase() ? (
+        entry.approval_status === 'Pending' ? (
+          // A suggestion is approved or rejected before it can be edited.
+          <div className="dlp-actions">
+            <CustomButton
+              variant="outline-success"
+              className="dlp-decision approve"
+              onClick={() => void review(entry, 'approve')}
+              disabled={reviewingId !== null}
+              aria-label={`Approve ${entry.name}`}
+            >
+              <Check size={13} aria-hidden="true" /> Approve
+            </CustomButton>
+            <CustomButton
+              variant="outline-danger"
+              className="dlp-decision reject"
+              onClick={() => void review(entry, 'reject')}
+              disabled={reviewingId !== null}
+              aria-label={`Reject ${entry.name}`}
+            >
+              <X size={13} aria-hidden="true" /> Reject
+            </CustomButton>
+          </div>
+        ) : entry.list_key === 'tag' && entry.name.toLowerCase() === DEFAULT_TAG.toLowerCase() ? (
           <span className="dlp-default-note">Default</span>
+        ) : isUnreviewed(entry) ? (
+          <div className="dlp-actions">
+            <CustomButton
+              variant="outline-danger"
+              className="dlp-icon-btn dlp-icon-btn--delete"
+              onClick={() => setDeleting(entry)}
+              title={`Delete ${entry.name}`}
+              aria-label={`Delete ${entry.name}`}
+            >
+              <Trash2 size={15} />
+            </CustomButton>
+          </div>
         ) : (
           <div className="dlp-actions">
             <CustomButton
@@ -247,6 +332,14 @@ export default function DirectoryListsPage() {
         .dlp-table .dlp-status-pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: var(--font-size-tertiary); font-weight: 600; }
         .dlp-table .dlp-status-pill.active { background: #dcfce7; color: #166534; }
         .dlp-table .dlp-status-pill.inactive { background: #eef2f6; color: #475569; }
+        .dlp-table .dlp-status-pill.pending { background: #fef3c7; color: #92400e; }
+        .dlp-table .dlp-status-pill.rejected { background: #fde1e5; color: #b4253a; }
+        .dlp-table .dlp-suggested-by { display: block; margin-top: 2px; color: var(--text-soft); font-size: var(--font-size-secondary); line-height: var(--leading-secondary); }
+        .custom-btn.dlp-decision { display: inline-flex; align-items: center; gap: 4px; height: var(--inline-action-height); min-height: 0; min-width: 0; padding: 0 10px; border-radius: 6px; border: 1px solid; font-size: var(--font-size-tertiary); font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+        .custom-btn.dlp-decision.approve, .custom-btn.dlp-decision.approve:disabled { background: #e8f6ee; border-color: #9fd8b6; color: #087b43; }
+        .custom-btn.dlp-decision.approve:hover:not(:disabled) { background: #d3efdf; border-color: #087b43; color: #066535; }
+        .custom-btn.dlp-decision.reject, .custom-btn.dlp-decision.reject:disabled { background: #fdecee; border-color: #f3b4bd; color: #b4253a; }
+        .custom-btn.dlp-decision.reject:hover:not(:disabled) { background: #fbd9de; border-color: #b4253a; color: #9a1d30; }
         .dlp-table .dlp-actions { display: flex; gap: 6px; justify-content: center; }
         .dlp-table .dlp-default-note { color: var(--text-muted); font-size: var(--font-size-tertiary); line-height: var(--leading-tertiary); }
         @media (max-width: 576px) { .dlp-table .dlp-status-pill.dlp-status-inline { display: table; margin-top: 4px; } }
@@ -276,13 +369,14 @@ export default function DirectoryListsPage() {
           </div>
         </div>
         <p className="dlp-intro mb-3">
-          The organization and resource person forms both offer only these entries. Renaming or
-          making one inactive changes what the forms offer next; records keep the value they already
-          hold.
+          The organization and person forms both offer only these entries. Renaming or making one
+          inactive changes what the forms offer next; records keep the value they already hold. A
+          Specialization users add from the form waits here as Pending; a record that picked it is
+          approved only after you approve it.
         </p>
 
         <CustomTabs<ListKey>
-          options={LISTS}
+          options={lists}
           value={list}
           onChange={setList}
           ariaLabel="List"

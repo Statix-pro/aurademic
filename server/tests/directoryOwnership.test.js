@@ -13,6 +13,8 @@ const specializationRows = vi.fn();
 // Profession rows are recorded apart from `execute`, so a record's post does not take a
 // result queued for the statement after it.
 const professionInserts = vi.fn();
+// The list lookup's parameters: the saver whose own Pending suggestions may be picked.
+const listLookups = vi.fn();
 const answerListQuery = (sql, params) => {
   if (/^\s*SELECT organization_id FROM directory_resource_person_professions/.test(sql))
     return [storedOrganizationLinks];
@@ -20,7 +22,10 @@ const answerListQuery = (sql, params) => {
     professionInserts(sql, params);
     return [{}];
   }
-  if (/FROM directory_options WHERE is_active = 1/.test(sql)) return [activeOptions];
+  if (/FROM directory_options\s+WHERE is_active = 1/.test(sql)) {
+    listLookups(params);
+    return [activeOptions];
+  }
   if (/directory_(resource_person|organization)_specializations/.test(sql)) {
     specializationRows(sql, params);
     if (/^\s*SELECT name FROM/.test(sql)) return [storedSpecializations];
@@ -800,6 +805,20 @@ describe('organization reviewer edits', () => {
     });
   });
 
+  // The reviewer's form offers "Add … as a new specialization" too, and the suggestion it
+  // creates is the reviewer's. Checked as nobody's, the save refused it as unlisted.
+  it('lets the reviewer save a specialization they suggested from the form', async () => {
+    listLookups.mockClear();
+    execute
+      .mockResolvedValueOnce([[{ id: 10, is_active: 0, updated_by: null }]])
+      .mockResolvedValueOnce([{}])
+      .mockResolvedValueOnce([[{ id: 10, name: 'Fixed', created_by: 4 }]]);
+
+    await organizationModel.updateSubmission(10, { name: 'Fixed', ...ORG_REQUIRED }, 8);
+
+    expect(listLookups).toHaveBeenCalledWith([8]);
+  });
+
   it.each([
     ['Approved', { is_active: 1, updated_by: 8 }],
     ['Rejected', { is_active: 0, updated_by: 8 }],
@@ -1141,8 +1160,20 @@ describe('resource person Tag and Specialization lists', () => {
     expect(connection.commit).toHaveBeenCalledOnce();
     expect(result).toEqual({
       added: [
-        { id: 7, list_key: 'specialization', name: 'Chemistry', is_active: true },
-        { id: 8, list_key: 'specialization', name: 'Physics', is_active: true },
+        {
+          id: 7,
+          list_key: 'specialization',
+          name: 'Chemistry',
+          is_active: true,
+          approval_status: 'Approved',
+        },
+        {
+          id: 8,
+          list_key: 'specialization',
+          name: 'Physics',
+          is_active: true,
+          approval_status: 'Approved',
+        },
       ],
       skipped: ['Cafe'],
     });

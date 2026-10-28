@@ -6,6 +6,10 @@ import RegionFields from '../../shared/components/RegionFields';
 import CustomButton from '../../shared/components/ui/CustomButton';
 import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 import CustomInput from '../../shared/components/ui/CustomInput';
+import {
+  type DirectoryListRow,
+  useSpecializationSuggestions,
+} from '../../shared/hooks/useSpecializationSuggestions';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { DEFAULT_COUNTRY, isIndia } from '../../shared/utils/regions';
 
@@ -36,6 +40,8 @@ export interface Organization {
   /** Who added the record, so a reader can ask them about it. */
   submitted_by_name?: string | null;
   submitted_by_email?: string | null;
+  /** Suggested specializations that keep it from being approved (the owner's and reviewer's). */
+  specializationHolds?: { name: string; status: string }[];
 }
 
 interface OrganizationDirectoryProps {
@@ -128,9 +134,13 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
   const [abbreviation, setAbbreviation] = useState('');
   const [establishmentYear, setEstablishmentYear] = useState('');
   const [specializations, setSpecializations] = useState<string[]>([]);
-  const [listNames, setListNames] = useState<{ tag: string[]; specialization: string[] }>({
-    tag: [],
-    specialization: [],
+  const [listRows, setListRows] = useState<DirectoryListRow[]>([]);
+  const tagNames = listRows.filter((row) => row.list_key === 'tag').map((row) => row.name);
+  // A specialization the list lacks can be added from the field; it waits for the admin.
+  const specializationField = useSpecializationSuggestions({
+    rows: listRows,
+    selected: specializations,
+    onSelectedChange: setSpecializations,
   });
   const [listError, setListError] = useState<string | null>(null);
   const [tag, setTag] = useState('');
@@ -187,13 +197,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
       .get('/directory-options')
       .then((response: any) => {
         if (cancelled) return;
-        const rows: { list_key: string; name: string }[] = response?.data || [];
-        setListNames({
-          tag: rows.filter((row) => row.list_key === 'tag').map((row) => row.name),
-          specialization: rows
-            .filter((row) => row.list_key === 'specialization')
-            .map((row) => row.name),
-        });
+        setListRows(response?.data || []);
         setListError(null);
       })
       .catch((err: any) => {
@@ -462,7 +466,7 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
               className="mb-0"
               value={tag ? { value: tag, label: tag } : null}
               onChange={(option: any) => setTag(option ? String(option.value) : '')}
-              options={toOptions(listNames.tag, [tag])}
+              options={toOptions(tagNames, [tag])}
               placeholder="Select tag"
               styles={listDropdownStyles}
               isDisabled={readOnly}
@@ -476,12 +480,10 @@ const OrganizationDirectory: React.FC<OrganizationDirectoryProps> = ({
               name="orgd-specializations"
               className="mb-0"
               isMulti
-              value={specializations.map((name) => ({ value: name, label: name }))}
-              onChange={(options: any) =>
-                setSpecializations((options || []).map((option: any) => String(option.value)))
-              }
-              options={toOptions(listNames.specialization, specializations)}
-              placeholder="Select specializations"
+              {...specializationField.dropdownProps}
+              error={specializationField.error || undefined}
+              helpText={specializationField.note}
+              placeholder="Select or type to add"
               styles={specializationDropdownStyles}
               isDisabled={readOnly}
             />

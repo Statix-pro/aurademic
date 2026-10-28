@@ -22,6 +22,8 @@ interface CustomDropdownProps {
   onChange: (value: SingleValue<OptionType> | MultiValue<OptionType>) => void;
   placeholder?: string;
   error?: string;
+  /** A hint under the field (13px help text); the error replaces it while there is one. */
+  helpText?: string;
   isDisabled?: boolean;
   isMulti?: boolean;
   className?: string;
@@ -44,6 +46,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
   onChange,
   placeholder = 'Select...',
   error,
+  helpText,
   isDisabled = false,
   isMulti = false,
   className = '',
@@ -198,6 +201,7 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
         {...props}
       />
       {error && <div className="custom-error-text">{error}</div>}
+      {!error && helpText && <div className="custom-help-text">{helpText}</div>}
     </div>
   );
 };

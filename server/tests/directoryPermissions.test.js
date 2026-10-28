@@ -215,7 +215,7 @@ describe('directory route authentication', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual([
-      { id: 1, list_key: 'tag', name: 'General', is_active: true },
+      { id: 1, list_key: 'tag', name: 'General', is_active: true, approval_status: 'Approved' },
     ]);
   });
 
@@ -226,6 +226,11 @@ describe('directory route authentication', () => {
     ['directory-user', 'put', '/api/directory-options/1', 403],
     ['directory-user', 'delete', '/api/directory-options/1', 403],
     ['directory-user', 'get', '/api/directory-options/all', 403],
+    // Suggesting is adding to the directory, so it takes directory.create; reviewing a
+    // suggestion is the Directory Admin's, like the rest of the list.
+    [undefined, 'post', '/api/directory-options/suggestions', 401],
+    ['nobody', 'post', '/api/directory-options/suggestions', 403],
+    ['directory-user', 'patch', '/api/directory-options/1/review', 403],
   ])('refuses %s at %s %s', async (token, method, path, status) => {
     const call = request(app)[method](path);
     if (token) call.set('Authorization', `Bearer ${token}`);
@@ -260,10 +265,44 @@ describe('directory route authentication', () => {
 
       expect(response.status).toBe(201);
       expect(response.body.data).toEqual({
-        added: [{ id: 5, list_key: 'tag', name: 'Research', is_active: true }],
+        added: [
+          {
+            id: 5,
+            list_key: 'tag',
+            name: 'Research',
+            is_active: true,
+            approval_status: 'Approved',
+          },
+        ],
         skipped: [],
       });
       expect(db.execute.mock.calls[1][0]).toMatch(/^INSERT INTO directory_options /);
+    },
+  );
+
+  it.each(['org-reviewer', 'rp-reviewer', 'super-admin'])(
+    'lets %s approve a suggested specialization',
+    async (token) => {
+      db.execute.mockResolvedValueOnce([{ affectedRows: 1 }]).mockResolvedValueOnce([
+        [
+          {
+            id: 9,
+            list_key: 'specialization',
+            name: 'Robotics',
+            is_active: 1,
+            approval_status: 'Approved',
+          },
+        ],
+      ]);
+
+      const response = await request(app)
+        .patch('/api/directory-options/9/review')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ decision: 'approve' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.data).toMatchObject({ id: 9, approval_status: 'Approved' });
+      expect(db.execute.mock.calls[0][1]).toEqual(['Approved', 1, '9']);
     },
   );
 

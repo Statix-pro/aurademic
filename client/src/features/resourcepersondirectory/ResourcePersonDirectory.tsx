@@ -18,6 +18,10 @@ import CustomDropdown from '../../shared/components/ui/CustomDropdown';
 import CustomFileUploader from '../../shared/components/ui/CustomFileUploader';
 import CustomInput from '../../shared/components/ui/CustomInput';
 import CustomRadio from '../../shared/components/ui/CustomRadio';
+import {
+  type DirectoryListRow,
+  useSpecializationSuggestions,
+} from '../../shared/hooks/useSpecializationSuggestions';
 import authenticityUtility from '../../shared/utils/authenticityUtility';
 import { DEFAULT_COUNTRY } from '../../shared/utils/regions';
 
@@ -133,6 +137,8 @@ export interface ResourcePerson {
   submitted_by_email?: string | null;
   /** On the submitter's own records: organizations that keep it from being approved. */
   organizationHolds?: { name: string; status: 'Pending' | 'Rejected' }[];
+  /** Specializations the owner added from the form that hold the record back the same way. */
+  specializationHolds?: { name: string; status: 'Pending' | 'Rejected' }[];
 }
 
 /** Save-time errors, each shown under its field; `post` names the row it is shown on. */
@@ -149,6 +155,8 @@ interface ResourcePersonDirectoryProps {
   organizations?: Organization[];
   /** Opens an "add organization" flow; `onCreated` receives the organization it saved. */
   onAddOrganization?: (onCreated: (organization: Organization) => void) => void;
+  /** For a new record: the organization its first post starts at. */
+  initialOrganization?: Organization | null;
   onSave: (personData: Omit<ResourcePerson, 'id' | 'date'>) => void;
   onCancel: () => void;
   readOnly?: boolean;
@@ -265,11 +273,6 @@ const specializationDropdownStyles = {
   }),
 };
 
-interface ListOption {
-  list_key: 'tag' | 'specialization';
-  name: string;
-}
-
 /** A stored value the list no longer offers is still shown, so an edit never drops it. */
 const toOptions = (names: string[], selected: string[]) =>
   [...names, ...selected.filter((value) => value && !names.includes(value))].map((name) => ({
@@ -296,6 +299,44 @@ const titleDropdownStyles = {
   }),
 };
 
+/**
+ * A post moved to a directory organization: its address and website are copied in, replacing
+ * what was there so a switch never leaves the previous organization's city behind. The
+ * Website input is stored as orgLinkedIn.
+ */
+const atOrganization = (
+  profession: ProfessionDetail,
+  organization: Organization,
+): ProfessionDetail => ({
+  ...profession,
+  organization: organization.name,
+  organizationId: organization.id,
+  organizationStatus: organization.approvalStatus ?? null,
+  city: organization.city || '',
+  state: organization.state || '',
+  country: organization.country || DEFAULT_COUNTRY,
+  orgLinkedIn: organization.website || '',
+});
+
+/** The multipart body POST and PUT /resource-persons take. */
+export const buildResourcePersonFormData = (
+  personData: Omit<ResourcePerson, 'id' | 'date'>,
+): FormData => {
+  const formData = new FormData();
+  Object.entries(personData).forEach(([key, val]) => {
+    if (key === 'professions' || key === 'specializations') {
+      formData.append(key, JSON.stringify(val));
+    } else if (key === 'photoFile' || key === 'resumeFile') {
+      if (val instanceof File) {
+        formData.append(key, val);
+      }
+    } else if (val !== undefined && val !== null) {
+      formData.append(key, String(val));
+    }
+  });
+  return formData;
+};
+
 // Uploads are served by the API server, not the Vite origin.
 const uploadUrl = (filePath?: string): string | undefined =>
   filePath
@@ -310,6 +351,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   editingPerson,
   organizations = [],
   onAddOrganization,
+  initialOrganization = null,
   onSave,
   onCancel,
   readOnly = false,
@@ -327,16 +369,20 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   const [serviceStatus, setServiceStatus] = useState('In Service');
   const [tag, setTag] = useState('');
   const [specializations, setSpecializations] = useState<string[]>([]);
-  const [listNames, setListNames] = useState<{ tag: string[]; specialization: string[] }>({
-    tag: [],
-    specialization: [],
-  });
+  const [listRows, setListRows] = useState<DirectoryListRow[]>([]);
+  const tagNames = listRows.filter((row) => row.list_key === 'tag').map((row) => row.name);
   const [listError, setListError] = useState<string | null>(null);
   const [mobile, setMobile] = useState('');
   const [personalEmail, setPersonalEmail] = useState('');
   const [linkedIn, setLinkedIn] = useState('');
   const [remarks, setRemarks] = useState('');
-  const [professions, setProfessions] = useState<ProfessionDetail[]>([emptyProfession()]);
+  // Opened from a project's collaborator row, a new person's first post starts at that
+  // row's organization, so they are listed under it once saved.
+  const [professions, setProfessions] = useState<ProfessionDetail[]>(() => [
+    initialOrganization && !editingPerson
+      ? atOrganization(emptyProfession(), initialOrganization)
+      : emptyProfession(),
+  ]);
   const [photoName, setPhotoName] = useState('');
   const [resumeName, setResumeName] = useState('');
   const [photoFile, setPhotoFile] = useState<File | undefined>(undefined);
@@ -349,6 +395,15 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const clearError = (key: keyof FieldErrors) =>
     setFieldErrors(({ [key]: _cleared, ...rest }) => rest);
+  // A specialization the list lacks can be added from the field; it waits for the admin.
+  const specializationField = useSpecializationSuggestions({
+    rows: listRows,
+    selected: specializations,
+    onSelectedChange: (names) => {
+      setSpecializations(names);
+      if (names.length) clearError('specializations');
+    },
+  });
   const clearPostError = (key: 'designation' | 'organization') =>
     setFieldErrors(({ post, ...rest }) => {
       if (!post) return rest;
@@ -400,13 +455,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
       .get('/directory-options')
       .then((response: any) => {
         if (cancelled) return;
-        const rows: ListOption[] = response?.data || [];
-        setListNames({
-          tag: rows.filter((row) => row.list_key === 'tag').map((row) => row.name),
-          specialization: rows
-            .filter((row) => row.list_key === 'specialization')
-            .map((row) => row.name),
-        });
+        setListRows(response?.data || []);
         setListError(null);
       })
       .catch((err: any) => {
@@ -458,27 +507,13 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
         idx === i ? { ...p, officialEmailType: type, officialEmailTypeChosen: true } : p,
       ),
     );
-  // Picking an organization copies its address and website into the row, replacing what
-  // was there so a switch never leaves the previous organization's city behind. Those
-  // fields are then locked: they belong to the organization's own record, edited in the
-  // Organization directory. The Website input is stored as orgLinkedIn.
+  // Picking an organization copies its address and website into the row (atOrganization).
+  // Those fields are then locked: they belong to the organization's own record, edited in
+  // the Organization directory.
   const selectOrganization = (i: number, organization: Organization) => {
     clearPostError('organization');
     setProfessions((prev) =>
-      prev.map((p, idx) =>
-        idx === i
-          ? {
-              ...p,
-              organization: organization.name,
-              organizationId: organization.id,
-              organizationStatus: organization.approvalStatus ?? null,
-              city: organization.city || '',
-              state: organization.state || '',
-              country: organization.country || DEFAULT_COUNTRY,
-              orgLinkedIn: organization.website || '',
-            }
-          : p,
-      ),
+      prev.map((p, idx) => (idx === i ? atOrganization(p, organization) : p)),
     );
   };
   // A Rejected organization is never offered. The submitter's own Pending one is (Add an
@@ -809,7 +844,7 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     className="mb-0"
                     value={tag ? { value: tag, label: tag } : null}
                     onChange={(option: any) => setTag(option ? String(option.value) : '')}
-                    options={toOptions(listNames.tag, [tag])}
+                    options={toOptions(tagNames, [tag])}
                     placeholder="Select tag"
                     styles={customDropdownStyles}
                     isDisabled={isReadOnly}
@@ -825,16 +860,10 @@ const ResourcePersonDirectory: React.FC<ResourcePersonDirectoryProps> = ({
                     name="rp-specializations"
                     className="mb-0"
                     isMulti
-                    value={specializations.map((name) => ({ value: name, label: name }))}
-                    onChange={(options: any) => {
-                      setSpecializations(
-                        (options || []).map((option: any) => String(option.value)),
-                      );
-                      if (options?.length) clearError('specializations');
-                    }}
-                    error={fieldErrors.specializations}
-                    options={toOptions(listNames.specialization, specializations)}
-                    placeholder="Select specializations"
+                    {...specializationField.dropdownProps}
+                    error={specializationField.error || fieldErrors.specializations}
+                    helpText={specializationField.note}
+                    placeholder="Select or type to add"
                     styles={specializationDropdownStyles}
                     isDisabled={isReadOnly}
                   />

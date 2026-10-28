@@ -102,7 +102,7 @@ const MODULE_LABELS = Object.freeze({
   expenditure: 'Expenditure request',
   budget: 'Budget proposal',
   organization_directory: 'Organization directory submission',
-  resource_person_directory: 'Resource-person directory submission',
+  resource_person_directory: 'People directory submission',
 });
 
 export const moduleLabel = (moduleKey) =>

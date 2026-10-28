@@ -4,6 +4,7 @@ import {
   DEFAULT_TAG,
   createDirectoryLists,
   parseSpecializations,
+  specializationHoldError,
 } from '../shared/directoryLists.js';
 import '../shared/workflow/directoryWorkflowAdapter.js';
 import workflowService from '../shared/workflow/workflowService.js';
@@ -102,6 +103,17 @@ export default {
       [userId || 0],
     );
     const specializationsByOrg = await lists.loadSpecializationsByRecord(rows.map((row) => row.id));
+    // The submitter is told which suggested specializations hold their record up; an
+    // Approved record has none, so only the user's own unapproved ones are checked.
+    const holdsByOrg = await lists.loadSpecializationHolds(
+      rows
+        .filter(
+          (row) =>
+            Number(row.created_by) === Number(userId) &&
+            getDirectoryApprovalStatus(row) !== 'Approved',
+        )
+        .map((row) => row.id),
+    );
     return rows.map((row) => {
       row.specializations = specializationsByOrg.get(Number(row.id)) || [];
       const isOwner = Number(row.created_by) === Number(userId);
@@ -111,6 +123,7 @@ export default {
         ...serialize(isOwner ? { ...publicRow, workflow_state: workflowState } : publicRow),
         approvalStatus: getDirectoryApprovalStatus(row),
         isOwner,
+        ...(isOwner ? { specializationHolds: holdsByOrg.get(Number(row.id)) || [] } : {}),
       };
     });
   },
@@ -123,10 +136,12 @@ export default {
     const connection = await db.getConnection();
     try {
       await connection.beginTransaction();
-      const listed = await lists.toListedValues(connection, {
-        tag: payload.tag,
-        specializations: requestedSpecializations,
-      });
+      const listed = await lists.toListedValues(
+        connection,
+        { tag: payload.tag, specializations: requestedSpecializations },
+        {},
+        { userId },
+      );
       payload.tag = listed.tag;
       const values = [...ORG_FIELDS.map((field) => payload[field]), 0, userId || null];
       const [result] = await connection.execute(
@@ -146,11 +161,13 @@ export default {
         [result.insertId],
       );
       await connection.commit();
+      const holds = await lists.loadSpecializationHolds([result.insertId]);
       // Same shape as listApproved, so the dashboard row keeps its Edit button.
       return {
         ...serialize({ ...rows[0], specializations: listed.specializations }),
         approvalStatus: 'Pending',
         isOwner: true,
+        specializationHolds: holds.get(Number(result.insertId)) || [],
       };
     } catch (error) {
       await connection.rollback();
@@ -177,6 +194,7 @@ export default {
         connection,
         { tag: payload.tag, specializations: requestedSpecializations },
         { tag: existing[0].tag, specializations: await lists.loadSpecializations(connection, id) },
+        { userId },
       );
       payload.tag = listed.tag;
 
@@ -204,10 +222,12 @@ export default {
         [id],
       );
       await connection.commit();
+      const holds = await lists.loadSpecializationHolds([Number(id)]);
       return {
         ...serialize({ ...rows[0], specializations: listed.specializations }),
         approvalStatus: 'Pending',
         isOwner: true,
+        specializationHolds: holds.get(Number(id)) || [],
       };
     } catch (error) {
       await connection.rollback();
@@ -224,9 +244,12 @@ export default {
        ORDER BY o.created_at ASC`,
     );
     const specializationsByOrg = await lists.loadSpecializationsByRecord(rows.map((row) => row.id));
+    const holdsByOrg = await lists.loadSpecializationHolds(rows.map((row) => row.id));
     return rows.map((row) => ({
       ...serialize({ ...row, specializations: specializationsByOrg.get(Number(row.id)) || [] }),
       approvalStatus: row.is_active ? 'Approved' : row.updated_by ? 'Rejected' : 'Pending',
+      // Suggested specializations that keep this record from being approved; see review().
+      specializationHolds: holdsByOrg.get(Number(row.id)) || [],
       submitted_by: row.created_by,
       submitted_by_name: row.submitted_by_name,
       submitted_by_email: row.submitted_by_email,
@@ -236,7 +259,9 @@ export default {
   // A reviewer corrects a submission before deciding on it. Only Pending rows qualify, and
   // the approval state is left alone: updated_by marks a decision, so setting it here would
   // read as Rejected, and no workflow step runs because nothing has been decided yet.
-  async updateSubmission(id, input) {
+  // `reviewerId`: the form lets a reviewer add a Specialization too, which is theirs until
+  // reviewed, like a submitter's -- and the record then waits for it like any other.
+  async updateSubmission(id, input, reviewerId = null) {
     const payload = normalizePayload(input);
     assertRequired(payload);
     const requestedSpecializations = parseSpecializations(input.specializations);
@@ -258,6 +283,7 @@ export default {
         connection,
         { tag: payload.tag, specializations: requestedSpecializations },
         { tag: existing[0].tag, specializations: await lists.loadSpecializations(connection, id) },
+        { userId: reviewerId },
       );
       payload.tag = listed.tag;
 
@@ -273,11 +299,13 @@ export default {
         [id],
       );
       await connection.commit();
+      const holds = await lists.loadSpecializationHolds([Number(id)]);
       // Same shape as listPending, so the approval row is replaced in place.
       const row = rows[0];
       return {
         ...serialize({ ...row, specializations: listed.specializations }),
         approvalStatus: 'Pending',
+        specializationHolds: holds.get(Number(id)) || [],
         submitted_by: row.created_by,
         submitted_by_name: row.submitted_by_name,
         submitted_by_email: row.submitted_by_email,
@@ -315,17 +343,40 @@ export default {
         throw error;
       }
     }
-    await workflowService.actOnWorkflow({
-      moduleKey: 'organization_directory',
-      recordId: id,
-      decision: decision === 'approve' ? 'approved' : 'rejected',
-      feedback: comment || (decision === 'reject' ? 'Rejected by super administrator' : null),
-      actor,
-      metadata: {
-        origin: 'api',
-        moduleMeta: { route: 'PATCH /api/organization-submissions/:id/review' },
-      },
-    });
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      // Checked in the approving transaction: the organization row is locked first, the
+      // order update() takes it in, and the share lock on the suggested entries keeps one
+      // from leaving Approved before the approval commits.
+      if (decision === 'approve') {
+        await connection.execute('SELECT id FROM organizations WHERE id = ? FOR UPDATE', [id]);
+        const holds = await lists.loadSpecializationHolds([Number(id)], {
+          tx: connection,
+          lock: true,
+        });
+        const holdError = specializationHoldError(holds.get(Number(id)));
+        if (holdError) throw holdError;
+      }
+      await workflowService.actOnWorkflow({
+        moduleKey: 'organization_directory',
+        recordId: id,
+        decision: decision === 'approve' ? 'approved' : 'rejected',
+        feedback: comment || (decision === 'reject' ? 'Rejected by super administrator' : null),
+        actor,
+        metadata: {
+          origin: 'api',
+          moduleMeta: { route: 'PATCH /api/organization-submissions/:id/review' },
+        },
+        tx: connection,
+      });
+      await connection.commit();
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
     return { id: Number(id), status: decision === 'approve' ? 'Approved' : 'Rejected' };
   },
 };

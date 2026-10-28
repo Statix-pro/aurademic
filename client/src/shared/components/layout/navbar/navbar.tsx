@@ -551,7 +551,7 @@ const Sidebar: React.FC<SidebarProps> = ({ collapsed, setCollapsed }) => {
                 }`}
                 onClick={handleLinkClick}
               >
-                Resource Person
+                People
               </Link>
               {/* The Tag / Specialization lists both directory forms pick from. */}
               {(showOrganizationApproval || showResourcePersonApproval) && (

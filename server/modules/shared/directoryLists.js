@@ -12,6 +12,9 @@ import db from '../../config/connection.js';
  *   - Values are stored by name, so renaming or retiring an entry changes only what the
  *     forms offer next.
  *   - Deleting an entry a record in either directory still uses retires it instead.
+ *   - A directory user may suggest a Specialization from the form. It waits, Pending, for
+ *     the Directory Admin; meanwhile only its suggester is offered it, and a record that
+ *     holds it -- Pending, or Rejected -- cannot be approved (see loadSpecializationHolds).
  *
  * Table and column names come only from the code-controlled config below.
  */
@@ -92,9 +95,18 @@ export const createDirectoryLists = ({ picks, recordColumn }) => ({
     return rows.map((row) => row.name);
   },
 
-  async toListedValues(connection, { tag, specializations }, current = {}) {
+  /**
+   * `userId` is the saver: their own Pending suggestions may be picked as well. Another
+   * user's Pending entry, or a Rejected one, may not -- unless the record already holds it.
+   */
+  async toListedValues(connection, { tag, specializations }, current = {}, { userId } = {}) {
     const [rows] = await connection.execute(
-      `SELECT list_key, name FROM ${OPTIONS} WHERE is_active = 1`,
+      `SELECT list_key, name FROM ${OPTIONS}
+        WHERE is_active = 1
+          AND (approval_status = 'Approved'
+               OR (approval_status = 'Pending' AND list_key = 'specialization'
+                   AND suggested_by = ?))`,
+      [userId ?? null],
     );
     const allowed = { tag: new Map(), specialization: new Map() };
     for (const row of rows) allowed[row.list_key]?.set(row.name.toLowerCase(), row.name);
@@ -125,16 +137,177 @@ export const createDirectoryLists = ({ picks, recordColumn }) => ({
         [recordId, name, index],
       );
   },
+
+  /**
+   * The suggested Specializations that keep each record from being approved: those still
+   * Pending, and those the admin Rejected (the owner has to edit them out). `{ name, status }`
+   * per entry, keyed by record id. `lock` (inside a transaction, `tx`) share-locks the entries
+   * read, so one cannot leave Approved before that transaction ends.
+   */
+  async loadSpecializationHolds(recordIds, { tx = db, lock = false } = {}) {
+    if (!recordIds.length) return new Map();
+    const [rows] = await tx.query(
+      `SELECT p.${recordColumn} AS record_id, o.name, o.approval_status
+         FROM ${picks} p
+         JOIN ${OPTIONS} o ON o.list_key = 'specialization' AND o.name = p.name
+        WHERE p.${recordColumn} IN (${recordIds.map(() => '?').join(', ')})
+          AND o.approval_status <> 'Approved'
+        ORDER BY p.${recordColumn}, p.sort_order${lock ? ' FOR SHARE' : ''}`,
+      recordIds,
+    );
+    const byRecord = new Map();
+    for (const row of rows) {
+      const recordId = Number(row.record_id);
+      const holds = byRecord.get(recordId) || [];
+      if (!holds.some((hold) => hold.name === row.name))
+        byRecord.set(recordId, [...holds, { name: row.name, status: row.approval_status }]);
+    }
+    return byRecord;
+  },
 });
 
-// Active entries feed the forms; the Directory Admin's page asks for retired ones too.
-export const listOptions = async ({ includeInactive = false } = {}) => {
-  const [rows] = await db.query(
-    `SELECT id, list_key, name, is_active FROM ${OPTIONS}
-       ${includeInactive ? '' : 'WHERE is_active = 1'}
-       ORDER BY list_key, name`,
+/**
+ * The approval error for a record held by suggested Specializations, or null. One message
+ * for both directories, so a reviewer reads the same reason on either approval page.
+ */
+export const specializationHoldError = (holds = []) => {
+  if (!holds.length) return null;
+  const quoted = (status) =>
+    holds.filter((hold) => hold.status === status).map((hold) => `"${hold.name}"`);
+  const pending = quoted('Pending');
+  const rejected = quoted('Rejected');
+  return failWith(
+    [
+      pending.length &&
+        `Approve the specialization ${pending.join(', ')} on the Directory Lists page first; it is still pending.`,
+      rejected.length &&
+        `The specialization ${rejected.join(', ')} was rejected; the submitter needs to remove it.`,
+    ]
+      .filter(Boolean)
+      .join(' '),
+    409,
   );
-  return rows.map((row) => ({ ...row, is_active: Boolean(row.is_active) }));
+};
+
+const serializeOption = (row) => ({
+  id: row.id,
+  list_key: row.list_key,
+  name: row.name,
+  is_active: Boolean(row.is_active),
+  approval_status: row.approval_status ?? 'Approved',
+  ...(row.suggested_by_name !== undefined
+    ? { suggested_by_name: row.suggested_by_name, suggested_by_email: row.suggested_by_email }
+    : {}),
+});
+
+/**
+ * The forms get the active, approved entries plus `userId`'s own Pending suggestions. The
+ * Directory Admin's page (`includeInactive`) gets every entry, retired and suggested ones
+ * included, with who suggested it.
+ */
+export const listOptions = async ({ includeInactive = false, userId = null } = {}) => {
+  const [rows] = includeInactive
+    ? await db.query(
+        `SELECT o.id, o.list_key, o.name, o.is_active, o.approval_status,
+                u.name AS suggested_by_name, u.email AS suggested_by_email
+           FROM ${OPTIONS} o
+           LEFT JOIN users u ON u.id = o.suggested_by
+          ORDER BY o.list_key, o.name`,
+      )
+    : await db.query(
+        `SELECT id, list_key, name, is_active, approval_status FROM ${OPTIONS}
+          WHERE is_active = 1
+            AND (approval_status = 'Approved'
+                 OR (approval_status = 'Pending' AND suggested_by = ?))
+          ORDER BY list_key, name`,
+        [userId ?? null],
+      );
+  return rows.map(serializeOption);
+};
+
+const loadOption = async (connection, id) => {
+  const [[row]] = await connection.execute(
+    `SELECT id, list_key, name, is_active, approval_status FROM ${OPTIONS} WHERE id = ?`,
+    [id],
+  );
+  return row ? serializeOption(row) : null;
+};
+
+/**
+ * A directory user adds a Specialization from the form. A name the list already holds is
+ * not added twice -- the database compares it under the column's collation (case and
+ * accents ignored), as addOptions does:
+ *   - Approved and active, or the user's own Pending suggestion: returned, to be selected.
+ *   - Retired, another user's Pending suggestion, or Rejected: refused with the reason.
+ * Anything else is added Pending, with the user as its suggester.
+ */
+export const suggestSpecialization = async (input = {}, userId) => {
+  const name = toOptionName(input.name, 'specialization');
+  if (!userId) throw failWith('Sign in again to suggest a specialization.', 401);
+  const connection = await db.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [[listed]] = await connection.execute(
+      `SELECT id, name, is_active, approval_status, suggested_by FROM ${OPTIONS}
+        WHERE list_key = 'specialization' AND name = ? FOR UPDATE`,
+      [name],
+    );
+    if (listed) {
+      const own = Number(listed.suggested_by) === Number(userId);
+      if (listed.approval_status === 'Rejected')
+        throw failWith(`"${listed.name}" was suggested before and not approved.`, 409);
+      if (listed.approval_status === 'Pending' && !own)
+        throw failWith(
+          `"${listed.name}" has already been suggested and is waiting for the Directory Admin.`,
+          409,
+        );
+      if (!Number(listed.is_active))
+        throw failWith(`"${listed.name}" was retired from the list by the Directory Admin.`, 409);
+      const existing = await loadOption(connection, listed.id);
+      await connection.commit();
+      return { entry: existing, created: false };
+    }
+    let insertId;
+    try {
+      [{ insertId }] = await connection.execute(
+        `INSERT INTO ${OPTIONS} (list_key, name, is_active, approval_status, suggested_by)
+         VALUES ('specialization', ?, 1, 'Pending', ?)`,
+        [name, userId],
+      );
+    } catch (error) {
+      // Someone added the same name since the check; they can pick it once it is listed.
+      if (error?.code === 'ER_DUP_ENTRY')
+        throw failWith(`"${name}" was just added by someone else. Search for it again.`, 409);
+      throw error;
+    }
+    const entry = await loadOption(connection, insertId);
+    await connection.commit();
+    return { entry, created: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+};
+
+/** The Directory Admin approves or rejects a suggested entry; only a Pending one. */
+export const reviewOption = async (id, decision, reviewerId) => {
+  if (!['approve', 'reject'].includes(decision))
+    throw failWith('Decision must be approve or reject.', 400);
+  const status = decision === 'approve' ? 'Approved' : 'Rejected';
+  const [result] = await db.execute(
+    `UPDATE ${OPTIONS}
+        SET approval_status = ?, reviewed_by = ?, reviewed_at = NOW()
+      WHERE id = ? AND approval_status = 'Pending'`,
+    [status, reviewerId ?? null, id],
+  );
+  if (!result.affectedRows) {
+    const existing = await loadOption(db, id);
+    if (!existing) throw failWith('List entry not found.', 404);
+    throw failWith(`This suggestion was already ${existing.approval_status.toLowerCase()}.`, 409);
+  }
+  return loadOption(db, id);
 };
 
 /**
@@ -188,15 +361,12 @@ export const addOptions = async (listKey, input = {}) => {
       );
     }
     const [rows] = await connection.execute(
-      `SELECT id, list_key, name, is_active FROM ${OPTIONS}
+      `SELECT id, list_key, name, is_active, approval_status FROM ${OPTIONS}
          WHERE id IN (${addedIds.map(() => '?').join(', ')})`,
       addedIds,
     );
     await connection.commit();
-    return {
-      added: rows.map((row) => ({ ...row, is_active: Boolean(row.is_active) })),
-      skipped,
-    };
+    return { added: rows.map(serializeOption), skipped };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -206,8 +376,15 @@ export const addOptions = async (listKey, input = {}) => {
 };
 
 export const updateOption = async (id, input = {}) => {
-  const [[entry]] = await db.execute(`SELECT list_key, name FROM ${OPTIONS} WHERE id = ?`, [id]);
+  const [[entry]] = await db.execute(
+    `SELECT list_key, name, approval_status FROM ${OPTIONS} WHERE id = ?`,
+    [id],
+  );
   if (!entry) throw failWith('List entry not found.', 404);
+  // Records that picked a suggestion hold it by name, so renaming it would leave them
+  // holding a name the list no longer has -- and no longer held for review.
+  if (entry.approval_status && entry.approval_status !== 'Approved')
+    throw failWith('Approve or reject this suggestion; it cannot be edited until then.', 409);
   const name = toOptionName(input.name, entry.list_key);
   if (isDefaultTag(entry) && (name !== entry.name || input.is_active === false))
     throw failWith(DEFAULT_TAG_LOCKED, 400);
@@ -217,11 +394,7 @@ export const updateOption = async (id, input = {}) => {
       [name, input.is_active === false ? 0 : 1, id],
     );
     if (!result.affectedRows) throw failWith('List entry not found.', 404);
-    const [[row]] = await db.execute(
-      `SELECT id, list_key, name, is_active FROM ${OPTIONS} WHERE id = ?`,
-      [id],
-    );
-    return { ...row, is_active: Boolean(row.is_active) };
+    return loadOption(db, id);
   } catch (error) {
     if (error?.code === 'ER_DUP_ENTRY') throw failWith(`"${name}" is already in the list.`, 409);
     throw error;

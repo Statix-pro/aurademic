@@ -46,6 +46,29 @@ describe('pickDirectoryProfession', () => {
     ).toBe('Retired');
     expect(pickDirectoryProfession([], 5)).toBeNull();
   });
+
+  // The project form lists a person under an organization when a post typed in before the
+  // organization was in the directory names it; the designation saved must be that post's.
+  it('counts an unlinked post that names the organization, but not one linked elsewhere', () => {
+    const professions = [
+      { designation: 'Professor', organization_id: 1, status: 'Working' },
+      { designation: 'Adjunct', organization_id: null, organization: ' iit madras ' },
+    ];
+    expect(pickDirectoryProfession(professions, 5, 'IIT Madras').designation).toBe('Adjunct');
+    expect(pickDirectoryProfession(professions, 5).designation).toBe('Professor');
+
+    // Linked to another organization that happens to carry the same name: not this one.
+    const linkedElsewhere = [
+      {
+        designation: 'Visiting',
+        organization_id: 1,
+        organization: 'IIT Madras',
+        status: 'Relieved',
+      },
+      { designation: 'Professor', organization_id: 2, status: 'Working' },
+    ];
+    expect(pickDirectoryProfession(linkedElsewhere, 5, 'IIT Madras').designation).toBe('Professor');
+  });
 });
 
 describe('fillDirectoryCollaborators', () => {

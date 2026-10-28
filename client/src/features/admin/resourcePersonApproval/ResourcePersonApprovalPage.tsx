@@ -13,6 +13,7 @@ import CustomPagination, {
 import CustomSubmitterLine from '../../../shared/components/ui/CustomSubmitterLine';
 import CustomTable from '../../../shared/components/ui/CustomTable';
 import authenticityUtility from '../../../shared/utils/authenticityUtility';
+import { specializationHoldNote } from '../../../shared/utils/directoryHolds';
 import ResourcePersonDirectory from '../../resourcepersondirectory/ResourcePersonDirectory';
 
 type Filter = 'All' | 'Pending' | 'Approved' | 'Rejected';
@@ -60,6 +61,9 @@ const organizationHoldNote = (row: Row) => {
     ? 'Organization rejected: submitter must choose another'
     : 'Organization pending approval';
 };
+// The same for a Specialization the submitter added from the form (specializationHolds).
+const holdNote = (row: Row) =>
+  organizationHoldNote(row) || specializationHoldNote(row.specializationHolds);
 const statusStyle = (s: string) =>
   s === 'Approved'
     ? { background: '#d9f8e5', color: '#087b43' }
@@ -106,7 +110,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
         ),
       );
     } catch (err: any) {
-      setError(err?.message || 'Failed to review resource person.');
+      setError(err?.message || 'Failed to review person.');
     } finally {
       setReviewingId(null);
     }
@@ -255,13 +259,18 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
   const columns = [
     {
       key: 'name',
-      label: 'Resource Person',
+      label: 'Person',
       render: (row: Row) => (
         <div className="d-flex flex-column">
           <strong>{personName(row)}</strong>
           {primaryProfession(row)?.designation && (
             <span className="resource-person-approval-meta">
               {primaryProfession(row).designation}
+            </span>
+          )}
+          {specializationHoldNote(row.specializationHolds) && (
+            <span className="resource-person-approval-hold">
+              {specializationHoldNote(row.specializationHolds)}
             </span>
           )}
         </div>
@@ -312,8 +321,8 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
                   variant="outline-success"
                   className="resource-person-approval-decision approve"
                   loading={reviewingId === row.id}
-                  disabled={reviewingId !== null || Boolean(organizationHoldNote(row))}
-                  title={organizationHoldNote(row) || undefined}
+                  disabled={reviewingId !== null || Boolean(holdNote(row))}
+                  title={holdNote(row) || undefined}
                   onClick={() => void review(row.id, 'approve')}
                 >
                   <Check size={13} strokeWidth={3} aria-hidden="true" />
@@ -368,7 +377,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
                 fontWeight: 700,
               }}
             >
-              Resource Person Request
+              Person Request
             </h2>
             <Badge
               className="resource-person-admin-badge"
@@ -393,7 +402,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
               name="resource-person-search"
               value={search}
               onChange={setSearch}
-              placeholder="Search resource person"
+              placeholder="Search people"
             />
             <div style={{ minWidth: 190 }}>
               <CustomDropdown
@@ -434,7 +443,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
           keyField="id"
           loading={loading}
           className="resource-person-approval-table"
-          emptyMessage="No resource persons found."
+          emptyMessage="No people found."
           onRowClick={(row: Row) => setViewing(row)}
           rowLabel={(row: Row) => `View ${personName(row)}`}
         />
@@ -449,7 +458,7 @@ export default function ResourcePersonApprovalPage({ switcher }: { switcher?: Re
         <CustomModal
           show={viewing !== null}
           onHide={() => setViewing(null)}
-          title="Resource Person Details"
+          title="Person Details"
           size="xl"
           scrollable
           className="resource-person-details-modal"

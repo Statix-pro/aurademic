@@ -21,6 +21,11 @@ interface SuggestInputProps {
   maxLength?: number;
   ariaLabel?: string;
   className?: string;
+  /**
+   * A last entry that is not a value -- "Add an organization to the directory" -- shown
+   * whenever the menu is open, matches or not, since a missing entry is when it is wanted.
+   */
+  action?: { label: string; onSelect: () => void };
 }
 
 /**
@@ -42,6 +47,7 @@ const SuggestInput: React.FC<SuggestInputProps> = ({
   maxLength,
   ariaLabel,
   className = '',
+  action,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [highlight, setHighlight] = useState(-1);
@@ -62,10 +68,14 @@ const SuggestInput: React.FC<SuggestInputProps> = ({
     setHighlight(-1);
   };
 
+  // The action sits after the matches, so the keyboard reaches it last.
+  const itemCount = matches.length + (action ? 1 : 0);
+  const actionIndex = action ? matches.length : -1;
+
   const { wrapperRef, menuNode, setMenuNode, menuBox } = useFloatingMenu<HTMLUListElement>({
-    isOpen: isOpen && matches.length > 0,
+    isOpen: isOpen && itemCount > 0,
     onClose: close,
-    contentKey: matches.length,
+    contentKey: itemCount,
   });
 
   useEffect(() => {
@@ -82,13 +92,18 @@ const SuggestInput: React.FC<SuggestInputProps> = ({
     close();
   };
 
+  const runAction = () => {
+    close();
+    action?.onSelect();
+  };
+
   const handleKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       setIsOpen(true);
       const step = event.key === 'ArrowDown' ? 1 : -1;
       setHighlight((current) => {
-        const last = matches.length - 1;
+        const last = itemCount - 1;
         if (last < 0) return -1;
         if (current < 0) return step === 1 ? 0 : last;
         return Math.max(0, Math.min(current + step, last));
@@ -96,6 +111,11 @@ const SuggestInput: React.FC<SuggestInputProps> = ({
       return;
     }
     // Enter picks only a row the user moved to; otherwise it is the form's.
+    if (event.key === 'Enter' && isOpen && highlight >= 0 && highlight === actionIndex) {
+      event.preventDefault();
+      runAction();
+      return;
+    }
     if (event.key === 'Enter' && isOpen && highlight >= 0 && matches[highlight]) {
       event.preventDefault();
       choose(matches[highlight]);
@@ -108,7 +128,7 @@ const SuggestInput: React.FC<SuggestInputProps> = ({
   };
 
   const listboxId = `${fieldId}-listbox`;
-  const showMenu = isOpen && !disabled && matches.length > 0;
+  const showMenu = isOpen && !disabled && itemCount > 0;
 
   return (
     <div className={`pf-select pf-combo ${className}`.trim()} ref={wrapperRef}>
@@ -175,6 +195,20 @@ const SuggestInput: React.FC<SuggestInputProps> = ({
                 {option.label}
               </li>
             ))}
+            {action && (
+              <li
+                id={`${fieldId}-option-${actionIndex}`}
+                role="option"
+                aria-selected={highlight === actionIndex}
+                className="pf-tags__option pf-combo__option pf-combo__action"
+                data-highlighted={highlight === actionIndex}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setHighlight(actionIndex)}
+                onClick={runAction}
+              >
+                {action.label}
+              </li>
+            )}
           </ul>,
           document.body,
         )}

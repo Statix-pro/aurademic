@@ -287,18 +287,34 @@ const OrganizationDirectoryDashboard: React.FC = () => {
       key: 'approvalStatus',
       label: 'Status',
       render: (org: Organization) => (
-        <span
-          className={`org-status-pill ${
-            org.approvalStatus === 'Approved'
-              ? 'approved'
-              : org.approvalStatus === 'Rejected'
-                ? 'rejected'
-                : 'pending'
-          }`}
-        >
-          {org.approvalStatus ||
-            ((org as Organization & { is_active?: boolean }).is_active ? 'Approved' : 'Pending')}
-        </span>
+        <>
+          <span
+            className={`org-status-pill ${
+              org.approvalStatus === 'Approved'
+                ? 'approved'
+                : org.approvalStatus === 'Rejected'
+                  ? 'rejected'
+                  : 'pending'
+            }`}
+          >
+            {org.approvalStatus ||
+              ((org as Organization & { is_active?: boolean }).is_active ? 'Approved' : 'Pending')}
+          </span>
+          {/* The owner's record, held by a specialization they added from the form. */}
+          {org.specializationHolds?.length ? (
+            <span
+              className={`org-status-hold${
+                org.specializationHolds.some((hold) => hold.status === 'Rejected')
+                  ? ' rejected'
+                  : ''
+              }`}
+            >
+              {org.specializationHolds.some((hold) => hold.status === 'Rejected')
+                ? 'Specialization rejected: edit and remove it'
+                : 'Waiting for specialization approval'}
+            </span>
+          ) : null}
+        </>
       ),
     },
     {

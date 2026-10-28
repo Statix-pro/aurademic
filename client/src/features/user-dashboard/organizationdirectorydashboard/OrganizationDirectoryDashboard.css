@@ -105,6 +105,19 @@
   color: #9f1239;
 }
 
+/* Under the pill: what keeps the owner's record from being approved. */
+.org-status-hold {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--font-size-secondary);
+  line-height: var(--leading-secondary);
+  color: #9b5f00;
+}
+
+.org-status-hold.rejected {
+  color: #b4253a;
+}
+
 /* Paired with .custom-btn to beat the global `.btn { color: white }` leaking from the
    events stylesheet, which otherwise draws this outline button white on white. */
 .custom-btn.org-action-edit-btn {

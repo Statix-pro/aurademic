@@ -113,7 +113,7 @@ describe('directory controller error envelopes', () => {
       resourcePersonController,
       resourcePersonModel,
       'Resource person not found',
-      'Resource person not found.',
+      'Person not found.',
     ],
   ])(
     'returns the same 404 for missing and non-owner %s updates',
@@ -177,12 +177,7 @@ describe('directory controller error envelopes', () => {
 
   it.each([
     ['organization', organizationController, organizationModel, 'Organization not found.'],
-    [
-      'resource person',
-      resourcePersonController,
-      resourcePersonModel,
-      'Resource person not found.',
-    ],
+    ['resource person', resourcePersonController, resourcePersonModel, 'Person not found.'],
   ])(
     'maps workflow review not-found errors to a %s 404',
     async (_name, controller, model, message) => {

@@ -2,10 +2,10 @@ import model from './resourcepersonDirectoryModel.js';
 import { deleteUploadedFile } from '../shared/uploadPaths.js';
 const errorResponse = (e) => {
   if (e?.code === 'ER_DUP_ENTRY' || Number(e?.errno) === 1062) {
-    return [409, { success: false, message: 'This resource person already exists.' }];
+    return [409, { success: false, message: 'This person already exists.' }];
   }
   if (/^(resource person|record) not found$/i.test(e?.message || '')) {
-    return [404, { success: false, message: 'Resource person not found.' }];
+    return [404, { success: false, message: 'Person not found.' }];
   }
   if (/^first name and last name are required$/i.test(e?.message || '')) {
     return [400, { success: false, message: e.message }];
@@ -54,7 +54,7 @@ export const update = async (req, res) => {
     return res.json({
       success: true,
       data: await model.update(req.params.id, req.body, req.files || {}, req.user?.id),
-      message: 'Resource person updated',
+      message: 'Person updated',
     });
   } catch (e) {
     discardUploads(req.files);
