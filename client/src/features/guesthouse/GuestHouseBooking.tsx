@@ -194,6 +194,7 @@ interface RoomAllotmentRow {
   roomNumber: string;
   occupants: string;
   remarks: string;
+  facilities?: RoomFacilityMap | string | null;
 }
 
 interface RoomAllotmentData {
@@ -671,9 +672,6 @@ const normalizeRoomFacilities = (value: unknown): RoomFacilityMap => {
   );
 };
 
-const roomFacilityKey = (block: unknown, roomNumber: unknown) =>
-  `${String(block || '').trim().toLowerCase()}::${String(roomNumber || '').trim().toLowerCase()}`;
-
 const createGuestAmenities = (
   previous?: Partial<Record<GuestAmenityKey, boolean>>,
 ): Record<GuestAmenityKey, boolean> =>
@@ -852,7 +850,7 @@ const normalizeRoomBlockOptions = (payload: unknown): RoomBlockOption[] => {
       'room_no',
       'number',
     ]);
-    if (Boolean(option.is_unavailable || option.isUnavailable)) return;
+    if (option.is_unavailable || option.isUnavailable) return;
     const nestedRooms = readRoomNumbers(option.roomNumbers || option.rooms || option.room_numbers);
 
     if (nestedRooms.length) {
@@ -1144,7 +1142,6 @@ const GuestHouseBooking: React.FC = () => {
     useState<BeneficiaryEmployeeOption[]>([]);
   const [beneficiarySearchOpen, setBeneficiarySearchOpen] = useState(false);
   const [roomBlockOptions, setRoomBlockOptions] = useState<RoomBlockOption[]>([]);
-  const [roomFacilitiesByKey, setRoomFacilitiesByKey] = useState<Record<string, RoomFacilityMap>>({});
   const [spocOptions, setSpocOptions] = useState<Array<{ name: string; mobile: string }>>([]);
   const [roomAllotments, setRoomAllotments] = useState<RoomAllotmentsByGuest>({});
   const [activeRoomDetail, setActiveRoomDetail] = useState<ActiveRoomDetail>(null);
@@ -1492,23 +1489,8 @@ const GuestHouseBooking: React.FC = () => {
         const query = params.toString();
         const response = await authenticityUtility.get(`/guesthouse/room-options${query ? `?${query}` : ''}`);
         const options = normalizeRoomBlockOptions(response);
-        const roomPayload = getPayloadData(response);
-        const roomRows = Array.isArray(roomPayload)
-          ? roomPayload
-          : roomPayload && typeof roomPayload === 'object'
-            ? (roomPayload as ApiRecord).rooms || []
-            : [];
-        const facilitiesByKey: Record<string, RoomFacilityMap> = {};
-        if (Array.isArray(roomRows)) {
-          roomRows.forEach((room: any) => {
-            const key = roomFacilityKey(room?.block || room?.block_name, room?.room_number || room?.roomNumber);
-            if (key !== '::') facilitiesByKey[key] = normalizeRoomFacilities(room?.facilities);
-          });
-        }
-
         if (isMounted) {
           setRoomBlockOptions(options);
-          setRoomFacilitiesByKey(facilitiesByKey);
         }
       } catch (error) {
         if (import.meta.env.DEV) {
@@ -4091,7 +4073,7 @@ const GuestHouseBooking: React.FC = () => {
                   ? allotment.rows.find((row) => row.id === activeRoomDetail.rowId)
                   : undefined;
               const activeRoomFacilities = activeRoomDetailRow
-                ? roomFacilitiesByKey[roomFacilityKey(activeRoomDetailRow.block, activeRoomDetailRow.roomNumber)] || {}
+                ? normalizeRoomFacilities(activeRoomDetailRow.facilities)
                 : {};
 
               return (

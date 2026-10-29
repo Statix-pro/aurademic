@@ -21,7 +21,8 @@ const safeParseJSON = (value, fallback = null) => {
   }
 };
 
-const withTransaction = async (callback) => {
+const withTransaction = async (callback, { tx: existingTransaction = null } = {}) => {
+  if (existingTransaction) return callback(existingTransaction);
   const conn = await db.getConnection();
   try {
     await conn.beginTransaction();
@@ -167,7 +168,7 @@ const guesthouseModel = {
   // Bookings — core CRUD
   // ============================================
 
-  async createGuesthouseBooking(payload = {}, createdByUserId) {
+  async createGuesthouseBooking(payload = {}, createdByUserId, { tx: existingTransaction = null } = {}) {
     return withTransaction(async (tx) => {
       const applicant = payload.applicant || {};
       const beneficiary = payload.beneficiary || {};
@@ -320,6 +321,7 @@ const guesthouseModel = {
                dinner_veg, dinner_nonveg
              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
              ON DUPLICATE KEY UPDATE
+               req_date = VALUES(req_date),
                morning_refreshment = VALUES(morning_refreshment),
                breakfast_veg = VALUES(breakfast_veg),
                breakfast_nonveg = VALUES(breakfast_nonveg),
@@ -356,7 +358,7 @@ const guesthouseModel = {
       }
 
       return bookingId;
-    });
+    }, { tx: existingTransaction });
   },
 
   /** Replace the editable booking detail rows in one transaction. Workflow data is retained. */
@@ -389,7 +391,33 @@ const guesthouseModel = {
         `SELECT 1 FROM guesthouse_room_allotments WHERE booking_id = ? LIMIT 1`,
         [normalizedId],
       );
-      if (allocated.length) throw new Error('This booking already has room allocations and cannot be edited.');
+      if (allocated.length) {
+        const error = new Error('This booking already has room allocations and cannot be edited.');
+        error.statusCode = 409;
+        throw error;
+      }
+
+      let departmentId = toPositiveInt(beneficiary.departmentId) || toPositiveInt(applicant.departmentId);
+      if (departmentId) {
+        const [departmentRows] = await tx.query(
+          `SELECT id FROM master_departments
+            WHERE id = ? AND is_active = 1 LIMIT 1`,
+          [departmentId],
+        );
+        if (!departmentRows.length) departmentId = null;
+      }
+      const departmentName = normalizeText(beneficiary.department || applicant.department);
+      if (!departmentId && departmentName) {
+        const [departmentRows] = await tx.query(
+          `SELECT id FROM master_departments
+            WHERE is_active = 1
+              AND LOWER(TRIM(CONVERT(name USING utf8mb4) COLLATE utf8mb4_unicode_ci))
+                = LOWER(TRIM(CONVERT(? USING utf8mb4) COLLATE utf8mb4_unicode_ci))
+            ORDER BY id ASC LIMIT 1`,
+          [departmentName],
+        );
+        departmentId = toPositiveInt(departmentRows[0]?.id);
+      }
 
       const [updated] = await tx.query(
         `UPDATE guesthouse_bookings SET
@@ -403,7 +431,7 @@ const guesthouseModel = {
           normalizeText(applicant.name) || null,
           normalizeText(applicant.erpId || applicant.erp_id) || null,
           normalizeText(beneficiary.department || applicant.department) || null,
-          toPositiveInt(beneficiary.departmentId) || toPositiveInt(applicant.departmentId),
+          departmentId,
           normalizeText(applicant.designation) || null,
           normalizeText(applicant.email) || null,
           normalizeText(applicant.mobile) || null,
@@ -520,7 +548,10 @@ const guesthouseModel = {
     let rowsByAllotment = new Map();
     if (allotmentIds.length) {
       const [allotmentRows] = await db.query(
-        `SELECT * FROM guesthouse_room_allotment_rows WHERE allotment_id IN (?) ORDER BY sort_order ASC, id ASC`,
+        `SELECT grar.*, gr.facilities
+           FROM guesthouse_room_allotment_rows grar
+           LEFT JOIN guesthouse_rooms gr ON gr.id = grar.room_id
+          WHERE grar.allotment_id IN (?) ORDER BY grar.sort_order ASC, grar.id ASC`,
         [allotmentIds],
       );
       const rowIds = allotmentRows.map((r) => r.id);
@@ -539,7 +570,11 @@ const guesthouseModel = {
       }
       rowsByAllotment = allotmentRows.reduce((map, row) => {
         const list = map.get(row.allotment_id) || [];
-        list.push({ ...row, occupants: occupantsByRow.get(row.id) || [] });
+        list.push({
+          ...row,
+          facilities: safeParseJSON(row.facilities, null),
+          occupants: occupantsByRow.get(row.id) || [],
+        });
         map.set(row.allotment_id, list);
         return map;
       }, new Map());
@@ -650,7 +685,7 @@ const guesthouseModel = {
           throw error;
         }
         const { stage, status } = getWorkflowStageAndStatus(booking);
-        if ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(status)) {
+        if ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed'].includes(status)) {
           const error = new Error('This booking can no longer be deleted after approval has started');
           error.statusCode = 409;
           throw error;
@@ -1015,7 +1050,11 @@ const guesthouseModel = {
         'SELECT id FROM guesthouse_guests WHERE id = ? AND booking_id = ? FOR UPDATE',
         [toPositiveInt(guestId), toPositiveInt(bookingId)],
       );
-      if (!guestRows.length) throw new Error('Room allotment guest does not belong to this booking');
+      if (!guestRows.length) {
+        const error = new Error('Room allotment guest does not belong to this booking');
+        error.statusCode = 404;
+        throw error;
+      }
       const [existing] = await tx.query(
         `SELECT id FROM guesthouse_room_allotments WHERE booking_id = ? AND guest_id = ?`,
         [bookingId, guestId],
@@ -1060,7 +1099,11 @@ const guesthouseModel = {
   async addRoomAllotmentRow(allotmentId, payload = {}) {
     return withTransaction(async (tx) => {
       const [allotments] = await tx.query('SELECT booking_id FROM guesthouse_room_allotments WHERE id = ?', [toPositiveInt(allotmentId)]);
-      if (!allotments.length) throw new Error('Room allotment not found');
+      if (!allotments.length) {
+        const error = new Error('Room allotment not found');
+        error.statusCode = 404;
+        throw error;
+      }
       const booking = await assertRoomAllocationActionable(tx, allotments[0].booking_id);
       const roomId = await assertRoomAvailable(tx, {
         bookingId: allotments[0].booking_id,
@@ -1147,7 +1190,9 @@ const guesthouseModel = {
 
       const currentState = safeParseJSON(bookingRows[0].workflow_state, null);
       if (String(currentState?.status || '').toLowerCase() !== 'archived') {
-        throw new Error('Guest House request is not archived');
+        const error = new Error('Guest House request is not archived');
+        error.statusCode = 409;
+        throw error;
       }
 
       const [archiveRows] = await tx.query(
@@ -1173,7 +1218,6 @@ const guesthouseModel = {
         error.statusCode = 403;
         throw error;
       }
-
       const restoreState = safeParseJSON(archive.snapshot_before, null);
       if (!restoreState?.currentStage || !restoreState?.flow) {
         throw new Error('Cannot unarchive: original workflow state is missing');
@@ -1212,7 +1256,11 @@ const guesthouseModel = {
            FROM guesthouse_bookings WHERE id = ? FOR UPDATE`,
         [normalizedId],
       );
-      if (!bookingRows.length) throw new Error('Guest House booking not found');
+      if (!bookingRows.length) {
+        const error = new Error('Guest House booking not found');
+        error.statusCode = 404;
+        throw error;
+      }
 
       const booking = bookingRows[0];
       const currentState = safeParseJSON(booking.workflow_state, null);
@@ -1301,7 +1349,9 @@ const guesthouseModel = {
           if (!block || !roomNumber) continue;
           const key = `${block}::${roomNumber}`;
           if (roomAssignments.has(key)) {
-            throw new Error(`Room ${normalizeText(room.roomNumber)} in ${normalizeText(room.block)} is assigned more than once in this booking`);
+            const error = new Error(`Room ${normalizeText(room.roomNumber)} in ${normalizeText(room.block)} is assigned more than once in this booking`);
+            error.statusCode = 409;
+            throw error;
           }
           roomAssignments.add(key);
         }
@@ -1316,7 +1366,9 @@ const guesthouseModel = {
       for (const allocation of Array.isArray(allotments) ? allotments : []) {
         const guestId = toPositiveInt(allocation?.guestId);
         if (!guestId || !bookingGuestIds.has(guestId)) {
-          throw new Error('Room allotment guest does not belong to this booking');
+          const error = new Error('Room allotment guest does not belong to this booking');
+          error.statusCode = 404;
+          throw error;
         }
 
         const [existing] = await tx.query(
@@ -1452,8 +1504,16 @@ const guesthouseModel = {
   },
 
   async bulkImportResources(type, rows, createdByUserId) {
-    if (!['rooms', 'caretakers'].includes(type)) throw new Error('Invalid import type');
-    if (!Array.isArray(rows) || rows.length === 0) throw new Error('At least one valid row is required');
+    if (!['rooms', 'caretakers'].includes(type)) {
+      const error = new Error('Invalid import type');
+      error.statusCode = 400;
+      throw error;
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+      const error = new Error('At least one valid row is required');
+      error.statusCode = 400;
+      throw error;
+    }
 
     return withTransaction(async (tx) => {
       let imported = 0;
@@ -1464,7 +1524,11 @@ const guesthouseModel = {
           const floor = normalizeText(row.floor);
           const roomNumber = normalizeText(row.roomNumber);
           const status = normalizeText(row.status);
-          if (!['Single', 'Double', 'Deluxe'].includes(roomType) || !block || !floor || !roomNumber || !['Active', 'Maintenance'].includes(status)) throw new Error('Invalid room data');
+          if (!['Single', 'Double', 'Deluxe'].includes(roomType) || !block || !floor || !roomNumber || !['Active', 'Maintenance'].includes(status)) {
+            const error = new Error('Invalid room data');
+            error.statusCode = 400;
+            throw error;
+          }
           await tx.query(
             `INSERT INTO guesthouse_rooms (room_type, block, floor, room_number, status, facilities, created_by)
              VALUES (?, ?, ?, ?, ?, '{}', ?)
@@ -1475,7 +1539,11 @@ const guesthouseModel = {
           const name = normalizeText(row.name);
           const mobile = normalizeText(row.mobile);
           const status = normalizeText(row.status);
-          if (!name || !mobile || !['Active', 'Leave'].includes(status)) throw new Error('Invalid care taker data');
+          if (!name || !mobile || !['Active', 'Leave'].includes(status)) {
+            const error = new Error('Invalid care taker data');
+            error.statusCode = 400;
+            throw error;
+          }
           await tx.query(
             `INSERT INTO guesthouse_caretakers (name, mobile, status, created_by)
              VALUES (?, ?, ?, ?)

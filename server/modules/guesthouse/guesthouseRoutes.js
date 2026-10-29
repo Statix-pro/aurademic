@@ -13,12 +13,37 @@ const router = express.Router();
 
 const GUESTHOUSE_WORKFLOW_PERMISSIONS = ['guesthouse.workflow.*'];
 const GUESTHOUSE_MANAGE_PERMISSIONS = ['guesthouse.manage'];
+const GUESTHOUSE_READ_PERMISSIONS = ['guesthouse.read'];
+const GUESTHOUSE_EDIT_PERMISSIONS = ['guesthouse.edit'];
 
 // RBAC is evaluated by the shared authorization middleware; stage checks are
 // performed by the workflow service once the target queue is known.
 const canAccessGuesthouseWorkflow = permissionMiddleware(GUESTHOUSE_WORKFLOW_PERMISSIONS);
 
 const canManageGuesthouseMasterData = permissionMiddleware(GUESTHOUSE_MANAGE_PERMISSIONS);
+const canReadGuesthouse = permissionMiddleware([
+  ...GUESTHOUSE_READ_PERMISSIONS,
+  ...GUESTHOUSE_WORKFLOW_PERMISSIONS,
+]);
+const canEditGuesthouse = permissionMiddleware([
+  ...GUESTHOUSE_EDIT_PERMISSIONS,
+  ...GUESTHOUSE_WORKFLOW_PERMISSIONS,
+]);
+const canReadGuesthouseOrOwner = async (req, res, next) => {
+  const hasReadPermission = req.user?.permissions?.includes('guesthouse.read');
+  const hasWorkflowPermission = req.user?.permissions?.some((permission) =>
+    String(permission || '').startsWith('guesthouse.workflow.'),
+  );
+  if (hasReadPermission || hasWorkflowPermission || req.user?.isSuperAdmin || req.user?.is_super_admin) {
+    return next();
+  }
+  const bookingId = Number.parseInt(req.params.id, 10);
+  const owner = await guesthouseModel.getGuesthouseOwner(bookingId);
+  if (owner && Number.parseInt(owner.created_by, 10) === Number.parseInt(req.user?.id, 10)) {
+    return next();
+  }
+  return res.status(403).json({ message: 'Insufficient permissions', requiredPermissions: GUESTHOUSE_READ_PERMISSIONS });
+};
 
 const canDeleteGuesthouseBooking = async (req, res, next) => {
   try {
@@ -45,7 +70,7 @@ const canDeleteGuesthouseBooking = async (req, res, next) => {
     const owner = await guesthouseModel.getGuesthouseOwner(bookingId);
     if (!owner) return next();
 
-    if (Number.parseInt(owner.created_by, 10) === userId) {
+    if (Number.parseInt(owner.created_by, 10) === userId && req.user?.permissions?.includes('guesthouse.edit')) {
       return next();
     }
 
@@ -64,11 +89,11 @@ router.use(authMiddleware);
 // the potentially stale role/permission claims embedded in the login token.
 router.use(authorizationSnapshotMiddleware);
 
-router.get('/room-options', guesthouseController.getRoomOptions);
-router.get('/spocs', guesthouseController.getSpocOptions);
+router.get('/room-options', canReadGuesthouse, guesthouseController.getRoomOptions);
+router.get('/spocs', canReadGuesthouse, guesthouseController.getSpocOptions);
 
-router.post('/', guesthouseController.createGuesthouseBooking);
-router.get('/', guesthouseController.listGuesthouseBookings);
+router.post('/', permissionMiddleware(GUESTHOUSE_EDIT_PERMISSIONS), guesthouseController.createGuesthouseBooking);
+router.get('/', canReadGuesthouse, guesthouseController.listGuesthouseBookings);
 
 router.get('/workflow/meta', canAccessGuesthouseWorkflow, guesthouseController.getWorkflowMeta);
 router.get(
@@ -120,16 +145,17 @@ router.delete(
   guesthouseController.deleteGuesthouseCaretaker,
 );
 
-router.get('/:id', guesthouseController.getGuesthouseBooking);
-router.put('/:id', guesthouseController.updateGuesthouseBooking);
+router.get('/:id', canReadGuesthouseOrOwner, guesthouseController.getGuesthouseBooking);
+router.put('/:id', canEditGuesthouse, guesthouseController.updateGuesthouseBooking);
 router.delete('/:id', canDeleteGuesthouseBooking, guesthouseController.deleteGuesthouseBooking);
-router.get('/:id/status-updates', guesthouseController.getStatusUpdates);
+router.get('/:id/status-updates', canReadGuesthouse, guesthouseController.getStatusUpdates);
 router.post(
   '/:id/principal-document',
+  canAccessGuesthouseWorkflow,
   upload.single('file'),
   guesthouseController.uploadPrincipalDocument,
 );
-router.delete('/:id/principal-document', guesthouseController.deletePrincipalDocument);
+router.delete('/:id/principal-document', canAccessGuesthouseWorkflow, guesthouseController.deletePrincipalDocument);
 router.patch(
   '/:id/approval',
   canAccessGuesthouseWorkflow,
@@ -140,7 +166,7 @@ router.patch(
   canAccessGuesthouseWorkflow,
   guesthouseController.toggleGuesthouseArchive,
 );
-router.patch('/:id/travel-schedule', guesthouseController.updateTravelSchedule);
+router.patch('/:id/travel-schedule', canEditGuesthouse, guesthouseController.updateTravelSchedule);
 router.put(
   '/:id/room-allotments',
   canAccessGuesthouseWorkflow,

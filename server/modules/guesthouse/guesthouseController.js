@@ -4,6 +4,7 @@ import { actOnWorkflow, startWorkflow, listQueue, getQueueScopeFilters, getTimel
 import fs from 'fs';
 import path from 'path';
 import { safeResolvePath } from '../../utils/pathSecurity.js';
+import db from '../../config/connection.js';
 
 const normalizeText = (value) => String(value ?? '').trim();
 const isPersonBeneficiary = (value) => ['faculty', 'staff'].includes(normalizeText(value).toLowerCase());
@@ -59,7 +60,6 @@ const hasGuesthouseStagePermission = (req, stage) => {
   const normalizedStage = normalizeText(stage).toLowerCase();
   if (!normalizedStage) return false;
   if (isSuperAdminRequest(req)) return true;
-  if (req.user?.is_admin || req.user?.isAdmin) return true;
 
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   const normalizedPermissions = permissions.map((p) => normalizeText(p).toLowerCase());
@@ -82,7 +82,7 @@ const hasGuesthouseStagePermission = (req, stage) => {
   });
 
   if (normalizedStage === 'guesthouse_admin') {
-    return normalizedRoles.includes('guesthouse_admin') || normalizedRoles.includes('admin');
+    return normalizedRoles.includes('guesthouse_admin');
   }
 
   return normalizedRoles.includes(normalizedStage);
@@ -96,9 +96,12 @@ const canAccessGuesthouseRecord = async (req, booking) => {
   if (isSuperAdminRequest(req)) return true;
   const permissions = Array.isArray(req.user?.permissions) ? req.user.permissions : [];
   const normalizedPermissions = permissions.map((permission) => normalizeText(permission).toLowerCase());
-  if (normalizedPermissions.includes('guesthouse.read')) return true;
   const actorUserId = toPositiveInt(req.user?.id);
-  if (actorUserId && actorUserId === toPositiveInt(booking.created_by)) return true;
+  if (
+    actorUserId &&
+    actorUserId === toPositiveInt(booking.created_by) &&
+    normalizedPermissions.includes('guesthouse.edit')
+  ) return true;
 
   // A queue may include records already acted on at the user's stage. Allow
   // detail access when the record is visible in any stage queue assigned to
@@ -133,7 +136,7 @@ const canAccessGuesthouseBookingAtStage = async (
 const isApplicantEditable = (booking) => {
   const status = normalizeText(booking?.workflow_state?.status || booking?.workflow_status || booking?.overall_status).toLowerCase();
   const stage = normalizeText(booking?.workflow_state?.currentStage || booking?.workflow_stage).toLowerCase();
-  return stage === 'hod' && ['in_progress', 'pending', 'submitted', ''].includes(status);
+  return stage === 'hod' && ['in_progress', 'pending', 'submitted', 'returned', ''].includes(status);
 };
 
 const isRoomAllotmentActionable = (booking) => {
@@ -199,7 +202,6 @@ const guesthouseController = {
   // ============================================
 
   async createGuesthouseBooking(req, res) {
-    let bookingId = null;
     try {
       const payload = req.body || {};
       if (
@@ -222,32 +224,38 @@ const guesthouseController = {
       if (invalidGuest) {
         return res.status(400).json({ success: false, message: 'Every guest needs a valid check-in and check-out stay' });
       }
-      bookingId = await guesthouseModel.createGuesthouseBooking(
-        { ...payload, guests },
-        req.user?.id,
-      );
-
-      const { state } = await startWorkflow({
-        moduleKey: 'guesthouse',
-        recordId: bookingId,
-        metadata: {
-          origin: 'api',
-          requestId: null,
-          moduleMetaVersion: 1,
-          moduleMeta: { route: 'POST /api/guesthouse-bookings' },
-        },
-      });
+      const conn = await db.getConnection();
+      let bookingId;
+      let state;
+      try {
+        await conn.beginTransaction();
+        bookingId = await guesthouseModel.createGuesthouseBooking(
+          { ...payload, guests },
+          req.user?.id,
+          { tx: conn },
+        );
+        ({ state } = await startWorkflow({
+          moduleKey: 'guesthouse',
+          recordId: bookingId,
+          metadata: {
+            origin: 'api',
+            requestId: null,
+            moduleMetaVersion: 1,
+            moduleMeta: { route: 'POST /api/guesthouse-bookings' },
+          },
+          tx: conn,
+        }));
+        await conn.commit();
+      } catch (error) {
+        await conn.rollback();
+        throw error;
+      } finally {
+        conn.release();
+      }
 
       const booking = await guesthouseModel.getGuesthouseBookingById(bookingId);
       return res.status(201).json({ success: true, data: { ...booking, workflow_state: state } });
     } catch (error) {
-      if (bookingId) {
-        try {
-          await guesthouseModel.deleteGuesthouseBooking(bookingId, { allowSuperAdmin: true });
-        } catch (cleanupError) {
-          console.error('Unable to remove incomplete guesthouse booking', cleanupError);
-        }
-      }
       return handleError(res, error, 'Error in createGuesthouseBooking');
     }
   },
@@ -256,12 +264,7 @@ const guesthouseController = {
     try {
       const mineOnly = normalizeText(req.query.mine).toLowerCase() === 'true';
       const isOwnerOnly = mineOnly || !hasAnyGuesthouseStagePermission(req);
-      const canListAll = Boolean(
-        isSuperAdminRequest(req) ||
-        req.user?.is_admin ||
-        req.user?.isAdmin ||
-        req.user?.permissions?.includes('guesthouse.workflow.guesthouse_admin'),
-      );
+      const canListAll = isSuperAdminRequest(req);
       let accessibleBookingIds;
 
       if (!mineOnly && !isOwnerOnly && !canListAll) {
@@ -405,7 +408,7 @@ const guesthouseController = {
       const state = booking?.workflow_state || {};
       const status = normalizeText(state.status || booking?.workflow_status || booking?.overall_status).toLowerCase();
       const stage = normalizeText(state.currentStage || booking?.workflow_stage).toLowerCase();
-      if (!isSuperAdminRequest(req) && ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed', 'returned'].includes(status))) {
+      if (!isSuperAdminRequest(req) && ((stage && stage !== 'hod') || ['approved', 'rejected', 'archived', 'completed'].includes(status))) {
         return res.status(409).json({ success: false, message: 'This booking can no longer be deleted after approval has started' });
       }
       await guesthouseModel.deleteGuesthouseBooking(bookingId, {
@@ -468,6 +471,13 @@ const guesthouseController = {
 
       const state = booking.workflow_state || {};
       if (normalizeText(state.status).toLowerCase() === 'archived') {
+        const archivedStage = normalizeText(state.currentStage || booking.workflow_stage).toLowerCase();
+        if (!archivedStage || !hasGuesthouseStagePermission(req, archivedStage)) {
+          return res.status(403).json({ success: false, message: 'Insufficient permissions for this Guest House workflow stage' });
+        }
+        if (!(await canAccessGuesthouseBookingAtStage(req, booking, archivedStage))) {
+          return res.status(403).json({ success: false, message: 'Record is outside your workflow scope' });
+        }
         const restoredState = await guesthouseModel.unarchiveGuesthouseBooking(
           bookingId,
           normalizeActor(req),
@@ -493,7 +503,11 @@ const guesthouseController = {
         return res.status(403).json({ success: false, message: 'Insufficient permissions for this Guest House workflow stage' });
       }
 
-      const isElevatedActor = isSuperAdminRequest(req) || Boolean(req.user?.is_admin || req.user?.isAdmin);
+      if (!(await canAccessGuesthouseBookingAtStage(req, booking, stage))) {
+        return res.status(403).json({ success: false, message: 'Record is outside your workflow scope' });
+      }
+
+      const isElevatedActor = isSuperAdminRequest(req);
       let allowedDepartmentIds = null;
       if (stage === 'hod' && !isElevatedActor) {
         const scopeFilters = await getQueueScopeFilters({
@@ -759,7 +773,7 @@ const guesthouseController = {
         return res.status(400).json({ success: false, message: 'A valid check-in and check-out date and time are required' });
       }
       const rooms = await guesthouseModel.listGuesthouseRooms({
-        status: 'Active',
+        status: req.query.includeMaintenance === 'true' ? undefined : 'Active',
         checkInDate,
         checkInTime,
         checkOutDate,

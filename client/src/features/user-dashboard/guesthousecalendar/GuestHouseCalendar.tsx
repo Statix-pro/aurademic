@@ -94,7 +94,7 @@ const GuestHouseCalendar: React.FC = () => {
     0,
   );
   const visibleBookings = useMemo(() => {
-    if (bookingFilter === 'needs-room') return selectedBookings.filter((booking) => !Boolean(booking.has_room_allocation));
+    if (bookingFilter === 'needs-room') return selectedBookings.filter((booking) => !booking.has_room_allocation);
     if (bookingFilter === 'allocated') return selectedBookings.filter((booking) => Number(booking.allocated_room_count) > 0);
     return selectedBookings;
   }, [bookingFilter, selectedBookings]);
@@ -102,7 +102,7 @@ const GuestHouseCalendar: React.FC = () => {
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const pageStartIndex = (safeCurrentPage - 1) * pageSize;
   const pageBookings = visibleBookings.slice(pageStartIndex, pageStartIndex + pageSize);
-  const unallocatedCount = selectedBookings.filter((booking) => !Boolean(booking.has_room_allocation)).length;
+  const unallocatedCount = selectedBookings.filter((booking) => !booking.has_room_allocation).length;
 
   useEffect(() => {
     setCurrentPage(1);
@@ -210,7 +210,7 @@ const GuestHouseCalendar: React.FC = () => {
         {!loading && !error && visibleBookings.length > 0 && (
           <div className="guesthouse-calendar-request-list">
             {pageBookings.map((booking) => {
-              const allocated = Boolean(booking.has_room_allocation);
+              const allocated = booking.has_room_allocation;
               return (
                 <button
                   type="button"
@@ -302,7 +302,7 @@ const GuestHouseCalendar: React.FC = () => {
                   <div className="guesthouse-calendar-day-content">
                   <span className="guesthouse-calendar-day-number">{arg.dayNumberText}</span>
                   {count > 0 && <span className="guesthouse-calendar-day-count"><b>{count}</b><small>booking{count === 1 ? '' : 's'}</small></span>}
-                  {count > 0 && bookings.some((booking) => !Boolean(booking.has_room_allocation) && bookingIncludesDate(booking, dateKey)) && <i className="guesthouse-calendar-unallocated-dot" title="Some bookings need a room" />}
+                  {count > 0 && bookings.some((booking) => !booking.has_room_allocation && bookingIncludesDate(booking, dateKey)) && <i className="guesthouse-calendar-unallocated-dot" title="Some bookings need a room" />}
                 </div>
               );
             }}

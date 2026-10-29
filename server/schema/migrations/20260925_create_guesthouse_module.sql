@@ -286,11 +286,11 @@ ON DUPLICATE KEY UPDATE `scope_type` = VALUES(`scope_type`), `meta` = VALUES(`me
 -- 11. Role + permissions
 -- ============================================================
 INSERT INTO `roles` (`role_code`, `role_name`, `description`, `is_system`, `is_admin_role`)
-VALUES ('guesthouse_admin', 'Guest House Admin', 'Final-stage approver and master-data manager for Guest House bookings', 1, 1)
+VALUES ('guesthouse_admin', 'Guest House Admin', 'Final-stage approver and master-data manager for Guest House bookings', 1, 0)
 ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`), `description` = VALUES(`description`);
 
 INSERT INTO `roles` (`role_code`, `role_name`, `description`, `is_system`, `is_admin_role`)
-VALUES ('guesthouse_incharge', 'Guesthouse Incharge', 'Reviews guesthouse requests after HOD approval', 0, 1)
+VALUES ('guesthouse_incharge', 'Guesthouse Incharge', 'Reviews guesthouse requests after HOD approval', 0, 0)
 ON DUPLICATE KEY UPDATE `role_name` = VALUES(`role_name`), `description` = VALUES(`description`);
 
 INSERT INTO `permissions` (`module_key`, `action_key`, `permission_key`, `description`, `is_system`)
@@ -343,6 +343,13 @@ SELECT r.id, p.id
 FROM `roles` r
 JOIN `permissions` p ON p.permission_key IN ('guesthouse.read', 'guesthouse.edit')
 WHERE r.role_code = 'user'
+ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
+
+INSERT INTO `role_permissions` (`role_id`, `permission_id`)
+SELECT r.id, p.id
+FROM `roles` r
+JOIN `permissions` p ON p.permission_key = 'guesthouse.read'
+WHERE r.role_code = 'guesthouse_incharge'
 ON DUPLICATE KEY UPDATE `granted_at` = `granted_at`;
 
 INSERT INTO `role_permissions` (`role_id`, `permission_id`)
@@ -428,22 +435,27 @@ MODIFY COLUMN `decision` ENUM(
 -- stale IDs and leave unmatched bookings unchanged.
 UPDATE `guesthouse_bookings` AS gb
 JOIN (
-  SELECT LOWER(TRIM(name)) AS normalized_name, MIN(id) AS department_id
+  SELECT LOWER(TRIM(CONVERT(name USING utf8mb4) COLLATE utf8mb4_unicode_ci)) AS normalized_name, MIN(id) AS department_id
   FROM `master_departments`
   WHERE is_active = 1
-  GROUP BY LOWER(TRIM(name))
+  GROUP BY LOWER(TRIM(CONVERT(name USING utf8mb4) COLLATE utf8mb4_unicode_ci))
   HAVING COUNT(*) = 1
 ) AS unique_departments
-  ON unique_departments.normalized_name = LOWER(TRIM(
+  ON unique_departments.normalized_name = LOWER(TRIM(CONVERT(
     CASE
       WHEN LOWER(TRIM(gb.beneficiary_type)) = 'department'
         THEN gb.beneficiary_value
       ELSE gb.department
-    END
-  ))
+    END USING utf8mb4) COLLATE utf8mb4_unicode_ci))
 SET gb.department_id = unique_departments.department_id
 WHERE gb.department_id IS NULL
    OR gb.department_id <> unique_departments.department_id;
+
+-- The Guest House roles are workflow roles and must not set the portal-wide
+-- administrator flag. Existing installations may have the original seeded value.
+UPDATE `roles`
+SET `is_admin_role` = 0
+WHERE `role_code` IN ('guesthouse_incharge', 'guesthouse_admin');
 
 -- ============================================================
 -- ROLLBACK (keep commented; use if you need to undo)
