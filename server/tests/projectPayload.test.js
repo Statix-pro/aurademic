@@ -913,6 +913,8 @@ describe('budget allotment matrix', () => {
         budget_head_name: 'Consumables',
         contribution_organization_id: 7,
         contribution_organization_name: 'Department of Science and Technology',
+        contribution_directory_organization_id: null,
+        party_field: 'budget.heads[0].contribution_organization',
         display_order: 0,
       },
       {
@@ -920,6 +922,8 @@ describe('budget allotment matrix', () => {
         budget_head_name: 'Manpower',
         contribution_organization_id: null,
         contribution_organization_name: null,
+        contribution_directory_organization_id: null,
+        party_field: 'budget.heads[1].contribution_organization',
         display_order: 1,
       },
     ]);

@@ -166,16 +166,25 @@ export const fillDirectoryCollaborators = async (
   return { rows: filled, errors };
 };
 
+const loadPeopleWithPersonalEmail = async (connection, personIds) => {
+  if (personIds.length === 0) return new Set();
+  const [rows] = await connection.query(
+    `SELECT id, personal_email FROM directory_resource_persons WHERE id IN (?)`,
+    [personIds],
+  );
+  return new Set(rows.filter((row) => row.personal_email).map((row) => Number(row.id)));
+};
+
 /**
  * For reading a project back: whether the directory holds an email for each linked
- * person, by the same post the designation was taken from. Keyed by collaborator id.
+ * person -- the official email of the post the designation was taken from, or else their
+ * personal email. Keyed by collaborator id.
  */
 export const loadDirectoryEmailOnFile = async (connection, collaborators) => {
   const linked = collaborators.filter((row) => row.directory_resource_person_id);
-  const professionsByPerson = await loadProfessions(
-    connection,
-    unique(linked.map((row) => toId(row.directory_resource_person_id))),
-  );
+  const personIds = unique(linked.map((row) => toId(row.directory_resource_person_id)));
+  const professionsByPerson = await loadProfessions(connection, personIds);
+  const withPersonalEmail = await loadPeopleWithPersonalEmail(connection, personIds);
   return new Map(
     linked.map((row) => {
       const profession = pickDirectoryProfession(
@@ -184,7 +193,11 @@ export const loadDirectoryEmailOnFile = async (connection, collaborators) => {
         // Copied from the directory on save, so it is the linked organization's name.
         row.organization_name,
       );
-      return [row.id, Boolean(profession?.official_email)];
+      return [
+        row.id,
+        Boolean(profession?.official_email) ||
+          withPersonalEmail.has(Number(row.directory_resource_person_id)),
+      ];
     }),
   );
 };

@@ -6,8 +6,15 @@ import SectionCard from '../components/SectionCard';
 import TagSelectField from '../components/TagSelectField';
 import { MAX_FINANCE_ROWS } from '../constants';
 import { createFinanceRow, removeAt, replaceAt, sumAmounts } from '../projectFormState';
-import { flatBudgetHeadOptions, withSelectedOption } from '../selectOptions';
+import {
+  financePartyOptions,
+  financePartyValue,
+  flatBudgetHeadOptions,
+  pickFinanceParty,
+  withSelectedOption,
+} from '../selectOptions';
 
+import type { DirectoryParty } from '../selectOptions';
 import type { BudgetHeadOption, FinanceRow, ProjectOrganization } from '../types';
 
 interface FinanceRowsSectionProps {
@@ -20,6 +27,8 @@ interface FinanceRowsSectionProps {
   onToggle: (enabled: boolean) => void;
   /** The project's own parties, not the whole master list — see `financeOrganizations`. */
   organizations: ProjectOrganization[];
+  /** Collaborators from the Organization directory with no master entry. */
+  directoryParties: DirectoryParty[];
   budgetHeads: BudgetHeadOption[];
   errors: Record<string, string>;
   disabled: boolean;
@@ -70,17 +79,14 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
   enabled,
   onToggle,
   organizations,
+  directoryParties,
   budgetHeads,
   errors,
   disabled,
 }) => {
   const organizationOptions = useMemo(
-    () =>
-      organizations.map((organization) => ({
-        value: String(organization.id),
-        label: organization.name,
-      })),
-    [organizations],
+    () => financePartyOptions(organizations, directoryParties),
+    [organizations, directoryParties],
   );
 
   // The flat head list rather than the grouped one `budgetHeadOptions()`
@@ -142,17 +148,18 @@ const FinanceRowsSection: React.FC<FinanceRowsSectionProps> = ({
 
                 <td>
                   <SelectField
-                    value={row.organizationId ? String(row.organizationId) : ''}
+                    value={financePartyValue(row.organizationId, row.directoryOrganizationId)}
                     onChange={(value) => {
-                      const organization = organizations.find((item) => String(item.id) === value);
+                      const party = pickFinanceParty(value, organizations, directoryParties);
                       update(index, {
-                        organizationId: organization?.id ?? null,
-                        organizationName: organization?.name ?? '',
+                        organizationId: party.organizationId,
+                        organizationName: party.name,
+                        directoryOrganizationId: party.directoryOrganizationId,
                       });
                     }}
                     options={withSelectedOption(
                       organizationOptions,
-                      row.organizationId ? String(row.organizationId) : '',
+                      financePartyValue(row.organizationId, row.directoryOrganizationId),
                       row.organizationName,
                     )}
                     disabled={disabled}

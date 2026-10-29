@@ -25,8 +25,15 @@ import {
   replaceAt,
   sortTransactions,
 } from '../projectFormState';
-import { transactionHeadOptions, withSelectedOption } from '../selectOptions';
+import {
+  financePartyOptions,
+  financePartyValue,
+  pickFinanceParty,
+  transactionHeadOptions,
+  withSelectedOption,
+} from '../selectOptions';
 
+import type { DirectoryParty } from '../selectOptions';
 import type {
   AccountOption,
   ProjectFormState,
@@ -41,6 +48,8 @@ interface TransactionAccountsSectionProps {
   accounts: AccountOption[];
   /** The project's own parties, as the finance tables offer them — see `financeOrganizations`. */
   organizations: ProjectOrganization[];
+  /** Collaborators from the Organization directory with no master entry. */
+  directoryParties: DirectoryParty[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -51,7 +60,7 @@ interface TransactionAccountsSectionProps {
  * and the money — so the ones that describe a single entry drop out of the
  * table's width and into a second row beneath it.
  */
-const DETAIL_ERROR_KEYS = ['transaction_date', 'payment_mode'];
+const DETAIL_ERROR_KEYS = ['transaction_date', 'payment_mode', 'contribution_organization'];
 
 /** What the Actuals tick means and what unticking it does, on the control itself. */
 const ACTUALS_HINT =
@@ -73,6 +82,7 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   patch,
   accounts,
   organizations,
+  directoryParties,
   errors,
   disabled,
 }) => {
@@ -126,12 +136,8 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
   // The same parties the Financial Contribution table offers, so a receipt can
   // name whoever sent it.
   const organizationOptions = useMemo(
-    () =>
-      organizations.map((organization) => ({
-        value: String(organization.id),
-        label: organization.name,
-      })),
-    [organizations],
+    () => financePartyOptions(organizations, directoryParties),
+    [organizations, directoryParties],
   );
 
   // An account already has a ledger on this project, so offering it again would
@@ -278,6 +284,10 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                       (key) => errors[`${field}.${key}`],
                     );
                     const isExpanded = openRow === row.key || hasDetailError;
+                    // The contributor is kept on an expenditure row but not shown
+                    // there; one the save refused is shown anyway, so it can be
+                    // re-picked or cleared.
+                    const contributionError = errors[`${field}.contribution_organization`];
                     const detailId = `${block.key}-${row.key}-detail`;
 
                     // The head says which way money moves: in under an income
@@ -515,36 +525,42 @@ const TransactionAccountsSection: React.FC<TransactionAccountsSectionProps> = ({
                                   kept on the row: switching a head from one kind
                                   to the other hides a value rather than
                                   destroying it. */}
-                              {isIncomeRow ? (
+                              {(isIncomeRow || contributionError) && (
                                 <div className="pf-ledger__detail-field pf-ledger__detail-field--contribution">
                                   <span className="pf-ledger__detail-label">Contribution</span>
                                   <SelectField
-                                    value={
-                                      row.contributionOrganizationId
-                                        ? String(row.contributionOrganizationId)
-                                        : ''
-                                    }
+                                    value={financePartyValue(
+                                      row.contributionOrganizationId,
+                                      row.contributionDirectoryOrganizationId,
+                                    )}
                                     onChange={(value) => {
-                                      const organization = organizations.find(
-                                        (item) => String(item.id) === value,
+                                      const party = pickFinanceParty(
+                                        value,
+                                        organizations,
+                                        directoryParties,
                                       );
                                       updateRow(blockIndex, rowIndex, {
-                                        contributionOrganizationId: organization?.id ?? null,
-                                        contributionOrganizationName: organization?.name ?? '',
+                                        contributionOrganizationId: party.organizationId,
+                                        contributionOrganizationName: party.name,
+                                        contributionDirectoryOrganizationId:
+                                          party.directoryOrganizationId,
                                       });
                                     }}
                                     options={withSelectedOption(
                                       organizationOptions,
-                                      row.contributionOrganizationId
-                                        ? String(row.contributionOrganizationId)
-                                        : '',
+                                      financePartyValue(
+                                        row.contributionOrganizationId,
+                                        row.contributionDirectoryOrganizationId,
+                                      ),
                                       row.contributionOrganizationName,
                                     )}
                                     disabled={disabled}
+                                    invalid={Boolean(contributionError)}
                                     ariaLabel="Contributing organization"
                                   />
                                 </div>
-                              ) : (
+                              )}
+                              {!isIncomeRow && (
                                 <label className="pf-ledger__detail-field pf-ledger__detail-field--compact">
                                   <span className="pf-ledger__detail-label">Ref. No.</span>
                                   <input

@@ -222,7 +222,13 @@ const CollaboratorsSection: React.FC<CollaboratorsSectionProps> = ({
       contactName: person.name,
       contactDesignation: profession?.designation || '',
       contactEmail: '',
-      contactEmailOnFile: Boolean(profession?.officialEmail || profession?.hasOfficialEmail),
+      // The post's official email, or else the person's own.
+      contactEmailOnFile: Boolean(
+        profession?.officialEmail ||
+        profession?.hasOfficialEmail ||
+        person.personalEmail ||
+        person.hasPersonalEmail,
+      ),
     };
   };
 

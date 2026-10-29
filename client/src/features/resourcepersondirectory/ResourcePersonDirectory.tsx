@@ -132,6 +132,8 @@ export interface ResourcePerson {
   isOwner?: boolean;
   /** Set by the server when this viewer may not see the contact details. */
   contactHidden?: boolean;
+  /** Sent with hidden contacts: whether a personal email exists. */
+  hasPersonalEmail?: boolean;
   /** Who added the record, so a reader can ask them about it. */
   submitted_by_name?: string | null;
   submitted_by_email?: string | null;

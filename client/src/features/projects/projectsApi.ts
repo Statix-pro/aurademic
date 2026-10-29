@@ -67,6 +67,7 @@ const count = (value: string): number => {
 const financeRowPayload = (row: FinanceRow) => ({
   organization_id: row.organizationId,
   organization_name: row.organizationName || null,
+  directory_organization_id: row.directoryOrganizationId,
   amount: nullableNumber(row.amount),
   covers_all_heads: row.coversAllHeads,
   heads: row.coversAllHeads ? [] : row.heads.map((name) => ({ budget_head_name: name })),
@@ -160,6 +161,7 @@ export function buildProjectPayload(form: ProjectFormState) {
       financial_year: row.financialYear || null,
       organization_id: row.organizationId,
       organization_name: row.organizationName || null,
+      directory_organization_id: row.directoryOrganizationId,
       amount: nullableNumber(row.amount),
       disbursement_date: row.disbursementDate || null,
       removed_documents: clearedSlots(row.documents, DISBURSEMENT_SLOTS),
@@ -192,6 +194,7 @@ export function buildProjectPayload(form: ProjectFormState) {
         budget_head_name: row.budgetHeadName || null,
         contribution_organization_id: row.contributionOrganizationId,
         contribution_organization_name: row.contributionOrganizationName || null,
+        contribution_directory_organization_id: row.contributionDirectoryOrganizationId,
       })),
       allotments: form.budgetRows
         .flatMap((row) =>
@@ -217,6 +220,7 @@ export function buildProjectPayload(form: ProjectFormState) {
         payment_mode: row.paymentMode || null,
         contribution_organization_id: row.contributionOrganizationId,
         contribution_organization_name: row.contributionOrganizationName || null,
+        contribution_directory_organization_id: row.contributionDirectoryOrganizationId,
         credit: nullableNumber(row.credit),
         debit: nullableNumber(row.debit),
         counts_as_actual: row.countsAsActual,

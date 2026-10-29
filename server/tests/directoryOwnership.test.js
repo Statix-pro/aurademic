@@ -708,7 +708,10 @@ describe('directory owner-only edits', () => {
     expect(person.professions[0].organization).toBe('Org');
     // Only that an email exists -- a project collaborator shows it as a filled, locked field.
     expect(person.professions[0].hasOfficialEmail).toBe(true);
+    // The collaborator field's fallback when a post has no official email.
+    expect(person.hasPersonalEmail).toBe(true);
     expect(JSON.stringify(person)).not.toContain('hod@x.edu');
+    expect(JSON.stringify(person)).not.toContain('personal@example.test');
     for (const field of [
       'dob',
       'mobile',

@@ -114,6 +114,7 @@ export function createFinanceRow(): FinanceRow {
     key: nextRowKey('finance'),
     organizationId: null,
     organizationName: '',
+    directoryOrganizationId: null,
     coversAllHeads: false,
     heads: [],
     amount: '',
@@ -130,6 +131,7 @@ export function createBudgetAllotmentRow(): BudgetAllotmentRow {
     budgetHeadName: '',
     contributionOrganizationId: null,
     contributionOrganizationName: '',
+    contributionDirectoryOrganizationId: null,
   };
 }
 
@@ -150,6 +152,7 @@ export function createTransactionRow(): TransactionRow {
     paymentMode: '',
     contributionOrganizationId: null,
     contributionOrganizationName: '',
+    contributionDirectoryOrganizationId: null,
     credit: '',
     debit: '',
     countsAsActual: true,
@@ -269,6 +272,7 @@ export function createDisbursementRow(): DisbursementRow {
     financialYear: '',
     organizationId: null,
     organizationName: '',
+    directoryOrganizationId: null,
     amount: '',
     disbursementDate: '',
     documents: emptyDocumentMap(DISBURSEMENT_SLOTS),
@@ -475,6 +479,7 @@ export function projectToFormState(project: any): ProjectFormState {
           ...createFinanceRow(),
           organizationId: row.organization_id ?? null,
           organizationName: text(row.organization_name || row.organization_label),
+          directoryOrganizationId: row.directory_organization_id ?? null,
           amount: amountInput(row.amount),
           coversAllHeads: flag(row.covers_all_heads),
           heads: Array.isArray(row.heads)
@@ -507,6 +512,7 @@ export function projectToFormState(project: any): ProjectFormState {
         contributionOrganizationName: text(
           row.contribution_organization_name || row.contribution_organization_label,
         ),
+        contributionDirectoryOrganizationId: row.contribution_directory_organization_id ?? null,
       }))
     : [];
   const rowKeyById = new Map<number, string>(
@@ -544,6 +550,7 @@ export function projectToFormState(project: any): ProjectFormState {
           contributionOrganizationName: text(
             row.contribution_organization_name || row.contribution_organization_label,
           ),
+          contributionDirectoryOrganizationId: row.contribution_directory_organization_id ?? null,
           credit: amountInput(row.credit),
           debit: amountInput(row.debit),
           countsAsActual: flagDefaultOn(row.counts_as_actual),
@@ -683,6 +690,7 @@ export function projectToFormState(project: any): ProjectFormState {
         financialYear: text(row.financial_year),
         organizationId: row.organization_id ?? null,
         organizationName: text(row.organization_name || row.organization_label),
+        directoryOrganizationId: row.directory_organization_id ?? null,
         amount: amountInput(row.amount),
         disbursementDate: dateInput(row.disbursement_date),
         documents: DISBURSEMENT_SLOTS.reduce(

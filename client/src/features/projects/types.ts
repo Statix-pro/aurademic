@@ -100,6 +100,8 @@ export interface FinanceRow {
   key: string;
   organizationId: number | null;
   organizationName: string;
+  /** A collaborator picked from the Organization directory, named by its directory id. */
+  directoryOrganizationId: number | null;
   /**
    * The row covers every budget head rather than the ones listed. `heads` is
    * always empty while this is set — "all" and a specific list cannot both hold.
@@ -117,6 +119,8 @@ export interface DisbursementRow {
   financialYear: string;
   organizationId: number | null;
   organizationName: string;
+  /** A releasing collaborator picked from the Organization directory, by its directory id. */
+  directoryOrganizationId: number | null;
   amount: string;
   disbursementDate: string;
   documents: Record<DisbursementSlot, DocumentSlotState>;
@@ -138,6 +142,8 @@ export interface BudgetAllotmentRow {
   /** The party whose money this head is allotted from; optional. */
   contributionOrganizationId: number | null;
   contributionOrganizationName: string;
+  /** The same party when it is a collaborator picked from the Organization directory. */
+  contributionDirectoryOrganizationId: number | null;
 }
 
 /**
@@ -166,6 +172,8 @@ export interface TransactionRow {
    */
   contributionOrganizationId: number | null;
   contributionOrganizationName: string;
+  /** The same party when it is a collaborator picked from the Organization directory. */
+  contributionDirectoryOrganizationId: number | null;
   credit: string;
   debit: string;
   /**

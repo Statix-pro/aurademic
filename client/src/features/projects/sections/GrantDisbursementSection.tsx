@@ -12,8 +12,14 @@ import {
   currentFinancialYear,
 } from '../constants';
 import { createDisbursementRow, removeAt, replaceAt, sumAmounts } from '../projectFormState';
-import { withSelectedOption } from '../selectOptions';
+import {
+  financePartyOptions,
+  financePartyValue,
+  pickFinanceParty,
+  withSelectedOption,
+} from '../selectOptions';
 
+import type { DirectoryParty } from '../selectOptions';
 import type {
   DisbursementRow,
   DisbursementSlot,
@@ -25,6 +31,8 @@ interface GrantDisbursementSectionProps {
   form: ProjectFormState;
   patch: (changes: Partial<ProjectFormState>) => void;
   organizations: ProjectOrganization[];
+  /** Collaborators from the Organization directory with no master entry. */
+  directoryParties: DirectoryParty[];
   onSelectDocument: (rowIndex: number, slot: DisbursementSlot, file: File) => void;
   onClearDocument: (rowIndex: number, slot: DisbursementSlot) => void;
   errors: Record<string, string>;
@@ -41,6 +49,7 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
   form,
   patch,
   organizations,
+  directoryParties,
   onSelectDocument,
   onClearDocument,
   errors,
@@ -54,12 +63,8 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
   );
 
   const organizationOptions = useMemo(
-    () =>
-      organizations.map((organization) => ({
-        value: String(organization.id),
-        label: organization.name,
-      })),
-    [organizations],
+    () => financePartyOptions(organizations, directoryParties),
+    [organizations, directoryParties],
   );
 
   const update = (index: number, changes: Partial<DisbursementRow>) =>
@@ -115,20 +120,22 @@ const GrantDisbursementSection: React.FC<GrantDisbursementSectionProps> = ({
 
                 <td>
                   <SelectField
-                    value={row.organizationId ? String(row.organizationId) : ''}
+                    value={financePartyValue(row.organizationId, row.directoryOrganizationId)}
                     onChange={(value) => {
-                      const organization = organizations.find((item) => String(item.id) === value);
+                      const party = pickFinanceParty(value, organizations, directoryParties);
                       update(index, {
-                        organizationId: organization?.id ?? null,
-                        organizationName: organization?.name ?? '',
+                        organizationId: party.organizationId,
+                        organizationName: party.name,
+                        directoryOrganizationId: party.directoryOrganizationId,
                       });
                     }}
                     options={withSelectedOption(
                       organizationOptions,
-                      row.organizationId ? String(row.organizationId) : '',
+                      financePartyValue(row.organizationId, row.directoryOrganizationId),
                       row.organizationName,
                     )}
                     disabled={disabled}
+                    invalid={Boolean(errors[`disbursements[${index}].organization`])}
                     ariaLabel="Releasing organization"
                   />
                 </td>

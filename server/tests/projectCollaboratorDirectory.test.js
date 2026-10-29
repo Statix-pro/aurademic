@@ -215,4 +215,23 @@ describe('loadDirectoryEmailOnFile', () => {
     expect(onFile.get(2)).toBe(true);
     expect(onFile.has(3)).toBe(false);
   });
+
+  // With no official email on the post, the person's personal email still fills the field.
+  it('falls back to the personal email when the post has none', async () => {
+    const connection = directory({
+      people: [{ id: 9, personal_email: 'asha@example.test' }, { id: 10 }],
+      professions: [
+        { resource_person_id: 9, organization_id: 5, official_email: null, status: 'Working' },
+        { resource_person_id: 10, organization_id: 5, official_email: null, status: 'Working' },
+      ],
+    });
+
+    const onFile = await loadDirectoryEmailOnFile(connection, [
+      { id: 1, directory_resource_person_id: 9, directory_organization_id: 5 },
+      { id: 2, directory_resource_person_id: 10, directory_organization_id: 5 },
+    ]);
+
+    expect(onFile.get(1)).toBe(true);
+    expect(onFile.get(2)).toBe(false);
+  });
 });

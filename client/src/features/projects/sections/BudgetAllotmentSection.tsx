@@ -19,8 +19,15 @@ import {
   removeAt,
   replaceAt,
 } from '../projectFormState';
-import { budgetHeadOptions, withSelectedOption } from '../selectOptions';
+import {
+  budgetHeadOptions,
+  financePartyOptions,
+  financePartyValue,
+  pickFinanceParty,
+  withSelectedOption,
+} from '../selectOptions';
 
+import type { DirectoryParty } from '../selectOptions';
 import type {
   BudgetAllotmentRow,
   BudgetHeadOption,
@@ -34,6 +41,8 @@ interface BudgetAllotmentSectionProps {
   budgetHeads: BudgetHeadOption[];
   /** The project's own parties, as the finance tables offer them — see `financeOrganizations`. */
   organizations: ProjectOrganization[];
+  /** Collaborators from the Organization directory with no master entry. */
+  directoryParties: DirectoryParty[];
   errors: Record<string, string>;
   disabled: boolean;
 }
@@ -51,6 +60,7 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
   patch,
   budgetHeads,
   organizations,
+  directoryParties,
   errors,
   disabled,
 }) => {
@@ -61,12 +71,8 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
   // The same parties the Financial Contribution table offers, so a head can be
   // attributed to whoever is putting up the money for it.
   const organizationOptions = useMemo(
-    () =>
-      organizations.map((organization) => ({
-        value: String(organization.id),
-        label: organization.name,
-      })),
-    [organizations],
+    () => financePartyOptions(organizations, directoryParties),
+    [organizations, directoryParties],
   );
 
   const yearOptions = useMemo(
@@ -251,27 +257,33 @@ const BudgetAllotmentSection: React.FC<BudgetAllotmentSectionProps> = ({
 
                 <td className="pf-matrix__contribution">
                   <SelectField
-                    value={
-                      row.contributionOrganizationId ? String(row.contributionOrganizationId) : ''
-                    }
+                    value={financePartyValue(
+                      row.contributionOrganizationId,
+                      row.contributionDirectoryOrganizationId,
+                    )}
                     onChange={(value) => {
-                      const organization = organizations.find((item) => String(item.id) === value);
+                      const party = pickFinanceParty(value, organizations, directoryParties);
                       patch({
                         budgetRows: replaceAt(budgetRows, index, {
-                          contributionOrganizationId: organization?.id ?? null,
-                          contributionOrganizationName: organization?.name ?? '',
+                          contributionOrganizationId: party.organizationId,
+                          contributionOrganizationName: party.name,
+                          contributionDirectoryOrganizationId: party.directoryOrganizationId,
                         }),
                       });
                     }}
                     options={withSelectedOption(
                       organizationOptions,
-                      row.contributionOrganizationId ? String(row.contributionOrganizationId) : '',
+                      financePartyValue(
+                        row.contributionOrganizationId,
+                        row.contributionDirectoryOrganizationId,
+                      ),
                       row.contributionOrganizationName,
                     )}
                     // A row is only stored once it names a head, and the
                     // contribution goes with it — so this stays shut until
                     // there is a row for it to be saved against.
                     disabled={disabled || !hasHead(row)}
+                    invalid={Boolean(errors[`budget.heads[${index}].contribution_organization`])}
                     ariaLabel="Contributing organization"
                   />
                 </td>

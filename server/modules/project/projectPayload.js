@@ -637,6 +637,15 @@ function normalizeBudgetHeads(raw, canonicalBudgetHead) {
   }, []);
 }
 
+/**
+ * Every organization picker on the Finance tab -- these two tables, a budget head's
+ * contributor, a receipt's contributor, a disbursement's releasing organization -- names a
+ * party one of two ways: a `project_organizations` entry, or a collaborator picked from the
+ * Organization directory. A row carrying the directory id drops any master id sent beside it.
+ * Whether the directory link is allowed, and the name stored with it, are decided in the save
+ * transaction (`resolveDirectoryParties` in the model); `party_field` is where its error
+ * points, by the index the form rendered the row at.
+ */
 function normalizeFinanceRows(raw, rowType, enabled, errors, canonicalBudgetHead) {
   if (!enabled) return [];
 
@@ -652,11 +661,14 @@ function normalizeFinanceRows(raw, rowType, enabled, errors, canonicalBudgetHead
     .slice(0, MAX_FINANCE_ROWS)
     .map((row, index) => {
       const coversAllHeads = toBoolean(row?.covers_all_heads ?? row?.coversAllHeads);
+      const directoryId = toId(row?.directory_organization_id ?? row?.directoryOrganizationId);
 
       return {
         row_type: rowType,
-        organization_id: toId(row?.organization_id ?? row?.organizationId),
+        organization_id: directoryId ? null : toId(row?.organization_id ?? row?.organizationId),
         organization_name: toNullableString(row?.organization_name ?? row?.organizationName, 255),
+        directory_organization_id: directoryId,
+        party_field: `${rowType}_rows[${index}].organization`,
         amount: toAmount(row?.amount, `${rowType}_rows[${index}].amount`, errors),
         covers_all_heads: coversAllHeads,
         // "All" is the absence of a restriction, so it cannot sit beside a list
@@ -676,12 +688,13 @@ function normalizeFinanceRows(raw, rowType, enabled, errors, canonicalBudgetHead
       (row) =>
         row.organization_id ||
         row.organization_name ||
+        row.directory_organization_id ||
         row.amount ||
         row.covers_all_heads ||
         row.heads.length,
     )
     .map(({ sourceIndex, ...row }, index) => {
-      if (!row.organization_id && !row.organization_name) {
+      if (!row.organization_id && !row.organization_name && !row.directory_organization_id) {
         errors.push({
           field: `${rowType}_rows[${sourceIndex}].organization`,
           message: 'Select an organization.',
@@ -720,6 +733,7 @@ function normalizeDisbursements(raw, errors, keysWithDocuments = new Set()) {
       if (financialYear && !FINANCIAL_YEAR.test(financialYear)) {
         errors.push({ field: `${field}.financial_year`, message: 'Use the 2025-26 format.' });
       }
+      const directoryId = toId(row?.directory_organization_id ?? row?.directoryOrganizationId);
 
       return {
         // Existing row id, so an update keeps the row (and the document rows
@@ -729,8 +743,11 @@ function normalizeDisbursements(raw, errors, keysWithDocuments = new Set()) {
         // and links `removed_documents` entries back to it.
         key: toNullableString(row?.key, 64) || `row-${index}`,
         financial_year: financialYear,
-        organization_id: toId(row?.organization_id ?? row?.organizationId),
+        organization_id: directoryId ? null : toId(row?.organization_id ?? row?.organizationId),
         organization_name: toNullableString(row?.organization_name ?? row?.organizationName, 255),
+        // A directory collaborator instead; see normalizeFinanceRows.
+        directory_organization_id: directoryId,
+        party_field: `${field}.organization`,
         amount: toAmount(row?.amount, `${field}.amount`, errors),
         disbursement_date: toDate(
           row?.disbursement_date ?? row?.disbursementDate,
@@ -749,6 +766,7 @@ function normalizeDisbursements(raw, errors, keysWithDocuments = new Set()) {
         row.financial_year ||
         row.organization_id ||
         row.organization_name ||
+        row.directory_organization_id ||
         row.amount ||
         row.disbursement_date ||
         row.removed_documents.length > 0 ||
@@ -858,19 +876,25 @@ function normalizeBudgetAllotment(raw, errors, canonicalBudgetHead) {
       // the row belongs to a budget that was already sanctioned under it, and
       // discarding it here would silently delete its allotments.
       const stored = name || toNullableString(submitted, 255);
+      const directoryId = toId(
+        row?.contribution_directory_organization_id ?? row?.contributionDirectoryOrganizationId,
+      );
       return {
         key: toNullableString(row?.key, 64) || `head-${index}`,
         budget_head_name: stored,
         // Who the money under this head comes from. Optional — a project that
         // never splits its budget by contributor leaves it empty — and stored
         // with a name snapshot beside the id the same way a finance row is.
-        contribution_organization_id: toId(
-          row?.contribution_organization_id ?? row?.contributionOrganizationId,
-        ),
+        contribution_organization_id: directoryId
+          ? null
+          : toId(row?.contribution_organization_id ?? row?.contributionOrganizationId),
         contribution_organization_name: toNullableString(
           row?.contribution_organization_name ?? row?.contributionOrganizationName,
           255,
         ),
+        // A directory collaborator instead; see normalizeFinanceRows.
+        contribution_directory_organization_id: directoryId,
+        party_field: `budget.heads[${index}].contribution_organization`,
         sourceIndex: index,
       };
     })
@@ -955,6 +979,9 @@ function normalizeTransactions(raw, fieldPrefix, errors, canonicalBudgetHead) {
         // The summary groups by year, so a row that was dated but not yeared
         // still lands in the right column.
         if (!financialYear) financialYear = financialYearForDate(transactionDate);
+        const directoryId = toId(
+          row?.contribution_directory_organization_id ?? row?.contributionDirectoryOrganizationId,
+        );
 
         return {
           financial_year: financialYear,
@@ -989,13 +1016,16 @@ function normalizeTransactions(raw, fieldPrefix, errors, canonicalBudgetHead) {
           // takes the place of the reference number, but stored on every row —
           // a head switched between the two kinds hides the field it no longer
           // uses rather than destroying what was typed into it.
-          contribution_organization_id: toId(
-            row?.contribution_organization_id ?? row?.contributionOrganizationId,
-          ),
+          contribution_organization_id: directoryId
+            ? null
+            : toId(row?.contribution_organization_id ?? row?.contributionOrganizationId),
           contribution_organization_name: toNullableString(
             row?.contribution_organization_name ?? row?.contributionOrganizationName,
             255,
           ),
+          // A directory collaborator instead; see normalizeFinanceRows.
+          contribution_directory_organization_id: directoryId,
+          party_field: `${field}.contribution_organization`,
           credit: toAmount(row?.credit, `${field}.credit`, errors),
           debit: toAmount(row?.debit, `${field}.debit`, errors),
           sourceIndex: index,
@@ -1010,6 +1040,7 @@ function normalizeTransactions(raw, fieldPrefix, errors, canonicalBudgetHead) {
           row.payment_mode ||
           row.contribution_organization_id ||
           row.contribution_organization_name ||
+          row.contribution_directory_organization_id ||
           row.credit !== null ||
           row.debit !== null,
       )

@@ -103,6 +103,8 @@ const serializePublicPerson = (person, professions) => {
       ...profession
     }) => ({ ...profession, hasOfficialEmail: Boolean(officialEmail ?? email) }),
   );
+  // The collaborator field falls back to the personal email when the post has none.
+  publicPerson.hasPersonalEmail = Boolean(person.personal_email);
   // Tells the form the contact fields were withheld, not left blank, so it shows them locked.
   publicPerson.contactHidden = true;
   return publicPerson;

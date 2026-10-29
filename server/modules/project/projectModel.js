@@ -323,7 +323,7 @@ async function replaceCollaborators(connection, projectId, submitted, userId) {
   if (errors.length > 0) throw new ProjectValidationError(errors);
 
   await connection.query('DELETE FROM project_collaborators WHERE project_id = ?', [projectId]);
-  if (collaborators.length === 0) return;
+  if (collaborators.length === 0) return collaborators;
 
   await connection.query(
     `INSERT INTO project_collaborators
@@ -349,6 +349,95 @@ async function replaceCollaborators(connection, projectId, submitted, userId) {
       ]),
     ],
   );
+  return collaborators;
+}
+
+/**
+ * The Finance tab's party pickers that may name a collaborator picked from the Organization
+ * directory (see normalizeFinanceRows): the aggregate rows, the table they are stored in, and
+ * that table's directory id and name columns. Table and column names come only from here.
+ */
+const DIRECTORY_PARTY_TABLES = [
+  {
+    rows: (aggregate) => aggregate.financeRows,
+    table: 'project_finance_rows',
+    idColumn: 'directory_organization_id',
+    nameColumn: 'organization_name',
+  },
+  {
+    rows: (aggregate) => aggregate.budget.heads,
+    table: 'project_budget_heads',
+    idColumn: 'contribution_directory_organization_id',
+    nameColumn: 'contribution_organization_name',
+  },
+  {
+    rows: (aggregate) => aggregate.transactionAccounts.flatMap((account) => account.transactions),
+    table: 'project_transactions',
+    idColumn: 'contribution_directory_organization_id',
+    nameColumn: 'contribution_organization_name',
+  },
+  {
+    rows: (aggregate) => aggregate.disbursements,
+    table: 'project_grant_disbursements',
+    idColumn: 'directory_organization_id',
+    nameColumn: 'organization_name',
+  },
+];
+
+/**
+ * Checks every directory link on the Finance tab and sets the name stored beside it, so a
+ * row never carries a name the client made up. Runs after replaceCollaborators (whose rows
+ * are already filled from the directory) and before the finance tables are rewritten, while
+ * their old links can still be read.
+ *
+ * A link is allowed to a directory collaborator saved with this project -- it takes the
+ * collaborator's name, current with the directory -- or to one the project's finance tables
+ * already held, which keeps the name it was stored with. The second is why a receipt or an
+ * allotment recorded against a partner who has since left the project still saves, the way
+ * a master organization no longer offered stays on its row. Anything else -- an arbitrary
+ * directory entry, or another user's Pending one -- is refused.
+ */
+async function resolveDirectoryParties(connection, projectId, aggregate, collaborators) {
+  const collaboratorNames = new Map(
+    collaborators
+      .filter((row) => row.directory_organization_id)
+      .map((row) => [Number(row.directory_organization_id), row.organization_name]),
+  );
+
+  // One query per table rather than a UNION: the name columns do not share a collation
+  // (utf8mb4_unicode_ci on the budget and ledger tables, utf8mb4_0900_ai_ci on the others),
+  // and MySQL refuses to UNION them.
+  const storedNames = new Map();
+  for (const { table, idColumn, nameColumn } of DIRECTORY_PARTY_TABLES) {
+    const [stored] = await connection.query(
+      `SELECT ${idColumn} AS id, ${nameColumn} AS name
+         FROM ${table}
+        WHERE project_id = ? AND ${idColumn} IS NOT NULL`,
+      [projectId],
+    );
+    stored.forEach((row) => {
+      if (!storedNames.has(Number(row.id))) storedNames.set(Number(row.id), row.name);
+    });
+  }
+
+  const errors = [];
+  for (const { rows: rowsOf, idColumn, nameColumn } of DIRECTORY_PARTY_TABLES) {
+    for (const row of rowsOf(aggregate)) {
+      const directoryId = row[idColumn];
+      if (!directoryId) continue;
+      if (collaboratorNames.has(directoryId)) {
+        row[nameColumn] = collaboratorNames.get(directoryId);
+      } else if (storedNames.has(directoryId)) {
+        row[nameColumn] = storedNames.get(directoryId);
+      } else {
+        errors.push({
+          field: row.party_field,
+          message: 'This organization is no longer a collaborator. Pick another.',
+        });
+      }
+    }
+  }
+  if (errors.length > 0) throw new ProjectValidationError(errors);
 }
 
 async function replaceFinanceRows(connection, projectId, financeRows) {
@@ -358,14 +447,15 @@ async function replaceFinanceRows(connection, projectId, financeRows) {
   for (const row of financeRows) {
     const [inserted] = await connection.query(
       `INSERT INTO project_finance_rows
-        (project_id, row_type, organization_id, organization_name, amount, covers_all_heads,
-         display_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (project_id, row_type, organization_id, organization_name, directory_organization_id,
+         amount, covers_all_heads, display_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         projectId,
         row.row_type,
         row.organization_id,
         row.organization_name,
+        row.directory_organization_id,
         row.amount,
         row.covers_all_heads,
         row.display_order,
@@ -423,13 +513,14 @@ async function replaceBudgetAllotment(connection, projectId, budget) {
     const [inserted] = await connection.query(
       `INSERT INTO project_budget_heads
         (project_id, budget_head_name, contribution_organization_id,
-         contribution_organization_name, display_order)
-       VALUES (?, ?, ?, ?, ?)`,
+         contribution_organization_name, contribution_directory_organization_id, display_order)
+       VALUES (?, ?, ?, ?, ?, ?)`,
       [
         projectId,
         row.budget_head_name,
         row.contribution_organization_id,
         row.contribution_organization_name,
+        row.contribution_directory_organization_id,
         row.display_order,
       ],
     );
@@ -477,7 +568,8 @@ async function replaceTransactionAccounts(connection, projectId, accounts) {
         (project_id, account_id, financial_year, transaction_date, head_kind,
          head_name, particulars, reference_no, payment_mode,
          contribution_organization_id, contribution_organization_name,
-         credit, debit, counts_as_actual, display_order)
+         contribution_directory_organization_id, credit, debit, counts_as_actual,
+         display_order)
        VALUES ?`,
       [
         account.transactions.map((row) => [
@@ -492,6 +584,7 @@ async function replaceTransactionAccounts(connection, projectId, accounts) {
           row.payment_mode,
           row.contribution_organization_id,
           row.contribution_organization_name,
+          row.contribution_directory_organization_id,
           row.credit,
           row.debit,
           row.counts_as_actual,
@@ -558,6 +651,7 @@ async function upsertDisbursements(connection, projectId, disbursements) {
       row.financial_year,
       row.organization_id,
       row.organization_name,
+      row.directory_organization_id,
       row.amount,
       row.disbursement_date,
       row.display_order,
@@ -566,8 +660,9 @@ async function upsertDisbursements(connection, projectId, disbursements) {
     if (row.id && existingIds.has(row.id)) {
       await connection.query(
         `UPDATE project_grant_disbursements
-            SET financial_year = ?, organization_id = ?, organization_name = ?, amount = ?,
-                disbursement_date = ?, display_order = ?
+            SET financial_year = ?, organization_id = ?, organization_name = ?,
+                directory_organization_id = ?, amount = ?, disbursement_date = ?,
+                display_order = ?
           WHERE id = ? AND project_id = ?`,
         [...values, row.id, projectId],
       );
@@ -578,9 +673,9 @@ async function upsertDisbursements(connection, projectId, disbursements) {
 
     const [inserted] = await connection.query(
       `INSERT INTO project_grant_disbursements
-        (project_id, financial_year, organization_id, organization_name, amount,
-         disbursement_date, display_order)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        (project_id, financial_year, organization_id, organization_name,
+         directory_organization_id, amount, disbursement_date, display_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [projectId, ...values],
     );
     rowIdByKey.set(row.key, inserted.insertId);
@@ -946,7 +1041,13 @@ const projectModel = {
 
       await replaceInvestigators(connection, savedId, aggregate.investigators, authorIds);
       await replaceTags(connection, savedId, aggregate.tags);
-      await replaceCollaborators(connection, savedId, aggregate.collaborators, userId);
+      const collaborators = await replaceCollaborators(
+        connection,
+        savedId,
+        aggregate.collaborators,
+        userId,
+      );
+      await resolveDirectoryParties(connection, savedId, aggregate, collaborators);
       await replaceFinanceRows(connection, savedId, aggregate.financeRows);
       await replaceIncomeHeads(connection, savedId, aggregate.incomeHeads);
       await replaceBudgetAllotment(connection, savedId, aggregate.budget);
@@ -1138,7 +1239,7 @@ const projectModel = {
       ),
       db.query(
         `SELECT pgd.id, pgd.financial_year, pgd.organization_id, pgd.organization_name,
-                  pgd.amount, pgd.display_order,
+                  pgd.directory_organization_id, pgd.amount, pgd.display_order,
                   DATE_FORMAT(pgd.disbursement_date, '%Y-%m-%d') AS disbursement_date,
                   COALESCE(NULLIF(pgd.organization_name, ''), org.name) AS organization_label
              FROM project_grant_disbursements pgd
@@ -1173,6 +1274,7 @@ const projectModel = {
       db.query(
         `SELECT pbh.id, pbh.display_order, pbh.budget_head_name,
                   pbh.contribution_organization_id, pbh.contribution_organization_name,
+                  pbh.contribution_directory_organization_id,
                   COALESCE(NULLIF(pbh.contribution_organization_name, ''), org.name)
                     AS contribution_organization_label
              FROM project_budget_heads pbh
@@ -1201,6 +1303,7 @@ const projectModel = {
         `SELECT pt.id, pt.account_id, pt.financial_year, pt.head_kind,
                   pt.particulars, pt.reference_no, pt.payment_mode,
                   pt.contribution_organization_id, pt.contribution_organization_name,
+                  pt.contribution_directory_organization_id,
                   COALESCE(NULLIF(pt.contribution_organization_name, ''), org.name)
                     AS contribution_organization_label,
                   pt.credit, pt.debit, pt.display_order,

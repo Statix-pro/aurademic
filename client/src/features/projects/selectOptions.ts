@@ -9,6 +9,12 @@ import type {
   VocabularyEntry,
 } from './types';
 
+/** A collaborator from the Organization directory, as the Finance tab's pickers offer it. */
+export interface DirectoryParty {
+  id: number;
+  name: string;
+}
+
 /**
  * One admin-curated list — National Initiatives, Domains, or one project
  * type's Categories — as options, in the order the admin set. Valued by name,
@@ -134,6 +140,83 @@ export function financeOrganizations(
   return organizations.filter(
     (organization) => organization.is_internal === 1 || allowed.has(organization.id),
   );
+}
+
+/**
+ * Collaborators picked from the Organization directory that match no master organization:
+ * the Finance tab's pickers offer them by directory id (see `financePartyOptions`). One that
+ * does match a master entry is already offered through `financeOrganizations`, so it is not
+ * listed twice.
+ */
+export function directoryCollaboratorParties(
+  form: Pick<ProjectFormState, 'collaborators' | 'collaboratorsEnabled'>,
+): DirectoryParty[] {
+  if (!form.collaboratorsEnabled) return [];
+
+  const seen = new Set<number>();
+  const parties: DirectoryParty[] = [];
+  form.collaborators.forEach((row) => {
+    const id = row.directoryOrganizationId;
+    if (!id || row.organizationId || seen.has(id)) return;
+    seen.add(id);
+    parties.push({ id, name: row.organizationName.trim() });
+  });
+  return parties;
+}
+
+// A directory collaborator's option value; prefixed so it cannot collide with a master
+// organization's id, which is the other kind of value in the same list.
+const DIRECTORY_PARTY = 'directory:';
+
+/**
+ * Every organization picker on the Finance tab — the two finance tables, a budget head's
+ * contributor, a receipt's contributor, a disbursement's releasing organization — offers
+ * the same parties: the master organizations from `financeOrganizations`, then the
+ * directory collaborators from `directoryCollaboratorParties`.
+ */
+export function financePartyOptions(
+  organizations: ProjectOrganization[],
+  directoryParties: DirectoryParty[],
+): SelectOption[] {
+  return [
+    ...organizations.map((organization) => ({
+      value: String(organization.id),
+      label: organization.name,
+    })),
+    ...directoryParties.map((party) => ({
+      value: `${DIRECTORY_PARTY}${party.id}`,
+      label: party.name,
+    })),
+  ];
+}
+
+/** The picker value of a stored party; '' when the row names none. */
+export function financePartyValue(
+  organizationId: number | null,
+  directoryOrganizationId: number | null,
+): string {
+  if (directoryOrganizationId) return `${DIRECTORY_PARTY}${directoryOrganizationId}`;
+  return organizationId ? String(organizationId) : '';
+}
+
+/**
+ * What a picked value stores: one id or the other, and the name shown until the server
+ * replaces it with the directory's own. Nothing picked clears all three.
+ */
+export function pickFinanceParty(
+  value: string,
+  organizations: ProjectOrganization[],
+  directoryParties: DirectoryParty[],
+): { organizationId: number | null; directoryOrganizationId: number | null; name: string } {
+  const party = directoryParties.find((item) => `${DIRECTORY_PARTY}${item.id}` === value);
+  if (party) return { organizationId: null, directoryOrganizationId: party.id, name: party.name };
+
+  const organization = organizations.find((item) => String(item.id) === value);
+  return {
+    organizationId: organization?.id ?? null,
+    directoryOrganizationId: null,
+    name: organization?.name ?? '',
+  };
 }
 
 /**

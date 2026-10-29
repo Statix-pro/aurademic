@@ -46,7 +46,7 @@ import SubmissionDetailsSection from './sections/SubmissionDetailsSection';
 import TechTransfersSection from './sections/TechTransfersSection';
 import TransactionAccountsSection from './sections/TransactionAccountsSection';
 import TransactionSummarySection from './sections/TransactionSummarySection';
-import { financeOrganizations } from './selectOptions';
+import { directoryCollaboratorParties, financeOrganizations } from './selectOptions';
 import AlertModal from '../../shared/components/ui/AlertModal';
 import ViewModeBanner from '../../shared/components/ui/ViewModeBanner';
 
@@ -278,6 +278,7 @@ function validate(form: ProjectFormState): Record<string, string> {
         row.paymentMode ||
         row.contributionOrganizationId ||
         row.contributionOrganizationName ||
+        row.contributionDirectoryOrganizationId ||
         row.credit ||
         row.debit,
     );
@@ -587,6 +588,12 @@ const ProjectForm: React.FC = () => {
   // corrected back to Selected finds its sanction details intact.
   const isSelected = form.finalResult === 'selected';
 
+  // Disbursement rows stay in state, and are saved, while their section is hidden by an
+  // earlier status or a result other than Selected. One the save refused (a releasing
+  // collaborator no longer on the project) is shown anyway: an error the user cannot see is
+  // one they cannot fix.
+  const hasDisbursementError = Object.keys(errors).some((key) => key.startsWith('disbursements['));
+
   // The final documents (on the Documents tab) are what a project leaves
   // behind, so they stay hidden until it has finished. `isSelected` is carried
   // through rather than assumed from the status: a project recorded as
@@ -623,6 +630,18 @@ const ProjectForm: React.FC = () => {
   const sharingParties = useMemo(
     () => financeParties.filter((organization) => organization.id !== form.fundingOrganizationId),
     [financeParties, form.fundingOrganizationId],
+  );
+
+  // A collaborator picked from the Organization directory usually has no master entry; every
+  // party picker on the Finance tab offers it by its directory id, and the server checks the
+  // link when the project is saved (see `financePartyOptions`).
+  const directoryParties = useMemo(
+    () =>
+      directoryCollaboratorParties({
+        collaborators: form.collaborators,
+        collaboratorsEnabled: form.collaboratorsEnabled,
+      }),
+    [form.collaborators, form.collaboratorsEnabled],
   );
 
   const patch = useCallback(
@@ -881,6 +900,19 @@ const ProjectForm: React.FC = () => {
     );
   }
 
+  const renderGrantDisbursements = () => (
+    <GrantDisbursementSection
+      form={form}
+      patch={patch}
+      organizations={financeParties}
+      directoryParties={directoryParties}
+      onSelectDocument={selectDisbursementDocument}
+      onClearDocument={clearDisbursementDocument}
+      errors={errors}
+      disabled={isReadOnly}
+    />
+  );
+
   return (
     <div className="pf-page">
       <div className="pf-page__inner">
@@ -1015,6 +1047,7 @@ const ProjectForm: React.FC = () => {
               enabled={form.financialContributionEnabled}
               onToggle={(enabled) => patch({ financialContributionEnabled: enabled })}
               organizations={financeParties}
+              directoryParties={directoryParties}
               budgetHeads={lookups.budgetHeads}
               errors={errors}
               disabled={isReadOnly}
@@ -1080,15 +1113,7 @@ const ProjectForm: React.FC = () => {
                       disabled={isReadOnly}
                     />
 
-                    <GrantDisbursementSection
-                      form={form}
-                      patch={patch}
-                      organizations={financeParties}
-                      onSelectDocument={selectDisbursementDocument}
-                      onClearDocument={clearDisbursementDocument}
-                      errors={errors}
-                      disabled={isReadOnly}
-                    />
+                    {renderGrantDisbursements()}
 
                     <ProjectStatusSection
                       form={form}
@@ -1100,6 +1125,8 @@ const ProjectForm: React.FC = () => {
                 )}
               </>
             )}
+
+            {!(showOutcome && isSelected) && hasDisbursementError && renderGrantDisbursements()}
 
             <section className="pf-card pf-card--inline">
               <div className="pf-card__header pf-card__header--inline">
@@ -1152,6 +1179,7 @@ const ProjectForm: React.FC = () => {
                 enabled={form.financeSharingEnabled}
                 onToggle={(enabled) => patch({ financeSharingEnabled: enabled })}
                 organizations={sharingParties}
+                directoryParties={directoryParties}
                 budgetHeads={lookups.budgetHeads}
                 errors={errors}
                 disabled={isReadOnly}
@@ -1162,6 +1190,7 @@ const ProjectForm: React.FC = () => {
                 patch={patch}
                 budgetHeads={lookups.budgetHeads}
                 organizations={financeParties}
+                directoryParties={directoryParties}
                 errors={errors}
                 disabled={isReadOnly}
               />
@@ -1179,6 +1208,7 @@ const ProjectForm: React.FC = () => {
                 patch={patch}
                 accounts={lookups.accounts}
                 organizations={financeParties}
+                directoryParties={directoryParties}
                 errors={errors}
                 disabled={isReadOnly}
               />
